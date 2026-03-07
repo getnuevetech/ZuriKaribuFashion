@@ -248,12 +248,12 @@ export default function Home() {
   const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
 
   // Product card component
-  const ProductCard = ({ product }: { product: FeaturedProduct }) => (
+  const ProductCard = ({ product, imageAspectRatio = '3/4' }: { product: FeaturedProduct; imageAspectRatio?: string }) => (
     <Link
       to={`/${product.productType === 'DESIGN' ? 'designs' : product.productType === 'FABRIC' ? 'fabrics' : 'ready-to-wear'}/${product.id}`}
       className="group block bg-white overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100"
     >
-      <div className="relative overflow-hidden bg-gray-100" style={{ aspectRatio: '3/4' }}>
+      <div className="relative overflow-hidden bg-gray-100" style={{ aspectRatio: imageAspectRatio }}>
         <img
           src={product.image}
           alt={product.name}
@@ -531,7 +531,7 @@ export default function Home() {
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               {featuredRTW.slice(0, 4).map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard key={product.id} product={product} imageAspectRatio="5/8" />
               ))}
             </div>
           )}
