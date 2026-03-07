@@ -270,16 +270,6 @@ export default function Home() {
           alt={product.name}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
         />
-        {product.badge && (
-          <div className={`absolute top-3 left-3 px-2 py-1 text-xs font-semibold text-white rounded ${
-            product.badge === 'SALE' ? 'bg-red-500' : 
-            product.badge === 'NEW' ? 'bg-green-500' : 
-            product.badge === 'PROMO' ? 'bg-purple-500' : 
-            product.badge === 'BEST SELLER' ? 'bg-amber-500' : 'bg-coral-500'
-          }`}>
-            {product.badge}
-          </div>
-        )}
         <button className="absolute top-3 right-3 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white">
           <Heart className="w-4 h-4 text-gray-600" />
         </button>
@@ -290,7 +280,7 @@ export default function Home() {
       <div>
         <h3 className="font-semibold text-lg text-gray-900 group-hover:text-gray-600 transition-colors line-clamp-1">{product.name}</h3>
         <p className="text-sm text-gray-500 mt-1">{product.designer}</p>
-        <p className="font-semibold mt-1 text-gray-900">${product.price}{product.productType === 'FABRIC' && <span className="text-sm font-normal text-gray-500">/yard</span>}</p>
+        <p className="font-semibold mt-1 text-gray-900">${Number(product.price || 0).toFixed(2)}</p>
       </div>
     </Link>
   );
