@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronLeft, ChevronRight, Star, Heart, Loader2, MousePointer2, Box, CreditCard, CheckCircle, Truck } from 'lucide-react';
 import { api } from '../services/api';
@@ -236,6 +236,9 @@ export default function Home() {
 
   // Hero carousel state
   const [currentSlide, setCurrentSlide] = useState(0);
+  const customStripRef = useRef<HTMLDivElement | null>(null);
+  const rtwStripRef = useRef<HTMLDivElement | null>(null);
+  const fabricStripRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -246,18 +249,26 @@ export default function Home() {
 
   const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
   const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
+  const scrollStrip = (stripRef: { current: HTMLDivElement | null }, direction: 'left' | 'right') => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    strip.scrollBy({
+      left: direction === 'left' ? -320 : 320,
+      behavior: 'smooth',
+    });
+  };
 
   // Product card component
-  const ProductCard = ({ product, imageAspectRatio = '3/4' }: { product: FeaturedProduct; imageAspectRatio?: string }) => (
+  const ProductCard = ({ product }: { product: FeaturedProduct }) => (
     <Link
       to={`/${product.productType === 'DESIGN' ? 'designs' : product.productType === 'FABRIC' ? 'fabrics' : 'ready-to-wear'}/${product.id}`}
-      className="group block bg-white overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100"
+      className="group block"
     >
-      <div className="relative overflow-hidden bg-gray-100" style={{ aspectRatio: imageAspectRatio }}>
+      <div className="relative overflow-hidden bg-gray-100 rounded-lg mb-4" style={{ aspectRatio: '3/4' }}>
         <img
           src={product.image}
           alt={product.name}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
         />
         {product.badge && (
           <div className={`absolute top-3 left-3 px-2 py-1 text-xs font-semibold text-white rounded ${
@@ -269,19 +280,17 @@ export default function Home() {
             {product.badge}
           </div>
         )}
-        <button className="absolute top-3 right-3 p-2 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-coral-50">
+        <button className="absolute top-3 right-3 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white">
           <Heart className="w-4 h-4 text-gray-600" />
         </button>
-        <div className="absolute bottom-3 right-3 text-2xl">
-          {countryFlags[product.country] || '🌍'}
+        <div className="absolute top-3 left-3 bg-white/90 px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
+          <span>{countryFlags[product.country] || '🌍'}</span>
         </div>
       </div>
-      <div className="p-4">
-        <h3 className="font-semibold text-gray-900 group-hover:text-coral-600 transition-colors line-clamp-1">
-          {product.name}
-        </h3>
+      <div>
+        <h3 className="font-semibold text-lg text-gray-900 group-hover:text-gray-600 transition-colors line-clamp-1">{product.name}</h3>
         <p className="text-sm text-gray-500 mt-1">{product.designer}</p>
-        <p className="font-bold text-coral-600 mt-2">${product.price}{product.productType === 'FABRIC' && <span className="text-sm font-normal text-gray-500">/yard</span>}</p>
+        <p className="font-semibold mt-1 text-gray-900">${product.price}{product.productType === 'FABRIC' && <span className="text-sm font-normal text-gray-500">/yard</span>}</p>
       </div>
     </Link>
   );
@@ -471,29 +480,48 @@ export default function Home() {
       </section>
 
       {/* Featured Custom To Wear */}
-      <section className="py-16 bg-[#F5F5F0]">
-        <div className="px-4 sm:px-6 lg:px-8 xl:px-12">
-          <div className="flex items-center justify-between mb-8">
+      <section className="py-16 lg:py-24 bg-white">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10">
             <div>
-              <p className="text-coral-500 text-sm font-semibold mb-1">FEATURED</p>
-              <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Custom To Wear</h2>
-              <p className="text-gray-500 mt-1">Made To Fit by an African with Love</p>
+              <p className="inline-flex mb-3 px-2 py-1 border border-black text-xs tracking-wider font-semibold">FEATURED</p>
+              <h2 className="font-['Oswald'] text-3xl sm:text-4xl font-bold text-gray-900">Custom To Wear</h2>
+              <p className="text-gray-600 mt-2">Made To Fit by an African with Love</p>
             </div>
-            <Link
-              to="/designs"
-              className="hidden sm:inline-flex items-center gap-2 text-gray-600 hover:text-coral-600 font-medium"
-            >
-              View All <ArrowRight className="w-4 h-4" />
-            </Link>
+            <div className="flex gap-2 mt-4 sm:mt-0">
+              <button
+                type="button"
+                onClick={() => scrollStrip(customStripRef, 'left')}
+                className="w-10 h-10 border border-black/20 rounded-full flex items-center justify-center hover:bg-black hover:text-white transition-colors"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollStrip(customStripRef, 'right')}
+                className="w-10 h-10 border border-black/20 rounded-full flex items-center justify-center hover:bg-black hover:text-white transition-colors"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+              <Link to="/designs" className="hidden sm:inline-flex items-center gap-1 text-sm font-medium ml-2">
+                View All <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
           </div>
           {featuredLoading ? (
             <div className="flex items-center justify-center h-64">
-              <Loader2 className="w-8 h-8 animate-spin text-coral-500" />
+              <Loader2 className="w-8 h-8 animate-spin text-gray-900" />
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 md:gap-6">
-              {featuredDesigns.slice(0, 3).map((product) => (
-                <ProductCard key={product.id} product={product} />
+            <div
+              ref={customStripRef}
+              className="flex gap-6 overflow-x-auto scrollbar-hide pb-4 -mx-4 px-4 sm:-mx-0 sm:px-0"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {featuredDesigns.map((product) => (
+                <div key={product.id} className="flex-shrink-0 w-72">
+                  <ProductCard product={product} />
+                </div>
               ))}
             </div>
           )}
@@ -501,37 +529,48 @@ export default function Home() {
       </section>
 
       {/* Featured Ready To Wear */}
-      <section className="py-16 bg-[#F5F5F0]">
-        <div className="px-4 sm:px-6 lg:px-8 xl:px-12">
-          <div className="flex items-center justify-between mb-8">
+      <section className="py-16 lg:py-24 bg-white">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10">
             <div>
-              <p className="text-coral-500 text-sm font-semibold mb-1">FEATURED</p>
-              <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Ready To Wear</h2>
-              <p className="text-gray-500 mt-1">Made To Standard sizes for all</p>
+              <p className="inline-flex mb-3 px-2 py-1 border border-black text-xs tracking-wider font-semibold">FEATURED</p>
+              <h2 className="font-['Oswald'] text-3xl sm:text-4xl font-bold text-gray-900">Ready To Wear</h2>
+              <p className="text-gray-600 mt-2">Made To Standard sizes for all</p>
             </div>
-            <div className="flex items-center gap-2">
-              <button className="p-2 border border-gray-200 rounded hover:bg-gray-50">
+            <div className="flex gap-2 mt-4 sm:mt-0">
+              <button
+                type="button"
+                onClick={() => scrollStrip(rtwStripRef, 'left')}
+                className="w-10 h-10 border border-black/20 rounded-full flex items-center justify-center hover:bg-black hover:text-white transition-colors"
+              >
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <button className="p-2 border border-gray-200 rounded hover:bg-gray-50">
+              <button
+                type="button"
+                onClick={() => scrollStrip(rtwStripRef, 'right')}
+                className="w-10 h-10 border border-black/20 rounded-full flex items-center justify-center hover:bg-black hover:text-white transition-colors"
+              >
                 <ChevronRight className="w-5 h-5" />
               </button>
-              <Link
-                to="/ready-to-wear"
-                className="hidden sm:inline-flex items-center gap-2 text-gray-600 hover:text-coral-600 font-medium ml-4"
-              >
+              <Link to="/ready-to-wear" className="hidden sm:inline-flex items-center gap-1 text-sm font-medium ml-2">
                 View All <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
           </div>
           {featuredLoading ? (
             <div className="flex items-center justify-center h-64">
-              <Loader2 className="w-8 h-8 animate-spin text-coral-500" />
+              <Loader2 className="w-8 h-8 animate-spin text-gray-900" />
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-              {featuredRTW.slice(0, 4).map((product) => (
-                <ProductCard key={product.id} product={product} imageAspectRatio="5/8" />
+            <div
+              ref={rtwStripRef}
+              className="flex gap-6 overflow-x-auto scrollbar-hide pb-4 -mx-4 px-4 sm:-mx-0 sm:px-0"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {featuredRTW.map((product) => (
+                <div key={product.id} className="flex-shrink-0 w-72">
+                  <ProductCard product={product} />
+                </div>
               ))}
             </div>
           )}
@@ -539,37 +578,48 @@ export default function Home() {
       </section>
 
       {/* Featured Fabrics */}
-      <section className="py-16 bg-[#F5F5F0]">
-        <div className="px-4 sm:px-6 lg:px-8 xl:px-12">
-          <div className="flex items-center justify-between mb-8">
+      <section className="py-16 lg:py-24 bg-white">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10">
             <div>
-              <p className="text-coral-500 text-sm font-semibold mb-1">FEATURED</p>
-              <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Fabrics To Buy</h2>
-              <p className="text-gray-500 mt-1">Fabrics from all across the edges of Africa</p>
+              <p className="inline-flex mb-3 px-2 py-1 border border-black text-xs tracking-wider font-semibold">FEATURED</p>
+              <h2 className="font-['Oswald'] text-3xl sm:text-4xl font-bold text-gray-900">Fabrics To Buy</h2>
+              <p className="text-gray-600 mt-2">Fabrics from all across the edges of Africa</p>
             </div>
-            <div className="flex items-center gap-2">
-              <button className="p-2 border border-gray-200 rounded hover:bg-gray-50">
+            <div className="flex gap-2 mt-4 sm:mt-0">
+              <button
+                type="button"
+                onClick={() => scrollStrip(fabricStripRef, 'left')}
+                className="w-10 h-10 border border-black/20 rounded-full flex items-center justify-center hover:bg-black hover:text-white transition-colors"
+              >
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <button className="p-2 border border-gray-200 rounded hover:bg-gray-50">
+              <button
+                type="button"
+                onClick={() => scrollStrip(fabricStripRef, 'right')}
+                className="w-10 h-10 border border-black/20 rounded-full flex items-center justify-center hover:bg-black hover:text-white transition-colors"
+              >
                 <ChevronRight className="w-5 h-5" />
               </button>
-              <Link
-                to="/fabrics"
-                className="hidden sm:inline-flex items-center gap-2 text-gray-600 hover:text-coral-600 font-medium ml-4"
-              >
+              <Link to="/fabrics" className="hidden sm:inline-flex items-center gap-1 text-sm font-medium ml-2">
                 View All <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
           </div>
           {featuredLoading ? (
             <div className="flex items-center justify-center h-64">
-              <Loader2 className="w-8 h-8 animate-spin text-coral-500" />
+              <Loader2 className="w-8 h-8 animate-spin text-gray-900" />
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-              {featuredFabrics.slice(0, 4).map((product) => (
-                <ProductCard key={product.id} product={product} />
+            <div
+              ref={fabricStripRef}
+              className="flex gap-6 overflow-x-auto scrollbar-hide pb-4 -mx-4 px-4 sm:-mx-0 sm:px-0"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {featuredFabrics.map((product) => (
+                <div key={product.id} className="flex-shrink-0 w-72">
+                  <ProductCard product={product} />
+                </div>
               ))}
             </div>
           )}
