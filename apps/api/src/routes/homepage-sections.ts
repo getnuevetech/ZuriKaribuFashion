@@ -86,6 +86,8 @@ const COUNTRY_IMAGE_SETTINGS_KEY = 'COUNTRY_IMAGE_API';
 const HOMEPAGE_VISIBILITY_SETTINGS_KEY = 'HOMEPAGE_SECTION_VISIBILITY';
 const DESIGNER_SPOTLIGHT_QUOTE_SETTINGS_KEY = 'DESIGNER_SPOTLIGHT_QUOTE_SETTINGS';
 const DEFAULT_DESIGNER_SPOTLIGHT_QUOTE_MAX_WORDS = 15;
+const TESTIMONIAL_SETTINGS_KEY = 'HOMEPAGE_TESTIMONIAL_SETTINGS';
+const DEFAULT_TESTIMONIAL_MAX_WORDS = 25;
 const HOMEPAGE_SECTION_VISIBILITY_META = [
   { key: 'hero', label: 'Hero Banner', description: 'Top hero carousel section.' },
   { key: 'countries', label: 'Country Strip', description: 'Country marquee cards below hero.' },
@@ -105,6 +107,9 @@ const HOMEPAGE_SECTION_VISIBILITY_META = [
 type HomepageVisibilityKey = (typeof HOMEPAGE_SECTION_VISIBILITY_META)[number]['key'];
 type HomepageSectionVisibility = Record<HomepageVisibilityKey, boolean>;
 type DesignerSpotlightQuoteSettings = {
+  maxWords: number;
+};
+type TestimonialSettings = {
   maxWords: number;
 };
 const HOMEPAGE_SECTION_VISIBILITY_DEFAULTS = HOMEPAGE_SECTION_VISIBILITY_META.reduce(
@@ -434,6 +439,94 @@ const applyDesignerSpotlightQuoteWordLimit = (spotlight: any, maxWords: number) 
     ...spotlight,
     quote: limited,
     headline: limited,
+  };
+};
+
+const normalizeTestimonialSettings = (raw: unknown): TestimonialSettings => {
+  if (!raw || typeof raw !== 'object') {
+    return { maxWords: DEFAULT_TESTIMONIAL_MAX_WORDS };
+  }
+  const row = raw as Record<string, unknown>;
+  const parsed = Number(row.maxWords);
+  if (!Number.isFinite(parsed)) {
+    return { maxWords: DEFAULT_TESTIMONIAL_MAX_WORDS };
+  }
+  return {
+    maxWords: Math.min(60, Math.max(10, Math.round(parsed))),
+  };
+};
+
+const readTestimonialSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    TESTIMONIAL_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: { maxWords: DEFAULT_TESTIMONIAL_MAX_WORDS },
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  let parsed = { maxWords: DEFAULT_TESTIMONIAL_MAX_WORDS };
+  try {
+    parsed = normalizeTestimonialSettings(JSON.parse(String(row.value || '{}')));
+  } catch {
+    parsed = { maxWords: DEFAULT_TESTIMONIAL_MAX_WORDS };
+  }
+  return {
+    rowId: String(row.id),
+    settings: parsed,
+    source: 'DATABASE' as const,
+    updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+  };
+};
+
+const saveTestimonialSettings = async (settings: TestimonialSettings) => {
+  const normalized = normalizeTestimonialSettings(settings);
+  const existing = await readTestimonialSettings();
+  const payload = JSON.stringify(normalized);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return normalized;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    TESTIMONIAL_SETTINGS_KEY,
+    payload
+  );
+  return normalized;
+};
+
+const getTestimonialSettingsForAdmin = async () => {
+  const { settings, source, updatedAt } = await readTestimonialSettings();
+  return {
+    maxWords: settings.maxWords,
+    source,
+    updatedAt,
+  };
+};
+
+const applyTestimonialWordLimit = (testimonial: any, maxWords: number) => {
+  const quoteText = getNonEmptyString(testimonial?.quote) ?? getNonEmptyString(testimonial?.text) ?? '';
+  const limited = trimToWordLimit(quoteText, maxWords);
+  return {
+    ...testimonial,
+    quote: limited,
+    text: limited,
   };
 };
 
@@ -770,6 +863,9 @@ const homepageVisibilityUpdateSchema = z.object({
 });
 const designerSpotlightQuoteSettingsUpdateSchema = z.object({
   maxWords: z.coerce.number().int().min(5).max(40),
+});
+const testimonialSettingsUpdateSchema = z.object({
+  maxWords: z.coerce.number().int().min(10).max(60),
 });
 
 const howItWorksCreateSchema = z.object({
@@ -1293,10 +1389,13 @@ router.get('/testimonials', async (req, res) => {
       where: { isActive: true },
       orderBy: { displayOrder: 'asc' },
     });
+    const settings = await getTestimonialSettingsForAdmin();
 
     res.json({
       success: true,
-      data: testimonials.map(serializeTestimonial),
+      data: testimonials
+        .map(serializeTestimonial)
+        .map((testimonial) => applyTestimonialWordLimit(testimonial, settings.maxWords)),
     });
   } catch (error) {
     console.error('Error fetching testimonials:', error);
@@ -1478,6 +1577,31 @@ router.put('/admin/designer-spotlight-settings', authenticate, authorizePermissi
     }
     console.error('Error updating designer spotlight settings:', error);
     res.status(500).json({ success: false, message: 'Failed to update designer spotlight settings.' });
+  }
+});
+
+router.get('/admin/testimonial-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const data = await getTestimonialSettingsForAdmin();
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Error fetching testimonial settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch testimonial settings.' });
+  }
+});
+
+router.put('/admin/testimonial-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = testimonialSettingsUpdateSchema.parse(req.body);
+    await saveTestimonialSettings({ maxWords: payload.maxWords });
+    const data = await getTestimonialSettingsForAdmin();
+    res.json({ success: true, data });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return validationError(res, error);
+    }
+    console.error('Error updating testimonial settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update testimonial settings.' });
   }
 });
 
@@ -2307,6 +2431,8 @@ router.get('/admin/testimonials', authenticate, authorizePermissions(Permissions
 router.post('/admin/testimonials', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const data = testimonialCreateSchema.parse(normalizeTestimonialInput(req.body));
+    const settings = await getTestimonialSettingsForAdmin();
+    data.quote = trimToWordLimit(data.quote, settings.maxWords);
     const testimonial = await prisma.testimonial.create({ data });
     res.status(201).json({ success: true, data: serializeTestimonial(testimonial) });
   } catch (error) {
@@ -2321,6 +2447,10 @@ router.post('/admin/testimonials', authenticate, authorizePermissions(Permission
 router.put('/admin/testimonials/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const data = testimonialUpdateSchema.parse(normalizeTestimonialInput(req.body));
+    const settings = await getTestimonialSettingsForAdmin();
+    if (typeof data.quote === 'string') {
+      data.quote = trimToWordLimit(data.quote, settings.maxWords);
+    }
     const testimonial = await prisma.testimonial.update({
       where: { id: req.params.id },
       data,
@@ -2337,6 +2467,10 @@ router.put('/admin/testimonials/:id', authenticate, authorizePermissions(Permiss
 router.patch('/admin/testimonials/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const data = testimonialUpdateSchema.parse(normalizeTestimonialInput(req.body));
+    const settings = await getTestimonialSettingsForAdmin();
+    if (typeof data.quote === 'string') {
+      data.quote = trimToWordLimit(data.quote, settings.maxWords);
+    }
     const testimonial = await prisma.testimonial.update({
       where: { id: req.params.id },
       data,

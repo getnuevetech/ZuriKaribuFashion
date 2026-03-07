@@ -96,6 +96,12 @@ interface DesignerSpotlightSettings {
   updatedAt: string | null;
 }
 
+interface TestimonialSettings {
+  maxWords: number;
+  source: 'DATABASE' | 'DEFAULT';
+  updatedAt: string | null;
+}
+
 interface HomepageStory {
   id: string;
   type: 'COUNTRY' | 'DESIGNER_SPOTLIGHT';
@@ -208,6 +214,12 @@ export default function HomepageSections() {
     updatedAt: null,
   });
   const [designerSpotlightSettingsSaving, setDesignerSpotlightSettingsSaving] = useState(false);
+  const [testimonialSettings, setTestimonialSettings] = useState<TestimonialSettings>({
+    maxWords: 25,
+    source: 'DEFAULT',
+    updatedAt: null,
+  });
+  const [testimonialSettingsSaving, setTestimonialSettingsSaving] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -300,8 +312,18 @@ export default function HomepageSections() {
           if (heritageRes.success) setHeritageSections(heritageRes.data);
           break;
         case 'testimonials':
-          const testimonialsRes = await api.homepageSections.getAdminTestimonials();
+          const [testimonialsRes, testimonialSettingsRes] = await Promise.all([
+            api.homepageSections.getAdminTestimonials(),
+            api.homepageSections.getAdminTestimonialSettings(),
+          ]);
           if (testimonialsRes.success) setTestimonials(testimonialsRes.data);
+          if (testimonialSettingsRes.success) {
+            setTestimonialSettings({
+              maxWords: Number(testimonialSettingsRes.data?.maxWords || 25),
+              source: testimonialSettingsRes.data?.source || 'DEFAULT',
+              updatedAt: testimonialSettingsRes.data?.updatedAt || null,
+            });
+          }
           break;
         case 'footer':
           const footerRes = await api.homepageSections.getAdminFooter();
@@ -522,6 +544,33 @@ export default function HomepageSections() {
     }
   };
 
+  const handleSaveTestimonialSettings = async () => {
+    const nextMaxWords = Number(testimonialSettings.maxWords || 25);
+    if (!Number.isFinite(nextMaxWords) || nextMaxWords < 10 || nextMaxWords > 60) {
+      toast.error('Testimonial max words must be between 10 and 60.');
+      return;
+    }
+    setTestimonialSettingsSaving(true);
+    try {
+      const response = await api.homepageSections.updateAdminTestimonialSettings({
+        maxWords: Math.round(nextMaxWords),
+      });
+      if (response.success) {
+        setTestimonialSettings({
+          maxWords: Number(response.data?.maxWords || 25),
+          source: response.data?.source || 'DATABASE',
+          updatedAt: response.data?.updatedAt || null,
+        });
+        toast.success('Testimonial word limit saved.');
+      }
+    } catch (error: any) {
+      const message = error?.response?.data?.message || 'Failed to save testimonial settings.';
+      toast.error(message);
+    } finally {
+      setTestimonialSettingsSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -656,12 +705,25 @@ export default function HomepageSections() {
               />
             )}
             {activeTab === 'testimonials' && (
-              <TestimonialsTable
-                data={testimonials}
-                onEdit={openModal}
-                onToggle={handleToggleActive}
-                onDelete={handleDelete}
-              />
+              <>
+                <TestimonialSettingsPanel
+                  settings={testimonialSettings}
+                  saving={testimonialSettingsSaving}
+                  onChange={(maxWords) =>
+                    setTestimonialSettings((prev) => ({
+                      ...prev,
+                      maxWords,
+                    }))
+                  }
+                  onSave={handleSaveTestimonialSettings}
+                />
+                <TestimonialsTable
+                  data={testimonials}
+                  onEdit={openModal}
+                  onToggle={handleToggleActive}
+                  onDelete={handleDelete}
+                />
+              </>
             )}
             {activeTab === 'footer' && (
               <FooterTable
@@ -685,6 +747,7 @@ export default function HomepageSections() {
           countryStories={countryBlogs}
           designerStories={designerBlogs}
           designerQuoteMaxWords={designerSpotlightSettings.maxWords}
+          testimonialMaxWords={testimonialSettings.maxWords}
           onClose={closeModal}
           onSave={handleSave}
         />
@@ -991,6 +1054,52 @@ function DesignerSpotlightSettingsPanel({
               max={40}
               value={settings.maxWords}
               onChange={(event) => onChange(Number(event.target.value || 15))}
+              className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+            />
+          </div>
+          <Button type="button" onClick={onSave} disabled={saving} className="h-10">
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TestimonialSettingsPanel({
+  settings,
+  saving,
+  onChange,
+  onSave,
+}: {
+  settings: TestimonialSettings;
+  saving: boolean;
+  onChange: (maxWords: number) => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="p-4 border-b border-gray-200 bg-gray-50">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-gray-900">Frontpage Testimonial Settings</p>
+          <p className="text-xs text-gray-600">
+            Keep customer reviews concise for a cleaner testimonial section.
+          </p>
+          <p className="text-xs text-gray-500">
+            Source: {settings.source === 'DATABASE' ? 'Saved in dashboard' : 'Default setting'} ·
+            {' '}
+            Current max words: <span className="font-semibold">{settings.maxWords}</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Max words</label>
+            <input
+              type="number"
+              min={10}
+              max={60}
+              value={settings.maxWords}
+              onChange={(event) => onChange(Number(event.target.value || 25))}
               className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
             />
           </div>
@@ -1573,6 +1682,7 @@ function SectionModal({
   countryStories,
   designerStories,
   designerQuoteMaxWords,
+  testimonialMaxWords,
   onClose,
   onSave,
 }: {
@@ -1583,6 +1693,7 @@ function SectionModal({
   countryStories: HomepageStory[];
   designerStories: HomepageStory[];
   designerQuoteMaxWords: number;
+  testimonialMaxWords: number;
   onClose: () => void;
   onSave: () => void;
 }) {
@@ -1598,6 +1709,7 @@ function SectionModal({
       .split(/\s+/)
       .filter(Boolean).length;
   const designerQuoteWordCount = countWords(String(formData.quote || ''));
+  const testimonialWordCount = countWords(String(formData.text || ''));
   const uploadField =
     type === 'testimonials'
       ? 'avatar'
@@ -1853,6 +1965,22 @@ function SectionModal({
         setSaving(false);
         setFormError('Enter an external URL to link this spotlight card.');
         toast.error('Enter an external URL to link this spotlight card.');
+        return;
+      }
+    }
+
+    if (type === 'testimonials') {
+      const testimonialText = String(formData.text || '').trim();
+      if (!testimonialText) {
+        setSaving(false);
+        setFormError('Testimonial text is required.');
+        toast.error('Testimonial text is required.');
+        return;
+      }
+      if (countWords(testimonialText) > testimonialMaxWords) {
+        setSaving(false);
+        setFormError(`Testimonial text cannot exceed ${testimonialMaxWords} words.`);
+        toast.error(`Testimonial text cannot exceed ${testimonialMaxWords} words.`);
         return;
       }
     }
@@ -2505,6 +2633,9 @@ function SectionModal({
                 rows={4}
                 required
               />
+              <p className={`mt-1 text-xs ${testimonialWordCount > testimonialMaxWords ? 'text-red-600' : 'text-gray-500'}`}>
+                {testimonialWordCount}/{testimonialMaxWords} words
+              </p>
             </div>
           </>
         );

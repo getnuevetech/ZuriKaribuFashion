@@ -1398,7 +1398,7 @@ export default function Home() {
             <p className="text-gray-600">Join thousands of happy customers worldwide.</p>
           </div>
           <div
-            className={`mx-auto max-w-3xl bg-[#F5F5F2] p-7 md:p-10 rounded-xl border border-black/10 transition-all duration-700 ${
+            className={`mx-auto max-w-3xl p-7 md:p-10 transition-all duration-700 ${
               testimonialsReveal.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
             }`}
           >

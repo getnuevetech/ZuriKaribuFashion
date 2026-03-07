@@ -1533,6 +1533,26 @@ const homepageSectionsApi = {
   getAdminTestimonials: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/admin/testimonials'),
 
+  getAdminTestimonialSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        maxWords: number;
+        source: 'DATABASE' | 'DEFAULT';
+        updatedAt: string | null;
+      };
+    }>('/homepage-sections/admin/testimonial-settings'),
+
+  updateAdminTestimonialSettings: (data: { maxWords: number }) =>
+    apiService.put<{
+      success: boolean;
+      data: {
+        maxWords: number;
+        source: 'DATABASE' | 'DEFAULT';
+        updatedAt: string | null;
+      };
+    }>('/homepage-sections/admin/testimonial-settings', data),
+
   createTestimonial: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/homepage-sections/admin/testimonials', data),
 
