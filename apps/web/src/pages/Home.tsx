@@ -330,7 +330,7 @@ export default function Home() {
         id: String(slide?.id || `hero-${index}`),
         image: resolveAssetUrl(slide?.image),
         badge: normalizeHeroBadge(slide?.badge),
-        title: slide?.title || 'African Fashion',
+        title: slide?.title || 'ZuriKaribu',
         subtitle: slide?.subtitle || '',
         ctaText: slide?.ctaText || 'Shop Now',
         ctaLink: slide?.ctaLink || '/custom-to-wear',
@@ -351,7 +351,7 @@ export default function Home() {
         id: `banner-hero-${heroBanner.id}`,
         image: heroBannerImage,
         badge: normalizeHeroBadge(heroBanner.name),
-        title: heroBanner.title || normalized[0]?.title || 'African Fashion',
+        title: heroBanner.title || normalized[0]?.title || 'ZuriKaribu',
         subtitle: heroBanner.subtitle || normalized[0]?.subtitle || '',
         ctaText: heroBanner.ctaText || normalized[0]?.ctaText || 'Shop Now',
         ctaLink: heroBanner.ctaLink || normalized[0]?.ctaLink || '/custom-to-wear',
@@ -1459,7 +1459,7 @@ export default function Home() {
               }`}
               style={{ transitionDelay: '120ms' }}
             >
-              <h2 className="text-2xl md:text-3xl font-bold mb-3">Ready to Wear African Fashion?</h2>
+              <h2 className="text-2xl md:text-3xl font-bold mb-3">Ready to Wear with ZuriKaribu?</h2>
               <p className="text-white/85 mb-6">
                 Join our community of fashion lovers and discover unique pieces from talented African designers.
               </p>

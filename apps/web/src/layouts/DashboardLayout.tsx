@@ -164,7 +164,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
           {/* Logo */}
           <div className="h-16 flex items-center px-6 border-b border-white/10">
             <Link to="/" className="font-display text-xl font-bold">
-              {isSidebarOpen ? 'African Fashion' : 'AF'}
+              {isSidebarOpen ? 'ZuriKaribu' : 'ZK'}
             </Link>
           </div>
 

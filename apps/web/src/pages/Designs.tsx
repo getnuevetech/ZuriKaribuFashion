@@ -536,7 +536,7 @@ export default function Designs() {
       <section className="relative h-72 md:h-80 overflow-hidden">
         <img
           src="/images/hero-designs.jpg"
-          alt="African Fashion Designs"
+          alt="ZuriKaribu Designs"
           onError={handleImageFallback('hero-custom-to-wear', 1920, 1080)}
           className="w-full h-full object-cover"
         />

@@ -355,13 +355,13 @@ export async function ensureHomepageSectionsSchema() {
     )`,
     `CREATE TABLE IF NOT EXISTS "FooterContent" (
       "id" TEXT NOT NULL,
-      "companyName" TEXT NOT NULL DEFAULT 'AfriFashion',
+      "companyName" TEXT NOT NULL DEFAULT 'ZuriKaribu',
       "tagline" TEXT NOT NULL DEFAULT 'Wear the story of Africa.',
-      "email" TEXT NOT NULL DEFAULT 'hello@afrifashion.com',
+      "email" TEXT NOT NULL DEFAULT 'hello@zurikaribu.com',
       "phone" TEXT NOT NULL DEFAULT '+1 (555) 123-4567',
       "address" TEXT NOT NULL DEFAULT 'Lagos, Nigeria',
       "socialLinks" TEXT,
-      "copyright" TEXT NOT NULL DEFAULT '© 2026 AfriFashion. All rights reserved.',
+      "copyright" TEXT NOT NULL DEFAULT '© 2026 ZuriKaribu. All rights reserved.',
       "updatedAt" TIMESTAMP(3) NOT NULL,
       CONSTRAINT "FooterContent_pkey" PRIMARY KEY ("id")
     )`,

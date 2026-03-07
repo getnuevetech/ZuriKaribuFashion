@@ -7,7 +7,7 @@ export default function Footer() {
       <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-10 lg:gap-8 mb-12">
           <div className="lg:col-span-2">
-            <h3 className="font-['Oswald'] text-2xl font-bold mb-4">AFRICAN FASHION</h3>
+            <h3 className="font-['Oswald'] text-2xl font-bold mb-4">ZURIKARIBU</h3>
             <p className="text-white/60 mb-6 max-w-sm">
               Wear the story of Africa. Discover authentic fashion crafted by talented African designers.
             </p>
@@ -71,13 +71,13 @@ export default function Footer() {
         </div>
 
         <div className="flex flex-wrap gap-6 py-8 border-t border-white/10 mb-8">
-          <p className="text-white/60 text-sm">hello@africanfashion.com</p>
+          <p className="text-white/60 text-sm">hello@zurikaribu.com</p>
           <p className="text-white/60 text-sm">+1 (555) 123-4567</p>
           <p className="text-white/60 text-sm">Lagos, Nigeria</p>
         </div>
 
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-8 border-t border-white/10">
-          <p className="text-white/40 text-sm">© 2026 African Fashion. All rights reserved.</p>
+          <p className="text-white/40 text-sm">© 2026 ZuriKaribu. All rights reserved.</p>
           <div className="flex gap-6">
             <Link to="/privacy" className="text-white/40 hover:text-white text-sm transition-colors">Privacy Policy</Link>
             <Link to="/terms" className="text-white/40 hover:text-white text-sm transition-colors">Terms of Service</Link>

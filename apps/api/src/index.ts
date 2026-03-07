@@ -83,7 +83,7 @@ app.use('/uploads', (req, res, next) => {
         </defs>
         <rect width="1200" height="1600" fill="url(#bg)"/>
         <rect x="90" y="180" width="1020" height="1240" rx="28" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.2)"/>
-        <text x="50%" y="46%" text-anchor="middle" font-family="Arial, sans-serif" font-size="64" font-weight="700" fill="#F9FAFB">AFRICAN FASHION</text>
+        <text x="50%" y="46%" text-anchor="middle" font-family="Arial, sans-serif" font-size="64" font-weight="700" fill="#F9FAFB">ZURIKARIBU</text>
         <text x="50%" y="52%" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" fill="#FDBA74">Image Placeholder</text>
         <text x="50%" y="57%" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#D1D5DB">Path is invalid or restricted</text>
       </svg>`
@@ -106,7 +106,7 @@ app.use('/uploads', (req, res, next) => {
       <circle cx="960" cy="260" r="130" fill="rgba(249,115,22,0.2)" />
       <circle cx="210" cy="1250" r="170" fill="rgba(249,115,22,0.14)" />
       <rect x="90" y="180" width="1020" height="1240" rx="28" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.2)"/>
-      <text x="50%" y="46%" text-anchor="middle" font-family="Arial, sans-serif" font-size="64" font-weight="700" fill="#F9FAFB">AFRICAN FASHION</text>
+      <text x="50%" y="46%" text-anchor="middle" font-family="Arial, sans-serif" font-size="64" font-weight="700" fill="#F9FAFB">ZURIKARIBU</text>
       <text x="50%" y="52%" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" fill="#FDBA74">Product Image Placeholder</text>
       <text x="50%" y="57%" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#D1D5DB">Original image not available yet</text>
     </svg>`

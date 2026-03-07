@@ -100,7 +100,7 @@ export default function MainLayout() {
                   isScrolled ? 'text-black' : 'text-white'
                 }`}
               >
-                African Fashion
+                ZuriKaribu
               </Link>
             </div>
 

@@ -20,7 +20,7 @@ export default function StaticPage({
   return (
     <div className="min-h-[70vh] bg-gray-50 pt-28 pb-16 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto bg-white border border-gray-200 rounded-2xl p-8 md:p-10 shadow-sm">
-        <p className="text-xs tracking-widest text-coral-500 font-semibold mb-3">AFRICAN FASHION</p>
+        <p className="text-xs tracking-widest text-coral-500 font-semibold mb-3">ZURIKARIBU</p>
         <h1 className="text-3xl md:text-4xl font-bold text-gray-900">{title}</h1>
         <p className="mt-4 text-gray-600 leading-relaxed">{description}</p>
 

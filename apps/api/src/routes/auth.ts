@@ -343,7 +343,7 @@ router.post('/register', async (req, res, next) => {
       success: true,
       message:
         data.role === 'CUSTOMER'
-          ? 'Registration successful! Welcome to African Fashion.'
+          ? 'Registration successful! Welcome to ZuriKaribu.'
           : 'Registration successful. Please complete your vendor profile for admin approval.',
       data: {
         user,

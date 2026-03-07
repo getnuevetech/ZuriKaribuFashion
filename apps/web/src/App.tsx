@@ -106,8 +106,8 @@ function App() {
                 path="/about"
                 element={
                   <StaticPage
-                    title="About African Fashion"
-                    description="African Fashion connects talented designers and fabric sellers with global customers. We curate authentic pieces, celebrate craftsmanship, and make African style accessible worldwide."
+                    title="About ZuriKaribu"
+                    description="ZuriKaribu connects talented designers and fabric sellers with global customers. We curate authentic pieces, celebrate craftsmanship, and make African style accessible worldwide."
                     primaryCtaLabel="Explore Collections"
                     primaryCtaHref="/ready-to-wear"
                     secondaryCtaLabel="Meet Designers"
@@ -120,7 +120,7 @@ function App() {
                 element={
                   <StaticPage
                     title="Contact Us"
-                    description="Need support with an order, vendor onboarding, or partnerships? Reach our team at hello@africanfashion.com and we will get back to you as soon as possible."
+                    description="Need support with an order, vendor onboarding, or partnerships? Reach our team at hello@zurikaribu.com and we will get back to you as soon as possible."
                     primaryCtaLabel="Browse Shop"
                     primaryCtaHref="/ready-to-wear"
                     secondaryCtaLabel="Read FAQs"

@@ -47,7 +47,7 @@ export default function Login() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <h2 className="text-3xl font-bold text-gray-900">Welcome back</h2>
-          <p className="mt-2 text-gray-600">Sign in to your African Fashion account</p>
+          <p className="mt-2 text-gray-600">Sign in to your ZuriKaribu account</p>
         </div>
 
         {error && (

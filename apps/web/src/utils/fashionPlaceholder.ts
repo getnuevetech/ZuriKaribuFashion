@@ -44,7 +44,7 @@ function escapeXml(value: string) {
 
 function deriveTitle(seed: string) {
   const cleaned = toTitleCase(seed).replace(/\b(Product|Image|Upload|Hero|Thumb)\b/gi, '').trim();
-  if (!cleaned) return 'African Fashion';
+  if (!cleaned) return 'ZuriKaribu';
   return cleaned.length > 34 ? `${cleaned.slice(0, 34)}...` : cleaned;
 }
 
@@ -54,7 +54,7 @@ export function fashionFallbackImage(seed: string, options: FashionFallbackOptio
   const normalizedSeed = String(seed || 'african-fashion').trim().toLowerCase();
   const palette = PALETTES[hashString(normalizedSeed) % PALETTES.length];
   const title = escapeXml(options.label || deriveTitle(seed));
-  const subtitle = escapeXml(options.subtitle || 'African Fashion Marketplace');
+  const subtitle = escapeXml(options.subtitle || 'ZuriKaribu Marketplace');
   const grainCount = 6;
   const grain = Array.from({ length: grainCount })
     .map((_, index) => {
@@ -90,7 +90,7 @@ export function fashionFallbackImage(seed: string, options: FashionFallbackOptio
     )}" rx="${Math.round(width * 0.03)}" fill="url(#card)" stroke="rgba(255,255,255,0.18)" />
     <text x="50%" y="${Math.round(height * 0.44)}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${Math.round(
       width * 0.06
-    )}" font-weight="700" fill="#FFFFFF" letter-spacing="1">AFRICAN FASHION</text>
+    )}" font-weight="700" fill="#FFFFFF" letter-spacing="1">ZURIKARIBU</text>
     <text x="50%" y="${Math.round(height * 0.51)}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${Math.round(
       width * 0.037
     )}" font-weight="600" fill="${palette.accent}">${title}</text>
