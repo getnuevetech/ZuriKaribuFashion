@@ -84,6 +84,8 @@ const OPENAI_COUNTRY_IMAGE_MODEL = String(process.env.OPENAI_COUNTRY_IMAGE_MODEL
 const OPENAI_COUNTRY_IMAGE_SIZE = String(process.env.OPENAI_COUNTRY_IMAGE_SIZE || '1536x1024').trim();
 const COUNTRY_IMAGE_SETTINGS_KEY = 'COUNTRY_IMAGE_API';
 const HOMEPAGE_VISIBILITY_SETTINGS_KEY = 'HOMEPAGE_SECTION_VISIBILITY';
+const DESIGNER_SPOTLIGHT_QUOTE_SETTINGS_KEY = 'DESIGNER_SPOTLIGHT_QUOTE_SETTINGS';
+const DEFAULT_DESIGNER_SPOTLIGHT_QUOTE_MAX_WORDS = 15;
 const HOMEPAGE_SECTION_VISIBILITY_META = [
   { key: 'hero', label: 'Hero Banner', description: 'Top hero carousel section.' },
   { key: 'countries', label: 'Country Strip', description: 'Country marquee cards below hero.' },
@@ -102,10 +104,30 @@ const HOMEPAGE_SECTION_VISIBILITY_META = [
 ] as const;
 type HomepageVisibilityKey = (typeof HOMEPAGE_SECTION_VISIBILITY_META)[number]['key'];
 type HomepageSectionVisibility = Record<HomepageVisibilityKey, boolean>;
+type DesignerSpotlightQuoteSettings = {
+  maxWords: number;
+};
 const HOMEPAGE_SECTION_VISIBILITY_DEFAULTS = HOMEPAGE_SECTION_VISIBILITY_META.reduce(
   (acc, item) => ({ ...acc, [item.key]: true }),
   {} as HomepageSectionVisibility
 );
+
+const wordCount = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+
+const trimToWordLimit = (value: unknown, maxWords: number) => {
+  const tokens = String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (tokens.length <= maxWords) {
+    return tokens.join(' ');
+  }
+  return tokens.slice(0, maxWords).join(' ');
+};
 
 type CountryImageProvider = 'OPENAI' | 'OPENAI_COMPATIBLE' | 'POLLINATIONS' | 'PICSUM';
 type CountryImageConfigProvider = Exclude<CountryImageProvider, 'PICSUM'>;
@@ -324,6 +346,94 @@ const getHomepageSectionVisibilityForAdmin = async () => {
       description: item.description,
       enabled: Boolean(visibility[item.key]),
     })),
+  };
+};
+
+const normalizeDesignerSpotlightQuoteSettings = (raw: unknown): DesignerSpotlightQuoteSettings => {
+  if (!raw || typeof raw !== 'object') {
+    return { maxWords: DEFAULT_DESIGNER_SPOTLIGHT_QUOTE_MAX_WORDS };
+  }
+  const row = raw as Record<string, unknown>;
+  const parsed = Number(row.maxWords);
+  if (!Number.isFinite(parsed)) {
+    return { maxWords: DEFAULT_DESIGNER_SPOTLIGHT_QUOTE_MAX_WORDS };
+  }
+  return {
+    maxWords: Math.min(40, Math.max(5, Math.round(parsed))),
+  };
+};
+
+const readDesignerSpotlightQuoteSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    DESIGNER_SPOTLIGHT_QUOTE_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: { maxWords: DEFAULT_DESIGNER_SPOTLIGHT_QUOTE_MAX_WORDS },
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  let parsed = { maxWords: DEFAULT_DESIGNER_SPOTLIGHT_QUOTE_MAX_WORDS };
+  try {
+    parsed = normalizeDesignerSpotlightQuoteSettings(JSON.parse(String(row.value || '{}')));
+  } catch {
+    parsed = { maxWords: DEFAULT_DESIGNER_SPOTLIGHT_QUOTE_MAX_WORDS };
+  }
+  return {
+    rowId: String(row.id),
+    settings: parsed,
+    source: 'DATABASE' as const,
+    updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+  };
+};
+
+const saveDesignerSpotlightQuoteSettings = async (settings: DesignerSpotlightQuoteSettings) => {
+  const normalized = normalizeDesignerSpotlightQuoteSettings(settings);
+  const existing = await readDesignerSpotlightQuoteSettings();
+  const payload = JSON.stringify(normalized);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return normalized;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    DESIGNER_SPOTLIGHT_QUOTE_SETTINGS_KEY,
+    payload
+  );
+  return normalized;
+};
+
+const getDesignerSpotlightQuoteSettingsForAdmin = async () => {
+  const { settings, source, updatedAt } = await readDesignerSpotlightQuoteSettings();
+  return {
+    maxWords: settings.maxWords,
+    source,
+    updatedAt,
+  };
+};
+
+const applyDesignerSpotlightQuoteWordLimit = (spotlight: any, maxWords: number) => {
+  const quoteText = getNonEmptyString(spotlight?.quote) ?? getNonEmptyString(spotlight?.headline) ?? '';
+  const limited = trimToWordLimit(quoteText, maxWords);
+  return {
+    ...spotlight,
+    quote: limited,
+    headline: limited,
   };
 };
 
@@ -657,6 +767,9 @@ const countryImageApiConfigTestSchema = countryImageApiConfigUpdateSchema.extend
 });
 const homepageVisibilityUpdateSchema = z.object({
   visibility: z.record(z.boolean()),
+});
+const designerSpotlightQuoteSettingsUpdateSchema = z.object({
+  maxWords: z.coerce.number().int().min(5).max(40),
 });
 
 const howItWorksCreateSchema = z.object({
@@ -1107,7 +1220,10 @@ router.get('/categories', async (req, res) => {
 router.get('/designer-spotlight', async (req, res) => {
   try {
     const spotlights = await getSpotlightsWithDesigners(true);
-    const spotlight = spotlights[0] || null;
+    const quoteSettings = await getDesignerSpotlightQuoteSettingsForAdmin();
+    const spotlight = spotlights[0]
+      ? applyDesignerSpotlightQuoteWordLimit(spotlights[0], quoteSettings.maxWords)
+      : null;
 
     if (!spotlight) {
       return res.json({
@@ -1133,9 +1249,12 @@ router.get('/designer-spotlight', async (req, res) => {
 router.get('/designer-spotlights', async (req, res) => {
   try {
     const spotlights = await getSpotlightsWithDesigners(true);
+    const quoteSettings = await getDesignerSpotlightQuoteSettingsForAdmin();
     res.json({
       success: true,
-      data: spotlights,
+      data: spotlights.map((spotlight) =>
+        applyDesignerSpotlightQuoteWordLimit(spotlight, quoteSettings.maxWords)
+      ),
     });
   } catch (error) {
     console.error('Error fetching designer spotlights:', error);
@@ -1334,6 +1453,31 @@ router.put('/admin/visibility', authenticate, authorizePermissions(Permissions.H
     }
     console.error('Error updating homepage section visibility:', error);
     res.status(500).json({ success: false, message: 'Failed to update homepage section visibility.' });
+  }
+});
+
+router.get('/admin/designer-spotlight-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const data = await getDesignerSpotlightQuoteSettingsForAdmin();
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Error fetching designer spotlight settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch designer spotlight settings.' });
+  }
+});
+
+router.put('/admin/designer-spotlight-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = designerSpotlightQuoteSettingsUpdateSchema.parse(req.body);
+    await saveDesignerSpotlightQuoteSettings({ maxWords: payload.maxWords });
+    const data = await getDesignerSpotlightQuoteSettingsForAdmin();
+    res.json({ success: true, data });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return validationError(res, error);
+    }
+    console.error('Error updating designer spotlight settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update designer spotlight settings.' });
   }
 });
 
@@ -1940,6 +2084,13 @@ router.get('/admin/designer-spotlight', authenticate, authorizePermissions(Permi
 router.post('/admin/designer-spotlight', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const data = designerSpotlightCreateSchema.parse(normalizeDesignerSpotlightInput(req.body));
+    const quoteSettings = await getDesignerSpotlightQuoteSettingsForAdmin();
+    if (wordCount(data.quote) > quoteSettings.maxWords) {
+      return res.status(400).json({
+        success: false,
+        message: `Quote cannot exceed ${quoteSettings.maxWords} words.`,
+      });
+    }
     const linkType = normalizeCardLinkType(data.linkType);
     const storyId = linkType === 'INTERNAL_BLOG' ? getNonEmptyString(data.storyId) : undefined;
     const externalUrl = linkType === 'EXTERNAL_URL' ? getNonEmptyString(data.externalUrl) : undefined;
@@ -1974,6 +2125,13 @@ router.post('/admin/designer-spotlight', authenticate, authorizePermissions(Perm
 router.put('/admin/designer-spotlight/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const data = designerSpotlightUpdateSchema.parse(normalizeDesignerSpotlightInput(req.body));
+    const quoteSettings = await getDesignerSpotlightQuoteSettingsForAdmin();
+    if (wordCount(data.quote) > quoteSettings.maxWords) {
+      return res.status(400).json({
+        success: false,
+        message: `Quote cannot exceed ${quoteSettings.maxWords} words.`,
+      });
+    }
     const linkType = data.linkType ? normalizeCardLinkType(data.linkType) : undefined;
     const storyId = linkType === 'INTERNAL_BLOG' ? getNonEmptyString(data.storyId) : undefined;
     const externalUrl = linkType === 'EXTERNAL_URL' ? getNonEmptyString(data.externalUrl) : undefined;
@@ -2012,6 +2170,13 @@ router.put('/admin/designer-spotlight/:id', authenticate, authorizePermissions(P
 router.patch('/admin/designer-spotlight/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const data = designerSpotlightUpdateSchema.parse(normalizeDesignerSpotlightInput(req.body));
+    const quoteSettings = await getDesignerSpotlightQuoteSettingsForAdmin();
+    if (wordCount(data.quote) > quoteSettings.maxWords) {
+      return res.status(400).json({
+        success: false,
+        message: `Quote cannot exceed ${quoteSettings.maxWords} words.`,
+      });
+    }
     const linkType = data.linkType ? normalizeCardLinkType(data.linkType) : undefined;
     const storyId = linkType === 'INTERNAL_BLOG' ? getNonEmptyString(data.storyId) : undefined;
     const externalUrl = linkType === 'EXTERNAL_URL' ? getNonEmptyString(data.externalUrl) : undefined;

@@ -90,6 +90,12 @@ interface DesignerSpotlight {
   };
 }
 
+interface DesignerSpotlightSettings {
+  maxWords: number;
+  source: 'DATABASE' | 'DEFAULT';
+  updatedAt: string | null;
+}
+
 interface HomepageStory {
   id: string;
   type: 'COUNTRY' | 'DESIGNER_SPOTLIGHT';
@@ -196,6 +202,12 @@ export default function HomepageSections() {
   const [showCountryImageApiModal, setShowCountryImageApiModal] = useState(false);
   const [countryImageApiConfig, setCountryImageApiConfig] = useState<CountryImageApiConfig | null>(null);
   const [countryImageApiLoading, setCountryImageApiLoading] = useState(false);
+  const [designerSpotlightSettings, setDesignerSpotlightSettings] = useState<DesignerSpotlightSettings>({
+    maxWords: 15,
+    source: 'DEFAULT',
+    updatedAt: null,
+  });
+  const [designerSpotlightSettingsSaving, setDesignerSpotlightSettingsSaving] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -266,8 +278,18 @@ export default function HomepageSections() {
           if (categoriesRes.success) setCategories(categoriesRes.data);
           break;
         case 'designerSpotlight':
-          const spotlightRes = await api.homepageSections.getAdminDesignerSpotlights();
+          const [spotlightRes, spotlightSettingsRes] = await Promise.all([
+            api.homepageSections.getAdminDesignerSpotlights(),
+            api.homepageSections.getAdminDesignerSpotlightSettings(),
+          ]);
           if (spotlightRes.success) setDesignerSpotlights(spotlightRes.data);
+          if (spotlightSettingsRes.success) {
+            setDesignerSpotlightSettings({
+              maxWords: Number(spotlightSettingsRes.data?.maxWords || 15),
+              source: spotlightSettingsRes.data?.source || 'DEFAULT',
+              updatedAt: spotlightSettingsRes.data?.updatedAt || null,
+            });
+          }
           break;
         case 'designerBlogs':
           const designerBlogsRes = await api.homepageSections.getAdminStories('DESIGNER_SPOTLIGHT');
@@ -473,6 +495,33 @@ export default function HomepageSections() {
     await fetchCountryImageApiConfig();
   };
 
+  const handleSaveDesignerSpotlightSettings = async () => {
+    const nextMaxWords = Number(designerSpotlightSettings.maxWords || 15);
+    if (!Number.isFinite(nextMaxWords) || nextMaxWords < 5 || nextMaxWords > 40) {
+      toast.error('Quote max words must be between 5 and 40.');
+      return;
+    }
+    setDesignerSpotlightSettingsSaving(true);
+    try {
+      const response = await api.homepageSections.updateAdminDesignerSpotlightSettings({
+        maxWords: Math.round(nextMaxWords),
+      });
+      if (response.success) {
+        setDesignerSpotlightSettings({
+          maxWords: Number(response.data?.maxWords || 15),
+          source: response.data?.source || 'DATABASE',
+          updatedAt: response.data?.updatedAt || null,
+        });
+        toast.success('Designer spotlight quote limit saved.');
+      }
+    } catch (error: any) {
+      const message = error?.response?.data?.message || 'Failed to save designer spotlight settings.';
+      toast.error(message);
+    } finally {
+      setDesignerSpotlightSettingsSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -569,12 +618,25 @@ export default function HomepageSections() {
               />
             )}
             {activeTab === 'designerSpotlight' && (
-              <DesignerSpotlightTable
-                data={designerSpotlights}
-                onEdit={openModal}
-                onToggle={handleToggleActive}
-                onDelete={handleDelete}
-              />
+              <>
+                <DesignerSpotlightSettingsPanel
+                  settings={designerSpotlightSettings}
+                  saving={designerSpotlightSettingsSaving}
+                  onChange={(maxWords) =>
+                    setDesignerSpotlightSettings((prev) => ({
+                      ...prev,
+                      maxWords,
+                    }))
+                  }
+                  onSave={handleSaveDesignerSpotlightSettings}
+                />
+                <DesignerSpotlightTable
+                  data={designerSpotlights}
+                  onEdit={openModal}
+                  onToggle={handleToggleActive}
+                  onDelete={handleDelete}
+                />
+              </>
             )}
             {activeTab === 'designerBlogs' && (
               <StoriesTable
@@ -622,6 +684,7 @@ export default function HomepageSections() {
           countryOptions={countryOptions}
           countryStories={countryBlogs}
           designerStories={designerBlogs}
+          designerQuoteMaxWords={designerSpotlightSettings.maxWords}
           onClose={closeModal}
           onSave={handleSave}
         />
@@ -889,6 +952,52 @@ function CountryImageApiSettingsModal({
             </Button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function DesignerSpotlightSettingsPanel({
+  settings,
+  saving,
+  onChange,
+  onSave,
+}: {
+  settings: DesignerSpotlightSettings;
+  saving: boolean;
+  onChange: (maxWords: number) => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="p-4 border-b border-gray-200 bg-gray-50">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-gray-900">Frontpage Quote Settings</p>
+          <p className="text-xs text-gray-600">
+            Card quotes use the <span className="font-medium">Quote</span> field. Keep it concise to preserve clean layout.
+          </p>
+          <p className="text-xs text-gray-500">
+            Source: {settings.source === 'DATABASE' ? 'Saved in dashboard' : 'Default setting'} ·
+            {' '}
+            Current max words: <span className="font-semibold">{settings.maxWords}</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Max words</label>
+            <input
+              type="number"
+              min={5}
+              max={40}
+              value={settings.maxWords}
+              onChange={(event) => onChange(Number(event.target.value || 15))}
+              className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+            />
+          </div>
+          <Button type="button" onClick={onSave} disabled={saving} className="h-10">
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -1463,6 +1572,7 @@ function SectionModal({
   countryOptions,
   countryStories,
   designerStories,
+  designerQuoteMaxWords,
   onClose,
   onSave,
 }: {
@@ -1472,6 +1582,7 @@ function SectionModal({
   countryOptions: CountryOption[];
   countryStories: HomepageStory[];
   designerStories: HomepageStory[];
+  designerQuoteMaxWords: number;
   onClose: () => void;
   onSave: () => void;
 }) {
@@ -1481,6 +1592,12 @@ function SectionModal({
   const [uploading, setUploading] = useState(false);
   const [generatingCountryImage, setGeneratingCountryImage] = useState(false);
   const [formError, setFormError] = useState('');
+  const countWords = (value: string) =>
+    String(value || '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean).length;
+  const designerQuoteWordCount = countWords(String(formData.quote || ''));
   const uploadField =
     type === 'testimonials'
       ? 'avatar'
@@ -1713,6 +1830,19 @@ function SectionModal({
     }
 
     if (type === 'designerSpotlight') {
+      const quoteText = String(formData.quote || '').trim();
+      if (!quoteText) {
+        setSaving(false);
+        setFormError('Quote is required for frontpage spotlight cards.');
+        toast.error('Quote is required for frontpage spotlight cards.');
+        return;
+      }
+      if (countWords(quoteText) > designerQuoteMaxWords) {
+        setSaving(false);
+        setFormError(`Quote cannot exceed ${designerQuoteMaxWords} words.`);
+        toast.error(`Quote cannot exceed ${designerQuoteMaxWords} words.`);
+        return;
+      }
       if (formData.linkType === 'INTERNAL_BLOG' && !String(formData.storyId || '').trim()) {
         setSaving(false);
         setFormError('Select a designer blog to link this spotlight card.');
@@ -2247,7 +2377,11 @@ function SectionModal({
                 onChange={(e) => setFormData({ ...formData, quote: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                 rows={2}
+                required
               />
+              <p className={`mt-1 text-xs ${designerQuoteWordCount > designerQuoteMaxWords ? 'text-red-600' : 'text-gray-500'}`}>
+                {designerQuoteWordCount}/{designerQuoteMaxWords} words
+              </p>
             </div>
             <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
               <p className="text-sm font-medium text-gray-700">Spotlight Link Destination</p>

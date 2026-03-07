@@ -123,7 +123,7 @@ interface DesignerSpotlightCard {
   name: string;
   country: string;
   image: string;
-  bio: string;
+  quote: string;
   linkType?: 'DEFAULT' | 'INTERNAL_BLOG' | 'EXTERNAL_URL';
   story?: { slug?: string; title?: string } | null;
   externalUrl?: string | null;
@@ -566,7 +566,7 @@ export default function Home() {
         name: item?.designer?.businessName || 'Featured Designer',
         country: item?.designer?.country || 'Africa',
         image: resolveAssetUrl(item?.image) || fallbackImage(`spotlight-${index}`, 900, 1200),
-        bio: item?.description || item?.bio || 'Discover this designer story.',
+        quote: item?.quote || item?.headline || item?.description || item?.bio || 'Discover this designer story.',
         linkType: item?.linkType || 'DEFAULT',
         story: item?.story || null,
         externalUrl: item?.externalUrl || null,
@@ -577,7 +577,7 @@ export default function Home() {
       name: designer.name,
       country: designer.country,
       image: designer.image,
-      bio: designer.bio,
+      quote: designer.bio,
       linkType: 'DEFAULT',
       story: null,
       externalUrl: null,
@@ -1299,7 +1299,7 @@ export default function Home() {
                         <p className="text-sm text-white/80 mt-1">
                           {countryFlags[designer.country] || '🌍'} {designer.country}
                         </p>
-                        <p className="text-sm text-white/80 mt-3 italic">"{designer.bio}"</p>
+                        <p className="text-sm text-white/80 mt-3 italic">"{designer.quote}"</p>
                       </div>
                     </div>
                   </>
