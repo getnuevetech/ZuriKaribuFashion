@@ -1353,8 +1353,8 @@ export default function Home() {
           heritageReveal.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
         }`}
       >
-        <div className={PAGE_CONTAINER_CLASS}>
-          <div className="relative overflow-hidden rounded-2xl min-h-[380px] md:min-h-[520px]">
+        <div className="w-full">
+          <div className="relative overflow-hidden rounded-none min-h-[380px] md:min-h-[520px]">
             <div className="absolute inset-0">
               <img
                 src={fallbackImage('heritage-story', 1400, 900)}
