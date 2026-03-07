@@ -617,30 +617,35 @@ export default function Home() {
       </section>
 
       {/* Fresh Drops Banner */}
-      <section className="py-16 bg-[#F5F5F0]">
-        <div className="relative h-[250px] md:h-[300px] overflow-hidden">
-          <img
-            src="/images/fresh-drops-banner.jpg"
-            alt="Fresh Drops"
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-navy-600 bg-opacity-70" />
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-white px-4">
-            <h2 className="text-3xl md:text-4xl font-bold mb-2">Fresh Drops</h2>
-            <p className="text-white text-opacity-80 mb-6">New arrivals from the most talented designers across the continent.</p>
-            <div className="flex gap-4">
-              <Link
-                to="/ready-to-wear"
-                className="inline-flex items-center gap-2 bg-coral-500 hover:bg-coral-600 text-white px-6 py-3 rounded font-semibold transition-colors"
-              >
-                Shop New Arrivals
-              </Link>
-              <Link
-                to="/designs"
-                className="inline-flex items-center gap-2 bg-transparent border-2 border-white text-white px-6 py-3 rounded font-semibold hover:bg-white hover:bg-opacity-10 transition-colors"
-              >
-                Explore Collections
-              </Link>
+      <section className="py-16 lg:py-20 bg-[#F2F2F2]">
+        <div className="w-full px-0 sm:px-0 lg:px-0 xl:px-0">
+          <div className="relative grid grid-cols-1 md:grid-cols-2">
+            <div className="px-6 sm:px-8 lg:px-12 xl:px-16 py-10 md:py-16 flex items-center bg-[#F2F2F2]">
+              <div className="max-w-xl">
+                <p className="inline-flex mb-5 px-2 py-0.5 border border-black text-[11px] tracking-wide font-semibold">
+                  FRESH DROPS
+                </p>
+                <h2 className="font-['Oswald'] text-5xl lg:text-6xl leading-[0.95] font-bold text-black mb-8">
+                  New arrivals from the most talented designers across the continent.
+                </h2>
+                <Link
+                  to="/ready-to-wear"
+                  className="inline-flex items-center gap-3 bg-black text-white px-6 py-3 text-xs font-semibold tracking-wider hover:bg-black/90 transition-colors"
+                >
+                  SHOP NEW ARRIVALS <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+            <div className="relative min-h-[420px] md:min-h-[640px] bg-gray-200">
+              <img
+                src="/images/fresh-drops-banner.jpg"
+                alt="Fresh Drops"
+                className="w-full h-full object-cover object-center"
+              />
+            </div>
+            <div className="absolute left-1/2 -translate-x-1/2 -bottom-7 bg-black text-white px-6 py-3 rounded-xl text-center shadow-lg">
+              <p className="font-['Oswald'] text-4xl font-bold leading-none">50+</p>
+              <p className="text-xs text-white/70 mt-1">New Arrivals</p>
             </div>
           </div>
         </div>
