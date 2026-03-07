@@ -470,30 +470,30 @@ export default function Home() {
       </section>
 
       {/* Featured Custom To Wear */}
-      <section className="py-16 lg:py-24 bg-white">
-        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10">
+      <section className="py-16 lg:py-20 bg-[#F2F2F2]">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
+          <div className="flex items-end justify-between mb-8">
             <div>
-              <p className="inline-flex mb-3 px-2 py-1 border border-black text-xs tracking-wider font-semibold">FEATURED</p>
-              <h2 className="font-['Oswald'] text-3xl sm:text-4xl font-bold text-gray-900">Custom To Wear</h2>
-              <p className="text-gray-600 mt-2">Made To Fit by an African with Love</p>
+              <p className="inline-flex mb-3 px-2 py-0.5 border border-black text-[11px] tracking-wide font-semibold">FEATURED</p>
+              <h2 className="font-['Oswald'] text-4xl md:text-5xl font-bold leading-none text-gray-900">Custom To Wear</h2>
+              <p className="text-gray-600 mt-2 text-lg">Made To Fit by an African with Love</p>
             </div>
-            <div className="flex gap-2 mt-4 sm:mt-0">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => scrollStrip(customStripRef, 'left')}
-                className="w-10 h-10 border border-black/20 rounded-full flex items-center justify-center hover:bg-black hover:text-white transition-colors"
+                className="w-10 h-10 border border-gray-300 rounded-full flex items-center justify-center text-gray-700 hover:bg-black hover:text-white transition-colors"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <button
                 type="button"
                 onClick={() => scrollStrip(customStripRef, 'right')}
-                className="w-10 h-10 border border-black/20 rounded-full flex items-center justify-center hover:bg-black hover:text-white transition-colors"
+                className="w-10 h-10 border border-gray-300 rounded-full flex items-center justify-center text-gray-700 hover:bg-black hover:text-white transition-colors"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
-              <Link to="/designs" className="hidden sm:inline-flex items-center gap-1 text-sm font-medium ml-2">
+              <Link to="/designs" className="hidden sm:inline-flex items-center gap-1 text-sm font-semibold text-gray-900 ml-4">
                 View All <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
@@ -505,11 +505,11 @@ export default function Home() {
           ) : (
             <div
               ref={customStripRef}
-              className="flex gap-6 overflow-x-auto scrollbar-hide pb-4 -mx-4 px-4 sm:-mx-0 sm:px-0"
+              className="flex gap-4 md:gap-5 overflow-x-auto scrollbar-hide pb-2"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {featuredDesigns.map((product) => (
-                <div key={product.id} className="flex-shrink-0 w-72">
+                <div key={product.id} className="flex-shrink-0 w-[14.25rem] sm:w-[14.75rem] md:w-[15rem]">
                   <ProductCard product={product} />
                 </div>
               ))}
