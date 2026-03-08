@@ -872,7 +872,20 @@ const homepageSectionsApi = {
             textColor: string;
             backgroundColor: string;
           };
-        }>('/homepage/top-strip');
+        }>('/homepage/top-strip').catch((fallbackError) => {
+          if (!isRouteNotFoundError(fallbackError)) throw fallbackError;
+          return apiService.get<{
+            success: boolean;
+            data: {
+              messages: string[];
+              separator: string;
+              repeatCount: number;
+              animationSeconds: number;
+              textColor: string;
+              backgroundColor: string;
+            };
+          }>('/admin/top-strip');
+        });
       }),
 
   getCountries: () =>
@@ -957,7 +970,20 @@ const homepageSectionsApi = {
             textColor: string;
             backgroundColor: string;
           };
-        }>('/homepage/admin/top-strip');
+        }>('/homepage/admin/top-strip').catch((fallbackError) => {
+          if (!isRouteNotFoundError(fallbackError)) throw fallbackError;
+          return apiService.get<{
+            success: boolean;
+            data: {
+              messages: string[];
+              separator: string;
+              repeatCount: number;
+              animationSeconds: number;
+              textColor: string;
+              backgroundColor: string;
+            };
+          }>('/admin/top-strip');
+        });
       }),
 
   updateAdminTopStrip: (data: {
@@ -992,7 +1018,20 @@ const homepageSectionsApi = {
             textColor: string;
             backgroundColor: string;
           };
-        }>('/homepage/admin/top-strip', data);
+        }>('/homepage/admin/top-strip', data).catch((fallbackError) => {
+          if (!isRouteNotFoundError(fallbackError)) throw fallbackError;
+          return apiService.put<{
+            success: boolean;
+            data: {
+              messages: string[];
+              separator: string;
+              repeatCount: number;
+              animationSeconds: number;
+              textColor: string;
+              backgroundColor: string;
+            };
+          }>('/admin/top-strip', data);
+        });
       }),
 
   getAdminCountryOptions: () =>

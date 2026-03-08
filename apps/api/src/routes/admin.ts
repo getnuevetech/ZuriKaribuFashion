@@ -20,6 +20,119 @@ function parsePagination(pageValue: unknown, limitValue: unknown, defaultLimit =
   return { page, limit, skip };
 }
 
+const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
+const ADMIN_TOP_STRIP_DEFAULTS = {
+  messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
+  separator: '•',
+  repeatCount: 4,
+  animationSeconds: 20,
+  textColor: '#ffffff',
+  backgroundColor: '#000000',
+};
+const adminTopStripUpdateSchema = z.object({
+  messages: z.array(z.string().trim().min(1)).min(1),
+  separator: z.string().trim().min(1).max(8).optional(),
+  repeatCount: z.coerce.number().int().min(2).max(12).optional(),
+  animationSeconds: z.coerce.number().int().min(8).max(120).optional(),
+  textColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+  backgroundColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+});
+
+const normalizeHexColor = (value: unknown, fallback: string) => {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(trimmed) ? trimmed.toLowerCase() : fallback;
+};
+
+const normalizeAdminTopStripSettings = (raw: unknown) => {
+  if (!raw || typeof raw !== 'object') return { ...ADMIN_TOP_STRIP_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const messages = Array.isArray(row.messages)
+    ? row.messages
+        .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+        .filter(Boolean)
+    : [];
+  return {
+    messages: messages.length > 0 ? messages : [...ADMIN_TOP_STRIP_DEFAULTS.messages],
+    separator:
+      typeof row.separator === 'string' && row.separator.trim()
+        ? row.separator.trim().slice(0, 8)
+        : ADMIN_TOP_STRIP_DEFAULTS.separator,
+    repeatCount: Number.isFinite(Number(row.repeatCount))
+      ? Math.max(2, Math.min(12, Math.round(Number(row.repeatCount))))
+      : ADMIN_TOP_STRIP_DEFAULTS.repeatCount,
+    animationSeconds: Number.isFinite(Number(row.animationSeconds))
+      ? Math.max(8, Math.min(120, Math.round(Number(row.animationSeconds))))
+      : ADMIN_TOP_STRIP_DEFAULTS.animationSeconds,
+    textColor: normalizeHexColor(row.textColor, ADMIN_TOP_STRIP_DEFAULTS.textColor),
+    backgroundColor: normalizeHexColor(row.backgroundColor, ADMIN_TOP_STRIP_DEFAULTS.backgroundColor),
+  };
+};
+
+const ensureHomepageSectionSettingTable = async () => {
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "HomepageSectionSetting" (
+      "id" TEXT NOT NULL,
+      "key" TEXT NOT NULL,
+      "value" TEXT NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL,
+      CONSTRAINT "HomepageSectionSetting_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "HomepageSectionSetting_key_key" ON "HomepageSectionSetting"("key")`
+  );
+};
+
+const readAdminTopStripSettings = async () => {
+  await ensureHomepageSectionSettingTable();
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_TOP_STRIP_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return { rowId: null as string | null, settings: { ...ADMIN_TOP_STRIP_DEFAULTS } };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizeAdminTopStripSettings(JSON.parse(String(row.value || '{}'))),
+    };
+  } catch {
+    return { rowId: String(row.id), settings: { ...ADMIN_TOP_STRIP_DEFAULTS } };
+  }
+};
+
+const saveAdminTopStripSettings = async (input: unknown) => {
+  const parsed = adminTopStripUpdateSchema.parse(input);
+  const merged = normalizeAdminTopStripSettings(parsed);
+  const existing = await readAdminTopStripSettings();
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_TOP_STRIP_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+
 const adminPermissionListSchema = z.array(z.string()).default([]);
 const adminRoleCreateSchema = z.object({
   name: z.string().min(2).max(80),
@@ -2989,6 +3102,43 @@ router.patch('/orders/:id/assign-qa', async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+});
+
+// Homepage top strip compatibility aliases
+router.get('/top-strip', async (_req, res) => {
+  try {
+    const { settings } = await readAdminTopStripSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching admin top strip settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch top strip settings.' });
+  }
+});
+
+router.put('/top-strip', async (req, res) => {
+  try {
+    const settings = await saveAdminTopStripSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating admin top strip settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update top strip settings.' });
+  }
+});
+
+router.patch('/top-strip', async (req, res) => {
+  try {
+    const settings = await saveAdminTopStripSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating admin top strip settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update top strip settings.' });
   }
 });
 
