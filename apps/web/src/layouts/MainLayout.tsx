@@ -1,6 +1,6 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { ShoppingBag, User, Menu, X, Search, Heart } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Menu, ShoppingBag, User, X } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
 import Footer from '../components/Footer';
@@ -8,7 +8,7 @@ import Footer from '../components/Footer';
 export default function MainLayout() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { isAuthenticated, user, logout } = useAuthStore();
+  const { isAuthenticated, logout } = useAuthStore();
   const { getItemCount } = useCartStore();
   const navigate = useNavigate();
 
@@ -27,98 +27,72 @@ export default function MainLayout() {
 
   const navLinks = [
     { label: 'Home', href: '/' },
-    { label: 'Shop', href: '/ready-to-wear' },
-    { label: 'Fabrics To Buy', href: '/fabrics' },
-    { label: 'Ready To Wear', href: '/ready-to-wear' },
-    { label: 'Custom To Wear', href: '/designs' },
-    { label: 'About Us', href: '/about' },
-    { label: 'Contact', href: '/contact' },
+    { label: 'Shop', href: '/#shop' },
+    { label: 'Designers', href: '/#designers' },
+    { label: 'About', href: '/#about' },
   ];
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
+      <div className="bg-black text-white py-2 overflow-hidden">
+        <div className="animate-marquee whitespace-nowrap flex gap-8">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="flex gap-8 text-xs tracking-wider">
+              <span>Free shipping on orders over $250</span>
+              <span>•</span>
+              <span>New arrivals weekly</span>
+              <span>•</span>
+              <span>Authentic African designs</span>
+              <span>•</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          isScrolled
-            ? 'bg-white/95 backdrop-blur-md shadow-sm'
-            : 'bg-transparent'
+        className={`fixed top-8 left-0 right-0 z-50 transition-all duration-500 ${
+          isScrolled ? 'glass shadow-lg py-3' : 'bg-transparent py-5'
         }`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 lg:h-20">
-            {/* Logo */}
-            <Link
-              to="/"
-              className={`font-display text-xl lg:text-2xl font-bold transition-colors ${
-                isScrolled ? 'text-navy-600' : 'text-white'
-              }`}
-            >
-              African Fashion
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-2">
+              <span className="font-['Oswald'] text-xl sm:text-2xl font-semibold tracking-wide text-white md:text-black">
+                ZURIKARIBU
+              </span>
             </Link>
 
-            {/* Desktop Navigation */}
             <nav className="hidden lg:flex items-center gap-8">
               {navLinks.map((link) => (
-                <Link
+                <a
                   key={link.label}
-                  to={link.href}
-                  className={`text-sm font-medium transition-colors relative group ${
-                    isScrolled
-                      ? 'text-gray-700 hover:text-coral-500'
-                      : 'text-white/90 hover:text-white'
-                  }`}
+                  href={link.href}
+                  className="text-sm font-medium link-underline text-white md:text-black"
                 >
                   {link.label}
-                  <span
-                    className={`absolute -bottom-1 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
-                      isScrolled ? 'bg-coral-500' : 'bg-white'
-                    }`}
-                  />
-                </Link>
+                </a>
               ))}
             </nav>
 
-            {/* Right Actions */}
             <div className="flex items-center gap-2 lg:gap-4">
-              <button
-                className={`p-2 rounded-full transition-colors ${
-                  isScrolled
-                    ? 'hover:bg-gray-100 text-gray-700'
-                    : 'hover:bg-white/10 text-white'
-                }`}
-              >
-                <Search className="w-5 h-5" />
-              </button>
-
               <Link
                 to="/cart"
-                className={`p-2 rounded-full transition-colors relative ${
-                  isScrolled
-                    ? 'hover:bg-gray-100 text-gray-700'
-                    : 'hover:bg-white/10 text-white'
-                }`}
+                className="relative p-2 hover:bg-black/5 rounded-full transition-colors text-white md:text-black"
               >
                 <ShoppingBag className="w-5 h-5" />
-                {getItemCount() > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-coral-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                    {getItemCount()}
-                  </span>
-                )}
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-black text-white text-[10px] rounded-full flex items-center justify-center">
+                  {getItemCount()}
+                </span>
               </Link>
 
               {isAuthenticated ? (
                 <div className="relative group">
                   <button
-                    className={`p-2 rounded-full transition-colors ${
-                      isScrolled
-                        ? 'hover:bg-gray-100 text-gray-700'
-                        : 'hover:bg-white/10 text-white'
-                    }`}
+                    className="p-2 hover:bg-black/5 rounded-full transition-colors text-white md:text-black"
                   >
                     <User className="w-5 h-5" />
                   </button>
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                     <div className="py-2">
                       <Link
                         to="/profile"
@@ -144,65 +118,52 @@ export default function MainLayout() {
               ) : (
                 <Link
                   to="/login"
-                  className={`hidden sm:inline-flex items-center px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                    isScrolled
-                      ? 'bg-navy-600 text-white hover:bg-navy-700'
-                      : 'bg-white text-navy-600 hover:bg-white/90'
-                  }`}
+                  className="hidden sm:flex items-center gap-2 text-sm font-medium text-white md:text-black hover:opacity-70 transition-opacity"
                 >
                   Sign In
                 </Link>
               )}
 
-              {/* Mobile Menu Button */}
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className={`lg:hidden p-2 rounded-full transition-colors ${
-                  isScrolled
-                    ? 'hover:bg-gray-100 text-gray-700'
-                    : 'hover:bg-white/10 text-white'
-                }`}
+                className="lg:hidden p-2 text-white md:text-black"
               >
-                {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
               </button>
             </div>
           </div>
-        </div>
 
-        {/* Mobile Menu */}
-        {isMobileMenuOpen && (
-          <div className="lg:hidden bg-white border-t border-gray-100">
-            <div className="px-4 py-4 space-y-2">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.label}
-                  to={link.href}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block px-4 py-3 text-gray-700 font-medium hover:bg-gray-50 rounded-lg"
-                >
-                  {link.label}
-                </Link>
-              ))}
-              {!isAuthenticated && (
-                <Link
-                  to="/login"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block px-4 py-3 text-navy-600 font-medium hover:bg-navy-50 rounded-lg"
-                >
-                  Sign In
-                </Link>
-              )}
+          {isMobileMenuOpen && (
+            <div className="lg:hidden mt-4 pb-4 border-t border-black/10 pt-4 animate-fade-in">
+              <nav className="flex flex-col gap-4">
+                {navLinks.map((link) => (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="text-lg font-medium text-white md:text-black"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+                {!isAuthenticated && (
+                  <Link
+                    to="/login"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="text-lg font-medium flex items-center gap-2 text-white md:text-black"
+                  >
+                    <User className="w-5 h-5" /> Sign In
+                  </Link>
+                )}
+              </nav>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </header>
 
-      {/* Main Content */}
       <main className="flex-1">
         <Outlet />
       </main>
-
-      {/* Footer */}
       <Footer />
     </div>
   );
