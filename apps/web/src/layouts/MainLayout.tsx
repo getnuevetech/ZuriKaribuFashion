@@ -6,7 +6,7 @@ import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
 import { api } from '../services/api';
 import Footer from '../components/Footer';
-import { getHomeRouteForRole, normalizeRole } from '../auth/rbac';
+import { getHomeRouteForUser, normalizeRole } from '../auth/rbac';
 
 const USE_DYNAMIC_HOMEPAGE = import.meta.env.VITE_HOMEPAGE_MODE === 'dynamic';
 
@@ -26,11 +26,11 @@ export default function MainLayout() {
   });
   const brandName = footerContent?.companyName?.trim() || 'ZURIKARIBU';
   const userRole = normalizeRole(user?.role);
-  const dashboardRoute = getHomeRouteForRole(user?.role);
+  const dashboardRoute = getHomeRouteForUser(user);
   const profileRoute = userRole === 'CUSTOMER' ? '/profile' : dashboardRoute;
-  const ordersRoute = userRole === 'CUSTOMER' ? '/orders' : dashboardRoute;
+  const ordersRoute = userRole === 'CUSTOMER' ? '/orders' : null;
   const profileLabel = userRole === 'CUSTOMER' ? 'My Profile' : 'Dashboard';
-  const ordersLabel = userRole === 'CUSTOMER' ? 'My Orders' : 'Go to Dashboard';
+  const ordersLabel = 'My Orders';
 
   useEffect(() => {
     const handleScroll = () => {
@@ -127,12 +127,14 @@ export default function MainLayout() {
                       >
                         {profileLabel}
                       </Link>
-                      <Link
-                        to={ordersRoute}
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        {ordersLabel}
-                      </Link>
+                      {ordersRoute ? (
+                        <Link
+                          to={ordersRoute}
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          {ordersLabel}
+                        </Link>
+                      ) : null}
                       <button
                         onClick={handleLogout}
                         className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"

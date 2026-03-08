@@ -51,7 +51,7 @@ import QADashboard from './pages/qa/Dashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminPermissionGuard from './components/AdminPermissionGuard';
 import { useAuthStore } from './store/authStore';
-import { getHomeRouteForRole } from './auth/rbac';
+import { getHomeRouteForUser } from './auth/rbac';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -67,7 +67,7 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || 'pk_t
 
 function App() {
   const { isAuthenticated, user } = useAuthStore();
-  const authenticatedHomeRoute = getHomeRouteForRole(user?.role);
+  const authenticatedHomeRoute = getHomeRouteForUser(user);
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -4,6 +4,7 @@ import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Store, Scissors } from 'luci
 import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import Button from '../components/ui/Button';
+import { getHomeRouteForUser } from '../auth/rbac';
 
 type UserRole = 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER';
 
@@ -92,7 +93,7 @@ export default function Register() {
       if (response.success) {
         if (response.data.user?.status === 'ACTIVE' && response.data.token) {
           login(response.data.user, response.data.token);
-          navigate('/');
+          navigate(getHomeRouteForUser(response.data.user));
         } else {
           setNotice('Account created successfully. Your account is pending admin approval before login.');
           navigate('/login');

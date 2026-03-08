@@ -4,7 +4,7 @@ import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import Button from '../components/ui/Button';
-import { getHomeRouteForRole } from '../auth/rbac';
+import { getHomeRouteForUser } from '../auth/rbac';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -26,7 +26,7 @@ export default function Login() {
       const response = await api.auth.login(formData.email, formData.password);
       if (response.success) {
         login(response.data.user, response.data.token);
-        navigate(getHomeRouteForRole(response.data.user.role));
+        navigate(getHomeRouteForUser(response.data.user));
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid email or password');
