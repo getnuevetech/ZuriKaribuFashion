@@ -264,21 +264,18 @@ export default function Home() {
       to={`/${product.productType === 'DESIGN' ? 'designs' : product.productType === 'FABRIC' ? 'fabrics' : 'ready-to-wear'}/${product.id}`}
       className="group block"
     >
-      <div className="relative overflow-hidden bg-gray-100 rounded-lg mb-4" style={{ aspectRatio: '3/4' }}>
+      <div className="relative overflow-hidden bg-gray-100 mb-4" style={{ aspectRatio: '3/4' }}>
         <img
           src={product.image}
           alt={product.name}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
         />
-        <button className="absolute top-3 right-3 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white">
-          <Heart className="w-4 h-4 text-gray-600" />
-        </button>
-        <div className="absolute top-3 left-3 bg-white/90 px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
+        <div className="absolute top-3 left-3 bg-white/90 px-2 py-1 text-xs font-medium flex items-center gap-1">
           <span>{countryFlags[product.country] || '🌍'}</span>
         </div>
       </div>
       <div>
-        <h3 className="font-semibold text-lg text-gray-900 group-hover:text-gray-600 transition-colors line-clamp-1">{product.name}</h3>
+        <h3 className="font-semibold text-lg text-gray-900 line-clamp-1">{product.name}</h3>
         <p className="text-sm text-gray-500 mt-1">{product.designer}</p>
         <p className="font-semibold mt-1 text-gray-900">${Number(product.price || 0).toFixed(2)}</p>
       </div>
@@ -429,7 +426,7 @@ export default function Home() {
                 <div className="absolute bottom-6 left-6 right-6 text-white">
                   <h3 className="text-2xl font-bold mb-2">{category.title}</h3>
                   <p className="text-sm text-white text-opacity-80 mb-4">{category.description}</p>
-                  <span className="inline-flex items-center gap-2 text-sm font-semibold group-hover:gap-3 transition-all">
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold">
                     Shop Now <ArrowRight className="w-4 h-4" />
                   </span>
                 </div>
@@ -643,7 +640,7 @@ export default function Home() {
                 className="w-full h-full object-cover object-center"
               />
             </div>
-            <div className="absolute left-1/2 -translate-x-1/2 -bottom-7 bg-black text-white px-6 py-3 rounded-xl text-center shadow-lg">
+            <div className="absolute left-1/2 -translate-x-1/2 -bottom-7 bg-black text-white px-6 py-3 text-center">
               <p className="font-['Oswald'] text-4xl font-bold leading-none">50+</p>
               <p className="text-xs text-white/70 mt-1">New Arrivals</p>
             </div>
@@ -656,7 +653,7 @@ export default function Home() {
         <div className="px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Designer Spotlight */}
-            <div className="bg-white overflow-hidden shadow-sm">
+            <div className="bg-white overflow-hidden">
               <div className="h-[250px] overflow-hidden">
                 <img
                   src={designerSpotlight.image}
@@ -737,47 +734,48 @@ export default function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 bg-[#F5F5F0]">
-        <div className="px-4 sm:px-6 lg:px-8 xl:px-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Shop CTA */}
-            <div className="bg-coral-500 rounded-lg p-8 md:p-12 text-center text-white">
-              <h2 className="text-2xl md:text-3xl font-bold mb-3">Ready to Wear African Fashion?</h2>
-              <p className="text-white text-opacity-90 mb-6">
-                Join our community of fashion lovers and discover unique pieces from talented African designers.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link
-                  to="/designs"
-                  className="inline-flex items-center justify-center gap-2 bg-white text-coral-600 px-6 py-3 rounded font-semibold hover:bg-gray-100 transition-colors"
-                >
-                  Shop Now
-                </Link>
-                <Link
-                  to="/register"
-                  className="inline-flex items-center justify-center gap-2 bg-transparent border-2 border-white text-white px-6 py-3 rounded font-semibold hover:bg-white bg-opacity-10 transition-colors"
-                >
-                  Create Account
-                </Link>
-              </div>
+      <section className="bg-[#EDEDED]">
+        <div className="px-4 sm:px-6 lg:px-8 xl:px-12 py-16 md:py-24">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="font-['Oswald'] text-4xl md:text-6xl font-bold text-black leading-none">
+              Ready to Wear African Fashion?
+            </h2>
+            <p className="text-gray-600 text-base md:text-2xl mt-4 md:mt-6">
+              Join our community of fashion lovers and discover unique pieces from talented African designers.
+            </p>
+            <div className="mt-8 md:mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Link
+                to="/ready-to-wear"
+                className="inline-flex items-center justify-center px-10 py-3 bg-black text-white text-sm font-semibold tracking-wide uppercase"
+              >
+                Shop Now
+              </Link>
+              <Link
+                to="/register"
+                className="inline-flex items-center justify-center px-10 py-3 border border-black text-black text-sm font-semibold tracking-wide uppercase"
+              >
+                Create Account
+              </Link>
             </div>
-
-            {/* Newsletter CTA */}
-            <div className="bg-coral-500 rounded-lg p-8 md:p-12 text-center text-white">
-              <h2 className="text-2xl md:text-3xl font-bold mb-3">Join the Movement</h2>
-              <p className="text-white text-opacity-90 mb-6">
-                Subscribe to our newsletter for exclusive offers, new arrivals, and stories from the continent.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-                <input
-                  type="email"
-                  placeholder="Enter your email"
-                  className="flex-1 px-4 py-3 rounded text-gray-900"
-                />
-                <button className="px-6 py-3 bg-navy-600 text-white rounded font-semibold hover:bg-navy-700 transition-colors">
-                  Subscribe
-                </button>
-              </div>
+          </div>
+        </div>
+        <div className="px-4 sm:px-6 lg:px-8 xl:px-12 py-16 md:py-24 border-t border-black/5">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="font-['Oswald'] text-4xl md:text-5xl font-bold text-black leading-none">
+              Join the Movement
+            </h2>
+            <p className="text-gray-600 text-base md:text-2xl mt-4 md:mt-6 max-w-3xl mx-auto">
+              Subscribe to our newsletter for exclusive offers, new arrivals, and stories from the continent.
+            </p>
+            <div className="mt-8 max-w-2xl mx-auto flex flex-col sm:flex-row gap-3">
+              <input
+                type="email"
+                placeholder="Enter your email"
+                className="h-12 flex-1 px-4 border border-black/15 bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:border-black/40"
+              />
+              <button className="h-12 px-8 bg-black text-white text-sm font-semibold tracking-wide uppercase">
+                Subscribe
+              </button>
             </div>
           </div>
         </div>
