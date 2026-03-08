@@ -6,7 +6,8 @@ import {
   UserCheck,
   UserX,
   Mail,
-  Plus
+  Plus,
+  Edit
 } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
@@ -14,8 +15,11 @@ import Badge from '../../components/ui/Badge';
 
 interface User {
   id: string;
+  firstName: string;
+  lastName: string;
   fullName: string;
   email: string;
+  phone?: string;
   role: string;
   status: string;
   country?: string;
@@ -33,7 +37,11 @@ export default function AdminUsers() {
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionType, setActionType] = useState<'activate' | 'suspend' | 'reject' | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [editError, setEditError] = useState('');
   const [createForm, setCreateForm] = useState({
     email: '',
     firstName: '',
@@ -42,6 +50,15 @@ export default function AdminUsers() {
     role: 'CUSTOMER',
     status: 'ACTIVE',
     phone: '',
+  });
+  const [editForm, setEditForm] = useState({
+    id: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    role: 'CUSTOMER',
+    status: 'ACTIVE',
   });
 
   useEffect(() => {
@@ -59,8 +76,11 @@ export default function AdminUsers() {
       if (response.success) {
         const mappedUsers: User[] = response.data.users.map((user: any) => ({
           id: user.id,
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
           fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
           email: user.email,
+          phone: user.phone || '',
           role: user.role,
           status: user.status,
           country: '-',
@@ -105,6 +125,7 @@ export default function AdminUsers() {
     e.preventDefault();
     try {
       setCreating(true);
+      setCreateError('');
       await api.admin.createUser({
         email: createForm.email.trim(),
         firstName: createForm.firstName.trim(),
@@ -125,11 +146,48 @@ export default function AdminUsers() {
         phone: '',
       });
       await fetchUsers();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create user:', error);
-      window.alert('Failed to create user.');
+      setCreateError(error?.response?.data?.message || 'Failed to create user.');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const openEditModal = (user: User) => {
+    setEditError('');
+    setEditForm({
+      id: user.id,
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      email: user.email,
+      phone: user.phone || '',
+      role: user.role,
+      status: user.status,
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setUpdating(true);
+      setEditError('');
+      await api.admin.updateUser(editForm.id, {
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        email: editForm.email.trim(),
+        phone: editForm.phone.trim() || null,
+        role: editForm.role,
+        status: editForm.status,
+      });
+      setShowEditModal(false);
+      await fetchUsers();
+    } catch (error: any) {
+      console.error('Failed to update user:', error);
+      setEditError(error?.response?.data?.message || 'Failed to update user.');
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -260,6 +318,13 @@ export default function AdminUsers() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex gap-2">
+                      <button
+                        onClick={() => openEditModal(user)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                        title="Edit profile"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
                       {user.status !== 'ACTIVE' && (
                         <button
                           onClick={() => openActionModal(user, 'activate')}
@@ -332,6 +397,11 @@ export default function AdminUsers() {
           <div className="bg-white rounded-2xl max-w-xl w-full p-6">
             <h3 className="text-xl font-bold mb-4">Add User</h3>
             <form onSubmit={handleCreateUser} className="space-y-4">
+              {createError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {createError}
+                </div>
+              ) : null}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <input
                   type="text"
@@ -402,6 +472,85 @@ export default function AdminUsers() {
                 </Button>
                 <Button type="submit" className="flex-1" disabled={creating}>
                   {creating ? 'Creating...' : 'Create User'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6">
+            <h3 className="text-xl font-bold mb-4">Edit User Profile</h3>
+            <form onSubmit={handleEditUser} className="space-y-4">
+              {editError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {editError}
+                </div>
+              ) : null}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  value={editForm.firstName}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                  placeholder="First name"
+                  className="px-3 py-2 border rounded-lg"
+                  required
+                />
+                <input
+                  type="text"
+                  value={editForm.lastName}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                  placeholder="Last name"
+                  className="px-3 py-2 border rounded-lg"
+                  required
+                />
+              </div>
+              <input
+                type="email"
+                value={editForm.email}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, email: e.target.value }))}
+                placeholder="Email"
+                className="w-full px-3 py-2 border rounded-lg"
+                required
+              />
+              <input
+                type="text"
+                value={editForm.phone}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))}
+                placeholder="Phone (optional)"
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <select
+                  value={editForm.role}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, role: e.target.value }))}
+                  className="px-3 py-2 border rounded-lg"
+                >
+                  <option value="CUSTOMER">Customer</option>
+                  <option value="FABRIC_SELLER">Fabric Seller</option>
+                  <option value="FASHION_DESIGNER">Designer</option>
+                  <option value="QA_TEAM">QA Team</option>
+                  <option value="ADMINISTRATOR">Administrator</option>
+                </select>
+                <select
+                  value={editForm.status}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value }))}
+                  className="px-3 py-2 border rounded-lg"
+                >
+                  <option value="ACTIVE">Active</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="SUSPENDED">Suspended</option>
+                  <option value="REJECTED">Rejected</option>
+                </select>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Button type="button" variant="outline" className="flex-1" onClick={() => setShowEditModal(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="flex-1" disabled={updating}>
+                  {updating ? 'Saving...' : 'Save Changes'}
                 </Button>
               </div>
             </form>

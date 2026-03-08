@@ -498,6 +498,7 @@ router.get('/users', async (req, res, next) => {
           email: true,
           firstName: true,
           lastName: true,
+          phone: true,
           role: true,
           status: true,
           createdAt: true,
@@ -1877,7 +1878,7 @@ router.patch('/users/:id/admin-access', authorizePermissions(Permissions.ADMIN_R
 
 router.get('/products/options', async (_req, res, next) => {
   try {
-    const [categories, materials, sellers, designers] = await Promise.all([
+    const [categories, materials, sellersRaw, designersRaw] = await Promise.all([
       prisma.productCategory.findMany({
         where: { isActive: true },
         orderBy: { sortOrder: 'asc' },
@@ -1889,14 +1890,46 @@ router.get('/products/options', async (_req, res, next) => {
         select: { id: true, name: true },
       }),
       prisma.fabricSellerProfile.findMany({
-        select: { id: true, businessName: true, country: true },
-        orderBy: { businessName: 'asc' },
+        select: {
+          id: true,
+          businessName: true,
+          country: true,
+          user: {
+            select: { firstName: true, lastName: true, email: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
       }),
       prisma.designerProfile.findMany({
-        select: { id: true, businessName: true, country: true },
-        orderBy: { businessName: 'asc' },
+        select: {
+          id: true,
+          businessName: true,
+          country: true,
+          user: {
+            select: { firstName: true, lastName: true, email: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
       }),
     ]);
+
+    const sellers = sellersRaw.map((item) => {
+      const fallbackName = `${item.user?.firstName || ''} ${item.user?.lastName || ''}`.trim() || item.user?.email || 'Fabric Seller';
+      return {
+        id: item.id,
+        businessName: String(item.businessName || '').trim() || fallbackName,
+        country: item.country || '',
+      };
+    });
+
+    const designers = designersRaw.map((item) => {
+      const fallbackName = `${item.user?.firstName || ''} ${item.user?.lastName || ''}`.trim() || item.user?.email || 'Designer';
+      return {
+        id: item.id,
+        businessName: String(item.businessName || '').trim() || fallbackName,
+        country: item.country || '',
+      };
+    });
 
     res.json({
       success: true,
