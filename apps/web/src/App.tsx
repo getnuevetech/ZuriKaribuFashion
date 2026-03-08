@@ -36,6 +36,7 @@ import AdminPricingRules from './pages/admin/PricingRules';
 import AdminBanners from './pages/admin/Banners';
 import AdminHomepage from './pages/admin/Homepage';
 import AdminHomepageSections from './pages/admin/HomepageSections';
+import AdminRoleManagement from './pages/admin/RoleManagement';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -113,6 +114,7 @@ function App() {
               <Route element={<DashboardLayout userType="admin" />}>
                 <Route path="/admin" element={<AdminDashboard />} />
                 <Route path="/admin/users" element={<AdminUsers />} />
+                <Route path="/admin/roles" element={<AdminRoleManagement />} />
                 <Route path="/admin/products" element={<AdminProducts />} />
                 <Route path="/admin/orders" element={<AdminOrders />} />
                 <Route path="/admin/pricing" element={<AdminPricingRules />} />

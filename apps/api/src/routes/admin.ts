@@ -1,8 +1,14 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma, UserRole, UserStatus, ProductStatus } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
-import { Permissions } from '../rbac';
+import {
+  getPermissionCatalog,
+  hasPermissionFromGrants,
+  Permissions,
+  sanitizePermissionGrants,
+} from '../rbac';
 
 const router = Router();
 
@@ -13,9 +19,150 @@ function parsePagination(pageValue: unknown, limitValue: unknown, defaultLimit =
   return { page, limit, skip };
 }
 
+const adminPermissionListSchema = z.array(z.string()).default([]);
+const adminRoleCreateSchema = z.object({
+  name: z.string().min(2).max(80),
+  description: z.string().max(500).optional(),
+  permissions: adminPermissionListSchema,
+  isActive: z.boolean().optional().default(true),
+});
+const adminRoleUpdateSchema = z.object({
+  name: z.string().min(2).max(80).optional(),
+  description: z.string().max(500).optional().nullable(),
+  permissions: adminPermissionListSchema.optional(),
+  isActive: z.boolean().optional(),
+});
+const adminUserRoleAssignmentSchema = z.object({
+  adminRoleId: z.string().uuid().nullable().optional(),
+  permissions: adminPermissionListSchema.optional(),
+});
+
+let adminRbacSchemaEnsured = false;
+let adminRbacSchemaPromise: Promise<void> | null = null;
+
+const ensureAdminRbacSchema = async () => {
+  if (adminRbacSchemaEnsured) return;
+  if (adminRbacSchemaPromise) {
+    await adminRbacSchemaPromise;
+    return;
+  }
+
+  adminRbacSchemaPromise = (async () => {
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "AdminRole" (
+        "id" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "description" TEXT,
+        "permissions" JSONB NOT NULL DEFAULT '[]'::jsonb,
+        "isSystem" BOOLEAN NOT NULL DEFAULT false,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "AdminRole_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "AdminRole_name_key" ON "AdminRole"("name")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AdminRole_isActive_idx" ON "AdminRole"("isActive")`);
+    await prisma.$executeRawUnsafe(
+      `DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'AdminProfile'
+            AND column_name = 'adminRoleId'
+        ) THEN
+          ALTER TABLE "AdminProfile" ADD COLUMN "adminRoleId" TEXT;
+        END IF;
+      END $$;`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "AdminProfile_adminRoleId_idx" ON "AdminProfile"("adminRoleId")`
+    );
+    await prisma.$executeRawUnsafe(
+      `DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'AdminProfile_adminRoleId_fkey'
+        ) THEN
+          ALTER TABLE "AdminProfile"
+          ADD CONSTRAINT "AdminProfile_adminRoleId_fkey"
+          FOREIGN KEY ("adminRoleId") REFERENCES "AdminRole"("id")
+          ON DELETE SET NULL ON UPDATE CASCADE;
+        END IF;
+      END $$;`
+    );
+
+    const allPermissions = JSON.stringify(getPermissionCatalog().map((entry) => entry.key));
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "AdminRole" ("id", "name", "description", "permissions", "isSystem", "isActive", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4::jsonb, true, true, NOW(), NOW())
+       ON CONFLICT ("name") DO NOTHING`,
+      randomUUID(),
+      'Super Administrator',
+      'Full administrative access across all system modules.',
+      allPermissions
+    );
+
+    adminRbacSchemaEnsured = true;
+  })();
+
+  try {
+    await adminRbacSchemaPromise;
+  } finally {
+    adminRbacSchemaPromise = null;
+  }
+};
+
+router.use(async (_req, _res, next) => {
+  try {
+    await ensureAdminRbacSchema();
+  } catch (error) {
+    console.error('Failed to ensure admin RBAC schema:', error);
+  }
+  next();
+});
+
 // All admin routes require admin role
 router.use(authenticate);
 router.use(authorizePermissions(Permissions.ADMIN_ACCESS));
+
+const resolveAdminRoutePermissions = (method: string, path: string) => {
+  if (/^\/users\/[^/]+\/admin-access$/.test(path) || path.startsWith('/roles') || path.startsWith('/permission-catalog')) {
+    return [Permissions.ADMIN_ROLE_MANAGE];
+  }
+  if (path.startsWith('/dashboard')) return [Permissions.ADMIN_DASHBOARD_READ];
+  if (path.startsWith('/users/pending')) return [Permissions.USERS_READ];
+  if (path.startsWith('/users')) {
+    return method === 'GET' ? [Permissions.USERS_READ] : [Permissions.USERS_MANAGE];
+  }
+  if (path.startsWith('/products') || path.startsWith('/categories') || path.startsWith('/materials')) {
+    return [Permissions.PRODUCTS_MANAGE];
+  }
+  if (path.startsWith('/pricing-rules')) return [Permissions.PRICING_MANAGE];
+  if (path.startsWith('/orders')) return [Permissions.ORDERS_MANAGE];
+  return [];
+};
+
+router.use((req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required.',
+    });
+  }
+  const grants = Array.isArray(req.user.permissions) ? req.user.permissions : [];
+  const routePermissions = resolveAdminRoutePermissions(req.method, req.path);
+  const missing = routePermissions.filter((permission) => !hasPermissionFromGrants(grants, permission));
+  if (missing.length > 0) {
+    return res.status(403).json({
+      success: false,
+      message: 'You do not have permission to access this resource.',
+    });
+  }
+  return next();
+});
 
 // ==================== DASHBOARD STATS ====================
 
@@ -126,15 +273,40 @@ router.get('/users', async (req, res, next) => {
           status: true,
           createdAt: true,
           lastLogin: true,
+          adminProfile: {
+            select: {
+              permissions: true,
+            },
+          },
         },
       }),
       prisma.user.count({ where }),
     ]);
 
+    const userIds = users.map((user) => user.id);
+    const adminRoleRows =
+      userIds.length > 0
+        ? await prisma.$queryRawUnsafe<Array<{ userId: string; adminRoleId: string | null }>>(
+            `SELECT "userId", "adminRoleId" FROM "AdminProfile" WHERE "userId" = ANY($1::text[])`,
+            userIds
+          )
+        : [];
+    const adminRoleByUserId = new Map(adminRoleRows.map((row) => [String(row.userId), row.adminRoleId || null]));
+    const usersWithAdminMeta = users.map((user) => ({
+      ...user,
+      adminProfile: user.adminProfile
+        ? {
+            ...user.adminProfile,
+            permissions: sanitizePermissionGrants(user.adminProfile.permissions),
+            adminRoleId: adminRoleByUserId.get(user.id) ?? null,
+          }
+        : null,
+    }));
+
     res.json({
       success: true,
       data: {
-        users,
+        users: usersWithAdminMeta,
         pagination: {
           page: pagination.page,
           limit: pagination.limit,
@@ -201,6 +373,311 @@ router.patch('/users/:id/status', async (req, res, next) => {
       success: true,
       message: `User ${status.toLowerCase()} successfully.`,
       data: user,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const parseStoredPermissions = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return sanitizePermissionGrants(value);
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return sanitizePermissionGrants(parsed);
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+// ==================== ADMIN ROLES & PERMISSIONS ====================
+
+router.get('/permission-catalog', authorizePermissions(Permissions.ADMIN_ROLE_MANAGE), async (_req, res) => {
+  const catalog = getPermissionCatalog();
+  res.json({
+    success: true,
+    data: {
+      catalog,
+      groups: Array.from(new Set(catalog.map((item) => item.group))),
+    },
+  });
+});
+
+router.get('/roles', authorizePermissions(Permissions.ADMIN_ROLE_MANAGE), async (_req, res, next) => {
+  try {
+    const roles = await prisma.$queryRawUnsafe<
+      Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        permissions: unknown;
+        isSystem: boolean;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        assignedAdmins: number;
+      }>
+    >(
+      `SELECT r."id",
+              r."name",
+              r."description",
+              r."permissions",
+              r."isSystem",
+              r."isActive",
+              r."createdAt",
+              r."updatedAt",
+              COALESCE(COUNT(ap."id"), 0)::int AS "assignedAdmins"
+       FROM "AdminRole" r
+       LEFT JOIN "AdminProfile" ap ON ap."adminRoleId" = r."id"
+       GROUP BY r."id", r."name", r."description", r."permissions", r."isSystem", r."isActive", r."createdAt", r."updatedAt"
+       ORDER BY r."isSystem" DESC, r."name" ASC`
+    );
+
+    res.json({
+      success: true,
+      data: roles.map((role) => ({
+        ...role,
+        permissions: parseStoredPermissions(role.permissions),
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/roles', authorizePermissions(Permissions.ADMIN_ROLE_MANAGE), async (req, res, next) => {
+  try {
+    const payload = adminRoleCreateSchema.parse(req.body);
+    const permissions = sanitizePermissionGrants(payload.permissions);
+    const roleRows = await prisma.$queryRawUnsafe<
+      Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        permissions: unknown;
+        isSystem: boolean;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+      }>
+    >(
+      `INSERT INTO "AdminRole" ("id", "name", "description", "permissions", "isSystem", "isActive", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4::jsonb, false, $5, NOW(), NOW())
+       RETURNING "id", "name", "description", "permissions", "isSystem", "isActive", "createdAt", "updatedAt"`,
+      randomUUID(),
+      payload.name.trim(),
+      payload.description?.trim() || null,
+      JSON.stringify(permissions),
+      payload.isActive ?? true
+    );
+
+    const created = roleRows[0];
+    res.status(201).json({
+      success: true,
+      data: {
+        ...created,
+        permissions: parseStoredPermissions(created?.permissions),
+        assignedAdmins: 0,
+      },
+    });
+  } catch (error: any) {
+    if (error?.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        message: 'An admin role with this name already exists.',
+      });
+    }
+    next(error);
+  }
+});
+
+router.patch('/roles/:id', authorizePermissions(Permissions.ADMIN_ROLE_MANAGE), async (req, res, next) => {
+  try {
+    const payload = adminRoleUpdateSchema.parse(req.body);
+    const existingRows = await prisma.$queryRawUnsafe<
+      Array<{ id: string; isSystem: boolean; permissions: unknown }>
+    >(`SELECT "id", "isSystem", "permissions" FROM "AdminRole" WHERE "id" = $1 LIMIT 1`, req.params.id);
+    const existing = existingRows[0];
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Admin role not found.' });
+    }
+    if (existing.isSystem) {
+      return res.status(400).json({ success: false, message: 'System roles cannot be modified.' });
+    }
+
+    const permissions =
+      payload.permissions !== undefined
+        ? sanitizePermissionGrants(payload.permissions)
+        : parseStoredPermissions(existing.permissions);
+
+    const roleRows = await prisma.$queryRawUnsafe<
+      Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        permissions: unknown;
+        isSystem: boolean;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+      }>
+    >(
+      `UPDATE "AdminRole"
+       SET "name" = COALESCE($1, "name"),
+           "description" = CASE WHEN $2::boolean THEN NULL ELSE COALESCE($3, "description") END,
+           "permissions" = $4::jsonb,
+           "isActive" = COALESCE($5, "isActive"),
+           "updatedAt" = NOW()
+       WHERE "id" = $6
+       RETURNING "id", "name", "description", "permissions", "isSystem", "isActive", "createdAt", "updatedAt"`,
+      payload.name?.trim() || null,
+      payload.description === null,
+      payload.description?.trim() || null,
+      JSON.stringify(permissions),
+      payload.isActive ?? null,
+      req.params.id
+    );
+
+    const updated = roleRows[0];
+    const countRows = await prisma.$queryRawUnsafe<Array<{ total: number }>>(
+      `SELECT COALESCE(COUNT(*), 0)::int AS "total" FROM "AdminProfile" WHERE "adminRoleId" = $1`,
+      req.params.id
+    );
+    res.json({
+      success: true,
+      data: {
+        ...updated,
+        permissions: parseStoredPermissions(updated?.permissions),
+        assignedAdmins: Number(countRows[0]?.total || 0),
+      },
+    });
+  } catch (error: any) {
+    if (error?.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        message: 'An admin role with this name already exists.',
+      });
+    }
+    next(error);
+  }
+});
+
+router.delete('/roles/:id', authorizePermissions(Permissions.ADMIN_ROLE_MANAGE), async (req, res, next) => {
+  try {
+    const existingRows = await prisma.$queryRawUnsafe<Array<{ id: string; isSystem: boolean }>>(
+      `SELECT "id", "isSystem" FROM "AdminRole" WHERE "id" = $1 LIMIT 1`,
+      req.params.id
+    );
+    const existing = existingRows[0];
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Admin role not found.' });
+    }
+    if (existing.isSystem) {
+      return res.status(400).json({ success: false, message: 'System roles cannot be deleted.' });
+    }
+
+    const countRows = await prisma.$queryRawUnsafe<Array<{ total: number }>>(
+      `SELECT COALESCE(COUNT(*), 0)::int AS "total" FROM "AdminProfile" WHERE "adminRoleId" = $1`,
+      req.params.id
+    );
+    if (Number(countRows[0]?.total || 0) > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'This role is still assigned to one or more administrators.',
+      });
+    }
+
+    await prisma.$executeRawUnsafe(`DELETE FROM "AdminRole" WHERE "id" = $1`, req.params.id);
+    res.json({ success: true, message: 'Admin role deleted.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/users/:id/admin-access', authorizePermissions(Permissions.ADMIN_ROLE_MANAGE), async (req, res, next) => {
+  try {
+    const payload = adminUserRoleAssignmentSchema.parse(req.body);
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, role: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    if (user.role !== UserRole.ADMINISTRATOR) {
+      return res.status(400).json({
+        success: false,
+        message: 'Only administrator users can receive admin role assignments.',
+      });
+    }
+
+    let rolePermissions: string[] = [];
+    let selectedRole: { id: string; name: string; isActive: boolean } | null = null;
+    if (payload.adminRoleId) {
+      const roleRows = await prisma.$queryRawUnsafe<
+        Array<{ id: string; name: string; permissions: unknown; isActive: boolean }>
+      >(
+        `SELECT "id", "name", "permissions", "isActive"
+         FROM "AdminRole"
+         WHERE "id" = $1
+         LIMIT 1`,
+        payload.adminRoleId
+      );
+      const role = roleRows[0];
+      if (!role || !role.isActive) {
+        return res.status(400).json({
+          success: false,
+          message: 'Selected admin role is invalid or inactive.',
+        });
+      }
+      rolePermissions = parseStoredPermissions(role.permissions);
+      selectedRole = { id: role.id, name: role.name, isActive: role.isActive };
+    }
+
+    const nextPermissions =
+      payload.permissions !== undefined
+        ? sanitizePermissionGrants(payload.permissions)
+        : payload.adminRoleId !== undefined
+          ? rolePermissions
+          : undefined;
+
+    const profile = await prisma.adminProfile.upsert({
+      where: { userId: user.id },
+      create: {
+        userId: user.id,
+        permissions: nextPermissions ?? [],
+      },
+      update: nextPermissions !== undefined ? { permissions: nextPermissions } : {},
+      select: {
+        userId: true,
+        permissions: true,
+      },
+    });
+
+    if (payload.adminRoleId !== undefined) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "AdminProfile"
+         SET "adminRoleId" = $1, "updatedAt" = NOW()
+         WHERE "userId" = $2`,
+        payload.adminRoleId || null,
+        user.id
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'Admin access updated.',
+      data: {
+        userId: user.id,
+        adminRoleId: payload.adminRoleId ?? null,
+        adminRole: payload.adminRoleId ? selectedRole : null,
+        permissions: sanitizePermissionGrants(profile.permissions),
+      },
     });
   } catch (error) {
     next(error);

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma, UserRole, UserStatus } from '../db';
 import { generateToken, authenticate } from '../middleware/auth';
-import { getRolePermissions, ROLE_HOME_ROUTE } from '../rbac';
+import { getRolePermissions, ROLE_HOME_ROUTE, sanitizePermissionGrants } from '../rbac';
 import { bootstrapAdminConfig } from '../bootstrap';
 
 const router = Router();
@@ -159,6 +159,23 @@ async function verifyPasswordCompat(plainPassword: string, storedPassword: strin
   }
 
   return { isValid: false, shouldUpgradeHash: false };
+}
+
+async function resolveEffectivePermissions(userId: string, role: UserRole) {
+  const rolePermissions = getRolePermissions(role);
+  if (role !== UserRole.ADMINISTRATOR) {
+    return rolePermissions;
+  }
+  try {
+    const profile = await prisma.adminProfile.findUnique({
+      where: { userId },
+      select: { permissions: true },
+    });
+    const adminPermissions = sanitizePermissionGrants(profile?.permissions);
+    return adminPermissions.length > 0 ? adminPermissions : rolePermissions;
+  } catch {
+    return rolePermissions;
+  }
 }
 
 // Register
@@ -460,6 +477,8 @@ router.post('/login', async (req, res, next) => {
       role: user.role,
     });
 
+    const effectivePermissions = await resolveEffectivePermissions(user.id, user.role);
+
     res.json({
       success: true,
       message: 'Login successful!',
@@ -471,11 +490,12 @@ router.post('/login', async (req, res, next) => {
           lastName: user.lastName,
           role: user.role,
           status: user.status,
+          permissions: effectivePermissions,
         },
         token,
         access: {
           homeRoute: ROLE_HOME_ROUTE[user.role],
-          permissions: getRolePermissions(user.role),
+          permissions: effectivePermissions,
         },
       },
     });
@@ -509,6 +529,8 @@ router.get('/me', authenticate, async (req, res, next) => {
       });
     }
 
+    const effectivePermissions = await resolveEffectivePermissions(user.id, user.role);
+
     res.json({
       success: true,
       data: {
@@ -523,7 +545,7 @@ router.get('/me', authenticate, async (req, res, next) => {
         profile: user.customerProfile || user.fabricSellerProfile || user.designerProfile || user.qaProfile || user.adminProfile,
         access: {
           homeRoute: ROLE_HOME_ROUTE[user.role],
-          permissions: getRolePermissions(user.role),
+          permissions: effectivePermissions,
         },
       },
     });

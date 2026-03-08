@@ -85,6 +85,13 @@ interface FooterContent {
   copyright: string;
 }
 
+interface VisibilitySection {
+  key: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+}
+
 const TABS = [
   { id: 'countries' as SectionType, label: 'Countries', icon: Globe },
   { id: 'howItWorks' as SectionType, label: 'How It Works', icon: Sparkles },
@@ -109,10 +116,16 @@ export default function HomepageSections() {
   const [heritageSections, setHeritageSections] = useState<HeritageSection[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [footerContents, setFooterContents] = useState<FooterContent[]>([]);
+  const [visibilitySections, setVisibilitySections] = useState<VisibilitySection[]>([]);
+  const [visibilityLoading, setVisibilityLoading] = useState(false);
 
   useEffect(() => {
     fetchData();
   }, [activeTab]);
+
+  useEffect(() => {
+    fetchVisibility();
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -152,6 +165,48 @@ export default function HomepageSections() {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchVisibility = async () => {
+    setVisibilityLoading(true);
+    try {
+      const response = await api.homepageSections.getAdminVisibility();
+      if (response.success) {
+        setVisibilitySections(response.data.sections || []);
+      }
+    } catch (error) {
+      console.error('Error fetching homepage visibility:', error);
+    } finally {
+      setVisibilityLoading(false);
+    }
+  };
+
+  const handleToggleVisibility = async (key: string, enabled: boolean) => {
+    const nextVisibility = visibilitySections.reduce<Record<string, boolean>>((acc, section) => {
+      acc[section.key] = section.key === key ? !enabled : section.enabled;
+      return acc;
+    }, {});
+
+    setVisibilitySections((prev) =>
+      prev.map((section) =>
+        section.key === key
+          ? {
+              ...section,
+              enabled: !enabled,
+            }
+          : section
+      )
+    );
+
+    try {
+      const response = await api.homepageSections.updateAdminVisibility(nextVisibility);
+      if (response.success) {
+        setVisibilitySections(response.data.sections || []);
+      }
+    } catch (error) {
+      console.error('Error updating homepage visibility:', error);
+      await fetchVisibility();
     }
   };
 
@@ -264,6 +319,43 @@ export default function HomepageSections() {
           <Plus className="w-4 h-4" />
           Add New
         </Button>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Frontpage Section Visibility</h2>
+          <p className="text-sm text-gray-500">Enable or disable entire homepage blocks instantly.</p>
+        </div>
+        {visibilityLoading ? (
+          <div className="flex items-center justify-center py-8 text-gray-500">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            Loading section visibility...
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {visibilitySections.map((section) => (
+              <div
+                key={section.key}
+                className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3"
+              >
+                <div className="pr-3">
+                  <p className="text-sm font-medium text-gray-900">{section.label}</p>
+                  <p className="text-xs text-gray-500">{section.description}</p>
+                </div>
+                <button
+                  onClick={() => handleToggleVisibility(section.key, section.enabled)}
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
+                    section.enabled
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {section.enabled ? 'Enabled' : 'Disabled'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Tabs */}

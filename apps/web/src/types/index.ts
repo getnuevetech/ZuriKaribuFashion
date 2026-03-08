@@ -14,6 +14,7 @@ export interface User {
   status: UserStatus;
   createdAt: string;
   bio?: string;
+  permissions?: string[];
 }
 
 export interface AuthState {

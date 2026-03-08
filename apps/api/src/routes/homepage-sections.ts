@@ -1,10 +1,73 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 
 const router = Router();
+
+const HOMEPAGE_VISIBILITY_SETTINGS_KEY = 'HOMEPAGE_SECTION_VISIBILITY';
+const HOMEPAGE_SECTION_VISIBILITY_META = [
+  { key: 'hero', label: 'Hero Banner', description: 'Top hero carousel section.' },
+  { key: 'countries', label: 'Country Strip', description: 'Country marquee cards below hero.' },
+  { key: 'categories', label: 'Shop by Category', description: 'Category card grid section.' },
+  { key: 'howItWorks', label: 'How It Works', description: 'Step-by-step process section.' },
+  { key: 'featuredCustomToWear', label: 'Custom To Wear', description: 'Featured custom designs carousel.' },
+  { key: 'featuredReadyToWear', label: 'Ready To Wear', description: 'Featured ready-to-wear carousel.' },
+  { key: 'featuredFabrics', label: 'Fabrics To Buy', description: 'Featured fabrics carousel.' },
+  { key: 'promoBanner', label: 'Fresh Drops Banner', description: 'Promo banner before designer spotlight.' },
+  { key: 'designerSpotlight', label: 'Designer Spotlight', description: 'Designer spotlight cards section.' },
+  { key: 'heritage', label: 'Heritage Story', description: 'Culture and heritage story section.' },
+  { key: 'testimonials', label: 'Testimonials', description: 'Customer testimonials section.' },
+  { key: 'cta', label: 'CTA + Newsletter', description: 'Final call-to-action and newsletter blocks.' },
+] as const;
+type HomepageVisibilityKey = (typeof HOMEPAGE_SECTION_VISIBILITY_META)[number]['key'];
+type HomepageSectionVisibility = Record<HomepageVisibilityKey, boolean>;
+const HOMEPAGE_SECTION_VISIBILITY_DEFAULTS = HOMEPAGE_SECTION_VISIBILITY_META.reduce(
+  (acc, item) => ({ ...acc, [item.key]: true }),
+  {} as HomepageSectionVisibility
+);
+
+let homepageSettingsSchemaEnsured = false;
+let homepageSettingsSchemaPromise: Promise<void> | null = null;
+const ensureHomepageSettingsSchema = async () => {
+  if (homepageSettingsSchemaEnsured) return;
+  if (homepageSettingsSchemaPromise) {
+    await homepageSettingsSchemaPromise;
+    return;
+  }
+  homepageSettingsSchemaPromise = (async () => {
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "HomepageSectionSetting" (
+        "id" TEXT NOT NULL,
+        "key" TEXT NOT NULL,
+        "value" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "HomepageSectionSetting_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "HomepageSectionSetting_key_key" ON "HomepageSectionSetting"("key")`
+    );
+    homepageSettingsSchemaEnsured = true;
+  })();
+  try {
+    await homepageSettingsSchemaPromise;
+  } finally {
+    homepageSettingsSchemaPromise = null;
+  }
+};
+
+router.use(async (_req, _res, next) => {
+  try {
+    await ensureHomepageSettingsSchema();
+  } catch (error) {
+    console.error('Failed to ensure homepage settings schema:', error);
+  }
+  next();
+});
 
 const getString = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
@@ -190,8 +253,108 @@ const normalizeFooterInput = (input: any) => {
   };
 };
 const footerUpdateSchema = footerCreateSchema;
+const homepageVisibilityUpdateSchema = z.object({
+  visibility: z.record(z.boolean()),
+});
+
+const normalizeHomepageSectionVisibility = (raw: unknown): HomepageSectionVisibility => {
+  const defaults = { ...HOMEPAGE_SECTION_VISIBILITY_DEFAULTS };
+  if (!raw || typeof raw !== 'object') {
+    return defaults;
+  }
+  const row = raw as Record<string, unknown>;
+  for (const item of HOMEPAGE_SECTION_VISIBILITY_META) {
+    if (typeof row[item.key] === 'boolean') {
+      defaults[item.key] = row[item.key] as boolean;
+    }
+  }
+  return defaults;
+};
+
+const readHomepageSectionVisibility = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_VISIBILITY_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      visibility: { ...HOMEPAGE_SECTION_VISIBILITY_DEFAULTS },
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+
+  let parsed: HomepageSectionVisibility = { ...HOMEPAGE_SECTION_VISIBILITY_DEFAULTS };
+  try {
+    parsed = normalizeHomepageSectionVisibility(JSON.parse(String(row.value || '{}')));
+  } catch {
+    parsed = { ...HOMEPAGE_SECTION_VISIBILITY_DEFAULTS };
+  }
+  return {
+    rowId: String(row.id),
+    visibility: parsed,
+    source: 'DATABASE' as const,
+    updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+  };
+};
+
+const saveHomepageSectionVisibility = async (next: Partial<Record<HomepageVisibilityKey, boolean>>) => {
+  const existing = await readHomepageSectionVisibility();
+  const merged = normalizeHomepageSectionVisibility({
+    ...existing.visibility,
+    ...next,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_VISIBILITY_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+
+const getHomepageSectionVisibilityForAdmin = async () => {
+  const { visibility, source, updatedAt } = await readHomepageSectionVisibility();
+  return {
+    source,
+    updatedAt,
+    sections: HOMEPAGE_SECTION_VISIBILITY_META.map((item) => ({
+      key: item.key,
+      label: item.label,
+      description: item.description,
+      enabled: Boolean(visibility[item.key]),
+    })),
+  };
+};
 
 // ==================== PUBLIC ENDPOINTS ====================
+
+router.get('/visibility', async (_req, res) => {
+  try {
+    const { visibility } = await readHomepageSectionVisibility();
+    res.json({ success: true, data: visibility });
+  } catch (error) {
+    console.error('Error fetching homepage visibility:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch homepage visibility settings.' });
+  }
+});
 
 // Get all active countries for marquee
 router.get('/countries', async (req, res) => {
@@ -394,6 +557,37 @@ router.get('/footer', async (req, res) => {
 });
 
 // ==================== ADMIN ENDPOINTS ====================
+
+router.get('/admin/visibility', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const data = await getHomepageSectionVisibilityForAdmin();
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Error fetching homepage section visibility:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch homepage section visibility.' });
+  }
+});
+
+router.put('/admin/visibility', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = homepageVisibilityUpdateSchema.parse(req.body);
+    const allowedKeys = new Set(HOMEPAGE_SECTION_VISIBILITY_META.map((item) => item.key));
+    const next: Partial<Record<HomepageVisibilityKey, boolean>> = {};
+    for (const [key, enabled] of Object.entries(payload.visibility || {})) {
+      if (!allowedKeys.has(key as HomepageVisibilityKey)) continue;
+      next[key as HomepageVisibilityKey] = Boolean(enabled);
+    }
+    await saveHomepageSectionVisibility(next);
+    const data = await getHomepageSectionVisibilityForAdmin();
+    res.json({ success: true, data });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating homepage section visibility:', error);
+    res.status(500).json({ success: false, message: 'Failed to update homepage section visibility.' });
+  }
+});
 
 // Country Marquee Admin
 router.get('/admin/countries', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {

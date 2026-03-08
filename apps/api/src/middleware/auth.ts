@@ -2,7 +2,13 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { prisma, UserRole } from '../db';
-import { Permission, hasAnyPermission } from '../rbac';
+import {
+  Permission,
+  getRolePermissions,
+  hasAnyPermission,
+  hasAnyPermissionFromGrants,
+  sanitizePermissionGrants,
+} from '../rbac';
 
 // JWT Secret - must be set in production
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -26,6 +32,7 @@ declare global {
         role: UserRole;
         firstName: string;
         lastName: string;
+        permissions?: string[];
       };
     }
   }
@@ -70,6 +77,11 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
         firstName: true,
         lastName: true,
         status: true,
+        adminProfile: {
+          select: {
+            permissions: true,
+          },
+        },
       },
     });
 
@@ -87,7 +99,21 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
       });
     }
 
-    req.user = user;
+    const rolePermissions = getRolePermissions(user.role) as string[];
+    const adminUserPermissions =
+      user.role === 'ADMINISTRATOR'
+        ? sanitizePermissionGrants((user as any)?.adminProfile?.permissions)
+        : [];
+    const effectivePermissions = adminUserPermissions.length > 0 ? adminUserPermissions : rolePermissions;
+
+    req.user = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      permissions: effectivePermissions,
+    };
     next();
   } catch (error) {
     return res.status(401).json({
@@ -128,7 +154,13 @@ export function authorizePermissions(...requiredPermissions: Permission[]) {
       });
     }
 
-    if (!hasAnyPermission(req.user.role, requiredPermissions)) {
+    const permissionGrants =
+      Array.isArray(req.user.permissions) && req.user.permissions.length > 0 ? req.user.permissions : null;
+    const canAccess = permissionGrants
+      ? hasAnyPermissionFromGrants(permissionGrants, requiredPermissions)
+      : hasAnyPermission(req.user.role, requiredPermissions);
+
+    if (!canAccess) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to access this resource.',
@@ -160,11 +192,30 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
         firstName: true,
         lastName: true,
         status: true,
+        adminProfile: {
+          select: {
+            permissions: true,
+          },
+        },
       },
     });
 
     if (user && user.status === 'ACTIVE') {
-      req.user = user;
+      const rolePermissions = getRolePermissions(user.role) as string[];
+      const adminUserPermissions =
+        user.role === 'ADMINISTRATOR'
+          ? sanitizePermissionGrants((user as any)?.adminProfile?.permissions)
+          : [];
+      const effectivePermissions = adminUserPermissions.length > 0 ? adminUserPermissions : rolePermissions;
+
+      req.user = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        permissions: effectivePermissions,
+      };
     }
 
     next();

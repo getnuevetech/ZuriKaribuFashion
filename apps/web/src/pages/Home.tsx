@@ -46,6 +46,37 @@ type CountryCard = {
   fabrics: string;
 };
 
+type HomepageVisibility = Record<
+  | 'hero'
+  | 'countries'
+  | 'categories'
+  | 'howItWorks'
+  | 'featuredCustomToWear'
+  | 'featuredReadyToWear'
+  | 'featuredFabrics'
+  | 'promoBanner'
+  | 'designerSpotlight'
+  | 'heritage'
+  | 'testimonials'
+  | 'cta',
+  boolean
+>;
+
+const DEFAULT_HOMEPAGE_VISIBILITY: HomepageVisibility = {
+  hero: true,
+  countries: true,
+  categories: true,
+  howItWorks: true,
+  featuredCustomToWear: true,
+  featuredReadyToWear: true,
+  featuredFabrics: true,
+  promoBanner: true,
+  designerSpotlight: true,
+  heritage: true,
+  testimonials: true,
+  cta: true,
+};
+
 const countryFlags: Record<string, string> = {
   Ghana: '🇬🇭',
   Nigeria: '🇳🇬',
@@ -382,6 +413,25 @@ export default function Home() {
     },
   });
 
+  const { data: visibilityData } = useQuery({
+    queryKey: ['homepageVisibility'],
+    enabled: USE_DYNAMIC_HOMEPAGE,
+    queryFn: async () => {
+      const response = await api.homepageSections.getVisibility();
+      return response.success ? response.data : null;
+    },
+  });
+
+  const sectionVisibility = useMemo<HomepageVisibility>(() => {
+    if (!USE_DYNAMIC_HOMEPAGE || !visibilityData) {
+      return DEFAULT_HOMEPAGE_VISIBILITY;
+    }
+    return {
+      ...DEFAULT_HOMEPAGE_VISIBILITY,
+      ...visibilityData,
+    };
+  }, [visibilityData]);
+
   const heroSlides = useMemo(
     () => {
       const source =
@@ -507,6 +557,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-white">
+      {sectionVisibility.hero ? (
       <section className="relative h-screen w-full overflow-hidden">
         {heroSlides.map((slide, index) => (
           <div
@@ -550,23 +601,25 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="absolute bottom-8 left-4 sm:left-6 lg:left-12 xl:left-20 right-4 sm:right-6 lg:right-12 xl:right-20">
-          <div className="flex flex-wrap gap-4 justify-start">
-            {countries.map((country) => (
-              <Link
-                key={country.name}
-                to={`/designs?country=${encodeURIComponent(country.name)}`}
-                className="bg-white/95 backdrop-blur-sm px-4 py-3 rounded-lg flex items-center gap-3 card-hover cursor-pointer"
-              >
-                <span className="text-2xl">{country.flag}</span>
-                <div>
-                  <p className="font-semibold text-sm">{country.name}</p>
-                  <p className="text-xs text-gray-500">{country.fabrics}</p>
-                </div>
-              </Link>
-            ))}
+        {sectionVisibility.countries ? (
+          <div className="absolute bottom-8 left-4 sm:left-6 lg:left-12 xl:left-20 right-4 sm:right-6 lg:right-12 xl:right-20">
+            <div className="flex flex-wrap gap-4 justify-start">
+              {countries.map((country) => (
+                <Link
+                  key={country.name}
+                  to={`/designs?country=${encodeURIComponent(country.name)}`}
+                  className="bg-white/95 backdrop-blur-sm px-4 py-3 rounded-lg flex items-center gap-3 card-hover cursor-pointer"
+                >
+                  <span className="text-2xl">{country.flag}</span>
+                  <div>
+                    <p className="font-semibold text-sm">{country.name}</p>
+                    <p className="text-xs text-gray-500">{country.fabrics}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <div className="absolute bottom-8 right-4 sm:right-6 lg:right-12 xl:right-20 flex gap-2">
           {heroSlides.map((_, index) => (
@@ -580,7 +633,9 @@ export default function Home() {
           ))}
         </div>
       </section>
+      ) : null}
 
+      {sectionVisibility.categories ? (
       <section className="py-20 lg:py-32 bg-white">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="text-center mb-16">
@@ -610,7 +665,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
+      {sectionVisibility.howItWorks ? (
       <section className="py-16 lg:py-24 bg-gray-50">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="flex flex-wrap justify-center items-center gap-8 lg:gap-16">
@@ -630,40 +687,48 @@ export default function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
-      <ProductCarousel
-        title="Custom To Wear"
-        subtitle="Made To Fit by an African with Love"
-        products={featuredDesigns}
-        stripRef={customStripRef}
-        onLeft={() => scrollStrip(customStripRef, 'left')}
-        onRight={() => scrollStrip(customStripRef, 'right')}
-        viewAllLink="/designs"
-        loading={featuredLoading}
-      />
+      {sectionVisibility.featuredCustomToWear ? (
+        <ProductCarousel
+          title="Custom To Wear"
+          subtitle="Made To Fit by an African with Love"
+          products={featuredDesigns}
+          stripRef={customStripRef}
+          onLeft={() => scrollStrip(customStripRef, 'left')}
+          onRight={() => scrollStrip(customStripRef, 'right')}
+          viewAllLink="/designs"
+          loading={featuredLoading}
+        />
+      ) : null}
 
-      <ProductCarousel
-        title="Ready To Wear"
-        subtitle="Made To Standard sizes for all"
-        products={featuredRTW}
-        stripRef={rtwStripRef}
-        onLeft={() => scrollStrip(rtwStripRef, 'left')}
-        onRight={() => scrollStrip(rtwStripRef, 'right')}
-        viewAllLink="/ready-to-wear"
-        loading={featuredLoading}
-      />
+      {sectionVisibility.featuredReadyToWear ? (
+        <ProductCarousel
+          title="Ready To Wear"
+          subtitle="Made To Standard sizes for all"
+          products={featuredRTW}
+          stripRef={rtwStripRef}
+          onLeft={() => scrollStrip(rtwStripRef, 'left')}
+          onRight={() => scrollStrip(rtwStripRef, 'right')}
+          viewAllLink="/ready-to-wear"
+          loading={featuredLoading}
+        />
+      ) : null}
 
-      <ProductCarousel
-        title="Fabrics To Buy"
-        subtitle="Fabrics from all across the edges of Africa"
-        products={featuredFabrics}
-        stripRef={fabricsStripRef}
-        onLeft={() => scrollStrip(fabricsStripRef, 'left')}
-        onRight={() => scrollStrip(fabricsStripRef, 'right')}
-        viewAllLink="/fabrics"
-        loading={featuredLoading}
-      />
+      {sectionVisibility.featuredFabrics ? (
+        <ProductCarousel
+          title="Fabrics To Buy"
+          subtitle="Fabrics from all across the edges of Africa"
+          products={featuredFabrics}
+          stripRef={fabricsStripRef}
+          onLeft={() => scrollStrip(fabricsStripRef, 'left')}
+          onRight={() => scrollStrip(fabricsStripRef, 'right')}
+          viewAllLink="/fabrics"
+          loading={featuredLoading}
+        />
+      ) : null}
 
+      {sectionVisibility.promoBanner ? (
       <section className="py-20 lg:py-32 bg-gray-50">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
@@ -696,7 +761,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
+      {sectionVisibility.designerSpotlight ? (
       <section className="py-20 lg:py-32 bg-white">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="text-center mb-16">
@@ -735,7 +802,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
+      {sectionVisibility.heritage ? (
       <section
         className="relative py-32 lg:py-48 bg-fixed bg-cover bg-center"
         style={{ backgroundImage: `url(${heritage.image})` }}
@@ -756,7 +825,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
+      {sectionVisibility.testimonials ? (
       <section className="py-20 lg:py-32 bg-white">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="text-center mb-16">
@@ -810,7 +881,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
+      {sectionVisibility.cta ? (
       <section className="py-20 lg:py-32 bg-gray-50">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="max-w-3xl mx-auto text-center">
@@ -833,7 +906,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
+      {sectionVisibility.cta ? (
       <section className="py-16 lg:py-24 bg-white border-t border-gray-100">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="max-w-xl mx-auto text-center">
@@ -854,6 +929,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+      ) : null}
     </div>
   );
 }

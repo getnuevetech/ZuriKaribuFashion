@@ -236,6 +236,64 @@ const adminApi = {
   updateUserStatus: (id: string, status: string, reason?: string) =>
     apiService.patch(`/admin/users/${id}/status`, { status, reason }),
 
+  getPermissionCatalog: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        catalog: Array<{
+          key: string;
+          label: string;
+          group: string;
+          description: string;
+        }>;
+        groups: string[];
+      };
+    }>('/admin/permission-catalog'),
+
+  getAdminRoles: () =>
+    apiService.get<{
+      success: boolean;
+      data: Array<{
+        id: string;
+        name: string;
+        description: string;
+        permissions: string[];
+        isSystem: boolean;
+        isActive: boolean;
+        assignedAdmins: number;
+        createdAt: string;
+        updatedAt: string;
+      }>;
+    }>('/admin/roles'),
+
+  createAdminRole: (data: {
+    name: string;
+    description?: string;
+    permissions: string[];
+    isActive?: boolean;
+  }) => apiService.post<{ success: boolean; data: any }>('/admin/roles', data),
+
+  updateAdminRole: (
+    id: string,
+    data: {
+      name?: string;
+      description?: string | null;
+      permissions?: string[];
+      isActive?: boolean;
+    }
+  ) => apiService.patch<{ success: boolean; data: any }>(`/admin/roles/${id}`, data),
+
+  deleteAdminRole: (id: string) =>
+    apiService.delete<{ success: boolean; message?: string }>(`/admin/roles/${id}`),
+
+  updateAdminUserAccess: (
+    userId: string,
+    data: {
+      adminRoleId?: string | null;
+      permissions?: string[];
+    }
+  ) => apiService.patch<{ success: boolean; data: any; message?: string }>(`/admin/users/${userId}/admin-access`, data),
+
   getCategories: () =>
     apiService.get<{ success: boolean; data: any[] }>('/admin/categories'),
 
@@ -568,6 +626,12 @@ const homepageApi = {
 // Homepage Sections API (new dynamic sections)
 const homepageSectionsApi = {
   // Public endpoints
+  getVisibility: () =>
+    apiService.get<{
+      success: boolean;
+      data: Record<string, boolean>;
+    }>('/homepage-sections/visibility'),
+
   getCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/countries'),
 
@@ -593,6 +657,36 @@ const homepageSectionsApi = {
     apiService.get<{ success: boolean; data: any }>('/homepage-sections/footer'),
 
   // Admin endpoints - Countries
+  getAdminVisibility: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        source: 'DATABASE' | 'DEFAULT';
+        updatedAt: string | null;
+        sections: Array<{
+          key: string;
+          label: string;
+          description: string;
+          enabled: boolean;
+        }>;
+      };
+    }>('/homepage-sections/admin/visibility'),
+
+  updateAdminVisibility: (visibility: Record<string, boolean>) =>
+    apiService.put<{
+      success: boolean;
+      data: {
+        source: 'DATABASE' | 'DEFAULT';
+        updatedAt: string | null;
+        sections: Array<{
+          key: string;
+          label: string;
+          description: string;
+          enabled: boolean;
+        }>;
+      };
+    }>('/homepage-sections/admin/visibility', { visibility }),
+
   getAdminCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/admin/countries'),
 
