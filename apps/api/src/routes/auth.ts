@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma, UserRole, UserStatus } from '../db';
 import { generateToken, authenticate } from '../middleware/auth';
 import { getRolePermissions, ROLE_HOME_ROUTE } from '../rbac';
+import { bootstrapAdminConfig } from '../bootstrap';
 
 const router = Router();
 
@@ -176,8 +177,35 @@ router.post('/login', async (req, res, next) => {
       });
     }
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(data.password, user.password);
+    // Verify password (supports legacy plain-text rows and bootstrap reset for default admin)
+    let isValidPassword = await bcrypt.compare(data.password, user.password);
+    const looksLikeBcrypt = /^\$2[aby]\$\d{2}\$/.test(user.password);
+    if (!isValidPassword && !looksLikeBcrypt && data.password === user.password) {
+      isValidPassword = true;
+      const upgradedPassword = await bcrypt.hash(data.password, 10);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { password: upgradedPassword },
+      });
+    }
+
+    const isBootstrapAdminAttempt =
+      data.email === bootstrapAdminConfig.email &&
+      data.password === bootstrapAdminConfig.password &&
+      user.role === UserRole.ADMINISTRATOR;
+
+    if (!isValidPassword && isBootstrapAdminAttempt) {
+      const repairedPassword = await bcrypt.hash(bootstrapAdminConfig.password, 10);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          password: repairedPassword,
+          status: UserStatus.ACTIVE,
+        },
+      });
+      isValidPassword = true;
+      user.status = UserStatus.ACTIVE;
+    }
 
     if (!isValidPassword) {
       return res.status(401).json({

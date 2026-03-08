@@ -27,6 +27,7 @@ import bannerRoutes from './routes/banners';
 import homepageRoutes from './routes/homepage';
 import homepageSectionsRoutes from './routes/homepage-sections';
 import paymentRoutes from './routes/payments';
+import { runStartupRepairs } from './bootstrap';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -104,9 +105,17 @@ app.use((req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 API Server running on port ${PORT}`);
-  console.log(`📚 API Documentation: http://localhost:${PORT}/health`);
-});
+void (async () => {
+  try {
+    await runStartupRepairs();
+  } catch (error) {
+    console.error('Startup repairs failed:', error);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`🚀 API Server running on port ${PORT}`);
+    console.log(`📚 API Documentation: http://localhost:${PORT}/health`);
+  });
+})();
 
 export default app;
