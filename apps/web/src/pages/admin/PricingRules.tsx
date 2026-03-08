@@ -106,8 +106,24 @@ export default function AdminPricingRules() {
     try {
       setError('');
       setSuccess('');
+      const numericPercentage = Number(formData.percentage) || 0;
+      const numericFixedAmount = Number(formData.fixedAmount) || 0;
+      const chosenValue = numericFixedAmount > 0 ? numericFixedAmount : numericPercentage;
+      if (chosenValue <= 0) {
+        setError('Enter a positive percentage or fixed amount.');
+        return;
+      }
+      if (
+        formData.targetType === 'DATE_RANGE' &&
+        formData.startDate &&
+        formData.endDate &&
+        new Date(formData.startDate).getTime() > new Date(formData.endDate).getTime()
+      ) {
+        setError('End date must be on or after start date.');
+        return;
+      }
       const adjustmentType =
-        formData.fixedAmount > 0
+        numericFixedAmount > 0
           ? formData.type === 'MARKDOWN'
             ? 'FIXED_DISCOUNT'
             : 'FIXED_MARKUP'
@@ -135,7 +151,7 @@ export default function AdminPricingRules() {
             : undefined,
         isSale: formData.type === 'MARKDOWN',
         adjustmentType,
-        value: formData.fixedAmount > 0 ? formData.fixedAmount : formData.percentage,
+        value: chosenValue,
         priority: 0,
         isActive: formData.isActive,
       };
@@ -334,7 +350,7 @@ export default function AdminPricingRules() {
                     type="number"
                     step="0.01"
                     value={formData.percentage}
-                    onChange={(e) => setFormData({ ...formData, percentage: parseFloat(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, percentage: Number(e.target.value) || 0 })}
                     className="w-full pl-10 pr-4 py-2 border rounded-lg"
                   />
                 </div>
@@ -349,7 +365,7 @@ export default function AdminPricingRules() {
                     type="number"
                     step="0.01"
                     value={formData.fixedAmount}
-                    onChange={(e) => setFormData({ ...formData, fixedAmount: parseFloat(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, fixedAmount: Number(e.target.value) || 0 })}
                     className="w-full pl-10 pr-4 py-2 border rounded-lg"
                   />
                 </div>
