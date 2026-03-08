@@ -11,6 +11,8 @@ interface TopStripContent {
   separator: string;
   repeatCount: number;
   animationSeconds: number;
+  textColor: string;
+  backgroundColor: string;
   source?: 'DATABASE' | 'DEFAULT';
   updatedAt?: string | null;
 }
@@ -542,6 +544,20 @@ function TopStripTable({ data, onEdit }: { data: TopStripContent | null; onEdit:
               <span className="rounded-full bg-gray-100 px-2 py-1">
                 Animation: {data?.animationSeconds ?? 20}s
               </span>
+              <span className="rounded-full bg-gray-100 px-2 py-1 inline-flex items-center gap-2">
+                <span
+                  className="inline-block h-3 w-3 rounded border border-gray-300"
+                  style={{ backgroundColor: data?.textColor || '#ffffff' }}
+                />
+                Text: {data?.textColor || '#ffffff'}
+              </span>
+              <span className="rounded-full bg-gray-100 px-2 py-1 inline-flex items-center gap-2">
+                <span
+                  className="inline-block h-3 w-3 rounded border border-gray-300"
+                  style={{ backgroundColor: data?.backgroundColor || '#000000' }}
+                />
+                Background: {data?.backgroundColor || '#000000'}
+              </span>
             </div>
             <div className="space-y-1">
               {messages.length > 0 ? (
@@ -922,6 +938,8 @@ function SectionModal({
       return {
         ...item,
         messagesText: Array.isArray(item.messages) ? item.messages.join('\n') : '',
+        textColor: item.textColor || '#ffffff',
+        backgroundColor: item.backgroundColor || '#000000',
       };
     }
     return item || getDefaultFormData(type);
@@ -937,6 +955,8 @@ function SectionModal({
           separator: '•',
           repeatCount: 4,
           animationSeconds: 20,
+          textColor: '#ffffff',
+          backgroundColor: '#000000',
         };
       case 'countries':
         return { countryCode: '', name: '', flag: '', image: '', fabrics: '', displayOrder: 0, isActive: true };
@@ -1022,11 +1042,16 @@ function SectionModal({
             .split('\n')
             .map((entry: string) => entry.trim())
             .filter(Boolean);
+          if (messages.length === 0) {
+            throw new Error('Please enter at least one scrolling message.');
+          }
           return {
             messages,
             separator: String(formData.separator || '').trim() || '•',
             repeatCount: Number(formData.repeatCount) || 4,
             animationSeconds: Number(formData.animationSeconds) || 20,
+            textColor: String(formData.textColor || '#ffffff').trim().toLowerCase(),
+            backgroundColor: String(formData.backgroundColor || '#000000').trim().toLowerCase(),
           };
         }
         if (type === 'categories') {
@@ -1123,9 +1148,16 @@ function SectionModal({
       }
       if (response?.success) {
         onSave();
+      } else {
+        throw new Error('Unable to save this section right now.');
       }
     } catch (error) {
       console.error('Error saving item:', error);
+      const message =
+        (error as any)?.response?.data?.message ||
+        (error as Error)?.message ||
+        'Failed to save changes.';
+      window.alert(message);
     } finally {
       setSaving(false);
     }
@@ -1184,6 +1216,44 @@ function SectionModal({
                   min={8}
                   max={120}
                 />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Text Color</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={formData.textColor || '#ffffff'}
+                    onChange={(e) => setFormData({ ...formData, textColor: e.target.value })}
+                    className="h-10 w-14 rounded border border-gray-300 bg-white p-1"
+                  />
+                  <input
+                    type="text"
+                    value={formData.textColor || '#ffffff'}
+                    onChange={(e) => setFormData({ ...formData, textColor: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    placeholder="#ffffff"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Background Color</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={formData.backgroundColor || '#000000'}
+                    onChange={(e) => setFormData({ ...formData, backgroundColor: e.target.value })}
+                    className="h-10 w-14 rounded border border-gray-300 bg-white p-1"
+                  />
+                  <input
+                    type="text"
+                    value={formData.backgroundColor || '#000000'}
+                    onChange={(e) => setFormData({ ...formData, backgroundColor: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    placeholder="#000000"
+                  />
+                </div>
               </div>
             </div>
           </>

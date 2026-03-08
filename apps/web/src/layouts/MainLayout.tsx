@@ -14,6 +14,8 @@ const TOP_STRIP_DEFAULTS = {
   separator: '•',
   repeatCount: 4,
   animationSeconds: 20,
+  textColor: '#ffffff',
+  backgroundColor: '#000000',
 };
 
 export default function MainLayout() {
@@ -32,7 +34,6 @@ export default function MainLayout() {
   });
   const { data: visibilityContent } = useQuery({
     queryKey: ['homepageVisibilityForLayout'],
-    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getVisibility();
       return response.success ? response.data : null;
@@ -40,7 +41,6 @@ export default function MainLayout() {
   });
   const { data: topStripContent } = useQuery({
     queryKey: ['homepageTopStrip'],
-    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getTopStrip();
       return response.success ? response.data : null;
@@ -53,7 +53,7 @@ export default function MainLayout() {
   const ordersRoute = userRole === 'CUSTOMER' ? '/orders' : null;
   const profileLabel = userRole === 'CUSTOMER' ? 'My Profile' : 'Dashboard';
   const ordersLabel = 'My Orders';
-  const topStripVisible = USE_DYNAMIC_HOMEPAGE ? Boolean(visibilityContent?.topStrip ?? true) : true;
+  const topStripVisible = Boolean(visibilityContent?.topStrip ?? true);
   const topStripMessages =
     Array.isArray(topStripContent?.messages) && topStripContent.messages.length > 0
       ? topStripContent.messages
@@ -67,6 +67,8 @@ export default function MainLayout() {
     8,
     Math.min(120, Number(topStripContent?.animationSeconds || TOP_STRIP_DEFAULTS.animationSeconds))
   );
+  const topStripTextColor = String(topStripContent?.textColor || TOP_STRIP_DEFAULTS.textColor);
+  const topStripBackgroundColor = String(topStripContent?.backgroundColor || TOP_STRIP_DEFAULTS.backgroundColor);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -91,7 +93,13 @@ export default function MainLayout() {
   return (
     <div className="min-h-screen flex flex-col">
       {topStripVisible ? (
-        <div className="bg-black text-white h-10 flex items-center overflow-hidden">
+        <div
+          className="h-10 flex items-center overflow-hidden"
+          style={{
+            backgroundColor: topStripBackgroundColor,
+            color: topStripTextColor,
+          }}
+        >
           <div className="animate-marquee whitespace-nowrap flex gap-8" style={{ animationDuration: `${topStripAnimationSeconds}s` }}>
             {[...Array(topStripRepeatCount)].map((_, i) => (
               <div key={i} className="flex gap-8 text-xs tracking-wider">

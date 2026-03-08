@@ -282,6 +282,8 @@ const topStripUpdateSchema = z.object({
   separator: z.string().trim().min(1).max(8).optional(),
   repeatCount: z.number().int().min(2).max(12).optional(),
   animationSeconds: z.number().int().min(8).max(120).optional(),
+  textColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+  backgroundColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
 });
 
 type TopStripSettings = {
@@ -289,6 +291,8 @@ type TopStripSettings = {
   separator: string;
   repeatCount: number;
   animationSeconds: number;
+  textColor: string;
+  backgroundColor: string;
 };
 
 const TOP_STRIP_DEFAULTS: TopStripSettings = {
@@ -296,6 +300,14 @@ const TOP_STRIP_DEFAULTS: TopStripSettings = {
   separator: '•',
   repeatCount: 4,
   animationSeconds: 20,
+  textColor: '#ffffff',
+  backgroundColor: '#000000',
+};
+
+const normalizeHexColor = (value: unknown, fallback: string) => {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(trimmed) ? trimmed.toLowerCase() : fallback;
 };
 
 const normalizeTopStripSettings = (raw: unknown): TopStripSettings => {
@@ -309,11 +321,15 @@ const normalizeTopStripSettings = (raw: unknown): TopStripSettings => {
   const separator = getString(row.separator) ?? TOP_STRIP_DEFAULTS.separator;
   const repeatCount = getNumber(row.repeatCount) ?? TOP_STRIP_DEFAULTS.repeatCount;
   const animationSeconds = getNumber(row.animationSeconds) ?? TOP_STRIP_DEFAULTS.animationSeconds;
+  const textColor = normalizeHexColor(row.textColor, TOP_STRIP_DEFAULTS.textColor);
+  const backgroundColor = normalizeHexColor(row.backgroundColor, TOP_STRIP_DEFAULTS.backgroundColor);
   return {
     messages: messages.length > 0 ? messages : [...TOP_STRIP_DEFAULTS.messages],
     separator,
     repeatCount: Math.max(2, Math.min(12, Math.round(repeatCount))),
     animationSeconds: Math.max(8, Math.min(120, Math.round(animationSeconds))),
+    textColor,
+    backgroundColor,
   };
 };
 

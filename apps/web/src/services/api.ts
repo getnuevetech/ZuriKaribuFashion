@@ -852,6 +852,8 @@ const homepageSectionsApi = {
         separator: string;
         repeatCount: number;
         animationSeconds: number;
+        textColor: string;
+        backgroundColor: string;
       };
     }>('/homepage-sections/top-strip'),
 
@@ -918,6 +920,8 @@ const homepageSectionsApi = {
         separator: string;
         repeatCount: number;
         animationSeconds: number;
+        textColor: string;
+        backgroundColor: string;
         source?: 'DATABASE' | 'DEFAULT';
         updatedAt?: string | null;
       };
@@ -928,6 +932,8 @@ const homepageSectionsApi = {
     separator?: string;
     repeatCount?: number;
     animationSeconds?: number;
+    textColor?: string;
+    backgroundColor?: string;
   }) =>
     apiService.put<{
       success: boolean;
@@ -936,6 +942,8 @@ const homepageSectionsApi = {
         separator: string;
         repeatCount: number;
         animationSeconds: number;
+        textColor: string;
+        backgroundColor: string;
       };
     }>('/homepage-sections/admin/top-strip', data),
 
