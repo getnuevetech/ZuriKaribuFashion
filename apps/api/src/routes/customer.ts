@@ -40,6 +40,34 @@ router.get('/profile', async (req, res, next) => {
   }
 });
 
+// Get customer addresses
+router.get('/addresses', async (req, res, next) => {
+  try {
+    const profile = await prisma.customerProfile.findUnique({
+      where: { userId: req.user!.id },
+    });
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer profile not found.',
+      });
+    }
+
+    const addresses = await prisma.address.findMany({
+      where: { customerProfileId: profile.id },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    res.json({
+      success: true,
+      data: addresses,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Add address
 router.post('/addresses', async (req, res, next) => {
   try {

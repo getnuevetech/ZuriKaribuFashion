@@ -85,6 +85,54 @@ router.get('/fabrics', async (req, res, next) => {
   }
 });
 
+// Update fabric stock
+router.patch('/fabrics/:id/stock', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const schema = z.object({
+      stock: z.number().min(0),
+    });
+    const { stock } = schema.parse(req.body);
+
+    const profile = await prisma.fabricSellerProfile.findFirst({
+      where: { userId: req.user!.id },
+      select: { id: true },
+    });
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Seller profile not found.',
+      });
+    }
+
+    const fabric = await prisma.fabric.findFirst({
+      where: { id, sellerId: profile.id },
+      select: { id: true },
+    });
+
+    if (!fabric) {
+      return res.status(404).json({
+        success: false,
+        message: 'Fabric not found.',
+      });
+    }
+
+    const updated = await prisma.fabric.update({
+      where: { id },
+      data: { stockYards: stock },
+    });
+
+    res.json({
+      success: true,
+      message: 'Fabric stock updated successfully.',
+      data: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Create fabric
 router.post('/fabrics', async (req, res, next) => {
   try {

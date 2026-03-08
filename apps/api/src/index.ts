@@ -3,6 +3,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import fs from 'fs';
+import { ZodError } from 'zod';
 
 // Load environment variables
 dotenv.config();
@@ -88,6 +89,13 @@ app.use('/api/payments', paymentRoutes);
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Error:', err);
+  if (err instanceof ZodError) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: err.issues,
+    });
+  }
   const statusCode = err.status || 500;
   const isClientError = statusCode >= 400 && statusCode < 500;
   res.status(err.status || 500).json({
