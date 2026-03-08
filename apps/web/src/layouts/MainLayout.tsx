@@ -6,13 +6,14 @@ import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
 import { api } from '../services/api';
 import Footer from '../components/Footer';
+import { getHomeRouteForRole, normalizeRole } from '../auth/rbac';
 
 const USE_DYNAMIC_HOMEPAGE = import.meta.env.VITE_HOMEPAGE_MODE === 'dynamic';
 
 export default function MainLayout() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { isAuthenticated, logout } = useAuthStore();
+  const { isAuthenticated, logout, user } = useAuthStore();
   const { getItemCount } = useCartStore();
   const navigate = useNavigate();
   const { data: footerContent } = useQuery({
@@ -24,6 +25,12 @@ export default function MainLayout() {
     },
   });
   const brandName = footerContent?.companyName?.trim() || 'ZURIKARIBU';
+  const userRole = normalizeRole(user?.role);
+  const dashboardRoute = getHomeRouteForRole(user?.role);
+  const profileRoute = userRole === 'CUSTOMER' ? '/profile' : dashboardRoute;
+  const ordersRoute = userRole === 'CUSTOMER' ? '/orders' : dashboardRoute;
+  const profileLabel = userRole === 'CUSTOMER' ? 'My Profile' : 'Dashboard';
+  const ordersLabel = userRole === 'CUSTOMER' ? 'My Orders' : 'Go to Dashboard';
 
   useEffect(() => {
     const handleScroll = () => {
@@ -115,16 +122,16 @@ export default function MainLayout() {
                   <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                     <div className="py-2">
                       <Link
-                        to="/profile"
+                        to={profileRoute}
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
-                        My Profile
+                        {profileLabel}
                       </Link>
                       <Link
-                        to="/orders"
+                        to={ordersRoute}
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
-                        My Orders
+                        {ordersLabel}
                       </Link>
                       <button
                         onClick={handleLogout}
