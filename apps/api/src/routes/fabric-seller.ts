@@ -146,7 +146,7 @@ router.post('/fabrics', async (req, res, next) => {
       images: z.array(z.object({
         url: z.string().url(),
         alt: z.string().optional(),
-      })),
+      })).min(4).max(6),
     });
 
     const data = schema.parse(req.body);

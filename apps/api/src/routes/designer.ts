@@ -116,7 +116,7 @@ router.post('/designs', async (req, res, next) => {
       images: z.array(z.object({
         url: z.string().url(),
         alt: z.string().optional(),
-      })),
+      })).min(4).max(6),
     });
 
     const data = schema.parse(req.body);
@@ -246,7 +246,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
       images: z.array(z.object({
         url: z.string().url(),
         alt: z.string().optional(),
-      })),
+      })).min(3).max(4),
     });
 
     const data = schema.parse(req.body);

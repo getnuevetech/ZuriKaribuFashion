@@ -25,6 +25,14 @@ interface Product {
   createdAt: string;
 }
 
+interface CurrencyMatrixRow {
+  countryCode: string;
+  country: string;
+  currencyCode: string;
+  currencyName: string;
+  usdPerUnit: number;
+}
+
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +49,9 @@ export default function AdminProducts() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkAction, setBulkAction] = useState<ModerationAction>('REQUEST_CHANGES');
+  const [imagesDirty, setImagesDirty] = useState(false);
+  const [imageUrlInput, setImageUrlInput] = useState('');
+  const [currencyMatrix, setCurrencyMatrix] = useState<CurrencyMatrixRow[]>([]);
   const [options, setOptions] = useState<{
     categories: Array<{ id: string; name: string }>;
     materials: Array<{ id: string; name: string }>;
@@ -61,7 +72,7 @@ export default function AdminProducts() {
     publishNow: false,
     isFeatured: false,
     featuredSection: 'FEATURED_DESIGNS',
-    image: '',
+    images: [] as string[],
     minYards: 1,
     stockYards: 0,
     stock: 0,
@@ -72,6 +83,27 @@ export default function AdminProducts() {
     if (type === 'FABRIC') return 'FEATURED_FABRICS';
     if (type === 'READY_TO_WEAR') return 'FEATURED_READY_TO_WEAR';
     return 'FEATURED_DESIGNS';
+  };
+
+  const getImagePolicy = (type: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR') => {
+    if (type === 'READY_TO_WEAR') return { min: 3, max: 4, label: 'Ready To Wear' };
+    return { min: 4, max: 6, label: type === 'DESIGN' ? 'Custom To Wear / Designer' : 'Designer / Fabric' };
+  };
+
+  const currencySymbolByCode: Record<string, string> = {
+    USD: '$',
+    NGN: '₦',
+    GHS: '₵',
+    KES: 'KSh',
+    ZAR: 'R',
+    UGX: 'USh',
+    TZS: 'TSh',
+    RWF: 'RF',
+    XOF: 'CFA',
+    XAF: 'CFA',
+    EGP: 'E£',
+    MAD: 'DH',
+    ETB: 'Br',
   };
 
   useEffect(() => {
@@ -89,11 +121,38 @@ export default function AdminProducts() {
     return typeFilter || undefined;
   }, [activeTab, typeFilter]);
 
+  const activeProductType = (editing?.type || form.type) as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+  const selectedOwnerCountry = useMemo(() => {
+    if (activeProductType === 'FABRIC') {
+      const seller = options.sellers.find((item) => item.id === form.sellerId);
+      return String(seller?.country || '').trim();
+    }
+    const designer = options.designers.find((item) => item.id === form.designerId);
+    return String(designer?.country || '').trim();
+  }, [activeProductType, options.sellers, options.designers, form.sellerId, form.designerId]);
+
+  const selectedLocalCurrency = useMemo(() => {
+    if (!selectedOwnerCountry) return null;
+    const normalized = selectedOwnerCountry.toUpperCase();
+    return (
+      currencyMatrix.find((row) => String(row.countryCode || '').toUpperCase() === normalized) ||
+      currencyMatrix.find((row) => String(row.country || '').toUpperCase() === normalized) ||
+      currencyMatrix.find((row) => String(row.country || '').toUpperCase().includes(normalized)) ||
+      null
+    );
+  }, [selectedOwnerCountry, currencyMatrix]);
+
   const fetchOptions = async () => {
     try {
-      const response = await api.admin.getProductOptions();
+      const [response, currencyResponse] = await Promise.all([
+        api.admin.getProductOptions(),
+        api.currency.getConfig(),
+      ]);
       if (response.success) {
         setOptions(response.data);
+      }
+      if (currencyResponse.success) {
+        setCurrencyMatrix(Array.isArray(currencyResponse.data?.matrix) ? currencyResponse.data.matrix : []);
       }
     } catch (err) {
       console.error('Failed to fetch product options', err);
@@ -139,12 +198,14 @@ export default function AdminProducts() {
       publishNow: false,
       isFeatured: false,
       featuredSection: 'FEATURED_DESIGNS',
-      image: '',
+      images: [],
       minYards: 1,
       stockYards: 0,
       stock: 0,
       size: 'M',
     });
+    setImagesDirty(false);
+    setImageUrlInput('');
     setShowModal(true);
   };
 
@@ -166,12 +227,14 @@ export default function AdminProducts() {
       publishNow: product.status === 'APPROVED' && product.isAvailable,
       isFeatured: Boolean(product.isFeatured),
       featuredSection: product.featuredSections?.[0] || getDefaultFeaturedSection(product.type),
-      image: product.image || '',
+      images: product.image ? [product.image] : [],
       minYards: 1,
       stockYards: 0,
       stock: 0,
       size: 'M',
     });
+    setImagesDirty(false);
+    setImageUrlInput('');
     setShowModal(true);
   };
 
@@ -180,6 +243,14 @@ export default function AdminProducts() {
     try {
       setSaving(true);
       setError('');
+      const currentType = (editing?.type || form.type) as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+      const imagePolicy = getImagePolicy(currentType);
+      const imageCount = form.images.length;
+      if (imageCount < imagePolicy.min || imageCount > imagePolicy.max) {
+        setError(`${imagePolicy.label} requires between ${imagePolicy.min} and ${imagePolicy.max} images.`);
+        setSaving(false);
+        return;
+      }
       const resolvedStatus = form.publishNow ? 'APPROVED' : form.status;
       const resolvedIsAvailable = form.publishNow ? true : false;
       let savedType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR' = editing ? editing.type : form.type;
@@ -191,7 +262,7 @@ export default function AdminProducts() {
           price: form.price,
           status: resolvedStatus,
           isAvailable: resolvedIsAvailable,
-          image: form.image || undefined,
+          images: imagesDirty ? form.images : undefined,
           materialTypeId: form.materialTypeId || undefined,
           categoryId: form.categoryId || undefined,
           stock: form.stock,
@@ -210,7 +281,7 @@ export default function AdminProducts() {
           categoryId: form.type !== 'FABRIC' ? form.categoryId : undefined,
           status: resolvedStatus,
           isAvailable: resolvedIsAvailable,
-          image: form.image || undefined,
+          images: form.images,
           minYards: form.minYards,
           stockYards: form.stockYards,
           stock: form.stock,
@@ -229,6 +300,8 @@ export default function AdminProducts() {
       }
       setSuccess(editing ? 'Product updated successfully.' : 'Product created successfully.');
       setShowModal(false);
+      setImagesDirty(false);
+      setImageUrlInput('');
       await fetchProducts();
     } catch (error) {
       console.error('Failed to save product:', error);
@@ -239,20 +312,35 @@ export default function AdminProducts() {
   };
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
     try {
       setUploadingImage(true);
       setError('');
-      const data = new FormData();
-      data.append('image', file);
-      const response = await api.upload.image(data);
-      if (response.success && response.data?.url) {
-        setForm((prev) => ({ ...prev, image: response.data.url }));
-        setSuccess('Image uploaded successfully.');
-      } else {
+      const uploadResults = await Promise.all(
+        files.map(async (file) => {
+          const data = new FormData();
+          data.append('image', file);
+          const response = await api.upload.image(data);
+          return response.success && response.data?.url ? response.data.url : null;
+        })
+      );
+      const uploadedUrls = uploadResults.filter((url): url is string => Boolean(url));
+      if (uploadedUrls.length === 0) {
         setError('Image upload failed.');
+        return;
       }
+      const policy = getImagePolicy((editing?.type || form.type) as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR');
+      setForm((prev) => {
+        const merged = Array.from(new Set([...prev.images, ...uploadedUrls]));
+        const trimmed = merged.slice(0, policy.max);
+        if (merged.length > policy.max) {
+          setError(`${policy.label} allows a maximum of ${policy.max} images.`);
+        }
+        return { ...prev, images: trimmed };
+      });
+      setImagesDirty(true);
+      setSuccess('Image(s) uploaded successfully.');
     } catch (uploadError) {
       console.error('Failed to upload product image:', uploadError);
       setError('Failed to upload image.');
@@ -260,6 +348,29 @@ export default function AdminProducts() {
       setUploadingImage(false);
       event.target.value = '';
     }
+  };
+
+  const handleAddImageUrl = () => {
+    const value = imageUrlInput.trim();
+    if (!value) return;
+    const policy = getImagePolicy(activeProductType);
+    setForm((prev) => {
+      const merged = Array.from(new Set([...prev.images, value])).slice(0, policy.max);
+      if (prev.images.length >= policy.max) {
+        setError(`${policy.label} allows a maximum of ${policy.max} images.`);
+      }
+      return { ...prev, images: merged };
+    });
+    setImagesDirty(true);
+    setImageUrlInput('');
+  };
+
+  const handleRemoveImage = (url: string) => {
+    setForm((prev) => ({
+      ...prev,
+      images: prev.images.filter((item) => item !== url),
+    }));
+    setImagesDirty(true);
   };
 
   const statusLabel = (product: Product) => {
@@ -597,27 +708,67 @@ export default function AdminProducts() {
                   <option value="READY_TO_WEAR">Ready To Wear</option>
                 </select>
               )}
-              <input required value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Product name" className="w-full rounded border px-3 py-2" />
-              <textarea required value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Description" className="h-24 w-full rounded border px-3 py-2" />
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Product Name *</label>
+                <input
+                  required
+                  value={form.name}
+                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Product name"
+                  className="w-full rounded border px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Description *</label>
+                <textarea
+                  required
+                  value={form.description}
+                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                  placeholder="Description"
+                  className="h-24 w-full rounded border px-3 py-2"
+                />
+              </div>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <input type="number" step="0.01" required value={form.price} onChange={(e) => setForm((prev) => ({ ...prev, price: Number(e.target.value) || 0 }))} placeholder="Price" className="rounded border px-3 py-2" />
-                <select
-                  value={form.status}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      status: e.target.value,
-                      publishNow: e.target.value === 'APPROVED' ? prev.publishNow : false,
-                    }))
-                  }
-                  className="rounded border px-3 py-2"
-                >
-                  <option value="DRAFT">DRAFT</option>
-                  <option value="PENDING_REVIEW">PENDING_REVIEW</option>
-                  <option value="APPROVED">APPROVED</option>
-                  <option value="REJECTED">REJECTED</option>
-                  <option value="ARCHIVED">ARCHIVED</option>
-                </select>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Base Price (USD, Admin) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={form.price}
+                    onChange={(e) => setForm((prev) => ({ ...prev, price: Number(e.target.value) || 0 }))}
+                    placeholder="Price in USD"
+                    className="w-full rounded border px-3 py-2"
+                  />
+                  {selectedLocalCurrency ? (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Seller/Designer local estimate for {selectedOwnerCountry}: {currencySymbolByCode[selectedLocalCurrency.currencyCode] || selectedLocalCurrency.currencyCode}{' '}
+                      {(form.price / Number(selectedLocalCurrency.usdPerUnit || 1)).toFixed(2)} ({selectedLocalCurrency.currencyCode})
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-gray-500">Admin uploads in USD. Local conversion appears after selecting seller/designer.</p>
+                  )}
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Review Status</label>
+                  <select
+                    value={form.status}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        status: e.target.value,
+                        publishNow: e.target.value === 'APPROVED' ? prev.publishNow : false,
+                      }))
+                    }
+                    className="w-full rounded border px-3 py-2"
+                  >
+                    <option value="DRAFT">DRAFT</option>
+                    <option value="PENDING_REVIEW">PENDING_REVIEW</option>
+                    <option value="APPROVED">APPROVED</option>
+                    <option value="REJECTED">REJECTED</option>
+                    <option value="ARCHIVED">ARCHIVED</option>
+                  </select>
+                </div>
                 {(editing?.type || form.type) === 'FABRIC' ? (
                   <>
                     <select required={!editing} value={form.sellerId} onChange={(e) => setForm((prev) => ({ ...prev, sellerId: e.target.value }))} className="rounded border px-3 py-2">
@@ -697,13 +848,21 @@ export default function AdminProducts() {
                 </select>
               ) : null}
               <div className="space-y-2">
-                <input
-                  type="url"
-                  value={form.image}
-                  onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))}
-                  placeholder="Image URL (optional)"
-                  className="w-full rounded border px-3 py-2"
-                />
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Product Images ({getImagePolicy(activeProductType).min} - {getImagePolicy(activeProductType).max} required)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={imageUrlInput}
+                    onChange={(e) => setImageUrlInput(e.target.value)}
+                    placeholder="Paste image URL and add"
+                    className="w-full rounded border px-3 py-2"
+                  />
+                  <Button type="button" variant="outline" onClick={handleAddImageUrl}>
+                    Add URL
+                  </Button>
+                </div>
                 <div className="flex items-center gap-2">
                   <label className="inline-flex cursor-pointer items-center rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
                     <Upload className="mr-2 h-4 w-4" />
@@ -714,10 +873,27 @@ export default function AdminProducts() {
                       className="hidden"
                       onChange={handleImageUpload}
                       disabled={uploadingImage}
+                      multiple
                     />
                   </label>
-                  {form.image ? <span className="text-xs text-green-700">Image ready</span> : null}
+                  <span className="text-xs text-gray-600">{form.images.length} image(s) selected</span>
                 </div>
+                {form.images.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                    {form.images.map((url) => (
+                      <div key={url} className="relative overflow-hidden rounded border">
+                        <img src={url} alt="Product" className="h-20 w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(url)}
+                          className="absolute right-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               <div className="flex gap-3 pt-2">
                 <Button type="button" variant="outline" className="flex-1" onClick={() => setShowModal(false)}>Cancel</Button>

@@ -111,6 +111,7 @@ const adminProductCreateSchema = z.object({
   stockYards: z.coerce.number().int().min(0).optional(),
   stock: z.coerce.number().int().min(0).optional(),
   size: z.string().optional(),
+  images: z.array(z.string().url()).optional(),
   image: z.string().optional(),
   status: z.nativeEnum(ProductStatus).optional(),
   isAvailable: z.boolean().optional(),
@@ -125,6 +126,7 @@ const adminProductUpdateSchema = z.object({
   minYards: z.coerce.number().int().min(1).optional(),
   stockYards: z.coerce.number().int().min(0).optional(),
   stock: z.coerce.number().int().min(0).optional(),
+  images: z.array(z.string().url()).optional(),
   image: z.string().optional(),
   status: z.nativeEnum(ProductStatus).optional(),
   isAvailable: z.boolean().optional(),
@@ -172,6 +174,16 @@ const getDefaultFeaturedSectionForType = (productType: ProductType): z.infer<typ
   if (productType === ProductType.FABRIC) return 'FEATURED_FABRICS';
   if (productType === ProductType.READY_TO_WEAR) return 'FEATURED_READY_TO_WEAR';
   return 'FEATURED_DESIGNS';
+};
+
+const getImagePolicyForProductType = (productType: ProductType) => {
+  if (productType === ProductType.READY_TO_WEAR) {
+    return { min: 3, max: 4, label: 'Ready To Wear' };
+  }
+  if (productType === ProductType.DESIGN) {
+    return { min: 4, max: 6, label: 'Custom To Wear / Designer' };
+  }
+  return { min: 4, max: 6, label: 'Fabric / Designer' };
 };
 
 let adminRbacSchemaEnsured = false;
@@ -2112,6 +2124,23 @@ router.get('/products', async (req, res, next) => {
 router.post('/products', async (req, res, next) => {
   try {
     const payload = adminProductCreateSchema.parse(req.body);
+    const normalizedImages = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(payload.images) ? payload.images : []),
+          payload.image || '',
+        ]
+          .map((value) => String(value || '').trim())
+          .filter(Boolean)
+      )
+    );
+    const imagePolicy = getImagePolicyForProductType(payload.type);
+    if (normalizedImages.length < imagePolicy.min || normalizedImages.length > imagePolicy.max) {
+      return res.status(400).json({
+        success: false,
+        message: `${imagePolicy.label} requires between ${imagePolicy.min} and ${imagePolicy.max} images.`,
+      });
+    }
     if (payload.type === ProductType.FABRIC) {
       if (!payload.sellerId || !payload.materialTypeId) {
         return res.status(400).json({ success: false, message: 'sellerId and materialTypeId are required for fabric.' });
@@ -2128,9 +2157,9 @@ router.post('/products', async (req, res, next) => {
           stockYards: payload.stockYards ?? 0,
           status: payload.status ?? ProductStatus.DRAFT,
           isAvailable: payload.isAvailable ?? true,
-          images: payload.image
+          images: normalizedImages.length > 0
             ? {
-                create: [{ url: payload.image, sortOrder: 0 }],
+                create: normalizedImages.map((url, index) => ({ url, sortOrder: index })),
               }
             : undefined,
         },
@@ -2153,9 +2182,9 @@ router.post('/products', async (req, res, next) => {
           finalPrice: payload.price,
           status: payload.status ?? ProductStatus.DRAFT,
           isAvailable: payload.isAvailable ?? true,
-          images: payload.image
+          images: normalizedImages.length > 0
             ? {
-                create: [{ url: payload.image, sortOrder: 0 }],
+                create: normalizedImages.map((url, index) => ({ url, sortOrder: index })),
               }
             : undefined,
         },
@@ -2175,9 +2204,9 @@ router.post('/products', async (req, res, next) => {
         basePrice: payload.price,
         status: payload.status ?? ProductStatus.DRAFT,
         isAvailable: payload.isAvailable ?? true,
-        images: payload.image
+        images: normalizedImages.length > 0
           ? {
-              create: [{ url: payload.image, sortOrder: 0 }],
+              create: normalizedImages.map((url, index) => ({ url, sortOrder: index })),
             }
           : undefined,
         sizeVariations: {
@@ -2201,6 +2230,27 @@ router.patch('/products/:type/:id', async (req, res, next) => {
   try {
     const type = adminProductTypeSchema.parse(String(req.params.type || '').toUpperCase());
     const payload = adminProductUpdateSchema.parse(req.body);
+    const hasImagesPayload =
+      Array.isArray(payload.images) || (typeof payload.image === 'string' && String(payload.image).trim().length > 0);
+    const normalizedImages = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(payload.images) ? payload.images : []),
+          payload.image || '',
+        ]
+          .map((value) => String(value || '').trim())
+          .filter(Boolean)
+      )
+    );
+    if (hasImagesPayload) {
+      const imagePolicy = getImagePolicyForProductType(type);
+      if (normalizedImages.length < imagePolicy.min || normalizedImages.length > imagePolicy.max) {
+        return res.status(400).json({
+          success: false,
+          message: `${imagePolicy.label} requires between ${imagePolicy.min} and ${imagePolicy.max} images.`,
+        });
+      }
+    }
     if (type === ProductType.FABRIC) {
       const updated = await prisma.fabric.update({
         where: { id: req.params.id },
@@ -2216,12 +2266,16 @@ router.patch('/products/:type/:id', async (req, res, next) => {
           isAvailable: payload.isAvailable,
         },
       });
-      if (payload.image) {
-        const existingImage = await prisma.fabricImage.findFirst({ where: { fabricId: updated.id }, orderBy: { sortOrder: 'asc' } });
-        if (existingImage) {
-          await prisma.fabricImage.update({ where: { id: existingImage.id }, data: { url: payload.image } });
-        } else {
-          await prisma.fabricImage.create({ data: { fabricId: updated.id, url: payload.image, sortOrder: 0 } });
+      if (hasImagesPayload) {
+        await prisma.fabricImage.deleteMany({ where: { fabricId: updated.id } });
+        if (normalizedImages.length > 0) {
+          await prisma.fabricImage.createMany({
+            data: normalizedImages.map((url, index) => ({
+              fabricId: updated.id,
+              url,
+              sortOrder: index,
+            })),
+          });
         }
       }
       return res.json({ success: true, data: { id: updated.id, type }, message: 'Product updated.' });
@@ -2241,12 +2295,16 @@ router.patch('/products/:type/:id', async (req, res, next) => {
           isAvailable: payload.isAvailable,
         },
       });
-      if (payload.image) {
-        const existingImage = await prisma.designImage.findFirst({ where: { designId: updated.id }, orderBy: { sortOrder: 'asc' } });
-        if (existingImage) {
-          await prisma.designImage.update({ where: { id: existingImage.id }, data: { url: payload.image } });
-        } else {
-          await prisma.designImage.create({ data: { designId: updated.id, url: payload.image, sortOrder: 0 } });
+      if (hasImagesPayload) {
+        await prisma.designImage.deleteMany({ where: { designId: updated.id } });
+        if (normalizedImages.length > 0) {
+          await prisma.designImage.createMany({
+            data: normalizedImages.map((url, index) => ({
+              designId: updated.id,
+              url,
+              sortOrder: index,
+            })),
+          });
         }
       }
       return res.json({ success: true, data: { id: updated.id, type }, message: 'Product updated.' });
@@ -2263,15 +2321,16 @@ router.patch('/products/:type/:id', async (req, res, next) => {
         isAvailable: payload.isAvailable,
       },
     });
-    if (payload.image) {
-      const existingImage = await prisma.readyToWearImage.findFirst({
-        where: { readyToWearId: updated.id },
-        orderBy: { sortOrder: 'asc' },
-      });
-      if (existingImage) {
-        await prisma.readyToWearImage.update({ where: { id: existingImage.id }, data: { url: payload.image } });
-      } else {
-        await prisma.readyToWearImage.create({ data: { readyToWearId: updated.id, url: payload.image, sortOrder: 0 } });
+    if (hasImagesPayload) {
+      await prisma.readyToWearImage.deleteMany({ where: { readyToWearId: updated.id } });
+      if (normalizedImages.length > 0) {
+        await prisma.readyToWearImage.createMany({
+          data: normalizedImages.map((url, index) => ({
+            readyToWearId: updated.id,
+            url,
+            sortOrder: index,
+          })),
+        });
       }
     }
     if (payload.price !== undefined || payload.stock !== undefined) {
