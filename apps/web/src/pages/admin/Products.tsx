@@ -1,86 +1,101 @@
-import { useState, useEffect } from 'react';
-import { 
-  Search, 
-  Filter, 
-  Plus,
-  Edit,
-  Eye,
-  MoreVertical,
-  Package,
-  Scissors,
-  CheckCircle,
-  XCircle
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Search, Filter, Plus, Edit, Package, Scissors } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 
 interface Product {
   id: string;
-  name: string;
   type: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
-  price: number;
+  name: string;
+  description: string;
   status: string;
-  sellerName?: string;
-  designerName?: string;
+  isAvailable: boolean;
+  finalPrice: number;
+  sellerId?: string;
+  designerId?: string;
+  ownerName: string;
   category: string;
   orderCount: number;
+  image?: string | null;
   createdAt: string;
 }
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'fabrics' | 'designs' | 'ready-to-wear'>('all');
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState<Product | null>(null);
+  const [options, setOptions] = useState<{
+    categories: Array<{ id: string; name: string }>;
+    materials: Array<{ id: string; name: string }>;
+    sellers: Array<{ id: string; businessName: string; country: string }>;
+    designers: Array<{ id: string; businessName: string; country: string }>;
+  }>({ categories: [], materials: [], sellers: [], designers: [] });
+  const [form, setForm] = useState({
+    type: 'FABRIC' as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR',
+    name: '',
+    description: '',
+    price: 0,
+    materialTypeId: '',
+    categoryId: '',
+    sellerId: '',
+    designerId: '',
+    status: 'DRAFT',
+    isAvailable: true,
+    image: '',
+    minYards: 1,
+    stockYards: 0,
+    stock: 0,
+    size: 'M',
+  });
 
   useEffect(() => {
-    fetchProducts();
+    void Promise.all([fetchProducts(), fetchOptions()]);
   }, []);
+
+  useEffect(() => {
+    void fetchProducts();
+  }, [typeFilter, statusFilter, activeTab]);
+
+  const effectiveType = useMemo(() => {
+    if (activeTab === 'fabrics') return 'FABRIC';
+    if (activeTab === 'designs') return 'DESIGN';
+    if (activeTab === 'ready-to-wear') return 'READY_TO_WEAR';
+    return typeFilter || undefined;
+  }, [activeTab, typeFilter]);
+
+  const fetchOptions = async () => {
+    try {
+      const response = await api.admin.getProductOptions();
+      if (response.success) {
+        setOptions(response.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch product options', err);
+    }
+  };
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      // In a real app, fetch from API
-      // const response = await api.admin.getProducts({ ... });
-      // Mock data for now
-      setProducts([
-        {
-          id: '1',
-          name: 'Premium Ankara Print',
-          type: 'FABRIC',
-          price: 25.00,
-          status: 'ACTIVE',
-          sellerName: 'African Fabrics Co.',
-          category: 'Ankara',
-          orderCount: 45,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          name: 'Traditional Kente Cloth',
-          type: 'FABRIC',
-          price: 45.00,
-          status: 'ACTIVE',
-          sellerName: 'Kente Masters',
-          category: 'Kente',
-          orderCount: 32,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: '3',
-          name: 'Elegant Dashiki Design',
-          type: 'DESIGN',
-          price: 120.00,
-          status: 'ACTIVE',
-          designerName: 'Fashion House Lagos',
-          category: 'Traditional',
-          orderCount: 28,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+      const response = await api.admin.getProducts({
+        search: search || undefined,
+        status: statusFilter || undefined,
+        type: (effectiveType as any) || undefined,
+        page: 1,
+        limit: 200,
+      });
+      if (response.success) {
+        setProducts(response.data.products || []);
+      }
     } catch (error) {
       console.error('Failed to fetch products:', error);
     } finally {
@@ -88,34 +103,103 @@ export default function AdminProducts() {
     }
   };
 
-  const handleApprove = async (id: string) => {
-    try {
-      // await api.admin.updateProductStatus(id, 'ACTIVE');
-      fetchProducts();
-    } catch (error) {
-      console.error('Failed to approve product:', error);
-    }
+  const openCreateModal = () => {
+    setEditing(null);
+    setError('');
+    setSuccess('');
+    setForm({
+      type: 'FABRIC',
+      name: '',
+      description: '',
+      price: 0,
+      materialTypeId: '',
+      categoryId: '',
+      sellerId: '',
+      designerId: '',
+      status: 'DRAFT',
+      isAvailable: true,
+      image: '',
+      minYards: 1,
+      stockYards: 0,
+      stock: 0,
+      size: 'M',
+    });
+    setShowModal(true);
   };
 
-  const handleReject = async (id: string) => {
-    try {
-      // await api.admin.updateProductStatus(id, 'REJECTED');
-      fetchProducts();
-    } catch (error) {
-      console.error('Failed to reject product:', error);
-    }
+  const openEditModal = (product: Product) => {
+    setEditing(product);
+    setError('');
+    setSuccess('');
+    setForm({
+      type: product.type,
+      name: product.name,
+      description: product.description || '',
+      price: Number(product.finalPrice || 0),
+      materialTypeId: '',
+      categoryId: '',
+      sellerId: product.sellerId || '',
+      designerId: product.designerId || '',
+      status: product.status,
+      isAvailable: product.isAvailable,
+      image: product.image || '',
+      minYards: 1,
+      stockYards: 0,
+      stock: 0,
+      size: 'M',
+    });
+    setShowModal(true);
   };
 
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(search.toLowerCase());
-    const matchesType = !typeFilter || product.type === typeFilter;
-    const matchesStatus = !statusFilter || product.status === statusFilter;
-    const matchesTab = activeTab === 'all' || 
-                      (activeTab === 'fabrics' && product.type === 'FABRIC') ||
-                      (activeTab === 'designs' && product.type === 'DESIGN') ||
-                      (activeTab === 'ready-to-wear' && product.type === 'READY_TO_WEAR');
-    return matchesSearch && matchesType && matchesStatus && matchesTab;
-  });
+  const saveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      setError('');
+      if (editing) {
+        await api.admin.updateProduct(editing.type, editing.id, {
+          name: form.name,
+          description: form.description,
+          price: form.price,
+          status: form.status,
+          isAvailable: form.isAvailable,
+          image: form.image || undefined,
+          materialTypeId: form.materialTypeId || undefined,
+          categoryId: form.categoryId || undefined,
+          stock: form.stock,
+          stockYards: form.stockYards,
+          minYards: form.minYards,
+        });
+        setSuccess('Product updated successfully.');
+      } else {
+        await api.admin.createProduct({
+          type: form.type,
+          name: form.name,
+          description: form.description,
+          price: form.price,
+          sellerId: form.type === 'FABRIC' ? form.sellerId : undefined,
+          designerId: form.type !== 'FABRIC' ? form.designerId : undefined,
+          materialTypeId: form.type === 'FABRIC' || form.type === 'DESIGN' ? form.materialTypeId || undefined : undefined,
+          categoryId: form.type !== 'FABRIC' ? form.categoryId : undefined,
+          status: form.status,
+          isAvailable: form.isAvailable,
+          image: form.image || undefined,
+          minYards: form.minYards,
+          stockYards: form.stockYards,
+          stock: form.stock,
+          size: form.size || undefined,
+        });
+        setSuccess('Product created successfully.');
+      }
+      setShowModal(false);
+      await fetchProducts();
+    } catch (error) {
+      console.error('Failed to save product:', error);
+      setError('Failed to save product.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -129,7 +213,7 @@ export default function AdminProducts() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Product Management</h1>
-        <Button>
+        <Button onClick={openCreateModal}>
           <Plus className="w-4 h-4 mr-2" />
           Add Product
         </Button>
@@ -185,16 +269,22 @@ export default function AdminProducts() {
           className="px-4 py-2 border rounded-lg"
         >
           <option value="">All Status</option>
-          <option value="ACTIVE">Active</option>
-          <option value="PENDING">Pending</option>
+          <option value="DRAFT">Draft</option>
+          <option value="PENDING_REVIEW">Pending Review</option>
+          <option value="APPROVED">Approved</option>
           <option value="REJECTED">Rejected</option>
-          <option value="INACTIVE">Inactive</option>
+          <option value="ARCHIVED">Archived</option>
         </select>
         <Button variant="outline" onClick={fetchProducts}>
           <Filter className="w-4 h-4 mr-2" />
           Filter
         </Button>
       </div>
+      {(error || success) && (
+        <div className={`rounded-lg border px-3 py-2 text-sm ${error ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
+          {error || success}
+        </div>
+      )}
 
       {/* Products Table */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
@@ -212,7 +302,7 @@ export default function AdminProducts() {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((product) => (
+              {products.map((product) => (
                 <tr key={product.id} className="border-b last:border-0 hover:bg-gray-50">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-3">
@@ -237,12 +327,12 @@ export default function AdminProducts() {
                   <td className="py-3 px-4">
                     <Badge variant="secondary">{product.type}</Badge>
                   </td>
-                  <td className="py-3 px-4 font-medium">${product.price.toFixed(2)}</td>
+                  <td className="py-3 px-4 font-medium">${Number(product.finalPrice || 0).toFixed(2)}</td>
                   <td className="py-3 px-4">
                     <Badge 
                       variant={
-                        product.status === 'ACTIVE' ? 'green' :
-                        product.status === 'PENDING' ? 'yellow' :
+                        product.status === 'APPROVED' ? 'green' :
+                        product.status === 'PENDING_REVIEW' ? 'yellow' :
                         product.status === 'REJECTED' ? 'red' : 'gray'
                       }
                     >
@@ -250,33 +340,14 @@ export default function AdminProducts() {
                     </Badge>
                   </td>
                   <td className="py-3 px-4 text-gray-600">
-                    {product.sellerName || product.designerName || 'N/A'}
+                    {product.ownerName || 'N/A'}
                   </td>
                   <td className="py-3 px-4 text-gray-600">{product.orderCount}</td>
                   <td className="py-3 px-4">
                     <div className="flex gap-2">
-                      <button className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg">
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                      <button onClick={() => openEditModal(product)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
                         <Edit className="w-4 h-4" />
                       </button>
-                      {product.status === 'PENDING' && (
-                        <>
-                          <button 
-                            onClick={() => handleApprove(product.id)}
-                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => handleReject(product.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </button>
-                        </>
-                      )}
                     </div>
                   </td>
                 </tr>
@@ -285,6 +356,74 @@ export default function AdminProducts() {
           </table>
         </div>
       </div>
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6">
+            <h3 className="mb-4 text-xl font-bold text-gray-900">{editing ? 'Edit Product' : 'Add Product'}</h3>
+            <form onSubmit={saveProduct} className="space-y-3">
+              {!editing && (
+                <select value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value as any }))} className="w-full rounded border px-3 py-2">
+                  <option value="FABRIC">Fabric</option>
+                  <option value="DESIGN">Design</option>
+                  <option value="READY_TO_WEAR">Ready To Wear</option>
+                </select>
+              )}
+              <input required value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Product name" className="w-full rounded border px-3 py-2" />
+              <textarea required value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Description" className="h-24 w-full rounded border px-3 py-2" />
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <input type="number" step="0.01" required value={form.price} onChange={(e) => setForm((prev) => ({ ...prev, price: Number(e.target.value) || 0 }))} placeholder="Price" className="rounded border px-3 py-2" />
+                <select value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))} className="rounded border px-3 py-2">
+                  <option value="DRAFT">DRAFT</option>
+                  <option value="PENDING_REVIEW">PENDING_REVIEW</option>
+                  <option value="APPROVED">APPROVED</option>
+                  <option value="REJECTED">REJECTED</option>
+                  <option value="ARCHIVED">ARCHIVED</option>
+                </select>
+                {(editing?.type || form.type) === 'FABRIC' ? (
+                  <>
+                    <select required={!editing} value={form.sellerId} onChange={(e) => setForm((prev) => ({ ...prev, sellerId: e.target.value }))} className="rounded border px-3 py-2">
+                      <option value="">Select seller</option>
+                      {options.sellers.map((item) => (
+                        <option key={item.id} value={item.id}>{item.businessName} ({item.country})</option>
+                      ))}
+                    </select>
+                    <select required={!editing} value={form.materialTypeId} onChange={(e) => setForm((prev) => ({ ...prev, materialTypeId: e.target.value }))} className="rounded border px-3 py-2">
+                      <option value="">Select material</option>
+                      {options.materials.map((item) => (
+                        <option key={item.id} value={item.id}>{item.name}</option>
+                      ))}
+                    </select>
+                  </>
+                ) : (
+                  <>
+                    <select required={!editing} value={form.designerId} onChange={(e) => setForm((prev) => ({ ...prev, designerId: e.target.value }))} className="rounded border px-3 py-2">
+                      <option value="">Select designer</option>
+                      {options.designers.map((item) => (
+                        <option key={item.id} value={item.id}>{item.businessName} ({item.country})</option>
+                      ))}
+                    </select>
+                    <select required={!editing} value={form.categoryId} onChange={(e) => setForm((prev) => ({ ...prev, categoryId: e.target.value }))} className="rounded border px-3 py-2">
+                      <option value="">Select category</option>
+                      {options.categories.map((item) => (
+                        <option key={item.id} value={item.id}>{item.name}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+              </div>
+              <input type="url" value={form.image} onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))} placeholder="Image URL (optional)" className="w-full rounded border px-3 py-2" />
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={form.isAvailable} onChange={(e) => setForm((prev) => ({ ...prev, isAvailable: e.target.checked }))} />
+                Available on storefront
+              </label>
+              <div className="flex gap-3 pt-2">
+                <Button type="button" variant="outline" className="flex-1" onClick={() => setShowModal(false)}>Cancel</Button>
+                <Button type="submit" className="flex-1" disabled={saving}>{saving ? 'Saving...' : editing ? 'Update Product' : 'Create Product'}</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

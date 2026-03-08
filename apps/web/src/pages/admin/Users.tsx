@@ -2,12 +2,11 @@ import { useState, useEffect } from 'react';
 import { 
   Search, 
   Filter, 
-  MoreVertical,
-  CheckCircle,
   XCircle,
   UserCheck,
   UserX,
-  Mail
+  Mail,
+  Plus
 } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
@@ -33,6 +32,17 @@ export default function AdminUsers() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionType, setActionType] = useState<'activate' | 'suspend' | 'reject' | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    email: '',
+    firstName: '',
+    lastName: '',
+    password: '',
+    role: 'CUSTOMER',
+    status: 'ACTIVE',
+    phone: '',
+  });
 
   useEffect(() => {
     fetchUsers();
@@ -91,6 +101,38 @@ export default function AdminUsers() {
     setShowActionModal(true);
   };
 
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setCreating(true);
+      await api.admin.createUser({
+        email: createForm.email.trim(),
+        firstName: createForm.firstName.trim(),
+        lastName: createForm.lastName.trim(),
+        password: createForm.password,
+        role: createForm.role,
+        status: createForm.status,
+        phone: createForm.phone.trim() || undefined,
+      });
+      setShowCreateModal(false);
+      setCreateForm({
+        email: '',
+        firstName: '',
+        lastName: '',
+        password: '',
+        role: 'CUSTOMER',
+        status: 'ACTIVE',
+        phone: '',
+      });
+      await fetchUsers();
+    } catch (error) {
+      console.error('Failed to create user:', error);
+      window.alert('Failed to create user.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.fullName.toLowerCase().includes(search.toLowerCase()) ||
                          user.email.toLowerCase().includes(search.toLowerCase());
@@ -111,10 +153,16 @@ export default function AdminUsers() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-        <Button>
-          <Mail className="w-4 h-4 mr-2" />
-          Send Bulk Email
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setShowCreateModal(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add User
+          </Button>
+          <Button variant="outline">
+            <Mail className="w-4 h-4 mr-2" />
+            Send Bulk Email
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -275,6 +323,88 @@ export default function AdminUsers() {
                 Confirm
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6">
+            <h3 className="text-xl font-bold mb-4">Add User</h3>
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  value={createForm.firstName}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                  placeholder="First name"
+                  className="px-3 py-2 border rounded-lg"
+                  required
+                />
+                <input
+                  type="text"
+                  value={createForm.lastName}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                  placeholder="Last name"
+                  className="px-3 py-2 border rounded-lg"
+                  required
+                />
+              </div>
+              <input
+                type="email"
+                value={createForm.email}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, email: e.target.value }))}
+                placeholder="Email"
+                className="w-full px-3 py-2 border rounded-lg"
+                required
+              />
+              <input
+                type="password"
+                value={createForm.password}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, password: e.target.value }))}
+                placeholder="Temporary password"
+                className="w-full px-3 py-2 border rounded-lg"
+                required
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <select
+                  value={createForm.role}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, role: e.target.value }))}
+                  className="px-3 py-2 border rounded-lg"
+                >
+                  <option value="CUSTOMER">Customer</option>
+                  <option value="FABRIC_SELLER">Fabric Seller</option>
+                  <option value="FASHION_DESIGNER">Designer</option>
+                  <option value="QA_TEAM">QA Team</option>
+                  <option value="ADMINISTRATOR">Administrator</option>
+                </select>
+                <select
+                  value={createForm.status}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, status: e.target.value }))}
+                  className="px-3 py-2 border rounded-lg"
+                >
+                  <option value="ACTIVE">Active</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="SUSPENDED">Suspended</option>
+                  <option value="REJECTED">Rejected</option>
+                </select>
+              </div>
+              <input
+                type="text"
+                value={createForm.phone}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, phone: e.target.value }))}
+                placeholder="Phone (optional)"
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+              <div className="flex gap-3 pt-2">
+                <Button type="button" variant="outline" className="flex-1" onClick={() => setShowCreateModal(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="flex-1" disabled={creating}>
+                  {creating ? 'Creating...' : 'Create User'}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

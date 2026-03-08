@@ -45,6 +45,20 @@ export default function AdminVendorProfiles() {
   const [selectedProfile, setSelectedProfile] = useState<any | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
   const [reviewing, setReviewing] = useState(false);
+  const [showAddVendorModal, setShowAddVendorModal] = useState(false);
+  const [creatingVendor, setCreatingVendor] = useState(false);
+  const [newVendor, setNewVendor] = useState({
+    role: 'FABRIC_SELLER' as VendorRole,
+    email: '',
+    password: '',
+    firstName: '',
+    lastName: '',
+    businessName: '',
+    country: '',
+    city: '',
+    address: '',
+    phone: '',
+  });
 
   const roleLabel = role === 'FABRIC_SELLER' ? 'Fabric Seller' : 'Fashion Designer';
 
@@ -192,6 +206,9 @@ export default function AdminVendorProfiles() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Vendor Profile Governance</h1>
         <div className="flex items-center gap-3">
+          <Button size="sm" onClick={() => setShowAddVendorModal(true)}>
+            Add Vendor
+          </Button>
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as VendorRole)}
@@ -463,6 +480,140 @@ export default function AdminVendorProfiles() {
                 {reviewing ? 'Submitting...' : 'Approve Profile'}
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showAddVendorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-gray-900">Create Vendor (Minimal Profile)</h3>
+              <Button size="sm" variant="outline" onClick={() => setShowAddVendorModal(false)}>
+                Close
+              </Button>
+            </div>
+            <form
+              className="space-y-3"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setCreatingVendor(true);
+                setError('');
+                try {
+                  await api.admin.createMinimalVendor({
+                    role: newVendor.role,
+                    email: newVendor.email.trim(),
+                    password: newVendor.password,
+                    firstName: newVendor.firstName.trim(),
+                    lastName: newVendor.lastName.trim(),
+                    businessName: newVendor.businessName.trim(),
+                    country: newVendor.country.trim(),
+                    city: newVendor.city.trim() || undefined,
+                    address: newVendor.address.trim() || undefined,
+                    phone: newVendor.phone.trim() || undefined,
+                  });
+                  setSuccess('Vendor created. Vendor can complete profile after login.');
+                  setShowAddVendorModal(false);
+                  setNewVendor({
+                    role: 'FABRIC_SELLER',
+                    email: '',
+                    password: '',
+                    firstName: '',
+                    lastName: '',
+                    businessName: '',
+                    country: '',
+                    city: '',
+                    address: '',
+                    phone: '',
+                  });
+                  if (tab === 'reviews') {
+                    await loadProfiles();
+                  }
+                } catch (err: any) {
+                  setError(err?.response?.data?.message || 'Failed to create vendor.');
+                } finally {
+                  setCreatingVendor(false);
+                }
+              }}
+            >
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <select
+                  value={newVendor.role}
+                  onChange={(e) => setNewVendor((prev) => ({ ...prev, role: e.target.value as VendorRole }))}
+                  className="rounded border px-3 py-2 text-sm"
+                >
+                  <option value="FABRIC_SELLER">Fabric Seller</option>
+                  <option value="FASHION_DESIGNER">Fashion Designer</option>
+                </select>
+                <input
+                  type="email"
+                  required
+                  value={newVendor.email}
+                  onChange={(e) => setNewVendor((prev) => ({ ...prev, email: e.target.value }))}
+                  placeholder="Email"
+                  className="rounded border px-3 py-2 text-sm"
+                />
+                <input
+                  type="password"
+                  required
+                  value={newVendor.password}
+                  onChange={(e) => setNewVendor((prev) => ({ ...prev, password: e.target.value }))}
+                  placeholder="Temporary password"
+                  className="rounded border px-3 py-2 text-sm"
+                />
+                <input
+                  required
+                  value={newVendor.businessName}
+                  onChange={(e) => setNewVendor((prev) => ({ ...prev, businessName: e.target.value }))}
+                  placeholder="Business name"
+                  className="rounded border px-3 py-2 text-sm"
+                />
+                <input
+                  required
+                  value={newVendor.firstName}
+                  onChange={(e) => setNewVendor((prev) => ({ ...prev, firstName: e.target.value }))}
+                  placeholder="First name"
+                  className="rounded border px-3 py-2 text-sm"
+                />
+                <input
+                  required
+                  value={newVendor.lastName}
+                  onChange={(e) => setNewVendor((prev) => ({ ...prev, lastName: e.target.value }))}
+                  placeholder="Last name"
+                  className="rounded border px-3 py-2 text-sm"
+                />
+                <input
+                  required
+                  value={newVendor.country}
+                  onChange={(e) => setNewVendor((prev) => ({ ...prev, country: e.target.value }))}
+                  placeholder="Country"
+                  className="rounded border px-3 py-2 text-sm"
+                />
+                <input
+                  value={newVendor.city}
+                  onChange={(e) => setNewVendor((prev) => ({ ...prev, city: e.target.value }))}
+                  placeholder="City (optional)"
+                  className="rounded border px-3 py-2 text-sm"
+                />
+                <input
+                  value={newVendor.phone}
+                  onChange={(e) => setNewVendor((prev) => ({ ...prev, phone: e.target.value }))}
+                  placeholder="Phone (optional)"
+                  className="rounded border px-3 py-2 text-sm"
+                />
+              </div>
+              <textarea
+                value={newVendor.address}
+                onChange={(e) => setNewVendor((prev) => ({ ...prev, address: e.target.value }))}
+                placeholder="Address (optional)"
+                className="h-20 w-full rounded border px-3 py-2 text-sm"
+              />
+              <div className="flex justify-end">
+                <Button type="submit" disabled={creatingVendor}>
+                  {creatingVendor ? 'Creating...' : 'Create Vendor'}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -31,6 +31,8 @@ export default function AdminPricingRules() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingRule, setEditingRule] = useState<PricingRule | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   
   const [formData, setFormData] = useState({
     name: '',
@@ -51,12 +53,49 @@ export default function AdminPricingRules() {
   const fetchRules = async () => {
     try {
       setLoading(true);
+      setError('');
       const response = await api.admin.getPricingRules();
       if (response.success) {
-        setRules(response.data);
+        const mapped = (response.data || []).map((item: any): PricingRule => {
+          const targetType: PricingRule['targetType'] =
+            item.ruleType === 'COUNTRY_MARKUP'
+              ? 'COUNTRY'
+              : item.ruleType === 'DATE_BASED'
+                ? 'DATE_RANGE'
+                : 'PRODUCT_TYPE';
+          const type: PricingRule['type'] =
+            item.adjustmentType === 'PERCENTAGE_DISCOUNT' || item.adjustmentType === 'FIXED_DISCOUNT'
+              ? 'MARKDOWN'
+              : 'MARKUP';
+          return {
+            id: item.id,
+            name: item.name,
+            type,
+            targetType,
+            targetValue:
+              targetType === 'PRODUCT_TYPE'
+                ? item.productType || ''
+                : targetType === 'COUNTRY'
+                  ? item.country || ''
+                  : item.description || '',
+            percentage:
+              item.adjustmentType === 'PERCENTAGE_MARKUP' || item.adjustmentType === 'PERCENTAGE_DISCOUNT'
+                ? Number(item.value || 0)
+                : 0,
+            fixedAmount:
+              item.adjustmentType === 'FIXED_MARKUP' || item.adjustmentType === 'FIXED_DISCOUNT'
+                ? Number(item.value || 0)
+                : 0,
+            startDate: item.startDate || undefined,
+            endDate: item.endDate || undefined,
+            isActive: Boolean(item.isActive),
+          };
+        });
+        setRules(mapped);
       }
     } catch (error) {
       console.error('Failed to fetch pricing rules:', error);
+      setError('Failed to fetch pricing rules.');
     } finally {
       setLoading(false);
     }
@@ -65,17 +104,54 @@ export default function AdminPricingRules() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      setError('');
+      setSuccess('');
+      const adjustmentType =
+        formData.fixedAmount > 0
+          ? formData.type === 'MARKDOWN'
+            ? 'FIXED_DISCOUNT'
+            : 'FIXED_MARKUP'
+          : formData.type === 'MARKDOWN'
+            ? 'PERCENTAGE_DISCOUNT'
+            : 'PERCENTAGE_MARKUP';
+      const payload = {
+        name: formData.name,
+        description: formData.targetType === 'DATE_RANGE' ? formData.targetValue || formData.name : undefined,
+        ruleType:
+          formData.targetType === 'COUNTRY'
+            ? 'COUNTRY_MARKUP'
+            : formData.targetType === 'DATE_RANGE'
+              ? 'DATE_BASED'
+              : 'CATEGORY_MARKUP',
+        productType: formData.targetType === 'PRODUCT_TYPE' ? formData.targetValue || undefined : undefined,
+        country: formData.targetType === 'COUNTRY' ? formData.targetValue || undefined : undefined,
+        startDate:
+          formData.targetType === 'DATE_RANGE' && formData.startDate
+            ? new Date(`${formData.startDate}T00:00:00.000Z`).toISOString()
+            : undefined,
+        endDate:
+          formData.targetType === 'DATE_RANGE' && formData.endDate
+            ? new Date(`${formData.endDate}T23:59:59.000Z`).toISOString()
+            : undefined,
+        isSale: formData.type === 'MARKDOWN',
+        adjustmentType,
+        value: formData.fixedAmount > 0 ? formData.fixedAmount : formData.percentage,
+        priority: 0,
+        isActive: formData.isActive,
+      };
       if (editingRule) {
-        await api.admin.updatePricingRule(editingRule.id, formData);
+        await api.admin.updatePricingRule(editingRule.id, payload);
       } else {
-        await api.admin.createPricingRule(formData);
+        await api.admin.createPricingRule(payload);
       }
       setShowForm(false);
       setEditingRule(null);
       resetForm();
+      setSuccess(editingRule ? 'Pricing rule updated successfully.' : 'Pricing rule created successfully.');
       fetchRules();
     } catch (error) {
       console.error('Failed to save pricing rule:', error);
+      setError('Failed to save pricing rule.');
     }
   };
 
@@ -83,9 +159,11 @@ export default function AdminPricingRules() {
     if (!confirm('Are you sure you want to delete this pricing rule?')) return;
     try {
       await api.admin.deletePricingRule(id);
+      setSuccess('Pricing rule deleted successfully.');
       fetchRules();
     } catch (error) {
       console.error('Failed to delete pricing rule:', error);
+      setError('Failed to delete pricing rule.');
     }
   };
 
@@ -98,8 +176,8 @@ export default function AdminPricingRules() {
       targetValue: rule.targetValue,
       percentage: rule.percentage,
       fixedAmount: rule.fixedAmount || 0,
-      startDate: rule.startDate || '',
-      endDate: rule.endDate || '',
+      startDate: rule.startDate ? String(rule.startDate).slice(0, 10) : '',
+      endDate: rule.endDate ? String(rule.endDate).slice(0, 10) : '',
       isActive: rule.isActive,
     });
     setShowForm(true);
@@ -148,6 +226,11 @@ export default function AdminPricingRules() {
           Add Rule
         </Button>
       </div>
+      {(error || success) && (
+        <div className={`rounded-lg border px-3 py-2 text-sm ${error ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
+          {error || success}
+        </div>
+      )}
 
       {/* Form */}
       {showForm && (

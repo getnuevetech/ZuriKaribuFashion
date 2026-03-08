@@ -46,6 +46,17 @@ type CountryCard = {
   fabrics: string;
 };
 
+type ManagedBanner = {
+  id: string;
+  section: string;
+  title?: string | null;
+  subtitle?: string | null;
+  ctaText?: string | null;
+  ctaLink?: string | null;
+  images?: string[];
+  displayImage?: string | null;
+};
+
 type HomepageVisibility = Record<
   | 'hero'
   | 'countries'
@@ -359,6 +370,15 @@ export default function Home() {
     },
   });
 
+  const { data: managedBannersData } = useQuery({
+    queryKey: ['homepageManagedBanners'],
+    enabled: USE_DYNAMIC_HOMEPAGE,
+    queryFn: async () => {
+      const response = await api.banners.getBanners();
+      return response.success ? response.data : null;
+    },
+  });
+
   const { data: countriesData } = useQuery({
     queryKey: ['homepageCountries'],
     enabled: USE_DYNAMIC_HOMEPAGE,
@@ -454,6 +474,16 @@ export default function Home() {
   const featuredDesigns = ((USE_DYNAMIC_HOMEPAGE ? featuredData?.FEATURED_DESIGNS : null) || kimiFeaturedDesigns) as FeaturedProduct[];
   const featuredRTW = ((USE_DYNAMIC_HOMEPAGE ? featuredData?.FEATURED_READY_TO_WEAR : null) || kimiReadyToWear) as FeaturedProduct[];
   const featuredFabrics = ((USE_DYNAMIC_HOMEPAGE ? featuredData?.FEATURED_FABRICS : null) || kimiFabrics) as FeaturedProduct[];
+  const managedBannersBySection = useMemo(() => {
+    const map = new Map<string, ManagedBanner>();
+    if (!USE_DYNAMIC_HOMEPAGE || !Array.isArray(managedBannersData)) return map;
+    for (const row of managedBannersData) {
+      const key = String(row?.section || '').toUpperCase();
+      if (!key || map.has(key)) continue;
+      map.set(key, row);
+    }
+    return map;
+  }, [managedBannersData]);
 
   const countries = useMemo<CountryCard[]>(
     () =>
@@ -702,6 +732,29 @@ export default function Home() {
         />
       ) : null}
 
+      {USE_DYNAMIC_HOMEPAGE && managedBannersBySection.get('BANNER_1') ? (
+        <section className="py-12 bg-white">
+          <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+            <div className="relative overflow-hidden rounded-xl">
+              <img
+                src={asText(managedBannersBySection.get('BANNER_1')?.displayImage, managedBannersBySection.get('BANNER_1')?.images?.[0], 'https://picsum.photos/seed/banner-1/1600/700')}
+                alt={asText(managedBannersBySection.get('BANNER_1')?.title, 'Homepage Banner')}
+                className="h-[340px] w-full object-cover"
+              />
+              <div className="absolute inset-0 bg-black/45" />
+              <div className="absolute inset-0 flex flex-col items-start justify-center p-8 text-white lg:p-12">
+                <h3 className="font-['Oswald'] text-3xl font-bold lg:text-4xl">
+                  {asText(managedBannersBySection.get('BANNER_1')?.title, 'Discover New African Fashion')}
+                </h3>
+                <p className="mt-2 max-w-xl text-white/85">
+                  {asText(managedBannersBySection.get('BANNER_1')?.subtitle, 'Curated looks and handcrafted pieces from across the continent.')}
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {sectionVisibility.featuredReadyToWear ? (
         <ProductCarousel
           title="Ready To Wear"
@@ -713,6 +766,29 @@ export default function Home() {
           viewAllLink="/ready-to-wear"
           loading={featuredLoading}
         />
+      ) : null}
+
+      {USE_DYNAMIC_HOMEPAGE && managedBannersBySection.get('BANNER_2') ? (
+        <section className="py-12 bg-white">
+          <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+            <div className="relative overflow-hidden rounded-xl">
+              <img
+                src={asText(managedBannersBySection.get('BANNER_2')?.displayImage, managedBannersBySection.get('BANNER_2')?.images?.[0], 'https://picsum.photos/seed/banner-2/1600/700')}
+                alt={asText(managedBannersBySection.get('BANNER_2')?.title, 'Homepage Banner')}
+                className="h-[340px] w-full object-cover"
+              />
+              <div className="absolute inset-0 bg-black/45" />
+              <div className="absolute inset-0 flex flex-col items-start justify-center p-8 text-white lg:p-12">
+                <h3 className="font-['Oswald'] text-3xl font-bold lg:text-4xl">
+                  {asText(managedBannersBySection.get('BANNER_2')?.title, 'Fresh Collections')}
+                </h3>
+                <p className="mt-2 max-w-xl text-white/85">
+                  {asText(managedBannersBySection.get('BANNER_2')?.subtitle, 'Limited releases and standout pieces from trusted African vendors.')}
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
       ) : null}
 
       {sectionVisibility.featuredFabrics ? (
@@ -737,18 +813,40 @@ export default function Home() {
                 FRESH DROPS
               </span>
               <h2 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
-                New arrivals from the most talented designers across the continent.
+                {asText(
+                  managedBannersBySection.get('PROMO')?.title,
+                  managedBannersBySection.get('HERO')?.title,
+                  'New arrivals from the most talented designers across the continent.'
+                )}
               </h2>
-              <Link to="/ready-to-wear" className="inline-flex items-center">
+              <Link
+                to={asText(
+                  managedBannersBySection.get('PROMO')?.ctaLink,
+                  managedBannersBySection.get('HERO')?.ctaLink,
+                  '/ready-to-wear'
+                )}
+                className="inline-flex items-center"
+              >
                 <span className="bg-black text-white hover:bg-black/90 btn-hover rounded-none px-8 py-6 text-sm font-semibold tracking-wider">
-                  SHOP NEW ARRIVALS <ArrowRight className="ml-2 w-4 h-4" />
+                  {asText(
+                    managedBannersBySection.get('PROMO')?.ctaText,
+                    managedBannersBySection.get('HERO')?.ctaText,
+                    'SHOP NEW ARRIVALS'
+                  )}{' '}
+                  <ArrowRight className="ml-2 w-4 h-4" />
                 </span>
               </Link>
             </div>
             <div>
               <div className="relative">
                 <img
-                  src="https://picsum.photos/seed/kimi-fresh-drops/1200/1600"
+                  src={asText(
+                    managedBannersBySection.get('PROMO')?.displayImage,
+                    managedBannersBySection.get('PROMO')?.images?.[0],
+                    managedBannersBySection.get('HERO')?.displayImage,
+                    managedBannersBySection.get('HERO')?.images?.[0],
+                    'https://picsum.photos/seed/kimi-fresh-drops/1200/1600'
+                  )}
                   alt="Fresh Drops"
                   className="w-full aspect-[3/4] object-cover rounded-xl"
                 />

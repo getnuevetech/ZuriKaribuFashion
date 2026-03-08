@@ -299,8 +299,68 @@ const adminApi = {
   getUsers: (params?: { role?: string; status?: string; search?: string; page?: number; limit?: number }) =>
     apiService.get<{ success: boolean; data: { users: any[]; pagination: any } }>('/admin/users', { params }),
 
+  createUser: (data: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    password: string;
+    role: string;
+    status?: string;
+    phone?: string;
+  }) => apiService.post<{ success: boolean; data: any; message?: string }>('/admin/users', data),
+
+  updateUser: (
+    id: string,
+    data: {
+      email?: string;
+      firstName?: string;
+      lastName?: string;
+      role?: string;
+      status?: string;
+      phone?: string | null;
+    }
+  ) => apiService.patch<{ success: boolean; data: any; message?: string }>(`/admin/users/${id}`, data),
+
   updateUserStatus: (id: string, status: string, reason?: string) =>
     apiService.patch(`/admin/users/${id}/status`, { status, reason }),
+
+  createMinimalVendor: (data: {
+    role: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    businessName: string;
+    country: string;
+    city?: string;
+    address?: string;
+    phone?: string;
+  }) => apiService.post<{ success: boolean; data: any; message?: string }>('/admin/vendor-profiles/create-minimal', data),
+
+  getProducts: (params?: {
+    search?: string;
+    status?: string;
+    type?: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+    page?: number;
+    limit?: number;
+  }) => apiService.get<{ success: boolean; data: { products: any[]; pagination: any } }>('/admin/products', { params }),
+
+  getProductOptions: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        categories: Array<{ id: string; name: string }>;
+        materials: Array<{ id: string; name: string }>;
+        sellers: Array<{ id: string; businessName: string; country: string }>;
+        designers: Array<{ id: string; businessName: string; country: string }>;
+      };
+    }>('/admin/products/options'),
+
+  createProduct: (data: any) =>
+    apiService.post<{ success: boolean; data: any; message?: string }>('/admin/products', data),
+
+  updateProduct: (type: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR', id: string, data: any) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>(`/admin/products/${type}/${id}`, data),
 
   getTrafficReport: (params?: {
     startDate?: string;

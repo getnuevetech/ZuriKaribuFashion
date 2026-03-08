@@ -64,6 +64,7 @@ export default function AdminHomepage() {
     ctaLink: '',
     displayOrder: 0,
   });
+  const [uploadingHeroImage, setUploadingHeroImage] = useState(false);
 
   // Featured products state
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([]);
@@ -202,6 +203,28 @@ export default function AdminHomepage() {
       setShowHeroModal(false);
     } catch (error) {
       console.error('Error saving hero slide:', error);
+    }
+  };
+
+  const handleHeroImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingHeroImage(true);
+      const formData = new FormData();
+      formData.append('image', file);
+      const response = await api.upload.image(formData);
+      if (response.success && response.data?.url) {
+        setHeroFormData((prev) => ({ ...prev, image: response.data.url }));
+      } else {
+        window.alert('Image upload failed.');
+      }
+    } catch (error) {
+      console.error('Error uploading hero image:', error);
+      window.alert('Image upload failed.');
+    } finally {
+      setUploadingHeroImage(false);
+      event.target.value = '';
     }
   };
 
@@ -603,16 +626,34 @@ export default function AdminHomepage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Image URL *
                 </label>
-                <input
-                  type="url"
-                  required
-                  value={heroFormData.image}
-                  onChange={(e) =>
-                    setHeroFormData({ ...heroFormData, image: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-coral-500"
-                  placeholder="https://..."
-                />
+                <div className="space-y-2">
+                  <input
+                    type="url"
+                    required
+                    value={heroFormData.image}
+                    onChange={(e) =>
+                      setHeroFormData({ ...heroFormData, image: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-coral-500"
+                    placeholder="https://..."
+                  />
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex cursor-pointer items-center rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
+                      <Upload className="mr-2 h-4 w-4" />
+                      {uploadingHeroImage ? 'Uploading...' : 'Upload Image'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleHeroImageUpload}
+                        disabled={uploadingHeroImage}
+                      />
+                    </label>
+                    {heroFormData.image ? (
+                      <span className="text-xs text-green-700">Image selected</span>
+                    ) : null}
+                  </div>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

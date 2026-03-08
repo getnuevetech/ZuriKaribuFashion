@@ -22,6 +22,7 @@ export default function AdminMeasurementTemplates() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -44,6 +45,7 @@ export default function AdminMeasurementTemplates() {
     try {
       setSaving(true);
       setError('');
+      setSuccess('');
       const payload = rows
         .map((row) => ({
           ...row,
@@ -57,6 +59,7 @@ export default function AdminMeasurementTemplates() {
         return;
       }
       await api.admin.updateMeasurementTemplates(payload);
+      setSuccess('Measurement templates saved successfully.');
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to save templates.');
     } finally {
@@ -91,10 +94,15 @@ export default function AdminMeasurementTemplates() {
           {error}
         </div>
       )}
+      {success && (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+          {success}
+        </div>
+      )}
 
       <div className="space-y-3 rounded-xl border bg-white p-4">
         {rows.map((row, idx) => (
-          <div key={`${row.name}-${idx}`} className="grid grid-cols-1 gap-3 rounded-lg border p-3 md:grid-cols-5">
+          <div key={idx} className="grid grid-cols-1 gap-3 rounded-lg border p-3 md:grid-cols-5">
             <input
               value={row.name}
               onChange={(e) =>
