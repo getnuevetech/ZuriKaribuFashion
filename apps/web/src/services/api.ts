@@ -68,6 +68,15 @@ const authApi = {
   loginWithGoogle: (idToken: string) =>
     apiService.post<{ success: boolean; data: { user: any; token: string | null } }>('/auth/google', { idToken }),
 
+  getGoogleLinkStatus: () =>
+    apiService.get<{ success: boolean; data: { linked: boolean; email: string | null; linkedAt: string | null } }>('/auth/google/link-status'),
+
+  linkGoogleAccount: (idToken: string) =>
+    apiService.post<{ success: boolean; data: { linked: boolean; email: string } }>('/auth/google/link', { idToken }),
+
+  unlinkGoogleAccount: () =>
+    apiService.delete<{ success: boolean; data: { linked: boolean } }>('/auth/google/link'),
+
   register: (data: any) =>
     apiService.post<{ success: boolean; data: { user: any; token: string | null } }>('/auth/register', data),
 

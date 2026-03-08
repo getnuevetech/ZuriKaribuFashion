@@ -196,6 +196,8 @@ const GOOGLE_CLIENT_IDS = Array.from(
   )
 );
 const googleClient = new OAuth2Client();
+let googleAuthSchemaEnsured = false;
+let googleAuthSchemaPromise: Promise<void> | null = null;
 
 const parseNameFromGoogle = (payload: Record<string, unknown>) => {
   const givenName = String(payload.given_name || '').trim();
@@ -210,6 +212,91 @@ const parseNameFromGoogle = (payload: Record<string, unknown>) => {
     return { firstName: firstName || 'User', lastName };
   }
   return { firstName: 'Google', lastName: 'User' };
+};
+
+const ensureGoogleAuthSchema = async () => {
+  if (googleAuthSchemaEnsured) return;
+  if (!googleAuthSchemaPromise) {
+    googleAuthSchemaPromise = (async () => {
+      await prisma.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS "GoogleAuthLink" (
+          "id" TEXT NOT NULL,
+          "userId" TEXT NOT NULL,
+          "googleSub" TEXT NOT NULL,
+          "email" TEXT NOT NULL,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "GoogleAuthLink_pkey" PRIMARY KEY ("id")
+        )`
+      );
+      await prisma.$executeRawUnsafe(
+        `CREATE UNIQUE INDEX IF NOT EXISTS "GoogleAuthLink_userId_key" ON "GoogleAuthLink"("userId")`
+      );
+      await prisma.$executeRawUnsafe(
+        `CREATE UNIQUE INDEX IF NOT EXISTS "GoogleAuthLink_googleSub_key" ON "GoogleAuthLink"("googleSub")`
+      );
+      await prisma.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS "GoogleAuthLink_email_idx" ON "GoogleAuthLink"("email")`
+      );
+      await prisma.$executeRawUnsafe(
+        `ALTER TABLE "GoogleAuthLink"
+         ADD CONSTRAINT "GoogleAuthLink_userId_fkey"
+         FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`
+      ).catch(() => undefined);
+      googleAuthSchemaEnsured = true;
+    })();
+  }
+  try {
+    await googleAuthSchemaPromise;
+  } finally {
+    googleAuthSchemaPromise = null;
+  }
+};
+
+type GoogleAuthLinkRow = {
+  userId: string;
+  googleSub: string;
+  email: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+const getGoogleAuthLinkBySub = async (googleSub: string) => {
+  await ensureGoogleAuthSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<GoogleAuthLinkRow>>(
+    `SELECT "userId","googleSub","email","createdAt","updatedAt"
+     FROM "GoogleAuthLink"
+     WHERE "googleSub" = $1
+     LIMIT 1`,
+    googleSub
+  );
+  return rows[0] || null;
+};
+
+const getGoogleAuthLinkByUserId = async (userId: string) => {
+  await ensureGoogleAuthSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<GoogleAuthLinkRow>>(
+    `SELECT "userId","googleSub","email","createdAt","updatedAt"
+     FROM "GoogleAuthLink"
+     WHERE "userId" = $1
+     LIMIT 1`,
+    userId
+  );
+  return rows[0] || null;
+};
+
+const upsertGoogleAuthLink = async (params: { userId: string; googleSub: string; email: string }) => {
+  await ensureGoogleAuthSchema();
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "GoogleAuthLink" ("id","userId","googleSub","email","createdAt","updatedAt")
+     VALUES ($1,$2,$3,$4,NOW(),NOW())
+     ON CONFLICT ("userId")
+     DO UPDATE SET "googleSub" = EXCLUDED."googleSub", "email" = EXCLUDED."email", "updatedAt" = NOW()`,
+    crypto.randomUUID(),
+    params.userId,
+    params.googleSub,
+    params.email
+  );
 };
 
 // Register
@@ -585,11 +672,23 @@ router.post('/google', async (req, res, next) => {
     }
 
     const email = String(payload.email).toLowerCase().trim();
-    let user = await prisma.user.findFirst({
-      where: {
-        email: { equals: email, mode: 'insensitive' },
-      },
-    });
+    const googleSub = String(payload.sub || '').trim();
+    let user = null as Awaited<ReturnType<typeof prisma.user.findFirst>>;
+
+    if (googleSub) {
+      const linked = await getGoogleAuthLinkBySub(googleSub);
+      if (linked?.userId) {
+        user = await prisma.user.findUnique({ where: { id: linked.userId } });
+      }
+    }
+
+    if (!user) {
+      user = await prisma.user.findFirst({
+        where: {
+          email: { equals: email, mode: 'insensitive' },
+        },
+      });
+    }
 
     if (!user) {
       const names = parseNameFromGoogle(payload as unknown as Record<string, unknown>);
@@ -609,6 +708,17 @@ router.post('/google', async (req, res, next) => {
           },
         },
       });
+    }
+
+    if (googleSub) {
+      const subLinkedToOther = await getGoogleAuthLinkBySub(googleSub);
+      if (subLinkedToOther && subLinkedToOther.userId !== user.id) {
+        return res.status(409).json({
+          success: false,
+          message: 'This Google account is already linked to another user.',
+        });
+      }
+      await upsertGoogleAuthLink({ userId: user.id, googleSub, email });
     }
 
     if (user.status === UserStatus.PENDING) {
@@ -688,6 +798,97 @@ router.post('/google', async (req, res, next) => {
           permissions: effectivePermissions,
         },
       },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/google/link-status', authenticate, async (req, res, next) => {
+  try {
+    const link = await getGoogleAuthLinkByUserId(req.user!.id);
+    return res.json({
+      success: true,
+      data: {
+        linked: Boolean(link),
+        email: link?.email || null,
+        linkedAt: link?.createdAt || null,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/google/link', authenticate, async (req, res, next) => {
+  try {
+    if (GOOGLE_CLIENT_IDS.length === 0) {
+      return res.status(503).json({
+        success: false,
+        message: 'Google login is not configured on this server.',
+      });
+    }
+    const data = googleLoginSchema.parse(req.body);
+    const ticket = await googleClient.verifyIdToken({
+      idToken: data.idToken,
+      audience: GOOGLE_CLIENT_IDS,
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.email || payload.email_verified === false || !payload.sub) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unable to verify Google account.',
+      });
+    }
+
+    const googleEmail = String(payload.email).toLowerCase().trim();
+    const googleSub = String(payload.sub).trim();
+    const accountEmail = String(req.user!.email || '').toLowerCase().trim();
+    if (googleEmail !== accountEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'Google account email must match your current account email.',
+      });
+    }
+
+    const linkedToOther = await getGoogleAuthLinkBySub(googleSub);
+    if (linkedToOther && linkedToOther.userId !== req.user!.id) {
+      return res.status(409).json({
+        success: false,
+        message: 'This Google account is already linked to another user.',
+      });
+    }
+
+    await upsertGoogleAuthLink({
+      userId: req.user!.id,
+      googleSub,
+      email: googleEmail,
+    });
+
+    return res.json({
+      success: true,
+      message: 'Google account linked successfully.',
+      data: {
+        linked: true,
+        email: googleEmail,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/google/link', authenticate, async (req, res, next) => {
+  try {
+    await ensureGoogleAuthSchema();
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM "GoogleAuthLink" WHERE "userId" = $1`,
+      req.user!.id
+    );
+    return res.json({
+      success: true,
+      message: 'Google account unlinked successfully.',
+      data: { linked: false },
     });
   } catch (error) {
     return next(error);

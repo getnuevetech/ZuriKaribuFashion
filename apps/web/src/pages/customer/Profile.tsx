@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { 
   User, 
   Mail, 
@@ -46,6 +47,13 @@ export default function CustomerProfile() {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [addressError, setAddressError] = useState('');
+  const [googleLinked, setGoogleLinked] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState('');
+  const [googleLinkedAt, setGoogleLinkedAt] = useState('');
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState('');
+  const [googleSuccess, setGoogleSuccess] = useState('');
+  const googleClientId = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
   
   const fullName = user?.firstName && user?.lastName 
     ? `${user.firstName} ${user.lastName}` 
@@ -73,6 +81,7 @@ export default function CustomerProfile() {
 
   useEffect(() => {
     fetchAddresses();
+    fetchGoogleLinkStatus();
   }, []);
 
   const fetchAddresses = async () => {
@@ -83,6 +92,19 @@ export default function CustomerProfile() {
       }
     } catch (error) {
       console.error('Failed to fetch addresses:', error);
+    }
+  };
+
+  const fetchGoogleLinkStatus = async () => {
+    try {
+      const response = await api.auth.getGoogleLinkStatus();
+      if (response.success) {
+        setGoogleLinked(Boolean(response.data?.linked));
+        setGoogleEmail(String(response.data?.email || ''));
+        setGoogleLinkedAt(String(response.data?.linkedAt || ''));
+      }
+    } catch (error) {
+      console.error('Failed to fetch Google link status:', error);
     }
   };
 
@@ -147,6 +169,47 @@ export default function CustomerProfile() {
       setAddresses(addresses.filter(a => a.id !== id));
     } catch (error) {
       console.error('Failed to delete address:', error);
+    }
+  };
+
+  const handleGoogleLinkSuccess = async (credentialResponse: CredentialResponse) => {
+    const credential = String(credentialResponse.credential || '').trim();
+    if (!credential) {
+      setGoogleError('Google authentication did not return a valid credential.');
+      return;
+    }
+    try {
+      setGoogleLoading(true);
+      setGoogleError('');
+      setGoogleSuccess('');
+      const response = await api.auth.linkGoogleAccount(credential);
+      if (response.success) {
+        setGoogleSuccess('Google account linked successfully.');
+        await fetchGoogleLinkStatus();
+      }
+    } catch (error: any) {
+      setGoogleError(error?.response?.data?.message || 'Failed to link Google account.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleUnlink = async () => {
+    try {
+      setGoogleLoading(true);
+      setGoogleError('');
+      setGoogleSuccess('');
+      const response = await api.auth.unlinkGoogleAccount();
+      if (response.success) {
+        setGoogleSuccess('Google account unlinked successfully.');
+        setGoogleLinked(false);
+        setGoogleEmail('');
+        setGoogleLinkedAt('');
+      }
+    } catch (error: any) {
+      setGoogleError(error?.response?.data?.message || 'Failed to unlink Google account.');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -267,6 +330,59 @@ export default function CustomerProfile() {
           </div>
         )}
       </div>
+
+      {/* Google Account Link */}
+      {googleClientId ? (
+        <div className="bg-white rounded-xl p-6 shadow-sm border space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Google Account</h2>
+              <p className="text-sm text-gray-500">
+                Link Google so you can sign in with either password or Google.
+              </p>
+            </div>
+            {googleLinked ? (
+              <Badge variant="green">Linked</Badge>
+            ) : (
+              <Badge variant="secondary">Not Linked</Badge>
+            )}
+          </div>
+
+          {googleError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {googleError}
+            </div>
+          ) : null}
+          {googleSuccess ? (
+            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+              {googleSuccess}
+            </div>
+          ) : null}
+
+          {googleLinked ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm text-gray-600">
+                <p>
+                  Linked email: <span className="font-medium text-gray-900">{googleEmail || profile.email}</span>
+                </p>
+                {googleLinkedAt ? (
+                  <p>Linked on: {new Date(googleLinkedAt).toLocaleString()}</p>
+                ) : null}
+              </div>
+              <Button variant="outline" onClick={handleGoogleUnlink} disabled={googleLoading}>
+                {googleLoading ? 'Unlinking...' : 'Unlink Google'}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex justify-start">
+              <GoogleLogin
+                onSuccess={handleGoogleLinkSuccess}
+                onError={() => setGoogleError('Google account linking was cancelled or failed.')}
+              />
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {/* Addresses */}
       <div className="bg-white rounded-xl p-6 shadow-sm border">
