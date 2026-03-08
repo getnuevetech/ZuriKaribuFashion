@@ -16,9 +16,21 @@ import Badge from '../../components/ui/Badge';
 
 interface Address {
   id: string;
+  label: string;
+  fullName: string;
+  address: string;
+  city: string;
+  postalCode?: string;
+  country: string;
+  phone: string;
+  isDefault: boolean;
+}
+
+interface AddressForm {
+  label: string;
   fullName: string;
   addressLine1: string;
-  addressLine2?: string;
+  addressLine2: string;
   city: string;
   state: string;
   postalCode: string;
@@ -33,6 +45,7 @@ export default function CustomerProfile() {
   const [editing, setEditing] = useState(false);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [showAddressForm, setShowAddressForm] = useState(false);
+  const [addressError, setAddressError] = useState('');
   
   const fullName = user?.firstName && user?.lastName 
     ? `${user.firstName} ${user.lastName}` 
@@ -45,7 +58,8 @@ export default function CustomerProfile() {
     phone: user?.phone || '',
   });
 
-  const [newAddress, setNewAddress] = useState<Partial<Address>>({
+  const [newAddress, setNewAddress] = useState<AddressForm>({
+    label: 'Home',
     fullName: '',
     addressLine1: '',
     addressLine2: '',
@@ -54,6 +68,7 @@ export default function CustomerProfile() {
     postalCode: '',
     country: '',
     phone: '',
+    isDefault: false,
   });
 
   useEffect(() => {
@@ -88,12 +103,27 @@ export default function CustomerProfile() {
 
   const handleAddAddress = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAddressError('');
     try {
-      const response = await api.customer.addAddress(newAddress);
+      const payload = {
+        label: newAddress.label.trim() || 'Home',
+        fullName: newAddress.fullName.trim(),
+        phone: newAddress.phone.trim(),
+        country: newAddress.country,
+        city: newAddress.city.trim(),
+        address: [newAddress.addressLine1, newAddress.addressLine2, newAddress.state]
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .join(', '),
+        postalCode: newAddress.postalCode.trim() || undefined,
+        isDefault: Boolean(newAddress.isDefault),
+      };
+      const response = await api.customer.addAddress(payload);
       if (response.success) {
         setAddresses([...addresses, response.data]);
         setShowAddressForm(false);
         setNewAddress({
+          label: 'Home',
           fullName: '',
           addressLine1: '',
           addressLine2: '',
@@ -102,9 +132,11 @@ export default function CustomerProfile() {
           postalCode: '',
           country: '',
           phone: '',
+          isDefault: false,
         });
       }
-    } catch (error) {
+    } catch (error: any) {
+      setAddressError(error?.response?.data?.message || 'Unable to save address. Please check your details.');
       console.error('Failed to add address:', error);
     }
   };
@@ -248,7 +280,31 @@ export default function CustomerProfile() {
         {showAddressForm && (
           <form onSubmit={handleAddAddress} className="mb-6 p-4 bg-gray-50 rounded-lg">
             <h3 className="font-medium mb-4">Add New Address</h3>
+            {addressError && (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {addressError}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <input
+                  type="text"
+                  placeholder="Label (Home, Office)"
+                  value={newAddress.label}
+                  onChange={(e) => setNewAddress({ ...newAddress, label: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  required
+                />
+              </div>
+              <div className="flex items-center gap-2 px-2">
+                <input
+                  id="isDefaultAddress"
+                  type="checkbox"
+                  checked={newAddress.isDefault}
+                  onChange={(e) => setNewAddress({ ...newAddress, isDefault: e.target.checked })}
+                />
+                <label htmlFor="isDefaultAddress" className="text-sm text-gray-700">Set as default</label>
+              </div>
               <div className="md:col-span-2">
                 <input
                   type="text"
@@ -350,16 +406,14 @@ export default function CustomerProfile() {
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="font-medium">{address.fullName}</p>
+                    <Badge variant="secondary" className="text-xs">{address.label}</Badge>
                     {address.isDefault && (
                       <Badge variant="secondary" className="text-xs">Default</Badge>
                     )}
                   </div>
-                  <p className="text-sm text-gray-600">{address.addressLine1}</p>
-                  {address.addressLine2 && (
-                    <p className="text-sm text-gray-600">{address.addressLine2}</p>
-                  )}
+                  <p className="text-sm text-gray-600">{address.address}</p>
                   <p className="text-sm text-gray-600">
-                    {address.city}, {address.state} {address.postalCode}
+                    {address.city}{address.postalCode ? `, ${address.postalCode}` : ''}
                   </p>
                   <p className="text-sm text-gray-600">{address.country}</p>
                   <p className="text-sm text-gray-500 mt-1">{address.phone}</p>

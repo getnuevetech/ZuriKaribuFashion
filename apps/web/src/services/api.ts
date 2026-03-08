@@ -309,14 +309,33 @@ const sellerApi = {
   getOrders: () =>
     apiService.get<{ success: boolean; data: any[] }>('/fabric-seller/orders'),
 
-  getStats: () =>
-    apiService.get<{ success: boolean; data: any }>('/fabric-seller/stats'),
+  getStats: async () => {
+    const response = await apiService.get<{ success: boolean; data: any }>('/fabric-seller/dashboard');
+    if (!response.success) {
+      return response;
+    }
+    const stats = response.data?.stats || {};
+    return {
+      success: true,
+      data: {
+        totalFabrics: Number(stats.totalFabrics || 0),
+        totalSales: Number(stats.totalOrders || 0),
+        totalRevenue: Number(stats.totalRevenue || 0),
+        pendingOrders: Number(stats.pendingOrders || 0),
+        lowStockItems: 0,
+        monthlySales: [],
+        topFabrics: [],
+        salesChange: 0,
+        revenueChange: 0,
+      },
+    };
+  },
 
   updateFabricStock: (fabricId: string, stock: number) =>
     apiService.patch(`/fabric-seller/fabrics/${fabricId}/stock`, { stock }),
 
   updateOrderStatus: (orderId: string, status: string) =>
-    apiService.patch(`/fabric-seller/orders/${orderId}/status`, { status }),
+    apiService.patch(`/orders/${orderId}/status`, { status }),
 };
 
 // Designer API
@@ -339,11 +358,32 @@ const designerApi = {
   getOrders: () =>
     apiService.get<{ success: boolean; data: any[] }>('/designer/orders'),
 
-  getStats: () =>
-    apiService.get<{ success: boolean; data: any }>('/designer/stats'),
+  getStats: async () => {
+    const response = await apiService.get<{ success: boolean; data: any }>('/designer/dashboard');
+    if (!response.success) {
+      return response;
+    }
+    const stats = response.data?.stats || {};
+    return {
+      success: true,
+      data: {
+        totalDesigns: Number(stats.totalDesigns || 0),
+        totalOrders: Number(stats.totalOrders || 0),
+        totalRevenue: Number(stats.totalRevenue || 0),
+        pendingOrders: Number(stats.pendingOrders || 0),
+        inProductionOrders: 0,
+        completedOrders: 0,
+        monthlyRevenue: [],
+        topDesigns: [],
+        rating: 0,
+        revenueChange: 0,
+        orderChange: 0,
+      },
+    };
+  },
 
   updateOrderStatus: (orderId: string, status: string) =>
-    apiService.patch(`/designer/orders/${orderId}/status`, { status }),
+    apiService.patch(`/orders/${orderId}/status`, { status }),
 };
 
 // QA API
@@ -357,17 +397,103 @@ const qaApi = {
   shipOrder: (orderId: string, trackingNumber: string, notes?: string) =>
     apiService.patch(`/qa/orders/${orderId}/ship`, { trackingNumber, notes }),
 
-  getStats: () =>
-    apiService.get<{ success: boolean; data: any }>('/qa/stats'),
+  getStats: async () => {
+    const response = await apiService.get<{ success: boolean; data: any }>('/qa/dashboard');
+    if (!response.success) {
+      return response;
+    }
+    const stats = response.data?.stats || {};
+    return {
+      success: true,
+      data: {
+        pendingReviews: Number(stats.pendingInspection || 0),
+        approvedToday: Number(stats.completedToday || 0),
+        rejectedToday: 0,
+        totalReviewed: Number(stats.assignedOrders || 0),
+        avgReviewTime: 0,
+        approvalRate: 0,
+        weeklyReviews: [],
+        reviewsByStatus: [],
+      },
+    };
+  },
 
-  getPendingItems: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/qa/pending'),
+  getPendingItems: async () => {
+    const response = await apiService.get<{ success: boolean; data: any[] }>('/qa/orders');
+    if (!response.success) {
+      return response;
+    }
+    const toAddressObject = (value: any) => {
+      if (!value) return null;
+      if (typeof value === 'object') return value;
+      if (typeof value === 'string') {
+        try {
+          return JSON.parse(value);
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    };
 
-  getReviewHistory: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/qa/history'),
+    const pendingStatuses = new Set(['QA_PENDING', 'QA_INSPECTING']);
+    const data = (response.data || [])
+      .filter((order: any) => pendingStatuses.has(order?.status))
+      .map((order: any) => {
+        const shippingAddress = toAddressObject(order.shippingAddress);
+        const design = order.designOrder?.design;
+        const firstImage = design?.images?.[0]?.url || order.readyToWearItems?.[0]?.readyToWear?.images?.[0]?.url;
+        return {
+          id: String(order.id),
+          orderNumber: order.orderNumber || 'N/A',
+          designName: design?.name || order.readyToWearItems?.[0]?.readyToWear?.name || 'Order Item',
+          designerName: 'Assigned Designer',
+          customerName:
+            `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim() ||
+            shippingAddress?.fullName ||
+            'Customer',
+          images: firstImage ? [firstImage] : ['https://picsum.photos/seed/qa-order/600/400'],
+          measurements: (order.designOrder?.measurements && typeof order.designOrder.measurements === 'object')
+            ? order.designOrder.measurements
+            : {},
+          submittedAt: order.createdAt,
+          priority: order.status === 'QA_PENDING' ? 'HIGH' : 'MEDIUM',
+          notes: order.timeline?.[0]?.notes || '',
+        };
+      });
+
+    return { success: true, data };
+  },
+
+  getReviewHistory: async () => {
+    const response = await apiService.get<{ success: boolean; data: any[] }>('/qa/orders');
+    if (!response.success) {
+      return response;
+    }
+    const doneStatuses = new Set(['QA_APPROVED', 'QA_REJECTED', 'SHIPPED', 'DELIVERED', 'COMPLETED']);
+    const data = (response.data || [])
+      .filter((order: any) => doneStatuses.has(order?.status))
+      .map((order: any) => {
+        const latestTimeline = Array.isArray(order.timeline) ? order.timeline[0] : null;
+        return {
+          id: String(order.id),
+          orderNumber: order.orderNumber || 'N/A',
+          designName: order.designOrder?.design?.name || order.readyToWearItems?.[0]?.readyToWear?.name || 'Order Item',
+          status: order.status === 'QA_REJECTED' ? 'REJECTED' : 'APPROVED',
+          reviewedAt: latestTimeline?.createdAt || order.updatedAt || order.createdAt,
+          notes: latestTimeline?.notes || '',
+          reviewerName: 'QA Team',
+          designerName: 'Assigned Designer',
+        };
+      });
+    return { success: true, data };
+  },
 
   submitReview: (data: { orderId: string; status: 'APPROVED' | 'REJECTED'; notes: string }) =>
-    apiService.post<{ success: boolean; data: any }>('/qa/review', data),
+    apiService.patch<{ success: boolean; data: any }>(`/orders/${data.orderId}/status`, {
+      status: data.status === 'APPROVED' ? 'QA_APPROVED' : 'QA_REJECTED',
+      notes: data.notes,
+    }),
 };
 
 // Payments API

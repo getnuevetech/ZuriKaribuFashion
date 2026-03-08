@@ -50,17 +50,17 @@ const navItems: Record<DashboardType, NavItem[]> = {
   ],
   seller: [
     { label: 'Dashboard', href: '/seller', icon: LayoutDashboard },
-    { label: 'My Fabrics', href: '/seller/fabrics', icon: Layers },
-    { label: 'Orders', href: '/seller/orders', icon: ShoppingBag },
+    { label: 'My Fabrics', href: '/seller?tab=fabrics', icon: Layers },
+    { label: 'Orders', href: '/seller?tab=orders', icon: ShoppingBag },
   ],
   designer: [
     { label: 'Dashboard', href: '/designer', icon: LayoutDashboard },
-    { label: 'My Designs', href: '/designer/designs', icon: Scissors },
-    { label: 'Orders', href: '/designer/orders', icon: ShoppingBag },
+    { label: 'My Designs', href: '/designer?tab=designs', icon: Scissors },
+    { label: 'Orders', href: '/designer?tab=orders', icon: ShoppingBag },
   ],
   qa: [
     { label: 'Dashboard', href: '/qa', icon: LayoutDashboard },
-    { label: 'Orders', href: '/qa/orders', icon: ClipboardCheck },
+    { label: 'Orders', href: '/qa?tab=pending', icon: ClipboardCheck },
   ],
   customer: [
     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -116,7 +116,12 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
           {/* Navigation */}
           <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
             {items.map((item) => {
-              const isActive = location.pathname === item.href;
+              const hrefUrl = new URL(item.href, window.location.origin);
+              const currentTab = new URLSearchParams(location.search).get('tab');
+              const hrefTab = hrefUrl.searchParams.get('tab');
+              const isActive =
+                location.pathname === hrefUrl.pathname &&
+                (hrefTab ? currentTab === hrefTab : !currentTab);
               const Icon = item.icon;
 
               return (

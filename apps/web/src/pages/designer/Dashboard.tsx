@@ -18,7 +18,7 @@ import {
   TrendingDown,
   Palette
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
 import StatCard from '../../components/dashboard/StatCard';
 import ActivityFeed from '../../components/dashboard/ActivityFeed';
@@ -55,6 +55,7 @@ interface Design {
 
 interface DesignOrder {
   id: string;
+  orderId: string;
   orderNumber: string;
   designName: string;
   customerName: string;
@@ -82,23 +83,105 @@ export default function DesignerDashboard() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'designs' | 'orders'>('overview');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const syncTabWithUrl = (tab: 'overview' | 'designs' | 'orders') => {
+    setActiveTab(tab);
+    if (tab === 'overview') {
+      setSearchParams({});
+      return;
+    }
+    setSearchParams({ tab });
+  };
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'designs' || tabParam === 'orders' || tabParam === 'overview') {
+      setActiveTab(tabParam);
+    } else {
+      setActiveTab('overview');
+    }
+  }, [searchParams]);
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       const [statsRes, designsRes, ordersRes] = await Promise.all([
-        api.designer.getStats(),
+        api.designer.getDashboard(),
         api.designer.getDesigns(),
         api.designer.getOrders()
       ]);
-      
-      if (statsRes.success) setStats(statsRes.data);
-      if (designsRes.success) setDesigns(designsRes.data);
-      if (ordersRes.success) setOrders(ordersRes.data);
+
+      const toAddressObject = (value: any) => {
+        if (!value) return null;
+        if (typeof value === 'object') return value;
+        if (typeof value === 'string') {
+          try {
+            return JSON.parse(value);
+          } catch {
+            return null;
+          }
+        }
+        return null;
+      };
+
+      const mappedOrders: DesignOrder[] = ordersRes.success
+        ? (ordersRes.data || []).map((item: any) => {
+            const shippingAddress = toAddressObject(item.order?.shippingAddress);
+            const createdAt = item.order?.createdAt || item.createdAt;
+            const dueDate = new Date(new Date(createdAt).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+            return {
+              id: String(item.id),
+              orderId: String(item.orderId || ''),
+              orderNumber: item.order?.orderNumber || 'N/A',
+              designName: item.design?.name || 'Design',
+              customerName: shippingAddress?.fullName || 'Customer',
+              measurements: (item.measurements && typeof item.measurements === 'object') ? item.measurements : {},
+              fabricInfo: 'Included in order details',
+              totalAmount: Number(item.price || 0),
+              status: item.status || 'PENDING',
+              createdAt,
+              dueDate,
+              priority: item.status === 'PENDING' ? 'HIGH' : 'MEDIUM',
+            };
+          })
+        : [];
+
+      if (statsRes.success) {
+        const baseStats = statsRes.data?.stats || {};
+        setStats({
+          totalDesigns: Number(baseStats.totalDesigns || 0),
+          totalOrders: Number(baseStats.totalOrders || 0),
+          totalRevenue: Number(baseStats.totalRevenue || 0),
+          pendingOrders: Number(baseStats.pendingOrders || 0),
+          inProductionOrders: mappedOrders.filter((order) => order.status === 'IN_PRODUCTION').length,
+          completedOrders: mappedOrders.filter((order) => order.status === 'COMPLETED').length,
+          monthlyRevenue: [],
+          topDesigns: [],
+          rating: 0,
+          revenueChange: 0,
+          orderChange: 0,
+        });
+      }
+      if (designsRes.success) {
+        const mappedDesigns = (designsRes.data || []).map((design: any) => ({
+          id: String(design.id),
+          name: design.name || 'Design',
+          basePrice: Number(design.basePrice || 0),
+          images: Array.isArray(design.images) ? design.images.map((img: any) => img?.url).filter(Boolean) : [],
+          category: design.category || { name: 'Category' },
+          rating: Number(design.rating || 0),
+          orderCount: Number(design?._count?.orderItems || 0),
+          status: design.status || 'DRAFT',
+          createdAt: design.createdAt,
+        }));
+        setDesigns(mappedDesigns);
+      }
+      if (ordersRes.success) setOrders(mappedOrders);
       
       // Mock activities
       setActivities([
@@ -167,9 +250,9 @@ export default function DesignerDashboard() {
           <p className="text-gray-500 mt-1">Manage your designs and track orders</p>
         </div>
         <Button asChild>
-          <Link to="/designer/designs/new">
+          <Link to="/designer?tab=designs">
             <Plus className="w-4 h-4 mr-2" />
-            Add New Design
+            Manage Designs
           </Link>
         </Button>
       </div>
@@ -216,7 +299,7 @@ export default function DesignerDashboard() {
           {(['overview', 'designs', 'orders'] as const).map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => syncTabWithUrl(tab)}
               className={`pb-3 text-sm font-medium capitalize transition-colors relative ${
                 activeTab === tab ? 'text-amber-600' : 'text-gray-500 hover:text-gray-700'
               }`}
@@ -320,7 +403,7 @@ export default function DesignerDashboard() {
                 <Button 
                   variant="outline" 
                   size="sm"
-                  onClick={() => setActiveTab('orders')}
+                  onClick={() => syncTabWithUrl('orders')}
                 >
                   View Orders
                 </Button>
@@ -335,9 +418,9 @@ export default function DesignerDashboard() {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-gray-900">My Designs</h2>
             <Button size="sm" asChild>
-              <Link to="/designer/designs/new">
+              <Link to="/designer?tab=designs">
                 <Plus className="w-4 h-4 mr-2" />
-                Add Design
+                Add/Manage Design
               </Link>
             </Button>
           </div>
@@ -371,7 +454,7 @@ export default function DesignerDashboard() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-500">Rating</p>
-                      <p className="font-medium text-gray-900">⭐ {design.rating.toFixed(1)}</p>
+                      <p className="font-medium text-gray-900">⭐ {Number(design.rating || 0).toFixed(1)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-500">Orders</p>
@@ -383,9 +466,11 @@ export default function DesignerDashboard() {
                       <Edit className="w-4 h-4 mr-1" />
                       Edit
                     </Button>
-                    <Button variant="outline" size="sm" className="flex-1">
-                      <Eye className="w-4 h-4 mr-1" />
-                      View
+                    <Button variant="outline" size="sm" className="flex-1" asChild>
+                      <Link to={`/designs/${design.id}`}>
+                        <Eye className="w-4 h-4 mr-1" />
+                        View
+                      </Link>
                     </Button>
                   </div>
                 </div>
@@ -435,7 +520,7 @@ export default function DesignerDashboard() {
               {item.status === 'PENDING' && (
                 <Button 
                   size="sm"
-                  onClick={() => handleUpdateOrderStatus(item.id, 'IN_PRODUCTION')}
+                  onClick={() => handleUpdateOrderStatus(item.orderId, 'IN_PRODUCTION')}
                 >
                   Start
                 </Button>
@@ -443,7 +528,7 @@ export default function DesignerDashboard() {
               {item.status === 'IN_PRODUCTION' && (
                 <Button 
                   size="sm"
-                  onClick={() => handleUpdateOrderStatus(item.id, 'READY_FOR_QA')}
+                  onClick={() => handleUpdateOrderStatus(item.orderId, 'COMPLETED')}
                 >
                   Complete
                 </Button>

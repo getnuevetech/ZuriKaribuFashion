@@ -16,7 +16,7 @@ import {
   MapPin,
   ArrowRight
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
 import StatCard from '../../components/dashboard/StatCard';
 import ActivityFeed from '../../components/dashboard/ActivityFeed';
@@ -51,6 +51,7 @@ interface Fabric {
 
 interface FabricOrder {
   id: string;
+  orderId: string;
   orderNumber: string;
   fabricName: string;
   meters: number;
@@ -79,23 +80,99 @@ export default function SellerDashboard() {
   const [showStockModal, setShowStockModal] = useState(false);
   const [selectedFabric, setSelectedFabric] = useState<Fabric | null>(null);
   const [newStock, setNewStock] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const syncTabWithUrl = (tab: 'overview' | 'fabrics' | 'orders') => {
+    setActiveTab(tab);
+    if (tab === 'overview') {
+      setSearchParams({});
+      return;
+    }
+    setSearchParams({ tab });
+  };
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'fabrics' || tabParam === 'orders' || tabParam === 'overview') {
+      setActiveTab(tabParam);
+    } else {
+      setActiveTab('overview');
+    }
+  }, [searchParams]);
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsRes, fabricsRes, ordersRes] = await Promise.all([
-        api.seller.getStats(),
+      const [dashboardRes, fabricsRes, ordersRes] = await Promise.all([
+        api.seller.getDashboard(),
         api.seller.getFabrics(),
         api.seller.getOrders()
       ]);
-      
-      if (statsRes.success) setStats(statsRes.data);
-      if (fabricsRes.success) setFabrics(fabricsRes.data);
-      if (ordersRes.success) setOrders(ordersRes.data);
+
+      if (dashboardRes.success) {
+        const baseStats = dashboardRes.data?.stats || {};
+        setStats({
+          totalFabrics: Number(baseStats.totalFabrics || 0),
+          totalSales: Number(baseStats.totalOrders || 0),
+          totalRevenue: Number(baseStats.totalRevenue || 0),
+          pendingOrders: Number(baseStats.pendingOrders || 0),
+          lowStockItems: 0,
+          monthlySales: [],
+          topFabrics: [],
+          salesChange: 0,
+          revenueChange: 0,
+        });
+      }
+      if (fabricsRes.success) {
+        const mappedFabrics = (fabricsRes.data || []).map((item: any) => ({
+          id: String(item.id),
+          name: item.name || 'Fabric',
+          pricePerMeter: Number(item.finalPrice ?? item.sellerPrice ?? 0),
+          stockMeters: Number(item.stockYards ?? 0),
+          images: Array.isArray(item.images)
+            ? item.images.map((img: any) => img?.url).filter(Boolean)
+            : [],
+          orderCount: Number(item?._count?.orderItems ?? 0),
+          status: item.status || 'DRAFT',
+          materialType: item.materialType || { name: 'Material' },
+          minOrderMeters: Number(item.minYards ?? 1),
+        }));
+        setFabrics(mappedFabrics);
+      }
+      if (ordersRes.success) {
+        const toAddressObject = (value: any) => {
+          if (!value) return null;
+          if (typeof value === 'object') return value;
+          if (typeof value === 'string') {
+            try {
+              return JSON.parse(value);
+            } catch {
+              return null;
+            }
+          }
+          return null;
+        };
+        const mappedOrders = (ordersRes.data || []).map((item: any) => {
+          const shippingAddress = toAddressObject(item.order?.shippingAddress);
+          return {
+            id: String(item.id),
+            orderId: String(item.orderId || ''),
+            orderNumber: item.order?.orderNumber || 'N/A',
+            fabricName: item.fabric?.name || 'Fabric',
+            meters: Number(item.yards || 0),
+            totalAmount: Number(item.totalPrice || 0),
+            status: item.status || 'PENDING',
+            designerCountry: shippingAddress?.country || 'N/A',
+            createdAt: item.order?.createdAt || item.createdAt,
+            customerName: shippingAddress?.fullName || 'Customer',
+          };
+        });
+        setOrders(mappedOrders);
+      }
       
       // Mock activities
       setActivities([
@@ -181,9 +258,9 @@ export default function SellerDashboard() {
           <p className="text-gray-500 mt-1">Manage your fabrics and track sales</p>
         </div>
         <Button asChild>
-          <Link to="/seller/fabrics/new">
+          <Link to="/seller?tab=fabrics">
             <Plus className="w-4 h-4 mr-2" />
-            Add New Fabric
+            Manage Fabrics
           </Link>
         </Button>
       </div>
@@ -230,7 +307,7 @@ export default function SellerDashboard() {
           {(['overview', 'fabrics', 'orders'] as const).map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => syncTabWithUrl(tab)}
               className={`pb-3 text-sm font-medium capitalize transition-colors relative ${
                 activeTab === tab ? 'text-amber-600' : 'text-gray-500 hover:text-gray-700'
               }`}
@@ -267,7 +344,7 @@ export default function SellerDashboard() {
                 <Button 
                   variant="outline" 
                   size="sm"
-                  onClick={() => setActiveTab('fabrics')}
+                  onClick={() => syncTabWithUrl('fabrics')}
                 >
                   Update Stock
                 </Button>
@@ -314,7 +391,7 @@ export default function SellerDashboard() {
             <div className="bg-white rounded-xl p-6 shadow-sm border">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Recent Orders</h3>
-                <Button variant="ghost" size="sm" onClick={() => setActiveTab('orders')}>
+                <Button variant="ghost" size="sm" onClick={() => syncTabWithUrl('orders')}>
                   View All
                   <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
@@ -330,7 +407,7 @@ export default function SellerDashboard() {
                       <p className="font-medium text-amber-700">${order.totalAmount.toFixed(2)}</p>
                       <Badge variant={
                         order.status === 'DELIVERED' ? 'green' :
-                        order.status === 'SHIPPED' ? 'blue' :
+                        order.status === 'SHIPPED_TO_DESIGNER' ? 'blue' :
                         order.status === 'CONFIRMED' ? 'yellow' : 'gray'
                       } size="sm">
                         {order.status}
@@ -352,9 +429,9 @@ export default function SellerDashboard() {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-gray-900">My Fabrics</h2>
             <Button size="sm" asChild>
-              <Link to="/seller/fabrics/new">
+              <Link to="/seller?tab=fabrics">
                 <Plus className="w-4 h-4 mr-2" />
-                Add Fabric
+                Add/Manage Fabric
               </Link>
             </Button>
           </div>
@@ -407,8 +484,10 @@ export default function SellerDashboard() {
                 <Button variant="outline" size="sm" onClick={() => openStockModal(item)}>
                   <Edit className="w-4 h-4" />
                 </Button>
-                <Button variant="outline" size="sm">
-                  <Eye className="w-4 h-4" />
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={`/fabrics/${item.id}`}>
+                    <Eye className="w-4 h-4" />
+                  </Link>
                 </Button>
               </div>
             )}
@@ -444,7 +523,7 @@ export default function SellerDashboard() {
               render: (item) => (
                 <Badge variant={
                   item.status === 'DELIVERED' ? 'green' :
-                  item.status === 'SHIPPED' ? 'blue' :
+                  item.status === 'SHIPPED_TO_DESIGNER' ? 'blue' :
                   item.status === 'CONFIRMED' ? 'yellow' : 'gray'
                 }>
                   {item.status}
@@ -461,15 +540,12 @@ export default function SellerDashboard() {
               {item.status === 'CONFIRMED' && (
                 <Button 
                   size="sm"
-                  onClick={() => handleUpdateOrderStatus(item.id, 'SHIPPED')}
+                  onClick={() => handleUpdateOrderStatus(item.orderId, 'SHIPPED_TO_DESIGNER')}
                 >
                   <Truck className="w-4 h-4 mr-1" />
                   Ship
                 </Button>
               )}
-              <Button variant="outline" size="sm">
-                <Eye className="w-4 h-4" />
-              </Button>
             </div>
           )}
         />

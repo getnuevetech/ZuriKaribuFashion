@@ -19,6 +19,7 @@ import {
   Truck
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { useSearchParams } from 'react-router-dom';
 import StatCard from '../../components/dashboard/StatCard';
 import ActivityFeed from '../../components/dashboard/ActivityFeed';
 import DataTable from '../../components/dashboard/DataTable';
@@ -81,10 +82,29 @@ export default function QADashboard() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState('');
   const [showShipModal, setShowShipModal] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const syncTabWithUrl = (tab: 'overview' | 'pending' | 'history') => {
+    setActiveTab(tab);
+    if (tab === 'overview') {
+      setSearchParams({});
+      return;
+    }
+    setSearchParams({ tab });
+  };
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'pending' || tabParam === 'history' || tabParam === 'overview') {
+      setActiveTab(tabParam);
+    } else {
+      setActiveTab('overview');
+    }
+  }, [searchParams]);
 
   const fetchDashboardData = async () => {
     try {
@@ -148,12 +168,12 @@ export default function QADashboard() {
       });
       
       setShowReviewModal(false);
-      setSelectedItem(null);
       setReviewNotes('');
       
       if (status === 'APPROVED') {
         setShowShipModal(true);
       } else {
+        setSelectedItem(null);
         fetchDashboardData();
       }
     } catch (error) {
@@ -250,7 +270,7 @@ export default function QADashboard() {
           {(['overview', 'pending', 'history'] as const).map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => syncTabWithUrl(tab)}
               className={`pb-3 text-sm font-medium capitalize transition-colors relative ${
                 activeTab === tab ? 'text-amber-600' : 'text-gray-500 hover:text-gray-700'
               }`}
@@ -287,7 +307,7 @@ export default function QADashboard() {
                 <Button 
                   variant="outline" 
                   size="sm"
-                  onClick={() => setActiveTab('pending')}
+                  onClick={() => syncTabWithUrl('pending')}
                 >
                   Review Now
                 </Button>
@@ -337,7 +357,7 @@ export default function QADashboard() {
             <div className="bg-white rounded-xl p-6 shadow-sm border">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Pending Reviews</h3>
-                <Button variant="ghost" size="sm" onClick={() => setActiveTab('pending')}>
+                <Button variant="ghost" size="sm" onClick={() => syncTabWithUrl('pending')}>
                   View All
                   <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
@@ -587,6 +607,7 @@ export default function QADashboard() {
                 className="flex-1"
                 onClick={() => {
                   setShowShipModal(false);
+                  setSelectedItem(null);
                   fetchDashboardData();
                 }}
               >

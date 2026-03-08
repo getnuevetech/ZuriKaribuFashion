@@ -341,7 +341,7 @@ export default function AdminDashboard() {
             pageSize={5}
             actions={(item) => (
               <Button variant="ghost" size="sm" asChild>
-                <Link to={`/admin/orders/${item.id}`}>
+                <Link to="/admin/orders">
                   View
                 </Link>
               </Button>
