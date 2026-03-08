@@ -20,17 +20,20 @@ interface HowItWorksStep {
   id: string;
   stepNumber: number;
   title: string;
-  description: string;
+  subtitle: string;
   icon: string;
+  displayOrder: number;
   isActive: boolean;
 }
 
 interface ShopCategory {
   id: string;
+  key: string;
   title: string;
-  subtitle: string;
+  description: string;
   image: string;
-  link: string;
+  ctaText: string;
+  ctaLink: string;
   displayOrder: number;
   isActive: boolean;
 }
@@ -38,9 +41,8 @@ interface ShopCategory {
 interface DesignerSpotlight {
   id: string;
   designerId: string;
-  headline: string;
-  description: string;
   quote: string;
+  bio: string;
   image: string;
   displayOrder: number;
   isActive: boolean;
@@ -54,9 +56,9 @@ interface HeritageSection {
   id: string;
   title: string;
   subtitle: string;
-  description: string;
   image: string;
-  stats: { label: string; value: string }[];
+  ctaText?: string;
+  ctaLink?: string;
   displayOrder: number;
   isActive: boolean;
 }
@@ -64,21 +66,23 @@ interface HeritageSection {
 interface Testimonial {
   id: string;
   name: string;
+  initials: string;
   location: string;
   avatar: string;
-  rating: number;
-  text: string;
+  quote: string;
   displayOrder: number;
   isActive: boolean;
 }
 
 interface FooterContent {
   id: string;
-  column: string;
-  title: string;
-  links: { label: string; url: string }[];
-  displayOrder: number;
-  isActive: boolean;
+  companyName: string;
+  tagline: string;
+  email: string;
+  phone: string;
+  address: string;
+  socialLinks?: string;
+  copyright: string;
 }
 
 const TABS = [
@@ -140,7 +144,8 @@ export default function HomepageSections() {
           break;
         case 'footer':
           const footerRes = await api.homepageSections.getAdminFooter();
-          if (footerRes.success) setFooterContents([footerRes.data]);
+          if (footerRes.success && footerRes.data) setFooterContents([footerRes.data]);
+          if (footerRes.success && !footerRes.data) setFooterContents([]);
           break;
       }
     } catch (error) {
@@ -425,7 +430,8 @@ function HowItWorksTable({ data, onEdit, onToggle, onDelete }: any) {
         <tr>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Step</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subtitle</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Icon</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
           <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
         </tr>
@@ -435,7 +441,8 @@ function HowItWorksTable({ data, onEdit, onToggle, onDelete }: any) {
           <tr key={item.id} className="hover:bg-gray-50">
             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.stepNumber}</td>
             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.title}</td>
-            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{item.description}</td>
+            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{item.subtitle}</td>
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.icon}</td>
             <td className="px-6 py-4 whitespace-nowrap">
               <Badge variant={item.isActive ? 'success' : 'secondary'}>
                 {item.isActive ? 'Active' : 'Inactive'}
@@ -468,8 +475,9 @@ function CategoriesTable({ data, onEdit, onToggle, onDelete }: any) {
         <tr>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subtitle</th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Link</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Key</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CTA</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
           <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
         </tr>
@@ -486,8 +494,9 @@ function CategoriesTable({ data, onEdit, onToggle, onDelete }: any) {
                 <span className="text-sm font-medium text-gray-900">{item.title}</span>
               </div>
             </td>
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.subtitle}</td>
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.link}</td>
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.key}</td>
+            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{item.description}</td>
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.ctaText} → {item.ctaLink}</td>
             <td className="px-6 py-4 whitespace-nowrap">
               <Badge variant={item.isActive ? 'success' : 'secondary'}>
                 {item.isActive ? 'Active' : 'Inactive'}
@@ -519,8 +528,8 @@ function DesignerSpotlightTable({ data, onEdit, onToggle, onDelete }: any) {
       <thead className="bg-gray-50">
         <tr>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Designer</th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Headline</th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quote</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bio</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
           <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
         </tr>
@@ -536,8 +545,8 @@ function DesignerSpotlightTable({ data, onEdit, onToggle, onDelete }: any) {
                 <span className="text-sm font-medium text-gray-900">{item.designer?.businessName || 'Unknown'}</span>
               </div>
             </td>
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.headline}</td>
-            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{item.description}</td>
+            <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">{item.quote}</td>
+            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{item.bio}</td>
             <td className="px-6 py-4 whitespace-nowrap">
               <Badge variant={item.isActive ? 'success' : 'secondary'}>
                 {item.isActive ? 'Active' : 'Inactive'}
@@ -571,6 +580,7 @@ function HeritageTable({ data, onEdit, onToggle, onDelete }: any) {
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subtitle</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CTA</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
           <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
         </tr>
@@ -588,6 +598,7 @@ function HeritageTable({ data, onEdit, onToggle, onDelete }: any) {
               </div>
             </td>
             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.subtitle}</td>
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.ctaText || '-'} {item.ctaLink ? `→ ${item.ctaLink}` : ''}</td>
             <td className="px-6 py-4 whitespace-nowrap">
               <Badge variant={item.isActive ? 'success' : 'secondary'}>
                 {item.isActive ? 'Active' : 'Inactive'}
@@ -621,7 +632,8 @@ function TestimonialsTable({ data, onEdit, onToggle, onDelete }: any) {
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Initials</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quote</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
           <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
         </tr>
@@ -639,16 +651,8 @@ function TestimonialsTable({ data, onEdit, onToggle, onDelete }: any) {
               </div>
             </td>
             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.location}</td>
-            <td className="px-6 py-4 whitespace-nowrap">
-              <div className="flex items-center">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`w-4 h-4 ${i < item.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
-                  />
-                ))}
-              </div>
-            </td>
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.initials}</td>
+            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{item.quote}</td>
             <td className="px-6 py-4 whitespace-nowrap">
               <Badge variant={item.isActive ? 'success' : 'secondary'}>
                 {item.isActive ? 'Active' : 'Inactive'}
@@ -679,20 +683,18 @@ function FooterTable({ data, onEdit }: any) {
     <table className="min-w-full divide-y divide-gray-200">
       <thead className="bg-gray-50">
         <tr>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Column</th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Links</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tagline</th>
           <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
         </tr>
       </thead>
       <tbody className="bg-white divide-y divide-gray-200">
         {data.map((item: FooterContent) => (
           <tr key={item.id} className="hover:bg-gray-50">
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.column}</td>
-            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.title}</td>
-            <td className="px-6 py-4 text-sm text-gray-500">
-              {item.links?.length || 0} links
-            </td>
+            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.companyName}</td>
+            <td className="px-6 py-4 text-sm text-gray-500">{item.email} · {item.phone}</td>
+            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{item.tagline}</td>
             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
               <button onClick={() => onEdit(item)} className="text-amber-600 hover:text-amber-900">
                 <Edit2 className="w-4 h-4" />
@@ -716,17 +718,17 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
       case 'countries':
         return { name: '', flag: '', image: '', fabrics: '', displayOrder: 0, isActive: true };
       case 'howItWorks':
-        return { stepNumber: 1, title: '', description: '', icon: 'Sparkles', isActive: true };
+        return { stepNumber: 1, title: '', subtitle: '', icon: 'Sparkles', displayOrder: 0, isActive: true };
       case 'categories':
-        return { title: '', subtitle: '', image: '', link: '', displayOrder: 0, isActive: true };
+        return { key: '', title: '', description: '', image: '', ctaText: 'Shop Now', ctaLink: '', displayOrder: 0, isActive: true };
       case 'designerSpotlight':
-        return { designerId: '', headline: '', description: '', quote: '', image: '', displayOrder: 0, isActive: true };
+        return { designerId: '', quote: '', bio: '', image: '', displayOrder: 0, isActive: true };
       case 'heritage':
-        return { title: '', subtitle: '', description: '', image: '', stats: [], displayOrder: 0, isActive: true };
+        return { title: '', subtitle: '', image: '', ctaText: 'Read Our Story', ctaLink: '/about', displayOrder: 0, isActive: true };
       case 'testimonials':
-        return { name: '', location: '', avatar: '', rating: 5, text: '', displayOrder: 0, isActive: true };
+        return { name: '', initials: '', location: '', quote: '', avatar: '', displayOrder: 0, isActive: true };
       case 'footer':
-        return { column: '', title: '', links: [], isActive: true };
+        return { companyName: '', tagline: '', email: '', phone: '', address: '', socialLinks: '', copyright: '' };
       default:
         return {};
     }
@@ -755,55 +757,90 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
     e.preventDefault();
     setSaving(true);
     try {
+      const payload = (() => {
+        if (type === 'categories') {
+          const title = String(formData.title || '').trim();
+          const key = String(formData.key || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '') || title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+          return { ...formData, key };
+        }
+        if (type === 'testimonials') {
+          const initials =
+            String(formData.initials || '').trim() ||
+            String(formData.name || '')
+              .split(/\s+/)
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((part) => part[0]?.toUpperCase() || '')
+              .join('');
+          return { ...formData, initials };
+        }
+        if (type === 'footer') {
+          return {
+            companyName: formData.companyName || undefined,
+            tagline: formData.tagline || undefined,
+            email: formData.email || undefined,
+            phone: formData.phone || undefined,
+            address: formData.address || undefined,
+            socialLinks: formData.socialLinks || undefined,
+            copyright: formData.copyright || undefined,
+          };
+        }
+        return formData;
+      })();
+
       let response;
       if (item?.id) {
         // Update existing
         switch (type) {
           case 'countries':
-            response = await api.homepageSections.updateCountry(item.id, formData);
+            response = await api.homepageSections.updateCountry(item.id, payload);
             break;
           case 'howItWorks':
-            response = await api.homepageSections.updateHowItWorksStep(item.id, formData);
+            response = await api.homepageSections.updateHowItWorksStep(item.id, payload);
             break;
           case 'categories':
-            response = await api.homepageSections.updateCategory(item.id, formData);
+            response = await api.homepageSections.updateCategory(item.id, payload);
             break;
           case 'designerSpotlight':
-            response = await api.homepageSections.updateDesignerSpotlight(item.id, formData);
+            response = await api.homepageSections.updateDesignerSpotlight(item.id, payload);
             break;
           case 'heritage':
-            response = await api.homepageSections.updateHeritage(item.id, formData);
+            response = await api.homepageSections.updateHeritage(item.id, payload);
             break;
           case 'testimonials':
-            response = await api.homepageSections.updateTestimonial(item.id, formData);
+            response = await api.homepageSections.updateTestimonial(item.id, payload);
             break;
           case 'footer':
-            response = await api.homepageSections.updateFooter(item.id, formData);
+            response = await api.homepageSections.updateFooter(item.id, payload);
             break;
         }
       } else {
         // Create new
         switch (type) {
           case 'countries':
-            response = await api.homepageSections.createCountry(formData);
+            response = await api.homepageSections.createCountry(payload);
             break;
           case 'howItWorks':
-            response = await api.homepageSections.createHowItWorksStep(formData);
+            response = await api.homepageSections.createHowItWorksStep(payload);
             break;
           case 'categories':
-            response = await api.homepageSections.createCategory(formData);
+            response = await api.homepageSections.createCategory(payload);
             break;
           case 'designerSpotlight':
-            response = await api.homepageSections.createDesignerSpotlight(formData);
+            response = await api.homepageSections.createDesignerSpotlight(payload);
             break;
           case 'heritage':
-            response = await api.homepageSections.createHeritage(formData);
+            response = await api.homepageSections.createHeritage(payload);
             break;
           case 'testimonials':
-            response = await api.homepageSections.createTestimonial(formData);
+            response = await api.homepageSections.createTestimonial(payload);
             break;
           case 'footer':
-            response = await api.homepageSections.createFooter(formData);
+            response = await api.homepageSections.createFooter(payload);
             break;
         }
       }
@@ -879,12 +916,23 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Subtitle</label>
               <textarea
-                value={formData.description || ''}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                value={formData.subtitle || ''}
+                onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                 rows={3}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Icon Name</label>
+              <input
+                type="text"
+                value={formData.icon || ''}
+                onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                placeholder="Search, Eye, Sparkles..."
                 required
               />
             </div>
@@ -893,6 +941,16 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
       case 'categories':
         return (
           <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Key (slug)</label>
+              <input
+                type="text"
+                value={formData.key || ''}
+                onChange={(e) => setFormData({ ...formData, key: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                placeholder="ready-to-wear"
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
               <input
@@ -904,22 +962,35 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Subtitle</label>
-              <input
-                type="text"
-                value={formData.subtitle || ''}
-                onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea
+                value={formData.description || ''}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                rows={3}
+                required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Link URL</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">CTA Text</label>
               <input
                 type="text"
-                value={formData.link || ''}
-                onChange={(e) => setFormData({ ...formData, link: e.target.value })}
+                value={formData.ctaText || ''}
+                onChange={(e) => setFormData({ ...formData, ctaText: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                placeholder="Shop Now"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">CTA Link</label>
+              <input
+                type="text"
+                value={formData.ctaLink || ''}
+                onChange={(e) => setFormData({ ...formData, ctaLink: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                 placeholder="/designs"
+                required
               />
             </div>
           </>
@@ -938,31 +1009,23 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Headline</label>
-              <input
-                type="text"
-                value={formData.headline || ''}
-                onChange={(e) => setFormData({ ...formData, headline: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-              <textarea
-                value={formData.description || ''}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                rows={3}
-              />
-            </div>
-            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Quote</label>
               <textarea
                 value={formData.quote || ''}
                 onChange={(e) => setFormData({ ...formData, quote: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                 rows={2}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
+              <textarea
+                value={formData.bio || ''}
+                onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                rows={3}
+                required
               />
             </div>
           </>
@@ -990,12 +1053,23 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-              <textarea
-                value={formData.description || ''}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              <label className="block text-sm font-medium text-gray-700 mb-1">CTA Text</label>
+              <input
+                type="text"
+                value={formData.ctaText || ''}
+                onChange={(e) => setFormData({ ...formData, ctaText: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                rows={4}
+                placeholder="Read Our Story"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">CTA Link</label>
+              <input
+                type="text"
+                value={formData.ctaLink || ''}
+                onChange={(e) => setFormData({ ...formData, ctaLink: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                placeholder="/about"
               />
             </div>
           </>
@@ -1024,21 +1098,20 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Rating (1-5)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Initials</label>
               <input
-                type="number"
-                value={formData.rating || 5}
-                onChange={(e) => setFormData({ ...formData, rating: parseInt(e.target.value) })}
+                type="text"
+                value={formData.initials || ''}
+                onChange={(e) => setFormData({ ...formData, initials: e.target.value.toUpperCase() })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                min={1}
-                max={5}
+                placeholder="AJ"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Testimonial Text</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Quote</label>
               <textarea
-                value={formData.text || ''}
-                onChange={(e) => setFormData({ ...formData, text: e.target.value })}
+                value={formData.quote || ''}
+                onChange={(e) => setFormData({ ...formData, quote: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                 rows={4}
                 required
@@ -1050,24 +1123,70 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
         return (
           <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Column</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
               <input
                 type="text"
-                value={formData.column || ''}
-                onChange={(e) => setFormData({ ...formData, column: e.target.value })}
+                value={formData.companyName || ''}
+                onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                placeholder="column1"
-                required
+                placeholder="ZuriKaribu"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tagline</label>
               <input
                 type="text"
-                value={formData.title || ''}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                value={formData.tagline || ''}
+                onChange={(e) => setFormData({ ...formData, tagline: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                required
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={formData.email || ''}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <input
+                  type="text"
+                  value={formData.phone || ''}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+              <input
+                type="text"
+                value={formData.address || ''}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Social Links JSON</label>
+              <textarea
+                value={formData.socialLinks || ''}
+                onChange={(e) => setFormData({ ...formData, socialLinks: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                rows={3}
+                placeholder='{"instagram":"https://...","facebook":"https://...","twitter":"https://..."}'
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Copyright</label>
+              <input
+                type="text"
+                value={formData.copyright || ''}
+                onChange={(e) => setFormData({ ...formData, copyright: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
               />
             </div>
           </>
@@ -1095,8 +1214,8 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Image</label>
               <div className="flex items-center gap-4">
-                {formData.image && (
-                  <img src={formData.image} alt="Preview" className="h-20 w-20 object-cover" />
+                {(type === 'testimonials' ? formData.avatar : formData.image) && (
+                  <img src={type === 'testimonials' ? formData.avatar : formData.image} alt="Preview" className="h-20 w-20 object-cover" />
                 )}
                 <label className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
                   <Upload className="w-4 h-4" />
@@ -1104,7 +1223,7 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={(e) => handleImageUpload(e, 'image')}
+                    onChange={(e) => handleImageUpload(e, type === 'testimonials' ? 'avatar' : 'image')}
                     className="hidden"
                     disabled={uploading}
                   />
@@ -1128,16 +1247,18 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
           )}
 
           {/* Active Status */}
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="isActive"
-              checked={formData.isActive}
-              onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-              className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
-            />
-            <label htmlFor="isActive" className="text-sm font-medium text-gray-700">Active</label>
-          </div>
+          {type !== 'footer' && (
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isActive"
+                checked={!!formData.isActive}
+                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+              />
+              <label htmlFor="isActive" className="text-sm font-medium text-gray-700">Active</label>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="secondary" onClick={onClose}>

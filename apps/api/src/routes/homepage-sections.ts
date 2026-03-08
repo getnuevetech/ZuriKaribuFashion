@@ -6,6 +6,34 @@ import { Permissions } from '../rbac';
 
 const router = Router();
 
+const getString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const getBoolean = (value: unknown): boolean | undefined => {
+  if (typeof value === 'boolean') return value;
+  return undefined;
+};
+
+const getNumber = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+};
+
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+
 const countryCreateSchema = z.object({
   name: z.string().min(1),
   flag: z.string().min(1),
@@ -24,6 +52,15 @@ const howItWorksCreateSchema = z.object({
   displayOrder: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
 });
+const normalizeHowItWorksInput = (input: any) => ({
+  ...input,
+  stepNumber: getNumber(input?.stepNumber) ?? input?.stepNumber,
+  title: getString(input?.title) ?? input?.title,
+  subtitle: getString(input?.subtitle) ?? getString(input?.description) ?? input?.subtitle,
+  icon: getString(input?.icon) ?? 'Sparkles',
+  displayOrder: getNumber(input?.displayOrder) ?? input?.displayOrder,
+  isActive: getBoolean(input?.isActive) ?? input?.isActive,
+});
 const howItWorksUpdateSchema = howItWorksCreateSchema.partial();
 
 const shopCategoryCreateSchema = z.object({
@@ -36,6 +73,21 @@ const shopCategoryCreateSchema = z.object({
   displayOrder: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
 });
+const normalizeCategoryInput = (input: any) => {
+  const title = getString(input?.title) ?? '';
+  const key = getString(input?.key) ?? (title ? slugify(title) : undefined);
+  return {
+    ...input,
+    key: key ?? input?.key,
+    title: title || input?.title,
+    description: getString(input?.description) ?? getString(input?.subtitle) ?? input?.description,
+    image: getString(input?.image) ?? input?.image,
+    ctaText: getString(input?.ctaText) ?? 'Shop Now',
+    ctaLink: getString(input?.ctaLink) ?? getString(input?.link) ?? input?.ctaLink,
+    displayOrder: getNumber(input?.displayOrder) ?? input?.displayOrder,
+    isActive: getBoolean(input?.isActive) ?? input?.isActive,
+  };
+};
 const shopCategoryUpdateSchema = shopCategoryCreateSchema.partial();
 
 const designerSpotlightCreateSchema = z.object({
@@ -45,6 +97,15 @@ const designerSpotlightCreateSchema = z.object({
   image: z.string().min(1),
   displayOrder: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
+});
+const normalizeDesignerSpotlightInput = (input: any) => ({
+  ...input,
+  designerId: getString(input?.designerId) ?? input?.designerId,
+  quote: getString(input?.quote) ?? getString(input?.headline) ?? input?.quote,
+  bio: getString(input?.bio) ?? getString(input?.description) ?? input?.bio,
+  image: getString(input?.image) ?? input?.image,
+  displayOrder: getNumber(input?.displayOrder) ?? input?.displayOrder,
+  isActive: getBoolean(input?.isActive) ?? input?.isActive,
 });
 const designerSpotlightUpdateSchema = designerSpotlightCreateSchema.partial();
 
@@ -57,6 +118,16 @@ const heritageCreateSchema = z.object({
   displayOrder: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
 });
+const normalizeHeritageInput = (input: any) => ({
+  ...input,
+  title: getString(input?.title) ?? input?.title,
+  subtitle: getString(input?.subtitle) ?? getString(input?.description) ?? input?.subtitle,
+  image: getString(input?.image) ?? input?.image,
+  ctaText: getString(input?.ctaText) ?? input?.ctaText,
+  ctaLink: getString(input?.ctaLink) ?? input?.ctaLink,
+  displayOrder: getNumber(input?.displayOrder) ?? input?.displayOrder,
+  isActive: getBoolean(input?.isActive) ?? input?.isActive,
+});
 const heritageUpdateSchema = heritageCreateSchema.partial();
 
 const testimonialCreateSchema = z.object({
@@ -68,6 +139,27 @@ const testimonialCreateSchema = z.object({
   displayOrder: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
 });
+const deriveInitials = (name?: string) =>
+  (name || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'NA';
+
+const normalizeTestimonialInput = (input: any) => {
+  const name = getString(input?.name) ?? input?.name;
+  return {
+    ...input,
+    name,
+    initials: getString(input?.initials) ?? deriveInitials(name),
+    location: getString(input?.location) ?? input?.location,
+    quote: getString(input?.quote) ?? getString(input?.text) ?? input?.quote,
+    avatar: getString(input?.avatar) ?? input?.avatar,
+    displayOrder: getNumber(input?.displayOrder) ?? input?.displayOrder,
+    isActive: getBoolean(input?.isActive) ?? input?.isActive,
+  };
+};
 const testimonialUpdateSchema = testimonialCreateSchema.partial();
 
 const footerCreateSchema = z.object({
@@ -79,6 +171,24 @@ const footerCreateSchema = z.object({
   socialLinks: z.string().optional(),
   copyright: z.string().optional(),
 });
+const normalizeFooterInput = (input: any) => {
+  const rawSocialLinks = input?.socialLinks;
+  let socialLinks: string | undefined;
+  if (typeof rawSocialLinks === 'string') {
+    socialLinks = rawSocialLinks;
+  } else if (rawSocialLinks && typeof rawSocialLinks === 'object') {
+    socialLinks = JSON.stringify(rawSocialLinks);
+  }
+  return {
+    companyName: getString(input?.companyName),
+    tagline: getString(input?.tagline),
+    email: getString(input?.email),
+    phone: getString(input?.phone),
+    address: getString(input?.address),
+    socialLinks,
+    copyright: getString(input?.copyright),
+  };
+};
 const footerUpdateSchema = footerCreateSchema;
 
 // ==================== PUBLIC ENDPOINTS ====================
@@ -183,6 +293,42 @@ router.get('/designer-spotlight', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch designer spotlight',
+    });
+  }
+});
+
+// Get all active designer spotlights
+router.get('/designer-spotlights', async (req, res) => {
+  try {
+    const spotlights = await prisma.designerSpotlight.findMany({
+      where: { isActive: true },
+      orderBy: { displayOrder: 'asc' },
+    });
+
+    const designerIds = spotlights.map((spotlight) => spotlight.designerId);
+    const designers = await prisma.designerProfile.findMany({
+      where: { id: { in: designerIds } },
+      select: {
+        id: true,
+        businessName: true,
+        country: true,
+        bio: true,
+      },
+    });
+    const designersById = new Map(designers.map((designer) => [designer.id, designer]));
+
+    res.json({
+      success: true,
+      data: spotlights.map((spotlight) => ({
+        ...spotlight,
+        designer: designersById.get(spotlight.designerId) || null,
+      })),
+    });
+  } catch (error) {
+    console.error('Error fetching designer spotlights:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch designer spotlights',
     });
   }
 });
@@ -307,7 +453,7 @@ router.get('/admin/how-it-works', authenticate, authorizePermissions(Permissions
 
 router.post('/admin/how-it-works', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = howItWorksCreateSchema.parse(req.body);
+    const data = howItWorksCreateSchema.parse(normalizeHowItWorksInput(req.body));
     const step = await prisma.howItWorksStep.create({ data });
     res.status(201).json({ success: true, data: step });
   } catch (error) {
@@ -317,7 +463,7 @@ router.post('/admin/how-it-works', authenticate, authorizePermissions(Permission
 
 router.put('/admin/how-it-works/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = howItWorksUpdateSchema.parse(req.body);
+    const data = howItWorksUpdateSchema.parse(normalizeHowItWorksInput(req.body));
     const step = await prisma.howItWorksStep.update({
       where: { id: req.params.id },
       data,
@@ -351,7 +497,7 @@ router.get('/admin/categories', authenticate, authorizePermissions(Permissions.H
 
 router.post('/admin/categories', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = shopCategoryCreateSchema.parse(req.body);
+    const data = shopCategoryCreateSchema.parse(normalizeCategoryInput(req.body));
     const category = await prisma.shopCategory.create({ data });
     res.status(201).json({ success: true, data: category });
   } catch (error) {
@@ -361,7 +507,7 @@ router.post('/admin/categories', authenticate, authorizePermissions(Permissions.
 
 router.put('/admin/categories/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = shopCategoryUpdateSchema.parse(req.body);
+    const data = shopCategoryUpdateSchema.parse(normalizeCategoryInput(req.body));
     const category = await prisma.shopCategory.update({
       where: { id: req.params.id },
       data,
@@ -411,7 +557,7 @@ router.get('/admin/designer-spotlight', authenticate, authorizePermissions(Permi
 
 router.post('/admin/designer-spotlight', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = designerSpotlightCreateSchema.parse(req.body);
+    const data = designerSpotlightCreateSchema.parse(normalizeDesignerSpotlightInput(req.body));
     const spotlight = await prisma.designerSpotlight.create({ data });
     res.status(201).json({ success: true, data: spotlight });
   } catch (error) {
@@ -421,7 +567,7 @@ router.post('/admin/designer-spotlight', authenticate, authorizePermissions(Perm
 
 router.put('/admin/designer-spotlight/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = designerSpotlightUpdateSchema.parse(req.body);
+    const data = designerSpotlightUpdateSchema.parse(normalizeDesignerSpotlightInput(req.body));
     const spotlight = await prisma.designerSpotlight.update({
       where: { id: req.params.id },
       data,
@@ -455,7 +601,7 @@ router.get('/admin/heritage', authenticate, authorizePermissions(Permissions.HOM
 
 router.post('/admin/heritage', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = heritageCreateSchema.parse(req.body);
+    const data = heritageCreateSchema.parse(normalizeHeritageInput(req.body));
     const heritage = await prisma.heritageSection.create({ data });
     res.status(201).json({ success: true, data: heritage });
   } catch (error) {
@@ -465,7 +611,7 @@ router.post('/admin/heritage', authenticate, authorizePermissions(Permissions.HO
 
 router.put('/admin/heritage/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = heritageUpdateSchema.parse(req.body);
+    const data = heritageUpdateSchema.parse(normalizeHeritageInput(req.body));
     const heritage = await prisma.heritageSection.update({
       where: { id: req.params.id },
       data,
@@ -499,7 +645,7 @@ router.get('/admin/testimonials', authenticate, authorizePermissions(Permissions
 
 router.post('/admin/testimonials', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = testimonialCreateSchema.parse(req.body);
+    const data = testimonialCreateSchema.parse(normalizeTestimonialInput(req.body));
     const testimonial = await prisma.testimonial.create({ data });
     res.status(201).json({ success: true, data: testimonial });
   } catch (error) {
@@ -509,7 +655,7 @@ router.post('/admin/testimonials', authenticate, authorizePermissions(Permission
 
 router.put('/admin/testimonials/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = testimonialUpdateSchema.parse(req.body);
+    const data = testimonialUpdateSchema.parse(normalizeTestimonialInput(req.body));
     const testimonial = await prisma.testimonial.update({
       where: { id: req.params.id },
       data,
@@ -541,7 +687,7 @@ router.get('/admin/footer', authenticate, authorizePermissions(Permissions.HOMEP
 
 router.post('/admin/footer', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = footerCreateSchema.parse(req.body);
+    const data = footerCreateSchema.parse(normalizeFooterInput(req.body));
     const footer = await prisma.footerContent.create({ data });
     res.status(201).json({ success: true, data: footer });
   } catch (error) {
@@ -551,7 +697,7 @@ router.post('/admin/footer', authenticate, authorizePermissions(Permissions.HOME
 
 router.put('/admin/footer/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = footerUpdateSchema.parse(req.body);
+    const data = footerUpdateSchema.parse(normalizeFooterInput(req.body));
     const footer = await prisma.footerContent.update({
       where: { id: req.params.id },
       data,

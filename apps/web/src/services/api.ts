@@ -454,6 +454,9 @@ const homepageSectionsApi = {
   getDesignerSpotlight: () =>
     apiService.get<{ success: boolean; data: any }>('/homepage-sections/designer-spotlight'),
 
+  getDesignerSpotlights: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/designer-spotlights'),
+
   getHeritage: () =>
     apiService.get<{ success: boolean; data: any }>('/homepage-sections/heritage'),
 

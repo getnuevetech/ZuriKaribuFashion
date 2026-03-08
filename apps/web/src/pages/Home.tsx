@@ -127,6 +127,15 @@ const kimiHowItWorks = [
   { id: 6, title: 'Delivered to You', icon: Truck },
 ];
 
+const iconByName: Record<string, any> = {
+  Search,
+  Eye,
+  Sparkles,
+  CreditCard,
+  Star,
+  Truck,
+};
+
 const kimiFeaturedDesigns: FeaturedProduct[] = [
   { id: '1', name: 'Exclusive Gorgeous', price: 1428.57, image: 'https://picsum.photos/seed/kimi-custom-1/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
   { id: '2', name: 'My Skkentele', price: 714.29, image: 'https://picsum.photos/seed/kimi-custom-2/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
@@ -346,11 +355,11 @@ export default function Home() {
     },
   });
 
-  const { data: designerSpotlightData } = useQuery({
-    queryKey: ['designerSpotlightPublic'],
+  const { data: designerSpotlightsData } = useQuery({
+    queryKey: ['designerSpotlightsPublic'],
     enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
-      const response = await api.homepageSections.getDesignerSpotlight();
+      const response = await api.homepageSections.getDesignerSpotlights();
       return response.success ? response.data : null;
     },
   });
@@ -415,7 +424,8 @@ export default function Home() {
         title: asText(item.title, kimiCategories[index % kimiCategories.length].title),
         description: asText(item.description, kimiCategories[index % kimiCategories.length].description),
         image: asText(item.image, kimiCategories[index % kimiCategories.length].image),
-        link: asText(item.link, kimiCategories[index % kimiCategories.length].link),
+        link: asText(item.ctaLink, item.link, kimiCategories[index % kimiCategories.length].link),
+        ctaText: asText(item.ctaText, 'SHOP NOW'),
       })),
     [categoriesData],
   );
@@ -425,27 +435,25 @@ export default function Home() {
       (USE_DYNAMIC_HOMEPAGE && Array.isArray(howItWorksData) && howItWorksData.length > 0 ? howItWorksData : kimiHowItWorks).slice(0, 6).map((item: any, index: number) => ({
         id: Number(item.id ?? index + 1),
         title: asText(item.title, kimiHowItWorks[index % kimiHowItWorks.length].title),
-        icon: kimiHowItWorks[index % kimiHowItWorks.length].icon,
+        icon: iconByName[asText(item.icon, '')] || kimiHowItWorks[index % kimiHowItWorks.length].icon,
       })),
     [howItWorksData],
   );
 
   const designers = useMemo(() => {
     if (!USE_DYNAMIC_HOMEPAGE) return kimiDesigners;
-    const spotlight = designerSpotlightData;
-    if (spotlight) {
-      const lead = {
-        id: String(spotlight.id ?? 'lead'),
-        name: asText(spotlight.name, spotlight.designer?.businessName, kimiDesigners[0].name),
-        country: asText(spotlight.country, spotlight.designer?.country, kimiDesigners[0].country),
-        flag: asText(spotlight.flag, countryFlags[spotlight.country], '🌍'),
-        quote: asText(spotlight.quote, spotlight.headline, kimiDesigners[0].quote),
-        image: asText(spotlight.image, kimiDesigners[0].image),
-      };
-      return [lead, ...kimiDesigners.slice(1)];
+    if (Array.isArray(designerSpotlightsData) && designerSpotlightsData.length > 0) {
+      return designerSpotlightsData.slice(0, 3).map((item: any, index: number) => ({
+        id: String(item.id ?? index),
+        name: asText(item.name, item.designer?.businessName, kimiDesigners[index % kimiDesigners.length].name),
+        country: asText(item.country, item.designer?.country, kimiDesigners[index % kimiDesigners.length].country),
+        flag: asText(item.flag, countryFlags[item?.country], '🌍'),
+        quote: asText(item.quote, kimiDesigners[index % kimiDesigners.length].quote),
+        image: asText(item.image, kimiDesigners[index % kimiDesigners.length].image),
+      }));
     }
     return kimiDesigners;
-  }, [designerSpotlightData]);
+  }, [designerSpotlightsData]);
 
   const testimonials = useMemo(
     () =>
@@ -463,11 +471,13 @@ export default function Home() {
     () => ({
       title: asText(USE_DYNAMIC_HOMEPAGE ? heritageData?.title : null, 'Rooted in Culture'),
       content: asText(
+        USE_DYNAMIC_HOMEPAGE ? heritageData?.subtitle : null,
         USE_DYNAMIC_HOMEPAGE ? heritageData?.description : null,
-        USE_DYNAMIC_HOMEPAGE ? heritageData?.content : null,
         "Every pattern carries meaning. From Kente's bold geometry to Ankara's vibrant motifs, African textiles tell stories of identity, celebration, and legacy passed through generations.",
       ),
       image: asText(USE_DYNAMIC_HOMEPAGE ? heritageData?.image : null, 'https://picsum.photos/seed/kimi-heritage/1920/1080'),
+      ctaText: asText(USE_DYNAMIC_HOMEPAGE ? heritageData?.ctaText : null, 'READ OUR STORY'),
+      ctaLink: asText(USE_DYNAMIC_HOMEPAGE ? heritageData?.ctaLink : null, '/about'),
     }),
     [heritageData],
   );
@@ -591,7 +601,7 @@ export default function Home() {
                   <p className="text-white/80 text-sm mb-4">{category.description}</p>
                   <span className="inline-flex items-center px-4 py-2" style={{ border: '1px solid currentColor' }}>
                     <span className="border-white text-white hover:bg-white hover:text-black rounded-none text-xs tracking-wider">
-                      SHOP NOW <ChevronRight className="ml-1 w-4 h-4" />
+                      {category.ctaText || 'SHOP NOW'} <ChevronRight className="ml-1 w-4 h-4" />
                     </span>
                   </span>
                 </div>
@@ -738,9 +748,9 @@ export default function Home() {
             </span>
             <h2 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">{heritage.title}</h2>
             <p className="text-white/80 text-lg leading-relaxed mb-8">{heritage.content}</p>
-            <Link to="/about" className="inline-flex items-center px-8 py-3" style={{ border: '1px solid currentColor' }}>
+            <Link to={heritage.ctaLink} className="inline-flex items-center px-8 py-3" style={{ border: '1px solid currentColor' }}>
               <span className="rounded-none border-white text-white hover:bg-white hover:text-black text-sm tracking-wider">
-                READ OUR STORY <ArrowRight className="ml-2 w-4 h-4 inline" />
+                {heritage.ctaText} <ArrowRight className="ml-2 w-4 h-4 inline" />
               </span>
             </Link>
           </div>
