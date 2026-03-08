@@ -264,13 +264,13 @@ export default function Home() {
       to={`/${product.productType === 'DESIGN' ? 'designs' : product.productType === 'FABRIC' ? 'fabrics' : 'ready-to-wear'}/${product.id}`}
       className="group block"
     >
-      <div className="relative overflow-hidden bg-gray-100 mb-4" style={{ aspectRatio: '3/4' }}>
+      <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-gray-100 mb-4 img-zoom">
         <img
           src={product.image}
           alt={product.name}
-          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+          className="w-full h-full object-cover"
         />
-        <div className="absolute top-3 left-3 bg-white/90 px-2 py-1 text-xs font-medium flex items-center gap-1">
+        <div className="absolute top-3 left-3 bg-white/90 px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
           <span>{countryFlags[product.country] || '🌍'}</span>
         </div>
       </div>
@@ -467,30 +467,30 @@ export default function Home() {
       </section>
 
       {/* Featured Custom To Wear */}
-      <section className="py-16 lg:py-20 bg-[#F2F2F2]">
-        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
-          <div className="flex items-end justify-between mb-8">
+      <section className="py-16 lg:py-24 bg-white">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10">
             <div>
-              <p className="inline-flex mb-3 px-2 py-0.5 border border-black text-[11px] tracking-wide font-semibold">FEATURED</p>
-              <h2 className="font-['Oswald'] text-4xl md:text-5xl font-bold leading-none text-gray-900">Custom To Wear</h2>
-              <p className="text-gray-600 mt-2 text-lg">Made To Fit by an African with Love</p>
+              <p className="inline-flex mb-3 px-2 py-1 border border-black text-xs tracking-wider font-semibold">FEATURED</p>
+              <h2 className="font-['Oswald'] text-3xl sm:text-4xl font-bold text-gray-900">Custom To Wear</h2>
+              <p className="text-gray-600 mt-2">Made To Fit by an African with Love</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex gap-2 mt-4 sm:mt-0">
               <button
                 type="button"
                 onClick={() => scrollStrip(customStripRef, 'left')}
-                className="w-10 h-10 border border-gray-300 rounded-full flex items-center justify-center text-gray-700 hover:bg-black hover:text-white transition-colors"
+                className="w-10 h-10 border border-black/20 rounded-full flex items-center justify-center hover:bg-black hover:text-white transition-colors"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <button
                 type="button"
                 onClick={() => scrollStrip(customStripRef, 'right')}
-                className="w-10 h-10 border border-gray-300 rounded-full flex items-center justify-center text-gray-700 hover:bg-black hover:text-white transition-colors"
+                className="w-10 h-10 border border-black/20 rounded-full flex items-center justify-center hover:bg-black hover:text-white transition-colors"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
-              <Link to="/designs" className="hidden sm:inline-flex items-center gap-1 text-sm font-semibold text-gray-900 ml-4">
+              <Link to="/designs" className="hidden sm:inline-flex items-center gap-1 text-sm font-medium ml-2">
                 View All <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
@@ -502,11 +502,11 @@ export default function Home() {
           ) : (
             <div
               ref={customStripRef}
-              className="flex gap-4 md:gap-5 overflow-x-auto scrollbar-hide pb-2"
+              className="flex gap-6 overflow-x-auto scrollbar-hide pb-4 -mx-4 px-4 sm:-mx-0 sm:px-0"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {featuredDesigns.map((product) => (
-                <div key={product.id} className="flex-shrink-0 w-[14.25rem] sm:w-[14.75rem] md:w-[15rem]">
+                <div key={product.id} className="flex-shrink-0 w-72">
                   <ProductCard product={product} />
                 </div>
               ))}
@@ -565,30 +565,30 @@ export default function Home() {
       </section>
 
       {/* Featured Fabrics */}
-      <section className="py-16 lg:py-20 bg-[#F2F2F2]">
-        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
-          <div className="flex items-end justify-between mb-8">
+      <section className="py-16 lg:py-24 bg-white">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10">
             <div>
-              <p className="inline-flex mb-3 px-2 py-0.5 border border-black text-[11px] tracking-wide font-semibold">FEATURED</p>
-              <h2 className="font-['Oswald'] text-4xl md:text-5xl font-bold leading-none text-gray-900">Fabrics To Buy</h2>
-              <p className="text-gray-600 mt-2 text-lg">Fabrics from all across the edges of Africa</p>
+              <p className="inline-flex mb-3 px-2 py-1 border border-black text-xs tracking-wider font-semibold">FEATURED</p>
+              <h2 className="font-['Oswald'] text-3xl sm:text-4xl font-bold text-gray-900">Fabrics To Buy</h2>
+              <p className="text-gray-600 mt-2">Fabrics from all across the edges of Africa</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex gap-2 mt-4 sm:mt-0">
               <button
                 type="button"
                 onClick={() => scrollStrip(fabricStripRef, 'left')}
-                className="w-10 h-10 border border-gray-300 rounded-full flex items-center justify-center text-gray-700 hover:bg-black hover:text-white transition-colors"
+                className="w-10 h-10 border border-black/20 rounded-full flex items-center justify-center hover:bg-black hover:text-white transition-colors"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <button
                 type="button"
                 onClick={() => scrollStrip(fabricStripRef, 'right')}
-                className="w-10 h-10 border border-gray-300 rounded-full flex items-center justify-center text-gray-700 hover:bg-black hover:text-white transition-colors"
+                className="w-10 h-10 border border-black/20 rounded-full flex items-center justify-center hover:bg-black hover:text-white transition-colors"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
-              <Link to="/fabrics" className="hidden sm:inline-flex items-center gap-1 text-sm font-semibold text-gray-900 ml-4">
+              <Link to="/fabrics" className="hidden sm:inline-flex items-center gap-1 text-sm font-medium ml-2">
                 View All <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
@@ -600,11 +600,11 @@ export default function Home() {
           ) : (
             <div
               ref={fabricStripRef}
-              className="flex gap-4 md:gap-5 overflow-x-auto scrollbar-hide pb-2"
+              className="flex gap-6 overflow-x-auto scrollbar-hide pb-4 -mx-4 px-4 sm:-mx-0 sm:px-0"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {featuredFabrics.map((product) => (
-                <div key={product.id} className="flex-shrink-0 w-[13.75rem] sm:w-[14rem] md:w-[14rem]">
+                <div key={product.id} className="flex-shrink-0 w-72">
                   <ProductCard product={product} />
                 </div>
               ))}
@@ -734,47 +734,49 @@ export default function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="bg-[#EDEDED]">
-        <div className="px-4 sm:px-6 lg:px-8 xl:px-12 py-16 md:py-24">
-          <div className="max-w-4xl mx-auto text-center">
-            <h2 className="font-['Oswald'] text-4xl md:text-6xl font-bold text-black leading-none">
+      <section className="py-20 lg:py-32 bg-gray-50">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="max-w-3xl mx-auto text-center">
+            <h2 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl font-bold mb-6">
               Ready to Wear African Fashion?
             </h2>
-            <p className="text-gray-600 text-base md:text-2xl mt-4 md:mt-6">
+            <p className="text-gray-600 text-lg mb-10">
               Join our community of fashion lovers and discover unique pieces from talented African designers.
             </p>
-            <div className="mt-8 md:mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
                 to="/ready-to-wear"
-                className="inline-flex items-center justify-center px-10 py-3 bg-black text-white text-sm font-semibold tracking-wide uppercase"
+                className="inline-flex items-center justify-center bg-black text-white hover:bg-black/90 btn-hover rounded-none px-8 py-6 text-sm font-semibold tracking-wider"
               >
                 Shop Now
               </Link>
               <Link
                 to="/register"
-                className="inline-flex items-center justify-center px-10 py-3 border border-black text-black text-sm font-semibold tracking-wide uppercase"
+                className="inline-flex items-center justify-center border border-black rounded-none px-8 py-6 text-sm font-semibold tracking-wider hover:bg-black hover:text-white transition-colors"
               >
                 Create Account
               </Link>
             </div>
           </div>
         </div>
-        <div className="px-4 sm:px-6 lg:px-8 xl:px-12 py-16 md:py-24 border-t border-black/5">
-          <div className="max-w-4xl mx-auto text-center">
-            <h2 className="font-['Oswald'] text-4xl md:text-5xl font-bold text-black leading-none">
-              Join the Movement
-            </h2>
-            <p className="text-gray-600 text-base md:text-2xl mt-4 md:mt-6 max-w-3xl mx-auto">
+      </section>
+
+      {/* Newsletter Section */}
+      <section className="py-16 lg:py-24 bg-white border-t border-gray-100">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="max-w-xl mx-auto text-center">
+            <h2 className="font-['Oswald'] text-2xl sm:text-3xl font-bold mb-3">Join the Movement</h2>
+            <p className="text-gray-600 mb-6">
               Subscribe to our newsletter for exclusive offers, new arrivals, and stories from the continent.
             </p>
-            <div className="mt-8 max-w-2xl mx-auto flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <input
                 type="email"
                 placeholder="Enter your email"
-                className="h-12 flex-1 px-4 border border-black/15 bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:border-black/40"
+                className="flex-1 rounded-none border border-black/20 focus:border-black h-12 px-4 text-gray-900 placeholder:text-gray-500 focus:outline-none"
               />
-              <button className="h-12 px-8 bg-black text-white text-sm font-semibold tracking-wide uppercase">
-                Subscribe
+              <button className="bg-black text-white hover:bg-black/90 rounded-none h-12 px-8 transition-colors">
+                SUBSCRIBE
               </button>
             </div>
           </div>

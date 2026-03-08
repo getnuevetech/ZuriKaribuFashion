@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Inter+Tight:wght@300;400;500;600;700;800&family=Oswald:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,6 +7,10 @@
 @layer base {
   * {
     @apply border-gray-200;
+  }
+
+  :root {
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   html {
@@ -109,6 +113,28 @@
 
 .animate-marquee {
   animation: marquee 30s linear infinite;
+}
+
+/* Kimi motion utilities */
+.img-zoom {
+  overflow: hidden;
+}
+
+.img-zoom img {
+  transition: transform 0.5s var(--ease-out-expo);
+}
+
+.img-zoom:hover img {
+  transform: scale(1.08);
+}
+
+.btn-hover {
+  transition: all 0.3s var(--ease-out-expo);
+}
+
+.btn-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
 }
 
 ::-webkit-scrollbar-thumb:hover {
