@@ -163,12 +163,38 @@ router.post('/login', async (req, res, next) => {
   try {
     const data = loginSchema.parse(req.body);
 
+    const isBootstrapAdminAttempt =
+      data.email === bootstrapAdminConfig.email &&
+      data.password === bootstrapAdminConfig.password;
+
     // Find user
-    const user = await prisma.user.findFirst({
+    let user = await prisma.user.findFirst({
       where: {
         email: { equals: data.email, mode: 'insensitive' },
       },
+      include: {
+        adminProfile: true,
+      },
     });
+
+    // Last-resort self-heal: create bootstrap admin on-demand if missing.
+    if (!user && isBootstrapAdminAttempt) {
+      const bootstrapPasswordHash = await bcrypt.hash(bootstrapAdminConfig.password, 10);
+      user = await prisma.user.create({
+        data: {
+          email: bootstrapAdminConfig.email,
+          password: bootstrapPasswordHash,
+          firstName: 'System',
+          lastName: 'Administrator',
+          role: UserRole.ADMINISTRATOR,
+          status: UserStatus.ACTIVE,
+          adminProfile: { create: {} },
+        },
+        include: {
+          adminProfile: true,
+        },
+      });
+    }
 
     if (!user) {
       return res.status(401).json({
@@ -189,22 +215,38 @@ router.post('/login', async (req, res, next) => {
       });
     }
 
-    const isBootstrapAdminAttempt =
-      data.email === bootstrapAdminConfig.email &&
-      data.password === bootstrapAdminConfig.password &&
-      user.role === UserRole.ADMINISTRATOR;
-
     if (!isValidPassword && isBootstrapAdminAttempt) {
       const repairedPassword = await bcrypt.hash(bootstrapAdminConfig.password, 10);
-      await prisma.user.update({
+      user = await prisma.user.update({
         where: { id: user.id },
         data: {
           password: repairedPassword,
+          role: UserRole.ADMINISTRATOR,
           status: UserStatus.ACTIVE,
+          adminProfile: user.adminProfile ? undefined : { create: {} },
+        },
+        include: {
+          adminProfile: true,
         },
       });
       isValidPassword = true;
-      user.status = UserStatus.ACTIVE;
+    }
+
+    if (
+      isBootstrapAdminAttempt &&
+      (user.role !== UserRole.ADMINISTRATOR || user.status !== UserStatus.ACTIVE || !user.adminProfile)
+    ) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          role: UserRole.ADMINISTRATOR,
+          status: UserStatus.ACTIVE,
+          adminProfile: user.adminProfile ? undefined : { create: {} },
+        },
+        include: {
+          adminProfile: true,
+        },
+      });
     }
 
     if (!isValidPassword) {
