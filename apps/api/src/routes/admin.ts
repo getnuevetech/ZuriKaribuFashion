@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
+import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { prisma, UserRole, UserStatus, ProductStatus } from '../db';
+import { prisma, UserRole, UserStatus, ProductStatus, ProductType } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import {
   getPermissionCatalog,
@@ -35,6 +36,71 @@ const adminRoleUpdateSchema = z.object({
 const adminUserRoleAssignmentSchema = z.object({
   adminRoleId: z.string().uuid().nullable().optional(),
   permissions: adminPermissionListSchema.optional(),
+});
+
+const adminUserCreateSchema = z.object({
+  email: z.string().email(),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  password: z.string().min(8),
+  role: z.nativeEnum(UserRole),
+  status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
+  phone: z.string().optional(),
+});
+
+const adminUserUpdateSchema = z.object({
+  email: z.string().email().optional(),
+  firstName: z.string().min(1).optional(),
+  lastName: z.string().min(1).optional(),
+  role: z.nativeEnum(UserRole).optional(),
+  status: z.nativeEnum(UserStatus).optional(),
+  phone: z.string().nullable().optional(),
+});
+
+const vendorCreateMinimalSchema = z.object({
+  role: z.enum(['FABRIC_SELLER', 'FASHION_DESIGNER']),
+  email: z.string().email(),
+  password: z.string().min(8),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  businessName: z.string().min(1),
+  country: z.string().min(1),
+  city: z.string().optional(),
+  address: z.string().optional(),
+  phone: z.string().optional(),
+});
+
+const adminProductTypeSchema = z.nativeEnum(ProductType);
+const adminProductCreateSchema = z.object({
+  type: adminProductTypeSchema,
+  name: z.string().min(1),
+  description: z.string().min(1),
+  categoryId: z.string().optional(),
+  materialTypeId: z.string().optional(),
+  sellerId: z.string().optional(),
+  designerId: z.string().optional(),
+  price: z.coerce.number().positive(),
+  minYards: z.coerce.number().int().min(1).optional(),
+  stockYards: z.coerce.number().int().min(0).optional(),
+  stock: z.coerce.number().int().min(0).optional(),
+  size: z.string().optional(),
+  image: z.string().optional(),
+  status: z.nativeEnum(ProductStatus).optional(),
+  isAvailable: z.boolean().optional(),
+});
+
+const adminProductUpdateSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().min(1).optional(),
+  categoryId: z.string().optional(),
+  materialTypeId: z.string().optional(),
+  price: z.coerce.number().positive().optional(),
+  minYards: z.coerce.number().int().min(1).optional(),
+  stockYards: z.coerce.number().int().min(0).optional(),
+  stock: z.coerce.number().int().min(0).optional(),
+  image: z.string().optional(),
+  status: z.nativeEnum(ProductStatus).optional(),
+  isAvailable: z.boolean().optional(),
 });
 
 const vendorRoleSchema = z.enum(['FABRIC_SELLER', 'FASHION_DESIGNER']);
@@ -434,6 +500,264 @@ router.get('/users', async (req, res, next) => {
       },
     });
   } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/users', async (req, res, next) => {
+  try {
+    const data = adminUserCreateSchema.parse(req.body);
+    const password = await bcrypt.hash(data.password, 10);
+
+    const created = await prisma.user.create({
+      data: {
+        email: data.email.toLowerCase().trim(),
+        firstName: data.firstName.trim(),
+        lastName: data.lastName.trim(),
+        password,
+        role: data.role,
+        status: data.status,
+        phone: data.phone,
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    if (created.role === UserRole.ADMINISTRATOR) {
+      await prisma.adminProfile.upsert({
+        where: { userId: created.id },
+        create: { userId: created.id },
+        update: {},
+      });
+    }
+
+    if (created.role === UserRole.FABRIC_SELLER) {
+      await prisma.fabricSellerProfile.upsert({
+        where: { userId: created.id },
+        create: {
+          userId: created.id,
+          businessName: `${created.firstName} ${created.lastName}`.trim(),
+          businessEmail: created.email,
+          businessPhone: created.email,
+          country: '',
+          city: '',
+          address: '',
+        },
+        update: {},
+      });
+    }
+
+    if (created.role === UserRole.FASHION_DESIGNER) {
+      await prisma.designerProfile.upsert({
+        where: { userId: created.id },
+        create: {
+          userId: created.id,
+          businessName: `${created.firstName} ${created.lastName}`.trim(),
+          businessEmail: created.email,
+          businessPhone: created.email,
+          country: '',
+          city: '',
+          address: '',
+        },
+        update: {},
+      });
+    }
+
+    if (created.role === UserRole.QA_TEAM) {
+      await prisma.qAProfile.upsert({
+        where: { userId: created.id },
+        create: {
+          userId: created.id,
+          country: '',
+          city: '',
+          address: '',
+        },
+        update: {},
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'User created successfully.',
+      data: created,
+    });
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      return res.status(409).json({
+        success: false,
+        message: 'A user with this email already exists.',
+      });
+    }
+    next(error);
+  }
+});
+
+router.patch('/users/:id', async (req, res, next) => {
+  try {
+    const data = adminUserUpdateSchema.parse(req.body);
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: {
+        email: data.email ? data.email.toLowerCase().trim() : undefined,
+        firstName: data.firstName?.trim(),
+        lastName: data.lastName?.trim(),
+        role: data.role,
+        status: data.status,
+        phone: data.phone === null ? null : data.phone,
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        lastLogin: true,
+      },
+    });
+
+    if (updated.role === UserRole.ADMINISTRATOR) {
+      await prisma.adminProfile.upsert({
+        where: { userId: updated.id },
+        create: { userId: updated.id },
+        update: {},
+      });
+    }
+
+    if (updated.role === UserRole.FABRIC_SELLER) {
+      await prisma.fabricSellerProfile.upsert({
+        where: { userId: updated.id },
+        create: {
+          userId: updated.id,
+          businessName: `${updated.firstName} ${updated.lastName}`.trim(),
+          businessEmail: updated.email,
+          businessPhone: updated.email,
+          country: '',
+          city: '',
+          address: '',
+        },
+        update: {},
+      });
+    }
+
+    if (updated.role === UserRole.FASHION_DESIGNER) {
+      await prisma.designerProfile.upsert({
+        where: { userId: updated.id },
+        create: {
+          userId: updated.id,
+          businessName: `${updated.firstName} ${updated.lastName}`.trim(),
+          businessEmail: updated.email,
+          businessPhone: updated.email,
+          country: '',
+          city: '',
+          address: '',
+        },
+        update: {},
+      });
+    }
+
+    if (updated.role === UserRole.QA_TEAM) {
+      await prisma.qAProfile.upsert({
+        where: { userId: updated.id },
+        create: {
+          userId: updated.id,
+          country: '',
+          city: '',
+          address: '',
+        },
+        update: {},
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'User updated successfully.',
+      data: updated,
+    });
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      return res.status(409).json({
+        success: false,
+        message: 'A user with this email already exists.',
+      });
+    }
+    next(error);
+  }
+});
+
+router.post('/vendor-profiles/create-minimal', async (req, res, next) => {
+  try {
+    const payload = vendorCreateMinimalSchema.parse(req.body);
+    const hashedPassword = await bcrypt.hash(payload.password, 10);
+    const role = payload.role === 'FABRIC_SELLER' ? UserRole.FABRIC_SELLER : UserRole.FASHION_DESIGNER;
+
+    const user = await prisma.user.create({
+      data: {
+        email: payload.email.toLowerCase().trim(),
+        password: hashedPassword,
+        firstName: payload.firstName.trim(),
+        lastName: payload.lastName.trim(),
+        role,
+        status: UserStatus.PENDING,
+        phone: payload.phone,
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    if (role === UserRole.FABRIC_SELLER) {
+      await prisma.fabricSellerProfile.create({
+        data: {
+          userId: user.id,
+          businessName: payload.businessName.trim(),
+          businessEmail: payload.email.toLowerCase().trim(),
+          businessPhone: payload.phone?.trim() || payload.email.toLowerCase().trim(),
+          country: payload.country.trim(),
+          city: payload.city?.trim() || '',
+          address: payload.address?.trim() || '',
+        },
+      });
+    } else {
+      await prisma.designerProfile.create({
+        data: {
+          userId: user.id,
+          businessName: payload.businessName.trim(),
+          businessEmail: payload.email.toLowerCase().trim(),
+          businessPhone: payload.phone?.trim() || payload.email.toLowerCase().trim(),
+          country: payload.country.trim(),
+          city: payload.city?.trim() || '',
+          address: payload.address?.trim() || '',
+        },
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Vendor created. Vendor can complete profile after first login.',
+      data: user,
+    });
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      return res.status(409).json({
+        success: false,
+        message: 'A user with this email already exists.',
+      });
+    }
     next(error);
   }
 });
@@ -1498,6 +1822,385 @@ router.patch('/users/:id/admin-access', authorizePermissions(Permissions.ADMIN_R
         permissions: sanitizePermissionGrants(profile.permissions),
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ==================== PRODUCTS (LIST/CREATE/EDIT) ====================
+
+router.get('/products/options', async (_req, res, next) => {
+  try {
+    const [categories, materials, sellers, designers] = await Promise.all([
+      prisma.productCategory.findMany({
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+        select: { id: true, name: true },
+      }),
+      prisma.materialType.findMany({
+        where: { isActive: true },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true },
+      }),
+      prisma.fabricSellerProfile.findMany({
+        select: { id: true, businessName: true, country: true },
+        orderBy: { businessName: 'asc' },
+      }),
+      prisma.designerProfile.findMany({
+        select: { id: true, businessName: true, country: true },
+        orderBy: { businessName: 'asc' },
+      }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        categories,
+        materials,
+        sellers,
+        designers,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/products', async (req, res, next) => {
+  try {
+    const querySchema = z.object({
+      search: z.string().optional(),
+      status: z.nativeEnum(ProductStatus).optional(),
+      type: adminProductTypeSchema.optional(),
+      page: z.string().optional(),
+      limit: z.string().optional(),
+    });
+    const query = querySchema.parse(req.query);
+    const pagination = parsePagination(query.page, query.limit, 20);
+    const search = String(query.search || '').trim();
+
+    const [fabrics, designs, readyToWear] = await Promise.all([
+      !query.type || query.type === ProductType.FABRIC
+        ? prisma.fabric.findMany({
+            where: {
+              ...(query.status ? { status: query.status } : {}),
+              ...(search
+                ? {
+                    OR: [
+                      { name: { contains: search, mode: 'insensitive' } },
+                      { description: { contains: search, mode: 'insensitive' } },
+                    ],
+                  }
+                : {}),
+            },
+            include: {
+              seller: { select: { id: true, businessName: true, country: true } },
+              materialType: { select: { name: true } },
+              images: { select: { url: true }, take: 1, orderBy: { sortOrder: 'asc' } },
+              _count: { select: { orderItems: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        : Promise.resolve([]),
+      !query.type || query.type === ProductType.DESIGN
+        ? prisma.design.findMany({
+            where: {
+              ...(query.status ? { status: query.status } : {}),
+              ...(search
+                ? {
+                    OR: [
+                      { name: { contains: search, mode: 'insensitive' } },
+                      { description: { contains: search, mode: 'insensitive' } },
+                    ],
+                  }
+                : {}),
+            },
+            include: {
+              designer: { select: { id: true, businessName: true, country: true } },
+              category: { select: { name: true } },
+              images: { select: { url: true }, take: 1, orderBy: { sortOrder: 'asc' } },
+              _count: { select: { orderItems: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        : Promise.resolve([]),
+      !query.type || query.type === ProductType.READY_TO_WEAR
+        ? prisma.readyToWear.findMany({
+            where: {
+              ...(query.status ? { status: query.status } : {}),
+              ...(search
+                ? {
+                    OR: [
+                      { name: { contains: search, mode: 'insensitive' } },
+                      { description: { contains: search, mode: 'insensitive' } },
+                    ],
+                  }
+                : {}),
+            },
+            include: {
+              designer: { select: { id: true, businessName: true, country: true } },
+              category: { select: { name: true } },
+              images: { select: { url: true }, take: 1, orderBy: { sortOrder: 'asc' } },
+              _count: { select: { orderItems: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const rows = [
+      ...fabrics.map((item) => ({
+        id: item.id,
+        type: ProductType.FABRIC,
+        name: item.name,
+        description: item.description,
+        status: item.status,
+        isAvailable: item.isAvailable,
+        basePrice: Number(item.sellerPrice || 0),
+        finalPrice: Number(item.finalPrice || 0),
+        sellerId: item.seller.id,
+        ownerName: item.seller.businessName || 'Fabric Seller',
+        ownerCountry: item.seller.country || null,
+        category: item.materialType?.name || 'Material',
+        orderCount: item._count.orderItems,
+        image: item.images?.[0]?.url || null,
+        createdAt: item.createdAt,
+      })),
+      ...designs.map((item) => ({
+        id: item.id,
+        type: ProductType.DESIGN,
+        name: item.name,
+        description: item.description,
+        status: item.status,
+        isAvailable: item.isAvailable,
+        basePrice: Number(item.basePrice || 0),
+        finalPrice: Number(item.finalPrice || 0),
+        designerId: item.designer.id,
+        ownerName: item.designer.businessName || 'Designer',
+        ownerCountry: item.designer.country || null,
+        category: item.category?.name || 'Category',
+        orderCount: item._count.orderItems,
+        image: item.images?.[0]?.url || null,
+        createdAt: item.createdAt,
+      })),
+      ...readyToWear.map((item) => ({
+        id: item.id,
+        type: ProductType.READY_TO_WEAR,
+        name: item.name,
+        description: item.description,
+        status: item.status,
+        isAvailable: item.isAvailable,
+        basePrice: Number(item.basePrice || 0),
+        finalPrice: Number(item.basePrice || 0),
+        designerId: item.designer.id,
+        ownerName: item.designer.businessName || 'Designer',
+        ownerCountry: item.designer.country || null,
+        category: item.category?.name || 'Category',
+        orderCount: item._count.orderItems,
+        image: item.images?.[0]?.url || null,
+        createdAt: item.createdAt,
+      })),
+    ].sort((a, b) => Number(new Date(b.createdAt)) - Number(new Date(a.createdAt)));
+
+    const paged = rows.slice(pagination.skip, pagination.skip + pagination.limit);
+    res.json({
+      success: true,
+      data: {
+        products: paged,
+        pagination: {
+          page: pagination.page,
+          limit: pagination.limit,
+          total: rows.length,
+          pages: Math.max(1, Math.ceil(rows.length / pagination.limit)),
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/products', async (req, res, next) => {
+  try {
+    const payload = adminProductCreateSchema.parse(req.body);
+    if (payload.type === ProductType.FABRIC) {
+      if (!payload.sellerId || !payload.materialTypeId) {
+        return res.status(400).json({ success: false, message: 'sellerId and materialTypeId are required for fabric.' });
+      }
+      const created = await prisma.fabric.create({
+        data: {
+          sellerId: payload.sellerId,
+          materialTypeId: payload.materialTypeId,
+          name: payload.name.trim(),
+          description: payload.description.trim(),
+          sellerPrice: payload.price,
+          finalPrice: payload.price,
+          minYards: payload.minYards ?? 1,
+          stockYards: payload.stockYards ?? 0,
+          status: payload.status ?? ProductStatus.DRAFT,
+          isAvailable: payload.isAvailable ?? true,
+          images: payload.image
+            ? {
+                create: [{ url: payload.image, sortOrder: 0 }],
+              }
+            : undefined,
+        },
+      });
+      return res.status(201).json({ success: true, data: { id: created.id, type: payload.type }, message: 'Product created.' });
+    }
+
+    if (payload.type === ProductType.DESIGN) {
+      if (!payload.designerId || !payload.categoryId) {
+        return res.status(400).json({ success: false, message: 'designerId and categoryId are required for design.' });
+      }
+      const created = await prisma.design.create({
+        data: {
+          designerId: payload.designerId,
+          categoryId: payload.categoryId,
+          materialTypeId: payload.materialTypeId || null,
+          name: payload.name.trim(),
+          description: payload.description.trim(),
+          basePrice: payload.price,
+          finalPrice: payload.price,
+          status: payload.status ?? ProductStatus.DRAFT,
+          isAvailable: payload.isAvailable ?? true,
+          images: payload.image
+            ? {
+                create: [{ url: payload.image, sortOrder: 0 }],
+              }
+            : undefined,
+        },
+      });
+      return res.status(201).json({ success: true, data: { id: created.id, type: payload.type }, message: 'Product created.' });
+    }
+
+    if (!payload.designerId || !payload.categoryId) {
+      return res.status(400).json({ success: false, message: 'designerId and categoryId are required for ready-to-wear.' });
+    }
+    const created = await prisma.readyToWear.create({
+      data: {
+        designerId: payload.designerId,
+        categoryId: payload.categoryId,
+        name: payload.name.trim(),
+        description: payload.description.trim(),
+        basePrice: payload.price,
+        status: payload.status ?? ProductStatus.DRAFT,
+        isAvailable: payload.isAvailable ?? true,
+        images: payload.image
+          ? {
+              create: [{ url: payload.image, sortOrder: 0 }],
+            }
+          : undefined,
+        sizeVariations: {
+          create: [
+            {
+              size: payload.size || 'M',
+              price: payload.price,
+              stock: payload.stock ?? 0,
+            },
+          ],
+        },
+      },
+    });
+    return res.status(201).json({ success: true, data: { id: created.id, type: payload.type }, message: 'Product created.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/products/:type/:id', async (req, res, next) => {
+  try {
+    const type = adminProductTypeSchema.parse(String(req.params.type || '').toUpperCase());
+    const payload = adminProductUpdateSchema.parse(req.body);
+    if (type === ProductType.FABRIC) {
+      const updated = await prisma.fabric.update({
+        where: { id: req.params.id },
+        data: {
+          name: payload.name?.trim(),
+          description: payload.description?.trim(),
+          materialTypeId: payload.materialTypeId,
+          sellerPrice: payload.price,
+          finalPrice: payload.price,
+          minYards: payload.minYards,
+          stockYards: payload.stockYards,
+          status: payload.status,
+          isAvailable: payload.isAvailable,
+        },
+      });
+      if (payload.image) {
+        const existingImage = await prisma.fabricImage.findFirst({ where: { fabricId: updated.id }, orderBy: { sortOrder: 'asc' } });
+        if (existingImage) {
+          await prisma.fabricImage.update({ where: { id: existingImage.id }, data: { url: payload.image } });
+        } else {
+          await prisma.fabricImage.create({ data: { fabricId: updated.id, url: payload.image, sortOrder: 0 } });
+        }
+      }
+      return res.json({ success: true, data: { id: updated.id, type }, message: 'Product updated.' });
+    }
+
+    if (type === ProductType.DESIGN) {
+      const updated = await prisma.design.update({
+        where: { id: req.params.id },
+        data: {
+          name: payload.name?.trim(),
+          description: payload.description?.trim(),
+          categoryId: payload.categoryId,
+          materialTypeId: payload.materialTypeId || null,
+          basePrice: payload.price,
+          finalPrice: payload.price,
+          status: payload.status,
+          isAvailable: payload.isAvailable,
+        },
+      });
+      if (payload.image) {
+        const existingImage = await prisma.designImage.findFirst({ where: { designId: updated.id }, orderBy: { sortOrder: 'asc' } });
+        if (existingImage) {
+          await prisma.designImage.update({ where: { id: existingImage.id }, data: { url: payload.image } });
+        } else {
+          await prisma.designImage.create({ data: { designId: updated.id, url: payload.image, sortOrder: 0 } });
+        }
+      }
+      return res.json({ success: true, data: { id: updated.id, type }, message: 'Product updated.' });
+    }
+
+    const updated = await prisma.readyToWear.update({
+      where: { id: req.params.id },
+      data: {
+        name: payload.name?.trim(),
+        description: payload.description?.trim(),
+        categoryId: payload.categoryId,
+        basePrice: payload.price,
+        status: payload.status,
+        isAvailable: payload.isAvailable,
+      },
+    });
+    if (payload.image) {
+      const existingImage = await prisma.readyToWearImage.findFirst({
+        where: { readyToWearId: updated.id },
+        orderBy: { sortOrder: 'asc' },
+      });
+      if (existingImage) {
+        await prisma.readyToWearImage.update({ where: { id: existingImage.id }, data: { url: payload.image } });
+      } else {
+        await prisma.readyToWearImage.create({ data: { readyToWearId: updated.id, url: payload.image, sortOrder: 0 } });
+      }
+    }
+    if (payload.price !== undefined || payload.stock !== undefined) {
+      const existingSize = await prisma.readyToWearSize.findFirst({
+        where: { readyToWearId: updated.id },
+        orderBy: { size: 'asc' },
+      });
+      if (existingSize) {
+        await prisma.readyToWearSize.update({
+          where: { id: existingSize.id },
+          data: {
+            price: payload.price ?? undefined,
+            stock: payload.stock ?? undefined,
+          },
+        });
+      }
+    }
+    return res.json({ success: true, data: { id: updated.id, type }, message: 'Product updated.' });
   } catch (error) {
     next(error);
   }
