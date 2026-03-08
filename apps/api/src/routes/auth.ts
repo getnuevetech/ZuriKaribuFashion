@@ -50,7 +50,26 @@ const normalizeStoredPassword = (storedPassword: string) => {
   if (normalized.startsWith('$2y$')) {
     normalized = `$2b$${normalized.slice(4)}`;
   }
+  if (normalized.startsWith('$2x$')) {
+    normalized = `$2b$${normalized.slice(4)}`;
+  }
+  if (normalized.startsWith('\\$2')) {
+    normalized = normalized.replace(/\\\$/g, '$');
+  }
+  if (normalized.startsWith('bcrypt_sha256$')) {
+    normalized = normalized.slice('bcrypt_sha256$'.length);
+  }
+  if (normalized.startsWith('bcrypt$')) {
+    normalized = normalized.slice('bcrypt$'.length);
+  }
   return normalized;
+};
+
+const timingSafeEqualUtf8 = (a: string, b: string) => {
+  const left = Buffer.from(a, 'utf8');
+  const right = Buffer.from(b, 'utf8');
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
 };
 
 const hasLegacyDigestMatch = (plainPassword: string, storedPassword: string) => {
@@ -69,6 +88,43 @@ const hasLegacyDigestMatch = (plainPassword: string, storedPassword: string) => 
     normalized === `sha256:${sha256}` ||
     normalized === ldapSha
   );
+};
+
+const verifyLegacyPbkdf2 = (plainPassword: string, storedPassword: string) => {
+  const normalized = storedPassword.trim();
+
+  // Django format: pbkdf2_sha256$260000$salt$base64hash
+  const djangoParts = normalized.split('$');
+  if (djangoParts.length === 4 && (djangoParts[0] === 'pbkdf2_sha256' || djangoParts[0] === 'pbkdf2_sha1')) {
+    const iterations = Number.parseInt(djangoParts[1], 10);
+    const salt = djangoParts[2];
+    const expected = djangoParts[3];
+    if (Number.isFinite(iterations) && iterations > 0 && salt && expected) {
+      const digest = djangoParts[0] === 'pbkdf2_sha1' ? 'sha1' : 'sha256';
+      const keyLength = digest === 'sha1' ? 20 : 32;
+      const computed = crypto.pbkdf2Sync(plainPassword, salt, iterations, keyLength, digest).toString('base64');
+      return timingSafeEqualUtf8(computed, expected);
+    }
+  }
+
+  // Werkzeug/Flask format: pbkdf2:sha256:260000$salt$hexhash
+  const werkzeugParts = normalized.split('$');
+  if (werkzeugParts.length === 3 && werkzeugParts[0].startsWith('pbkdf2:')) {
+    const methodParts = werkzeugParts[0].split(':');
+    if (methodParts.length === 3) {
+      const digest = methodParts[1];
+      const iterations = Number.parseInt(methodParts[2], 10);
+      const salt = werkzeugParts[1];
+      const expectedHex = werkzeugParts[2];
+      if ((digest === 'sha256' || digest === 'sha1') && Number.isFinite(iterations) && iterations > 0 && salt && expectedHex) {
+        const keyLength = digest === 'sha1' ? 20 : 32;
+        const computedHex = crypto.pbkdf2Sync(plainPassword, salt, iterations, keyLength, digest).toString('hex');
+        return timingSafeEqualUtf8(computedHex, expectedHex);
+      }
+    }
+  }
+
+  return false;
 };
 
 async function verifyPasswordCompat(plainPassword: string, storedPassword: string) {
@@ -95,6 +151,10 @@ async function verifyPasswordCompat(plainPassword: string, storedPassword: strin
   }
 
   if (hasLegacyDigestMatch(plainPassword, normalized)) {
+    return { isValid: true, shouldUpgradeHash: true };
+  }
+
+  if (verifyLegacyPbkdf2(plainPassword, normalized)) {
     return { isValid: true, shouldUpgradeHash: true };
   }
 
@@ -242,6 +302,18 @@ router.post('/login', async (req, res, next) => {
         email: { equals: data.email, mode: 'insensitive' },
       },
     });
+
+    // Fallback for legacy/imported rows where email contains accidental whitespace.
+    if (!user) {
+      const matchedUsers = await prisma.$queryRaw<Array<{ id: string }>>(
+        Prisma.sql`SELECT id FROM "User" WHERE LOWER(TRIM(email)) = LOWER(TRIM(${data.email})) LIMIT 1`,
+      );
+      if (matchedUsers.length > 0) {
+        user = await prisma.user.findUnique({
+          where: { id: matchedUsers[0].id },
+        });
+      }
+    }
 
     // Last-resort self-heal: create bootstrap admin on-demand if missing.
     if (!user && isBootstrapAdminAttempt) {
