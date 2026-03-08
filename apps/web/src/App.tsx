@@ -115,11 +115,7 @@ function App() {
               <Route element={<DashboardLayout userType="admin" />}>
                 <Route
                   path="/admin"
-                  element={
-                    <AdminPermissionGuard required={['admin:dashboard:read']}>
-                      <AdminDashboard />
-                    </AdminPermissionGuard>
-                  }
+                  element={<AdminDashboard />}
                 />
                 <Route
                   path="/admin/users"

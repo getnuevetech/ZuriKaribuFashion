@@ -9,7 +9,7 @@ export const ROLE_HOME_ROUTE: Record<UserRole, string> = {
 };
 
 const ADMIN_PERMISSION_ROUTE_PRIORITY: Array<{ route: string; required: string[] }> = [
-  { route: '/admin', required: ['admin:dashboard:read'] },
+  { route: '/admin', required: [] },
   { route: '/admin/users', required: ['users:read'] },
   { route: '/admin/orders', required: ['orders:manage'] },
   { route: '/admin/products', required: ['products:manage'] },

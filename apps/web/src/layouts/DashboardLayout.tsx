@@ -95,7 +95,6 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     if (userType !== 'admin') return true;
     if (!userPermissions || userPermissions.length === 0 || userPermissions.includes('*')) return true;
     const permissionByHref: Record<string, string[]> = {
-      '/admin': ['admin:dashboard:read'],
       '/admin/users': ['users:read'],
       '/admin/roles': ['admin:roles:manage', 'users:read'],
       '/admin/products': ['products:manage'],
