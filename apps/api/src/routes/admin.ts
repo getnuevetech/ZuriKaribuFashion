@@ -71,6 +71,19 @@ const vendorCreateMinimalSchema = z.object({
 });
 
 const adminProductTypeSchema = z.nativeEnum(ProductType);
+const featuredSectionSchema = z.enum([
+  'FEATURED_DESIGNS',
+  'FEATURED_FABRICS',
+  'FEATURED_READY_TO_WEAR',
+  'TRENDING_NOW',
+  'NEW_ARRIVALS',
+]);
+const productFeaturedSchema = z.object({
+  isFeatured: z.boolean(),
+  section: featuredSectionSchema.optional(),
+  displayOrder: z.coerce.number().int().min(0).optional(),
+});
+
 const adminProductCreateSchema = z.object({
   type: adminProductTypeSchema,
   name: z.string().min(1),
@@ -139,6 +152,12 @@ const parseDateValue = (value?: string | null) => {
   if (!value) return undefined;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? undefined : date;
+};
+
+const getDefaultFeaturedSectionForType = (productType: ProductType): z.infer<typeof featuredSectionSchema> => {
+  if (productType === ProductType.FABRIC) return 'FEATURED_FABRICS';
+  if (productType === ProductType.READY_TO_WEAR) return 'FEATURED_READY_TO_WEAR';
+  return 'FEATURED_DESIGNS';
 };
 
 let adminRbacSchemaEnsured = false;
@@ -2003,7 +2022,62 @@ router.get('/products', async (req, res, next) => {
       })),
     ].sort((a, b) => Number(new Date(b.createdAt)) - Number(new Date(a.createdAt)));
 
-    const paged = rows.slice(pagination.skip, pagination.skip + pagination.limit);
+    const featuredRows =
+      rows.length > 0
+        ? await prisma.featuredProduct.findMany({
+            where: {
+              OR: [
+                {
+                  productType: ProductType.FABRIC,
+                  productId: {
+                    in: rows.filter((row) => row.type === ProductType.FABRIC).map((row) => row.id),
+                  },
+                },
+                {
+                  productType: ProductType.DESIGN,
+                  productId: {
+                    in: rows.filter((row) => row.type === ProductType.DESIGN).map((row) => row.id),
+                  },
+                },
+                {
+                  productType: ProductType.READY_TO_WEAR,
+                  productId: {
+                    in: rows.filter((row) => row.type === ProductType.READY_TO_WEAR).map((row) => row.id),
+                  },
+                },
+              ],
+            },
+            select: {
+              productId: true,
+              productType: true,
+              section: true,
+              isActive: true,
+            },
+          })
+        : [];
+
+    const featuredMap = new Map<string, string[]>();
+    for (const row of featuredRows) {
+      if (!row.isActive) continue;
+      const key = `${row.productType}:${row.productId}`;
+      const existing = featuredMap.get(key) || [];
+      if (!existing.includes(row.section)) {
+        existing.push(row.section);
+      }
+      featuredMap.set(key, existing);
+    }
+
+    const rowsWithFeatured = rows.map((row) => {
+      const key = `${row.type}:${row.id}`;
+      const featuredSections = featuredMap.get(key) || [];
+      return {
+        ...row,
+        isFeatured: featuredSections.length > 0,
+        featuredSections,
+      };
+    });
+
+    const paged = rowsWithFeatured.slice(pagination.skip, pagination.skip + pagination.limit);
     res.json({
       success: true,
       data: {
@@ -2011,8 +2085,8 @@ router.get('/products', async (req, res, next) => {
         pagination: {
           page: pagination.page,
           limit: pagination.limit,
-          total: rows.length,
-          pages: Math.max(1, Math.ceil(rows.length / pagination.limit)),
+          total: rowsWithFeatured.length,
+          pages: Math.max(1, Math.ceil(rowsWithFeatured.length / pagination.limit)),
         },
       },
     });
@@ -2204,6 +2278,75 @@ router.patch('/products/:type/:id', async (req, res, next) => {
     return res.json({ success: true, data: { id: updated.id, type }, message: 'Product updated.' });
   } catch (error) {
     next(error);
+  }
+});
+
+router.patch('/products/:type/:id/featured', async (req, res, next) => {
+  try {
+    const productType = adminProductTypeSchema.parse(String(req.params.type || '').toUpperCase());
+    const { id } = req.params;
+    const payload = productFeaturedSchema.parse(req.body);
+
+    let exists = false;
+    if (productType === ProductType.FABRIC) {
+      exists = (await prisma.fabric.count({ where: { id } })) > 0;
+    } else if (productType === ProductType.DESIGN) {
+      exists = (await prisma.design.count({ where: { id } })) > 0;
+    } else {
+      exists = (await prisma.readyToWear.count({ where: { id } })) > 0;
+    }
+
+    if (!exists) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found.',
+      });
+    }
+
+    if (payload.isFeatured) {
+      const section = payload.section || getDefaultFeaturedSectionForType(productType);
+      const featured = await prisma.featuredProduct.upsert({
+        where: {
+          productId_productType_section: {
+            productId: id,
+            productType,
+            section,
+          },
+        },
+        update: {
+          isActive: true,
+          displayOrder: payload.displayOrder ?? 0,
+        },
+        create: {
+          productId: id,
+          productType,
+          section,
+          displayOrder: payload.displayOrder ?? 0,
+          isActive: true,
+        },
+      });
+
+      return res.json({
+        success: true,
+        message: 'Product marked as featured.',
+        data: featured,
+      });
+    }
+
+    await prisma.featuredProduct.deleteMany({
+      where: {
+        productId: id,
+        productType,
+        ...(payload.section ? { section: payload.section } : {}),
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: 'Product removed from featured list.',
+    });
+  } catch (error) {
+    return next(error);
   }
 });
 

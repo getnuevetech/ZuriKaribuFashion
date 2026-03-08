@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Filter, Plus, Edit, Package, Scissors, Upload } from 'lucide-react';
+import { Search, Filter, Plus, Edit, Package, Scissors, Upload, Star } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -18,6 +18,8 @@ interface Product {
   category: string;
   orderCount: number;
   image?: string | null;
+  isFeatured?: boolean;
+  featuredSections?: string[];
   createdAt: string;
 }
 
@@ -50,13 +52,22 @@ export default function AdminProducts() {
     sellerId: '',
     designerId: '',
     status: 'DRAFT',
-    isAvailable: true,
+    isAvailable: false,
+    publishNow: false,
+    isFeatured: false,
+    featuredSection: 'FEATURED_DESIGNS',
     image: '',
     minYards: 1,
     stockYards: 0,
     stock: 0,
     size: 'M',
   });
+
+  const getDefaultFeaturedSection = (type: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR') => {
+    if (type === 'FABRIC') return 'FEATURED_FABRICS';
+    if (type === 'READY_TO_WEAR') return 'FEATURED_READY_TO_WEAR';
+    return 'FEATURED_DESIGNS';
+  };
 
   useEffect(() => {
     void Promise.all([fetchProducts(), fetchOptions()]);
@@ -118,7 +129,10 @@ export default function AdminProducts() {
       sellerId: '',
       designerId: '',
       status: 'DRAFT',
-      isAvailable: true,
+      isAvailable: false,
+      publishNow: false,
+      isFeatured: false,
+      featuredSection: 'FEATURED_DESIGNS',
       image: '',
       minYards: 1,
       stockYards: 0,
@@ -143,6 +157,9 @@ export default function AdminProducts() {
       designerId: product.designerId || '',
       status: product.status,
       isAvailable: product.isAvailable,
+      publishNow: product.status === 'APPROVED' && product.isAvailable,
+      isFeatured: Boolean(product.isFeatured),
+      featuredSection: product.featuredSections?.[0] || getDefaultFeaturedSection(product.type),
       image: product.image || '',
       minYards: 1,
       stockYards: 0,
@@ -157,13 +174,17 @@ export default function AdminProducts() {
     try {
       setSaving(true);
       setError('');
+      const resolvedStatus = form.publishNow ? 'APPROVED' : form.status;
+      const resolvedIsAvailable = form.publishNow ? true : false;
+      let savedType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR' = editing ? editing.type : form.type;
+      let savedId: string | null = editing?.id || null;
       if (editing) {
         await api.admin.updateProduct(editing.type, editing.id, {
           name: form.name,
           description: form.description,
           price: form.price,
-          status: form.status,
-          isAvailable: form.isAvailable,
+          status: resolvedStatus,
+          isAvailable: resolvedIsAvailable,
           image: form.image || undefined,
           materialTypeId: form.materialTypeId || undefined,
           categoryId: form.categoryId || undefined,
@@ -171,9 +192,8 @@ export default function AdminProducts() {
           stockYards: form.stockYards,
           minYards: form.minYards,
         });
-        setSuccess('Product updated successfully.');
       } else {
-        await api.admin.createProduct({
+        const created = await api.admin.createProduct({
           type: form.type,
           name: form.name,
           description: form.description,
@@ -182,16 +202,26 @@ export default function AdminProducts() {
           designerId: form.type !== 'FABRIC' ? form.designerId : undefined,
           materialTypeId: form.type === 'FABRIC' || form.type === 'DESIGN' ? form.materialTypeId || undefined : undefined,
           categoryId: form.type !== 'FABRIC' ? form.categoryId : undefined,
-          status: form.status,
-          isAvailable: form.isAvailable,
+          status: resolvedStatus,
+          isAvailable: resolvedIsAvailable,
           image: form.image || undefined,
           minYards: form.minYards,
           stockYards: form.stockYards,
           stock: form.stock,
           size: form.size || undefined,
         });
-        setSuccess('Product created successfully.');
+        savedId = created.data?.id || null;
+        savedType = (created.data?.type as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR') || form.type;
       }
+
+      if (savedId) {
+        await api.admin.setProductFeatured(savedType, savedId, {
+          isFeatured: form.isFeatured,
+          section: form.isFeatured ? form.featuredSection : undefined,
+          displayOrder: 0,
+        });
+      }
+      setSuccess(editing ? 'Product updated successfully.' : 'Product created successfully.');
       setShowModal(false);
       await fetchProducts();
     } catch (error) {
@@ -344,7 +374,10 @@ export default function AdminProducts() {
                         )}
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900">{product.name}</p>
+                        <p className="font-medium text-gray-900">
+                          {product.name}
+                          {product.isFeatured ? <Star className="ml-1 inline h-3.5 w-3.5 text-amber-500" /> : null}
+                        </p>
                         <p className="text-sm text-gray-500">{product.category}</p>
                       </div>
                     </div>
@@ -387,7 +420,20 @@ export default function AdminProducts() {
             <h3 className="mb-4 text-xl font-bold text-gray-900">{editing ? 'Edit Product' : 'Add Product'}</h3>
             <form onSubmit={saveProduct} className="space-y-3">
               {!editing && (
-                <select value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value as any }))} className="w-full rounded border px-3 py-2">
+                <select
+                  value={form.type}
+                  onChange={(e) =>
+                    setForm((prev) => {
+                      const nextType = e.target.value as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+                      return {
+                        ...prev,
+                        type: nextType,
+                        featuredSection: getDefaultFeaturedSection(nextType),
+                      };
+                    })
+                  }
+                  className="w-full rounded border px-3 py-2"
+                >
                   <option value="FABRIC">Fabric</option>
                   <option value="DESIGN">Design</option>
                   <option value="READY_TO_WEAR">Ready To Wear</option>
@@ -397,7 +443,17 @@ export default function AdminProducts() {
               <textarea required value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Description" className="h-24 w-full rounded border px-3 py-2" />
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <input type="number" step="0.01" required value={form.price} onChange={(e) => setForm((prev) => ({ ...prev, price: Number(e.target.value) || 0 }))} placeholder="Price" className="rounded border px-3 py-2" />
-                <select value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))} className="rounded border px-3 py-2">
+                <select
+                  value={form.status}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      status: e.target.value,
+                      publishNow: e.target.value === 'APPROVED' ? prev.publishNow : false,
+                    }))
+                  }
+                  className="rounded border px-3 py-2"
+                >
                   <option value="DRAFT">DRAFT</option>
                   <option value="PENDING_REVIEW">PENDING_REVIEW</option>
                   <option value="APPROVED">APPROVED</option>
@@ -436,6 +492,52 @@ export default function AdminProducts() {
                   </>
                 )}
               </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={form.isFeatured}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        isFeatured: e.target.checked,
+                        featuredSection: e.target.checked
+                          ? prev.featuredSection || getDefaultFeaturedSection(editing?.type || prev.type)
+                          : prev.featuredSection,
+                      }))
+                    }
+                  />
+                  Featured on homepage
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={form.publishNow}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        publishNow: e.target.checked,
+                        isAvailable: e.target.checked,
+                        status: e.target.checked ? 'APPROVED' : prev.status,
+                      }))
+                    }
+                  />
+                  Publish on storefront
+                </label>
+              </div>
+              {form.isFeatured ? (
+                <select
+                  value={form.featuredSection}
+                  onChange={(e) => setForm((prev) => ({ ...prev, featuredSection: e.target.value }))}
+                  className="w-full rounded border px-3 py-2"
+                >
+                  <option value="FEATURED_DESIGNS">Featured Designs</option>
+                  <option value="FEATURED_FABRICS">Featured Fabrics</option>
+                  <option value="FEATURED_READY_TO_WEAR">Featured Ready To Wear</option>
+                  <option value="TRENDING_NOW">Trending Now</option>
+                  <option value="NEW_ARRIVALS">New Arrivals</option>
+                </select>
+              ) : null}
               <div className="space-y-2">
                 <input
                   type="url"
@@ -459,10 +561,6 @@ export default function AdminProducts() {
                   {form.image ? <span className="text-xs text-green-700">Image ready</span> : null}
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input type="checkbox" checked={form.isAvailable} onChange={(e) => setForm((prev) => ({ ...prev, isAvailable: e.target.checked }))} />
-                Available on storefront
-              </label>
               <div className="flex gap-3 pt-2">
                 <Button type="button" variant="outline" className="flex-1" onClick={() => setShowModal(false)}>Cancel</Button>
                 <Button type="submit" className="flex-1" disabled={saving}>{saving ? 'Saving...' : editing ? 'Update Product' : 'Create Product'}</Button>

@@ -362,6 +362,12 @@ const adminApi = {
   updateProduct: (type: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR', id: string, data: any) =>
     apiService.patch<{ success: boolean; data: any; message?: string }>(`/admin/products/${type}/${id}`, data),
 
+  setProductFeatured: (
+    type: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR',
+    id: string,
+    data: { isFeatured: boolean; section?: string; displayOrder?: number }
+  ) => apiService.patch<{ success: boolean; data?: any; message?: string }>(`/admin/products/${type}/${id}/featured`, data),
+
   getTrafficReport: (params?: {
     startDate?: string;
     endDate?: string;
