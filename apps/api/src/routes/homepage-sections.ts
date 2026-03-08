@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
+import { AFRICAN_CURRENCY_BASELINE } from '../constants/africanCurrencies';
 
 const router = Router();
 
@@ -96,6 +97,24 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
+
+const countryCodeToFlag = (countryCode: string) =>
+  String(countryCode || '')
+    .toUpperCase()
+    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
+
+const AFRICAN_COUNTRY_OPTIONS = Array.from(
+  new Map(
+    AFRICAN_CURRENCY_BASELINE.map((row) => [
+      row.countryCode.toUpperCase(),
+      {
+        code: row.countryCode.toUpperCase(),
+        name: row.country,
+        flag: countryCodeToFlag(row.countryCode),
+      },
+    ])
+  ).values()
+).sort((a, b) => a.name.localeCompare(b.name));
 
 const countryCreateSchema = z.object({
   name: z.string().min(1),
@@ -586,6 +605,32 @@ router.put('/admin/visibility', authenticate, authorizePermissions(Permissions.H
     }
     console.error('Error updating homepage section visibility:', error);
     res.status(500).json({ success: false, message: 'Failed to update homepage section visibility.' });
+  }
+});
+
+router.get('/admin/country-options', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  res.json({
+    success: true,
+    data: AFRICAN_COUNTRY_OPTIONS,
+  });
+});
+
+router.get('/admin/designer-options', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const designers = await prisma.designerProfile.findMany({
+      select: {
+        id: true,
+        businessName: true,
+        country: true,
+      },
+      orderBy: [{ businessName: 'asc' }],
+    });
+    res.json({
+      success: true,
+      data: designers,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to fetch designer options' });
   }
 });
 

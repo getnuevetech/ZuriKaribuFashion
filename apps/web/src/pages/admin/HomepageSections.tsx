@@ -92,6 +92,18 @@ interface VisibilitySection {
   enabled: boolean;
 }
 
+interface CountryOption {
+  code: string;
+  name: string;
+  flag: string;
+}
+
+interface DesignerOption {
+  id: string;
+  businessName: string;
+  country: string;
+}
+
 const TABS = [
   { id: 'countries' as SectionType, label: 'Countries', icon: Globe },
   { id: 'howItWorks' as SectionType, label: 'How It Works', icon: Sparkles },
@@ -118,6 +130,8 @@ export default function HomepageSections() {
   const [footerContents, setFooterContents] = useState<FooterContent[]>([]);
   const [visibilitySections, setVisibilitySections] = useState<VisibilitySection[]>([]);
   const [visibilityLoading, setVisibilityLoading] = useState(false);
+  const [countryOptions, setCountryOptions] = useState<CountryOption[]>([]);
+  const [designerOptions, setDesignerOptions] = useState<DesignerOption[]>([]);
 
   useEffect(() => {
     fetchData();
@@ -125,6 +139,10 @@ export default function HomepageSections() {
 
   useEffect(() => {
     fetchVisibility();
+  }, []);
+
+  useEffect(() => {
+    fetchAuxiliaryOptions();
   }, []);
 
   const fetchData = async () => {
@@ -179,6 +197,23 @@ export default function HomepageSections() {
       console.error('Error fetching homepage visibility:', error);
     } finally {
       setVisibilityLoading(false);
+    }
+  };
+
+  const fetchAuxiliaryOptions = async () => {
+    try {
+      const [countryOptionsRes, designerOptionsRes] = await Promise.all([
+        api.homepageSections.getAdminCountryOptions(),
+        api.homepageSections.getAdminDesignerOptions(),
+      ]);
+      if (countryOptionsRes.success) {
+        setCountryOptions(countryOptionsRes.data || []);
+      }
+      if (designerOptionsRes.success) {
+        setDesignerOptions(designerOptionsRes.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching homepage auxiliary options:', error);
     }
   };
 
@@ -454,6 +489,8 @@ export default function HomepageSections() {
         <SectionModal
           type={activeTab}
           item={editingItem}
+          countryOptions={countryOptions}
+          designers={designerOptions}
           onClose={closeModal}
           onSave={handleSave}
         />
@@ -800,7 +837,21 @@ function FooterTable({ data, onEdit }: any) {
 }
 
 // Modal Component
-function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item: any; onClose: () => void; onSave: () => void }) {
+function SectionModal({
+  type,
+  item,
+  countryOptions,
+  designers,
+  onClose,
+  onSave,
+}: {
+  type: SectionType;
+  item: any;
+  countryOptions: CountryOption[];
+  designers: DesignerOption[];
+  onClose: () => void;
+  onSave: () => void;
+}) {
   const [formData, setFormData] = useState<any>(item || getDefaultFormData(type));
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -808,7 +859,7 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
   function getDefaultFormData(sectionType: SectionType) {
     switch (sectionType) {
       case 'countries':
-        return { name: '', flag: '', image: '', fabrics: '', displayOrder: 0, isActive: true };
+        return { countryCode: '', name: '', flag: '', image: '', fabrics: '', displayOrder: 0, isActive: true };
       case 'howItWorks':
         return { stepNumber: 1, title: '', subtitle: '', icon: 'Sparkles', displayOrder: 0, isActive: true };
       case 'categories':
@@ -825,6 +876,36 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
         return {};
     }
   }
+
+  const countryOptionByCode = new Map(countryOptions.map((option) => [option.code, option]));
+  const countryOptionByName = new Map(countryOptions.map((option) => [option.name.toLowerCase(), option]));
+
+  useEffect(() => {
+    if (type !== 'countries') return;
+    const name = String(formData?.name || '').trim().toLowerCase();
+    const existingCode = String(formData?.countryCode || '').trim().toUpperCase();
+    const option =
+      (existingCode ? countryOptionByCode.get(existingCode) : undefined) ||
+      (name ? countryOptionByName.get(name) : undefined);
+    if (!option) return;
+    if (existingCode === option.code && String(formData?.flag || '') === option.flag) return;
+    setFormData((prev: any) => ({
+      ...prev,
+      countryCode: option.code,
+      name: prev?.name || option.name,
+      flag: option.flag,
+    }));
+  }, [type, countryOptions]);
+
+  const handleCountryCodeChange = (countryCode: string) => {
+    const option = countryOptionByCode.get(String(countryCode || '').toUpperCase());
+    setFormData((prev: any) => ({
+      ...prev,
+      countryCode: option?.code || countryCode,
+      name: option?.name || prev?.name || '',
+      flag: option?.flag || prev?.flag || '',
+    }));
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
     const file = e.target.files?.[0];
@@ -952,6 +1033,31 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
         return (
           <>
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+              <select
+                value={formData.countryCode || ''}
+                onChange={(e) => handleCountryCodeChange(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                required
+              >
+                <option value="">Select country</option>
+                {countryOptions.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.flag} {option.name} ({option.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Auto Flag</label>
+              <div className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-2xl">
+                {formData.flag || '🌍'}
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Flag icon is auto-filled based on country selection.
+              </p>
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Country Name</label>
               <input
                 type="text"
@@ -959,16 +1065,6 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                 required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Flag Emoji</label>
-              <input
-                type="text"
-                value={formData.flag || ''}
-                onChange={(e) => setFormData({ ...formData, flag: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                placeholder="🇬🇭"
               />
             </div>
             <div>
@@ -1091,14 +1187,20 @@ function SectionModal({ type, item, onClose, onSave }: { type: SectionType; item
         return (
           <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Designer ID</label>
-              <input
-                type="text"
+              <label className="block text-sm font-medium text-gray-700 mb-1">Designer</label>
+              <select
                 value={formData.designerId || ''}
                 onChange={(e) => setFormData({ ...formData, designerId: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                 required
-              />
+              >
+                <option value="">Select designer</option>
+                {designers.map((designer) => (
+                  <option key={designer.id} value={designer.id}>
+                    {designer.businessName} ({designer.country})
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Quote</label>

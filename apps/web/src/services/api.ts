@@ -803,6 +803,16 @@ const homepageSectionsApi = {
       };
     }>('/homepage-sections/admin/visibility', { visibility }),
 
+  getAdminCountryOptions: () =>
+    apiService.get<{ success: boolean; data: Array<{ code: string; name: string; flag: string }> }>(
+      '/homepage-sections/admin/country-options'
+    ),
+
+  getAdminDesignerOptions: () =>
+    apiService.get<{ success: boolean; data: Array<{ id: string; businessName: string; country: string }> }>(
+      '/homepage-sections/admin/designer-options'
+    ),
+
   getAdminCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/admin/countries'),
 
