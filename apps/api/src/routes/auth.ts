@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { z } from 'zod';
 import { prisma, UserRole, UserStatus } from '../db';
 import { generateToken, authenticate } from '../middleware/auth';
@@ -31,6 +32,70 @@ const loginSchema = z.object({
   email: z.string().email('Invalid email address').transform((value) => value.toLowerCase().trim()),
   password: z.string().min(1, 'Password is required'),
 });
+
+const BCRYPT_PATTERN = /^\$2[aby]\$\d{2}\$/;
+
+const normalizeStoredPassword = (storedPassword: string) => {
+  let normalized = storedPassword.trim();
+  if (
+    (normalized.startsWith('"') && normalized.endsWith('"')) ||
+    (normalized.startsWith("'") && normalized.endsWith("'"))
+  ) {
+    normalized = normalized.slice(1, -1);
+  }
+  if (normalized.startsWith('$2y$')) {
+    normalized = `$2b$${normalized.slice(4)}`;
+  }
+  return normalized;
+};
+
+const hasLegacyDigestMatch = (plainPassword: string, storedPassword: string) => {
+  const normalized = storedPassword.trim().toLowerCase();
+  const md5 = crypto.createHash('md5').update(plainPassword).digest('hex');
+  const sha1 = crypto.createHash('sha1').update(plainPassword).digest('hex');
+  const sha256 = crypto.createHash('sha256').update(plainPassword).digest('hex');
+  const ldapSha = `{sha}${crypto.createHash('sha1').update(plainPassword).digest('base64')}`.toLowerCase();
+
+  return (
+    normalized === md5 ||
+    normalized === sha1 ||
+    normalized === sha256 ||
+    normalized === `md5:${md5}` ||
+    normalized === `sha1:${sha1}` ||
+    normalized === `sha256:${sha256}` ||
+    normalized === ldapSha
+  );
+};
+
+async function verifyPasswordCompat(plainPassword: string, storedPassword: string) {
+  const normalized = normalizeStoredPassword(storedPassword);
+  const candidates = Array.from(new Set([storedPassword, normalized])).filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (!BCRYPT_PATTERN.test(candidate)) continue;
+    try {
+      const matches = await bcrypt.compare(plainPassword, candidate);
+      if (matches) {
+        return {
+          isValid: true,
+          shouldUpgradeHash: candidate !== storedPassword,
+        };
+      }
+    } catch {
+      // Ignore malformed bcrypt values and continue legacy checks.
+    }
+  }
+
+  if (!BCRYPT_PATTERN.test(normalized) && plainPassword === normalized) {
+    return { isValid: true, shouldUpgradeHash: true };
+  }
+
+  if (hasLegacyDigestMatch(plainPassword, normalized)) {
+    return { isValid: true, shouldUpgradeHash: true };
+  }
+
+  return { isValid: false, shouldUpgradeHash: false };
+}
 
 // Register
 router.post('/register', async (req, res, next) => {
@@ -203,11 +268,10 @@ router.post('/login', async (req, res, next) => {
       });
     }
 
-    // Verify password (supports legacy plain-text rows and bootstrap reset for default admin)
-    let isValidPassword = await bcrypt.compare(data.password, user.password);
-    const looksLikeBcrypt = /^\$2[aby]\$\d{2}\$/.test(user.password);
-    if (!isValidPassword && !looksLikeBcrypt && data.password === user.password) {
-      isValidPassword = true;
+    // Verify password with legacy compatibility and auto-upgrade hash format on success.
+    let passwordCheck = await verifyPasswordCompat(data.password, user.password);
+    let isValidPassword = passwordCheck.isValid;
+    if (isValidPassword && passwordCheck.shouldUpgradeHash) {
       const upgradedPassword = await bcrypt.hash(data.password, 10);
       await prisma.user.update({
         where: { id: user.id },
@@ -230,6 +294,19 @@ router.post('/login', async (req, res, next) => {
         },
       });
       isValidPassword = true;
+    }
+
+    if (!isValidPassword) {
+      // Re-run after potential bootstrap repair mutation.
+      passwordCheck = await verifyPasswordCompat(data.password, user.password);
+      isValidPassword = passwordCheck.isValid;
+      if (isValidPassword && passwordCheck.shouldUpgradeHash) {
+        const upgradedPassword = await bcrypt.hash(data.password, 10);
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { password: upgradedPassword },
+        });
+      }
     }
 
     if (
@@ -413,8 +490,9 @@ router.post('/change-password', authenticate, async (req, res, next) => {
       });
     }
 
-    // Verify current password
-    const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+    // Verify current password with legacy compatibility.
+    const passwordCheck = await verifyPasswordCompat(currentPassword, user.password);
+    const isValidPassword = passwordCheck.isValid;
 
     if (!isValidPassword) {
       return res.status(400).json({
