@@ -81,6 +81,72 @@ const authApi = {
     apiService.post('/auth/logout'),
 };
 
+const currencyApi = {
+  getConfig: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        defaultCurrency: string;
+        supportedCurrencies: string[];
+        visitorCountry?: {
+          countryCode: string;
+          country: string;
+          currencyCode: string;
+        } | null;
+        usdPerUnitByCurrency?: Record<string, number>;
+        matrix: Array<{
+          countryCode: string;
+          country: string;
+          currencyCode: string;
+          currencyName: string;
+          usdPerUnit: number;
+        }>;
+      };
+    }>('/currency/config'),
+
+  getMyOptions: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        country: string;
+        defaultCurrency: string;
+        allowedCurrencies: string[];
+        usdPerUnitByCurrency: Record<string, number>;
+      };
+    }>('/currency/my-options'),
+
+  getAdminMatrix: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        matrix: any[];
+        rules: any[];
+        health?: {
+          lastRefreshedAt: string | null;
+          staleAfterHours: number;
+          isStale: boolean;
+          lastSource: string | null;
+        };
+        overrides?: Record<string, any>;
+      };
+    }>('/currency/admin/matrix'),
+
+  updateCountryRate: (data: {
+    countryCode: string;
+    country: string;
+    currencyCode: string;
+    currencyName: string;
+    usdPerUnit: number;
+  }) => apiService.put('/currency/admin/rate', data),
+
+  updateRules: (rules: Array<{ id: string; scopeType: 'COUNTRY' | 'USER' | 'ROLE'; scopeValue: string; currencies: string[] }>) =>
+    apiService.put('/currency/admin/rules', { rules }),
+
+  refreshRates: (preserveOverrides = true) => apiService.post('/currency/admin/refresh', { preserveOverrides }),
+
+  clearOverride: (countryCode: string) => apiService.delete(`/currency/admin/override/${countryCode}`),
+};
+
 // Products API
 const productsApi = {
   getCategories: () =>
@@ -235,6 +301,56 @@ const adminApi = {
 
   updateUserStatus: (id: string, status: string, reason?: string) =>
     apiService.patch(`/admin/users/${id}/status`, { status, reason }),
+
+  getTrafficReport: (params?: {
+    startDate?: string;
+    endDate?: string;
+    productType?: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+    vendorUserId?: string;
+    page?: string;
+  }) =>
+    apiService.get<{ success: boolean; data: any }>('/admin/traffic-report', { params }),
+
+  getSessionAudit: (params?: {
+    action?: 'VENDOR_SESSION_STARTED' | 'VENDOR_SESSION_REPLACED' | 'VENDOR_SESSION_LOGOUT';
+    role?: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+    userId?: string;
+    page?: number;
+    limit?: number;
+  }) => apiService.get<{ success: boolean; data: any }>('/admin/security/session-audit', { params }),
+
+  getMeasurementTemplates: () =>
+    apiService.get<{ success: boolean; data: Array<{ name: string; unit: string; isRequired: boolean; instructions?: string }> }>(
+      '/admin/measurement-templates'
+    ),
+
+  updateMeasurementTemplates: (templates: Array<{ name: string; unit: string; isRequired: boolean; instructions?: string }>) =>
+    apiService.put('/admin/measurement-templates', { templates }),
+
+  getVendorProfileFields: (role: 'FABRIC_SELLER' | 'FASHION_DESIGNER') =>
+    apiService.get<{ success: boolean; data: { role: string; fields: any[] } }>('/admin/vendor-profile/fields', {
+      params: { role },
+    }),
+
+  updateVendorProfileFields: (role: 'FABRIC_SELLER' | 'FASHION_DESIGNER', fields: any[]) =>
+    apiService.put<{ success: boolean; data: any }>('/admin/vendor-profile/fields', { role, fields }),
+
+  getVendorProfiles: (params?: {
+    role?: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+    status?: 'INCOMPLETE' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) => apiService.get<{ success: boolean; data: any }>('/admin/vendor-profiles', { params }),
+
+  getVendorProfileDetails: (role: 'FABRIC_SELLER' | 'FASHION_DESIGNER', userId: string) =>
+    apiService.get<{ success: boolean; data: any }>(`/admin/vendor-profiles/${role}/${userId}`),
+
+  reviewVendorProfile: (
+    role: 'FABRIC_SELLER' | 'FASHION_DESIGNER',
+    userId: string,
+    data: { status: 'APPROVED' | 'REJECTED'; notes?: string }
+  ) => apiService.patch<{ success: boolean; message?: string }>(`/admin/vendor-profiles/${role}/${userId}/review`, data),
 
   getPermissionCatalog: () =>
     apiService.get<{
@@ -778,6 +894,7 @@ const homepageSectionsApi = {
 // Export combined API
 export const api = {
   auth: authApi,
+  currency: currencyApi,
   products: productsApi,
   orders: ordersApi,
   customer: customerApi,
@@ -795,6 +912,7 @@ export const api = {
 // Named exports for direct import
 export {
   authApi,
+  currencyApi,
   productsApi,
   ordersApi,
   customerApi,

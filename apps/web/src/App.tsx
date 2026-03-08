@@ -37,6 +37,11 @@ import AdminBanners from './pages/admin/Banners';
 import AdminHomepage from './pages/admin/Homepage';
 import AdminHomepageSections from './pages/admin/HomepageSections';
 import AdminRoleManagement from './pages/admin/RoleManagement';
+import AdminVendorProfiles from './pages/admin/VendorProfiles';
+import AdminSessionAudit from './pages/admin/SessionAudit';
+import AdminTraffic from './pages/admin/Traffic';
+import AdminMeasurementTemplates from './pages/admin/MeasurementTemplates';
+import AdminCurrencyMatrix from './pages/admin/CurrencyMatrix';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -130,6 +135,46 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['admin:roles:manage', 'users:read']}>
                       <AdminRoleManagement />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/vendor-profiles"
+                  element={
+                    <AdminPermissionGuard required={['vendor_profiles:read']}>
+                      <AdminVendorProfiles />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/session-audit"
+                  element={
+                    <AdminPermissionGuard required={['session_audit:read']}>
+                      <AdminSessionAudit />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/traffic"
+                  element={
+                    <AdminPermissionGuard required={['traffic:read']}>
+                      <AdminTraffic />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/measurement-templates"
+                  element={
+                    <AdminPermissionGuard required={['measurement_templates:manage']}>
+                      <AdminMeasurementTemplates />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/currency"
+                  element={
+                    <AdminPermissionGuard required={['currency:manage']}>
+                      <AdminCurrencyMatrix />
                     </AdminPermissionGuard>
                   }
                 />

@@ -464,11 +464,33 @@ router.post('/login', async (req, res, next) => {
       });
     }
 
+    const previousLastLoginAt = user.lastLogin;
+
     // Update last login
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLogin: new Date() },
     });
+
+    if (user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER) {
+      const forwardedFor = req.headers['x-forwarded-for'];
+      const rawIp = Array.isArray(forwardedFor) ? String(forwardedFor[0] || '') : String(forwardedFor || req.ip || '');
+      const ipAddress = rawIp.split(',')[0].trim() || null;
+      await prisma.activityLog.create({
+        data: {
+          userId: user.id,
+          action: previousLastLoginAt ? 'VENDOR_SESSION_REPLACED' : 'VENDOR_SESSION_STARTED',
+          details: {
+            role: user.role,
+            sessionIssuedAt: Date.now(),
+            previousSessionAt: previousLastLoginAt ? previousLastLoginAt.toISOString() : null,
+            deviceType: String(req.headers['sec-ch-ua-platform'] || req.headers['user-agent'] || '').slice(0, 120),
+          },
+          ipAddress,
+          userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
+        },
+      });
+    }
 
     // Generate token
     const token = generateToken({
@@ -633,12 +655,34 @@ router.post('/change-password', authenticate, async (req, res, next) => {
 });
 
 // Logout (client-side token removal, but we can track it if needed)
-router.post('/logout', authenticate, async (req, res) => {
-  // In a more advanced setup, we could blacklist the token
-  res.json({
-    success: true,
-    message: 'Logout successful.',
-  });
+router.post('/logout', authenticate, async (req, res, next) => {
+  try {
+    if (req.user?.role === UserRole.FABRIC_SELLER || req.user?.role === UserRole.FASHION_DESIGNER) {
+      const forwardedFor = req.headers['x-forwarded-for'];
+      const rawIp = Array.isArray(forwardedFor) ? String(forwardedFor[0] || '') : String(forwardedFor || req.ip || '');
+      const ipAddress = rawIp.split(',')[0].trim() || null;
+      await prisma.activityLog.create({
+        data: {
+          userId: req.user.id,
+          action: 'VENDOR_SESSION_LOGOUT',
+          details: {
+            role: req.user.role,
+            sessionEndedAt: Date.now(),
+            deviceType: String(req.headers['sec-ch-ua-platform'] || req.headers['user-agent'] || '').slice(0, 120),
+          },
+          ipAddress,
+          userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
+        },
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Logout successful.',
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 export default router;

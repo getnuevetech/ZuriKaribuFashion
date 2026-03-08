@@ -37,6 +37,44 @@ const adminUserRoleAssignmentSchema = z.object({
   permissions: adminPermissionListSchema.optional(),
 });
 
+const vendorRoleSchema = z.enum(['FABRIC_SELLER', 'FASHION_DESIGNER']);
+const vendorProfileStatusSchema = z.enum(['INCOMPLETE', 'SUBMITTED', 'APPROVED', 'REJECTED']);
+const vendorProfileFieldSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  fieldType: z.enum([
+    'TEXT',
+    'TEXTAREA',
+    'NUMBER',
+    'DATE',
+    'SELECT',
+    'MULTI_SELECT',
+    'EMAIL',
+    'PHONE',
+    'URL',
+    'DOCUMENT',
+    'IMAGE',
+  ]),
+  required: z.boolean().optional().default(false),
+  placeholder: z.string().optional(),
+  helpText: z.string().optional(),
+  options: z.array(z.string()).optional().default([]),
+  sortOrder: z.number().int().optional(),
+  isActive: z.boolean().optional().default(true),
+});
+const measurementTemplateSchema = z.object({
+  name: z.string().min(1),
+  unit: z.string().min(1).default('cm'),
+  isRequired: z.boolean().default(true),
+  instructions: z.string().optional(),
+});
+
+const parseDateValue = (value?: string | null) => {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+};
+
 let adminRbacSchemaEnsured = false;
 let adminRbacSchemaPromise: Promise<void> | null = null;
 
@@ -94,6 +132,77 @@ const ensureAdminRbacSchema = async () => {
       END $$;`
     );
 
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "VendorProfileField" (
+        "id" TEXT NOT NULL,
+        "role" TEXT NOT NULL,
+        "key" TEXT NOT NULL,
+        "label" TEXT NOT NULL,
+        "fieldType" TEXT NOT NULL,
+        "placeholder" TEXT,
+        "helpText" TEXT,
+        "required" BOOLEAN NOT NULL DEFAULT false,
+        "options" JSONB,
+        "sortOrder" INTEGER NOT NULL DEFAULT 0,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "createdById" TEXT,
+        "updatedById" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "VendorProfileField_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "VendorProfileField_role_key_key" ON "VendorProfileField"("role", "key")`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "VendorProfileField_role_sortOrder_idx" ON "VendorProfileField"("role", "sortOrder")`
+    );
+
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "VendorProfileSubmission" (
+        "id" TEXT NOT NULL,
+        "role" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "businessName" TEXT,
+        "profileStatus" TEXT NOT NULL DEFAULT 'SUBMITTED',
+        "profileData" JSONB,
+        "profileSubmittedAt" TIMESTAMP(3),
+        "profileReviewedAt" TIMESTAMP(3),
+        "profileReviewNotes" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "VendorProfileSubmission_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "VendorProfileSubmission_role_userId_key" ON "VendorProfileSubmission"("role", "userId")`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "VendorProfileSubmission_status_idx" ON "VendorProfileSubmission"("profileStatus")`
+    );
+
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "MeasurementTemplate" (
+        "id" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "unit" TEXT NOT NULL DEFAULT 'cm',
+        "isRequired" BOOLEAN NOT NULL DEFAULT true,
+        "instructions" TEXT,
+        "displayOrder" INTEGER NOT NULL DEFAULT 0,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "MeasurementTemplate_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "MeasurementTemplate_name_key" ON "MeasurementTemplate"("name")`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "MeasurementTemplate_displayOrder_idx" ON "MeasurementTemplate"("displayOrder")`
+    );
+
     const allPermissions = JSON.stringify(getPermissionCatalog().map((entry) => entry.key));
     await prisma.$executeRawUnsafe(
       `INSERT INTO "AdminRole" ("id", "name", "description", "permissions", "isSystem", "isActive", "createdAt", "updatedAt")
@@ -133,13 +242,22 @@ const resolveAdminRoutePermissions = (method: string, path: string) => {
     return [Permissions.ADMIN_ROLE_MANAGE];
   }
   if (path.startsWith('/dashboard')) return [Permissions.ADMIN_DASHBOARD_READ];
+  if (path.startsWith('/traffic-report')) return [Permissions.TRAFFIC_READ];
+  if (path.startsWith('/security/session-audit')) return [Permissions.SESSION_AUDIT_READ];
   if (path.startsWith('/users/pending')) return [Permissions.USERS_READ];
   if (path.startsWith('/users')) {
     return method === 'GET' ? [Permissions.USERS_READ] : [Permissions.USERS_MANAGE];
   }
+  if (path.startsWith('/vendor-profile/fields')) {
+    return method === 'GET' ? [Permissions.VENDOR_PROFILES_READ] : [Permissions.VENDOR_PROFILES_REVIEW];
+  }
+  if (path.startsWith('/vendor-profiles')) {
+    return method === 'GET' ? [Permissions.VENDOR_PROFILES_READ] : [Permissions.VENDOR_PROFILES_REVIEW];
+  }
   if (path.startsWith('/products') || path.startsWith('/categories') || path.startsWith('/materials')) {
     return [Permissions.PRODUCTS_MANAGE];
   }
+  if (path.startsWith('/measurement-templates')) return [Permissions.MEASUREMENT_TEMPLATES_MANAGE];
   if (path.startsWith('/pricing-rules')) return [Permissions.PRICING_MANAGE];
   if (path.startsWith('/orders')) return [Permissions.ORDERS_MANAGE];
   return [];
@@ -393,6 +511,707 @@ const parseStoredPermissions = (value: unknown) => {
   }
   return [];
 };
+
+type VendorRole = z.infer<typeof vendorRoleSchema>;
+type VendorProfileStatus = z.infer<typeof vendorProfileStatusSchema>;
+
+const normalizeVendorProfileStatus = (value: unknown): VendorProfileStatus => {
+  const normalized = String(value || '').toUpperCase();
+  if (normalized === 'INCOMPLETE' || normalized === 'SUBMITTED' || normalized === 'APPROVED' || normalized === 'REJECTED') {
+    return normalized;
+  }
+  return 'SUBMITTED';
+};
+
+const getVendorProfileFields = async (role: VendorRole) => {
+  const rows = await prisma.$queryRawUnsafe<Array<any>>(
+    `SELECT "id","role","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive"
+     FROM "VendorProfileField"
+     WHERE "role" = $1
+     ORDER BY "sortOrder" ASC, "createdAt" ASC`,
+    role
+  );
+  return rows.map((row) => ({
+    ...row,
+    required: Boolean(row.required),
+    isActive: Boolean(row.isActive),
+    options: Array.isArray(row.options) ? row.options : [],
+  }));
+};
+
+const getVendorSubmissionRows = async () => {
+  const rows = await prisma.$queryRawUnsafe<Array<any>>(
+    `SELECT "id","role","userId","businessName","profileStatus","profileData","profileSubmittedAt","profileReviewedAt","profileReviewNotes","updatedAt"
+     FROM "VendorProfileSubmission"`
+  );
+  return new Map(rows.map((row) => [`${row.role}:${row.userId}`, row]));
+};
+
+// ==================== TRAFFIC / AUDIT / VENDOR GOVERNANCE ====================
+
+router.get('/traffic-report', async (req, res, next) => {
+  try {
+    const querySchema = z.object({
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+      productType: z.enum(['FABRIC', 'DESIGN', 'READY_TO_WEAR']).optional(),
+      vendorUserId: z.string().uuid().optional(),
+      page: z.string().optional(),
+    });
+    const filters = querySchema.parse(req.query);
+
+    const where: any = {};
+    const startDate = parseDateValue(filters.startDate);
+    const endDate = parseDateValue(filters.endDate);
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = startDate;
+      if (endDate) where.createdAt.lte = endDate;
+    }
+
+    const orders = await prisma.order.findMany({
+      where,
+      include: {
+        designOrder: {
+          include: {
+            design: {
+              select: {
+                id: true,
+                name: true,
+                designer: { select: { userId: true, businessName: true } },
+              },
+            },
+          },
+        },
+        fabricOrder: {
+          include: {
+            fabric: {
+              select: {
+                id: true,
+                name: true,
+                seller: { select: { userId: true, businessName: true } },
+              },
+            },
+          },
+        },
+        readyToWearItems: {
+          include: {
+            readyToWear: {
+              select: {
+                id: true,
+                name: true,
+                designer: { select: { userId: true, businessName: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    type Entry = {
+      orderId: string;
+      productId: string;
+      productName: string;
+      productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+      page: string;
+      vendorUserId: string;
+      vendorName: string;
+      vendorRole: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+      revenue: number;
+    };
+
+    const entries: Entry[] = [];
+    for (const order of orders) {
+      if (order.designOrder?.design?.designer?.userId) {
+        entries.push({
+          orderId: order.id,
+          productId: order.designOrder.design.id,
+          productName: order.designOrder.design.name,
+          productType: 'DESIGN',
+          page: `/designs/${order.designOrder.design.id}`,
+          vendorUserId: order.designOrder.design.designer.userId,
+          vendorName: order.designOrder.design.designer.businessName || 'Designer',
+          vendorRole: 'FASHION_DESIGNER',
+          revenue: Number(order.designOrder.price || 0),
+        });
+      }
+      if (order.fabricOrder?.fabric?.seller?.userId) {
+        entries.push({
+          orderId: order.id,
+          productId: order.fabricOrder.fabric.id,
+          productName: order.fabricOrder.fabric.name,
+          productType: 'FABRIC',
+          page: `/fabrics/${order.fabricOrder.fabric.id}`,
+          vendorUserId: order.fabricOrder.fabric.seller.userId,
+          vendorName: order.fabricOrder.fabric.seller.businessName || 'Fabric Seller',
+          vendorRole: 'FABRIC_SELLER',
+          revenue: Number(order.fabricOrder.totalPrice || 0),
+        });
+      }
+      for (const item of order.readyToWearItems || []) {
+        if (!item.readyToWear?.designer?.userId) continue;
+        entries.push({
+          orderId: order.id,
+          productId: item.readyToWear.id,
+          productName: item.readyToWear.name,
+          productType: 'READY_TO_WEAR',
+          page: `/ready-to-wear/${item.readyToWear.id}`,
+          vendorUserId: item.readyToWear.designer.userId,
+          vendorName: item.readyToWear.designer.businessName || 'Designer',
+          vendorRole: 'FASHION_DESIGNER',
+          revenue: Number(item.price || 0) * Number(item.quantity || 1),
+        });
+      }
+    }
+
+    const filtered = entries.filter((entry) => {
+      if (filters.productType && entry.productType !== filters.productType) return false;
+      if (filters.vendorUserId && entry.vendorUserId !== filters.vendorUserId) return false;
+      if (filters.page && entry.page !== filters.page) return false;
+      return true;
+    });
+
+    const vendors = new Map<string, any>();
+    const products = new Map<string, any>();
+    const pages = new Map<string, any>();
+    const uniqueOrders = new Set<string>();
+    let totalRevenue = 0;
+
+    for (const entry of filtered) {
+      uniqueOrders.add(entry.orderId);
+      totalRevenue += entry.revenue;
+
+      const vendorKey = `${entry.vendorRole}:${entry.vendorUserId}`;
+      const vendorAgg = vendors.get(vendorKey) || {
+        vendorUserId: entry.vendorUserId,
+        vendorName: entry.vendorName,
+        vendorRole: entry.vendorRole,
+        orderCount: 0,
+        revenue: 0,
+      };
+      vendorAgg.orderCount += 1;
+      vendorAgg.revenue += entry.revenue;
+      vendors.set(vendorKey, vendorAgg);
+
+      const productKey = `${entry.productType}:${entry.productId}`;
+      const productAgg = products.get(productKey) || {
+        productId: entry.productId,
+        productName: entry.productName,
+        productType: entry.productType,
+        page: entry.page,
+        orderCount: 0,
+        revenue: 0,
+      };
+      productAgg.orderCount += 1;
+      productAgg.revenue += entry.revenue;
+      products.set(productKey, productAgg);
+
+      const pageAgg = pages.get(entry.page) || {
+        page: entry.page,
+        orderCount: 0,
+        revenue: 0,
+      };
+      pageAgg.orderCount += 1;
+      pageAgg.revenue += entry.revenue;
+      pages.set(entry.page, pageAgg);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        filters: {
+          startDate: startDate?.toISOString() || null,
+          endDate: endDate?.toISOString() || null,
+          productType: filters.productType || null,
+          vendorUserId: filters.vendorUserId || null,
+          page: filters.page || null,
+        },
+        summary: {
+          totalOrders: uniqueOrders.size,
+          totalLineItems: filtered.length,
+          totalRevenue,
+        },
+        vendors: Array.from(vendors.values()).sort((a, b) => b.revenue - a.revenue),
+        products: Array.from(products.values()).sort((a, b) => b.orderCount - a.orderCount),
+        pages: Array.from(pages.values()).sort((a, b) => b.orderCount - a.orderCount),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/security/session-audit', async (req, res, next) => {
+  try {
+    const querySchema = z.object({
+      action: z.enum(['VENDOR_SESSION_STARTED', 'VENDOR_SESSION_REPLACED', 'VENDOR_SESSION_LOGOUT']).optional(),
+      role: z.enum(['FABRIC_SELLER', 'FASHION_DESIGNER']).optional(),
+      userId: z.string().uuid().optional(),
+      page: z.string().optional(),
+      limit: z.string().optional(),
+    });
+    const filters = querySchema.parse(req.query);
+    const pagination = parsePagination(filters.page, filters.limit, 20);
+
+    const where: any = {
+      action: filters.action
+        ? filters.action
+        : {
+            in: ['VENDOR_SESSION_STARTED', 'VENDOR_SESSION_REPLACED', 'VENDOR_SESSION_LOGOUT'],
+          },
+    };
+    if (filters.userId) where.userId = filters.userId;
+    if (filters.role) where.user = { role: filters.role };
+
+    const [events, total] = await Promise.all([
+      prisma.activityLog.findMany({
+        where,
+        skip: pagination.skip,
+        take: pagination.limit,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          action: true,
+          details: true,
+          ipAddress: true,
+          userAgent: true,
+          createdAt: true,
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              role: true,
+            },
+          },
+        },
+      }),
+      prisma.activityLog.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        events: events.map((event) => {
+          const details = (event.details as any) || {};
+          return {
+            id: event.id,
+            action: event.action,
+            createdAt: event.createdAt,
+            ipAddress: event.ipAddress,
+            userAgent: event.userAgent,
+            user: event.user,
+            details: {
+              role: details.role || event.user?.role || null,
+              deviceType: details.deviceType || 'unknown',
+              sessionIssuedAt: details.sessionIssuedAt || null,
+              previousSessionAt: details.previousSessionAt || null,
+            },
+          };
+        }),
+        pagination: {
+          page: pagination.page,
+          limit: pagination.limit,
+          total,
+          pages: Math.max(1, Math.ceil(total / pagination.limit)),
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/vendor-profile/fields', async (req, res, next) => {
+  try {
+    const role = vendorRoleSchema.parse(String(req.query.role || 'FABRIC_SELLER'));
+    const fields = await getVendorProfileFields(role);
+    res.json({
+      success: true,
+      data: {
+        role,
+        fields,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put('/vendor-profile/fields', async (req, res, next) => {
+  try {
+    const schema = z.object({
+      role: vendorRoleSchema,
+      fields: z.array(vendorProfileFieldSchema).min(1),
+    });
+    const payload = schema.parse(req.body);
+    await prisma.$executeRawUnsafe(`DELETE FROM "VendorProfileField" WHERE "role" = $1`, payload.role);
+    for (let index = 0; index < payload.fields.length; index += 1) {
+      const field = payload.fields[index];
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "VendorProfileField"
+          ("id","role","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive","createdById","updatedById","createdAt","updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,NOW(),NOW())`,
+        randomUUID(),
+        payload.role,
+        String(field.key).trim(),
+        String(field.label).trim(),
+        field.fieldType,
+        field.placeholder || null,
+        field.helpText || null,
+        Boolean(field.required),
+        JSON.stringify(field.options || []),
+        field.sortOrder ?? index + 1,
+        field.isActive !== false,
+        req.user?.id || null,
+        req.user?.id || null
+      );
+    }
+    const fields = await getVendorProfileFields(payload.role);
+    res.json({
+      success: true,
+      message: 'Vendor profile fields updated successfully.',
+      data: { role: payload.role, fields },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/vendor-profiles', async (req, res, next) => {
+  try {
+    const schema = z.object({
+      role: vendorRoleSchema.optional(),
+      status: vendorProfileStatusSchema.optional(),
+      search: z.string().trim().optional(),
+      page: z.string().optional(),
+      limit: z.string().optional(),
+    });
+    const query = schema.parse(req.query);
+    const pagination = parsePagination(query.page, query.limit, 20);
+    const search = query.search?.trim().toLowerCase();
+
+    const [sellers, designers, submissions] = await Promise.all([
+      query.role && query.role !== 'FABRIC_SELLER'
+        ? Promise.resolve([])
+        : prisma.fabricSellerProfile.findMany({
+            include: {
+              user: {
+                select: { id: true, email: true, firstName: true, lastName: true, status: true },
+              },
+            },
+            orderBy: { updatedAt: 'desc' },
+          }),
+      query.role && query.role !== 'FASHION_DESIGNER'
+        ? Promise.resolve([])
+        : prisma.designerProfile.findMany({
+            include: {
+              user: {
+                select: { id: true, email: true, firstName: true, lastName: true, status: true },
+              },
+            },
+            orderBy: { updatedAt: 'desc' },
+          }),
+      getVendorSubmissionRows(),
+    ]);
+
+    const rows = [
+      ...sellers.map((profile) => {
+        const submission = submissions.get(`FABRIC_SELLER:${profile.userId}`);
+        const profileStatus = submission
+          ? normalizeVendorProfileStatus(submission.profileStatus)
+          : profile.isVerified
+            ? 'APPROVED'
+            : profile.user.status === UserStatus.PENDING
+              ? 'SUBMITTED'
+              : 'INCOMPLETE';
+        return {
+          role: 'FABRIC_SELLER' as const,
+          userId: profile.userId,
+          profileId: profile.id,
+          businessName: profile.businessName,
+          profileStatus,
+          isVerified: profile.isVerified,
+          profileSubmittedAt: submission?.profileSubmittedAt || null,
+          profileReviewedAt: submission?.profileReviewedAt || null,
+          profileReviewNotes: submission?.profileReviewNotes || null,
+          profileData: submission?.profileData || {},
+          user: profile.user,
+          updatedAt: submission?.updatedAt || profile.updatedAt,
+        };
+      }),
+      ...designers.map((profile) => {
+        const submission = submissions.get(`FASHION_DESIGNER:${profile.userId}`);
+        const profileStatus = submission
+          ? normalizeVendorProfileStatus(submission.profileStatus)
+          : profile.isVerified
+            ? 'APPROVED'
+            : profile.user.status === UserStatus.PENDING
+              ? 'SUBMITTED'
+              : 'INCOMPLETE';
+        return {
+          role: 'FASHION_DESIGNER' as const,
+          userId: profile.userId,
+          profileId: profile.id,
+          businessName: profile.businessName,
+          profileStatus,
+          isVerified: profile.isVerified,
+          profileSubmittedAt: submission?.profileSubmittedAt || null,
+          profileReviewedAt: submission?.profileReviewedAt || null,
+          profileReviewNotes: submission?.profileReviewNotes || null,
+          profileData: submission?.profileData || {},
+          user: profile.user,
+          updatedAt: submission?.updatedAt || profile.updatedAt,
+        };
+      }),
+    ]
+      .filter((row) => {
+        if (query.status && row.profileStatus !== query.status) return false;
+        if (!search) return true;
+        return (
+          row.businessName?.toLowerCase().includes(search) ||
+          row.user.email?.toLowerCase().includes(search) ||
+          `${row.user.firstName || ''} ${row.user.lastName || ''}`.trim().toLowerCase().includes(search)
+        );
+      })
+      .sort((a, b) => Number(new Date(b.updatedAt)) - Number(new Date(a.updatedAt)));
+
+    const paged = rows.slice(pagination.skip, pagination.skip + pagination.limit);
+    res.json({
+      success: true,
+      data: {
+        profiles: paged,
+        pagination: {
+          page: pagination.page,
+          limit: pagination.limit,
+          total: rows.length,
+          pages: Math.max(1, Math.ceil(rows.length / pagination.limit)),
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/vendor-profiles/:role/:userId', async (req, res, next) => {
+  try {
+    const role = vendorRoleSchema.parse(String(req.params.role || ''));
+    const userId = String(req.params.userId || '');
+    const [submissionRows, fields] = await Promise.all([
+      prisma.$queryRawUnsafe<Array<any>>(
+        `SELECT "id","role","userId","businessName","profileStatus","profileData","profileSubmittedAt","profileReviewedAt","profileReviewNotes"
+         FROM "VendorProfileSubmission"
+         WHERE "role" = $1 AND "userId" = $2
+         LIMIT 1`,
+        role,
+        userId
+      ),
+      getVendorProfileFields(role),
+    ]);
+    const submission = submissionRows[0] || null;
+
+    if (role === 'FABRIC_SELLER') {
+      const profile = await prisma.fabricSellerProfile.findFirst({
+        where: { userId },
+        include: { user: { select: { id: true, email: true, firstName: true, lastName: true, status: true } } },
+      });
+      if (!profile) {
+        return res.status(404).json({ success: false, message: 'Vendor profile not found.' });
+      }
+      return res.json({
+        success: true,
+        data: {
+          role,
+          user: profile.user,
+          profile: {
+            ...profile,
+            profileStatus: submission ? normalizeVendorProfileStatus(submission.profileStatus) : profile.isVerified ? 'APPROVED' : 'SUBMITTED',
+            profileData: submission?.profileData || {},
+            profileSubmittedAt: submission?.profileSubmittedAt || null,
+            profileReviewedAt: submission?.profileReviewedAt || null,
+            profileReviewNotes: submission?.profileReviewNotes || null,
+          },
+          fields,
+        },
+      });
+    }
+
+    const profile = await prisma.designerProfile.findFirst({
+      where: { userId },
+      include: { user: { select: { id: true, email: true, firstName: true, lastName: true, status: true } } },
+    });
+    if (!profile) {
+      return res.status(404).json({ success: false, message: 'Vendor profile not found.' });
+    }
+    return res.json({
+      success: true,
+      data: {
+        role,
+        user: profile.user,
+        profile: {
+          ...profile,
+          profileStatus: submission ? normalizeVendorProfileStatus(submission.profileStatus) : profile.isVerified ? 'APPROVED' : 'SUBMITTED',
+          profileData: submission?.profileData || {},
+          profileSubmittedAt: submission?.profileSubmittedAt || null,
+          profileReviewedAt: submission?.profileReviewedAt || null,
+          profileReviewNotes: submission?.profileReviewNotes || null,
+        },
+        fields,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/vendor-profiles/:role/:userId/review', async (req, res, next) => {
+  try {
+    const role = vendorRoleSchema.parse(String(req.params.role || ''));
+    const userId = String(req.params.userId || '');
+    const payload = z
+      .object({
+        status: z.enum(['APPROVED', 'REJECTED']),
+        notes: z.string().optional(),
+      })
+      .parse(req.body);
+
+    const now = new Date();
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "VendorProfileSubmission"
+        ("id","role","userId","profileStatus","profileReviewNotes","profileReviewedAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,NOW())
+       ON CONFLICT ("role","userId")
+       DO UPDATE SET
+         "profileStatus" = EXCLUDED."profileStatus",
+         "profileReviewNotes" = EXCLUDED."profileReviewNotes",
+         "profileReviewedAt" = EXCLUDED."profileReviewedAt",
+         "updatedAt" = NOW()`,
+      randomUUID(),
+      role,
+      userId,
+      payload.status,
+      payload.notes || null,
+      now
+    );
+
+    if (role === 'FABRIC_SELLER') {
+      await prisma.fabricSellerProfile.updateMany({
+        where: { userId },
+        data: { isVerified: payload.status === 'APPROVED' },
+      });
+    } else {
+      await prisma.designerProfile.updateMany({
+        where: { userId },
+        data: { isVerified: payload.status === 'APPROVED' },
+      });
+    }
+
+    if (payload.status === 'APPROVED') {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { status: UserStatus.ACTIVE },
+      });
+    }
+
+    await prisma.$transaction([
+      prisma.notification.create({
+        data: {
+          userId,
+          type: payload.status === 'APPROVED' ? 'SYSTEM' : 'NEW_MESSAGE',
+          title: payload.status === 'APPROVED' ? 'Vendor profile approved' : 'Vendor profile rejected',
+          message:
+            payload.status === 'APPROVED'
+              ? 'Your vendor profile has been approved. You can now upload products.'
+              : payload.notes || 'Your vendor profile requires corrections before approval.',
+          relatedType: 'PROFILE',
+          relatedId: userId,
+        },
+      }),
+      prisma.activityLog.create({
+        data: {
+          userId: req.user!.id,
+          action: 'VENDOR_PROFILE_REVIEWED',
+          details: {
+            role,
+            vendorUserId: userId,
+            status: payload.status,
+            notes: payload.notes || null,
+          },
+        },
+      }),
+    ]);
+
+    res.json({
+      success: true,
+      message: `Vendor profile ${payload.status.toLowerCase()} successfully.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/measurement-templates', async (_req, res, next) => {
+  try {
+    const templates = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT "id","name","unit","isRequired","instructions","displayOrder","isActive"
+       FROM "MeasurementTemplate"
+       WHERE "isActive" = true
+       ORDER BY "displayOrder" ASC, "name" ASC`
+    );
+    res.json({
+      success: true,
+      data: templates.map((item) => ({
+        name: item.name,
+        unit: item.unit,
+        isRequired: Boolean(item.isRequired),
+        instructions: item.instructions || '',
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put('/measurement-templates', async (req, res, next) => {
+  try {
+    const schema = z.object({
+      templates: z.array(measurementTemplateSchema).min(1),
+    });
+    const payload = schema.parse(req.body);
+    await prisma.$executeRawUnsafe(`DELETE FROM "MeasurementTemplate"`);
+    for (let index = 0; index < payload.templates.length; index += 1) {
+      const item = payload.templates[index];
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "MeasurementTemplate"
+          ("id","name","unit","isRequired","instructions","displayOrder","isActive","createdAt","updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,true,NOW(),NOW())`,
+        randomUUID(),
+        item.name.trim(),
+        item.unit.trim(),
+        Boolean(item.isRequired),
+        item.instructions?.trim() || '',
+        index + 1
+      );
+    }
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'MEASUREMENT_TEMPLATES_UPDATED',
+        details: { templates: payload.templates },
+      },
+    });
+    res.json({
+      success: true,
+      message: 'Measurement templates updated successfully.',
+      data: payload.templates,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ==================== ADMIN ROLES & PERMISSIONS ====================
 
