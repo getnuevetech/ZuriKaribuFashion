@@ -16,7 +16,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 
-const USE_DYNAMIC_HOMEPAGE = import.meta.env.VITE_USE_DYNAMIC_HOMEPAGE === 'true';
+const USE_DYNAMIC_HOMEPAGE = import.meta.env.VITE_HOMEPAGE_MODE === 'dynamic';
 
 type HeroSlide = {
   id: string;
@@ -520,12 +520,11 @@ export default function Home() {
                 {heroSlides[currentSlide]?.title}
               </h1>
               <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-lg">{heroSlides[currentSlide]?.subtitle}</p>
-              <Link
-                to={heroSlides[currentSlide]?.ctaLink || '/ready-to-wear'}
-                className="inline-flex items-center bg-white text-black hover:bg-white/90 btn-hover rounded-none px-8 py-6 text-sm font-semibold tracking-wider"
-              >
-                {heroSlides[currentSlide]?.ctaText || 'SHOP NOW'}
-                <ArrowRight className="ml-2 w-4 h-4" />
+              <Link to={heroSlides[currentSlide]?.ctaLink || '/ready-to-wear'} className="inline-flex items-center">
+                <span className="bg-white text-black hover:bg-white/90 btn-hover rounded-none px-8 py-6 text-sm font-semibold tracking-wider">
+                  {heroSlides[currentSlide]?.ctaText || 'SHOP NOW'}
+                  <ArrowRight className="ml-2 w-4 h-4 inline" />
+                </span>
               </Link>
             </div>
           </div>
@@ -580,8 +579,10 @@ export default function Home() {
                 <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
                   <h3 className="font-['Oswald'] text-2xl font-bold mb-2">{category.title}</h3>
                   <p className="text-white/80 text-sm mb-4">{category.description}</p>
-                  <span className="inline-flex items-center border border-white text-white rounded-none px-4 py-2 text-xs tracking-wider">
-                    SHOP NOW <ChevronRight className="ml-1 w-4 h-4" />
+                  <span className="inline-flex items-center px-4 py-2" style={{ border: '1px solid currentColor' }}>
+                    <span className="border-white text-white hover:bg-white hover:text-black rounded-none text-xs tracking-wider">
+                      SHOP NOW <ChevronRight className="ml-1 w-4 h-4" />
+                    </span>
                   </span>
                 </div>
               </Link>
@@ -651,8 +652,10 @@ export default function Home() {
               <h2 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
                 New arrivals from the most talented designers across the continent.
               </h2>
-              <Link to="/ready-to-wear" className="inline-flex items-center bg-black text-white hover:bg-black/90 btn-hover rounded-none px-8 py-6 text-sm font-semibold tracking-wider">
-                SHOP NEW ARRIVALS <ArrowRight className="ml-2 w-4 h-4" />
+              <Link to="/ready-to-wear" className="inline-flex items-center">
+                <span className="bg-black text-white hover:bg-black/90 btn-hover rounded-none px-8 py-6 text-sm font-semibold tracking-wider">
+                  SHOP NEW ARRIVALS <ArrowRight className="ml-2 w-4 h-4" />
+                </span>
               </Link>
             </div>
             <div>
@@ -696,8 +699,10 @@ export default function Home() {
           </div>
 
           <div className="text-center mt-10">
-            <Link to="/designs" className="inline-flex items-center rounded-none border-black text-sm tracking-wider hover:bg-black hover:text-white border px-8 py-3 transition-colors">
-              MEET ALL DESIGNERS <ArrowRight className="ml-2 w-4 h-4" />
+            <Link to="/designs" className="inline-flex items-center px-8 py-3" style={{ border: '1px solid currentColor' }}>
+              <span className="rounded-none border-black text-sm tracking-wider hover:bg-black hover:text-white">
+                MEET ALL DESIGNERS <ArrowRight className="ml-2 w-4 h-4 inline" />
+              </span>
             </Link>
           </div>
         </div>
@@ -713,8 +718,10 @@ export default function Home() {
             <p className="mb-4 rounded-none border-white text-white text-xs tracking-wider">HERITAGE STORY</p>
             <h2 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">{heritage.title}</h2>
             <p className="text-white/80 text-lg leading-relaxed mb-8">{heritage.content}</p>
-            <Link to="/about" className="inline-flex items-center rounded-none border-white text-white hover:bg-white hover:text-black text-sm tracking-wider border px-8 py-3 transition-colors">
-              READ OUR STORY <ArrowRight className="ml-2 w-4 h-4" />
+            <Link to="/about" className="inline-flex items-center px-8 py-3" style={{ border: '1px solid currentColor' }}>
+              <span className="rounded-none border-white text-white hover:bg-white hover:text-black text-sm tracking-wider">
+                READ OUR STORY <ArrowRight className="ml-2 w-4 h-4 inline" />
+              </span>
             </Link>
           </div>
         </div>
@@ -746,7 +753,7 @@ export default function Home() {
                       <blockquote className="text-2xl sm:text-3xl lg:text-4xl font-light italic text-gray-800 mb-8 leading-relaxed">
                         &ldquo;{testimonial.quote}&rdquo;
                       </blockquote>
-                      <div className="flex items-center gap-4 justify-center">
+                      <div className="flex items-center justify-center gap-4">
                         <img src={testimonial.avatar} alt={testimonial.name} className="w-14 h-14 rounded-full object-cover" />
                         <div className="text-left">
                           <p className="font-semibold">{testimonial.name}</p>
@@ -782,11 +789,15 @@ export default function Home() {
               Join our community of fashion lovers and discover unique pieces from talented African designers.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/ready-to-wear" className="inline-flex items-center justify-center bg-black text-white hover:bg-black/90 btn-hover rounded-none px-8 py-6 text-sm font-semibold tracking-wider">
-                SHOP NOW
+              <Link to="/ready-to-wear" className="inline-flex items-center justify-center">
+                <span className="bg-black text-white hover:bg-black/90 btn-hover rounded-none px-8 py-6 text-sm font-semibold tracking-wider">
+                  SHOP NOW
+                </span>
               </Link>
-              <Link to="/register" className="inline-flex items-center justify-center border-black rounded-none px-8 py-6 text-sm font-semibold tracking-wider hover:bg-black hover:text-white border transition-colors">
-                CREATE ACCOUNT
+              <Link to="/register" className="inline-flex items-center justify-center px-8 py-6" style={{ border: '1px solid currentColor' }}>
+                <span className="border-black rounded-none px-8 py-6 text-sm font-semibold tracking-wider hover:bg-black hover:text-white">
+                  CREATE ACCOUNT
+                </span>
               </Link>
             </div>
           </div>
@@ -804,7 +815,7 @@ export default function Home() {
               <input
                 type="email"
                 placeholder="Enter your email"
-                className="flex-1 rounded-none border-black/20 focus:border-black h-12 border px-4 text-gray-900 placeholder:text-gray-500 focus:outline-none"
+                className="flex-1 rounded-none border-black/20 focus:border-black h-12"
               />
               <button type="submit" className="bg-black text-white hover:bg-black/90 rounded-none h-12 px-8">
                 SUBSCRIBE

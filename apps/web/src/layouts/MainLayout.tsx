@@ -7,7 +7,7 @@ import { useCartStore } from '../store/cartStore';
 import { api } from '../services/api';
 import Footer from '../components/Footer';
 
-const USE_DYNAMIC_HOMEPAGE = import.meta.env.VITE_USE_DYNAMIC_HOMEPAGE === 'true';
+const USE_DYNAMIC_HOMEPAGE = import.meta.env.VITE_HOMEPAGE_MODE === 'dynamic';
 
 export default function MainLayout() {
   const [isScrolled, setIsScrolled] = useState(false);
