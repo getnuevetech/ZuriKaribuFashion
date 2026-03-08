@@ -16,6 +16,8 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 
+const USE_DYNAMIC_HOMEPAGE = import.meta.env.VITE_USE_DYNAMIC_HOMEPAGE === 'true';
+
 type HeroSlide = {
   id: string;
   image: string;
@@ -56,7 +58,7 @@ const countryFlags: Record<string, string> = {
   Tanzania: '🇹🇿',
 };
 
-const defaultHeroSlides: HeroSlide[] = [
+const kimiHeroSlides: HeroSlide[] = [
   {
     id: '1',
     image: '/images/hero-1.jpg',
@@ -86,18 +88,18 @@ const defaultHeroSlides: HeroSlide[] = [
   },
 ];
 
-const defaultCountries: CountryCard[] = [
-  { name: 'Ghana', flag: '🇬🇭', fabrics: 'Kente, Adinkra, Batik' },
+const kimiCountries: CountryCard[] = [
+  { name: 'Angola', flag: '🇦🇴', fabrics: 'Kanari, Masai' },
+  { name: 'Algeria', flag: '🇩🇿', fabrics: 'Camru, Kokomo' },
   { name: 'Nigeria', flag: '🇳🇬', fabrics: 'Adire, Ankara, Aso-Oke' },
-  { name: 'Kenya', flag: '🇰🇪', fabrics: 'Kitenge, Kikoy, Shuka' },
 ];
 
-const defaultCategories = [
+const kimiCategories = [
   {
     id: '1',
     title: 'Ready To Wear',
     description: 'Made by African, Worn by the World',
-    image: '/images/category-ready-to-wear.jpg',
+    image: '/images/category-ready.jpg',
     link: '/ready-to-wear',
   },
   {
@@ -116,7 +118,7 @@ const defaultCategories = [
   },
 ];
 
-const defaultHowItWorks = [
+const kimiHowItWorks = [
   { id: 1, title: 'Discover Your Style', icon: Search },
   { id: 2, title: 'Preview Virtually', icon: Eye },
   { id: 3, title: 'Select Your Fabric', icon: Sparkles },
@@ -125,25 +127,26 @@ const defaultHowItWorks = [
   { id: 6, title: 'Delivered to You', icon: Truck },
 ];
 
-const defaultFeaturedDesigns: FeaturedProduct[] = [
+const kimiFeaturedDesigns: FeaturedProduct[] = [
   { id: '1', name: 'Exclusive Gorgeous', price: 1428.57, image: '/images/product-custom-1.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
   { id: '2', name: 'My Skkentele', price: 714.29, image: '/images/product-custom-2.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
   { id: '3', name: 'Ankara Gbasibe', price: 857.14, image: '/images/product-custom-3.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
 ];
 
-const defaultReadyToWear: FeaturedProduct[] = [
+const kimiReadyToWear: FeaturedProduct[] = [
   { id: 'r1', name: 'Bridal Traditional', price: 2285.71, image: '/images/product-ready-1.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
   { id: 'r2', name: 'Afigan', price: 1642.86, image: '/images/product-ready-2.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
   { id: 'r3', name: 'Kakaki Africa', price: 1507.14, image: '/images/product-ready-3.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
 ];
 
-const defaultFabrics: FeaturedProduct[] = [
+const kimiFabrics: FeaturedProduct[] = [
   { id: 'f1', name: 'Ankara Mummy', price: 2142.86, image: '/images/fabric-1.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
   { id: 'f2', name: 'Dancing Queen Adire', price: 785.71, image: '/images/fabric-2.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
   { id: 'f3', name: 'Ankara Party', price: 928.57, image: '/images/fabric-3.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
+  { id: 'f4', name: 'Awon Da', price: 1428.57, image: '/images/fabric-4.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
 ];
 
-const defaultDesigners = [
+const kimiDesigners = [
   {
     id: '1',
     name: 'Asante Designs',
@@ -170,27 +173,27 @@ const defaultDesigners = [
   },
 ];
 
-const defaultTestimonials = [
+const kimiTestimonials = [
   {
     id: '1',
     name: 'Amara Johnson',
     location: 'New York, USA',
-    avatar: '/images/avatar-1.jpg',
+    avatar: '/images/testimonial-1.jpg',
     quote: 'The quality exceeded my expectations. My dress fits perfectly and the fabric is gorgeous.',
   },
   {
     id: '2',
     name: 'Kwame Asante',
     location: 'London, UK',
-    avatar: '/images/avatar-2.jpg',
+    avatar: '/images/testimonial-2.jpg',
     quote: 'Amazing experience from start to finish. The custom tailoring service is a game changer!',
   },
   {
     id: '3',
     name: 'Fatima Mohammed',
     location: 'Dubai, UAE',
-    avatar: '/images/avatar-3.jpg',
-    quote: 'Supporting African designers while getting beautiful clothes. This platform is a gem.',
+    avatar: '/images/testimonial-3.jpg',
+    quote: 'Supporting African designers while getting beautiful clothes—this platform is a gem.',
   },
 ];
 
@@ -300,6 +303,7 @@ export default function Home() {
 
   const { data: heroSlidesData } = useQuery({
     queryKey: ['heroSlides'],
+    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepage.getHeroSlides();
       return response.success ? response.data : null;
@@ -308,6 +312,7 @@ export default function Home() {
 
   const { data: featuredData, isLoading: featuredLoading } = useQuery({
     queryKey: ['featuredProducts'],
+    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepage.getAllFeatured();
       return response.success ? response.data : null;
@@ -316,6 +321,7 @@ export default function Home() {
 
   const { data: countriesData } = useQuery({
     queryKey: ['homepageCountries'],
+    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getCountries();
       return response.success ? response.data : null;
@@ -324,6 +330,7 @@ export default function Home() {
 
   const { data: categoriesData } = useQuery({
     queryKey: ['homepageCategories'],
+    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getCategories();
       return response.success ? response.data : null;
@@ -332,6 +339,7 @@ export default function Home() {
 
   const { data: howItWorksData } = useQuery({
     queryKey: ['homepageHowItWorks'],
+    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getHowItWorks();
       return response.success ? response.data : null;
@@ -340,6 +348,7 @@ export default function Home() {
 
   const { data: designerSpotlightData } = useQuery({
     queryKey: ['designerSpotlightPublic'],
+    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getDesignerSpotlight();
       return response.success ? response.data : null;
@@ -348,6 +357,7 @@ export default function Home() {
 
   const { data: heritageData } = useQuery({
     queryKey: ['heritagePublic'],
+    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getHeritage();
       return response.success ? response.data : null;
@@ -356,6 +366,7 @@ export default function Home() {
 
   const { data: testimonialsData } = useQuery({
     queryKey: ['testimonialsPublic'],
+    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getTestimonials();
       return response.success ? response.data : null;
@@ -363,26 +374,31 @@ export default function Home() {
   });
 
   const heroSlides = useMemo(
-    () =>
-      (Array.isArray(heroSlidesData) && heroSlidesData.length > 0 ? heroSlidesData : defaultHeroSlides).map((slide: any, index: number) => ({
+    () => {
+      const source =
+        USE_DYNAMIC_HOMEPAGE && Array.isArray(heroSlidesData) && heroSlidesData.length > 0
+          ? heroSlidesData
+          : kimiHeroSlides;
+      return source.map((slide: any, index: number) => ({
         id: String(slide.id ?? index),
-        image: asText(slide.image, defaultHeroSlides[index % defaultHeroSlides.length].image),
-        title: asText(slide.title, defaultHeroSlides[index % defaultHeroSlides.length].title),
-        subtitle: asText(slide.subtitle, defaultHeroSlides[index % defaultHeroSlides.length].subtitle),
-        badge: asText(slide.badge, defaultHeroSlides[index % defaultHeroSlides.length].badge),
-        ctaText: asText(slide.ctaText, defaultHeroSlides[index % defaultHeroSlides.length].ctaText),
-        ctaLink: asText(slide.ctaLink, defaultHeroSlides[index % defaultHeroSlides.length].ctaLink),
-      })),
+        image: asText(slide.image, kimiHeroSlides[index % kimiHeroSlides.length].image),
+        title: asText(slide.title, kimiHeroSlides[index % kimiHeroSlides.length].title),
+        subtitle: asText(slide.subtitle, kimiHeroSlides[index % kimiHeroSlides.length].subtitle),
+        badge: asText(slide.badge, kimiHeroSlides[index % kimiHeroSlides.length].badge),
+        ctaText: asText(slide.ctaText, kimiHeroSlides[index % kimiHeroSlides.length].ctaText),
+        ctaLink: asText(slide.ctaLink, kimiHeroSlides[index % kimiHeroSlides.length].ctaLink),
+      }));
+    },
     [heroSlidesData],
   );
 
-  const featuredDesigns = (featuredData?.FEATURED_DESIGNS || defaultFeaturedDesigns) as FeaturedProduct[];
-  const featuredRTW = (featuredData?.FEATURED_READY_TO_WEAR || defaultReadyToWear) as FeaturedProduct[];
-  const featuredFabrics = (featuredData?.FEATURED_FABRICS || defaultFabrics) as FeaturedProduct[];
+  const featuredDesigns = ((USE_DYNAMIC_HOMEPAGE ? featuredData?.FEATURED_DESIGNS : null) || kimiFeaturedDesigns) as FeaturedProduct[];
+  const featuredRTW = ((USE_DYNAMIC_HOMEPAGE ? featuredData?.FEATURED_READY_TO_WEAR : null) || kimiReadyToWear) as FeaturedProduct[];
+  const featuredFabrics = ((USE_DYNAMIC_HOMEPAGE ? featuredData?.FEATURED_FABRICS : null) || kimiFabrics) as FeaturedProduct[];
 
   const countries = useMemo<CountryCard[]>(
     () =>
-      (Array.isArray(countriesData) && countriesData.length > 0 ? countriesData : defaultCountries)
+      (USE_DYNAMIC_HOMEPAGE && Array.isArray(countriesData) && countriesData.length > 0 ? countriesData : kimiCountries)
         .slice(0, 3)
         .map((country: any) => ({
           name: asText(country.name, 'Country'),
@@ -394,63 +410,64 @@ export default function Home() {
 
   const categories = useMemo(
     () =>
-      (Array.isArray(categoriesData) && categoriesData.length > 0 ? categoriesData : defaultCategories).slice(0, 3).map((item: any, index: number) => ({
+      (USE_DYNAMIC_HOMEPAGE && Array.isArray(categoriesData) && categoriesData.length > 0 ? categoriesData : kimiCategories).slice(0, 3).map((item: any, index: number) => ({
         id: String(item.id ?? index),
-        title: asText(item.title, defaultCategories[index % defaultCategories.length].title),
-        description: asText(item.description, defaultCategories[index % defaultCategories.length].description),
-        image: asText(item.image, defaultCategories[index % defaultCategories.length].image),
-        link: asText(item.link, defaultCategories[index % defaultCategories.length].link),
+        title: asText(item.title, kimiCategories[index % kimiCategories.length].title),
+        description: asText(item.description, kimiCategories[index % kimiCategories.length].description),
+        image: asText(item.image, kimiCategories[index % kimiCategories.length].image),
+        link: asText(item.link, kimiCategories[index % kimiCategories.length].link),
       })),
     [categoriesData],
   );
 
   const howItWorks = useMemo(
     () =>
-      (Array.isArray(howItWorksData) && howItWorksData.length > 0 ? howItWorksData : defaultHowItWorks).slice(0, 6).map((item: any, index: number) => ({
+      (USE_DYNAMIC_HOMEPAGE && Array.isArray(howItWorksData) && howItWorksData.length > 0 ? howItWorksData : kimiHowItWorks).slice(0, 6).map((item: any, index: number) => ({
         id: Number(item.id ?? index + 1),
-        title: asText(item.title, defaultHowItWorks[index % defaultHowItWorks.length].title),
-        icon: defaultHowItWorks[index % defaultHowItWorks.length].icon,
+        title: asText(item.title, kimiHowItWorks[index % kimiHowItWorks.length].title),
+        icon: kimiHowItWorks[index % kimiHowItWorks.length].icon,
       })),
     [howItWorksData],
   );
 
   const designers = useMemo(() => {
+    if (!USE_DYNAMIC_HOMEPAGE) return kimiDesigners;
     const spotlight = designerSpotlightData;
     if (spotlight) {
       const lead = {
         id: String(spotlight.id ?? 'lead'),
-        name: asText(spotlight.name, spotlight.designer?.businessName, defaultDesigners[0].name),
-        country: asText(spotlight.country, spotlight.designer?.country, defaultDesigners[0].country),
+        name: asText(spotlight.name, spotlight.designer?.businessName, kimiDesigners[0].name),
+        country: asText(spotlight.country, spotlight.designer?.country, kimiDesigners[0].country),
         flag: asText(spotlight.flag, countryFlags[spotlight.country], '🌍'),
-        quote: asText(spotlight.quote, spotlight.headline, defaultDesigners[0].quote),
-        image: asText(spotlight.image, defaultDesigners[0].image),
+        quote: asText(spotlight.quote, spotlight.headline, kimiDesigners[0].quote),
+        image: asText(spotlight.image, kimiDesigners[0].image),
       };
-      return [lead, ...defaultDesigners.slice(1)];
+      return [lead, ...kimiDesigners.slice(1)];
     }
-    return defaultDesigners;
+    return kimiDesigners;
   }, [designerSpotlightData]);
 
   const testimonials = useMemo(
     () =>
-      (Array.isArray(testimonialsData) && testimonialsData.length > 0 ? testimonialsData : defaultTestimonials).map((item: any, index: number) => ({
+      (USE_DYNAMIC_HOMEPAGE && Array.isArray(testimonialsData) && testimonialsData.length > 0 ? testimonialsData : kimiTestimonials).map((item: any, index: number) => ({
         id: String(item.id ?? index),
-        name: asText(item.name, defaultTestimonials[index % defaultTestimonials.length].name),
-        location: asText(item.location, defaultTestimonials[index % defaultTestimonials.length].location),
-        avatar: asText(item.avatar, defaultTestimonials[index % defaultTestimonials.length].avatar),
-        quote: asText(item.quote, item.text, defaultTestimonials[index % defaultTestimonials.length].quote),
+        name: asText(item.name, kimiTestimonials[index % kimiTestimonials.length].name),
+        location: asText(item.location, kimiTestimonials[index % kimiTestimonials.length].location),
+        avatar: asText(item.avatar, kimiTestimonials[index % kimiTestimonials.length].avatar),
+        quote: asText(item.quote, item.text, kimiTestimonials[index % kimiTestimonials.length].quote),
       })),
     [testimonialsData],
   );
 
   const heritage = useMemo(
     () => ({
-      title: asText(heritageData?.title, 'Rooted in Culture'),
+      title: asText(USE_DYNAMIC_HOMEPAGE ? heritageData?.title : null, 'Rooted in Culture'),
       content: asText(
-        heritageData?.description,
-        heritageData?.content,
+        USE_DYNAMIC_HOMEPAGE ? heritageData?.description : null,
+        USE_DYNAMIC_HOMEPAGE ? heritageData?.content : null,
         "Every pattern carries meaning. From Kente's bold geometry to Ankara's vibrant motifs, African textiles tell stories of identity, celebration, and legacy passed through generations.",
       ),
-      image: asText(heritageData?.image, '/images/heritage-bg.jpg'),
+      image: asText(USE_DYNAMIC_HOMEPAGE ? heritageData?.image : null, '/images/heritage-bg.jpg'),
     }),
     [heritageData],
   );
@@ -640,7 +657,7 @@ export default function Home() {
             </div>
             <div>
               <div className="relative">
-                <img src="/images/fresh-drops-banner.jpg" alt="Fresh Drops" className="w-full aspect-[3/4] object-cover rounded-xl" />
+                <img src="/images/fresh-drops.jpg" alt="Fresh Drops" className="w-full aspect-[3/4] object-cover rounded-xl" />
                 <div className="absolute -bottom-6 -left-6 bg-black text-white p-6 rounded-xl">
                   <p className="font-['Oswald'] text-3xl font-bold">50+</p>
                   <p className="text-sm text-white/70">New Arrivals</p>
