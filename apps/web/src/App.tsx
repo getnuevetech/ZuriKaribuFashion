@@ -49,6 +49,7 @@ import QADashboard from './pages/qa/Dashboard';
 
 // Auth
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminPermissionGuard from './components/AdminPermissionGuard';
 import { useAuthStore } from './store/authStore';
 import { getHomeRouteForRole } from './auth/rbac';
 
@@ -112,15 +113,78 @@ function App() {
             {/* Admin Routes */}
             <Route element={<ProtectedRoute allowedRoles={['ADMINISTRATOR']} />}>
               <Route element={<DashboardLayout userType="admin" />}>
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/admin/users" element={<AdminUsers />} />
-                <Route path="/admin/roles" element={<AdminRoleManagement />} />
-                <Route path="/admin/products" element={<AdminProducts />} />
-                <Route path="/admin/orders" element={<AdminOrders />} />
-                <Route path="/admin/pricing" element={<AdminPricingRules />} />
-                <Route path="/admin/banners" element={<AdminBanners />} />
-                <Route path="/admin/homepage" element={<AdminHomepage />} />
-                <Route path="/admin/homepage-sections" element={<AdminHomepageSections />} />
+                <Route
+                  path="/admin"
+                  element={
+                    <AdminPermissionGuard required={['admin:dashboard:read']}>
+                      <AdminDashboard />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/users"
+                  element={
+                    <AdminPermissionGuard required={['users:read']}>
+                      <AdminUsers />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/roles"
+                  element={
+                    <AdminPermissionGuard required={['admin:roles:manage', 'users:read']}>
+                      <AdminRoleManagement />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/products"
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminProducts />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/orders"
+                  element={
+                    <AdminPermissionGuard required={['orders:manage']}>
+                      <AdminOrders />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/pricing"
+                  element={
+                    <AdminPermissionGuard required={['pricing:manage']}>
+                      <AdminPricingRules />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/banners"
+                  element={
+                    <AdminPermissionGuard required={['banners:manage']}>
+                      <AdminBanners />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/homepage"
+                  element={
+                    <AdminPermissionGuard required={['homepage:manage']}>
+                      <AdminHomepage />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/homepage-sections"
+                  element={
+                    <AdminPermissionGuard required={['homepage:manage']}>
+                      <AdminHomepageSections />
+                    </AdminPermissionGuard>
+                  }
+                />
               </Route>
             </Route>
 

@@ -90,6 +90,26 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const navigate = useNavigate();
 
   const items = navItems[userType] || [];
+  const userPermissions = Array.isArray(user?.permissions) ? user.permissions : [];
+  const canAccessAdminNav = (href: string) => {
+    if (userType !== 'admin') return true;
+    if (!userPermissions || userPermissions.length === 0 || userPermissions.includes('*')) return true;
+    const permissionByHref: Record<string, string[]> = {
+      '/admin': ['admin:dashboard:read'],
+      '/admin/users': ['users:read'],
+      '/admin/roles': ['admin:roles:manage', 'users:read'],
+      '/admin/products': ['products:manage'],
+      '/admin/pricing': ['pricing:manage'],
+      '/admin/orders': ['orders:manage'],
+      '/admin/banners': ['banners:manage'],
+      '/admin/homepage': ['homepage:manage'],
+      '/admin/homepage-sections': ['homepage:manage'],
+    };
+    const required = permissionByHref[href] || [];
+    if (required.length === 0) return true;
+    return required.every((permission) => userPermissions.includes(permission));
+  };
+  const visibleItems = items.filter((item) => canAccessAdminNav(item.href));
   const roleLabel = roleLabels[userType] || 'User';
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
 
@@ -116,7 +136,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
 
           {/* Navigation */}
           <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
-            {items.map((item) => {
+            {visibleItems.map((item) => {
               const hrefUrl = new URL(item.href, window.location.origin);
               const currentTab = new URLSearchParams(location.search).get('tab');
               const hrefTab = hrefUrl.searchParams.get('tab');
