@@ -4,7 +4,16 @@ import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 
-type SectionType = 'countries' | 'howItWorks' | 'categories' | 'designerSpotlight' | 'heritage' | 'testimonials' | 'footer';
+type SectionType = 'topStrip' | 'countries' | 'howItWorks' | 'categories' | 'designerSpotlight' | 'heritage' | 'testimonials' | 'footer';
+
+interface TopStripContent {
+  messages: string[];
+  separator: string;
+  repeatCount: number;
+  animationSeconds: number;
+  source?: 'DATABASE' | 'DEFAULT';
+  updatedAt?: string | null;
+}
 
 interface Country {
   id: string;
@@ -105,6 +114,7 @@ interface DesignerOption {
 }
 
 const TABS = [
+  { id: 'topStrip' as SectionType, label: 'Top Strip', icon: Layout },
   { id: 'countries' as SectionType, label: 'Countries', icon: Globe },
   { id: 'howItWorks' as SectionType, label: 'How It Works', icon: Sparkles },
   { id: 'categories' as SectionType, label: 'Categories', icon: ShoppingBag },
@@ -115,7 +125,7 @@ const TABS = [
 ];
 
 export default function HomepageSections() {
-  const [activeTab, setActiveTab] = useState<SectionType>('countries');
+  const [activeTab, setActiveTab] = useState<SectionType>('topStrip');
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -128,6 +138,7 @@ export default function HomepageSections() {
   const [heritageSections, setHeritageSections] = useState<HeritageSection[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [footerContents, setFooterContents] = useState<FooterContent[]>([]);
+  const [topStripContent, setTopStripContent] = useState<TopStripContent | null>(null);
   const [visibilitySections, setVisibilitySections] = useState<VisibilitySection[]>([]);
   const [visibilityLoading, setVisibilityLoading] = useState(false);
   const [countryOptions, setCountryOptions] = useState<CountryOption[]>([]);
@@ -149,6 +160,10 @@ export default function HomepageSections() {
     setLoading(true);
     try {
       switch (activeTab) {
+        case 'topStrip':
+          const topStripRes = await api.homepageSections.getAdminTopStrip();
+          if (topStripRes.success) setTopStripContent(topStripRes.data);
+          break;
         case 'countries':
           const countriesRes = await api.homepageSections.getAdminCountries();
           if (countriesRes.success) setCountries(countriesRes.data);
@@ -350,9 +365,9 @@ export default function HomepageSections() {
           <h1 className="text-2xl font-bold text-gray-900">Homepage Sections</h1>
           <p className="text-gray-500 mt-1">Manage all dynamic homepage content</p>
         </div>
-        <Button onClick={() => openModal()} className="flex items-center gap-2">
+        <Button onClick={() => openModal(activeTab === 'topStrip' ? topStripContent : null)} className="flex items-center gap-2">
           <Plus className="w-4 h-4" />
-          Add New
+          {activeTab === 'topStrip' ? 'Edit Top Strip' : 'Add New'}
         </Button>
       </div>
 
@@ -424,6 +439,12 @@ export default function HomepageSections() {
           </div>
         ) : (
           <>
+            {activeTab === 'topStrip' && (
+              <TopStripTable
+                data={topStripContent}
+                onEdit={() => openModal(topStripContent)}
+              />
+            )}
             {activeTab === 'countries' && (
               <CountriesTable
                 data={countries}
@@ -500,6 +521,50 @@ export default function HomepageSections() {
 }
 
 // Table Components
+function TopStripTable({ data, onEdit }: { data: TopStripContent | null; onEdit: () => void }) {
+  const messages = Array.isArray(data?.messages) ? data.messages : [];
+  return (
+    <div className="p-6 space-y-4">
+      <div className="rounded-lg border border-gray-200 p-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-gray-900">Top Announcement Strip</h3>
+            <p className="text-xs text-gray-500">
+              This controls the scrolling message bar above the hero banner.
+            </p>
+            <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+              <span className="rounded-full bg-gray-100 px-2 py-1">
+                Separator: {data?.separator || '•'}
+              </span>
+              <span className="rounded-full bg-gray-100 px-2 py-1">
+                Repeat count: {data?.repeatCount ?? 4}
+              </span>
+              <span className="rounded-full bg-gray-100 px-2 py-1">
+                Animation: {data?.animationSeconds ?? 20}s
+              </span>
+            </div>
+            <div className="space-y-1">
+              {messages.length > 0 ? (
+                messages.map((message, idx) => (
+                  <p key={`${idx}-${message}`} className="text-sm text-gray-700">
+                    • {message}
+                  </p>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500">No top strip message configured yet.</p>
+              )}
+            </div>
+          </div>
+          <Button onClick={onEdit} className="inline-flex items-center gap-2 self-start">
+            <Edit2 className="h-4 w-4" />
+            Edit Top Strip
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CountriesTable({ data, onEdit, onToggle, onDelete }: any) {
   return (
     <table className="min-w-full divide-y divide-gray-200">
@@ -852,12 +917,27 @@ function SectionModal({
   onClose: () => void;
   onSave: () => void;
 }) {
-  const [formData, setFormData] = useState<any>(item || getDefaultFormData(type));
+  const [formData, setFormData] = useState<any>(() => {
+    if (type === 'topStrip' && item) {
+      return {
+        ...item,
+        messagesText: Array.isArray(item.messages) ? item.messages.join('\n') : '',
+      };
+    }
+    return item || getDefaultFormData(type);
+  });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   function getDefaultFormData(sectionType: SectionType) {
     switch (sectionType) {
+      case 'topStrip':
+        return {
+          messagesText: 'Free shipping on orders over $250\nNew arrivals weekly\nAuthentic African designs',
+          separator: '•',
+          repeatCount: 4,
+          animationSeconds: 20,
+        };
       case 'countries':
         return { countryCode: '', name: '', flag: '', image: '', fabrics: '', displayOrder: 0, isActive: true };
       case 'howItWorks':
@@ -931,6 +1011,24 @@ function SectionModal({
     setSaving(true);
     try {
       const payload = (() => {
+        if (type === 'topStrip') {
+          const rawMessages =
+            typeof formData.messagesText === 'string'
+              ? formData.messagesText
+              : Array.isArray(formData.messages)
+                ? formData.messages.join('\n')
+                : '';
+          const messages = rawMessages
+            .split('\n')
+            .map((entry: string) => entry.trim())
+            .filter(Boolean);
+          return {
+            messages,
+            separator: String(formData.separator || '').trim() || '•',
+            repeatCount: Number(formData.repeatCount) || 4,
+            animationSeconds: Number(formData.animationSeconds) || 20,
+          };
+        }
         if (type === 'categories') {
           const title = String(formData.title || '').trim();
           const key = String(formData.key || '')
@@ -969,6 +1067,9 @@ function SectionModal({
       if (item?.id) {
         // Update existing
         switch (type) {
+          case 'topStrip':
+            response = await api.homepageSections.updateAdminTopStrip(payload);
+            break;
           case 'countries':
             response = await api.homepageSections.updateCountry(item.id, payload);
             break;
@@ -994,6 +1095,9 @@ function SectionModal({
       } else {
         // Create new
         switch (type) {
+          case 'topStrip':
+            response = await api.homepageSections.updateAdminTopStrip(payload);
+            break;
           case 'countries':
             response = await api.homepageSections.createCountry(payload);
             break;
@@ -1029,6 +1133,61 @@ function SectionModal({
 
   const renderFormFields = () => {
     switch (type) {
+      case 'topStrip':
+        return (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Scrolling Messages (one per line)</label>
+              <textarea
+                value={
+                  typeof formData.messagesText === 'string'
+                    ? formData.messagesText
+                    : Array.isArray(formData.messages)
+                      ? formData.messages.join('\n')
+                      : ''
+                }
+                onChange={(e) => setFormData({ ...formData, messagesText: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                rows={5}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Separator</label>
+                <input
+                  type="text"
+                  value={formData.separator || '•'}
+                  onChange={(e) => setFormData({ ...formData, separator: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  maxLength={8}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Repeat Count</label>
+                <input
+                  type="number"
+                  value={formData.repeatCount || 4}
+                  onChange={(e) => setFormData({ ...formData, repeatCount: parseInt(e.target.value, 10) || 4 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  min={2}
+                  max={12}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Animation Seconds</label>
+                <input
+                  type="number"
+                  value={formData.animationSeconds || 20}
+                  onChange={(e) => setFormData({ ...formData, animationSeconds: parseInt(e.target.value, 10) || 20 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  min={8}
+                  max={120}
+                />
+              </div>
+            </div>
+          </>
+        );
       case 'countries':
         return (
           <>
@@ -1427,7 +1586,7 @@ function SectionModal({
           )}
 
           {/* Display Order */}
-          {type !== 'footer' && (
+          {type !== 'footer' && type !== 'topStrip' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Display Order</label>
               <input
@@ -1441,7 +1600,7 @@ function SectionModal({
           )}
 
           {/* Active Status */}
-          {type !== 'footer' && (
+          {type !== 'footer' && type !== 'topStrip' && (
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"

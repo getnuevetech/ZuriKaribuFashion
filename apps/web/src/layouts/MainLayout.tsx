@@ -9,6 +9,12 @@ import Footer from '../components/Footer';
 import { getHomeRouteForUser, normalizeRole } from '../auth/rbac';
 
 const USE_DYNAMIC_HOMEPAGE = import.meta.env.VITE_HOMEPAGE_MODE === 'dynamic';
+const TOP_STRIP_DEFAULTS = {
+  messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
+  separator: '•',
+  repeatCount: 4,
+  animationSeconds: 20,
+};
 
 export default function MainLayout() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -24,6 +30,22 @@ export default function MainLayout() {
       return response.success ? response.data : null;
     },
   });
+  const { data: visibilityContent } = useQuery({
+    queryKey: ['homepageVisibilityForLayout'],
+    enabled: USE_DYNAMIC_HOMEPAGE,
+    queryFn: async () => {
+      const response = await api.homepageSections.getVisibility();
+      return response.success ? response.data : null;
+    },
+  });
+  const { data: topStripContent } = useQuery({
+    queryKey: ['homepageTopStrip'],
+    enabled: USE_DYNAMIC_HOMEPAGE,
+    queryFn: async () => {
+      const response = await api.homepageSections.getTopStrip();
+      return response.success ? response.data : null;
+    },
+  });
   const brandName = footerContent?.companyName?.trim() || 'ZURIKARIBU';
   const userRole = normalizeRole(user?.role);
   const dashboardRoute = getHomeRouteForUser(user);
@@ -31,6 +53,20 @@ export default function MainLayout() {
   const ordersRoute = userRole === 'CUSTOMER' ? '/orders' : null;
   const profileLabel = userRole === 'CUSTOMER' ? 'My Profile' : 'Dashboard';
   const ordersLabel = 'My Orders';
+  const topStripVisible = USE_DYNAMIC_HOMEPAGE ? Boolean(visibilityContent?.topStrip ?? true) : true;
+  const topStripMessages =
+    Array.isArray(topStripContent?.messages) && topStripContent.messages.length > 0
+      ? topStripContent.messages
+      : TOP_STRIP_DEFAULTS.messages;
+  const topStripSeparator = String(topStripContent?.separator || TOP_STRIP_DEFAULTS.separator);
+  const topStripRepeatCount = Math.max(
+    2,
+    Math.min(12, Number(topStripContent?.repeatCount || TOP_STRIP_DEFAULTS.repeatCount))
+  );
+  const topStripAnimationSeconds = Math.max(
+    8,
+    Math.min(120, Number(topStripContent?.animationSeconds || TOP_STRIP_DEFAULTS.animationSeconds))
+  );
 
   useEffect(() => {
     const handleScroll = () => {
@@ -54,23 +90,25 @@ export default function MainLayout() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="bg-black text-white h-10 flex items-center overflow-hidden">
-        <div className="animate-marquee whitespace-nowrap flex gap-8">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="flex gap-8 text-xs tracking-wider">
-              <span>Free shipping on orders over $250</span>
-              <span>•</span>
-              <span>New arrivals weekly</span>
-              <span>•</span>
-              <span>Authentic African designs</span>
-              <span>•</span>
-            </div>
-          ))}
+      {topStripVisible ? (
+        <div className="bg-black text-white h-10 flex items-center overflow-hidden">
+          <div className="animate-marquee whitespace-nowrap flex gap-8" style={{ animationDuration: `${topStripAnimationSeconds}s` }}>
+            {[...Array(topStripRepeatCount)].map((_, i) => (
+              <div key={i} className="flex gap-8 text-xs tracking-wider">
+                {topStripMessages.map((message, idx) => (
+                  <span key={`${i}-${idx}`} className="inline-flex items-center gap-8">
+                    <span>{message}</span>
+                    <span>{topStripSeparator}</span>
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <header
-        className={`fixed top-10 left-0 right-0 z-50 transition-all duration-500 ${
+        className={`fixed ${topStripVisible ? 'top-10' : 'top-0'} left-0 right-0 z-50 transition-all duration-500 ${
           isScrolled ? 'glass shadow-lg py-3' : 'bg-transparent py-5'
         }`}
       >

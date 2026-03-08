@@ -844,6 +844,17 @@ const homepageSectionsApi = {
       data: Record<string, boolean>;
     }>('/homepage-sections/visibility'),
 
+  getTopStrip: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        messages: string[];
+        separator: string;
+        repeatCount: number;
+        animationSeconds: number;
+      };
+    }>('/homepage-sections/top-strip'),
+
   getCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/countries'),
 
@@ -898,6 +909,35 @@ const homepageSectionsApi = {
         }>;
       };
     }>('/homepage-sections/admin/visibility', { visibility }),
+
+  getAdminTopStrip: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        messages: string[];
+        separator: string;
+        repeatCount: number;
+        animationSeconds: number;
+        source?: 'DATABASE' | 'DEFAULT';
+        updatedAt?: string | null;
+      };
+    }>('/homepage-sections/admin/top-strip'),
+
+  updateAdminTopStrip: (data: {
+    messages: string[];
+    separator?: string;
+    repeatCount?: number;
+    animationSeconds?: number;
+  }) =>
+    apiService.put<{
+      success: boolean;
+      data: {
+        messages: string[];
+        separator: string;
+        repeatCount: number;
+        animationSeconds: number;
+      };
+    }>('/homepage-sections/admin/top-strip', data),
 
   getAdminCountryOptions: () =>
     apiService.get<{ success: boolean; data: Array<{ code: string; name: string; flag: string }> }>(

@@ -9,7 +9,9 @@ import { AFRICAN_CURRENCY_BASELINE } from '../constants/africanCurrencies';
 const router = Router();
 
 const HOMEPAGE_VISIBILITY_SETTINGS_KEY = 'HOMEPAGE_SECTION_VISIBILITY';
+const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
 const HOMEPAGE_SECTION_VISIBILITY_META = [
+  { key: 'topStrip', label: 'Top Announcement Strip', description: 'Scrolling announcement bar above the hero banner.' },
   { key: 'hero', label: 'Hero Banner', description: 'Top hero carousel section.' },
   { key: 'countries', label: 'Country Strip', description: 'Country marquee cards below hero.' },
   { key: 'categories', label: 'Shop by Category', description: 'Category card grid section.' },
@@ -275,6 +277,45 @@ const footerUpdateSchema = footerCreateSchema;
 const homepageVisibilityUpdateSchema = z.object({
   visibility: z.record(z.boolean()),
 });
+const topStripUpdateSchema = z.object({
+  messages: z.array(z.string().min(1)).min(1),
+  separator: z.string().trim().min(1).max(8).optional(),
+  repeatCount: z.number().int().min(2).max(12).optional(),
+  animationSeconds: z.number().int().min(8).max(120).optional(),
+});
+
+type TopStripSettings = {
+  messages: string[];
+  separator: string;
+  repeatCount: number;
+  animationSeconds: number;
+};
+
+const TOP_STRIP_DEFAULTS: TopStripSettings = {
+  messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
+  separator: '•',
+  repeatCount: 4,
+  animationSeconds: 20,
+};
+
+const normalizeTopStripSettings = (raw: unknown): TopStripSettings => {
+  if (!raw || typeof raw !== 'object') return { ...TOP_STRIP_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const messages = Array.isArray(row.messages)
+    ? row.messages
+        .map((entry) => getString(entry))
+        .filter((entry): entry is string => Boolean(entry))
+    : [];
+  const separator = getString(row.separator) ?? TOP_STRIP_DEFAULTS.separator;
+  const repeatCount = getNumber(row.repeatCount) ?? TOP_STRIP_DEFAULTS.repeatCount;
+  const animationSeconds = getNumber(row.animationSeconds) ?? TOP_STRIP_DEFAULTS.animationSeconds;
+  return {
+    messages: messages.length > 0 ? messages : [...TOP_STRIP_DEFAULTS.messages],
+    separator,
+    repeatCount: Math.max(2, Math.min(12, Math.round(repeatCount))),
+    animationSeconds: Math.max(8, Math.min(120, Math.round(animationSeconds))),
+  };
+};
 
 const normalizeHomepageSectionVisibility = (raw: unknown): HomepageSectionVisibility => {
   const defaults = { ...HOMEPAGE_SECTION_VISIBILITY_DEFAULTS };
@@ -363,6 +404,64 @@ const getHomepageSectionVisibilityForAdmin = async () => {
   };
 };
 
+const readTopStripSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_TOP_STRIP_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: { ...TOP_STRIP_DEFAULTS },
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  let parsed = { ...TOP_STRIP_DEFAULTS };
+  try {
+    parsed = normalizeTopStripSettings(JSON.parse(String(row.value || '{}')));
+  } catch {
+    parsed = { ...TOP_STRIP_DEFAULTS };
+  }
+  return {
+    rowId: String(row.id),
+    settings: parsed,
+    source: 'DATABASE' as const,
+    updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+  };
+};
+
+const saveTopStripSettings = async (next: Partial<TopStripSettings>) => {
+  const existing = await readTopStripSettings();
+  const merged = normalizeTopStripSettings({
+    ...existing.settings,
+    ...next,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_TOP_STRIP_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+
 // ==================== PUBLIC ENDPOINTS ====================
 
 router.get('/visibility', async (_req, res) => {
@@ -372,6 +471,16 @@ router.get('/visibility', async (_req, res) => {
   } catch (error) {
     console.error('Error fetching homepage visibility:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch homepage visibility settings.' });
+  }
+});
+
+router.get('/top-strip', async (_req, res) => {
+  try {
+    const { settings } = await readTopStripSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching top strip settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch top strip settings.' });
   }
 });
 
@@ -605,6 +714,37 @@ router.put('/admin/visibility', authenticate, authorizePermissions(Permissions.H
     }
     console.error('Error updating homepage section visibility:', error);
     res.status(500).json({ success: false, message: 'Failed to update homepage section visibility.' });
+  }
+});
+
+router.get('/admin/top-strip', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings, source, updatedAt } = await readTopStripSettings();
+    res.json({
+      success: true,
+      data: {
+        ...settings,
+        source,
+        updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching admin top strip settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch top strip settings.' });
+  }
+});
+
+router.put('/admin/top-strip', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = topStripUpdateSchema.parse(req.body);
+    const settings = await saveTopStripSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating top strip settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update top strip settings.' });
   }
 });
 
