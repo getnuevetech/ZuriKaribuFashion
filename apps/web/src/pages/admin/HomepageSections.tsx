@@ -1054,6 +1054,18 @@ function SectionModal({
             backgroundColor: String(formData.backgroundColor || '#000000').trim().toLowerCase(),
           };
         }
+        if (type === 'countries') {
+          const normalizedCode = String(formData.countryCode || '').trim().toUpperCase();
+          const selected =
+            countryOptionByCode.get(normalizedCode) ||
+            countryOptionByName.get(String(formData.name || '').trim().toLowerCase());
+          return {
+            ...formData,
+            countryCode: selected?.code || normalizedCode,
+            name: selected?.name || String(formData.name || '').trim(),
+            flag: selected?.flag || String(formData.flag || '').trim(),
+          };
+        }
         if (type === 'categories') {
           const title = String(formData.title || '').trim();
           const key = String(formData.key || '')
@@ -1291,10 +1303,13 @@ function SectionModal({
               <input
                 type="text"
                 value={formData.name || ''}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                readOnly
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                 required
               />
+              <p className="mt-1 text-xs text-gray-500">
+                Auto-populated from selected country.
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Fabrics</label>
