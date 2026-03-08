@@ -61,7 +61,7 @@ const countryFlags: Record<string, string> = {
 const kimiHeroSlides: HeroSlide[] = [
   {
     id: '1',
-    image: '/images/hero-1.jpg',
+    image: 'https://picsum.photos/seed/kimi-hero-1/1920/1080',
     badge: 'NEW COLLECTION',
     title: 'The Elegance of Africa',
     subtitle: 'Discover authentic fashion crafted by African designers',
@@ -70,7 +70,7 @@ const kimiHeroSlides: HeroSlide[] = [
   },
   {
     id: '2',
-    image: '/images/hero-2.jpg',
+    image: 'https://picsum.photos/seed/kimi-hero-2/1920/1080',
     badge: 'FRESH DROPS',
     title: 'Timeless Heritage',
     subtitle: 'Wear the story of African craftsmanship',
@@ -79,7 +79,7 @@ const kimiHeroSlides: HeroSlide[] = [
   },
   {
     id: '3',
-    image: '/images/hero-3.jpg',
+    image: 'https://picsum.photos/seed/kimi-hero-3/1920/1080',
     badge: 'TRENDING NOW',
     title: 'Modern African Luxury',
     subtitle: 'Contemporary designs rooted in tradition',
@@ -99,21 +99,21 @@ const kimiCategories = [
     id: '1',
     title: 'Ready To Wear',
     description: 'Made by African, Worn by the World',
-    image: '/images/category-ready.jpg',
+    image: 'https://picsum.photos/seed/kimi-category-ready/900/1200',
     link: '/ready-to-wear',
   },
   {
     id: '2',
     title: 'Fabrics To Buy',
     description: 'African fabrics across all edges of Africa',
-    image: '/images/category-fabrics.jpg',
+    image: 'https://picsum.photos/seed/kimi-category-fabrics/900/1200',
     link: '/fabrics',
   },
   {
     id: '3',
     title: 'Custom To Wear',
     description: 'Every stitch sewn by an African Designer',
-    image: '/images/category-custom.jpg',
+    image: 'https://picsum.photos/seed/kimi-category-custom/900/1200',
     link: '/designs',
   },
 ];
@@ -128,22 +128,22 @@ const kimiHowItWorks = [
 ];
 
 const kimiFeaturedDesigns: FeaturedProduct[] = [
-  { id: '1', name: 'Exclusive Gorgeous', price: 1428.57, image: '/images/product-custom-1.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
-  { id: '2', name: 'My Skkentele', price: 714.29, image: '/images/product-custom-2.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
-  { id: '3', name: 'Ankara Gbasibe', price: 857.14, image: '/images/product-custom-3.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
+  { id: '1', name: 'Exclusive Gorgeous', price: 1428.57, image: 'https://picsum.photos/seed/kimi-custom-1/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
+  { id: '2', name: 'My Skkentele', price: 714.29, image: 'https://picsum.photos/seed/kimi-custom-2/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
+  { id: '3', name: 'Ankara Gbasibe', price: 857.14, image: 'https://picsum.photos/seed/kimi-custom-3/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
 ];
 
 const kimiReadyToWear: FeaturedProduct[] = [
-  { id: 'r1', name: 'Bridal Traditional', price: 2285.71, image: '/images/product-ready-1.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
-  { id: 'r2', name: 'Afigan', price: 1642.86, image: '/images/product-ready-2.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
-  { id: 'r3', name: 'Kakaki Africa', price: 1507.14, image: '/images/product-ready-3.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
+  { id: 'r1', name: 'Bridal Traditional', price: 2285.71, image: 'https://picsum.photos/seed/kimi-ready-1/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
+  { id: 'r2', name: 'Afigan', price: 1642.86, image: 'https://picsum.photos/seed/kimi-ready-2/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
+  { id: 'r3', name: 'Kakaki Africa', price: 1507.14, image: 'https://picsum.photos/seed/kimi-ready-3/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
 ];
 
 const kimiFabrics: FeaturedProduct[] = [
-  { id: 'f1', name: 'Ankara Mummy', price: 2142.86, image: '/images/fabric-1.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
-  { id: 'f2', name: 'Dancing Queen Adire', price: 785.71, image: '/images/fabric-2.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
-  { id: 'f3', name: 'Ankara Party', price: 928.57, image: '/images/fabric-3.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
-  { id: 'f4', name: 'Awon Da', price: 1428.57, image: '/images/fabric-4.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
+  { id: 'f1', name: 'Ankara Mummy', price: 2142.86, image: 'https://picsum.photos/seed/kimi-fabric-1/800/1000', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
+  { id: 'f2', name: 'Dancing Queen Adire', price: 785.71, image: 'https://picsum.photos/seed/kimi-fabric-2/800/1000', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
+  { id: 'f3', name: 'Ankara Party', price: 928.57, image: 'https://picsum.photos/seed/kimi-fabric-3/800/1000', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
+  { id: 'f4', name: 'Awon Da', price: 1428.57, image: 'https://picsum.photos/seed/kimi-fabric-4/800/1000', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
 ];
 
 const kimiDesigners = [
@@ -153,7 +153,7 @@ const kimiDesigners = [
     country: 'Ghana',
     flag: '🇬🇭',
     quote: 'When we sew, it is from the heart. Every stitch tells a story.',
-    image: '/images/designer-1.jpg',
+    image: 'https://picsum.photos/seed/kimi-designer-1/800/1000',
   },
   {
     id: '2',
@@ -161,7 +161,7 @@ const kimiDesigners = [
     country: 'Nigeria',
     flag: '🇳🇬',
     quote: 'Bringing the vibrant spirit of Africa to the world through fashion.',
-    image: '/images/designer-2.jpg',
+    image: 'https://picsum.photos/seed/kimi-designer-2/800/1000',
   },
   {
     id: '3',
@@ -169,7 +169,7 @@ const kimiDesigners = [
     country: 'Ghana',
     flag: '🇬🇭',
     quote: 'Kente to the world. Preserving tradition while embracing modernity.',
-    image: '/images/designer-3.jpg',
+    image: 'https://picsum.photos/seed/kimi-designer-3/800/1000',
   },
 ];
 
@@ -178,21 +178,21 @@ const kimiTestimonials = [
     id: '1',
     name: 'Amara Johnson',
     location: 'New York, USA',
-    avatar: '/images/testimonial-1.jpg',
+    avatar: 'https://picsum.photos/seed/kimi-testimonial-1/120/120',
     quote: 'The quality exceeded my expectations. My dress fits perfectly and the fabric is gorgeous.',
   },
   {
     id: '2',
     name: 'Kwame Asante',
     location: 'London, UK',
-    avatar: '/images/testimonial-2.jpg',
+    avatar: 'https://picsum.photos/seed/kimi-testimonial-2/120/120',
     quote: 'Amazing experience from start to finish. The custom tailoring service is a game changer!',
   },
   {
     id: '3',
     name: 'Fatima Mohammed',
     location: 'Dubai, UAE',
-    avatar: '/images/testimonial-3.jpg',
+    avatar: 'https://picsum.photos/seed/kimi-testimonial-3/120/120',
     quote: 'Supporting African designers while getting beautiful clothes—this platform is a gem.',
   },
 ];
@@ -467,7 +467,7 @@ export default function Home() {
         USE_DYNAMIC_HOMEPAGE ? heritageData?.content : null,
         "Every pattern carries meaning. From Kente's bold geometry to Ankara's vibrant motifs, African textiles tell stories of identity, celebration, and legacy passed through generations.",
       ),
-      image: asText(USE_DYNAMIC_HOMEPAGE ? heritageData?.image : null, '/images/heritage-bg.jpg'),
+      image: asText(USE_DYNAMIC_HOMEPAGE ? heritageData?.image : null, 'https://picsum.photos/seed/kimi-heritage/1920/1080'),
     }),
     [heritageData],
   );
@@ -513,19 +513,29 @@ export default function Home() {
         <div className="relative h-full flex items-center">
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
             <div className="max-w-2xl">
-              <p className="inline-flex mb-4 px-2 py-1 border border-white/70 text-[11px] tracking-wider font-semibold">
-                {heroSlides[currentSlide]?.badge}
-              </p>
-              <h1 className="font-['Oswald'] text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-bold text-white mb-6 leading-tight">
-                {heroSlides[currentSlide]?.title}
-              </h1>
-              <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-lg">{heroSlides[currentSlide]?.subtitle}</p>
-              <Link to={heroSlides[currentSlide]?.ctaLink || '/ready-to-wear'} className="inline-flex items-center">
-                <span className="bg-white text-black hover:bg-white/90 btn-hover rounded-none px-8 py-6 text-sm font-semibold tracking-wider">
-                  {heroSlides[currentSlide]?.ctaText || 'SHOP NOW'}
-                  <ArrowRight className="ml-2 w-4 h-4 inline" />
-                </span>
-              </Link>
+              {heroSlides.map((slide, index) => (
+                <div
+                  key={slide.id}
+                  className={`transition-all duration-700 ${
+                    index === currentSlide ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 absolute'
+                  }`}
+                >
+                  {index === currentSlide && (
+                    <>
+                      <h1 className="font-['Oswald'] text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-bold text-white mb-6 leading-tight">
+                        {slide.title}
+                      </h1>
+                      <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-lg">{slide.subtitle}</p>
+                      <Link to={slide.ctaLink || '/ready-to-wear'} className="inline-flex items-center">
+                        <span className="bg-white text-black hover:bg-white/90 btn-hover rounded-none px-8 py-6 text-sm font-semibold tracking-wider">
+                          {(slide.ctaText || 'SHOP NOW').toUpperCase()}
+                          <ArrowRight className="ml-2 w-4 h-4 inline" />
+                        </span>
+                      </Link>
+                    </>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -648,7 +658,9 @@ export default function Home() {
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
-              <p className="mb-4 rounded-none border-black text-xs tracking-wider">FRESH DROPS</p>
+              <span className="mb-4 rounded-none border-black text-xs tracking-wider inline-flex border px-2.5 py-0.5 font-medium">
+                FRESH DROPS
+              </span>
               <h2 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
                 New arrivals from the most talented designers across the continent.
               </h2>
@@ -660,7 +672,11 @@ export default function Home() {
             </div>
             <div>
               <div className="relative">
-                <img src="/images/fresh-drops.jpg" alt="Fresh Drops" className="w-full aspect-[3/4] object-cover rounded-xl" />
+                <img
+                  src="https://picsum.photos/seed/kimi-fresh-drops/1200/1600"
+                  alt="Fresh Drops"
+                  className="w-full aspect-[3/4] object-cover rounded-xl"
+                />
                 <div className="absolute -bottom-6 -left-6 bg-black text-white p-6 rounded-xl">
                   <p className="font-['Oswald'] text-3xl font-bold">50+</p>
                   <p className="text-sm text-white/70">New Arrivals</p>
@@ -674,7 +690,9 @@ export default function Home() {
       <section className="py-20 lg:py-32 bg-white">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="text-center mb-16">
-            <p className="mb-4 rounded-none border-black text-xs tracking-wider">DESIGNER SPOTLIGHT</p>
+            <span className="mb-4 rounded-none border-black text-xs tracking-wider inline-flex border px-2.5 py-0.5 font-medium">
+              DESIGNER SPOTLIGHT
+            </span>
             <h2 className="font-['Oswald'] text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">Meet Designers Across Africa</h2>
             <p className="text-gray-600 max-w-xl mx-auto">Showcasing rotating talent from different countries.</p>
           </div>
@@ -715,7 +733,9 @@ export default function Home() {
         <div className="absolute inset-0 bg-black/60" />
         <div className="relative w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="max-w-2xl mx-auto text-center">
-            <p className="mb-4 rounded-none border-white text-white text-xs tracking-wider">HERITAGE STORY</p>
+            <span className="mb-4 rounded-none border-white text-white text-xs tracking-wider inline-flex border px-2.5 py-0.5 font-medium">
+              HERITAGE STORY
+            </span>
             <h2 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">{heritage.title}</h2>
             <p className="text-white/80 text-lg leading-relaxed mb-8">{heritage.content}</p>
             <Link to="/about" className="inline-flex items-center px-8 py-3" style={{ border: '1px solid currentColor' }}>
