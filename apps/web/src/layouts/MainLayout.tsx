@@ -26,10 +26,10 @@ export default function MainLayout() {
   };
 
   const navLinks = [
-    { label: 'Home', href: '/' },
-    { label: 'Shop', href: '/#shop' },
-    { label: 'Designers', href: '/#designers' },
-    { label: 'About', href: '/#about' },
+    { label: 'Home', href: '#' },
+    { label: 'Shop', href: '#shop' },
+    { label: 'Designers', href: '#designers' },
+    { label: 'About', href: '#about' },
   ];
 
   return (
@@ -50,14 +50,14 @@ export default function MainLayout() {
       </div>
 
       <header
-        className={`fixed top-8 left-0 right-0 z-50 transition-all duration-500 ${
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
           isScrolled ? 'glass shadow-lg py-3' : 'bg-transparent py-5'
         }`}
       >
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center gap-2">
-              <span className="font-['Oswald'] text-xl sm:text-2xl font-semibold tracking-wide text-white md:text-black">
+              <span className="font-['Oswald'] text-xl sm:text-2xl font-semibold tracking-wide">
                 ZURIKARIBU
               </span>
             </Link>
@@ -67,7 +67,7 @@ export default function MainLayout() {
                 <a
                   key={link.label}
                   href={link.href}
-                  className="text-sm font-medium link-underline text-white md:text-black"
+                  className="text-sm font-medium link-underline"
                 >
                   {link.label}
                 </a>
@@ -75,9 +75,18 @@ export default function MainLayout() {
             </nav>
 
             <div className="flex items-center gap-2 lg:gap-4">
+              <div className="hidden md:block">
+                <select className="w-20 h-8 text-xs border-none bg-transparent">
+                  <option>USD</option>
+                  <option>EUR</option>
+                  <option>GBP</option>
+                  <option>NGN</option>
+                  <option>GHS</option>
+                </select>
+              </div>
               <Link
                 to="/cart"
-                className="relative p-2 hover:bg-black/5 rounded-full transition-colors text-white md:text-black"
+                className="relative p-2 hover:bg-black/5 rounded-full transition-colors"
               >
                 <ShoppingBag className="w-5 h-5" />
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-black text-white text-[10px] rounded-full flex items-center justify-center">
@@ -87,9 +96,7 @@ export default function MainLayout() {
 
               {isAuthenticated ? (
                 <div className="relative group">
-                  <button
-                    className="p-2 hover:bg-black/5 rounded-full transition-colors text-white md:text-black"
-                  >
+                  <button className="p-2 hover:bg-black/5 rounded-full transition-colors">
                     <User className="w-5 h-5" />
                   </button>
                   <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
@@ -118,7 +125,7 @@ export default function MainLayout() {
               ) : (
                 <Link
                   to="/login"
-                  className="hidden sm:flex items-center gap-2 text-sm font-medium text-white md:text-black hover:opacity-70 transition-opacity"
+                  className="hidden sm:flex items-center gap-2 text-sm font-medium hover:opacity-70 transition-opacity"
                 >
                   Sign In
                 </Link>
@@ -126,7 +133,7 @@ export default function MainLayout() {
 
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="lg:hidden p-2 text-white md:text-black"
+                className="lg:hidden p-2"
               >
                 {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
               </button>
@@ -141,7 +148,7 @@ export default function MainLayout() {
                     key={link.label}
                     href={link.href}
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className="text-lg font-medium text-white md:text-black"
+                    className="text-lg font-medium"
                   >
                     {link.label}
                   </a>
@@ -150,7 +157,7 @@ export default function MainLayout() {
                   <Link
                     to="/login"
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className="text-lg font-medium flex items-center gap-2 text-white md:text-black"
+                    className="text-lg font-medium flex items-center gap-2"
                   >
                     <User className="w-5 h-5" /> Sign In
                   </Link>

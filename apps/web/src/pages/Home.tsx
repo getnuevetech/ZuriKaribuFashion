@@ -220,7 +220,7 @@ function ProductCard({ product }: { product: FeaturedProduct }) {
         </div>
       </div>
       <div>
-        <h3 className="font-semibold text-lg group-hover:text-gray-600 transition-colors line-clamp-1">{product.name}</h3>
+        <h3 className="font-semibold text-lg group-hover:text-gray-600 transition-colors">{product.name}</h3>
         <p className="text-gray-500 text-sm line-clamp-1">{product.designer}</p>
         <p className="font-semibold mt-1">${Number(product.price || 0).toFixed(2)}</p>
       </div>
@@ -263,7 +263,7 @@ function ProductCarousel({
             <button onClick={onRight} className="w-10 h-10 border border-black/20 rounded-full flex items-center justify-center hover:bg-black hover:text-white transition-colors">
               <ChevronRight className="w-5 h-5" />
             </button>
-            <Link to={viewAllLink} className="hidden sm:inline-flex items-center gap-1 text-sm font-medium ml-2">
+            <Link to={viewAllLink} className="hidden sm:flex items-center gap-1 text-sm font-medium">
               View All <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
@@ -495,11 +495,11 @@ export default function Home() {
 
         <div className="relative h-full flex items-center">
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-            <div className="max-w-2xl text-white">
+            <div className="max-w-2xl">
               <p className="inline-flex mb-4 px-2 py-1 border border-white/70 text-[11px] tracking-wider font-semibold">
                 {heroSlides[currentSlide]?.badge}
               </p>
-              <h1 className="font-['Oswald'] text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-bold mb-6 leading-tight">
+              <h1 className="font-['Oswald'] text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-bold text-white mb-6 leading-tight">
                 {heroSlides[currentSlide]?.title}
               </h1>
               <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-lg">{heroSlides[currentSlide]?.subtitle}</p>
@@ -585,7 +585,7 @@ export default function Home() {
                   </span>
                 </div>
                 {index < howItWorks.length - 1 && (
-                  <div className="hidden lg:block absolute w-12 h-px bg-gray-300 top-10 left-[108px]" />
+                  <div className="hidden lg:block absolute w-12 h-px bg-gray-300" style={{ marginLeft: '140px' }} />
                 )}
               </div>
             ))}
@@ -630,7 +630,7 @@ export default function Home() {
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
-              <p className="inline-flex mb-4 px-2 py-1 border border-black text-xs tracking-wider font-semibold">FRESH DROPS</p>
+              <p className="mb-4 rounded-none border-black text-xs tracking-wider">FRESH DROPS</p>
               <h2 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
                 New arrivals from the most talented designers across the continent.
               </h2>
@@ -654,7 +654,7 @@ export default function Home() {
       <section className="py-20 lg:py-32 bg-white">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="text-center mb-16">
-            <p className="inline-flex mb-3 px-2 py-1 border border-black text-xs tracking-wider font-semibold">DESIGNER SPOTLIGHT</p>
+            <p className="mb-4 rounded-none border-black text-xs tracking-wider">DESIGNER SPOTLIGHT</p>
             <h2 className="font-['Oswald'] text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">Meet Designers Across Africa</h2>
             <p className="text-gray-600 max-w-xl mx-auto">Showcasing rotating talent from different countries.</p>
           </div>
@@ -679,7 +679,7 @@ export default function Home() {
           </div>
 
           <div className="text-center mt-10">
-            <Link to="/designs" className="inline-flex items-center border border-black text-black rounded-none px-8 py-3 text-sm tracking-wider hover:bg-black hover:text-white transition-colors">
+            <Link to="/designs" className="inline-flex items-center rounded-none border-black text-sm tracking-wider hover:bg-black hover:text-white border px-8 py-3 transition-colors">
               MEET ALL DESIGNERS <ArrowRight className="ml-2 w-4 h-4" />
             </Link>
           </div>
@@ -693,10 +693,10 @@ export default function Home() {
         <div className="absolute inset-0 bg-black/60" />
         <div className="relative w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="max-w-2xl mx-auto text-center">
-            <p className="inline-flex mb-4 px-2 py-1 border border-white text-white text-xs tracking-wider font-semibold">HERITAGE STORY</p>
+            <p className="mb-4 rounded-none border-white text-white text-xs tracking-wider">HERITAGE STORY</p>
             <h2 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">{heritage.title}</h2>
             <p className="text-white/80 text-lg leading-relaxed mb-8">{heritage.content}</p>
-            <Link to="/about" className="inline-flex items-center border border-white text-white rounded-none px-8 py-3 text-sm tracking-wider hover:bg-white hover:text-black transition-colors">
+            <Link to="/about" className="inline-flex items-center rounded-none border-white text-white hover:bg-white hover:text-black text-sm tracking-wider border px-8 py-3 transition-colors">
               READ OUR STORY <ArrowRight className="ml-2 w-4 h-4" />
             </Link>
           </div>
@@ -729,7 +729,7 @@ export default function Home() {
                       <blockquote className="text-2xl sm:text-3xl lg:text-4xl font-light italic text-gray-800 mb-8 leading-relaxed">
                         &ldquo;{testimonial.quote}&rdquo;
                       </blockquote>
-                      <div className="flex items-center justify-center gap-4">
+                      <div className="flex items-center gap-4 justify-center">
                         <img src={testimonial.avatar} alt={testimonial.name} className="w-14 h-14 rounded-full object-cover" />
                         <div className="text-left">
                           <p className="font-semibold">{testimonial.name}</p>
@@ -768,7 +768,7 @@ export default function Home() {
               <Link to="/ready-to-wear" className="inline-flex items-center justify-center bg-black text-white hover:bg-black/90 btn-hover rounded-none px-8 py-6 text-sm font-semibold tracking-wider">
                 SHOP NOW
               </Link>
-              <Link to="/register" className="inline-flex items-center justify-center border border-black rounded-none px-8 py-6 text-sm font-semibold tracking-wider hover:bg-black hover:text-white transition-colors">
+              <Link to="/register" className="inline-flex items-center justify-center border-black rounded-none px-8 py-6 text-sm font-semibold tracking-wider hover:bg-black hover:text-white border transition-colors">
                 CREATE ACCOUNT
               </Link>
             </div>
@@ -787,9 +787,9 @@ export default function Home() {
               <input
                 type="email"
                 placeholder="Enter your email"
-                className="flex-1 rounded-none border border-black/20 focus:border-black h-12 px-4 text-gray-900 placeholder:text-gray-500 focus:outline-none"
+                className="flex-1 rounded-none border-black/20 focus:border-black h-12 border px-4 text-gray-900 placeholder:text-gray-500 focus:outline-none"
               />
-              <button type="submit" className="bg-black text-white hover:bg-black/90 rounded-none h-12 px-8 transition-colors">
+              <button type="submit" className="bg-black text-white hover:bg-black/90 rounded-none h-12 px-8">
                 SUBSCRIBE
               </button>
             </form>
