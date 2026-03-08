@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
+import { OAuth2Client } from 'google-auth-library';
 import { prisma, UserRole, UserStatus } from '../db';
 import { generateToken, authenticate } from '../middleware/auth';
 import { getRolePermissions, ROLE_HOME_ROUTE, sanitizePermissionGrants } from '../rbac';
@@ -32,6 +33,10 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email('Invalid email address').transform((value) => value.toLowerCase().trim()),
   password: z.string().min(1, 'Password is required'),
+});
+
+const googleLoginSchema = z.object({
+  idToken: z.string().min(1, 'Google ID token is required'),
 });
 
 const BCRYPT_PATTERN = /^\$2[aby]\$\d{2}\$/;
@@ -177,6 +182,35 @@ async function resolveEffectivePermissions(userId: string, role: UserRole) {
     return rolePermissions;
   }
 }
+
+const GOOGLE_CLIENT_IDS = Array.from(
+  new Set(
+    [
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_OAUTH_CLIENT_ID,
+      process.env.GOOGLE_WEB_CLIENT_ID,
+      process.env.VITE_GOOGLE_CLIENT_ID,
+    ]
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  )
+);
+const googleClient = new OAuth2Client();
+
+const parseNameFromGoogle = (payload: Record<string, unknown>) => {
+  const givenName = String(payload.given_name || '').trim();
+  const familyName = String(payload.family_name || '').trim();
+  if (givenName && familyName) {
+    return { firstName: givenName, lastName: familyName };
+  }
+  const fullName = String(payload.name || '').trim();
+  if (fullName) {
+    const [firstName = '', ...rest] = fullName.split(/\s+/);
+    const lastName = rest.join(' ') || firstName || 'User';
+    return { firstName: firstName || 'User', lastName };
+  }
+  return { firstName: 'Google', lastName: 'User' };
+};
 
 // Register
 router.post('/register', async (req, res, next) => {
@@ -523,6 +557,140 @@ router.post('/login', async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+});
+
+// Google Sign-In (ID token flow)
+router.post('/google', async (req, res, next) => {
+  try {
+    if (GOOGLE_CLIENT_IDS.length === 0) {
+      return res.status(503).json({
+        success: false,
+        message: 'Google login is not configured on this server.',
+      });
+    }
+
+    const data = googleLoginSchema.parse(req.body);
+    const ticket = await googleClient.verifyIdToken({
+      idToken: data.idToken,
+      audience: GOOGLE_CLIENT_IDS,
+    });
+    const payload = ticket.getPayload();
+
+    if (!payload?.email || payload.email_verified === false) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unable to verify Google account email.',
+      });
+    }
+
+    const email = String(payload.email).toLowerCase().trim();
+    let user = await prisma.user.findFirst({
+      where: {
+        email: { equals: email, mode: 'insensitive' },
+      },
+    });
+
+    if (!user) {
+      const names = parseNameFromGoogle(payload as unknown as Record<string, unknown>);
+      const randomPassword = crypto.randomUUID();
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+      user = await prisma.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          firstName: names.firstName,
+          lastName: names.lastName,
+          avatar: String(payload.picture || '').trim() || null,
+          role: UserRole.CUSTOMER,
+          status: UserStatus.ACTIVE,
+          customerProfile: {
+            create: {},
+          },
+        },
+      });
+    }
+
+    if (user.status === UserStatus.PENDING) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account is pending approval. Please wait for admin verification.',
+      });
+    }
+
+    if (user.status === UserStatus.SUSPENDED) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been suspended. Please contact support.',
+      });
+    }
+
+    if (user.status === UserStatus.REJECTED) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your registration was not approved. Please contact support for more information.',
+      });
+    }
+
+    const previousLastLoginAt = user.lastLogin;
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastLogin: new Date(),
+        avatar: user.avatar || String(payload.picture || '').trim() || null,
+      },
+    });
+
+    if (user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER) {
+      const forwardedFor = req.headers['x-forwarded-for'];
+      const rawIp = Array.isArray(forwardedFor) ? String(forwardedFor[0] || '') : String(forwardedFor || req.ip || '');
+      const ipAddress = rawIp.split(',')[0].trim() || null;
+      await prisma.activityLog.create({
+        data: {
+          userId: user.id,
+          action: previousLastLoginAt ? 'VENDOR_SESSION_REPLACED' : 'VENDOR_SESSION_STARTED',
+          details: {
+            role: user.role,
+            sessionIssuedAt: Date.now(),
+            previousSessionAt: previousLastLoginAt ? previousLastLoginAt.toISOString() : null,
+            deviceType: String(req.headers['sec-ch-ua-platform'] || req.headers['user-agent'] || '').slice(0, 120),
+            authProvider: 'google',
+          },
+          ipAddress,
+          userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
+        },
+      });
+    }
+
+    const token = generateToken({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    });
+    const effectivePermissions = await resolveEffectivePermissions(user.id, user.role);
+
+    return res.json({
+      success: true,
+      message: 'Login successful!',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          status: user.status,
+          permissions: effectivePermissions,
+        },
+        token,
+        access: {
+          homeRoute: ROLE_HOME_ROUTE[user.role],
+          permissions: effectivePermissions,
+        },
+      },
+    });
+  } catch (error) {
+    return next(error);
   }
 });
 

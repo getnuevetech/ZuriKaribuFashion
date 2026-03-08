@@ -31,7 +31,7 @@ httpClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     const url = error.config?.url || '';
-    const isAuthRequest = url.includes('/auth/login') || url.includes('/auth/register');
+    const isAuthRequest = url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/google');
     if (error.response?.status === 401 && !isAuthRequest) {
       useAuthStore.getState().logout();
       if (window.location.pathname !== '/login') {
@@ -64,6 +64,9 @@ const apiService = {
 const authApi = {
   login: (email: string, password: string) =>
     apiService.post<{ success: boolean; data: { user: any; token: string | null } }>('/auth/login', { email, password }),
+
+  loginWithGoogle: (idToken: string) =>
+    apiService.post<{ success: boolean; data: { user: any; token: string | null } }>('/auth/google', { idToken }),
 
   register: (data: any) =>
     apiService.post<{ success: boolean; data: { user: any; token: string | null } }>('/auth/register', data),

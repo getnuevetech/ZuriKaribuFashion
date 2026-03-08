@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Store, Scissors } from 'lucide-react';
+import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import Button from '../components/ui/Button';
@@ -56,6 +57,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const googleClientId = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,6 +120,29 @@ export default function Register() {
     }
   };
 
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
+    const credential = String(credentialResponse.credential || '').trim();
+    if (!credential) {
+      setError('Google authentication did not return a valid credential.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      const response = await api.auth.loginWithGoogle(credential);
+      if (response.success && response.data?.token) {
+        login(response.data.user, response.data.token);
+        navigate(getHomeRouteForUser(response.data.user));
+      } else {
+        setError('Google sign up failed. Please try again.');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Google sign up failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -152,6 +177,15 @@ export default function Register() {
             {notice}
           </div>
         )}
+
+        {googleClientId ? (
+          <div className="rounded-lg border bg-white p-4">
+            <p className="mb-2 text-center text-sm text-gray-600">Continue with Google (creates a customer account)</p>
+            <div className="flex justify-center">
+              <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google sign up was cancelled or failed.')} />
+            </div>
+          </div>
+        ) : null}
 
         {step === 1 && (
           <div className="space-y-6">
