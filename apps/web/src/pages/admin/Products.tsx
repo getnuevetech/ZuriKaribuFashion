@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Filter, Plus, Edit, Package, Scissors } from 'lucide-react';
+import { Search, Filter, Plus, Edit, Package, Scissors, Upload } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -27,6 +27,7 @@ export default function AdminProducts() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -198,6 +199,30 @@ export default function AdminProducts() {
       setError('Failed to save product.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingImage(true);
+      setError('');
+      const data = new FormData();
+      data.append('image', file);
+      const response = await api.upload.image(data);
+      if (response.success && response.data?.url) {
+        setForm((prev) => ({ ...prev, image: response.data.url }));
+        setSuccess('Image uploaded successfully.');
+      } else {
+        setError('Image upload failed.');
+      }
+    } catch (uploadError) {
+      console.error('Failed to upload product image:', uploadError);
+      setError('Failed to upload image.');
+    } finally {
+      setUploadingImage(false);
+      event.target.value = '';
     }
   };
 
@@ -411,7 +436,29 @@ export default function AdminProducts() {
                   </>
                 )}
               </div>
-              <input type="url" value={form.image} onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))} placeholder="Image URL (optional)" className="w-full rounded border px-3 py-2" />
+              <div className="space-y-2">
+                <input
+                  type="url"
+                  value={form.image}
+                  onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))}
+                  placeholder="Image URL (optional)"
+                  className="w-full rounded border px-3 py-2"
+                />
+                <div className="flex items-center gap-2">
+                  <label className="inline-flex cursor-pointer items-center rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
+                    <Upload className="mr-2 h-4 w-4" />
+                    {uploadingImage ? 'Uploading...' : 'Upload Image'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageUpload}
+                      disabled={uploadingImage}
+                    />
+                  </label>
+                  {form.image ? <span className="text-xs text-green-700">Image ready</span> : null}
+                </div>
+              </div>
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={form.isAvailable} onChange={(e) => setForm((prev) => ({ ...prev, isAvailable: e.target.checked }))} />
                 Available on storefront
