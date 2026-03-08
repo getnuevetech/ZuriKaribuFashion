@@ -375,6 +375,39 @@ router.put('/admin/hero-slides/:id', authenticate, authorizePermissions(Permissi
   }
 });
 
+// Update hero slide (admin) - PATCH alias for backward compatibility
+router.patch('/admin/hero-slides/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, subtitle, image, ctaText, ctaLink, displayOrder, isActive } = req.body;
+
+    const slide = await prisma.heroSlide.update({
+      where: { id },
+      data: {
+        title,
+        subtitle,
+        image,
+        ctaText,
+        ctaLink,
+        displayOrder,
+        isActive,
+      },
+    });
+
+    res.json({
+      success: true,
+      data: slide,
+      message: 'Hero slide updated successfully',
+    });
+  } catch (error) {
+    console.error('Error updating hero slide:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update hero slide',
+    });
+  }
+});
+
 // Delete hero slide (admin)
 router.delete('/admin/hero-slides/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
@@ -473,6 +506,36 @@ router.post('/admin/featured', authenticate, authorizePermissions(Permissions.HO
 
 // Update featured product (admin)
 router.put('/admin/featured/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { displayOrder, customTitle, customDescription, isActive } = req.body;
+
+    const featured = await prisma.featuredProduct.update({
+      where: { id },
+      data: {
+        displayOrder,
+        customTitle,
+        customDescription,
+        isActive,
+      },
+    });
+
+    res.json({
+      success: true,
+      data: featured,
+      message: 'Featured product updated successfully',
+    });
+  } catch (error) {
+    console.error('Error updating featured product:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update featured product',
+    });
+  }
+});
+
+// Update featured product (admin) - PATCH alias for backward compatibility
+router.patch('/admin/featured/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const { id } = req.params;
     const { displayOrder, customTitle, customDescription, isActive } = req.body;

@@ -354,7 +354,6 @@ export default function Home() {
 
   const { data: heroSlidesData } = useQuery({
     queryKey: ['heroSlides'],
-    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepage.getHeroSlides();
       return response.success ? response.data : null;
@@ -372,7 +371,6 @@ export default function Home() {
 
   const { data: managedBannersData } = useQuery({
     queryKey: ['homepageManagedBanners'],
-    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.banners.getBanners();
       return response.success ? response.data : null;
@@ -454,10 +452,26 @@ export default function Home() {
 
   const heroSlides = useMemo(
     () => {
+      const heroBanners =
+        Array.isArray(managedBannersData)
+          ? managedBannersData
+              .filter((row: any) => String(row?.section || '').toUpperCase() === 'HERO')
+              .map((row: any, index: number) => ({
+                id: String(row?.id ?? `hero-banner-${index}`),
+                image: asText(row?.displayImage, row?.images?.[0], kimiHeroSlides[index % kimiHeroSlides.length].image),
+                title: asText(row?.title, kimiHeroSlides[index % kimiHeroSlides.length].title),
+                subtitle: asText(row?.subtitle, kimiHeroSlides[index % kimiHeroSlides.length].subtitle),
+                badge: kimiHeroSlides[index % kimiHeroSlides.length].badge,
+                ctaText: asText(row?.ctaText, kimiHeroSlides[index % kimiHeroSlides.length].ctaText),
+                ctaLink: asText(row?.ctaLink, kimiHeroSlides[index % kimiHeroSlides.length].ctaLink),
+              }))
+          : [];
       const source =
-        USE_DYNAMIC_HOMEPAGE && Array.isArray(heroSlidesData) && heroSlidesData.length > 0
-          ? heroSlidesData
-          : kimiHeroSlides;
+        heroBanners.length > 0
+          ? heroBanners
+          : Array.isArray(heroSlidesData) && heroSlidesData.length > 0
+            ? heroSlidesData
+            : kimiHeroSlides;
       return source.map((slide: any, index: number) => ({
         id: String(slide.id ?? index),
         image: asText(slide.image, kimiHeroSlides[index % kimiHeroSlides.length].image),
@@ -468,7 +482,7 @@ export default function Home() {
         ctaLink: asText(slide.ctaLink, kimiHeroSlides[index % kimiHeroSlides.length].ctaLink),
       }));
     },
-    [heroSlidesData],
+    [heroSlidesData, managedBannersData],
   );
 
   const featuredDesigns = ((USE_DYNAMIC_HOMEPAGE ? featuredData?.FEATURED_DESIGNS : null) || kimiFeaturedDesigns) as FeaturedProduct[];

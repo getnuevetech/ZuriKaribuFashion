@@ -814,7 +814,7 @@ const homepageApi = {
     apiService.post<{ success: boolean; data: any }>('/homepage/admin/hero-slides', data),
 
   updateHeroSlide: (id: string, data: any) =>
-    apiService.patch<{ success: boolean; data: any }>(`/homepage/admin/hero-slides/${id}`, data),
+    apiService.put<{ success: boolean; data: any }>(`/homepage/admin/hero-slides/${id}`, data),
 
   deleteHeroSlide: (id: string) =>
     apiService.delete<{ success: boolean }>(`/homepage/admin/hero-slides/${id}`),
@@ -826,7 +826,7 @@ const homepageApi = {
     apiService.post<{ success: boolean; data: any }>('/homepage/admin/featured', data),
 
   updateFeaturedProduct: (id: string, data: any) =>
-    apiService.patch<{ success: boolean; data: any }>(`/homepage/admin/featured/${id}`, data),
+    apiService.put<{ success: boolean; data: any }>(`/homepage/admin/featured/${id}`, data),
 
   removeFeaturedProduct: (id: string) =>
     apiService.delete<{ success: boolean }>(`/homepage/admin/featured/${id}`),
