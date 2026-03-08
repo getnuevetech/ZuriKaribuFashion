@@ -1,11 +1,168 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { prisma } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 
 const router = Router();
+const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
+
+type TopStripSettings = {
+  messages: string[];
+  separator: string;
+  repeatCount: number;
+  animationSeconds: number;
+  textColor: string;
+  backgroundColor: string;
+};
+
+const TOP_STRIP_DEFAULTS: TopStripSettings = {
+  messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
+  separator: '•',
+  repeatCount: 4,
+  animationSeconds: 20,
+  textColor: '#ffffff',
+  backgroundColor: '#000000',
+};
+
+let homepageSettingsSchemaEnsured = false;
+let homepageSettingsSchemaPromise: Promise<void> | null = null;
+const ensureHomepageSettingsSchema = async () => {
+  if (homepageSettingsSchemaEnsured) return;
+  if (homepageSettingsSchemaPromise) {
+    await homepageSettingsSchemaPromise;
+    return;
+  }
+  homepageSettingsSchemaPromise = (async () => {
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "HomepageSectionSetting" (
+        "id" TEXT NOT NULL,
+        "key" TEXT NOT NULL,
+        "value" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "HomepageSectionSetting_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "HomepageSectionSetting_key_key" ON "HomepageSectionSetting"("key")`
+    );
+    homepageSettingsSchemaEnsured = true;
+  })();
+  try {
+    await homepageSettingsSchemaPromise;
+  } finally {
+    homepageSettingsSchemaPromise = null;
+  }
+};
+
+router.use(async (_req, _res, next) => {
+  try {
+    await ensureHomepageSettingsSchema();
+  } catch (error) {
+    console.error('Failed to ensure homepage settings schema:', error);
+  }
+  next();
+});
+
+const normalizeHexColor = (value: unknown, fallback: string) => {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(trimmed) ? trimmed.toLowerCase() : fallback;
+};
+
+const normalizeTopStripSettings = (raw: unknown): TopStripSettings => {
+  if (!raw || typeof raw !== 'object') return { ...TOP_STRIP_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const messages = Array.isArray(row.messages)
+    ? row.messages
+        .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+        .filter(Boolean)
+    : [];
+  const separator =
+    typeof row.separator === 'string' && row.separator.trim()
+      ? row.separator.trim().slice(0, 8)
+      : TOP_STRIP_DEFAULTS.separator;
+  const repeatCountRaw = Number(row.repeatCount);
+  const animationSecondsRaw = Number(row.animationSeconds);
+  return {
+    messages: messages.length > 0 ? messages : [...TOP_STRIP_DEFAULTS.messages],
+    separator,
+    repeatCount: Number.isFinite(repeatCountRaw) ? Math.max(2, Math.min(12, Math.round(repeatCountRaw))) : TOP_STRIP_DEFAULTS.repeatCount,
+    animationSeconds: Number.isFinite(animationSecondsRaw)
+      ? Math.max(8, Math.min(120, Math.round(animationSecondsRaw)))
+      : TOP_STRIP_DEFAULTS.animationSeconds,
+    textColor: normalizeHexColor(row.textColor, TOP_STRIP_DEFAULTS.textColor),
+    backgroundColor: normalizeHexColor(row.backgroundColor, TOP_STRIP_DEFAULTS.backgroundColor),
+  };
+};
+
+const readTopStripSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_TOP_STRIP_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return { rowId: null as string | null, settings: { ...TOP_STRIP_DEFAULTS } };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizeTopStripSettings(JSON.parse(String(row.value || '{}'))),
+    };
+  } catch {
+    return { rowId: String(row.id), settings: { ...TOP_STRIP_DEFAULTS } };
+  }
+};
+
+const saveTopStripSettings = async (rawInput: unknown) => {
+  const existing = await readTopStripSettings();
+  const merged = normalizeTopStripSettings({
+    ...existing.settings,
+    ...(rawInput && typeof rawInput === 'object' ? (rawInput as Record<string, unknown>) : {}),
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_TOP_STRIP_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
 
 // ==================== PUBLIC ENDPOINTS (for frontend) ====================
+
+router.get('/top-strip', async (_req, res) => {
+  try {
+    const { settings } = await readTopStripSettings();
+    res.json({
+      success: true,
+      data: settings,
+    });
+  } catch (error) {
+    console.error('Error fetching top strip settings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch top strip settings',
+    });
+  }
+});
 
 // Get active hero slides
 router.get('/hero-slides', async (req, res) => {
@@ -284,6 +441,54 @@ router.get('/featured', async (req, res) => {
 });
 
 // ==================== ADMIN ENDPOINTS ====================
+
+router.get('/admin/top-strip', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings } = await readTopStripSettings();
+    res.json({
+      success: true,
+      data: settings,
+    });
+  } catch (error) {
+    console.error('Error fetching admin top strip settings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch top strip settings',
+    });
+  }
+});
+
+router.put('/admin/top-strip', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveTopStripSettings(req.body);
+    res.json({
+      success: true,
+      data: settings,
+    });
+  } catch (error) {
+    console.error('Error updating top strip settings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update top strip settings',
+    });
+  }
+});
+
+router.patch('/admin/top-strip', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveTopStripSettings(req.body);
+    res.json({
+      success: true,
+      data: settings,
+    });
+  } catch (error) {
+    console.error('Error updating top strip settings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update top strip settings',
+    });
+  }
+});
 
 // Get all hero slides (admin)
 router.get('/admin/hero-slides', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {

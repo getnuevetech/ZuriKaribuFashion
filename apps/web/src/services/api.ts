@@ -60,6 +60,9 @@ const apiService = {
     httpClient.delete<T>(url, config).then((res) => res.data),
 };
 
+const isRouteNotFoundError = (error: unknown) =>
+  (error as AxiosError)?.response?.status === 404;
+
 // Auth API
 const authApi = {
   login: (email: string, password: string) =>
@@ -845,17 +848,32 @@ const homepageSectionsApi = {
     }>('/homepage-sections/visibility'),
 
   getTopStrip: () =>
-    apiService.get<{
-      success: boolean;
-      data: {
-        messages: string[];
-        separator: string;
-        repeatCount: number;
-        animationSeconds: number;
-        textColor: string;
-        backgroundColor: string;
-      };
-    }>('/homepage-sections/top-strip'),
+    apiService
+      .get<{
+        success: boolean;
+        data: {
+          messages: string[];
+          separator: string;
+          repeatCount: number;
+          animationSeconds: number;
+          textColor: string;
+          backgroundColor: string;
+        };
+      }>('/homepage-sections/top-strip')
+      .catch((error) => {
+        if (!isRouteNotFoundError(error)) throw error;
+        return apiService.get<{
+          success: boolean;
+          data: {
+            messages: string[];
+            separator: string;
+            repeatCount: number;
+            animationSeconds: number;
+            textColor: string;
+            backgroundColor: string;
+          };
+        }>('/homepage/top-strip');
+      }),
 
   getCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/countries'),
@@ -913,19 +931,34 @@ const homepageSectionsApi = {
     }>('/homepage-sections/admin/visibility', { visibility }),
 
   getAdminTopStrip: () =>
-    apiService.get<{
-      success: boolean;
-      data: {
-        messages: string[];
-        separator: string;
-        repeatCount: number;
-        animationSeconds: number;
-        textColor: string;
-        backgroundColor: string;
-        source?: 'DATABASE' | 'DEFAULT';
-        updatedAt?: string | null;
-      };
-    }>('/homepage-sections/admin/top-strip'),
+    apiService
+      .get<{
+        success: boolean;
+        data: {
+          messages: string[];
+          separator: string;
+          repeatCount: number;
+          animationSeconds: number;
+          textColor: string;
+          backgroundColor: string;
+          source?: 'DATABASE' | 'DEFAULT';
+          updatedAt?: string | null;
+        };
+      }>('/homepage-sections/admin/top-strip')
+      .catch((error) => {
+        if (!isRouteNotFoundError(error)) throw error;
+        return apiService.get<{
+          success: boolean;
+          data: {
+            messages: string[];
+            separator: string;
+            repeatCount: number;
+            animationSeconds: number;
+            textColor: string;
+            backgroundColor: string;
+          };
+        }>('/homepage/admin/top-strip');
+      }),
 
   updateAdminTopStrip: (data: {
     messages: string[];
@@ -935,17 +968,32 @@ const homepageSectionsApi = {
     textColor?: string;
     backgroundColor?: string;
   }) =>
-    apiService.put<{
-      success: boolean;
-      data: {
-        messages: string[];
-        separator: string;
-        repeatCount: number;
-        animationSeconds: number;
-        textColor: string;
-        backgroundColor: string;
-      };
-    }>('/homepage-sections/admin/top-strip', data),
+    apiService
+      .put<{
+        success: boolean;
+        data: {
+          messages: string[];
+          separator: string;
+          repeatCount: number;
+          animationSeconds: number;
+          textColor: string;
+          backgroundColor: string;
+        };
+      }>('/homepage-sections/admin/top-strip', data)
+      .catch((error) => {
+        if (!isRouteNotFoundError(error)) throw error;
+        return apiService.put<{
+          success: boolean;
+          data: {
+            messages: string[];
+            separator: string;
+            repeatCount: number;
+            animationSeconds: number;
+            textColor: string;
+            backgroundColor: string;
+          };
+        }>('/homepage/admin/top-strip', data);
+      }),
 
   getAdminCountryOptions: () =>
     apiService.get<{ success: boolean; data: Array<{ code: string; name: string; flag: string }> }>(
