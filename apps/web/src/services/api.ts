@@ -368,6 +368,24 @@ const adminApi = {
     data: { isFeatured: boolean; section?: string; displayOrder?: number }
   ) => apiService.patch<{ success: boolean; data?: any; message?: string }>(`/admin/products/${type}/${id}/featured`, data),
 
+  moderateProduct: (
+    type: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR',
+    id: string,
+    data: {
+      action: 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'SUSPEND' | 'PUBLISH' | 'UNPUBLISH';
+      message?: string;
+      notifyVendor?: boolean;
+    }
+  ) => apiService.patch<{ success: boolean; data?: any; message?: string }>(`/admin/products/${type}/${id}/moderate`, data),
+
+  moderateProductsBulk: (data: {
+    productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+    productIds: string[];
+    action: 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'SUSPEND' | 'PUBLISH' | 'UNPUBLISH';
+    message?: string;
+    notifyVendor?: boolean;
+  }) => apiService.post<{ success: boolean; data?: any; message?: string }>('/admin/products/moderate-bulk', data),
+
   getTrafficReport: (params?: {
     startDate?: string;
     endDate?: string;

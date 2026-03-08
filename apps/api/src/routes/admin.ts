@@ -84,6 +84,20 @@ const productFeaturedSchema = z.object({
   displayOrder: z.coerce.number().int().min(0).optional(),
 });
 
+const productModerationSchema = z.object({
+  action: z.enum(['APPROVE', 'REJECT', 'REQUEST_CHANGES', 'SUSPEND', 'PUBLISH', 'UNPUBLISH']),
+  message: z.string().trim().min(1).optional(),
+  notifyVendor: z.boolean().default(true),
+});
+
+const bulkModerationSchema = z.object({
+  productType: adminProductTypeSchema,
+  productIds: z.array(z.string().uuid()).min(1),
+  action: productModerationSchema.shape.action,
+  message: z.string().trim().min(1).optional(),
+  notifyVendor: z.boolean().default(true),
+});
+
 const adminProductCreateSchema = z.object({
   type: adminProductTypeSchema,
   name: z.string().min(1),
@@ -2278,6 +2292,188 @@ router.patch('/products/:type/:id', async (req, res, next) => {
     return res.json({ success: true, data: { id: updated.id, type }, message: 'Product updated.' });
   } catch (error) {
     next(error);
+  }
+});
+
+router.patch('/products/:type/:id/moderate', async (req, res, next) => {
+  try {
+    const productType = adminProductTypeSchema.parse(String(req.params.type || '').toUpperCase());
+    const { id } = req.params;
+    const payload = productModerationSchema.parse(req.body);
+
+    let exists = false;
+    if (productType === ProductType.FABRIC) {
+      exists = (await prisma.fabric.count({ where: { id } })) > 0;
+    } else if (productType === ProductType.DESIGN) {
+      exists = (await prisma.design.count({ where: { id } })) > 0;
+    } else {
+      exists = (await prisma.readyToWear.count({ where: { id } })) > 0;
+    }
+
+    if (!exists) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found.',
+      });
+    }
+
+    let nextStatus: ProductStatus | undefined;
+    let nextAvailability: boolean | undefined;
+    switch (payload.action) {
+      case 'APPROVE':
+      case 'PUBLISH':
+        nextStatus = ProductStatus.APPROVED;
+        nextAvailability = true;
+        break;
+      case 'REJECT':
+        nextStatus = ProductStatus.REJECTED;
+        nextAvailability = false;
+        break;
+      case 'REQUEST_CHANGES':
+        nextStatus = ProductStatus.PENDING_REVIEW;
+        nextAvailability = false;
+        break;
+      case 'SUSPEND':
+        nextStatus = ProductStatus.ARCHIVED;
+        nextAvailability = false;
+        break;
+      case 'UNPUBLISH':
+        nextAvailability = false;
+        break;
+    }
+
+    const updateData: { status?: ProductStatus; isAvailable?: boolean } = {};
+    if (nextStatus) updateData.status = nextStatus;
+    if (typeof nextAvailability === 'boolean') updateData.isAvailable = nextAvailability;
+
+    if (productType === ProductType.FABRIC) {
+      await prisma.fabric.update({
+        where: { id },
+        data: updateData,
+      });
+    } else if (productType === ProductType.DESIGN) {
+      await prisma.design.update({
+        where: { id },
+        data: updateData,
+      });
+    } else {
+      await prisma.readyToWear.update({
+        where: { id },
+        data: updateData,
+      });
+    }
+
+    if (payload.action !== 'APPROVE' && payload.action !== 'PUBLISH') {
+      await prisma.featuredProduct.deleteMany({
+        where: { productId: id, productType },
+      });
+    }
+
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'ADMIN_PRODUCT_MODERATE',
+        details: {
+          productId: id,
+          productType,
+          action: payload.action,
+          message: payload.message || null,
+        },
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: 'Product moderation action applied.',
+      data: {
+        productId: id,
+        productType,
+        action: payload.action,
+        status: nextStatus,
+        isAvailable: nextAvailability,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/products/moderate-bulk', async (req, res, next) => {
+  try {
+    const payload = bulkModerationSchema.parse(req.body);
+    let nextStatus: ProductStatus | undefined;
+    let nextAvailability: boolean | undefined;
+
+    switch (payload.action) {
+      case 'APPROVE':
+      case 'PUBLISH':
+        nextStatus = ProductStatus.APPROVED;
+        nextAvailability = true;
+        break;
+      case 'REJECT':
+        nextStatus = ProductStatus.REJECTED;
+        nextAvailability = false;
+        break;
+      case 'REQUEST_CHANGES':
+        nextStatus = ProductStatus.PENDING_REVIEW;
+        nextAvailability = false;
+        break;
+      case 'SUSPEND':
+        nextStatus = ProductStatus.ARCHIVED;
+        nextAvailability = false;
+        break;
+      case 'UNPUBLISH':
+        nextAvailability = false;
+        break;
+    }
+
+    const updateData: { status?: ProductStatus; isAvailable?: boolean } = {};
+    if (nextStatus) updateData.status = nextStatus;
+    if (typeof nextAvailability === 'boolean') updateData.isAvailable = nextAvailability;
+
+    if (payload.productType === ProductType.FABRIC) {
+      await prisma.fabric.updateMany({
+        where: { id: { in: payload.productIds } },
+        data: updateData,
+      });
+    } else if (payload.productType === ProductType.DESIGN) {
+      await prisma.design.updateMany({
+        where: { id: { in: payload.productIds } },
+        data: updateData,
+      });
+    } else {
+      await prisma.readyToWear.updateMany({
+        where: { id: { in: payload.productIds } },
+        data: updateData,
+      });
+    }
+
+    if (payload.action !== 'APPROVE' && payload.action !== 'PUBLISH') {
+      await prisma.featuredProduct.deleteMany({
+        where: { productType: payload.productType, productId: { in: payload.productIds } },
+      });
+    }
+
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'ADMIN_PRODUCT_MODERATE_BULK',
+        details: {
+          productType: payload.productType,
+          productIds: payload.productIds,
+          action: payload.action,
+          message: payload.message || null,
+        },
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: 'Bulk moderation action applied.',
+      data: { affected: payload.productIds.length },
+    });
+  } catch (error) {
+    return next(error);
   }
 });
 

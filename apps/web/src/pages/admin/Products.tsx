@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Filter, Plus, Edit, Package, Scissors, Upload, Star } from 'lucide-react';
+import { Search, Filter, Plus, Edit, Package, Scissors, Upload, Star, CheckCircle, XCircle } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+
+type ModerationAction = 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'SUSPEND' | 'PUBLISH' | 'UNPUBLISH';
 
 interface Product {
   id: string;
@@ -30,12 +32,15 @@ export default function AdminProducts() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'fabrics' | 'designs' | 'ready-to-wear'>('all');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkAction, setBulkAction] = useState<ModerationAction>('REQUEST_CHANGES');
   const [options, setOptions] = useState<{
     categories: Array<{ id: string; name: string }>;
     materials: Array<{ id: string; name: string }>;
@@ -107,6 +112,7 @@ export default function AdminProducts() {
       });
       if (response.success) {
         setProducts(response.data.products || []);
+        setSelectedIds([]);
       }
     } catch (error) {
       console.error('Failed to fetch products:', error);
@@ -256,6 +262,94 @@ export default function AdminProducts() {
     }
   };
 
+  const statusLabel = (product: Product) => {
+    if (product.status === 'APPROVED' && !product.isAvailable) return 'UNPUBLISHED';
+    return product.status;
+  };
+
+  const moderateProduct = async (product: Product, action: ModerationAction) => {
+    try {
+      setSubmitting(true);
+      const requiresMessage = action === 'REQUEST_CHANGES' || action === 'REJECT' || action === 'SUSPEND';
+      const message = requiresMessage ? window.prompt('Enter message to vendor (required):', '')?.trim() || undefined : undefined;
+      if (requiresMessage && !message) return;
+      await api.admin.moderateProduct(product.type, product.id, {
+        action,
+        message,
+        notifyVendor: true,
+      });
+      await fetchProducts();
+      setSuccess('Product moderation action applied.');
+    } catch (moderationError) {
+      console.error('Failed to moderate product:', moderationError);
+      setError('Failed to apply moderation action.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleBulkModeration = async () => {
+    if (selectedIds.length === 0) return;
+    try {
+      setSubmitting(true);
+      setError('');
+      const selectedProducts = products.filter((product) => selectedIds.includes(product.id));
+      const byType = selectedProducts.reduce<Record<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR', string[]>>(
+        (acc, product) => {
+          acc[product.type].push(product.id);
+          return acc;
+        },
+        { FABRIC: [], DESIGN: [], READY_TO_WEAR: [] }
+      );
+
+      const requiresMessage = bulkAction === 'REQUEST_CHANGES' || bulkAction === 'REJECT' || bulkAction === 'SUSPEND';
+      const message = requiresMessage
+        ? window.prompt('Enter message to affected vendors (required):', '')?.trim() || undefined
+        : undefined;
+      if (requiresMessage && !message) return;
+
+      await Promise.all(
+        (Object.entries(byType) as Array<['FABRIC' | 'DESIGN' | 'READY_TO_WEAR', string[]]>)
+          .filter(([, ids]) => ids.length > 0)
+          .map(([productType, ids]) =>
+            api.admin.moderateProductsBulk({
+              productType,
+              productIds: ids,
+              action: bulkAction,
+              message,
+              notifyVendor: true,
+            })
+          )
+      );
+      setSelectedIds([]);
+      await fetchProducts();
+      setSuccess('Bulk moderation action applied.');
+    } catch (bulkError) {
+      console.error('Failed to run bulk moderation:', bulkError);
+      setError('Failed to run bulk moderation.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const toggleFeaturedFromList = async (product: Product) => {
+    try {
+      setSubmitting(true);
+      await api.admin.setProductFeatured(product.type, product.id, {
+        isFeatured: !Boolean(product.isFeatured),
+        section: product.featuredSections?.[0] || getDefaultFeaturedSection(product.type),
+        displayOrder: 0,
+      });
+      await fetchProducts();
+      setSuccess(product.isFeatured ? 'Removed from featured.' : 'Marked as featured.');
+    } catch (featureError) {
+      console.error('Failed to toggle featured:', featureError);
+      setError('Failed to update featured status.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -335,6 +429,24 @@ export default function AdminProducts() {
           Filter
         </Button>
       </div>
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+        <span className="text-sm font-medium text-amber-900">{selectedIds.length} selected</span>
+        <select
+          value={bulkAction}
+          onChange={(e) => setBulkAction(e.target.value as ModerationAction)}
+          className="rounded-lg border px-3 py-2 text-sm"
+        >
+          <option value="REQUEST_CHANGES">Request Changes</option>
+          <option value="APPROVE">Approve</option>
+          <option value="REJECT">Reject</option>
+          <option value="SUSPEND">Suspend</option>
+          <option value="PUBLISH">Publish</option>
+          <option value="UNPUBLISH">Unpublish</option>
+        </select>
+        <Button size="sm" disabled={selectedIds.length === 0 || submitting} onClick={handleBulkModeration}>
+          {submitting ? 'Applying...' : 'Apply to selected'}
+        </Button>
+      </div>
       {(error || success) && (
         <div className={`rounded-lg border px-3 py-2 text-sm ${error ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
           {error || success}
@@ -347,6 +459,15 @@ export default function AdminProducts() {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
+                <th className="py-3 px-4">
+                  <input
+                    type="checkbox"
+                    checked={products.length > 0 && selectedIds.length === products.length}
+                    onChange={(e) =>
+                      setSelectedIds(e.target.checked ? products.map((product) => product.id) : [])
+                    }
+                  />
+                </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Product</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Type</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Price</th>
@@ -359,6 +480,17 @@ export default function AdminProducts() {
             <tbody>
               {products.map((product) => (
                 <tr key={product.id} className="border-b last:border-0 hover:bg-gray-50">
+                  <td className="py-3 px-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(product.id)}
+                      onChange={(e) =>
+                        setSelectedIds((prev) =>
+                          e.target.checked ? [...prev, product.id] : prev.filter((id) => id !== product.id)
+                        )
+                      }
+                    />
+                  </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
@@ -389,12 +521,12 @@ export default function AdminProducts() {
                   <td className="py-3 px-4">
                     <Badge 
                       variant={
-                        product.status === 'APPROVED' ? 'green' :
+                        product.status === 'APPROVED' && product.isAvailable ? 'green' :
                         product.status === 'PENDING_REVIEW' ? 'yellow' :
                         product.status === 'REJECTED' ? 'red' : 'gray'
                       }
                     >
-                      {product.status}
+                      {statusLabel(product)}
                     </Badge>
                   </td>
                   <td className="py-3 px-4 text-gray-600">
@@ -402,7 +534,33 @@ export default function AdminProducts() {
                   </td>
                   <td className="py-3 px-4 text-gray-600">{product.orderCount}</td>
                   <td className="py-3 px-4">
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => toggleFeaturedFromList(product)}
+                        className={`p-2 rounded-lg ${
+                          product.isFeatured ? 'text-amber-600 bg-amber-50' : 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'
+                        }`}
+                        title={product.isFeatured ? 'Remove featured' : 'Mark featured'}
+                      >
+                        <Star className="w-4 h-4" />
+                      </button>
+                      {product.status !== 'APPROVED' || !product.isAvailable ? (
+                        <button
+                          onClick={() => moderateProduct(product, 'PUBLISH')}
+                          className="p-2 rounded-lg text-green-600 hover:bg-green-50"
+                          title="Publish"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => moderateProduct(product, 'UNPUBLISH')}
+                          className="p-2 rounded-lg text-gray-600 hover:bg-gray-100"
+                          title="Unpublish"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      )}
                       <button onClick={() => openEditModal(product)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
                         <Edit className="w-4 h-4" />
                       </button>
