@@ -62,6 +62,61 @@ const apiService = {
 
 const isRouteNotFoundError = (error: unknown) =>
   (error as AxiosError)?.response?.status === 404;
+const isMethodNotAllowedError = (error: unknown) =>
+  (error as AxiosError)?.response?.status === 405;
+
+const topStripReadPaths = [
+  '/homepage-sections/admin/top-strip',
+  '/homepage/admin/top-strip',
+  '/admin/top-strip',
+  '/homepage-sections/top-strip',
+  '/homepage/top-strip',
+];
+
+const topStripWritePaths = [
+  '/homepage-sections/admin/top-strip',
+  '/homepage/admin/top-strip',
+  '/admin/top-strip',
+];
+
+async function readTopStripWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of topStripReadPaths) {
+    try {
+      return await apiService.get<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRouteNotFoundError(error)) {
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Top strip route not found.');
+}
+
+async function writeTopStripWithFallback<T>(data: unknown) {
+  let lastError: unknown = null;
+  for (const path of topStripWritePaths) {
+    try {
+      return await apiService.put<T>(path, data);
+    } catch (putError) {
+      lastError = putError;
+      if (!isRouteNotFoundError(putError) && !isMethodNotAllowedError(putError)) {
+        throw putError;
+      }
+    }
+    try {
+      return await apiService.patch<T>(path, data);
+    } catch (patchError) {
+      lastError = patchError;
+      if (!isRouteNotFoundError(patchError) && !isMethodNotAllowedError(patchError)) {
+        throw patchError;
+      }
+    }
+  }
+  throw lastError ?? new Error('Top strip route not found.');
+}
 
 // Auth API
 const authApi = {
@@ -848,45 +903,17 @@ const homepageSectionsApi = {
     }>('/homepage-sections/visibility'),
 
   getTopStrip: () =>
-    apiService
-      .get<{
-        success: boolean;
-        data: {
-          messages: string[];
-          separator: string;
-          repeatCount: number;
-          animationSeconds: number;
-          textColor: string;
-          backgroundColor: string;
-        };
-      }>('/homepage-sections/top-strip')
-      .catch((error) => {
-        if (!isRouteNotFoundError(error)) throw error;
-        return apiService.get<{
-          success: boolean;
-          data: {
-            messages: string[];
-            separator: string;
-            repeatCount: number;
-            animationSeconds: number;
-            textColor: string;
-            backgroundColor: string;
-          };
-        }>('/homepage/top-strip').catch((fallbackError) => {
-          if (!isRouteNotFoundError(fallbackError)) throw fallbackError;
-          return apiService.get<{
-            success: boolean;
-            data: {
-              messages: string[];
-              separator: string;
-              repeatCount: number;
-              animationSeconds: number;
-              textColor: string;
-              backgroundColor: string;
-            };
-          }>('/admin/top-strip');
-        });
-      }),
+    readTopStripWithFallback<{
+      success: boolean;
+      data: {
+        messages: string[];
+        separator: string;
+        repeatCount: number;
+        animationSeconds: number;
+        textColor: string;
+        backgroundColor: string;
+      };
+    }>(),
 
   getCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/countries'),
@@ -944,47 +971,19 @@ const homepageSectionsApi = {
     }>('/homepage-sections/admin/visibility', { visibility }),
 
   getAdminTopStrip: () =>
-    apiService
-      .get<{
-        success: boolean;
-        data: {
-          messages: string[];
-          separator: string;
-          repeatCount: number;
-          animationSeconds: number;
-          textColor: string;
-          backgroundColor: string;
-          source?: 'DATABASE' | 'DEFAULT';
-          updatedAt?: string | null;
-        };
-      }>('/homepage-sections/admin/top-strip')
-      .catch((error) => {
-        if (!isRouteNotFoundError(error)) throw error;
-        return apiService.get<{
-          success: boolean;
-          data: {
-            messages: string[];
-            separator: string;
-            repeatCount: number;
-            animationSeconds: number;
-            textColor: string;
-            backgroundColor: string;
-          };
-        }>('/homepage/admin/top-strip').catch((fallbackError) => {
-          if (!isRouteNotFoundError(fallbackError)) throw fallbackError;
-          return apiService.get<{
-            success: boolean;
-            data: {
-              messages: string[];
-              separator: string;
-              repeatCount: number;
-              animationSeconds: number;
-              textColor: string;
-              backgroundColor: string;
-            };
-          }>('/admin/top-strip');
-        });
-      }),
+    readTopStripWithFallback<{
+      success: boolean;
+      data: {
+        messages: string[];
+        separator: string;
+        repeatCount: number;
+        animationSeconds: number;
+        textColor: string;
+        backgroundColor: string;
+        source?: 'DATABASE' | 'DEFAULT';
+        updatedAt?: string | null;
+      };
+    }>(),
 
   updateAdminTopStrip: (data: {
     messages: string[];
@@ -994,45 +993,17 @@ const homepageSectionsApi = {
     textColor?: string;
     backgroundColor?: string;
   }) =>
-    apiService
-      .put<{
-        success: boolean;
-        data: {
-          messages: string[];
-          separator: string;
-          repeatCount: number;
-          animationSeconds: number;
-          textColor: string;
-          backgroundColor: string;
-        };
-      }>('/homepage-sections/admin/top-strip', data)
-      .catch((error) => {
-        if (!isRouteNotFoundError(error)) throw error;
-        return apiService.put<{
-          success: boolean;
-          data: {
-            messages: string[];
-            separator: string;
-            repeatCount: number;
-            animationSeconds: number;
-            textColor: string;
-            backgroundColor: string;
-          };
-        }>('/homepage/admin/top-strip', data).catch((fallbackError) => {
-          if (!isRouteNotFoundError(fallbackError)) throw fallbackError;
-          return apiService.put<{
-            success: boolean;
-            data: {
-              messages: string[];
-              separator: string;
-              repeatCount: number;
-              animationSeconds: number;
-              textColor: string;
-              backgroundColor: string;
-            };
-          }>('/admin/top-strip', data);
-        });
-      }),
+    writeTopStripWithFallback<{
+      success: boolean;
+      data: {
+        messages: string[];
+        separator: string;
+        repeatCount: number;
+        animationSeconds: number;
+        textColor: string;
+        backgroundColor: string;
+      };
+    }>(data),
 
   getAdminCountryOptions: () =>
     apiService.get<{ success: boolean; data: Array<{ code: string; name: string; flag: string }> }>(
