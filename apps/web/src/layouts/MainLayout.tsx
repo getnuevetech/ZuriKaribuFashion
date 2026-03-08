@@ -1,9 +1,13 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Menu, ShoppingBag, User, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
+import { api } from '../services/api';
 import Footer from '../components/Footer';
+
+const USE_DYNAMIC_HOMEPAGE = import.meta.env.VITE_USE_DYNAMIC_HOMEPAGE === 'true';
 
 export default function MainLayout() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -11,6 +15,15 @@ export default function MainLayout() {
   const { isAuthenticated, logout } = useAuthStore();
   const { getItemCount } = useCartStore();
   const navigate = useNavigate();
+  const { data: footerContent } = useQuery({
+    queryKey: ['homepageFooterForHeader'],
+    enabled: USE_DYNAMIC_HOMEPAGE,
+    queryFn: async () => {
+      const response = await api.homepageSections.getFooter();
+      return response.success ? response.data : null;
+    },
+  });
+  const brandName = footerContent?.companyName?.trim() || 'ZURIKARIBU';
 
   useEffect(() => {
     const handleScroll = () => {
@@ -58,7 +71,7 @@ export default function MainLayout() {
           <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center gap-2">
               <span className="font-['Oswald'] text-xl sm:text-2xl font-semibold tracking-wide">
-                ZURIKARIBU
+                {brandName.toUpperCase()}
               </span>
             </Link>
 
