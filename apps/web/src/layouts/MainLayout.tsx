@@ -54,7 +54,7 @@ export default function MainLayout() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="bg-black text-white py-2 overflow-hidden">
+      <div className="bg-black text-white h-10 flex items-center overflow-hidden">
         <div className="animate-marquee whitespace-nowrap flex gap-8">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="flex gap-8 text-xs tracking-wider">
@@ -70,7 +70,7 @@ export default function MainLayout() {
       </div>
 
       <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+        className={`fixed top-10 left-0 right-0 z-50 transition-all duration-500 ${
           isScrolled ? 'glass shadow-lg py-3' : 'bg-transparent py-5'
         }`}
       >
