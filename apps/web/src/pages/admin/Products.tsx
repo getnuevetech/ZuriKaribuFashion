@@ -172,6 +172,36 @@ export default function AdminProducts() {
             : [],
         });
       }
+      const currentSellers = Array.isArray(response.data?.sellers) ? response.data.sellers : [];
+      const currentDesigners = Array.isArray(response.data?.designers) ? response.data.designers : [];
+      if (currentSellers.length === 0 && currentDesigners.length === 0) {
+        try {
+          const ownerFallback = await api.homepageSections.getAdminDesignerOptions();
+          if (ownerFallback.success && Array.isArray(ownerFallback.data) && ownerFallback.data.length > 0) {
+            const sellers = ownerFallback.data
+              .filter((item) => String(item.vendorType || '').toUpperCase() === 'SELLER')
+              .map((item) => ({
+                id: String(item.id || ''),
+                businessName: String(item.businessName || '').trim() || `Seller ${String(item.id || '').slice(0, 8)}`,
+                country: String(item.country || '').trim(),
+              }));
+            const designers = ownerFallback.data
+              .filter((item) => String(item.vendorType || 'DESIGNER').toUpperCase() !== 'SELLER')
+              .map((item) => ({
+                id: String(item.id || ''),
+                businessName: String(item.businessName || '').trim() || `Designer ${String(item.id || '').slice(0, 8)}`,
+                country: String(item.country || '').trim(),
+              }));
+            setOptions((prev) => ({
+              ...prev,
+              sellers,
+              designers,
+            }));
+          }
+        } catch (ownerFallbackError) {
+          console.error('Failed to load seller/designer fallback options', ownerFallbackError);
+        }
+      }
       if (currencyResponse.success) {
         setCurrencyMatrix(Array.isArray(currencyResponse.data?.matrix) ? currencyResponse.data.matrix : []);
       }

@@ -389,6 +389,53 @@ const normalizeDesignerOptionsPayload = (payload: unknown): NormalizedDesignerOp
   return Array.from(byId.values()).sort((a, b) => a.businessName.localeCompare(b.businessName));
 };
 
+async function readDesignerOptionsFromVendorProfilesFallback() {
+  const response = await apiService.get<{
+    success: boolean;
+    data?: {
+      profiles?: Array<{
+        role?: string;
+        profileId?: string;
+        userId?: string;
+        businessName?: string;
+        profileData?: Record<string, unknown> | null;
+        user?: {
+          firstName?: string | null;
+          lastName?: string | null;
+          email?: string | null;
+        } | null;
+      }>;
+    };
+  }>('/admin/vendor-profiles', { params: { page: 1, limit: 100 } });
+  const rows = Array.isArray(response?.data?.profiles) ? response.data.profiles : [];
+  const mapped = rows
+    .map((row) => {
+      const role = String(row.role || '').toUpperCase();
+      const vendorType: 'DESIGNER' | 'SELLER' =
+        role === 'FABRIC_SELLER' ? 'SELLER' : 'DESIGNER';
+      const id = String(row.profileId || '').trim();
+      if (!id) return null;
+      const fallbackName =
+        `${row.user?.firstName || ''} ${row.user?.lastName || ''}`.trim() ||
+        String(row.user?.email || '').trim() ||
+        `${vendorType === 'SELLER' ? 'Seller' : 'Designer'} ${id.slice(0, 8)}`;
+      const businessName = String(row.businessName || '').trim() || fallbackName;
+      const profileCountry = String((row.profileData?.country as string) || '').trim();
+      return {
+        id,
+        businessName,
+        country: profileCountry,
+        vendorType,
+      };
+    })
+    .filter((row): row is NormalizedDesignerOption => Boolean(row));
+  const deduped = new Map<string, NormalizedDesignerOption>();
+  for (const item of mapped) {
+    if (!deduped.has(item.id)) deduped.set(item.id, item);
+  }
+  return Array.from(deduped.values()).sort((a, b) => a.businessName.localeCompare(b.businessName));
+}
+
 async function readHowItWorksStyleWithFallback<T>() {
   let lastError: unknown = null;
   for (const path of howItWorksStyleReadPaths) {
@@ -468,6 +515,19 @@ async function readDesignerOptionsWithFallback<T>() {
         continue;
       }
       throw error;
+    }
+  }
+  try {
+    const vendorProfileOptions = await readDesignerOptionsFromVendorProfilesFallback();
+    if (vendorProfileOptions.length > 0) {
+      return {
+        success: true,
+        data: vendorProfileOptions,
+      } as T;
+    }
+  } catch (vendorProfileError) {
+    if (!isRetryableRouteError(vendorProfileError)) {
+      lastError = vendorProfileError;
     }
   }
   try {
