@@ -517,7 +517,7 @@ export default function Home() {
   const featuredFabrics = ((USE_DYNAMIC_HOMEPAGE ? featuredData?.FEATURED_FABRICS : null) || kimiFabrics) as FeaturedProduct[];
   const managedBannersBySection = useMemo(() => {
     const map = new Map<string, ManagedBanner>();
-    if (!USE_DYNAMIC_HOMEPAGE || !Array.isArray(managedBannersData)) return map;
+    if (!Array.isArray(managedBannersData)) return map;
     for (const row of managedBannersData) {
       const key = String(row?.section || '').toUpperCase();
       if (!key || map.has(key)) continue;
@@ -826,7 +826,7 @@ export default function Home() {
         />
       ) : null}
 
-      {USE_DYNAMIC_HOMEPAGE && managedBannersBySection.get('BANNER_1') ? (
+      {managedBannersBySection.get('BANNER_1') ? (
         <section className="py-12 bg-white">
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
             <div className="relative overflow-hidden rounded-xl">
@@ -862,7 +862,7 @@ export default function Home() {
         />
       ) : null}
 
-      {USE_DYNAMIC_HOMEPAGE && managedBannersBySection.get('BANNER_2') ? (
+      {managedBannersBySection.get('BANNER_2') ? (
         <section className="py-12 bg-white">
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
             <div className="relative overflow-hidden rounded-xl">
