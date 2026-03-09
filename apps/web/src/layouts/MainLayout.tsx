@@ -14,6 +14,8 @@ const TOP_STRIP_DEFAULTS = {
   separator: '•',
   repeatCount: 4,
   animationSeconds: 20,
+  fontSize: 12,
+  isBold: false,
   textColor: '#ffffff',
   backgroundColor: '#000000',
 };
@@ -67,6 +69,8 @@ export default function MainLayout() {
     8,
     Math.min(120, Number(topStripContent?.animationSeconds || TOP_STRIP_DEFAULTS.animationSeconds))
   );
+  const topStripFontSize = Math.max(10, Math.min(40, Number(topStripContent?.fontSize || TOP_STRIP_DEFAULTS.fontSize)));
+  const topStripIsBold = Boolean(topStripContent?.isBold ?? TOP_STRIP_DEFAULTS.isBold);
   const topStripTextColor = String(topStripContent?.textColor || TOP_STRIP_DEFAULTS.textColor);
   const topStripBackgroundColor = String(topStripContent?.backgroundColor || TOP_STRIP_DEFAULTS.backgroundColor);
 
@@ -102,7 +106,11 @@ export default function MainLayout() {
         >
           <div className="animate-marquee whitespace-nowrap flex gap-8" style={{ animationDuration: `${topStripAnimationSeconds}s` }}>
             {[...Array(topStripRepeatCount)].map((_, i) => (
-              <div key={i} className="flex gap-8 text-xs tracking-wider">
+              <div
+                key={i}
+                className="flex gap-8 tracking-wider"
+                style={{ fontSize: `${topStripFontSize}px`, fontWeight: topStripIsBold ? 700 : 400 }}
+              >
                 {topStripMessages.map((message, idx) => (
                   <span key={`${i}-${idx}`} className="inline-flex items-center gap-8">
                     <span>{message}</span>

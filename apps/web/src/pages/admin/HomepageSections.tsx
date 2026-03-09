@@ -11,6 +11,8 @@ interface TopStripContent {
   separator: string;
   repeatCount: number;
   animationSeconds: number;
+  fontSize: number;
+  isBold: boolean;
   textColor: string;
   backgroundColor: string;
   source?: 'DATABASE' | 'DEFAULT';
@@ -770,6 +772,12 @@ function TopStripTable({ data, onEdit }: { data: TopStripContent | null; onEdit:
               <span className="rounded-full bg-gray-100 px-2 py-1">
                 Animation: {data?.animationSeconds ?? 20}s
               </span>
+              <span className="rounded-full bg-gray-100 px-2 py-1">
+                Font size: {data?.fontSize ?? 12}px
+              </span>
+              <span className="rounded-full bg-gray-100 px-2 py-1">
+                Weight: {data?.isBold ? 'Bold' : 'Regular'}
+              </span>
               <span className="rounded-full bg-gray-100 px-2 py-1 inline-flex items-center gap-2">
                 <span
                   className="inline-block h-3 w-3 rounded border border-gray-300"
@@ -1164,6 +1172,8 @@ function SectionModal({
       return {
         ...item,
         messagesText: Array.isArray(item.messages) ? item.messages.join('\n') : '',
+        fontSize: Number(item.fontSize) || 12,
+        isBold: Boolean(item.isBold),
         textColor: item.textColor || '#ffffff',
         backgroundColor: item.backgroundColor || '#000000',
       };
@@ -1183,6 +1193,8 @@ function SectionModal({
           separator: '•',
           repeatCount: 4,
           animationSeconds: 20,
+          fontSize: 12,
+          isBold: false,
           textColor: '#ffffff',
           backgroundColor: '#000000',
         };
@@ -1305,6 +1317,8 @@ function SectionModal({
             separator: String(formData.separator || '').trim() || '•',
             repeatCount: Number(formData.repeatCount) || 4,
             animationSeconds: Number(formData.animationSeconds) || 20,
+            fontSize: Number(formData.fontSize) || 12,
+            isBold: Boolean(formData.isBold),
             textColor: String(formData.textColor || '#ffffff').trim().toLowerCase(),
             backgroundColor: String(formData.backgroundColor || '#000000').trim().toLowerCase(),
           };
@@ -1454,7 +1468,7 @@ function SectionModal({
                 required
               />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Separator</label>
                 <input
@@ -1487,6 +1501,29 @@ function SectionModal({
                   max={120}
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Font Size (px)</label>
+                <input
+                  type="number"
+                  value={formData.fontSize || 12}
+                  onChange={(e) => setFormData({ ...formData, fontSize: parseInt(e.target.value, 10) || 12 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  min={10}
+                  max={40}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="top-strip-bold"
+                type="checkbox"
+                checked={!!formData.isBold}
+                onChange={(e) => setFormData({ ...formData, isBold: e.target.checked })}
+                className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+              />
+              <label htmlFor="top-strip-bold" className="text-sm font-medium text-gray-700">
+                Bold text
+              </label>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>

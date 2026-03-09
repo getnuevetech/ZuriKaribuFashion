@@ -12,6 +12,8 @@ type TopStripSettings = {
   separator: string;
   repeatCount: number;
   animationSeconds: number;
+  fontSize: number;
+  isBold: boolean;
   textColor: string;
   backgroundColor: string;
 };
@@ -21,6 +23,8 @@ const TOP_STRIP_DEFAULTS: TopStripSettings = {
   separator: '•',
   repeatCount: 4,
   animationSeconds: 20,
+  fontSize: 12,
+  isBold: false,
   textColor: '#ffffff',
   backgroundColor: '#000000',
 };
@@ -85,6 +89,7 @@ const normalizeTopStripSettings = (raw: unknown): TopStripSettings => {
       : TOP_STRIP_DEFAULTS.separator;
   const repeatCountRaw = Number(row.repeatCount);
   const animationSecondsRaw = Number(row.animationSeconds);
+  const fontSizeRaw = Number(row.fontSize);
   return {
     messages: messages.length > 0 ? messages : [...TOP_STRIP_DEFAULTS.messages],
     separator,
@@ -92,6 +97,8 @@ const normalizeTopStripSettings = (raw: unknown): TopStripSettings => {
     animationSeconds: Number.isFinite(animationSecondsRaw)
       ? Math.max(8, Math.min(120, Math.round(animationSecondsRaw)))
       : TOP_STRIP_DEFAULTS.animationSeconds,
+    fontSize: Number.isFinite(fontSizeRaw) ? Math.max(10, Math.min(40, Math.round(fontSizeRaw))) : TOP_STRIP_DEFAULTS.fontSize,
+    isBold: typeof row.isBold === 'boolean' ? row.isBold : TOP_STRIP_DEFAULTS.isBold,
     textColor: normalizeHexColor(row.textColor, TOP_STRIP_DEFAULTS.textColor),
     backgroundColor: normalizeHexColor(row.backgroundColor, TOP_STRIP_DEFAULTS.backgroundColor),
   };

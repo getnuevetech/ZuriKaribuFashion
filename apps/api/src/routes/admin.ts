@@ -27,6 +27,8 @@ const ADMIN_TOP_STRIP_DEFAULTS = {
   separator: '•',
   repeatCount: 4,
   animationSeconds: 20,
+  fontSize: 12,
+  isBold: false,
   textColor: '#ffffff',
   backgroundColor: '#000000',
 };
@@ -35,6 +37,8 @@ const adminTopStripUpdateSchema = z.object({
   separator: z.string().trim().min(1).max(8).optional(),
   repeatCount: z.coerce.number().int().min(2).max(12).optional(),
   animationSeconds: z.coerce.number().int().min(8).max(120).optional(),
+  fontSize: z.coerce.number().int().min(10).max(40).optional(),
+  isBold: z.boolean().optional(),
   textColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
   backgroundColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
 });
@@ -83,6 +87,10 @@ const normalizeAdminTopStripSettings = (raw: unknown) => {
     animationSeconds: Number.isFinite(Number(row.animationSeconds))
       ? Math.max(8, Math.min(120, Math.round(Number(row.animationSeconds))))
       : ADMIN_TOP_STRIP_DEFAULTS.animationSeconds,
+    fontSize: Number.isFinite(Number(row.fontSize))
+      ? Math.max(10, Math.min(40, Math.round(Number(row.fontSize))))
+      : ADMIN_TOP_STRIP_DEFAULTS.fontSize,
+    isBold: typeof row.isBold === 'boolean' ? row.isBold : ADMIN_TOP_STRIP_DEFAULTS.isBold,
     textColor: normalizeHexColor(row.textColor, ADMIN_TOP_STRIP_DEFAULTS.textColor),
     backgroundColor: normalizeHexColor(row.backgroundColor, ADMIN_TOP_STRIP_DEFAULTS.backgroundColor),
   };
