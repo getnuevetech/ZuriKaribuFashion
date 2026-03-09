@@ -473,7 +473,7 @@ export default function AdminBanners() {
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
-          <div className="mx-auto w-full max-w-4xl rounded-2xl bg-white max-h-[92vh] overflow-y-auto">
+          <div className="mx-auto w-full max-w-4xl rounded-2xl bg-white max-h-[92vh] overflow-hidden">
             <div className="p-6 border-b flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900">
                 {editingBanner ? 'Edit Banner' : 'Create Banner'}
@@ -486,7 +486,8 @@ export default function AdminBanners() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="flex h-[calc(92vh-88px)] flex-col">
+              <div className="space-y-6 overflow-y-auto p-6">
               {/* Banner Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -692,8 +693,9 @@ export default function AdminBanners() {
                 </label>
               </div>
 
+              </div>
               {/* Actions */}
-              <div className="flex gap-3 pt-4 border-t">
+              <div className="sticky bottom-0 flex gap-3 border-t bg-white px-6 py-4">
                 <Button
                   type="button"
                   variant="outline"

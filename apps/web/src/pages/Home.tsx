@@ -679,7 +679,7 @@ export default function Home() {
     return profileId ? `/designs?designerId=${encodeURIComponent(profileId)}` : '/designs';
   };
 
-  const isExternalHref = (href: string) => /^https?:\/\//i.test(String(href || ''));
+  const isExternalHref = (href: string) => /^(https?:\/\/|mailto:|tel:)/i.test(String(href || ''));
 
   return (
     <div className="min-h-screen bg-white">
@@ -1042,11 +1042,25 @@ export default function Home() {
             </span>
             <h2 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">{heritage.title}</h2>
             <p className="text-white/80 text-lg leading-relaxed mb-8">{heritage.content}</p>
-            <Link to={heritage.ctaLink} className="inline-flex items-center px-8 py-3" style={{ border: '1px solid currentColor' }}>
-              <span className="rounded-none border-white text-white hover:bg-white hover:text-black text-sm tracking-wider">
-                {heritage.ctaText} <ArrowRight className="ml-2 w-4 h-4 inline" />
-              </span>
-            </Link>
+            {isExternalHref(heritage.ctaLink) ? (
+              <a
+                href={heritage.ctaLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center px-8 py-3"
+                style={{ border: '1px solid currentColor' }}
+              >
+                <span className="rounded-none border-white text-white hover:bg-white hover:text-black text-sm tracking-wider">
+                  {heritage.ctaText} <ArrowRight className="ml-2 w-4 h-4 inline" />
+                </span>
+              </a>
+            ) : (
+              <Link to={heritage.ctaLink} className="inline-flex items-center px-8 py-3" style={{ border: '1px solid currentColor' }}>
+                <span className="rounded-none border-white text-white hover:bg-white hover:text-black text-sm tracking-wider">
+                  {heritage.ctaText} <ArrowRight className="ml-2 w-4 h-4 inline" />
+                </span>
+              </Link>
+            )}
           </div>
         </div>
       </section>

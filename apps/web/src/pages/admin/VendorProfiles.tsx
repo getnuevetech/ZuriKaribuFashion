@@ -486,7 +486,7 @@ export default function AdminVendorProfiles() {
 
       {showAddVendorModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
-          <div className="mx-auto w-full max-w-3xl rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
+          <div className="mx-auto w-full max-w-3xl rounded-xl bg-white p-6 max-h-[92vh] overflow-hidden">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-xl font-bold text-gray-900">Create Vendor (Minimal Profile)</h3>
               <Button size="sm" variant="outline" onClick={() => setShowAddVendorModal(false)}>
@@ -494,7 +494,7 @@ export default function AdminVendorProfiles() {
               </Button>
             </div>
             <form
-              className="space-y-3"
+              className="flex h-[calc(92vh-110px)] flex-col"
               onSubmit={async (e) => {
                 e.preventDefault();
                 setCreatingVendor(true);
@@ -536,7 +536,7 @@ export default function AdminVendorProfiles() {
                 }
               }}
             >
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 overflow-y-auto pr-1 md:grid-cols-2">
                 <select
                   value={newVendor.role}
                   onChange={(e) => setNewVendor((prev) => ({ ...prev, role: e.target.value as VendorRole }))}
@@ -606,9 +606,12 @@ export default function AdminVendorProfiles() {
                 value={newVendor.address}
                 onChange={(e) => setNewVendor((prev) => ({ ...prev, address: e.target.value }))}
                 placeholder="Address (optional)"
-                className="h-20 w-full rounded border px-3 py-2 text-sm"
+                className="h-20 w-full rounded border px-3 py-2 text-sm md:col-span-2"
               />
-              <div className="flex justify-end">
+              <div className="sticky bottom-0 mt-3 flex justify-end gap-2 border-t bg-white pt-3 md:col-span-2">
+                <Button type="button" variant="outline" onClick={() => setShowAddVendorModal(false)}>
+                  Cancel
+                </Button>
                 <Button type="submit" disabled={creatingVendor}>
                   {creatingVendor ? 'Creating...' : 'Create Vendor'}
                 </Button>

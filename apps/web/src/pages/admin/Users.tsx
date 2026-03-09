@@ -394,9 +394,10 @@ export default function AdminUsers() {
 
       {showCreateModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
-          <div className="mx-auto w-full max-w-2xl rounded-2xl bg-white p-6 max-h-[92vh] overflow-y-auto">
+          <div className="mx-auto w-full max-w-2xl rounded-2xl bg-white p-6 max-h-[92vh] overflow-hidden">
             <h3 className="text-xl font-bold mb-4">Add User</h3>
-            <form onSubmit={handleCreateUser} className="space-y-4">
+            <form onSubmit={handleCreateUser} className="flex h-[calc(92vh-110px)] flex-col">
+              <div className="space-y-4 overflow-y-auto pr-1">
               {createError ? (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                   {createError}
@@ -466,7 +467,8 @@ export default function AdminUsers() {
                 placeholder="Phone (optional)"
                 className="w-full px-3 py-2 border rounded-lg"
               />
-              <div className="flex gap-3 pt-2">
+              </div>
+              <div className="sticky bottom-0 flex gap-3 border-t bg-white pt-3">
                 <Button type="button" variant="outline" className="flex-1" onClick={() => setShowCreateModal(false)}>
                   Cancel
                 </Button>
@@ -481,9 +483,10 @@ export default function AdminUsers() {
 
       {showEditModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
-          <div className="mx-auto w-full max-w-2xl rounded-2xl bg-white p-6 max-h-[92vh] overflow-y-auto">
+          <div className="mx-auto w-full max-w-2xl rounded-2xl bg-white p-6 max-h-[92vh] overflow-hidden">
             <h3 className="text-xl font-bold mb-4">Edit User Profile</h3>
-            <form onSubmit={handleEditUser} className="space-y-4">
+            <form onSubmit={handleEditUser} className="flex h-[calc(92vh-110px)] flex-col">
+              <div className="space-y-4 overflow-y-auto pr-1">
               {editError ? (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                   {editError}
@@ -545,7 +548,8 @@ export default function AdminUsers() {
                   <option value="REJECTED">Rejected</option>
                 </select>
               </div>
-              <div className="flex gap-3 pt-2">
+              </div>
+              <div className="sticky bottom-0 flex gap-3 border-t bg-white pt-3">
                 <Button type="button" variant="outline" className="flex-1" onClick={() => setShowEditModal(false)}>
                   Cancel
                 </Button>

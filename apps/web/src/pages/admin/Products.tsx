@@ -1017,14 +1017,15 @@ export default function AdminProducts() {
       </div>
       {showModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
-          <div className="mx-auto w-full max-w-2xl rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
+          <div className="mx-auto w-full max-w-2xl rounded-xl bg-white p-6 max-h-[92vh] overflow-hidden">
             <h3 className="mb-4 text-xl font-bold text-gray-900">{editing ? 'Edit Product' : 'Add Product'}</h3>
             {modalError ? (
               <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 {modalError}
               </div>
             ) : null}
-            <form onSubmit={saveProduct} className="space-y-3">
+            <form onSubmit={saveProduct} className="flex h-[calc(92vh-120px)] flex-col">
+              <div className="space-y-3 overflow-y-auto pr-1">
               {!editing && (
                 <select
                   value={form.type}
@@ -1238,7 +1239,8 @@ export default function AdminProducts() {
                   </div>
                 ) : null}
               </div>
-              <div className="flex gap-3 pt-2">
+              </div>
+              <div className="sticky bottom-0 flex gap-3 border-t bg-white pt-3">
                 <Button type="button" variant="outline" className="flex-1" onClick={() => { setShowModal(false); setModalError(''); }}>Cancel</Button>
                 <Button type="submit" className="flex-1" disabled={saving}>{saving ? 'Saving...' : editing ? 'Update Product' : 'Create Product'}</Button>
               </div>

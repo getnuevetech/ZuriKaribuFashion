@@ -1336,6 +1336,19 @@ function SectionModal({
         pauseOnHover: Boolean(item.pauseOnHover ?? true),
       };
     }
+    if (type === 'heritage' && item) {
+      const link = String(item.ctaLink || '').trim();
+      const linkedBlog = blogOptions.find(
+        (blog) => String(blog.link || '').trim() === link || `/stories/${blog.slug}` === link
+      );
+      return {
+        ...item,
+        linkMode: linkedBlog ? 'BLOG' : 'CUSTOM_URL',
+        blogPostId: linkedBlog?.id || '',
+        externalUrl: linkedBlog ? '' : link,
+        ctaLink: link,
+      };
+    }
     return item || getDefaultFormData(type);
   });
   const [saving, setSaving] = useState(false);
@@ -1383,7 +1396,18 @@ function SectionModal({
           isActive: true,
         };
       case 'heritage':
-        return { title: '', subtitle: '', image: '', ctaText: 'Read Our Story', ctaLink: '/about', displayOrder: 0, isActive: true };
+        return {
+          title: '',
+          subtitle: '',
+          image: '',
+          ctaText: 'Read Our Story',
+          ctaLink: '/about',
+          linkMode: 'CUSTOM_URL',
+          externalUrl: '/about',
+          blogPostId: '',
+          displayOrder: 0,
+          isActive: true,
+        };
       case 'testimonials':
         return { name: '', initials: '', location: '', quote: '', avatar: '', displayOrder: 0, isActive: true };
       case 'footer':
@@ -1422,6 +1446,20 @@ function SectionModal({
       }
       if (String(next.linkMode || 'DEFAULT_STORE') !== 'BLOG') {
         next.blogPostId = '';
+      }
+      return next;
+    });
+  }, [type, formData?.linkMode]);
+
+  useEffect(() => {
+    if (type !== 'heritage') return;
+    setFormData((prev: any) => {
+      const next = { ...prev };
+      if (String(next.linkMode || 'CUSTOM_URL') !== 'BLOG') {
+        next.blogPostId = '';
+      }
+      if (String(next.linkMode || 'CUSTOM_URL') !== 'CUSTOM_URL') {
+        next.externalUrl = '';
       }
       return next;
     });
@@ -1537,6 +1575,26 @@ function SectionModal({
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-+|-+$/g, '') || title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
           return { ...formData, key };
+        }
+        if (type === 'heritage') {
+          const linkMode = String(formData.linkMode || 'CUSTOM_URL').toUpperCase();
+          const blog = blogOptions.find((option) => option.id === String(formData.blogPostId || ''));
+          const resolvedLink =
+            linkMode === 'BLOG'
+              ? String(blog?.link || '').trim()
+              : String(formData.externalUrl || formData.ctaLink || '').trim();
+          if (linkMode === 'BLOG' && !resolvedLink) {
+            throw new Error('Please select a blog story for heritage link.');
+          }
+          return {
+            title: String(formData.title || '').trim(),
+            subtitle: String(formData.subtitle || '').trim(),
+            image: String(formData.image || '').trim(),
+            ctaText: String(formData.ctaText || '').trim() || undefined,
+            ctaLink: resolvedLink || undefined,
+            displayOrder: Number(formData.displayOrder || 0),
+            isActive: Boolean(formData.isActive),
+          };
         }
         if (type === 'testimonials') {
           const initials =
@@ -2091,14 +2149,44 @@ function SectionModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">CTA Link</label>
-              <input
-                type="text"
-                value={formData.ctaLink || ''}
-                onChange={(e) => setFormData({ ...formData, ctaLink: e.target.value })}
+              <select
+                value={formData.linkMode || 'CUSTOM_URL'}
+                onChange={(e) => setFormData({ ...formData, linkMode: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                placeholder="/about"
-              />
+              >
+                <option value="CUSTOM_URL">Custom / External URL</option>
+                <option value="BLOG">Blog story</option>
+              </select>
             </div>
+            {String(formData.linkMode || 'CUSTOM_URL') === 'BLOG' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select Blog Story</label>
+                <select
+                  value={formData.blogPostId || ''}
+                  onChange={(e) => setFormData({ ...formData, blogPostId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  required
+                >
+                  <option value="">Select story</option>
+                  {blogOptions.map((blog) => (
+                    <option key={blog.id} value={blog.id}>
+                      [{blog.audienceType}] {blog.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">External URL / Internal Path</label>
+                <input
+                  type="text"
+                  value={formData.externalUrl || formData.ctaLink || ''}
+                  onChange={(e) => setFormData({ ...formData, externalUrl: e.target.value, ctaLink: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  placeholder="/about or https://example.com/story"
+                />
+              </div>
+            )}
           </>
         );
       case 'testimonials':
@@ -2223,7 +2311,7 @@ function SectionModal({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
-      <div className="mx-auto w-full max-w-4xl rounded-xl bg-white shadow-xl max-h-[92vh] overflow-y-auto">
+      <div className="mx-auto w-full max-w-4xl rounded-xl bg-white shadow-xl max-h-[92vh] overflow-hidden">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">
             {item ? 'Edit' : 'Add'} {type.charAt(0).toUpperCase() + type.slice(1).replace(/([A-Z])/g, ' $1')}
@@ -2233,61 +2321,63 @@ function SectionModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {renderFormFields()}
+        <form onSubmit={handleSubmit} className="flex h-[calc(92vh-84px)] flex-col">
+          <div className="space-y-4 overflow-y-auto p-6">
+            {renderFormFields()}
 
-          {/* Image Upload */}
-          {(type === 'countries' || type === 'categories' || type === 'designerSpotlight' || type === 'heritage' || type === 'testimonials') && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Image</label>
-              <div className="flex items-center gap-4">
-                {(type === 'testimonials' ? formData.avatar : formData.image) && (
-                  <img src={type === 'testimonials' ? formData.avatar : formData.image} alt="Preview" className="h-20 w-20 object-cover" />
-                )}
-                <label className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
-                  <Upload className="w-4 h-4" />
-                  <span className="text-sm">{uploading ? 'Uploading...' : 'Upload Image'}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageUpload(e, type === 'testimonials' ? 'avatar' : 'image')}
-                    className="hidden"
-                    disabled={uploading}
-                  />
-                </label>
+            {/* Image Upload */}
+            {(type === 'countries' || type === 'categories' || type === 'designerSpotlight' || type === 'heritage' || type === 'testimonials') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Image</label>
+                <div className="flex items-center gap-4">
+                  {(type === 'testimonials' ? formData.avatar : formData.image) && (
+                    <img src={type === 'testimonials' ? formData.avatar : formData.image} alt="Preview" className="h-20 w-20 object-cover" />
+                  )}
+                  <label className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                    <Upload className="w-4 h-4" />
+                    <span className="text-sm">{uploading ? 'Uploading...' : 'Upload Image'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e, type === 'testimonials' ? 'avatar' : 'image')}
+                      className="hidden"
+                      disabled={uploading}
+                    />
+                  </label>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Display Order */}
-          {type !== 'footer' && type !== 'topStrip' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Display Order</label>
-              <input
-                type="number"
-                value={formData.displayOrder || 0}
-                onChange={(e) => setFormData({ ...formData, displayOrder: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                min={0}
-              />
-            </div>
-          )}
+            {/* Display Order */}
+            {type !== 'footer' && type !== 'topStrip' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Display Order</label>
+                <input
+                  type="number"
+                  value={formData.displayOrder || 0}
+                  onChange={(e) => setFormData({ ...formData, displayOrder: parseInt(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  min={0}
+                />
+              </div>
+            )}
 
-          {/* Active Status */}
-          {type !== 'footer' && type !== 'topStrip' && (
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="isActive"
-                checked={!!formData.isActive}
-                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
-              />
-              <label htmlFor="isActive" className="text-sm font-medium text-gray-700">Active</label>
-            </div>
-          )}
+            {/* Active Status */}
+            {type !== 'footer' && type !== 'topStrip' && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isActive"
+                  checked={!!formData.isActive}
+                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                  className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                />
+                <label htmlFor="isActive" className="text-sm font-medium text-gray-700">Active</label>
+              </div>
+            )}
+          </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="sticky bottom-0 flex justify-end gap-3 border-t bg-white px-6 py-4">
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancel
             </Button>
