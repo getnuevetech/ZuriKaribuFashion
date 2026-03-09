@@ -149,7 +149,28 @@ export default function AdminProducts() {
         api.currency.getConfig(),
       ]);
       if (response.success) {
-        setOptions(response.data);
+        const normalizeOwnerName = (name: string | undefined, role: 'Seller' | 'Designer', id: string) => {
+          const trimmed = String(name || '').trim();
+          return trimmed || `${role} ${String(id || '').slice(0, 8)}`;
+        };
+        setOptions({
+          categories: Array.isArray(response.data?.categories) ? response.data.categories : [],
+          materials: Array.isArray(response.data?.materials) ? response.data.materials : [],
+          sellers: Array.isArray(response.data?.sellers)
+            ? response.data.sellers.map((item: any) => ({
+                id: String(item.id || ''),
+                businessName: normalizeOwnerName(item.businessName, 'Seller', item.id),
+                country: String(item.country || '').trim(),
+              }))
+            : [],
+          designers: Array.isArray(response.data?.designers)
+            ? response.data.designers.map((item: any) => ({
+                id: String(item.id || ''),
+                businessName: normalizeOwnerName(item.businessName, 'Designer', item.id),
+                country: String(item.country || '').trim(),
+              }))
+            : [],
+        });
       }
       if (currencyResponse.success) {
         setCurrencyMatrix(Array.isArray(currencyResponse.data?.matrix) ? currencyResponse.data.matrix : []);

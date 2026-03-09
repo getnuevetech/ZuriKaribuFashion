@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
-import { prisma } from '../db';
+import { prisma, UserRole } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import { AFRICAN_CURRENCY_BASELINE } from '../constants/africanCurrencies';
@@ -881,6 +881,73 @@ const generateCountryImage = async (input: {
   }
 };
 
+type SpotlightProfileView = {
+  id: string;
+  businessName: string;
+  country: string;
+  bio?: string;
+  vendorType: 'DESIGNER' | 'SELLER';
+};
+
+const mapSpotlightProfileName = (
+  row: { id: string; businessName?: string | null; user?: { firstName?: string | null; lastName?: string | null; email?: string | null } | null },
+  fallbackLabel: string
+) => {
+  const directName = getString(row.businessName);
+  if (directName) return directName;
+  const fullName = `${row.user?.firstName || ''} ${row.user?.lastName || ''}`.trim();
+  if (fullName) return fullName;
+  return row.user?.email || `${fallbackLabel} ${String(row.id || '').slice(0, 8)}`;
+};
+
+const readSpotlightProfilesByIds = async (ids: string[]): Promise<Map<string, SpotlightProfileView>> => {
+  const uniqueIds = Array.from(new Set(ids.map((id) => String(id || '').trim()).filter(Boolean)));
+  if (uniqueIds.length === 0) return new Map();
+  const [designers, sellers] = await Promise.all([
+    prisma.designerProfile.findMany({
+      where: { id: { in: uniqueIds } },
+      select: {
+        id: true,
+        businessName: true,
+        country: true,
+        bio: true,
+        user: { select: { firstName: true, lastName: true, email: true } },
+      },
+    }),
+    prisma.fabricSellerProfile.findMany({
+      where: { id: { in: uniqueIds } },
+      select: {
+        id: true,
+        businessName: true,
+        country: true,
+        user: { select: { firstName: true, lastName: true, email: true } },
+      },
+    }),
+  ]);
+
+  const mapped = new Map<string, SpotlightProfileView>();
+  for (const row of designers) {
+    mapped.set(row.id, {
+      id: row.id,
+      businessName: mapSpotlightProfileName(row, 'Designer'),
+      country: getString(row.country) || '',
+      bio: getString(row.bio) || undefined,
+      vendorType: 'DESIGNER',
+    });
+  }
+  for (const row of sellers) {
+    if (mapped.has(row.id)) continue;
+    mapped.set(row.id, {
+      id: row.id,
+      businessName: mapSpotlightProfileName(row, 'Seller'),
+      country: getString(row.country) || '',
+      bio: undefined,
+      vendorType: 'SELLER',
+    });
+  }
+  return mapped;
+};
+
 // ==================== PUBLIC ENDPOINTS ====================
 
 router.get('/visibility', async (_req, res) => {
@@ -991,21 +1058,22 @@ router.get('/designer-spotlight', async (req, res) => {
       });
     }
 
-    const designer = await prisma.designerProfile.findUnique({
-      where: { id: spotlight.designerId },
-      select: {
-        id: true,
-        businessName: true,
-        country: true,
-        bio: true,
-      },
-    });
+    const profilesById = await readSpotlightProfilesByIds([spotlight.designerId]);
+    const profile = profilesById.get(spotlight.designerId) || null;
 
     res.json({
       success: true,
       data: {
         ...spotlight,
-        designer,
+        designer: profile
+          ? {
+              id: profile.id,
+              businessName: profile.businessName,
+              country: profile.country,
+              bio: profile.bio || null,
+            }
+          : null,
+        vendorType: profile?.vendorType || null,
       },
     });
   } catch (error) {
@@ -1026,22 +1094,21 @@ router.get('/designer-spotlights', async (req, res) => {
     });
 
     const designerIds = spotlights.map((spotlight) => spotlight.designerId);
-    const designers = await prisma.designerProfile.findMany({
-      where: { id: { in: designerIds } },
-      select: {
-        id: true,
-        businessName: true,
-        country: true,
-        bio: true,
-      },
-    });
-    const designersById = new Map(designers.map((designer) => [designer.id, designer]));
+    const profilesById = await readSpotlightProfilesByIds(designerIds);
 
     res.json({
       success: true,
       data: spotlights.map((spotlight) => ({
         ...spotlight,
-        designer: designersById.get(spotlight.designerId) || null,
+        designer: profilesById.get(spotlight.designerId)
+          ? {
+              id: profilesById.get(spotlight.designerId)!.id,
+              businessName: profilesById.get(spotlight.designerId)!.businessName,
+              country: profilesById.get(spotlight.designerId)!.country,
+              bio: profilesById.get(spotlight.designerId)!.bio || null,
+            }
+          : null,
+        vendorType: profilesById.get(spotlight.designerId)?.vendorType || null,
       })),
     });
   } catch (error) {
@@ -1272,17 +1339,106 @@ router.get('/admin/country-options', authenticate, authorizePermissions(Permissi
 
 router.get('/admin/designer-options', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
   try {
-    const designers = await prisma.designerProfile.findMany({
-      select: {
-        id: true,
-        businessName: true,
-        country: true,
-      },
-      orderBy: [{ businessName: 'asc' }],
+    const [designerUsers, sellerUsers, existingDesignerProfiles, existingSellerProfiles] = await Promise.all([
+      prisma.user.findMany({
+        where: { role: UserRole.FASHION_DESIGNER },
+        select: { id: true, email: true, firstName: true, lastName: true, phone: true },
+      }),
+      prisma.user.findMany({
+        where: { role: UserRole.FABRIC_SELLER },
+        select: { id: true, email: true, firstName: true, lastName: true, phone: true },
+      }),
+      prisma.designerProfile.findMany({ select: { userId: true } }),
+      prisma.fabricSellerProfile.findMany({ select: { userId: true } }),
+    ]);
+    const designerProfileUserIds = new Set(existingDesignerProfiles.map((row) => row.userId));
+    const sellerProfileUserIds = new Set(existingSellerProfiles.map((row) => row.userId));
+    const missingDesignerProfiles = designerUsers.filter((user) => !designerProfileUserIds.has(user.id));
+    const missingSellerProfiles = sellerUsers.filter((user) => !sellerProfileUserIds.has(user.id));
+
+    if (missingDesignerProfiles.length > 0) {
+      await prisma.designerProfile.createMany({
+        data: missingDesignerProfiles.map((user) => ({
+          userId: user.id,
+          businessName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Designer',
+          businessEmail: user.email,
+          businessPhone: user.phone || '',
+          country: '',
+          city: '',
+          address: '',
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    if (missingSellerProfiles.length > 0) {
+      await prisma.fabricSellerProfile.createMany({
+        data: missingSellerProfiles.map((user) => ({
+          userId: user.id,
+          businessName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Seller',
+          businessEmail: user.email,
+          businessPhone: user.phone || '',
+          country: '',
+          city: '',
+          address: '',
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    const [designersRaw, sellersRaw] = await Promise.all([
+      prisma.designerProfile.findMany({
+        select: {
+          id: true,
+          businessName: true,
+          country: true,
+          user: {
+            select: { firstName: true, lastName: true, email: true },
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }],
+      }),
+      prisma.fabricSellerProfile.findMany({
+        select: {
+          id: true,
+          businessName: true,
+          country: true,
+          user: {
+            select: { firstName: true, lastName: true, email: true },
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }],
+      }),
+    ]);
+
+    const designers = designersRaw.map((item) => {
+      const businessName = String(item.businessName || '').trim();
+      const fallbackName =
+        `${item.user?.firstName || ''} ${item.user?.lastName || ''}`.trim() ||
+        item.user?.email ||
+        `Designer ${String(item.id || '').slice(0, 8)}`;
+      return {
+        id: item.id,
+        businessName: businessName || fallbackName,
+        country: String(item.country || '').trim(),
+      };
     });
+    const sellers = sellersRaw.map((item) => {
+      const businessName = String(item.businessName || '').trim();
+      const fallbackName =
+        `${item.user?.firstName || ''} ${item.user?.lastName || ''}`.trim() ||
+        item.user?.email ||
+        `Seller ${String(item.id || '').slice(0, 8)}`;
+      return {
+        id: item.id,
+        businessName: `${businessName || fallbackName} [Seller]`,
+        country: String(item.country || '').trim(),
+      };
+    });
+    const options = [...designers, ...sellers].sort((a, b) => a.businessName.localeCompare(b.businessName));
     res.json({
       success: true,
-      data: designers,
+      data: options,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to fetch designer options' });
@@ -1509,19 +1665,17 @@ router.get('/admin/designer-spotlight', authenticate, authorizePermissions(Permi
       orderBy: { displayOrder: 'asc' },
     });
     const designerIds = spotlights.map((spotlight) => spotlight.designerId);
-    const designers = await prisma.designerProfile.findMany({
-      where: { id: { in: designerIds } },
-      select: {
-        id: true,
-        businessName: true,
-        country: true,
-      },
-    });
-
-    const designersById = new Map(designers.map((designer) => [designer.id, designer]));
+    const profilesById = await readSpotlightProfilesByIds(designerIds);
     const data = spotlights.map((spotlight) => ({
       ...spotlight,
-      designer: designersById.get(spotlight.designerId) || null,
+      designer: profilesById.get(spotlight.designerId)
+        ? {
+            id: profilesById.get(spotlight.designerId)!.id,
+            businessName: profilesById.get(spotlight.designerId)!.businessName,
+            country: profilesById.get(spotlight.designerId)!.country,
+          }
+        : null,
+      vendorType: profilesById.get(spotlight.designerId)?.vendorType || null,
     }));
 
     res.json({ success: true, data });

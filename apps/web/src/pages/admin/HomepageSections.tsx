@@ -319,26 +319,28 @@ export default function HomepageSections() {
   };
 
   const fetchAuxiliaryOptions = async () => {
-    try {
-      const [countryOptionsRes, designerOptionsRes] = await Promise.all([
-        api.homepageSections.getAdminCountryOptions(),
-        api.homepageSections.getAdminDesignerOptions(),
-      ]);
-      if (countryOptionsRes.success) {
-        setCountryOptions(
-          Array.isArray(countryOptionsRes.data) && countryOptionsRes.data.length > 0
-            ? countryOptionsRes.data
-            : FALLBACK_AFRICAN_COUNTRY_OPTIONS
-        );
-      } else {
-        setCountryOptions(FALLBACK_AFRICAN_COUNTRY_OPTIONS);
-      }
-      if (designerOptionsRes.success) {
-        setDesignerOptions(designerOptionsRes.data || []);
-      }
-    } catch (error) {
-      console.error('Error fetching homepage auxiliary options:', error);
+    const [countryOptionsResult, designerOptionsResult] = await Promise.allSettled([
+      api.homepageSections.getAdminCountryOptions(),
+      api.homepageSections.getAdminDesignerOptions(),
+    ]);
+
+    if (countryOptionsResult.status === 'fulfilled' && countryOptionsResult.value.success) {
+      setCountryOptions(
+        Array.isArray(countryOptionsResult.value.data) && countryOptionsResult.value.data.length > 0
+          ? countryOptionsResult.value.data
+          : FALLBACK_AFRICAN_COUNTRY_OPTIONS
+      );
+    } else {
       setCountryOptions(FALLBACK_AFRICAN_COUNTRY_OPTIONS);
+    }
+
+    if (designerOptionsResult.status === 'fulfilled' && designerOptionsResult.value.success) {
+      setDesignerOptions(Array.isArray(designerOptionsResult.value.data) ? designerOptionsResult.value.data : []);
+    } else {
+      if (designerOptionsResult.status === 'rejected') {
+        console.error('Error fetching designer options:', designerOptionsResult.reason);
+      }
+      setDesignerOptions([]);
     }
   };
 
@@ -1877,7 +1879,8 @@ function SectionModal({
                 <option value="">Select designer</option>
                 {designers.map((designer) => (
                   <option key={designer.id} value={designer.id}>
-                    {designer.businessName} ({designer.country})
+                    {designer.businessName}
+                    {designer.country ? ` (${designer.country})` : ''}
                   </option>
                 ))}
               </select>

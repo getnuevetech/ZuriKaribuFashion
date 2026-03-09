@@ -20,6 +20,72 @@ function parsePagination(pageValue: unknown, limitValue: unknown, defaultLimit =
   return { page, limit, skip };
 }
 
+const getVendorDisplayName = (input: {
+  id: string;
+  roleLabel: 'Designer' | 'Fabric Seller';
+  businessName?: string | null;
+  user?: { firstName?: string | null; lastName?: string | null; email?: string | null } | null;
+}) => {
+  const businessName = String(input.businessName || '').trim();
+  if (businessName) return businessName;
+  const fullName = `${input.user?.firstName || ''} ${input.user?.lastName || ''}`.trim();
+  if (fullName) return fullName;
+  if (input.user?.email) return input.user.email;
+  return `${input.roleLabel} ${String(input.id || '').slice(0, 8)}`;
+};
+
+const ensureVendorProfilesForRoleUsers = async () => {
+  const users = await prisma.user.findMany({
+    where: { role: { in: [UserRole.FABRIC_SELLER, UserRole.FASHION_DESIGNER] } },
+    select: { id: true, email: true, firstName: true, lastName: true, phone: true, role: true },
+  });
+  if (users.length === 0) return;
+
+  const [sellerProfiles, designerProfiles] = await Promise.all([
+    prisma.fabricSellerProfile.findMany({ select: { userId: true } }),
+    prisma.designerProfile.findMany({ select: { userId: true } }),
+  ]);
+  const sellerUserIds = new Set(sellerProfiles.map((row) => row.userId));
+  const designerUserIds = new Set(designerProfiles.map((row) => row.userId));
+
+  const missingSellerProfiles = users.filter(
+    (user) => user.role === UserRole.FABRIC_SELLER && !sellerUserIds.has(user.id)
+  );
+  const missingDesignerProfiles = users.filter(
+    (user) => user.role === UserRole.FASHION_DESIGNER && !designerUserIds.has(user.id)
+  );
+
+  if (missingSellerProfiles.length > 0) {
+    await prisma.fabricSellerProfile.createMany({
+      data: missingSellerProfiles.map((user) => ({
+        userId: user.id,
+        businessName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Fabric Seller',
+        businessEmail: user.email,
+        businessPhone: user.phone || '',
+        country: '',
+        city: '',
+        address: '',
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  if (missingDesignerProfiles.length > 0) {
+    await prisma.designerProfile.createMany({
+      data: missingDesignerProfiles.map((user) => ({
+        userId: user.id,
+        businessName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Designer',
+        businessEmail: user.email,
+        businessPhone: user.phone || '',
+        country: '',
+        city: '',
+        address: '',
+      })),
+      skipDuplicates: true,
+    });
+  }
+};
+
 const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
 const HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY = 'HOMEPAGE_COUNTRY_IMAGE_GENERATION';
 const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
@@ -2161,6 +2227,7 @@ router.patch('/users/:id/admin-access', authorizePermissions(Permissions.ADMIN_R
 
 router.get('/products/options', async (_req, res, next) => {
   try {
+    await ensureVendorProfilesForRoleUsers();
     const [categories, materials, sellersRaw, designersRaw] = await Promise.all([
       prisma.productCategory.findMany({
         where: { isActive: true },
@@ -2197,19 +2264,27 @@ router.get('/products/options', async (_req, res, next) => {
     ]);
 
     const sellers = sellersRaw.map((item) => {
-      const fallbackName = `${item.user?.firstName || ''} ${item.user?.lastName || ''}`.trim() || item.user?.email || 'Fabric Seller';
       return {
         id: item.id,
-        businessName: String(item.businessName || '').trim() || fallbackName,
+        businessName: getVendorDisplayName({
+          id: item.id,
+          roleLabel: 'Fabric Seller',
+          businessName: item.businessName,
+          user: item.user,
+        }),
         country: item.country || '',
       };
     });
 
     const designers = designersRaw.map((item) => {
-      const fallbackName = `${item.user?.firstName || ''} ${item.user?.lastName || ''}`.trim() || item.user?.email || 'Designer';
       return {
         id: item.id,
-        businessName: String(item.businessName || '').trim() || fallbackName,
+        businessName: getVendorDisplayName({
+          id: item.id,
+          roleLabel: 'Designer',
+          businessName: item.businessName,
+          user: item.user,
+        }),
         country: item.country || '',
       };
     });
@@ -2222,6 +2297,62 @@ router.get('/products/options', async (_req, res, next) => {
         sellers,
         designers,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/designer-options', async (_req, res, next) => {
+  try {
+    await ensureVendorProfilesForRoleUsers();
+    const [designersRaw, sellersRaw] = await Promise.all([
+      prisma.designerProfile.findMany({
+        select: {
+          id: true,
+          businessName: true,
+          country: true,
+          user: {
+            select: { firstName: true, lastName: true, email: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.fabricSellerProfile.findMany({
+        select: {
+          id: true,
+          businessName: true,
+          country: true,
+          user: {
+            select: { firstName: true, lastName: true, email: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+    const designers = designersRaw.map((item) => ({
+      id: item.id,
+      businessName: getVendorDisplayName({
+        id: item.id,
+        roleLabel: 'Designer',
+        businessName: item.businessName,
+        user: item.user,
+      }),
+      country: String(item.country || '').trim(),
+    }));
+    const sellers = sellersRaw.map((item) => ({
+      id: item.id,
+      businessName: `${getVendorDisplayName({
+        id: item.id,
+        roleLabel: 'Fabric Seller',
+        businessName: item.businessName,
+        user: item.user,
+      })} [Seller]`,
+      country: String(item.country || '').trim(),
+    }));
+    res.json({
+      success: true,
+      data: [...designers, ...sellers].sort((a, b) => a.businessName.localeCompare(b.businessName)),
     });
   } catch (error) {
     next(error);

@@ -317,6 +317,12 @@ const homepageCategoryReadPaths = [
   '/homepage/categories',
 ];
 
+const designerOptionsReadPaths = [
+  '/homepage-sections/admin/designer-options',
+  '/homepage/admin/designer-options',
+  '/admin/designer-options',
+];
+
 async function readHowItWorksStyleWithFallback<T>() {
   let lastError: unknown = null;
   for (const path of howItWorksStyleReadPaths) {
@@ -374,6 +380,47 @@ async function readHomepageCategoriesWithFallback<T>() {
     }
   }
   throw lastError ?? new Error('Homepage categories route not found.');
+}
+
+async function readDesignerOptionsWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of designerOptionsReadPaths) {
+    try {
+      return await apiService.get<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) {
+        continue;
+      }
+      throw error;
+    }
+  }
+  try {
+    const productOptions = await apiService.get<{
+      success: boolean;
+      data?: {
+        designers?: Array<{ id: string; businessName: string; country: string }>;
+        sellers?: Array<{ id: string; businessName: string; country: string }>;
+      };
+    }>('/admin/products/options');
+    const designers = Array.isArray(productOptions?.data?.designers) ? productOptions.data.designers : [];
+    const sellers = Array.isArray(productOptions?.data?.sellers)
+      ? productOptions.data.sellers.map((item) => ({
+          id: item.id,
+          businessName: `${String(item.businessName || '').trim() || 'Seller'} [Seller]`,
+          country: item.country,
+        }))
+      : [];
+    return {
+      success: true,
+      data: [...designers, ...sellers],
+    } as T;
+  } catch (fallbackError) {
+    if (!isRetryableRouteError(fallbackError)) {
+      throw fallbackError;
+    }
+  }
+  throw lastError ?? new Error('Designer options route not found.');
 }
 
 async function readCountryImageGenerationWithFallback<T>() {
@@ -1362,9 +1409,7 @@ const homepageSectionsApi = {
     ),
 
   getAdminDesignerOptions: () =>
-    apiService.get<{ success: boolean; data: Array<{ id: string; businessName: string; country: string }> }>(
-      '/homepage-sections/admin/designer-options'
-    ),
+    readDesignerOptionsWithFallback<{ success: boolean; data: Array<{ id: string; businessName: string; country: string }> }>(),
 
   getAdminCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/admin/countries'),
