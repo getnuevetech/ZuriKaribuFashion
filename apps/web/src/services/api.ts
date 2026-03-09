@@ -660,6 +660,60 @@ const customerApi = {
 };
 
 // Admin API
+const PROMO_BADGE_FALLBACK_DEFAULTS = {
+  valueText: '50+',
+  labelText: 'New Arrivals',
+};
+
+const adminPromoBadgeReadPaths = ['/banners/admin/promo-badge', '/admin/banners/promo-badge'];
+const adminPromoBadgeWriteAttempts = [
+  { method: 'put', path: '/banners/admin/promo-badge' },
+  { method: 'patch', path: '/banners/admin/promo-badge' },
+  { method: 'put', path: '/admin/banners/promo-badge' },
+  { method: 'patch', path: '/admin/banners/promo-badge' },
+] as const;
+
+async function readAdminPromoBadgeWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of adminPromoBadgeReadPaths) {
+    try {
+      return await apiService.get<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    return {
+      success: true,
+      data: { ...PROMO_BADGE_FALLBACK_DEFAULTS },
+    } as T;
+  }
+  throw lastError ?? new Error('Promo badge settings route not found.');
+}
+
+async function writeAdminPromoBadgeWithFallback<T>(data: { valueText: string; labelText: string }) {
+  const payload = {
+    valueText: String(data.valueText || '').trim() || PROMO_BADGE_FALLBACK_DEFAULTS.valueText,
+    labelText: String(data.labelText || '').trim() || PROMO_BADGE_FALLBACK_DEFAULTS.labelText,
+  };
+  let lastError: unknown = null;
+  for (const attempt of adminPromoBadgeWriteAttempts) {
+    try {
+      if (attempt.method === 'patch') {
+        return await apiService.patch<T>(attempt.path, payload);
+      }
+      return await apiService.put<T>(attempt.path, payload);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Promo badge settings route not found.');
+}
+
 const adminApi = {
   getDashboard: () =>
     apiService.get<{ success: boolean; data: any }>('/admin/dashboard'),
@@ -963,10 +1017,10 @@ const adminApi = {
     apiService.get<{ success: boolean; data: any[] }>('/banners/admin/all'),
 
   getPromoBadgeSettings: () =>
-    apiService.get<{ success: boolean; data: { valueText: string; labelText: string } }>('/banners/admin/promo-badge'),
+    readAdminPromoBadgeWithFallback<{ success: boolean; data: { valueText: string; labelText: string } }>(),
 
   updatePromoBadgeSettings: (data: { valueText: string; labelText: string }) =>
-    apiService.put<{ success: boolean; data: { valueText: string; labelText: string } }>('/banners/admin/promo-badge', data),
+    writeAdminPromoBadgeWithFallback<{ success: boolean; data: { valueText: string; labelText: string } }>(data),
 
   createBanner: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/banners', data),

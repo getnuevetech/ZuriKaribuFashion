@@ -165,28 +165,40 @@ export default function AdminBanners() {
     }
 
     try {
+      let bannerSaved = false;
       if (editingBanner) {
         const response = await api.admin.updateBanner(editingBanner.id, formData);
         if (response.success) {
           setBanners(banners.map(b => 
             b.id === editingBanner.id ? response.data : b
           ));
+          bannerSaved = true;
         }
       } else {
         const response = await api.admin.createBanner(formData);
         if (response.success) {
           setBanners([...banners, response.data]);
+          bannerSaved = true;
         }
       }
-      if (formData.section === 'PROMO') {
-        await api.admin.updatePromoBadgeSettings({
-          valueText: promoBadge.valueText || '50+',
-          labelText: promoBadge.labelText || 'New Arrivals',
-        });
+
+      if (formData.section === 'PROMO' && bannerSaved) {
+        try {
+          await api.admin.updatePromoBadgeSettings({
+            valueText: promoBadge.valueText,
+            labelText: promoBadge.labelText,
+          });
+        } catch (promoBadgeError) {
+          console.error('Failed to save promo badge settings:', promoBadgeError);
+          window.alert('Promotional banner was saved, but promo badge text could not be saved. Please try again after backend redeploy.');
+        }
       }
+
       setShowModal(false);
+      await fetchBanners();
     } catch (error) {
       console.error('Failed to save banner:', error);
+      window.alert((error as any)?.response?.data?.message || (error as any)?.message || 'Failed to save banner.');
     }
   };
 
