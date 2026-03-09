@@ -1083,8 +1083,12 @@ export default function Home() {
           </div>
 
           <div className="text-center mt-10">
-            <Link to="/designs" className="inline-flex items-center px-8 py-3" style={{ border: '1px solid currentColor' }}>
-              <span className="rounded-none border-black text-sm tracking-wider hover:bg-black hover:text-white">
+            <Link
+              to="/designs"
+              className="inline-flex items-center px-8 py-3 text-black transition-colors hover:bg-black hover:text-white"
+              style={{ border: '1px solid currentColor' }}
+            >
+              <span className="rounded-none border-black text-sm tracking-wider">
                 MEET ALL DESIGNERS <ArrowRight className="ml-2 w-4 h-4 inline" />
               </span>
             </Link>
