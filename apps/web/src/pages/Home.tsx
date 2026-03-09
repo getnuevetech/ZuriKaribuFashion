@@ -88,16 +88,84 @@ const DEFAULT_HOMEPAGE_VISIBILITY: HomepageVisibility = {
   cta: true,
 };
 
-const countryFlags: Record<string, string> = {
-  Ghana: '🇬🇭',
-  Nigeria: '🇳🇬',
-  Kenya: '🇰🇪',
-  Senegal: '🇸🇳',
-  Ethiopia: '🇪🇹',
-  Morocco: '🇲🇦',
-  Mali: '🇲🇱',
-  'South Africa': '🇿🇦',
-  Tanzania: '🇹🇿',
+const countryNameToCode: Record<string, string> = {
+  algeria: 'DZ',
+  angola: 'AO',
+  benin: 'BJ',
+  botswana: 'BW',
+  'burkina faso': 'BF',
+  burundi: 'BI',
+  'cabo verde': 'CV',
+  cameroon: 'CM',
+  'central african republic': 'CF',
+  chad: 'TD',
+  comoros: 'KM',
+  congo: 'CG',
+  'democratic republic of the congo': 'CD',
+  'dr congo': 'CD',
+  'cote d’ivoire': 'CI',
+  "cote d'ivoire": 'CI',
+  djibouti: 'DJ',
+  egypt: 'EG',
+  'equatorial guinea': 'GQ',
+  eritrea: 'ER',
+  eswatini: 'SZ',
+  ethiopia: 'ET',
+  gabon: 'GA',
+  gambia: 'GM',
+  ghana: 'GH',
+  guinea: 'GN',
+  'guinea-bissau': 'GW',
+  kenya: 'KE',
+  lesotho: 'LS',
+  liberia: 'LR',
+  libya: 'LY',
+  madagascar: 'MG',
+  malawi: 'MW',
+  mali: 'ML',
+  mauritania: 'MR',
+  mauritius: 'MU',
+  morocco: 'MA',
+  mozambique: 'MZ',
+  namibia: 'NA',
+  niger: 'NE',
+  nigeria: 'NG',
+  rwanda: 'RW',
+  senegal: 'SN',
+  seychelles: 'SC',
+  'sierra leone': 'SL',
+  somalia: 'SO',
+  'south africa': 'ZA',
+  'south sudan': 'SS',
+  sudan: 'SD',
+  tanzania: 'TZ',
+  togo: 'TG',
+  tunisia: 'TN',
+  uganda: 'UG',
+  zambia: 'ZM',
+  zimbabwe: 'ZW',
+};
+
+const countryCodeToFlag = (countryCode: string) =>
+  String(countryCode || '')
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .slice(0, 2)
+    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
+
+const resolveCountryFlag = (country?: string | null, explicitFlag?: string | null) => {
+  const explicit = String(explicitFlag || '').trim();
+  if (explicit) return explicit;
+  const raw = String(country || '').trim();
+  if (!raw) return '🌍';
+  const normalized = raw.toLowerCase();
+  const directCode = /^[a-z]{2}$/i.test(raw) ? raw.toUpperCase() : '';
+  if (directCode) return countryCodeToFlag(directCode);
+  const mappedCode =
+    countryNameToCode[normalized] ||
+    countryNameToCode[normalized.split(',')[0]?.trim() || ''] ||
+    '';
+  return mappedCode ? countryCodeToFlag(mappedCode) : '🌍';
 };
 
 const kimiHeroSlides: HeroSlide[] = [
@@ -291,7 +359,7 @@ function ProductCard({ product }: { product: FeaturedProduct }) {
           <Heart className="w-4 h-4" />
         </button>
         <div className="absolute top-3 left-3 bg-white/90 px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
-          <span>{product.flag || countryFlags[product.country] || '🌍'}</span>
+          <span>{resolveCountryFlag(product.country, product.flag)}</span>
         </div>
       </div>
       <div>
@@ -536,7 +604,7 @@ export default function Home() {
       (Array.isArray(countriesData) && countriesData.length > 0 ? countriesData : kimiCountries)
         .map((country: any) => ({
           name: asText(country.name, 'Country'),
-          flag: asText(country.flag, countryFlags[country?.name], '🌍'),
+          flag: resolveCountryFlag(asText(country.name, ''), asText(country.flag, '')),
           fabrics: asText(country.fabrics, 'African textiles'),
         })),
     [countriesData],
@@ -579,7 +647,7 @@ export default function Home() {
         vendorType: String(item.vendorType || 'DESIGNER').toUpperCase(),
         name: asText(item.name, item.designer?.businessName, kimiDesigners[index % kimiDesigners.length].name),
         country: asText(item.country, item.designer?.country, kimiDesigners[index % kimiDesigners.length].country),
-        flag: asText(item.flag, countryFlags[item?.country], '🌍'),
+        flag: resolveCountryFlag(asText(item.country, item.designer?.country, ''), asText(item.flag, '')),
         quote: asText(item.quote, kimiDesigners[index % kimiDesigners.length].quote),
         image: asText(item.image, kimiDesigners[index % kimiDesigners.length].image),
         linkMode: asText(item.linkMode, 'DEFAULT_STORE').toUpperCase(),
