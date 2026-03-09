@@ -309,6 +309,11 @@ const howItWorksStyleWritePaths = [
   '/admin/homepage-sections/how-it-works-style',
 ];
 
+const homepageCategoryReadPaths = [
+  '/homepage-sections/categories',
+  '/homepage/categories',
+];
+
 async function readHowItWorksStyleWithFallback<T>() {
   let lastError: unknown = null;
   for (const path of howItWorksStyleReadPaths) {
@@ -350,6 +355,22 @@ async function writeHowItWorksStyleWithFallback<T>(data: unknown) {
     }
   }
   throw lastError ?? new Error('How it works style route not found.');
+}
+
+async function readHomepageCategoriesWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of homepageCategoryReadPaths) {
+    try {
+      return await apiService.get<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) {
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Homepage categories route not found.');
 }
 
 async function readCountryImageGenerationWithFallback<T>() {
@@ -1204,7 +1225,7 @@ const homepageSectionsApi = {
     }>(),
 
   getCategories: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/categories'),
+    readHomepageCategoriesWithFallback<{ success: boolean; data: any[] }>(),
 
   getDesignerSpotlight: () =>
     apiService.get<{ success: boolean; data: any }>('/homepage-sections/designer-spotlight'),

@@ -274,6 +274,11 @@ const asText = (...values: any[]) => {
   return '';
 };
 
+const normalizeCategoryCtaText = (value: unknown) => {
+  const text = asText(value, 'SHOP NOW');
+  return text.replace(/\s*>\s*$/g, '').trim() || 'SHOP NOW';
+};
+
 const productBasePath = (productType: string) => {
   if (productType === 'DESIGN') return '/designs';
   if (productType === 'FABRIC') return '/fabrics';
@@ -543,7 +548,7 @@ export default function Home() {
         description: asText(item.description, kimiCategories[index % kimiCategories.length].description),
         image: asText(item.image, kimiCategories[index % kimiCategories.length].image),
         link: asText(item.ctaLink, item.link, kimiCategories[index % kimiCategories.length].link),
-        ctaText: asText(item.ctaText, 'SHOP NOW'),
+        ctaText: normalizeCategoryCtaText(item.ctaText),
       })),
     [categoriesData],
   );

@@ -260,6 +260,25 @@ router.get('/how-it-works-style', async (_req, res) => {
   }
 });
 
+router.get('/categories', async (_req, res) => {
+  try {
+    const categories = await prisma.shopCategory.findMany({
+      where: { isActive: true },
+      orderBy: { displayOrder: 'asc' },
+    });
+    res.json({
+      success: true,
+      data: categories,
+    });
+  } catch (error) {
+    console.error('Error fetching homepage categories:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch categories',
+    });
+  }
+});
+
 // Get active hero slides
 router.get('/hero-slides', async (req, res) => {
   try {
