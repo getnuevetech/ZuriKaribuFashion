@@ -716,14 +716,14 @@ export default function Home() {
 
       {sectionVisibility.categories ? (
       <section className="py-20 lg:py-32 bg-white">
-        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+        <div className="w-full px-2 sm:px-4 lg:px-8 xl:px-12">
           <div className="text-center mb-16">
             <h2 className="font-['Oswald'] text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">Shop by Category</h2>
             <p className="text-gray-600 max-w-xl mx-auto">
               Choose what fits your moment, ready pieces, custom fits, or raw fabrics.
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
             {categories.map((category) => (
               <Link key={category.id} to={category.link} className="group relative overflow-hidden rounded-xl cursor-pointer card-hover">
                 <div className="aspect-[3/4] overflow-hidden">
@@ -733,10 +733,8 @@ export default function Home() {
                 <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
                   <h3 className="font-['Oswald'] text-2xl font-bold mb-2">{category.title}</h3>
                   <p className="text-white/80 text-sm mb-4">{category.description}</p>
-                  <span className="inline-flex items-center px-4 py-2" style={{ border: '1px solid currentColor' }}>
-                    <span className="border-white text-white hover:bg-white hover:text-black rounded-none text-xs tracking-wider">
-                      {category.ctaText || 'SHOP NOW'}
-                    </span>
+                  <span className="inline-flex items-center border border-white text-white rounded-none text-xs tracking-wider px-4 py-2 transition-colors duration-200 group-hover:bg-white group-hover:text-black">
+                    {category.ctaText || 'SHOP NOW'}
                   </span>
                 </div>
               </Link>
