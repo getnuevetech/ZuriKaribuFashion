@@ -343,6 +343,11 @@ const asText = (...values: any[]) => {
 };
 
 const normalizeCategoryCtaText = (_value: unknown) => 'SHOP NOW';
+const CTA_BUTTON_BASE_CLASS =
+  'inline-flex items-center justify-center gap-2 rounded-none border px-8 py-3 text-sm font-semibold tracking-wider transition-colors duration-200';
+const CTA_BUTTON_DARK_CLASS = `${CTA_BUTTON_BASE_CLASS} border-black bg-black text-white hover:bg-white hover:text-black`;
+const CTA_BUTTON_LIGHT_CLASS = `${CTA_BUTTON_BASE_CLASS} border-black bg-white text-black hover:bg-black hover:text-white`;
+const CTA_BUTTON_OVERLAY_CLASS = `${CTA_BUTTON_BASE_CLASS} border-white bg-transparent text-white hover:bg-white hover:text-black`;
 
 const productBasePath = (productType: string) => {
   if (productType === 'DESIGN') return '/designs';
@@ -777,11 +782,9 @@ export default function Home() {
                         {slide.title}
                       </h1>
                       <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-lg">{slide.subtitle}</p>
-                      <Link to={slide.ctaLink || '/ready-to-wear'} className="inline-flex items-center">
-                        <span className="bg-white text-black hover:bg-white/90 btn-hover rounded-none px-8 py-6 text-sm font-semibold tracking-wider">
-                          {(slide.ctaText || 'SHOP NOW').toUpperCase()}
-                          <ArrowRight className="ml-2 w-4 h-4 inline" />
-                        </span>
+                      <Link to={slide.ctaLink || '/ready-to-wear'} className={CTA_BUTTON_LIGHT_CLASS}>
+                        {(slide.ctaText || 'SHOP NOW').toUpperCase()}
+                        <ArrowRight className="w-4 h-4" />
                       </Link>
                     </>
                   )}
@@ -851,7 +854,7 @@ export default function Home() {
                 <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
                   <h3 className="font-['Oswald'] text-2xl font-bold mb-2">{category.title}</h3>
                   <p className="text-white/80 text-sm mb-4">{category.description}</p>
-                  <span className="inline-flex items-center border border-white text-white rounded-none text-xs tracking-wider px-4 py-2 transition-colors duration-200 group-hover:bg-white group-hover:text-black">
+                  <span className="inline-flex items-center justify-center border border-white text-white rounded-none px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200 group-hover:bg-white group-hover:text-black">
                     {category.ctaText || 'SHOP NOW'}
                   </span>
                 </div>
@@ -1001,16 +1004,14 @@ export default function Home() {
                   managedBannersBySection.get('HERO')?.ctaLink,
                   '/ready-to-wear'
                 )}
-                className="inline-flex items-center"
+                className={CTA_BUTTON_DARK_CLASS}
               >
-                <span className="bg-black text-white hover:bg-black/90 btn-hover rounded-none px-8 py-6 text-sm font-semibold tracking-wider">
-                  {asText(
-                    managedBannersBySection.get('PROMO')?.ctaText,
-                    managedBannersBySection.get('HERO')?.ctaText,
-                    'SHOP NEW ARRIVALS'
-                  )}{' '}
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </span>
+                {asText(
+                  managedBannersBySection.get('PROMO')?.ctaText,
+                  managedBannersBySection.get('HERO')?.ctaText,
+                  'SHOP NEW ARRIVALS'
+                )}
+                <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
             <div>
@@ -1085,12 +1086,10 @@ export default function Home() {
           <div className="text-center mt-10">
             <Link
               to="/designs"
-              className="inline-flex items-center px-8 py-3 text-black transition-colors hover:bg-black hover:text-white"
-              style={{ border: '1px solid currentColor' }}
+              className={CTA_BUTTON_LIGHT_CLASS}
             >
-              <span className="rounded-none border-black text-sm tracking-wider">
-                MEET ALL DESIGNERS <ArrowRight className="ml-2 w-4 h-4 inline" />
-              </span>
+              MEET ALL DESIGNERS
+              <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
@@ -1115,17 +1114,15 @@ export default function Home() {
                 href={heritage.ctaLink}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center px-8 py-3 border border-white text-white transition-colors hover:bg-white hover:text-black"
+                className={CTA_BUTTON_OVERLAY_CLASS}
               >
-                <span className="rounded-none border-white text-sm tracking-wider">
-                  {heritage.ctaText} <ArrowRight className="ml-2 w-4 h-4 inline" />
-                </span>
+                {heritage.ctaText}
+                <ArrowRight className="w-4 h-4" />
               </a>
             ) : (
-              <Link to={heritage.ctaLink} className="inline-flex items-center px-8 py-3 border border-white text-white transition-colors hover:bg-white hover:text-black">
-                <span className="rounded-none border-white text-sm tracking-wider">
-                  {heritage.ctaText} <ArrowRight className="ml-2 w-4 h-4 inline" />
-                </span>
+              <Link to={heritage.ctaLink} className={CTA_BUTTON_OVERLAY_CLASS}>
+                {heritage.ctaText}
+                <ArrowRight className="w-4 h-4" />
               </Link>
             )}
           </div>
@@ -1198,15 +1195,11 @@ export default function Home() {
               Join our community of fashion lovers and discover unique pieces from talented African designers.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/ready-to-wear" className="inline-flex items-center justify-center">
-                <span className="bg-black text-white hover:bg-black/90 btn-hover rounded-none px-8 py-6 text-sm font-semibold tracking-wider">
-                  SHOP NOW
-                </span>
+              <Link to="/ready-to-wear" className={CTA_BUTTON_DARK_CLASS}>
+                SHOP NOW
               </Link>
-              <Link to="/register" className="inline-flex items-center justify-center px-8 py-6" style={{ border: '1px solid currentColor' }}>
-                <span className="border-black rounded-none px-8 py-6 text-sm font-semibold tracking-wider hover:bg-black hover:text-white">
-                  CREATE ACCOUNT
-                </span>
+              <Link to="/register" className={CTA_BUTTON_LIGHT_CLASS}>
+                CREATE ACCOUNT
               </Link>
             </div>
           </div>
@@ -1228,7 +1221,7 @@ export default function Home() {
                 placeholder="Enter your email"
                 className="flex-1 rounded-none border-black/20 focus:border-black h-12"
               />
-              <button type="submit" className="bg-black text-white hover:bg-black/90 rounded-none h-12 px-8">
+              <button type="submit" className={`${CTA_BUTTON_DARK_CLASS} whitespace-nowrap`}>
                 SUBSCRIBE
               </button>
             </form>
