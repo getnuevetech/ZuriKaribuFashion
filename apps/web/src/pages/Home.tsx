@@ -884,7 +884,7 @@ export default function Home() {
                 >
                   {index === currentSlide && (
                     <>
-                      <h1 className="font-['Oswald'] text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-bold text-white mb-6 leading-tight">
+                      <h1 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-6 leading-tight">
                         {slide.title}
                       </h1>
                       <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-lg">{slide.subtitle}</p>
