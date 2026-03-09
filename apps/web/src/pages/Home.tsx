@@ -450,7 +450,6 @@ export default function Home() {
 
   const { data: heritageData } = useQuery({
     queryKey: ['heritagePublic'],
-    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getHeritage();
       return response.success ? response.data : null;
@@ -608,15 +607,15 @@ export default function Home() {
 
   const heritage = useMemo(
     () => ({
-      title: asText(USE_DYNAMIC_HOMEPAGE ? heritageData?.title : null, 'Rooted in Culture'),
+      title: asText(heritageData?.title, 'Rooted in Culture'),
       content: asText(
-        USE_DYNAMIC_HOMEPAGE ? heritageData?.subtitle : null,
-        USE_DYNAMIC_HOMEPAGE ? heritageData?.description : null,
+        heritageData?.subtitle,
+        heritageData?.description,
         "Every pattern carries meaning. From Kente's bold geometry to Ankara's vibrant motifs, African textiles tell stories of identity, celebration, and legacy passed through generations.",
       ),
-      image: asText(USE_DYNAMIC_HOMEPAGE ? heritageData?.image : null, 'https://picsum.photos/seed/kimi-heritage/1920/1080'),
-      ctaText: asText(USE_DYNAMIC_HOMEPAGE ? heritageData?.ctaText : null, 'READ OUR STORY'),
-      ctaLink: asText(USE_DYNAMIC_HOMEPAGE ? heritageData?.ctaLink : null, '/about'),
+      image: asText(heritageData?.image, 'https://picsum.photos/seed/kimi-heritage/1920/1080'),
+      ctaText: asText(heritageData?.ctaText, 'READ OUR STORY'),
+      ctaLink: asText(heritageData?.ctaLink, '/about'),
     }),
     [heritageData],
   );
