@@ -460,13 +460,13 @@ type CountryImageGenerationSettings = {
 };
 
 const COUNTRY_IMAGE_GENERATION_DEFAULTS: CountryImageGenerationSettings = {
-  enabled: false,
-  apiUrl: '',
+  enabled: true,
+  apiUrl: 'https://image.pollinations.ai/prompt/{prompt}',
   apiKey: '',
-  model: '',
+  model: 'flux',
   promptTemplate: 'High quality fashion editorial image inspired by {country}. Keywords: {keywords}. Fabrics: {fabrics}.',
   responseImagePath: 'url',
-  requestMethod: 'POST',
+  requestMethod: 'GET',
 };
 
 const normalizeCountryImageGenerationSettings = (raw: unknown): CountryImageGenerationSettings => {
@@ -732,7 +732,14 @@ const generateCountryImage = async (input: {
     }
     let response: Response;
     if (settings.requestMethod === 'GET') {
-      const url = new URL(settings.apiUrl);
+      const templateUrl = String(settings.apiUrl || '').trim();
+      if (templateUrl.includes('{prompt}')) {
+        const resolvedUrl = templateUrl.replace('{prompt}', encodeURIComponent(prompt));
+        const url = new URL(resolvedUrl);
+        if (settings.model) url.searchParams.set('model', settings.model);
+        return url.toString();
+      }
+      const url = new URL(templateUrl);
       url.searchParams.set('prompt', prompt);
       if (settings.model) url.searchParams.set('model', settings.model);
       response = await fetch(url.toString(), { method: 'GET', headers });

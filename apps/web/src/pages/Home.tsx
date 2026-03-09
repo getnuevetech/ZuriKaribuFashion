@@ -379,7 +379,6 @@ export default function Home() {
 
   const { data: countriesData } = useQuery({
     queryKey: ['homepageCountries'],
-    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getCountries();
       return response.success ? response.data : null;
@@ -501,7 +500,7 @@ export default function Home() {
 
   const countries = useMemo<CountryCard[]>(
     () =>
-      (USE_DYNAMIC_HOMEPAGE && Array.isArray(countriesData) && countriesData.length > 0 ? countriesData : kimiCountries)
+      (Array.isArray(countriesData) && countriesData.length > 0 ? countriesData : kimiCountries)
         .map((country: any) => ({
           name: asText(country.name, 'Country'),
           flag: asText(country.flag, countryFlags[country?.name], '🌍'),
