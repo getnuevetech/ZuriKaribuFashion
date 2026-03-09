@@ -1030,7 +1030,6 @@ export default function Home() {
           onRight={() => scrollStrip(customStripRef, 'right')}
           viewAllLink="/designs"
           loading={featuredLoading}
-          itemWidthClassName="w-56"
         />
       ) : null}
 
@@ -1067,7 +1066,6 @@ export default function Home() {
           onRight={() => scrollStrip(rtwStripRef, 'right')}
           viewAllLink="/ready-to-wear"
           loading={featuredLoading}
-          itemWidthClassName="w-56"
         />
       ) : null}
 
