@@ -399,6 +399,14 @@ export default function Home() {
     },
   });
 
+  const { data: promoBadgeData } = useQuery({
+    queryKey: ['homepagePromoBadge'],
+    queryFn: async () => {
+      const response = await api.banners.getPromoBadgeSettings();
+      return response.success ? response.data : null;
+    },
+  });
+
   const { data: countriesData } = useQuery({
     queryKey: ['homepageCountries'],
     queryFn: async () => {
@@ -612,6 +620,8 @@ export default function Home() {
     }),
     [heritageData],
   );
+  const promoBadgeValue = asText(promoBadgeData?.valueText, '50+');
+  const promoBadgeLabel = asText(promoBadgeData?.labelText, 'New Arrivals');
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -945,8 +955,8 @@ export default function Home() {
                   className="w-full aspect-[3/4] object-cover rounded-xl"
                 />
                 <div className="absolute -bottom-6 -left-6 bg-black text-white p-6 rounded-xl">
-                  <p className="font-['Oswald'] text-3xl font-bold">50+</p>
-                  <p className="text-sm text-white/70">New Arrivals</p>
+                  <p className="font-['Oswald'] text-3xl font-bold">{promoBadgeValue}</p>
+                  <p className="text-sm text-white/70">{promoBadgeLabel}</p>
                 </div>
               </div>
             </div>

@@ -33,6 +33,11 @@ interface Banner {
   updatedAt: string;
 }
 
+interface PromoBadgeSettings {
+  valueText: string;
+  labelText: string;
+}
+
 const SECTIONS = [
   { value: 'BANNER_1', label: 'Banner 1 (After Featured Designs)' },
   { value: 'BANNER_2', label: 'Banner 2 (After Featured Ready To Wear)' },
@@ -48,6 +53,10 @@ export default function AdminBanners() {
   const [uploading, setUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [promoBadge, setPromoBadge] = useState<PromoBadgeSettings>({
+    valueText: '50+',
+    labelText: 'New Arrivals',
+  });
 
   // Form state
   const [formData, setFormData] = useState({
@@ -69,9 +78,18 @@ export default function AdminBanners() {
   const fetchBanners = async () => {
     try {
       setLoading(true);
-      const response = await api.admin.getBanners();
-      if (response.success) {
-        setBanners(response.data);
+      const [bannersResponse, promoBadgeResponse] = await Promise.all([
+        api.admin.getBanners(),
+        api.admin.getPromoBadgeSettings().catch(() => null),
+      ]);
+      if (bannersResponse.success) {
+        setBanners(bannersResponse.data);
+      }
+      if (promoBadgeResponse && promoBadgeResponse.success && promoBadgeResponse.data) {
+        setPromoBadge({
+          valueText: promoBadgeResponse.data.valueText || '50+',
+          labelText: promoBadgeResponse.data.labelText || 'New Arrivals',
+        });
       }
     } catch (error) {
       console.error('Failed to fetch banners:', error);
@@ -159,6 +177,12 @@ export default function AdminBanners() {
         if (response.success) {
           setBanners([...banners, response.data]);
         }
+      }
+      if (formData.section === 'PROMO') {
+        await api.admin.updatePromoBadgeSettings({
+          valueText: promoBadge.valueText || '50+',
+          labelText: promoBadge.labelText || 'New Arrivals',
+        });
       }
       setShowModal(false);
     } catch (error) {
@@ -441,6 +465,35 @@ export default function AdminBanners() {
                   />
                 </div>
               </div>
+
+              {formData.section === 'PROMO' ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Promo Badge Value
+                    </label>
+                    <input
+                      type="text"
+                      value={promoBadge.valueText}
+                      onChange={(e) => setPromoBadge((prev) => ({ ...prev, valueText: e.target.value }))}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-transparent"
+                      placeholder="50+"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Promo Badge Label
+                    </label>
+                    <input
+                      type="text"
+                      value={promoBadge.labelText}
+                      onChange={(e) => setPromoBadge((prev) => ({ ...prev, labelText: e.target.value }))}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-transparent"
+                      placeholder="New Arrivals"
+                    />
+                  </div>
+                </div>
+              ) : null}
 
               {/* CTA */}
               <div className="grid grid-cols-2 gap-4">

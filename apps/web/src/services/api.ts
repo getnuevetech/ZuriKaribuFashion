@@ -962,6 +962,12 @@ const adminApi = {
   getBanners: () =>
     apiService.get<{ success: boolean; data: any[] }>('/banners/admin/all'),
 
+  getPromoBadgeSettings: () =>
+    apiService.get<{ success: boolean; data: { valueText: string; labelText: string } }>('/banners/admin/promo-badge'),
+
+  updatePromoBadgeSettings: (data: { valueText: string; labelText: string }) =>
+    apiService.put<{ success: boolean; data: { valueText: string; labelText: string } }>('/banners/admin/promo-badge', data),
+
   createBanner: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/banners', data),
 
@@ -1189,6 +1195,9 @@ const paymentsApi = {
 const bannersApi = {
   getBanners: (section?: string) =>
     apiService.get<{ success: boolean; data: any[] }>('/banners', { params: section ? { section } : undefined }),
+
+  getPromoBadgeSettings: () =>
+    apiService.get<{ success: boolean; data: { valueText: string; labelText: string } }>('/banners/promo-badge'),
 
   getBannerSections: () =>
     apiService.get<{ success: boolean; data: any[] }>('/banners/meta/sections'),
