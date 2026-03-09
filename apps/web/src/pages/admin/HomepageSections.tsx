@@ -175,6 +175,18 @@ interface FeaturedProductDescriptionSettings {
   wordLimit: number;
 }
 
+const FEATURED_DESCRIPTION_PREVIEW_TEXT =
+  'Hand-finished African fashion piece crafted with premium fabric for modern style and everyday comfort.';
+
+const trimPreviewToWordLimit = (text: string, limit: number) => {
+  const words = String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length <= limit) return words.join(' ');
+  return `${words.slice(0, limit).join(' ')}…`;
+};
+
 const FALLBACK_AFRICAN_COUNTRY_OPTIONS: CountryOption[] = [
   { code: 'DZ', name: 'Algeria', flag: '🇩🇿' },
   { code: 'AO', name: 'Angola', flag: '🇦🇴' },
@@ -286,6 +298,10 @@ export default function HomepageSections() {
     iconHoverColor: '#ffffff',
   });
   const [howItWorksStyleSaving, setHowItWorksStyleSaving] = useState(false);
+  const featuredDescriptionPreview = trimPreviewToWordLimit(
+    FEATURED_DESCRIPTION_PREVIEW_TEXT,
+    Math.max(5, Math.min(60, Number(featuredProductDescriptionSettings.wordLimit) || 12))
+  );
 
   useEffect(() => {
     fetchData();
@@ -810,6 +826,12 @@ export default function HomepageSections() {
             max={60}
           />
           <p className="mt-1 text-xs text-gray-500">Allowed range: 5 to 60 words.</p>
+        </div>
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <p className="text-xs font-medium text-gray-600">Live Preview</p>
+          <p className="mt-1 text-xs text-gray-700">
+            {featuredDescriptionPreview}
+          </p>
         </div>
         <div>
           <Button onClick={handleSaveFeaturedProductDescriptionSettings} disabled={featuredProductDescriptionSaving}>
