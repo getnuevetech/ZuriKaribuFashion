@@ -397,6 +397,7 @@ const topStripUpdateSchema = z.object({
 });
 
 const howItWorksStyleUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
   iconColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
   iconHoverColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
 });
@@ -414,6 +415,7 @@ type TopStripSettings = {
 };
 
 type HowItWorksStyleSettings = {
+  enabled: boolean;
   iconColor: string;
   iconHoverColor: string;
 };
@@ -431,6 +433,7 @@ const TOP_STRIP_DEFAULTS: TopStripSettings = {
 };
 
 const HOW_IT_WORKS_STYLE_DEFAULTS: HowItWorksStyleSettings = {
+  enabled: false,
   iconColor: '#111827',
   iconHoverColor: '#ffffff',
 };
@@ -474,6 +477,7 @@ const normalizeHowItWorksStyleSettings = (raw: unknown): HowItWorksStyleSettings
   if (!raw || typeof raw !== 'object') return { ...HOW_IT_WORKS_STYLE_DEFAULTS };
   const row = raw as Record<string, unknown>;
   return {
+    enabled: getBoolean(row.enabled) ?? HOW_IT_WORKS_STYLE_DEFAULTS.enabled,
     iconColor: normalizeHexColor(row.iconColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconColor),
     iconHoverColor: normalizeHexColor(row.iconHoverColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconHoverColor),
   };

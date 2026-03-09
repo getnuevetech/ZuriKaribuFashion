@@ -55,6 +55,7 @@ const ADMIN_COUNTRY_IMAGE_GENERATION_DEFAULTS = {
   requestMethod: 'GET' as 'GET' | 'POST',
 };
 const ADMIN_HOW_IT_WORKS_STYLE_DEFAULTS = {
+  enabled: false,
   iconColor: '#111827',
   iconHoverColor: '#ffffff',
 };
@@ -68,6 +69,7 @@ const adminCountryImageGenerationUpdateSchema = z.object({
   requestMethod: z.enum(['GET', 'POST']).optional(),
 });
 const adminHowItWorksStyleUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
   iconColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
   iconHoverColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
 });
@@ -135,6 +137,7 @@ const normalizeAdminHowItWorksStyleSettings = (raw: unknown) => {
   if (!raw || typeof raw !== 'object') return { ...ADMIN_HOW_IT_WORKS_STYLE_DEFAULTS };
   const row = raw as Record<string, unknown>;
   return {
+    enabled: typeof row.enabled === 'boolean' ? row.enabled : ADMIN_HOW_IT_WORKS_STYLE_DEFAULTS.enabled,
     iconColor: normalizeHexColor(row.iconColor, ADMIN_HOW_IT_WORKS_STYLE_DEFAULTS.iconColor),
     iconHoverColor: normalizeHexColor(row.iconHoverColor, ADMIN_HOW_IT_WORKS_STYLE_DEFAULTS.iconHoverColor),
   };

@@ -21,6 +21,7 @@ type TopStripSettings = {
 };
 
 type HowItWorksStyleSettings = {
+  enabled: boolean;
   iconColor: string;
   iconHoverColor: string;
 };
@@ -38,6 +39,7 @@ const TOP_STRIP_DEFAULTS: TopStripSettings = {
 };
 
 const HOW_IT_WORKS_STYLE_DEFAULTS: HowItWorksStyleSettings = {
+  enabled: false,
   iconColor: '#111827',
   iconHoverColor: '#ffffff',
 };
@@ -123,6 +125,7 @@ const normalizeHowItWorksStyleSettings = (raw: unknown): HowItWorksStyleSettings
   if (!raw || typeof raw !== 'object') return { ...HOW_IT_WORKS_STYLE_DEFAULTS };
   const row = raw as Record<string, unknown>;
   return {
+    enabled: typeof row.enabled === 'boolean' ? row.enabled : HOW_IT_WORKS_STYLE_DEFAULTS.enabled,
     iconColor: normalizeHexColor(row.iconColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconColor),
     iconHoverColor: normalizeHexColor(row.iconHoverColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconHoverColor),
   };

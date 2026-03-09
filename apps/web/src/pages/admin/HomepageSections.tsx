@@ -118,6 +118,12 @@ interface DesignerOption {
   country: string;
 }
 
+interface HowItWorksStyleSettings {
+  enabled: boolean;
+  iconColor: string;
+  iconHoverColor: string;
+}
+
 interface CountryImageGenerationSettings {
   enabled: boolean;
   apiUrl: string;
@@ -226,6 +232,12 @@ export default function HomepageSections() {
     requestMethod: 'POST',
   });
   const [countryImageSaving, setCountryImageSaving] = useState(false);
+  const [howItWorksStyle, setHowItWorksStyle] = useState<HowItWorksStyleSettings>({
+    enabled: false,
+    iconColor: '#111827',
+    iconHoverColor: '#ffffff',
+  });
+  const [howItWorksStyleSaving, setHowItWorksStyleSaving] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -241,6 +253,10 @@ export default function HomepageSections() {
 
   useEffect(() => {
     fetchCountryImageSettings();
+  }, []);
+
+  useEffect(() => {
+    fetchHowItWorksStyleSettings();
   }, []);
 
   const fetchData = async () => {
@@ -342,6 +358,41 @@ export default function HomepageSections() {
       }
     } catch (error) {
       console.error('Error fetching country image generation settings:', error);
+    }
+  };
+
+  const fetchHowItWorksStyleSettings = async () => {
+    try {
+      const response = await api.homepageSections.getAdminHowItWorksStyle();
+      if (response.success && response.data) {
+        setHowItWorksStyle({
+          enabled: !!response.data.enabled,
+          iconColor: response.data.iconColor || '#111827',
+          iconHoverColor: response.data.iconHoverColor || '#ffffff',
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching how it works style settings:', error);
+    }
+  };
+
+  const handleSaveHowItWorksStyleSettings = async () => {
+    setHowItWorksStyleSaving(true);
+    try {
+      const response = await api.homepageSections.updateAdminHowItWorksStyle(howItWorksStyle);
+      if (response.success && response.data) {
+        setHowItWorksStyle({
+          enabled: !!response.data.enabled,
+          iconColor: response.data.iconColor || '#111827',
+          iconHoverColor: response.data.iconHoverColor || '#ffffff',
+        });
+        window.alert('How it works style saved.');
+      }
+    } catch (error: any) {
+      console.error('Error saving how it works style settings:', error);
+      window.alert(error?.response?.data?.message || 'Failed to save how it works style.');
+    } finally {
+      setHowItWorksStyleSaving(false);
     }
   };
 
@@ -661,6 +712,49 @@ export default function HomepageSections() {
           })}
         </nav>
       </div>
+
+      {activeTab === 'howItWorks' && (
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <div className="flex flex-col gap-4">
+            <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={howItWorksStyle.enabled}
+                onChange={(e) => setHowItWorksStyle((prev) => ({ ...prev, enabled: e.target.checked }))}
+                className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+              />
+              Enable custom How It Works icon colors
+            </label>
+            <div className={`grid gap-4 md:grid-cols-2 ${howItWorksStyle.enabled ? '' : 'opacity-60'}`}>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Icon Color</label>
+                <input
+                  type="color"
+                  value={howItWorksStyle.iconColor}
+                  disabled={!howItWorksStyle.enabled}
+                  onChange={(e) => setHowItWorksStyle((prev) => ({ ...prev, iconColor: e.target.value }))}
+                  className="h-10 w-full cursor-pointer rounded border border-gray-300 bg-white p-1 disabled:cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Icon Hover Color</label>
+                <input
+                  type="color"
+                  value={howItWorksStyle.iconHoverColor}
+                  disabled={!howItWorksStyle.enabled}
+                  onChange={(e) => setHowItWorksStyle((prev) => ({ ...prev, iconHoverColor: e.target.value }))}
+                  className="h-10 w-full cursor-pointer rounded border border-gray-300 bg-white p-1 disabled:cursor-not-allowed"
+                />
+              </div>
+            </div>
+            <div>
+              <Button onClick={handleSaveHowItWorksStyleSettings} disabled={howItWorksStyleSaving}>
+                {howItWorksStyleSaving ? 'Saving...' : 'Save How It Works Style'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">

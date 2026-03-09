@@ -273,11 +273,13 @@ const countryImageGenerationPaths = [
 ];
 
 type HowItWorksStylePayload = {
+  enabled: boolean;
   iconColor: string;
   iconHoverColor: string;
 };
 
 const HOW_IT_WORKS_STYLE_DEFAULTS: HowItWorksStylePayload = {
+  enabled: false,
   iconColor: '#111827',
   iconHoverColor: '#ffffff',
 };
@@ -286,6 +288,7 @@ const normalizeHowItWorksStylePayload = (raw: unknown): HowItWorksStylePayload =
   if (!raw || typeof raw !== 'object') return { ...HOW_IT_WORKS_STYLE_DEFAULTS };
   const row = raw as Record<string, unknown>;
   return {
+    enabled: typeof row.enabled === 'boolean' ? row.enabled : HOW_IT_WORKS_STYLE_DEFAULTS.enabled,
     iconColor: normalizeHexColor(row.iconColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconColor),
     iconHoverColor: normalizeHexColor(row.iconHoverColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconHoverColor),
   };
@@ -1221,7 +1224,7 @@ const homepageSectionsApi = {
   getHowItWorksStyle: () =>
     readHowItWorksStyleWithFallback<{
       success: boolean;
-      data: { iconColor: string; iconHoverColor: string };
+      data: { enabled: boolean; iconColor: string; iconHoverColor: string };
     }>(),
 
   getCategories: () =>
@@ -1393,13 +1396,13 @@ const homepageSectionsApi = {
   getAdminHowItWorksStyle: () =>
     readHowItWorksStyleWithFallback<{
       success: boolean;
-      data: { iconColor: string; iconHoverColor: string; source?: 'DATABASE' | 'DEFAULT'; updatedAt?: string | null };
+      data: { enabled: boolean; iconColor: string; iconHoverColor: string; source?: 'DATABASE' | 'DEFAULT'; updatedAt?: string | null };
     }>(),
 
-  updateAdminHowItWorksStyle: (data: { iconColor?: string; iconHoverColor?: string }) =>
+  updateAdminHowItWorksStyle: (data: { enabled?: boolean; iconColor?: string; iconHoverColor?: string }) =>
     writeHowItWorksStyleWithFallback<{
       success: boolean;
-      data: { iconColor: string; iconHoverColor: string };
+      data: { enabled: boolean; iconColor: string; iconHoverColor: string };
     }>(data),
 
   createHowItWorksStep: (data: any) =>
