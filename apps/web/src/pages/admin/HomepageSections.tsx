@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Eye, EyeOff, Upload, X, Globe, Sparkles, ShoppingBag, User, BookOpen, MessageSquare, Layout, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, EyeOff, Upload, X, Globe, Sparkles, ShoppingBag, User, BookOpen, MessageSquare, Layout, Loader2, BarChart3 } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 
-type SectionType = 'topStrip' | 'countries' | 'howItWorks' | 'categories' | 'designerSpotlight' | 'heritage' | 'testimonials' | 'footer';
+type SectionType = 'topStrip' | 'statsStrip' | 'countries' | 'howItWorks' | 'categories' | 'designerSpotlight' | 'heritage' | 'testimonials' | 'footer';
 
 interface TopStripContent {
   messages: string[];
@@ -16,6 +16,24 @@ interface TopStripContent {
   pauseOnHover: boolean;
   textColor: string;
   backgroundColor: string;
+  source?: 'DATABASE' | 'DEFAULT';
+  updatedAt?: string | null;
+}
+interface StatsStripContent {
+  items: Array<{
+    value: string;
+    suffix: string;
+    label: string;
+    displayOrder: number;
+    isActive: boolean;
+  }>;
+  backgroundImage: string;
+  backgroundColor: string;
+  overlayColor: string;
+  overlayOpacity: number;
+  valueColor: string;
+  suffixColor: string;
+  labelColor: string;
   source?: 'DATABASE' | 'DEFAULT';
   updatedAt?: string | null;
 }
@@ -214,6 +232,7 @@ const FALLBACK_AFRICAN_COUNTRY_OPTIONS: CountryOption[] = [
 
 const TABS = [
   { id: 'topStrip' as SectionType, label: 'Top Strip', icon: Layout },
+  { id: 'statsStrip' as SectionType, label: 'Stats Strip', icon: BarChart3 },
   { id: 'countries' as SectionType, label: 'Countries', icon: Globe },
   { id: 'howItWorks' as SectionType, label: 'How It Works', icon: Sparkles },
   { id: 'categories' as SectionType, label: 'Categories', icon: ShoppingBag },
@@ -238,6 +257,7 @@ export default function HomepageSections() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [footerContents, setFooterContents] = useState<FooterContent[]>([]);
   const [topStripContent, setTopStripContent] = useState<TopStripContent | null>(null);
+  const [statsStripContent, setStatsStripContent] = useState<StatsStripContent | null>(null);
   const [visibilitySections, setVisibilitySections] = useState<VisibilitySection[]>([]);
   const [visibilityLoading, setVisibilityLoading] = useState(false);
   const [countryOptions, setCountryOptions] = useState<CountryOption[]>([]);
@@ -287,6 +307,10 @@ export default function HomepageSections() {
         case 'topStrip':
           const topStripRes = await api.homepageSections.getAdminTopStrip();
           if (topStripRes.success) setTopStripContent(topStripRes.data);
+          break;
+        case 'statsStrip':
+          const statsStripRes = await api.homepageSections.getAdminStatsStrip();
+          if (statsStripRes.success) setStatsStripContent(statsStripRes.data);
           break;
         case 'countries':
           const countriesRes = await api.homepageSections.getAdminCountries();
@@ -586,9 +610,9 @@ export default function HomepageSections() {
           <h1 className="text-2xl font-bold text-gray-900">Homepage Sections</h1>
           <p className="text-gray-500 mt-1">Manage all dynamic homepage content</p>
         </div>
-        <Button onClick={() => openModal(activeTab === 'topStrip' ? topStripContent : null)} className="flex items-center gap-2">
+        <Button onClick={() => openModal(activeTab === 'topStrip' ? topStripContent : activeTab === 'statsStrip' ? statsStripContent : null)} className="flex items-center gap-2">
           <Plus className="w-4 h-4" />
-          {activeTab === 'topStrip' ? 'Edit Top Strip' : 'Add New'}
+          {activeTab === 'topStrip' || activeTab === 'statsStrip' ? 'Edit Settings' : 'Add New'}
         </Button>
       </div>
 
@@ -803,6 +827,12 @@ export default function HomepageSections() {
                 onEdit={() => openModal(topStripContent)}
               />
             )}
+            {activeTab === 'statsStrip' && (
+              <StatsStripTable
+                data={statsStripContent}
+                onEdit={() => openModal(statsStripContent)}
+              />
+            )}
             {activeTab === 'countries' && (
               <CountriesTable
                 data={countries}
@@ -942,6 +972,59 @@ function TopStripTable({ data, onEdit }: { data: TopStripContent | null; onEdit:
             <Edit2 className="h-4 w-4" />
             Edit Top Strip
           </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatsStripTable({ data, onEdit }: { data: StatsStripContent | null; onEdit: () => void }) {
+  const items = Array.isArray(data?.items) ? data.items.filter((item) => item.isActive) : [];
+  return (
+    <div className="p-6 space-y-4">
+      <div className="rounded-lg border border-gray-200 p-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-gray-900">Homepage Statistics Strip</h3>
+            <p className="text-xs text-gray-500">
+              This controls the stats bar shown below the hero banner on the frontpage.
+            </p>
+            <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+              <span className="rounded-full bg-gray-100 px-2 py-1">
+                Overlay opacity: {data?.overlayOpacity ?? 45}%
+              </span>
+              <span className="rounded-full bg-gray-100 px-2 py-1 inline-flex items-center gap-2">
+                <span
+                  className="inline-block h-3 w-3 rounded border border-gray-300"
+                  style={{ backgroundColor: data?.backgroundColor || '#111827' }}
+                />
+                Background: {data?.backgroundColor || '#111827'}
+              </span>
+              <span className="rounded-full bg-gray-100 px-2 py-1 inline-flex items-center gap-2">
+                <span
+                  className="inline-block h-3 w-3 rounded border border-gray-300"
+                  style={{ backgroundColor: data?.overlayColor || '#000000' }}
+                />
+                Overlay: {data?.overlayColor || '#000000'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {items.length > 0 ? (
+                items.map((item, index) => (
+                  <div key={`${item.label}-${index}`} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <p className="text-2xl font-bold text-gray-900">
+                      {item.value}
+                      <span className="ml-1 text-yellow-500">{item.suffix}</span>
+                    </p>
+                    <p className="mt-1 text-xs tracking-widest text-gray-500">{item.label}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500">No active stat items configured yet.</p>
+              )}
+            </div>
+          </div>
+          <Button onClick={onEdit} className="self-start">Edit Stats Strip</Button>
         </div>
       </div>
     </div>
@@ -1336,6 +1419,26 @@ function SectionModal({
         pauseOnHover: Boolean(item.pauseOnHover ?? true),
       };
     }
+    if (type === 'statsStrip' && item) {
+      return {
+        ...item,
+        items: Array.isArray(item.items) && item.items.length > 0
+          ? item.items
+          : [
+              { value: '120', suffix: '+', label: 'COUNTRIES', displayOrder: 0, isActive: true },
+              { value: '50', suffix: 'K+', label: 'DESIGNERS', displayOrder: 1, isActive: true },
+              { value: '1', suffix: 'M+', label: 'FABRICS', displayOrder: 2, isActive: true },
+              { value: '100', suffix: 'K+', label: 'PRODUCTS', displayOrder: 3, isActive: true },
+            ],
+        backgroundImage: item.backgroundImage || '',
+        backgroundColor: item.backgroundColor || '#111827',
+        overlayColor: item.overlayColor || '#000000',
+        overlayOpacity: Number(item.overlayOpacity) || 45,
+        valueColor: item.valueColor || '#ffffff',
+        suffixColor: item.suffixColor || '#facc15',
+        labelColor: item.labelColor || '#d1d5db',
+      };
+    }
     if (type === 'heritage' && item) {
       const link = String(item.ctaLink || '').trim();
       const linkedBlog = blogOptions.find(
@@ -1379,6 +1482,22 @@ function SectionModal({
         };
       case 'countries':
         return { countryCode: '', name: '', flag: '', image: '', imageKeyword: '', fabrics: '', displayOrder: 0, isActive: true };
+      case 'statsStrip':
+        return {
+          items: [
+            { value: '120', suffix: '+', label: 'COUNTRIES', displayOrder: 0, isActive: true },
+            { value: '50', suffix: 'K+', label: 'DESIGNERS', displayOrder: 1, isActive: true },
+            { value: '1', suffix: 'M+', label: 'FABRICS', displayOrder: 2, isActive: true },
+            { value: '100', suffix: 'K+', label: 'PRODUCTS', displayOrder: 3, isActive: true },
+          ],
+          backgroundImage: '',
+          backgroundColor: '#111827',
+          overlayColor: '#000000',
+          overlayOpacity: 45,
+          valueColor: '#ffffff',
+          suffixColor: '#facc15',
+          labelColor: '#d1d5db',
+        };
       case 'howItWorks':
         return { stepNumber: 1, title: '', subtitle: '', icon: 'Sparkles', displayOrder: 0, isActive: true };
       case 'categories':
@@ -1521,6 +1640,35 @@ function SectionModal({
     }
   };
 
+  const updateStatsItem = (index: number, patch: Partial<{ value: string; suffix: string; label: string; displayOrder: number; isActive: boolean }>) => {
+    setFormData((prev: any) => {
+      const nextItems = Array.isArray(prev.items) ? [...prev.items] : [];
+      const current = nextItems[index] || { value: '', suffix: '', label: '', displayOrder: index, isActive: true };
+      nextItems[index] = { ...current, ...patch };
+      return { ...prev, items: nextItems };
+    });
+  };
+
+  const addStatsItem = () => {
+    setFormData((prev: any) => {
+      const nextItems = Array.isArray(prev.items) ? [...prev.items] : [];
+      const displayOrder =
+        nextItems.length > 0
+          ? Math.max(...nextItems.map((item: any, idx: number) => Number(item?.displayOrder ?? idx))) + 1
+          : 0;
+      nextItems.push({ value: '', suffix: '', label: '', displayOrder, isActive: true });
+      return { ...prev, items: nextItems };
+    });
+  };
+
+  const removeStatsItem = (index: number) => {
+    setFormData((prev: any) => {
+      const nextItems = Array.isArray(prev.items) ? [...prev.items] : [];
+      nextItems.splice(index, 1);
+      return { ...prev, items: nextItems };
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -1550,6 +1698,30 @@ function SectionModal({
             pauseOnHover: Boolean(formData.pauseOnHover ?? true),
             textColor: String(formData.textColor || '#ffffff').trim().toLowerCase(),
             backgroundColor: String(formData.backgroundColor || '#000000').trim().toLowerCase(),
+          };
+        }
+        if (type === 'statsStrip') {
+          const items = (Array.isArray(formData.items) ? formData.items : [])
+            .map((entry: any, index: number) => ({
+              value: String(entry?.value || '').trim(),
+              suffix: String(entry?.suffix || '').trim(),
+              label: String(entry?.label || '').trim().toUpperCase(),
+              displayOrder: Number(entry?.displayOrder ?? index) || index,
+              isActive: Boolean(entry?.isActive ?? true),
+            }))
+            .filter((entry: any) => entry.value.length > 0 && entry.label.length > 0);
+          if (items.length === 0) {
+            throw new Error('Please add at least one statistic with value and label.');
+          }
+          return {
+            items,
+            backgroundImage: String(formData.backgroundImage || '').trim(),
+            backgroundColor: String(formData.backgroundColor || '#111827').trim().toLowerCase(),
+            overlayColor: String(formData.overlayColor || '#000000').trim().toLowerCase(),
+            overlayOpacity: Math.max(0, Math.min(100, Number(formData.overlayOpacity) || 45)),
+            valueColor: String(formData.valueColor || '#ffffff').trim().toLowerCase(),
+            suffixColor: String(formData.suffixColor || '#facc15').trim().toLowerCase(),
+            labelColor: String(formData.labelColor || '#d1d5db').trim().toLowerCase(),
           };
         }
         if (type === 'countries') {
@@ -1628,6 +1800,9 @@ function SectionModal({
           case 'topStrip':
             response = await api.homepageSections.updateAdminTopStrip(payload);
             break;
+          case 'statsStrip':
+            response = await api.homepageSections.updateAdminStatsStrip(payload);
+            break;
           case 'countries':
             response = await api.homepageSections.updateCountry(item.id, payload);
             break;
@@ -1655,6 +1830,9 @@ function SectionModal({
         switch (type) {
           case 'topStrip':
             response = await api.homepageSections.updateAdminTopStrip(payload);
+            break;
+          case 'statsStrip':
+            response = await api.homepageSections.updateAdminStatsStrip(payload);
             break;
           case 'countries':
             response = await api.homepageSections.createCountry(payload);
@@ -1823,6 +2001,152 @@ function SectionModal({
                   />
                 </div>
               </div>
+            </div>
+          </>
+        );
+      case 'statsStrip':
+        return (
+          <>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Background Image URL (optional)</label>
+                <input
+                  type="text"
+                  value={formData.backgroundImage || ''}
+                  onChange={(e) => setFormData({ ...formData, backgroundImage: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  placeholder="https://..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Overlay Opacity (%)</label>
+                <input
+                  type="number"
+                  value={formData.overlayOpacity ?? 45}
+                  onChange={(e) => setFormData({ ...formData, overlayOpacity: Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0)) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  min={0}
+                  max={100}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Background Color</label>
+                <input
+                  type="color"
+                  value={formData.backgroundColor || '#111827'}
+                  onChange={(e) => setFormData({ ...formData, backgroundColor: e.target.value })}
+                  className="h-10 w-full cursor-pointer rounded border border-gray-300 bg-white p-1"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Overlay Color</label>
+                <input
+                  type="color"
+                  value={formData.overlayColor || '#000000'}
+                  onChange={(e) => setFormData({ ...formData, overlayColor: e.target.value })}
+                  className="h-10 w-full cursor-pointer rounded border border-gray-300 bg-white p-1"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Value Color</label>
+                <input
+                  type="color"
+                  value={formData.valueColor || '#ffffff'}
+                  onChange={(e) => setFormData({ ...formData, valueColor: e.target.value })}
+                  className="h-10 w-full cursor-pointer rounded border border-gray-300 bg-white p-1"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Suffix Color</label>
+                <input
+                  type="color"
+                  value={formData.suffixColor || '#facc15'}
+                  onChange={(e) => setFormData({ ...formData, suffixColor: e.target.value })}
+                  className="h-10 w-full cursor-pointer rounded border border-gray-300 bg-white p-1"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Label Color</label>
+                <input
+                  type="color"
+                  value={formData.labelColor || '#d1d5db'}
+                  onChange={(e) => setFormData({ ...formData, labelColor: e.target.value })}
+                  className="h-10 w-full cursor-pointer rounded border border-gray-300 bg-white p-1"
+                />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="block text-sm font-medium text-gray-700">Statistic Items</label>
+                <Button type="button" onClick={addStatsItem}>Add Item</Button>
+              </div>
+              {(Array.isArray(formData.items) ? formData.items : []).map((entry: any, index: number) => (
+                <div key={`stat-item-${index}`} className="rounded-lg border border-gray-200 p-3">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-6">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Value</label>
+                      <input
+                        type="text"
+                        value={entry?.value || ''}
+                        onChange={(e) => updateStatsItem(index, { value: e.target.value })}
+                        className="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                        placeholder="120"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Suffix</label>
+                      <input
+                        type="text"
+                        value={entry?.suffix || ''}
+                        onChange={(e) => updateStatsItem(index, { suffix: e.target.value })}
+                        className="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                        placeholder="K+"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Label</label>
+                      <input
+                        type="text"
+                        value={entry?.label || ''}
+                        onChange={(e) => updateStatsItem(index, { label: e.target.value.toUpperCase() })}
+                        className="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                        placeholder="COUNTRIES"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Order</label>
+                      <input
+                        type="number"
+                        value={entry?.displayOrder ?? index}
+                        onChange={(e) => updateStatsItem(index, { displayOrder: parseInt(e.target.value, 10) || 0 })}
+                        className="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                        min={0}
+                      />
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <label className="inline-flex items-center gap-2 text-xs text-gray-600">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(entry?.isActive ?? true)}
+                          onChange={(e) => updateStatsItem(index, { isActive: e.target.checked })}
+                          className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                        />
+                        Active
+                      </label>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                        onClick={() => removeStatsItem(index)}
+                        disabled={(Array.isArray(formData.items) ? formData.items.length : 0) <= 1}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </>
         );
@@ -2349,7 +2673,7 @@ function SectionModal({
             )}
 
             {/* Display Order */}
-            {type !== 'footer' && type !== 'topStrip' && (
+            {type !== 'footer' && type !== 'topStrip' && type !== 'statsStrip' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Display Order</label>
                 <input
@@ -2363,7 +2687,7 @@ function SectionModal({
             )}
 
             {/* Active Status */}
-            {type !== 'footer' && type !== 'topStrip' && (
+            {type !== 'footer' && type !== 'topStrip' && type !== 'statsStrip' && (
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"

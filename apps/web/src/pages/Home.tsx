@@ -56,9 +56,27 @@ type ManagedBanner = {
   images?: string[];
   displayImage?: string | null;
 };
+type StatsStripItem = {
+  value: string;
+  suffix?: string;
+  label: string;
+  displayOrder?: number;
+  isActive?: boolean;
+};
+type StatsStripSettings = {
+  items: StatsStripItem[];
+  backgroundImage?: string;
+  backgroundColor?: string;
+  overlayColor?: string;
+  overlayOpacity?: number;
+  valueColor?: string;
+  suffixColor?: string;
+  labelColor?: string;
+};
 
 type HomepageVisibility = Record<
   | 'hero'
+  | 'statsStrip'
   | 'countries'
   | 'categories'
   | 'howItWorks'
@@ -75,6 +93,7 @@ type HomepageVisibility = Record<
 
 const DEFAULT_HOMEPAGE_VISIBILITY: HomepageVisibility = {
   hero: true,
+  statsStrip: true,
   countries: true,
   categories: true,
   howItWorks: true,
@@ -86,6 +105,21 @@ const DEFAULT_HOMEPAGE_VISIBILITY: HomepageVisibility = {
   heritage: true,
   testimonials: true,
   cta: true,
+};
+const DEFAULT_STATS_STRIP: StatsStripSettings = {
+  items: [
+    { value: '120', suffix: '+', label: 'COUNTRIES', displayOrder: 0, isActive: true },
+    { value: '50', suffix: 'K+', label: 'DESIGNERS', displayOrder: 1, isActive: true },
+    { value: '1', suffix: 'M+', label: 'FABRICS', displayOrder: 2, isActive: true },
+    { value: '100', suffix: 'K+', label: 'PRODUCTS', displayOrder: 3, isActive: true },
+  ],
+  backgroundImage: '',
+  backgroundColor: '#111827',
+  overlayColor: '#000000',
+  overlayOpacity: 45,
+  valueColor: '#ffffff',
+  suffixColor: '#facc15',
+  labelColor: '#d1d5db',
 };
 
 const countryNameToCode: Record<string, string> = {
@@ -535,6 +569,13 @@ export default function Home() {
       return response.success ? response.data : null;
     },
   });
+  const { data: statsStripData } = useQuery({
+    queryKey: ['homepageStatsStrip'],
+    queryFn: async () => {
+      const response = await api.homepageSections.getStatsStrip();
+      return response.success ? response.data : null;
+    },
+  });
 
   const { data: visibilityData } = useQuery({
     queryKey: ['homepageVisibility'],
@@ -554,6 +595,39 @@ export default function Home() {
       ...visibilityData,
     };
   }, [visibilityData]);
+  const statsStrip = useMemo<StatsStripSettings>(() => {
+    const fallback = { ...DEFAULT_STATS_STRIP, items: [...DEFAULT_STATS_STRIP.items] };
+    if (!statsStripData || typeof statsStripData !== 'object') {
+      return fallback;
+    }
+    const row = statsStripData as Record<string, any>;
+    const items = Array.isArray(row.items)
+      ? row.items
+          .map((item: any, index: number) => ({
+            value: asText(item?.value),
+            suffix: asText(item?.suffix, ''),
+            label: asText(item?.label).toUpperCase(),
+            displayOrder: Number(item?.displayOrder ?? index) || index,
+            isActive: item?.isActive !== false,
+          }))
+          .filter((item: StatsStripItem) => item.value && item.label)
+          .sort((a: StatsStripItem, b: StatsStripItem) => Number(a.displayOrder || 0) - Number(b.displayOrder || 0))
+      : [];
+    return {
+      items: items.length > 0 ? items : [...DEFAULT_STATS_STRIP.items],
+      backgroundImage: asText(row.backgroundImage),
+      backgroundColor: asText(row.backgroundColor, DEFAULT_STATS_STRIP.backgroundColor),
+      overlayColor: asText(row.overlayColor, DEFAULT_STATS_STRIP.overlayColor),
+      overlayOpacity: Math.max(0, Math.min(100, Number(row.overlayOpacity ?? DEFAULT_STATS_STRIP.overlayOpacity) || 0)),
+      valueColor: asText(row.valueColor, DEFAULT_STATS_STRIP.valueColor),
+      suffixColor: asText(row.suffixColor, DEFAULT_STATS_STRIP.suffixColor),
+      labelColor: asText(row.labelColor, DEFAULT_STATS_STRIP.labelColor),
+    };
+  }, [statsStripData]);
+  const activeStatsItems = useMemo(
+    () => (Array.isArray(statsStrip.items) ? statsStrip.items.filter((item) => item.isActive !== false) : []),
+    [statsStrip.items]
+  );
 
   const heroSlides = useMemo(
     () => {
@@ -831,6 +905,47 @@ export default function Home() {
               }`}
             />
           ))}
+        </div>
+      </section>
+      ) : null}
+
+      {sectionVisibility.statsStrip && activeStatsItems.length > 0 ? (
+      <section
+        className="relative overflow-hidden py-10"
+        style={{
+          backgroundColor: asText(statsStrip.backgroundColor, '#111827'),
+          backgroundImage: asText(statsStrip.backgroundImage) ? `url(${asText(statsStrip.backgroundImage)})` : 'none',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundColor: asText(statsStrip.overlayColor, '#000000'),
+            opacity: Math.max(0, Math.min(1, Number(statsStrip.overlayOpacity ?? 45) / 100)),
+          }}
+        />
+        <div className="relative w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="grid grid-cols-2 gap-6 text-center md:grid-cols-4">
+            {activeStatsItems.map((item, index) => (
+              <div key={`${item.label}-${index}`}>
+                <p
+                  className="font-['Oswald'] text-3xl font-bold sm:text-4xl lg:text-5xl"
+                  style={{ color: asText(statsStrip.valueColor, '#ffffff') }}
+                >
+                  {item.value}
+                  <span style={{ color: asText(statsStrip.suffixColor, '#facc15') }}>{item.suffix || ''}</span>
+                </p>
+                <p
+                  className="mt-1 text-xs tracking-[0.25em] sm:text-sm"
+                  style={{ color: asText(statsStrip.labelColor, '#d1d5db') }}
+                >
+                  {item.label}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
       ) : null}

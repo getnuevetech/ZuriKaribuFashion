@@ -82,6 +82,23 @@ type TopStripPayload = {
   textColor: string;
   backgroundColor: string;
 };
+type StatsStripItemPayload = {
+  value: string;
+  suffix: string;
+  label: string;
+  displayOrder: number;
+  isActive: boolean;
+};
+type StatsStripPayload = {
+  items: StatsStripItemPayload[];
+  backgroundImage: string;
+  backgroundColor: string;
+  overlayColor: string;
+  overlayOpacity: number;
+  valueColor: string;
+  suffixColor: string;
+  labelColor: string;
+};
 
 const TOP_STRIP_DEFAULTS: TopStripPayload = {
   messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
@@ -93,6 +110,21 @@ const TOP_STRIP_DEFAULTS: TopStripPayload = {
   pauseOnHover: true,
   textColor: '#ffffff',
   backgroundColor: '#000000',
+};
+const STATS_STRIP_DEFAULTS: StatsStripPayload = {
+  items: [
+    { value: '120', suffix: '+', label: 'COUNTRIES', displayOrder: 0, isActive: true },
+    { value: '50', suffix: 'K+', label: 'DESIGNERS', displayOrder: 1, isActive: true },
+    { value: '1', suffix: 'M+', label: 'FABRICS', displayOrder: 2, isActive: true },
+    { value: '100', suffix: 'K+', label: 'PRODUCTS', displayOrder: 3, isActive: true },
+  ],
+  backgroundImage: '',
+  backgroundColor: '#111827',
+  overlayColor: '#000000',
+  overlayOpacity: 45,
+  valueColor: '#ffffff',
+  suffixColor: '#facc15',
+  labelColor: '#d1d5db',
 };
 
 const TOP_STRIP_BANNER_SECTION = 'TOP_STRIP';
@@ -130,6 +162,46 @@ const normalizeTopStripPayload = (raw: unknown): TopStripPayload => {
     backgroundColor: normalizeHexColor(row.backgroundColor, TOP_STRIP_DEFAULTS.backgroundColor),
   };
 };
+const normalizeStatsStripPayload = (raw: unknown): StatsStripPayload => {
+  if (!raw || typeof raw !== 'object') {
+    return { ...STATS_STRIP_DEFAULTS, items: [...STATS_STRIP_DEFAULTS.items] };
+  }
+  const row = raw as Record<string, unknown>;
+  const items = Array.isArray(row.items)
+    ? row.items
+        .map((entry, index) => {
+          if (!entry || typeof entry !== 'object') return null;
+          const item = entry as Record<string, unknown>;
+          const value = String(item.value || '').trim();
+          const label = String(item.label || '').trim().toUpperCase();
+          if (!value || !label) return null;
+          const suffix = String(item.suffix || '').trim();
+          const displayOrderRaw = Number(item.displayOrder);
+          return {
+            value: value.slice(0, 20),
+            suffix: suffix.slice(0, 8),
+            label: label.slice(0, 40),
+            displayOrder: Number.isFinite(displayOrderRaw) ? Math.max(0, Math.min(100, Math.round(displayOrderRaw))) : index,
+            isActive: typeof item.isActive === 'boolean' ? item.isActive : true,
+          } as StatsStripItemPayload;
+        })
+        .filter((entry): entry is StatsStripItemPayload => Boolean(entry))
+        .sort((a, b) => a.displayOrder - b.displayOrder)
+    : [];
+  return {
+    items: items.length > 0 ? items : [...STATS_STRIP_DEFAULTS.items],
+    backgroundImage: String(row.backgroundImage || '').trim(),
+    backgroundColor: normalizeHexColor(row.backgroundColor, STATS_STRIP_DEFAULTS.backgroundColor),
+    overlayColor: normalizeHexColor(row.overlayColor, STATS_STRIP_DEFAULTS.overlayColor),
+    overlayOpacity: Math.max(
+      0,
+      Math.min(100, Math.round(Number.isFinite(Number(row.overlayOpacity)) ? Number(row.overlayOpacity) : STATS_STRIP_DEFAULTS.overlayOpacity))
+    ),
+    valueColor: normalizeHexColor(row.valueColor, STATS_STRIP_DEFAULTS.valueColor),
+    suffixColor: normalizeHexColor(row.suffixColor, STATS_STRIP_DEFAULTS.suffixColor),
+    labelColor: normalizeHexColor(row.labelColor, STATS_STRIP_DEFAULTS.labelColor),
+  };
+};
 
 const parseTopStripPayloadFromBanner = (banner: any): TopStripPayload | null => {
   const ctaLink = String(banner?.ctaLink || '');
@@ -151,6 +223,15 @@ const topStripReadPaths = [
   '/admin/homepage-sections/top-strip',
   '/homepage-sections/top-strip',
   '/homepage/top-strip',
+];
+const statsStripReadPaths = [
+  '/homepage-sections/admin/stats-strip',
+  '/admin/stats-strip',
+  '/homepage-sections/stats-strip',
+];
+const statsStripWritePaths = [
+  '/homepage-sections/admin/stats-strip',
+  '/admin/stats-strip',
 ];
 
 const topStripWritePaths = [
@@ -262,6 +343,41 @@ async function writeTopStripWithFallback<T>(data: unknown) {
   }
 
   throw lastError ?? new Error('Top strip route not found.');
+}
+async function readStatsStripWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of statsStripReadPaths) {
+    try {
+      return await apiService.get<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  return {
+    success: true,
+    data: { ...STATS_STRIP_DEFAULTS, items: [...STATS_STRIP_DEFAULTS.items] },
+  } as T;
+}
+async function writeStatsStripWithFallback<T>(data: unknown) {
+  const normalized = normalizeStatsStripPayload(data);
+  let lastError: unknown = null;
+  for (const path of statsStripWritePaths) {
+    try {
+      return await apiService.put<T>(path, normalized);
+    } catch (putError) {
+      lastError = putError;
+      if (!isRetryableRouteError(putError)) throw putError;
+    }
+    try {
+      return await apiService.patch<T>(path, normalized);
+    } catch (patchError) {
+      lastError = patchError;
+      if (!isRetryableRouteError(patchError)) throw patchError;
+    }
+  }
+  throw lastError ?? new Error('Stats strip route not found.');
 }
 
 const countryImageGenerationPaths = [
@@ -1497,6 +1613,20 @@ const homepageSectionsApi = {
         backgroundColor: string;
       };
     }>('public'),
+  getStatsStrip: () =>
+    readStatsStripWithFallback<{
+      success: boolean;
+      data: {
+        items: Array<{ value: string; suffix: string; label: string; displayOrder: number; isActive: boolean }>;
+        backgroundImage: string;
+        backgroundColor: string;
+        overlayColor: string;
+        overlayOpacity: number;
+        valueColor: string;
+        suffixColor: string;
+        labelColor: string;
+      };
+    }>(),
 
   getCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/countries'),
@@ -1576,6 +1706,22 @@ const homepageSectionsApi = {
         updatedAt?: string | null;
       };
     }>('admin'),
+  getAdminStatsStrip: () =>
+    readStatsStripWithFallback<{
+      success: boolean;
+      data: {
+        items: Array<{ value: string; suffix: string; label: string; displayOrder: number; isActive: boolean }>;
+        backgroundImage: string;
+        backgroundColor: string;
+        overlayColor: string;
+        overlayOpacity: number;
+        valueColor: string;
+        suffixColor: string;
+        labelColor: string;
+        source?: 'DATABASE' | 'DEFAULT';
+        updatedAt?: string | null;
+      };
+    }>(),
 
   getAdminCountryImageGeneration: () =>
     readCountryImageGenerationWithFallback<{
@@ -1636,6 +1782,29 @@ const homepageSectionsApi = {
         pauseOnHover: boolean;
         textColor: string;
         backgroundColor: string;
+      };
+    }>(data),
+  updateAdminStatsStrip: (data: {
+    items: Array<{ value: string; suffix?: string; label: string; displayOrder?: number; isActive?: boolean }>;
+    backgroundImage?: string;
+    backgroundColor?: string;
+    overlayColor?: string;
+    overlayOpacity?: number;
+    valueColor?: string;
+    suffixColor?: string;
+    labelColor?: string;
+  }) =>
+    writeStatsStripWithFallback<{
+      success: boolean;
+      data: {
+        items: Array<{ value: string; suffix: string; label: string; displayOrder: number; isActive: boolean }>;
+        backgroundImage: string;
+        backgroundColor: string;
+        overlayColor: string;
+        overlayOpacity: number;
+        valueColor: string;
+        suffixColor: string;
+        labelColor: string;
       };
     }>(data),
 

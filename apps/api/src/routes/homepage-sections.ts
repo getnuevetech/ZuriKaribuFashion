@@ -10,6 +10,7 @@ const router = Router();
 
 const HOMEPAGE_VISIBILITY_SETTINGS_KEY = 'HOMEPAGE_SECTION_VISIBILITY';
 const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
+const HOMEPAGE_STATS_STRIP_SETTINGS_KEY = 'HOMEPAGE_STATS_STRIP';
 const HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY = 'HOMEPAGE_COUNTRY_IMAGE_GENERATION';
 const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
 const SPOTLIGHT_LINK_MODES = ['DEFAULT_STORE', 'CUSTOM_URL', 'BLOG'] as const;
@@ -17,6 +18,7 @@ type SpotlightLinkMode = (typeof SPOTLIGHT_LINK_MODES)[number];
 const HOMEPAGE_SECTION_VISIBILITY_META = [
   { key: 'topStrip', label: 'Top Announcement Strip', description: 'Scrolling announcement bar above the hero banner.' },
   { key: 'hero', label: 'Hero Banner', description: 'Top hero carousel section.' },
+  { key: 'statsStrip', label: 'Statistics Strip', description: 'Trust stats bar below the hero section.' },
   { key: 'countries', label: 'Country Strip', description: 'Country marquee cards below hero.' },
   { key: 'categories', label: 'Shop by Category', description: 'Category card grid section.' },
   { key: 'howItWorks', label: 'How It Works', description: 'Step-by-step process section.' },
@@ -500,6 +502,23 @@ const topStripUpdateSchema = z.object({
   textColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
   backgroundColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
 });
+const statsStripItemUpdateSchema = z.object({
+  value: z.string().trim().min(1).max(20),
+  suffix: z.string().trim().max(8).optional(),
+  label: z.string().trim().min(1).max(40),
+  displayOrder: z.number().int().min(0).max(100).optional(),
+  isActive: z.boolean().optional(),
+});
+const statsStripUpdateSchema = z.object({
+  items: z.array(statsStripItemUpdateSchema).min(1).max(8),
+  backgroundImage: z.string().trim().optional(),
+  backgroundColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+  overlayColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+  overlayOpacity: z.number().int().min(0).max(100).optional(),
+  valueColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+  suffixColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+  labelColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+});
 
 const howItWorksStyleUpdateSchema = z.object({
   enabled: z.boolean().optional(),
@@ -518,6 +537,23 @@ type TopStripSettings = {
   textColor: string;
   backgroundColor: string;
 };
+type StatsStripItem = {
+  value: string;
+  suffix: string;
+  label: string;
+  displayOrder: number;
+  isActive: boolean;
+};
+type StatsStripSettings = {
+  items: StatsStripItem[];
+  backgroundImage: string;
+  backgroundColor: string;
+  overlayColor: string;
+  overlayOpacity: number;
+  valueColor: string;
+  suffixColor: string;
+  labelColor: string;
+};
 
 type HowItWorksStyleSettings = {
   enabled: boolean;
@@ -535,6 +571,21 @@ const TOP_STRIP_DEFAULTS: TopStripSettings = {
   pauseOnHover: true,
   textColor: '#ffffff',
   backgroundColor: '#000000',
+};
+const STATS_STRIP_DEFAULTS: StatsStripSettings = {
+  items: [
+    { value: '120', suffix: '+', label: 'COUNTRIES', displayOrder: 0, isActive: true },
+    { value: '50', suffix: 'K+', label: 'DESIGNERS', displayOrder: 1, isActive: true },
+    { value: '1', suffix: 'M+', label: 'FABRICS', displayOrder: 2, isActive: true },
+    { value: '100', suffix: 'K+', label: 'PRODUCTS', displayOrder: 3, isActive: true },
+  ],
+  backgroundImage: '',
+  backgroundColor: '#111827',
+  overlayColor: '#000000',
+  overlayOpacity: 45,
+  valueColor: '#ffffff',
+  suffixColor: '#facc15',
+  labelColor: '#d1d5db',
 };
 
 const HOW_IT_WORKS_STYLE_DEFAULTS: HowItWorksStyleSettings = {
@@ -575,6 +626,44 @@ const normalizeTopStripSettings = (raw: unknown): TopStripSettings => {
     pauseOnHover: Boolean(pauseOnHover),
     textColor,
     backgroundColor,
+  };
+};
+const normalizeStatsStripSettings = (raw: unknown): StatsStripSettings => {
+  if (!raw || typeof raw !== 'object') return { ...STATS_STRIP_DEFAULTS, items: [...STATS_STRIP_DEFAULTS.items] };
+  const row = raw as Record<string, unknown>;
+  const rawItems = Array.isArray(row.items) ? row.items : [];
+  const normalizedItems = rawItems
+    .map((entry, index) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const item = entry as Record<string, unknown>;
+      const value = getString(item.value) || '';
+      const label = getString(item.label) || '';
+      if (!value || !label) return null;
+      const suffix = getString(item.suffix) || '';
+      const displayOrder = getNumber(item.displayOrder);
+      const isActive = getBoolean(item.isActive);
+      return {
+        value: value.slice(0, 20),
+        suffix: suffix.slice(0, 8),
+        label: label.slice(0, 40).toUpperCase(),
+        displayOrder: Number.isFinite(displayOrder as number) ? Math.max(0, Math.min(100, Math.round(displayOrder as number))) : index,
+        isActive: typeof isActive === 'boolean' ? isActive : true,
+      } as StatsStripItem;
+    })
+    .filter((entry): entry is StatsStripItem => Boolean(entry))
+    .sort((a, b) => a.displayOrder - b.displayOrder);
+  return {
+    items: normalizedItems.length > 0 ? normalizedItems : [...STATS_STRIP_DEFAULTS.items],
+    backgroundImage: getString(row.backgroundImage) || '',
+    backgroundColor: normalizeHexColor(row.backgroundColor, STATS_STRIP_DEFAULTS.backgroundColor),
+    overlayColor: normalizeHexColor(row.overlayColor, STATS_STRIP_DEFAULTS.overlayColor),
+    overlayOpacity: Math.max(
+      0,
+      Math.min(100, Math.round(getNumber(row.overlayOpacity) ?? STATS_STRIP_DEFAULTS.overlayOpacity))
+    ),
+    valueColor: normalizeHexColor(row.valueColor, STATS_STRIP_DEFAULTS.valueColor),
+    suffixColor: normalizeHexColor(row.suffixColor, STATS_STRIP_DEFAULTS.suffixColor),
+    labelColor: normalizeHexColor(row.labelColor, STATS_STRIP_DEFAULTS.labelColor),
   };
 };
 
@@ -792,6 +881,63 @@ const saveTopStripSettings = async (next: Partial<TopStripSettings>) => {
      VALUES ($1, $2, $3, NOW(), NOW())`,
     randomUUID(),
     HOMEPAGE_TOP_STRIP_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+const readStatsStripSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_STATS_STRIP_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: { ...STATS_STRIP_DEFAULTS, items: [...STATS_STRIP_DEFAULTS.items] },
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  let parsed = { ...STATS_STRIP_DEFAULTS, items: [...STATS_STRIP_DEFAULTS.items] };
+  try {
+    parsed = normalizeStatsStripSettings(JSON.parse(String(row.value || '{}')));
+  } catch {
+    parsed = { ...STATS_STRIP_DEFAULTS, items: [...STATS_STRIP_DEFAULTS.items] };
+  }
+  return {
+    rowId: String(row.id),
+    settings: parsed,
+    source: 'DATABASE' as const,
+    updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+  };
+};
+const saveStatsStripSettings = async (next: unknown) => {
+  const existing = await readStatsStripSettings();
+  const nextObject = next && typeof next === 'object' ? (next as Record<string, unknown>) : {};
+  const merged = normalizeStatsStripSettings({
+    ...existing.settings,
+    ...nextObject,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_STATS_STRIP_SETTINGS_KEY,
     payload
   );
   return merged;
@@ -1177,6 +1323,15 @@ router.get('/top-strip', async (_req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch top strip settings.' });
   }
 });
+router.get('/stats-strip', async (_req, res) => {
+  try {
+    const { settings } = await readStatsStripSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching stats strip settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch stats strip settings.' });
+  }
+});
 
 router.get('/how-it-works-style', async (_req, res) => {
   try {
@@ -1486,6 +1641,22 @@ router.get('/admin/top-strip', authenticate, authorizePermissions(Permissions.HO
     res.status(500).json({ success: false, message: 'Failed to fetch top strip settings.' });
   }
 });
+router.get('/admin/stats-strip', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings, source, updatedAt } = await readStatsStripSettings();
+    res.json({
+      success: true,
+      data: {
+        ...settings,
+        source,
+        updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching admin stats strip settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch stats strip settings.' });
+  }
+});
 
 router.put('/admin/top-strip', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
@@ -1498,6 +1669,32 @@ router.put('/admin/top-strip', authenticate, authorizePermissions(Permissions.HO
     }
     console.error('Error updating top strip settings:', error);
     res.status(500).json({ success: false, message: 'Failed to update top strip settings.' });
+  }
+});
+router.put('/admin/stats-strip', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = statsStripUpdateSchema.parse(req.body);
+    const settings = await saveStatsStripSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating stats strip settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update stats strip settings.' });
+  }
+});
+router.patch('/admin/stats-strip', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = statsStripUpdateSchema.parse(req.body);
+    const settings = await saveStatsStripSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating stats strip settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update stats strip settings.' });
   }
 });
 
