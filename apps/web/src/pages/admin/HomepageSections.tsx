@@ -1011,6 +1011,7 @@ function SectionModal({
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const effectiveCountryOptions = countryOptions.length > 0 ? countryOptions : FALLBACK_AFRICAN_COUNTRY_OPTIONS;
 
   function getDefaultFormData(sectionType: SectionType) {
     switch (sectionType) {
@@ -1042,8 +1043,8 @@ function SectionModal({
     }
   }
 
-  const countryOptionByCode = new Map(countryOptions.map((option) => [option.code, option]));
-  const countryOptionByName = new Map(countryOptions.map((option) => [option.name.toLowerCase(), option]));
+  const countryOptionByCode = new Map(effectiveCountryOptions.map((option) => [option.code, option]));
+  const countryOptionByName = new Map(effectiveCountryOptions.map((option) => [option.name.toLowerCase(), option]));
 
   useEffect(() => {
     if (type !== 'countries') return;
@@ -1060,14 +1061,14 @@ function SectionModal({
       name: prev?.name || option.name,
       flag: option.flag,
     }));
-  }, [type, countryOptions]);
+  }, [type, effectiveCountryOptions]);
 
-  const handleCountryCodeChange = (countryCode: string) => {
-    const option = countryOptionByCode.get(String(countryCode || '').toUpperCase());
+  const handleCountryNameChange = (countryName: string) => {
+    const option = countryOptionByName.get(String(countryName || '').trim().toLowerCase());
     setFormData((prev: any) => ({
       ...prev,
-      countryCode: option?.code || countryCode,
-      name: option?.name || prev?.name || '',
+      countryCode: option?.code || prev?.countryCode || '',
+      name: option?.name || countryName,
       flag: option?.flag || prev?.flag || '',
     }));
   };
@@ -1339,20 +1340,29 @@ function SectionModal({
         return (
           <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Country Name</label>
               <select
-                value={formData.countryCode || ''}
-                onChange={(e) => handleCountryCodeChange(e.target.value)}
+                value={formData.name || ''}
+                onChange={(e) => handleCountryNameChange(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                 required
               >
                 <option value="">Select country</option>
-                {countryOptions.map((option) => (
-                  <option key={option.code} value={option.code}>
-                    {option.flag} {option.name} ({option.code})
+                {effectiveCountryOptions.map((option) => (
+                  <option key={option.code} value={option.name}>
+                    {option.name}
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Country Code</label>
+              <input
+                type="text"
+                value={formData.countryCode || ''}
+                readOnly
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Auto Flag</label>
@@ -1361,19 +1371,6 @@ function SectionModal({
               </div>
               <p className="mt-1 text-xs text-gray-500">
                 Flag icon is auto-filled based on country selection.
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Country Name</label>
-              <input
-                type="text"
-                value={formData.name || ''}
-                readOnly
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                required
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Auto-populated from selected country.
               </p>
             </div>
             <div>
