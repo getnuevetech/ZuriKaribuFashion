@@ -441,7 +441,6 @@ export default function Home() {
 
   const { data: designerSpotlightsData } = useQuery({
     queryKey: ['designerSpotlightsPublic'],
-    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getDesignerSpotlights();
       return response.success ? response.data : null;
@@ -573,7 +572,6 @@ export default function Home() {
   const howItWorksIconColor = asText(howItWorksStyleData?.iconColor, '#111827');
   const howItWorksIconHoverColor = asText(howItWorksStyleData?.iconHoverColor, '#ffffff');
   const designers = useMemo(() => {
-    if (!USE_DYNAMIC_HOMEPAGE) return kimiDesigners;
     if (Array.isArray(designerSpotlightsData) && designerSpotlightsData.length > 0) {
       return designerSpotlightsData.slice(0, 3).map((item: any, index: number) => ({
         id: String(item.id ?? index),
