@@ -227,27 +227,33 @@ const parseTopStripPayloadFromBanner = (banner: any): TopStripPayload | null => 
   }
 };
 
-const topStripReadPaths = [
+const topStripReadPathsAdmin = [
   '/homepage-sections/admin/top-strip',
   '/homepage/admin/top-strip',
   '/admin/top-strip',
   '/admin/homepage/top-strip',
   '/admin/homepage-sections/top-strip',
+];
+const topStripReadPathsPublic = [
   '/homepage-sections/top-strip',
   '/homepage/top-strip',
 ];
-const statsStripReadPaths = [
+const statsStripReadPathsAdmin = [
   '/homepage-sections/admin/stats-strip',
   '/admin/stats-strip',
+];
+const statsStripReadPathsPublic = [
   '/homepage-sections/stats-strip',
 ];
 const statsStripWritePaths = [
   '/homepage-sections/admin/stats-strip',
   '/admin/stats-strip',
 ];
-const featuredProductDescriptionReadPaths = [
+const featuredProductDescriptionReadPathsAdmin = [
   '/homepage-sections/admin/featured-product-description-settings',
   '/admin/featured-product-description-settings',
+];
+const featuredProductDescriptionReadPathsPublic = [
   '/homepage-sections/featured-product-description-settings',
 ];
 const featuredProductDescriptionWritePaths = [
@@ -265,7 +271,10 @@ const topStripWritePaths = [
 
 async function readTopStripWithFallback<T>(mode: 'admin' | 'public') {
   let lastError: unknown = null;
-  for (const path of topStripReadPaths) {
+  const readPaths = mode === 'admin'
+    ? [...topStripReadPathsAdmin, ...topStripReadPathsPublic]
+    : [...topStripReadPathsPublic];
+  for (const path of readPaths) {
     try {
       return await apiService.get<T>(path);
     } catch (error) {
@@ -365,9 +374,12 @@ async function writeTopStripWithFallback<T>(data: unknown) {
 
   throw lastError ?? new Error('Top strip route not found.');
 }
-async function readStatsStripWithFallback<T>() {
+async function readStatsStripWithFallback<T>(mode: 'admin' | 'public') {
   let lastError: unknown = null;
-  for (const path of statsStripReadPaths) {
+  const readPaths = mode === 'admin'
+    ? [...statsStripReadPathsAdmin, ...statsStripReadPathsPublic]
+    : [...statsStripReadPathsPublic];
+  for (const path of readPaths) {
     try {
       return await apiService.get<T>(path);
     } catch (error) {
@@ -400,9 +412,12 @@ async function writeStatsStripWithFallback<T>(data: unknown) {
   }
   throw lastError ?? new Error('Stats strip route not found.');
 }
-async function readFeaturedProductDescriptionSettingsWithFallback<T>() {
+async function readFeaturedProductDescriptionSettingsWithFallback<T>(mode: 'admin' | 'public') {
   let lastError: unknown = null;
-  for (const path of featuredProductDescriptionReadPaths) {
+  const readPaths = mode === 'admin'
+    ? [...featuredProductDescriptionReadPathsAdmin, ...featuredProductDescriptionReadPathsPublic]
+    : [...featuredProductDescriptionReadPathsPublic];
+  for (const path of readPaths) {
     try {
       return await apiService.get<T>(path);
     } catch (error) {
@@ -469,14 +484,16 @@ const normalizeHowItWorksStylePayload = (raw: unknown): HowItWorksStylePayload =
   };
 };
 
-const howItWorksStyleReadPaths = [
+const howItWorksStyleReadPathsPublic = [
+  '/homepage-sections/how-it-works-style',
+  '/homepage/how-it-works-style',
+];
+const howItWorksStyleReadPathsAdmin = [
   '/homepage-sections/admin/how-it-works-style',
   '/homepage/admin/how-it-works-style',
   '/admin/how-it-works-style',
   '/admin/homepage/how-it-works-style',
   '/admin/homepage-sections/how-it-works-style',
-  '/homepage-sections/how-it-works-style',
-  '/homepage/how-it-works-style',
 ];
 
 const howItWorksStyleWritePaths = [
@@ -617,9 +634,12 @@ async function readDesignerOptionsFromVendorProfilesFallback() {
   return Array.from(deduped.values()).sort((a, b) => a.businessName.localeCompare(b.businessName));
 }
 
-async function readHowItWorksStyleWithFallback<T>() {
+async function readHowItWorksStyleWithFallback<T>(mode: 'admin' | 'public') {
   let lastError: unknown = null;
-  for (const path of howItWorksStyleReadPaths) {
+  const readPaths = mode === 'admin'
+    ? [...howItWorksStyleReadPathsAdmin, ...howItWorksStyleReadPathsPublic]
+    : [...howItWorksStyleReadPathsPublic];
+  for (const path of readPaths) {
     try {
       return await apiService.get<T>(path);
     } catch (error) {
@@ -1733,12 +1753,12 @@ const homepageSectionsApi = {
         suffixColor: string;
         labelColor: string;
       };
-    }>(),
+    }>('public'),
   getFeaturedProductDescriptionSettings: () =>
     readFeaturedProductDescriptionSettingsWithFallback<{
       success: boolean;
       data: { wordLimit: number };
-    }>(),
+    }>('public'),
 
   getCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/countries'),
@@ -1750,7 +1770,7 @@ const homepageSectionsApi = {
     readHowItWorksStyleWithFallback<{
       success: boolean;
       data: { enabled: boolean; iconColor: string; iconHoverColor: string };
-    }>(),
+    }>('public'),
 
   getCategories: () =>
     readHomepageCategoriesWithFallback<{ success: boolean; data: any[] }>(),
@@ -1833,12 +1853,12 @@ const homepageSectionsApi = {
         source?: 'DATABASE' | 'DEFAULT';
         updatedAt?: string | null;
       };
-    }>(),
+    }>('admin'),
   getAdminFeaturedProductDescriptionSettings: () =>
     readFeaturedProductDescriptionSettingsWithFallback<{
       success: boolean;
       data: { wordLimit: number; source?: 'DATABASE' | 'DEFAULT'; updatedAt?: string | null };
-    }>(),
+    }>('admin'),
 
   getAdminCountryImageGeneration: () =>
     readCountryImageGenerationWithFallback<{
@@ -1972,7 +1992,7 @@ const homepageSectionsApi = {
     readHowItWorksStyleWithFallback<{
       success: boolean;
       data: { enabled: boolean; iconColor: string; iconHoverColor: string; source?: 'DATABASE' | 'DEFAULT'; updatedAt?: string | null };
-    }>(),
+    }>('admin'),
 
   updateAdminHowItWorksStyle: (data: { enabled?: boolean; iconColor?: string; iconHoverColor?: string }) =>
     writeHowItWorksStyleWithFallback<{
