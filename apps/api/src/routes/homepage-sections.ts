@@ -10,6 +10,7 @@ const router = Router();
 
 const HOMEPAGE_VISIBILITY_SETTINGS_KEY = 'HOMEPAGE_SECTION_VISIBILITY';
 const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
+const HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY = 'HOMEPAGE_COUNTRY_IMAGE_GENERATION';
 const HOMEPAGE_SECTION_VISIBILITY_META = [
   { key: 'topStrip', label: 'Top Announcement Strip', description: 'Scrolling announcement bar above the hero banner.' },
   { key: 'hero', label: 'Hero Banner', description: 'Top hero carousel section.' },
@@ -186,15 +187,41 @@ const AFRICAN_COUNTRY_OPTIONS = Array.from(
   ).values()
 ).sort((a, b) => a.name.localeCompare(b.name));
 
+const AFRICAN_COUNTRY_OPTION_BY_CODE = new Map(
+  AFRICAN_COUNTRY_OPTIONS.map((option) => [option.code.toUpperCase(), option])
+);
+
 const countryCreateSchema = z.object({
-  name: z.string().min(1),
-  flag: z.string().min(1),
-  fabrics: z.string().min(1),
-  image: z.string().min(1),
+  countryCode: z.string().trim().min(2).max(3).optional(),
+  name: z.string().trim().min(1),
+  flag: z.string().trim().min(1).optional(),
+  fabrics: z.string().trim().optional(),
+  image: z.string().trim().optional(),
+  imageKeyword: z.string().trim().optional(),
   displayOrder: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
 });
 const countryUpdateSchema = countryCreateSchema.partial();
+
+const normalizeCountryInput = (input: any) => {
+  const countryCode = String(input?.countryCode || '').trim().toUpperCase();
+  const selectedByCode = countryCode ? AFRICAN_COUNTRY_OPTION_BY_CODE.get(countryCode) : undefined;
+  const selectedByName = AFRICAN_COUNTRY_OPTIONS.find(
+    (option) => option.name.toLowerCase() === String(input?.name || '').trim().toLowerCase()
+  );
+  const selected = selectedByCode || selectedByName;
+  return {
+    ...input,
+    countryCode: selected?.code || countryCode || undefined,
+    name: selected?.name || getString(input?.name) || input?.name,
+    flag: selected?.flag || getString(input?.flag) || undefined,
+    fabrics: getString(input?.fabrics) || undefined,
+    image: getString(input?.image) || undefined,
+    imageKeyword: getString(input?.imageKeyword) || undefined,
+    displayOrder: getNumber(input?.displayOrder) ?? input?.displayOrder,
+    isActive: getBoolean(input?.isActive) ?? input?.isActive,
+  };
+};
 
 const howItWorksCreateSchema = z.object({
   stepNumber: z.number().int().positive(),
@@ -401,6 +428,70 @@ const normalizeTopStripSettings = (raw: unknown): TopStripSettings => {
   };
 };
 
+const countryImageGenerationUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  apiUrl: z.string().trim().optional(),
+  apiKey: z.string().trim().optional(),
+  model: z.string().trim().optional(),
+  promptTemplate: z.string().trim().min(1).optional(),
+  responseImagePath: z.string().trim().min(1).optional(),
+  requestMethod: z.enum(['GET', 'POST']).optional(),
+});
+
+type CountryImageGenerationSettings = {
+  enabled: boolean;
+  apiUrl: string;
+  apiKey: string;
+  model: string;
+  promptTemplate: string;
+  responseImagePath: string;
+  requestMethod: 'GET' | 'POST';
+};
+
+const COUNTRY_IMAGE_GENERATION_DEFAULTS: CountryImageGenerationSettings = {
+  enabled: false,
+  apiUrl: '',
+  apiKey: '',
+  model: '',
+  promptTemplate: 'High quality fashion editorial image inspired by {country}. Keywords: {keywords}. Fabrics: {fabrics}.',
+  responseImagePath: 'url',
+  requestMethod: 'POST',
+};
+
+const normalizeCountryImageGenerationSettings = (raw: unknown): CountryImageGenerationSettings => {
+  if (!raw || typeof raw !== 'object') return { ...COUNTRY_IMAGE_GENERATION_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const requestMethod = String(row.requestMethod || '').toUpperCase();
+  return {
+    enabled: getBoolean(row.enabled) ?? COUNTRY_IMAGE_GENERATION_DEFAULTS.enabled,
+    apiUrl: getString(row.apiUrl) || '',
+    apiKey: getString(row.apiKey) || '',
+    model: getString(row.model) || '',
+    promptTemplate: getString(row.promptTemplate) || COUNTRY_IMAGE_GENERATION_DEFAULTS.promptTemplate,
+    responseImagePath: getString(row.responseImagePath) || COUNTRY_IMAGE_GENERATION_DEFAULTS.responseImagePath,
+    requestMethod: requestMethod === 'GET' ? 'GET' : 'POST',
+  };
+};
+
+const getValueAtPath = (obj: unknown, path: string): unknown => {
+  if (!obj || !path) return undefined;
+  const normalized = path.replace(/\[(\d+)\]/g, '.$1').replace(/^\./, '');
+  return normalized.split('.').reduce<unknown>((acc, key) => {
+    if (acc && typeof acc === 'object' && key in (acc as Record<string, unknown>)) {
+      return (acc as Record<string, unknown>)[key];
+    }
+    return undefined;
+  }, obj);
+};
+
+const isLikelyImageUrl = (value: string) =>
+  /^https?:\/\//i.test(value) ||
+  value.startsWith('/uploads/') ||
+  value.startsWith('data:image/');
+
+const buildCountryImageFallbackUrl = (keyword: string) =>
+  `https://picsum.photos/seed/${encodeURIComponent(slugify(keyword || 'african-country-card'))}/1200/1600`;
+
 const normalizeHomepageSectionVisibility = (raw: unknown): HomepageSectionVisibility => {
   const defaults = { ...HOMEPAGE_SECTION_VISIBILITY_DEFAULTS };
   if (!raw || typeof raw !== 'object') {
@@ -544,6 +635,130 @@ const saveTopStripSettings = async (next: Partial<TopStripSettings>) => {
     payload
   );
   return merged;
+};
+
+const readCountryImageGenerationSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: { ...COUNTRY_IMAGE_GENERATION_DEFAULTS },
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizeCountryImageGenerationSettings(JSON.parse(String(row.value || '{}'))),
+      source: 'DATABASE' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  } catch {
+    return {
+      rowId: String(row.id),
+      settings: { ...COUNTRY_IMAGE_GENERATION_DEFAULTS },
+      source: 'DEFAULT' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  }
+};
+
+const saveCountryImageGenerationSettings = async (next: Partial<CountryImageGenerationSettings>) => {
+  const existing = await readCountryImageGenerationSettings();
+  const merged = normalizeCountryImageGenerationSettings({
+    ...existing.settings,
+    ...next,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+
+const generateCountryImage = async (input: {
+  country: string;
+  fabrics?: string;
+  imageKeyword?: string;
+}) => {
+  const keyword = getString(input.imageKeyword) || `${input.country} ${input.fabrics || ''}`.trim();
+  const fallbackUrl = buildCountryImageFallbackUrl(keyword || input.country);
+  try {
+    const { settings } = await readCountryImageGenerationSettings();
+    if (!settings.enabled || !settings.apiUrl) {
+      return fallbackUrl;
+    }
+    const prompt = settings.promptTemplate
+      .replace(/\{country\}/gi, input.country)
+      .replace(/\{fabrics\}/gi, input.fabrics || 'African textiles')
+      .replace(/\{keywords\}/gi, keyword || input.country);
+    const headers: Record<string, string> = {};
+    if (settings.apiKey) {
+      headers.Authorization = `Bearer ${settings.apiKey}`;
+      headers['x-api-key'] = settings.apiKey;
+    }
+    let response: Response;
+    if (settings.requestMethod === 'GET') {
+      const url = new URL(settings.apiUrl);
+      url.searchParams.set('prompt', prompt);
+      if (settings.model) url.searchParams.set('model', settings.model);
+      response = await fetch(url.toString(), { method: 'GET', headers });
+    } else {
+      headers['Content-Type'] = 'application/json';
+      response = await fetch(settings.apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          prompt,
+          model: settings.model || undefined,
+          country: input.country,
+          keywords: keyword || input.country,
+        }),
+      });
+    }
+    if (!response.ok) return fallbackUrl;
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('image/')) {
+      return response.url || fallbackUrl;
+    }
+    const json = await response.json().catch(() => null);
+    if (!json) return fallbackUrl;
+    const direct = typeof json === 'string' ? json : undefined;
+    const fromPath = getValueAtPath(json, settings.responseImagePath);
+    const resolved =
+      (typeof fromPath === 'string' ? fromPath : undefined) ||
+      (typeof (json as any)?.url === 'string' ? (json as any).url : undefined) ||
+      (typeof (json as any)?.image === 'string' ? (json as any).image : undefined) ||
+      direct;
+    if (resolved && isLikelyImageUrl(resolved)) {
+      return resolved;
+    }
+    return fallbackUrl;
+  } catch {
+    return fallbackUrl;
+  }
 };
 
 // ==================== PUBLIC ENDPOINTS ====================
@@ -832,6 +1047,47 @@ router.put('/admin/top-strip', authenticate, authorizePermissions(Permissions.HO
   }
 });
 
+router.get(
+  '/admin/country-image-generation',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (_req, res) => {
+    try {
+      const { settings, source, updatedAt } = await readCountryImageGenerationSettings();
+      res.json({
+        success: true,
+        data: {
+          ...settings,
+          source,
+          updatedAt,
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching country image generation settings:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch country image generation settings.' });
+    }
+  }
+);
+
+router.put(
+  '/admin/country-image-generation',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (req, res) => {
+    try {
+      const payload = countryImageGenerationUpdateSchema.parse(req.body);
+      const settings = await saveCountryImageGenerationSettings(payload);
+      res.json({ success: true, data: settings });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      console.error('Error updating country image generation settings:', error);
+      res.status(500).json({ success: false, message: 'Failed to update country image generation settings.' });
+    }
+  }
+);
+
 router.get('/admin/country-options', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
   res.json({
     success: true,
@@ -872,23 +1128,75 @@ router.get('/admin/countries', authenticate, authorizePermissions(Permissions.HO
 
 router.post('/admin/countries', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = countryCreateSchema.parse(req.body);
+    const parsed = countryCreateSchema.parse(normalizeCountryInput(req.body));
+    const selected = parsed.countryCode ? AFRICAN_COUNTRY_OPTION_BY_CODE.get(parsed.countryCode.toUpperCase()) : undefined;
+    const image =
+      getString(parsed.image) ||
+      (await generateCountryImage({
+        country: selected?.name || parsed.name,
+        fabrics: parsed.fabrics,
+        imageKeyword: parsed.imageKeyword,
+      }));
+    const data = {
+      name: selected?.name || parsed.name,
+      flag: selected?.flag || parsed.flag || countryCodeToFlag(parsed.countryCode || ''),
+      fabrics: parsed.fabrics || 'African textiles',
+      image,
+      displayOrder: parsed.displayOrder ?? 0,
+      isActive: parsed.isActive ?? true,
+    };
     const country = await prisma.countryMarquee.create({ data });
     res.status(201).json({ success: true, data: country });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
     res.status(500).json({ success: false, message: 'Failed to create country' });
   }
 });
 
 router.put('/admin/countries/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = countryUpdateSchema.parse(req.body);
+    const parsed = countryUpdateSchema.parse(normalizeCountryInput(req.body));
+    const existing = await prisma.countryMarquee.findUnique({ where: { id: req.params.id } });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Country card not found.' });
+    }
+    const selected = parsed.countryCode ? AFRICAN_COUNTRY_OPTION_BY_CODE.get(parsed.countryCode.toUpperCase()) : undefined;
+    const resolvedName = selected?.name || parsed.name || existing.name;
+    const resolvedFabrics = parsed.fabrics || existing.fabrics || 'African textiles';
+    const shouldRegenerateImage = !getString(parsed.image) && Boolean(getString(parsed.imageKeyword));
+    const resolvedImage =
+      getString(parsed.image) ||
+      (shouldRegenerateImage
+        ? await generateCountryImage({
+            country: resolvedName,
+            fabrics: resolvedFabrics,
+            imageKeyword: parsed.imageKeyword,
+          })
+        : existing.image) ||
+      (await generateCountryImage({
+        country: resolvedName,
+        fabrics: resolvedFabrics,
+        imageKeyword: parsed.imageKeyword,
+      }));
+    const data = {
+      ...(parsed.name ? { name: resolvedName } : selected ? { name: selected.name } : {}),
+      ...(parsed.flag ? { flag: parsed.flag } : selected ? { flag: selected.flag } : {}),
+      ...(parsed.fabrics ? { fabrics: resolvedFabrics } : {}),
+      ...(parsed.image || !existing.image ? { image: resolvedImage } : {}),
+      ...(typeof parsed.displayOrder === 'number' ? { displayOrder: parsed.displayOrder } : {}),
+      ...(typeof parsed.isActive === 'boolean' ? { isActive: parsed.isActive } : {}),
+    };
     const country = await prisma.countryMarquee.update({
       where: { id: req.params.id },
       data,
     });
     res.json({ success: true, data: country });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
     res.status(500).json({ success: false, message: 'Failed to update country' });
   }
 });

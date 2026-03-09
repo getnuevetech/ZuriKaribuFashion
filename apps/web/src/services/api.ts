@@ -1120,6 +1120,42 @@ const homepageSectionsApi = {
       };
     }>('admin'),
 
+  getAdminCountryImageGeneration: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        enabled: boolean;
+        apiUrl: string;
+        apiKey: string;
+        model: string;
+        promptTemplate: string;
+        responseImagePath: string;
+        requestMethod: 'GET' | 'POST';
+      };
+    }>('/homepage-sections/admin/country-image-generation'),
+
+  updateAdminCountryImageGeneration: (data: {
+    enabled?: boolean;
+    apiUrl?: string;
+    apiKey?: string;
+    model?: string;
+    promptTemplate?: string;
+    responseImagePath?: string;
+    requestMethod?: 'GET' | 'POST';
+  }) =>
+    apiService.put<{
+      success: boolean;
+      data: {
+        enabled: boolean;
+        apiUrl: string;
+        apiKey: string;
+        model: string;
+        promptTemplate: string;
+        responseImagePath: string;
+        requestMethod: 'GET' | 'POST';
+      };
+    }>('/homepage-sections/admin/country-image-generation', data),
+
   updateAdminTopStrip: (data: {
     messages: string[];
     separator?: string;

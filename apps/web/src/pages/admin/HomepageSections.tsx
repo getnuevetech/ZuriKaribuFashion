@@ -115,6 +115,16 @@ interface DesignerOption {
   country: string;
 }
 
+interface CountryImageGenerationSettings {
+  enabled: boolean;
+  apiUrl: string;
+  apiKey: string;
+  model: string;
+  promptTemplate: string;
+  responseImagePath: string;
+  requestMethod: 'GET' | 'POST';
+}
+
 const FALLBACK_AFRICAN_COUNTRY_OPTIONS: CountryOption[] = [
   { code: 'DZ', name: 'Algeria', flag: '🇩🇿' },
   { code: 'AO', name: 'Angola', flag: '🇦🇴' },
@@ -203,6 +213,16 @@ export default function HomepageSections() {
   const [visibilityLoading, setVisibilityLoading] = useState(false);
   const [countryOptions, setCountryOptions] = useState<CountryOption[]>([]);
   const [designerOptions, setDesignerOptions] = useState<DesignerOption[]>([]);
+  const [countryImageSettings, setCountryImageSettings] = useState<CountryImageGenerationSettings>({
+    enabled: false,
+    apiUrl: '',
+    apiKey: '',
+    model: '',
+    promptTemplate: 'High quality fashion editorial image inspired by {country}. Keywords: {keywords}. Fabrics: {fabrics}.',
+    responseImagePath: 'url',
+    requestMethod: 'POST',
+  });
+  const [countryImageSaving, setCountryImageSaving] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -214,6 +234,10 @@ export default function HomepageSections() {
 
   useEffect(() => {
     fetchAuxiliaryOptions();
+  }, []);
+
+  useEffect(() => {
+    fetchCountryImageSettings();
   }, []);
 
   const fetchData = async () => {
@@ -296,6 +320,49 @@ export default function HomepageSections() {
     } catch (error) {
       console.error('Error fetching homepage auxiliary options:', error);
       setCountryOptions(FALLBACK_AFRICAN_COUNTRY_OPTIONS);
+    }
+  };
+
+  const fetchCountryImageSettings = async () => {
+    try {
+      const response = await api.homepageSections.getAdminCountryImageGeneration();
+      if (response.success && response.data) {
+        setCountryImageSettings({
+          enabled: !!response.data.enabled,
+          apiUrl: response.data.apiUrl || '',
+          apiKey: response.data.apiKey || '',
+          model: response.data.model || '',
+          promptTemplate: response.data.promptTemplate || 'High quality fashion editorial image inspired by {country}. Keywords: {keywords}. Fabrics: {fabrics}.',
+          responseImagePath: response.data.responseImagePath || 'url',
+          requestMethod: response.data.requestMethod || 'POST',
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching country image generation settings:', error);
+    }
+  };
+
+  const handleSaveCountryImageSettings = async () => {
+    setCountryImageSaving(true);
+    try {
+      const response = await api.homepageSections.updateAdminCountryImageGeneration(countryImageSettings);
+      if (response.success && response.data) {
+        setCountryImageSettings({
+          enabled: !!response.data.enabled,
+          apiUrl: response.data.apiUrl || '',
+          apiKey: response.data.apiKey || '',
+          model: response.data.model || '',
+          promptTemplate: response.data.promptTemplate || countryImageSettings.promptTemplate,
+          responseImagePath: response.data.responseImagePath || 'url',
+          requestMethod: response.data.requestMethod || 'POST',
+        });
+        window.alert('Country image generation settings saved.');
+      }
+    } catch (error: any) {
+      console.error('Error saving country image generation settings:', error);
+      window.alert(error?.response?.data?.message || 'Failed to save country image generation settings.');
+    } finally {
+      setCountryImageSaving(false);
     }
   };
 
@@ -473,6 +540,100 @@ export default function HomepageSections() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Country Image Generation API</h2>
+          <p className="text-sm text-gray-500">
+            Configure image API from Admin. If country image is empty, it auto-generates from keyword/country data.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            id="country-image-enabled"
+            type="checkbox"
+            checked={countryImageSettings.enabled}
+            onChange={(e) => setCountryImageSettings((prev) => ({ ...prev, enabled: e.target.checked }))}
+            className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+          />
+          <label htmlFor="country-image-enabled" className="text-sm font-medium text-gray-700">
+            Enable custom image API (falls back to deterministic placeholder if unavailable)
+          </label>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">API URL</label>
+            <input
+              type="text"
+              value={countryImageSettings.apiUrl}
+              onChange={(e) => setCountryImageSettings((prev) => ({ ...prev, apiUrl: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              placeholder="https://api.provider.com/generate"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+            <input
+              type="password"
+              value={countryImageSettings.apiKey}
+              onChange={(e) => setCountryImageSettings((prev) => ({ ...prev, apiKey: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              placeholder="Provider API key"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Model (optional)</label>
+            <input
+              type="text"
+              value={countryImageSettings.model}
+              onChange={(e) => setCountryImageSettings((prev) => ({ ...prev, model: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              placeholder="gpt-image-1 / custom model"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Request Method</label>
+            <select
+              value={countryImageSettings.requestMethod}
+              onChange={(e) =>
+                setCountryImageSettings((prev) => ({
+                  ...prev,
+                  requestMethod: (e.target.value as 'GET' | 'POST') || 'POST',
+                }))
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+            >
+              <option value="POST">POST</option>
+              <option value="GET">GET</option>
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Prompt Template</label>
+            <textarea
+              value={countryImageSettings.promptTemplate}
+              onChange={(e) => setCountryImageSettings((prev) => ({ ...prev, promptTemplate: e.target.value }))}
+              rows={2}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              placeholder="Use {country}, {fabrics}, {keywords}"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Response Image Path</label>
+            <input
+              type="text"
+              value={countryImageSettings.responseImagePath}
+              onChange={(e) => setCountryImageSettings((prev) => ({ ...prev, responseImagePath: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              placeholder="url or data[0].url"
+            />
+          </div>
+        </div>
+        <div>
+          <Button onClick={handleSaveCountryImageSettings} disabled={countryImageSaving}>
+            {countryImageSaving ? 'Saving...' : 'Save Image Generation Settings'}
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -1025,7 +1186,7 @@ function SectionModal({
           backgroundColor: '#000000',
         };
       case 'countries':
-        return { countryCode: '', name: '', flag: '', image: '', fabrics: '', displayOrder: 0, isActive: true };
+        return { countryCode: '', name: '', flag: '', image: '', imageKeyword: '', fabrics: '', displayOrder: 0, isActive: true };
       case 'howItWorks':
         return { stepNumber: 1, title: '', subtitle: '', icon: 'Sparkles', displayOrder: 0, isActive: true };
       case 'categories':
@@ -1130,6 +1291,9 @@ function SectionModal({
             countryCode: selected?.code || normalizedCode,
             name: selected?.name || String(formData.name || '').trim(),
             flag: selected?.flag || String(formData.flag || '').trim(),
+            image: String(formData.image || '').trim() || undefined,
+            imageKeyword: String(formData.imageKeyword || '').trim() || undefined,
+            fabrics: String(formData.fabrics || '').trim() || undefined,
           };
         }
         if (type === 'categories') {
@@ -1382,6 +1546,19 @@ function SectionModal({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                 placeholder="Kente, Adinkra"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Image Keyword (for auto-generate)</label>
+              <input
+                type="text"
+                value={formData.imageKeyword || ''}
+                onChange={(e) => setFormData({ ...formData, imageKeyword: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                placeholder="e.g. kente fashion portrait"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                If image is empty when saving, system auto-generates from this keyword and country details.
+              </p>
             </div>
           </>
         );
