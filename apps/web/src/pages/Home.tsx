@@ -421,6 +421,14 @@ export default function Home() {
     },
   });
 
+  const { data: howItWorksStyleData } = useQuery({
+    queryKey: ['homepageHowItWorksStyle'],
+    queryFn: async () => {
+      const response = await api.homepageSections.getHowItWorksStyle();
+      return response.success ? response.data : null;
+    },
+  });
+
   const { data: designerSpotlightsData } = useQuery({
     queryKey: ['designerSpotlightsPublic'],
     enabled: USE_DYNAMIC_HOMEPAGE,
@@ -553,6 +561,7 @@ export default function Home() {
       })),
     [howItWorksData],
   );
+  const howItWorksIconColor = asText(howItWorksStyleData?.iconColor, '#111827');
 
   const designers = useMemo(() => {
     if (!USE_DYNAMIC_HOMEPAGE) return kimiDesigners;
@@ -738,7 +747,7 @@ export default function Home() {
             {howItWorks.map((step, index) => (
               <div key={step.id} className="group flex flex-col items-center text-center relative">
                 <div className="relative w-20 h-20 bg-white rounded-full border border-gray-200 flex items-center justify-center card-hover group-hover:bg-black group-hover:border-black transition-all duration-300 mb-4">
-                  <step.icon className="w-8 h-8 text-black/80 group-hover:text-white transition-colors duration-300" />
+                  <step.icon className="w-8 h-8 transition-colors duration-300" style={{ color: howItWorksIconColor }} />
                   <span className="absolute -top-1 -right-1 w-6 h-6 bg-black text-white rounded-full flex items-center justify-center text-xs font-bold">
                     {index + 1}
                   </span>

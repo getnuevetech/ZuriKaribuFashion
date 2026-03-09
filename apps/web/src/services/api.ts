@@ -1117,6 +1117,9 @@ const homepageSectionsApi = {
   getHowItWorks: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/how-it-works'),
 
+  getHowItWorksStyle: () =>
+    apiService.get<{ success: boolean; data: { iconColor: string } }>('/homepage-sections/how-it-works-style'),
+
   getCategories: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/categories'),
 
@@ -1282,6 +1285,18 @@ const homepageSectionsApi = {
   // Admin endpoints - How It Works
   getAdminHowItWorks: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/admin/how-it-works'),
+
+  getAdminHowItWorksStyle: () =>
+    apiService.get<{
+      success: boolean;
+      data: { iconColor: string; source?: 'DATABASE' | 'DEFAULT'; updatedAt?: string | null };
+    }>('/homepage-sections/admin/how-it-works-style'),
+
+  updateAdminHowItWorksStyle: (data: { iconColor?: string }) =>
+    apiService.put<{
+      success: boolean;
+      data: { iconColor: string };
+    }>('/homepage-sections/admin/how-it-works-style', data),
 
   createHowItWorksStep: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/homepage-sections/admin/how-it-works', data),

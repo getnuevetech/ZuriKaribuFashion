@@ -118,6 +118,10 @@ interface DesignerOption {
   country: string;
 }
 
+interface HowItWorksStyleSettings {
+  iconColor: string;
+}
+
 interface CountryImageGenerationSettings {
   enabled: boolean;
   apiUrl: string;
@@ -226,6 +230,10 @@ export default function HomepageSections() {
     requestMethod: 'POST',
   });
   const [countryImageSaving, setCountryImageSaving] = useState(false);
+  const [howItWorksStyle, setHowItWorksStyle] = useState<HowItWorksStyleSettings>({
+    iconColor: '#111827',
+  });
+  const [howItWorksStyleSaving, setHowItWorksStyleSaving] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -241,6 +249,10 @@ export default function HomepageSections() {
 
   useEffect(() => {
     fetchCountryImageSettings();
+  }, []);
+
+  useEffect(() => {
+    fetchHowItWorksStyleSettings();
   }, []);
 
   const fetchData = async () => {
@@ -342,6 +354,37 @@ export default function HomepageSections() {
       }
     } catch (error) {
       console.error('Error fetching country image generation settings:', error);
+    }
+  };
+
+  const fetchHowItWorksStyleSettings = async () => {
+    try {
+      const response = await api.homepageSections.getAdminHowItWorksStyle();
+      if (response.success && response.data) {
+        setHowItWorksStyle({
+          iconColor: response.data.iconColor || '#111827',
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching how it works style settings:', error);
+    }
+  };
+
+  const handleSaveHowItWorksStyleSettings = async () => {
+    setHowItWorksStyleSaving(true);
+    try {
+      const response = await api.homepageSections.updateAdminHowItWorksStyle(howItWorksStyle);
+      if (response.success && response.data) {
+        setHowItWorksStyle({
+          iconColor: response.data.iconColor || '#111827',
+        });
+        window.alert('How it works icon color saved.');
+      }
+    } catch (error: any) {
+      console.error('Error saving how it works style settings:', error);
+      window.alert(error?.response?.data?.message || 'Failed to save how it works icon color.');
+    } finally {
+      setHowItWorksStyleSaving(false);
     }
   };
 
@@ -661,6 +704,25 @@ export default function HomepageSections() {
           })}
         </nav>
       </div>
+
+      {activeTab === 'howItWorks' && (
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="w-full md:max-w-xs">
+              <label className="block text-sm font-medium text-gray-700 mb-1">How It Works Icon Color</label>
+              <input
+                type="color"
+                value={howItWorksStyle.iconColor}
+                onChange={(e) => setHowItWorksStyle((prev) => ({ ...prev, iconColor: e.target.value }))}
+                className="h-10 w-full cursor-pointer rounded border border-gray-300 bg-white p-1"
+              />
+            </div>
+            <Button onClick={handleSaveHowItWorksStyleSettings} disabled={howItWorksStyleSaving}>
+              {howItWorksStyleSaving ? 'Saving...' : 'Save Icon Color'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">

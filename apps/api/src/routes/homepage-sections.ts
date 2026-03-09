@@ -11,6 +11,7 @@ const router = Router();
 const HOMEPAGE_VISIBILITY_SETTINGS_KEY = 'HOMEPAGE_SECTION_VISIBILITY';
 const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
 const HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY = 'HOMEPAGE_COUNTRY_IMAGE_GENERATION';
+const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
 const HOMEPAGE_SECTION_VISIBILITY_META = [
   { key: 'topStrip', label: 'Top Announcement Strip', description: 'Scrolling announcement bar above the hero banner.' },
   { key: 'hero', label: 'Hero Banner', description: 'Top hero carousel section.' },
@@ -395,6 +396,10 @@ const topStripUpdateSchema = z.object({
   backgroundColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
 });
 
+const howItWorksStyleUpdateSchema = z.object({
+  iconColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+});
+
 type TopStripSettings = {
   messages: string[];
   separator: string;
@@ -407,6 +412,10 @@ type TopStripSettings = {
   backgroundColor: string;
 };
 
+type HowItWorksStyleSettings = {
+  iconColor: string;
+};
+
 const TOP_STRIP_DEFAULTS: TopStripSettings = {
   messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
   separator: '•',
@@ -417,6 +426,10 @@ const TOP_STRIP_DEFAULTS: TopStripSettings = {
   pauseOnHover: true,
   textColor: '#ffffff',
   backgroundColor: '#000000',
+};
+
+const HOW_IT_WORKS_STYLE_DEFAULTS: HowItWorksStyleSettings = {
+  iconColor: '#111827',
 };
 
 const normalizeHexColor = (value: unknown, fallback: string) => {
@@ -451,6 +464,14 @@ const normalizeTopStripSettings = (raw: unknown): TopStripSettings => {
     pauseOnHover: Boolean(pauseOnHover),
     textColor,
     backgroundColor,
+  };
+};
+
+const normalizeHowItWorksStyleSettings = (raw: unknown): HowItWorksStyleSettings => {
+  if (!raw || typeof raw !== 'object') return { ...HOW_IT_WORKS_STYLE_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  return {
+    iconColor: normalizeHexColor(row.iconColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconColor),
   };
 };
 
@@ -663,6 +684,64 @@ const saveTopStripSettings = async (next: Partial<TopStripSettings>) => {
   return merged;
 };
 
+const readHowItWorksStyleSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: { ...HOW_IT_WORKS_STYLE_DEFAULTS },
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  let parsed = { ...HOW_IT_WORKS_STYLE_DEFAULTS };
+  try {
+    parsed = normalizeHowItWorksStyleSettings(JSON.parse(String(row.value || '{}')));
+  } catch {
+    parsed = { ...HOW_IT_WORKS_STYLE_DEFAULTS };
+  }
+  return {
+    rowId: String(row.id),
+    settings: parsed,
+    source: 'DATABASE' as const,
+    updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+  };
+};
+
+const saveHowItWorksStyleSettings = async (next: Partial<HowItWorksStyleSettings>) => {
+  const existing = await readHowItWorksStyleSettings();
+  const merged = normalizeHowItWorksStyleSettings({
+    ...existing.settings,
+    ...next,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+
 const readCountryImageGenerationSettings = async () => {
   const rows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT "id", "value", "updatedAt"
@@ -813,6 +892,16 @@ router.get('/top-strip', async (_req, res) => {
   } catch (error) {
     console.error('Error fetching top strip settings:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch top strip settings.' });
+  }
+});
+
+router.get('/how-it-works-style', async (_req, res) => {
+  try {
+    const { settings } = await readHowItWorksStyleSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching how it works style settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch how it works style settings.' });
   }
 });
 
@@ -1077,6 +1166,37 @@ router.put('/admin/top-strip', authenticate, authorizePermissions(Permissions.HO
     }
     console.error('Error updating top strip settings:', error);
     res.status(500).json({ success: false, message: 'Failed to update top strip settings.' });
+  }
+});
+
+router.get('/admin/how-it-works-style', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings, source, updatedAt } = await readHowItWorksStyleSettings();
+    res.json({
+      success: true,
+      data: {
+        ...settings,
+        source,
+        updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching admin how it works style settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch how it works style settings.' });
+  }
+});
+
+router.put('/admin/how-it-works-style', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = howItWorksStyleUpdateSchema.parse(req.body);
+    const settings = await saveHowItWorksStyleSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating how it works style settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update how it works style settings.' });
   }
 });
 
