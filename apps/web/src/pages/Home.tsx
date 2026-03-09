@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type WheelEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -274,10 +274,7 @@ const asText = (...values: any[]) => {
   return '';
 };
 
-const normalizeCategoryCtaText = (value: unknown) => {
-  const text = asText(value, 'SHOP NOW');
-  return text.replace(/\s*>\s*$/g, '').trim() || 'SHOP NOW';
-};
+const normalizeCategoryCtaText = (_value: unknown) => 'SHOP NOW';
 
 const productBasePath = (productType: string) => {
   if (productType === 'DESIGN') return '/designs';
@@ -634,6 +631,16 @@ export default function Home() {
     });
   };
 
+  const handleCountryStripWheel = (event: WheelEvent<HTMLDivElement>) => {
+    const strip = event.currentTarget;
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    strip.scrollBy({
+      left: event.deltaY,
+      behavior: 'auto',
+    });
+    event.preventDefault();
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {sectionVisibility.hero ? (
@@ -682,12 +689,15 @@ export default function Home() {
 
         {sectionVisibility.countries ? (
           <div className="absolute bottom-8 left-4 sm:left-6 lg:left-12 xl:left-20 right-4 sm:right-6 lg:right-12 xl:right-20">
-            <div className="flex flex-wrap gap-4 justify-start">
+            <div
+              className="flex flex-nowrap gap-4 justify-start overflow-x-auto overflow-y-hidden pb-2 scrollbar-hide"
+              onWheel={handleCountryStripWheel}
+            >
               {countries.map((country) => (
                 <Link
                   key={country.name}
                   to={`/designs?country=${encodeURIComponent(country.name)}`}
-                  className="bg-white/95 backdrop-blur-sm px-4 py-3 rounded-lg flex items-center gap-3 card-hover cursor-pointer"
+                  className="bg-white/95 backdrop-blur-sm px-4 py-3 rounded-lg flex items-center gap-3 card-hover cursor-pointer flex-shrink-0"
                 >
                   <span className="text-2xl">{country.flag}</span>
                   <div>
