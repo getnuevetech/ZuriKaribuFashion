@@ -1154,7 +1154,7 @@ export default function Home() {
                           <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
                         ))}
                       </div>
-                      <blockquote className="text-2xl sm:text-3xl lg:text-4xl font-light italic text-gray-800 mb-8 leading-relaxed">
+                      <blockquote className="text-lg sm:text-xl lg:text-2xl font-light italic text-gray-800 mb-8 leading-relaxed">
                         &ldquo;{testimonial.quote}&rdquo;
                       </blockquote>
                       <div className="flex items-center justify-center gap-4">
