@@ -578,8 +578,8 @@ export default function AdminHomepage() {
 
       {/* Hero Slide Modal */}
       {showHeroModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-3xl rounded-lg bg-white max-h-[92vh] overflow-y-auto">
             <div className="p-6 border-b flex items-center justify-between">
               <h2 className="text-xl font-semibold">
                 {editingHeroSlide ? 'Edit Hero Slide' : 'Add Hero Slide'}
@@ -722,8 +722,8 @@ export default function AdminHomepage() {
 
       {/* Featured Product Modal */}
       {showFeaturedModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-3xl rounded-lg bg-white max-h-[92vh] overflow-y-auto">
             <div className="p-6 border-b flex items-center justify-between">
               <h2 className="text-xl font-semibold">
                 {editingFeatured ? 'Edit Featured Product' : 'Add Featured Product'}

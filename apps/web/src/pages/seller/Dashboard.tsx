@@ -553,8 +553,8 @@ export default function SellerDashboard() {
 
       {/* Stock Update Modal */}
       {showStockModal && selectedFabric && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-lg rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Update Stock: {selectedFabric.name}
             </h3>

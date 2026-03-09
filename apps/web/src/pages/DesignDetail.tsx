@@ -485,8 +485,8 @@ export default function DesignDetail() {
 
       {/* Measurement Guide Modal */}
       {showMeasurementModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[80vh] overflow-auto">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-2xl rounded-2xl bg-white max-h-[92vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-bold">How to Measure</h3>

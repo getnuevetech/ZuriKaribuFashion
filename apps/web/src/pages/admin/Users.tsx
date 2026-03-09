@@ -363,8 +363,8 @@ export default function AdminUsers() {
 
       {/* Action Modal */}
       {showActionModal && selectedUser && actionType && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-md rounded-2xl bg-white p-6 max-h-[92vh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4">
               {actionType === 'activate' && 'Activate User'}
               {actionType === 'suspend' && 'Suspend User'}
@@ -393,8 +393,8 @@ export default function AdminUsers() {
       )}
 
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-2xl rounded-2xl bg-white p-6 max-h-[92vh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4">Add User</h3>
             <form onSubmit={handleCreateUser} className="space-y-4">
               {createError ? (
@@ -480,8 +480,8 @@ export default function AdminUsers() {
       )}
 
       {showEditModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-2xl rounded-2xl bg-white p-6 max-h-[92vh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4">Edit User Profile</h3>
             <form onSubmit={handleEditUser} className="space-y-4">
               {editError ? (

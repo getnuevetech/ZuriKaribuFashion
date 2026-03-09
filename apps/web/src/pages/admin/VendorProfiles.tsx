@@ -407,8 +407,8 @@ export default function AdminVendorProfiles() {
       )}
 
       {selectedProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl bg-white p-6">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-4xl rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
             <div className="mb-4 flex items-start justify-between">
               <div>
                 <h3 className="text-xl font-bold text-gray-900">Vendor Profile Review</h3>
@@ -485,8 +485,8 @@ export default function AdminVendorProfiles() {
       )}
 
       {showAddVendorModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-xl bg-white p-6">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-3xl rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-xl font-bold text-gray-900">Create Vendor (Minimal Profile)</h3>
               <Button size="sm" variant="outline" onClick={() => setShowAddVendorModal(false)}>
