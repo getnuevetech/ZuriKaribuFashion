@@ -161,12 +161,12 @@ const kimiCategories = [
 ];
 
 const kimiHowItWorks = [
-  { id: 1, title: 'Discover Your Style', icon: Search },
-  { id: 2, title: 'Preview Virtually', icon: Eye },
-  { id: 3, title: 'Select Your Fabric', icon: Sparkles },
-  { id: 4, title: 'Pay Securely', icon: CreditCard },
-  { id: 5, title: 'Quality Assured', icon: Star },
-  { id: 6, title: 'Delivered to You', icon: Truck },
+  { id: 1, title: 'Discover Your Style', subtitle: 'Explore curated African designs and fabrics.', icon: Search },
+  { id: 2, title: 'Preview Virtually', subtitle: 'Visualize your outfit before checkout.', icon: Eye },
+  { id: 3, title: 'Select Your Fabric', subtitle: 'Choose textures and colors that match your look.', icon: Sparkles },
+  { id: 4, title: 'Pay Securely', subtitle: 'Complete checkout with protected payment flows.', icon: CreditCard },
+  { id: 5, title: 'Quality Assured', subtitle: 'Every order passes expert review before dispatch.', icon: Star },
+  { id: 6, title: 'Delivered to You', subtitle: 'Receive your order anywhere in the world.', icon: Truck },
 ];
 
 const iconByName: Record<string, any> = {
@@ -545,6 +545,7 @@ export default function Home() {
       (Array.isArray(howItWorksData) && howItWorksData.length > 0 ? howItWorksData : kimiHowItWorks).slice(0, 6).map((item: any, index: number) => ({
         id: Number(item.id ?? index + 1),
         title: asText(item.title, kimiHowItWorks[index % kimiHowItWorks.length].title),
+        subtitle: asText(item.subtitle, item.description, kimiHowItWorks[index % kimiHowItWorks.length].subtitle),
         icon:
           iconByName[asText(item.icon, '')] ||
           iconByNormalizedName[normalizeIconKey(item.icon)] ||
@@ -733,18 +734,17 @@ export default function Home() {
       {sectionVisibility.howItWorks ? (
       <section className="py-16 lg:py-24 bg-gray-50">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <div className="flex flex-wrap justify-center items-center gap-8 lg:gap-16">
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {howItWorks.map((step, index) => (
-              <div key={step.id} className="group flex flex-col items-center relative">
-                <div className="relative w-20 h-20 bg-white rounded-full border border-gray-200 flex items-center justify-center card-hover group-hover:bg-black group-hover:border-black transition-all duration-300">
+              <div key={step.id} className="group flex flex-col items-center text-center relative">
+                <div className="relative w-20 h-20 bg-white rounded-full border border-gray-200 flex items-center justify-center card-hover group-hover:bg-black group-hover:border-black transition-all duration-300 mb-4">
                   <step.icon className="w-8 h-8 text-black/80 group-hover:text-white transition-colors duration-300" />
                   <span className="absolute -top-1 -right-1 w-6 h-6 bg-black text-white rounded-full flex items-center justify-center text-xs font-bold">
                     {index + 1}
                   </span>
                 </div>
-                {index < howItWorks.length - 1 && (
-                  <div className="hidden lg:block absolute w-12 h-px bg-gray-300" style={{ marginLeft: '140px' }} />
-                )}
+                <h3 className="text-sm font-semibold text-gray-900">{step.title}</h3>
+                <p className="mt-1 text-xs text-gray-500 max-w-[180px]">{step.subtitle}</p>
               </div>
             ))}
           </div>
