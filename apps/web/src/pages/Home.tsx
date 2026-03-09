@@ -419,6 +419,7 @@ function ProductCarousel({
   onRight,
   viewAllLink,
   loading,
+  itemWidthClassName = 'w-72',
 }: {
   title: string;
   subtitle: string;
@@ -428,6 +429,7 @@ function ProductCarousel({
   onRight: () => void;
   viewAllLink: string;
   loading: boolean;
+  itemWidthClassName?: string;
 }) {
   return (
     <section className="py-16 lg:py-24 bg-white">
@@ -462,7 +464,7 @@ function ProductCarousel({
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {products.map((product) => (
-              <div key={product.id} className="flex-shrink-0 w-72">
+              <div key={product.id} className={`flex-shrink-0 ${itemWidthClassName}`}>
                 <ProductCard product={product} />
               </div>
             ))}
@@ -491,7 +493,6 @@ export default function Home() {
 
   const { data: featuredData, isLoading: featuredLoading } = useQuery({
     queryKey: ['featuredProducts'],
-    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepage.getAllFeatured();
       return response.success ? response.data : null;
@@ -664,9 +665,15 @@ export default function Home() {
     [heroSlidesData, managedBannersData],
   );
 
-  const featuredDesigns = ((USE_DYNAMIC_HOMEPAGE ? featuredData?.FEATURED_DESIGNS : null) || kimiFeaturedDesigns) as FeaturedProduct[];
-  const featuredRTW = ((USE_DYNAMIC_HOMEPAGE ? featuredData?.FEATURED_READY_TO_WEAR : null) || kimiReadyToWear) as FeaturedProduct[];
-  const featuredFabrics = ((USE_DYNAMIC_HOMEPAGE ? featuredData?.FEATURED_FABRICS : null) || kimiFabrics) as FeaturedProduct[];
+  const featuredDesigns = (Array.isArray(featuredData?.FEATURED_DESIGNS) && featuredData.FEATURED_DESIGNS.length > 0
+    ? featuredData.FEATURED_DESIGNS
+    : kimiFeaturedDesigns) as FeaturedProduct[];
+  const featuredRTW = (Array.isArray(featuredData?.FEATURED_READY_TO_WEAR) && featuredData.FEATURED_READY_TO_WEAR.length > 0
+    ? featuredData.FEATURED_READY_TO_WEAR
+    : kimiReadyToWear) as FeaturedProduct[];
+  const featuredFabrics = (Array.isArray(featuredData?.FEATURED_FABRICS) && featuredData.FEATURED_FABRICS.length > 0
+    ? featuredData.FEATURED_FABRICS
+    : kimiFabrics) as FeaturedProduct[];
   const managedBannersBySection = useMemo(() => {
     const map = new Map<string, ManagedBanner>();
     if (!Array.isArray(managedBannersData)) return map;
@@ -1023,6 +1030,7 @@ export default function Home() {
           onRight={() => scrollStrip(customStripRef, 'right')}
           viewAllLink="/designs"
           loading={featuredLoading}
+          itemWidthClassName="w-56"
         />
       ) : null}
 
@@ -1059,6 +1067,7 @@ export default function Home() {
           onRight={() => scrollStrip(rtwStripRef, 'right')}
           viewAllLink="/ready-to-wear"
           loading={featuredLoading}
+          itemWidthClassName="w-56"
         />
       ) : null}
 
