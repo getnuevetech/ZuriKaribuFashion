@@ -41,6 +41,7 @@ export default function AdminProducts() {
   const [success, setSuccess] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [modalError, setModalError] = useState('');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -120,6 +121,19 @@ export default function AdminProducts() {
   const normalizeOwnerName = (name: string | undefined, role: 'Seller' | 'Designer', id: string) => {
     const trimmed = String(name || '').trim();
     return trimmed || `${role} ${String(id || '').slice(0, 8)}`;
+  };
+
+  const formatApiError = (error: any, fallbackMessage: string) => {
+    const directMessage = String(error?.response?.data?.message || error?.message || '').trim();
+    const issues = error?.response?.data?.issues;
+    if (Array.isArray(issues) && issues.length > 0) {
+      const details = issues
+        .map((issue: any) => String(issue?.message || '').trim())
+        .filter(Boolean)
+        .join(', ');
+      if (details) return details;
+    }
+    return directMessage || fallbackMessage;
   };
 
   useEffect(() => {
@@ -373,6 +387,7 @@ export default function AdminProducts() {
     setEditing(null);
     setError('');
     setSuccess('');
+    setModalError('');
     setForm({
       type: 'FABRIC',
       name: '',
@@ -402,6 +417,7 @@ export default function AdminProducts() {
     setEditing(product);
     setError('');
     setSuccess('');
+    setModalError('');
     setForm({
       type: product.type,
       name: product.name,
@@ -432,11 +448,52 @@ export default function AdminProducts() {
     try {
       setSaving(true);
       setError('');
+      setModalError('');
       const currentType = (editing?.type || form.type) as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+      if (!String(form.name || '').trim()) {
+        setModalError('Product name is required.');
+        setSaving(false);
+        return;
+      }
+      if (!String(form.description || '').trim()) {
+        setModalError('Product description is required.');
+        setSaving(false);
+        return;
+      }
+      if (!Number.isFinite(Number(form.price)) || Number(form.price) <= 0) {
+        setModalError('Base price must be greater than 0.');
+        setSaving(false);
+        return;
+      }
+      if (currentType === 'FABRIC') {
+        if (!form.sellerId) {
+          setModalError('Please select a seller for this fabric product.');
+          setSaving(false);
+          return;
+        }
+        if (!form.materialTypeId) {
+          setModalError('Please select a material type for this fabric product.');
+          setSaving(false);
+          return;
+        }
+      } else {
+        if (!form.designerId) {
+          setModalError('Please select a designer for this product.');
+          setSaving(false);
+          return;
+        }
+        if (!form.categoryId) {
+          setModalError('Please select a category for this product.');
+          setSaving(false);
+          return;
+        }
+      }
       const imagePolicy = getImagePolicy(currentType);
       const imageCount = form.images.length;
       if (imageCount < imagePolicy.min || imageCount > imagePolicy.max) {
-        setError(`${imagePolicy.label} requires between ${imagePolicy.min} and ${imagePolicy.max} images.`);
+        const message = `${imagePolicy.label} requires between ${imagePolicy.min} and ${imagePolicy.max} images.`;
+        setError(message);
+        setModalError(message);
         setSaving(false);
         return;
       }
@@ -489,12 +546,15 @@ export default function AdminProducts() {
       }
       setSuccess(editing ? 'Product updated successfully.' : 'Product created successfully.');
       setShowModal(false);
+      setModalError('');
       setImagesDirty(false);
       setImageUrlInput('');
       await fetchProducts();
     } catch (error) {
       console.error('Failed to save product:', error);
-      setError('Failed to save product.');
+      const message = formatApiError(error, 'Failed to save product.');
+      setError(message);
+      setModalError(message);
     } finally {
       setSaving(false);
     }
@@ -506,6 +566,7 @@ export default function AdminProducts() {
     try {
       setUploadingImage(true);
       setError('');
+      setModalError('');
       const uploadResults = await Promise.all(
         files.map(async (file) => {
           const data = new FormData();
@@ -516,7 +577,9 @@ export default function AdminProducts() {
       );
       const uploadedUrls = uploadResults.filter((url): url is string => Boolean(url));
       if (uploadedUrls.length === 0) {
-        setError('Image upload failed.');
+        const message = 'Image upload failed.';
+        setError(message);
+        setModalError(message);
         return;
       }
       const policy = getImagePolicy((editing?.type || form.type) as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR');
@@ -524,7 +587,9 @@ export default function AdminProducts() {
         const merged = Array.from(new Set([...prev.images, ...uploadedUrls]));
         const trimmed = merged.slice(0, policy.max);
         if (merged.length > policy.max) {
-          setError(`${policy.label} allows a maximum of ${policy.max} images.`);
+          const message = `${policy.label} allows a maximum of ${policy.max} images.`;
+          setError(message);
+          setModalError(message);
         }
         return { ...prev, images: trimmed };
       });
@@ -532,7 +597,9 @@ export default function AdminProducts() {
       setSuccess('Image(s) uploaded successfully.');
     } catch (uploadError) {
       console.error('Failed to upload product image:', uploadError);
-      setError('Failed to upload image.');
+      const message = formatApiError(uploadError, 'Failed to upload image.');
+      setError(message);
+      setModalError(message);
     } finally {
       setUploadingImage(false);
       event.target.value = '';
@@ -541,12 +608,18 @@ export default function AdminProducts() {
 
   const handleAddImageUrl = () => {
     const value = imageUrlInput.trim();
-    if (!value) return;
+    if (!value) {
+      setModalError('Please enter an image URL before adding.');
+      return;
+    }
+    setModalError('');
     const policy = getImagePolicy(activeProductType);
     setForm((prev) => {
       const merged = Array.from(new Set([...prev.images, value])).slice(0, policy.max);
       if (prev.images.length >= policy.max) {
-        setError(`${policy.label} allows a maximum of ${policy.max} images.`);
+        const message = `${policy.label} allows a maximum of ${policy.max} images.`;
+        setError(message);
+        setModalError(message);
       }
       return { ...prev, images: merged };
     });
@@ -945,6 +1018,11 @@ export default function AdminProducts() {
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
           <div className="mx-auto w-full max-w-2xl rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
             <h3 className="mb-4 text-xl font-bold text-gray-900">{editing ? 'Edit Product' : 'Add Product'}</h3>
+            {modalError ? (
+              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {modalError}
+              </div>
+            ) : null}
             <form onSubmit={saveProduct} className="space-y-3">
               {!editing && (
                 <select
@@ -1160,7 +1238,7 @@ export default function AdminProducts() {
                 ) : null}
               </div>
               <div className="flex gap-3 pt-2">
-                <Button type="button" variant="outline" className="flex-1" onClick={() => setShowModal(false)}>Cancel</Button>
+                <Button type="button" variant="outline" className="flex-1" onClick={() => { setShowModal(false); setModalError(''); }}>Cancel</Button>
                 <Button type="submit" className="flex-1" disabled={saving}>{saving ? 'Saving...' : editing ? 'Update Product' : 'Create Product'}</Button>
               </div>
             </form>
