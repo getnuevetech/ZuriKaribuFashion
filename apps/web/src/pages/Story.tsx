@@ -1,7 +1,78 @@
+import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
 import { api } from '../services/api';
+
+const hasHtmlTag = (value: string) => /<\/?[a-z][\s\S]*>/i.test(String(value || ''));
+
+const escapeHtml = (value: string) =>
+  String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const sanitizeHtmlForStory = (raw: string) => {
+  const source = String(raw || '');
+  if (!source.trim()) return '';
+  if (!hasHtmlTag(source)) {
+    return escapeHtml(source).replace(/\n/g, '<br/>');
+  }
+  const parser = new DOMParser();
+  const parsedDoc = parser.parseFromString(source, 'text/html');
+  const allowedTags = new Set([
+    'P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'S',
+    'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+    'UL', 'OL', 'LI', 'BLOCKQUOTE', 'A', 'IMG', 'HR',
+  ]);
+  const isSafeUrl = (value: string, image = false) => {
+    const url = String(value || '').trim().toLowerCase();
+    if (!url) return false;
+    if (url.startsWith('/') || url.startsWith('http://') || url.startsWith('https://')) return true;
+    if (!image && (url.startsWith('mailto:') || url.startsWith('tel:'))) return true;
+    if (image && url.startsWith('data:image/')) return true;
+    return false;
+  };
+  const traverse = (node: Node) => {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const element = node as HTMLElement;
+      const tag = element.tagName.toUpperCase();
+      if (!allowedTags.has(tag)) {
+        const parent = element.parentNode;
+        if (parent) {
+          while (element.firstChild) parent.insertBefore(element.firstChild, element);
+          parent.removeChild(element);
+          return;
+        }
+      } else {
+        Array.from(element.attributes).forEach((attribute) => {
+          const name = attribute.name.toLowerCase();
+          const value = attribute.value;
+          if (tag === 'A') {
+            if (name === 'href' && isSafeUrl(value, false)) return;
+            if (name === 'target' || name === 'rel') return;
+            element.removeAttribute(attribute.name);
+          } else if (tag === 'IMG') {
+            if (name === 'src' && isSafeUrl(value, true)) return;
+            if (name === 'alt' || name === 'title') return;
+            element.removeAttribute(attribute.name);
+          } else {
+            element.removeAttribute(attribute.name);
+          }
+        });
+        if (tag === 'A') {
+          element.setAttribute('target', '_blank');
+          element.setAttribute('rel', 'noopener noreferrer');
+        }
+      }
+    }
+    Array.from(node.childNodes).forEach(traverse);
+  };
+  traverse(parsedDoc.body);
+  return parsedDoc.body.innerHTML;
+};
 
 export default function StoryPage() {
   const { slug = '' } = useParams();
@@ -13,6 +84,7 @@ export default function StoryPage() {
     },
     enabled: slug.trim().length > 0,
   });
+  const safeContentHtml = useMemo(() => sanitizeHtmlForStory(String(data?.content || '')), [data?.content]);
 
   if (isLoading) {
     return (
@@ -57,7 +129,10 @@ export default function StoryPage() {
           ) : null}
         </div>
         {data.excerpt ? <p className="mt-6 text-lg text-gray-700">{data.excerpt}</p> : null}
-        <div className="mt-8 whitespace-pre-wrap leading-8 text-gray-800">{data.content}</div>
+        <div
+          className="prose prose-gray mt-8 max-w-none leading-8 prose-img:rounded-lg prose-img:max-h-[520px] prose-img:object-cover"
+          dangerouslySetInnerHTML={{ __html: safeContentHtml }}
+        />
       </div>
     </article>
   );

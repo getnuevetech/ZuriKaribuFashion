@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Edit2, Trash2, ExternalLink } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
@@ -36,6 +36,36 @@ const slugify = (value: string) =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 200);
 
+const hasHtmlTag = (value: string) => /<\/?[a-z][\s\S]*>/i.test(String(value || ''));
+
+const escapeHtml = (value: string) =>
+  String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const toEditorHtml = (value: string) => {
+  const text = String(value || '');
+  if (!text.trim()) return '<p><br/></p>';
+  if (hasHtmlTag(text)) return text;
+  return `<p>${escapeHtml(text).replace(/\n/g, '<br/>')}</p>`;
+};
+
+const hasMeaningfulEditorContent = (html: string) => {
+  const normalized = String(html || '').trim();
+  if (!normalized) return false;
+  if (/<img[\s>]/i.test(normalized)) return true;
+  const textOnly = normalized
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .trim();
+  return textOnly.length > 0;
+};
+
 export default function AdminBlogs() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,6 +77,10 @@ export default function AdminBlogs() {
   const [blogs, setBlogs] = useState<BlogPost[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<BlogPost | null>(null);
+  const [editorHtml, setEditorHtml] = useState('<p><br/></p>');
+  const [uploadingInlineImage, setUploadingInlineImage] = useState(false);
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const inlineImageInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState({
     title: '',
     slug: '',
@@ -92,6 +126,7 @@ export default function AdminBlogs() {
 
   const openCreateModal = () => {
     setEditing(null);
+    setEditorHtml('<p><br/></p>');
     setForm({
       title: '',
       slug: '',
@@ -108,6 +143,7 @@ export default function AdminBlogs() {
 
   const openEditModal = (blog: BlogPost) => {
     setEditing(blog);
+    setEditorHtml(toEditorHtml(blog.content || ''));
     setForm({
       title: blog.title || '',
       slug: blog.slug || '',
@@ -122,17 +158,70 @@ export default function AdminBlogs() {
     setShowModal(true);
   };
 
+  useEffect(() => {
+    if (!showModal || !editorRef.current) return;
+    editorRef.current.innerHTML = editorHtml || '<p><br/></p>';
+  }, [showModal, editorHtml]);
+
+  const syncEditorToState = () => {
+    const html = editorRef.current?.innerHTML || '';
+    setEditorHtml(html);
+    setForm((prev) => ({ ...prev, content: html }));
+  };
+
+  const runEditorCommand = (command: string, value?: string) => {
+    editorRef.current?.focus();
+    document.execCommand(command, false, value);
+    syncEditorToState();
+  };
+
+  const promptAndInsertLink = () => {
+    const url = window.prompt('Enter link URL');
+    if (!url) return;
+    runEditorCommand('createLink', url.trim());
+  };
+
+  const handleInlineImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingInlineImage(true);
+      const data = new FormData();
+      data.append('image', file);
+      const response = await api.upload.image(data);
+      const imageUrl = response.success ? response.data?.url : '';
+      if (!imageUrl) {
+        setError('Image upload failed.');
+        return;
+      }
+      runEditorCommand('insertImage', imageUrl);
+      setSuccess('Image inserted into content.');
+    } catch (uploadError: any) {
+      console.error('Failed to upload inline blog image:', uploadError);
+      setError(uploadError?.response?.data?.message || 'Failed to upload image.');
+    } finally {
+      setUploadingInlineImage(false);
+      event.target.value = '';
+    }
+  };
+
   const saveBlog = async (event: React.FormEvent) => {
     event.preventDefault();
     try {
       setSaving(true);
       setError('');
       setSuccess('');
+      const contentHtml = editorRef.current?.innerHTML || editorHtml || form.content;
+      if (!hasMeaningfulEditorContent(contentHtml)) {
+        setError('Main content is required.');
+        setSaving(false);
+        return;
+      }
       const payload = {
         title: form.title,
         slug: form.slug || undefined,
         excerpt: form.excerpt || undefined,
-        content: form.content,
+        content: contentHtml,
         audienceType: form.audienceType,
         targetName: form.targetName || undefined,
         targetEntityId: form.targetEntityId || undefined,
@@ -299,15 +388,16 @@ export default function AdminBlogs() {
       </div>
 
       {showModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4">
+          <div className="mx-auto w-full max-w-5xl rounded-lg bg-white shadow-xl max-h-[92vh] overflow-hidden">
             <div className="flex items-center justify-between border-b px-6 py-4">
               <h2 className="text-lg font-semibold text-gray-900">{editing ? 'Edit Blog Post' : 'Create Blog Post'}</h2>
               <button className="text-gray-500 hover:text-gray-700" onClick={() => setShowModal(false)}>
                 ×
               </button>
             </div>
-            <form onSubmit={saveBlog} className="space-y-4 px-6 py-4">
+            <form onSubmit={saveBlog} className="flex flex-col h-[calc(92vh-76px)]">
+              <div className="space-y-4 overflow-y-auto px-6 py-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Title</label>
                 <input
@@ -376,13 +466,40 @@ export default function AdminBlogs() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Content</label>
-                <textarea
-                  value={form.content}
-                  onChange={(e) => setForm((prev) => ({ ...prev, content: e.target.value }))}
-                  className="w-full rounded border px-3 py-2"
-                  rows={8}
-                  required
-                />
+                <div className="rounded border border-gray-300">
+                  <div className="flex flex-wrap items-center gap-2 border-b bg-gray-50 px-3 py-2">
+                    <button type="button" className="rounded border bg-white px-2 py-1 text-xs" onClick={() => runEditorCommand('bold')}>Bold</button>
+                    <button type="button" className="rounded border bg-white px-2 py-1 text-xs" onClick={() => runEditorCommand('italic')}>Italic</button>
+                    <button type="button" className="rounded border bg-white px-2 py-1 text-xs" onClick={() => runEditorCommand('underline')}>Underline</button>
+                    <button type="button" className="rounded border bg-white px-2 py-1 text-xs" onClick={() => runEditorCommand('formatBlock', 'H2')}>H2</button>
+                    <button type="button" className="rounded border bg-white px-2 py-1 text-xs" onClick={() => runEditorCommand('formatBlock', 'H3')}>H3</button>
+                    <button type="button" className="rounded border bg-white px-2 py-1 text-xs" onClick={() => runEditorCommand('insertUnorderedList')}>Bullets</button>
+                    <button type="button" className="rounded border bg-white px-2 py-1 text-xs" onClick={() => runEditorCommand('insertOrderedList')}>Numbers</button>
+                    <button type="button" className="rounded border bg-white px-2 py-1 text-xs" onClick={() => runEditorCommand('formatBlock', 'BLOCKQUOTE')}>Quote</button>
+                    <button type="button" className="rounded border bg-white px-2 py-1 text-xs" onClick={promptAndInsertLink}>Link</button>
+                    <button
+                      type="button"
+                      className="rounded border bg-white px-2 py-1 text-xs"
+                      onClick={() => inlineImageInputRef.current?.click()}
+                      disabled={uploadingInlineImage}
+                    >
+                      {uploadingInlineImage ? 'Uploading image...' : 'Image'}
+                    </button>
+                    <input
+                      ref={inlineImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleInlineImageUpload}
+                    />
+                  </div>
+                  <div
+                    ref={editorRef}
+                    contentEditable
+                    onInput={syncEditorToState}
+                    className="min-h-[320px] w-full px-3 py-2 focus:outline-none"
+                  />
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Cover Image URL (optional)</label>
@@ -404,7 +521,8 @@ export default function AdminBlogs() {
                 />
                 Publish now
               </label>
-              <div className="flex justify-end gap-2 border-t pt-4">
+              </div>
+              <div className="flex justify-end gap-2 border-t px-6 py-4">
                 <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
                   Cancel
                 </Button>
