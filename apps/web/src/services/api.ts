@@ -322,6 +322,12 @@ const designerOptionsReadPaths = [
   '/homepage/admin/designer-options',
   '/admin/designer-options',
 ];
+const designerSpotlightsReadPaths = [
+  '/homepage-sections/designer-spotlights',
+  '/homepage-sections/designer-spotlight',
+  '/homepage/designer-spotlights',
+  '/homepage/designer-spotlight',
+];
 
 type NormalizedDesignerOption = {
   id: string;
@@ -557,6 +563,37 @@ async function readDesignerOptionsWithFallback<T>() {
     } as T;
   }
   throw lastError ?? new Error('Designer options route not found.');
+}
+
+async function readDesignerSpotlightsWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of designerSpotlightsReadPaths) {
+    try {
+      const response = await apiService.get<any>(path);
+      const raw = response?.data;
+      if (Array.isArray(raw)) {
+        return {
+          success: true,
+          data: raw,
+        } as T;
+      }
+      if (raw && typeof raw === 'object') {
+        return {
+          success: true,
+          data: [raw],
+        } as T;
+      }
+      return {
+        success: true,
+        data: [],
+      } as T;
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Designer spotlight route not found.');
 }
 
 async function readCountryImageGenerationWithFallback<T>() {
@@ -1480,7 +1517,7 @@ const homepageSectionsApi = {
     apiService.get<{ success: boolean; data: any }>('/homepage-sections/designer-spotlight'),
 
   getDesignerSpotlights: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/designer-spotlights'),
+    readDesignerSpotlightsWithFallback<{ success: boolean; data: any[] }>(),
 
   getHeritage: () =>
     apiService.get<{ success: boolean; data: any }>('/homepage-sections/heritage'),
