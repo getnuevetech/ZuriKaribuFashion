@@ -71,6 +71,67 @@ const isRouteNotFoundMessageError = (error: unknown) => {
 const isRetryableRouteError = (error: unknown) =>
   isRouteNotFoundError(error) || isMethodNotAllowedError(error) || isRouteNotFoundMessageError(error);
 
+type TopStripPayload = {
+  messages: string[];
+  separator: string;
+  repeatCount: number;
+  animationSeconds: number;
+  textColor: string;
+  backgroundColor: string;
+};
+
+const TOP_STRIP_DEFAULTS: TopStripPayload = {
+  messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
+  separator: '•',
+  repeatCount: 4,
+  animationSeconds: 20,
+  textColor: '#ffffff',
+  backgroundColor: '#000000',
+};
+
+const TOP_STRIP_BANNER_SECTION = 'TOP_STRIP';
+const TOP_STRIP_BANNER_PREFIX = 'TOP_STRIP_JSON:';
+const TOP_STRIP_BANNER_PLACEHOLDER_IMAGE =
+  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+
+const normalizeHexColor = (value: unknown, fallback: string) => {
+  const trimmed = String(value || '').trim();
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(trimmed) ? trimmed.toLowerCase() : fallback;
+};
+
+const normalizeTopStripPayload = (raw: unknown): TopStripPayload => {
+  if (!raw || typeof raw !== 'object') return { ...TOP_STRIP_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const messages = Array.isArray(row.messages)
+    ? row.messages.map((entry) => String(entry || '').trim()).filter(Boolean)
+    : [];
+  const repeatCount = Number(row.repeatCount);
+  const animationSeconds = Number(row.animationSeconds);
+  const separator = String(row.separator || '').trim();
+  return {
+    messages: messages.length > 0 ? messages : [...TOP_STRIP_DEFAULTS.messages],
+    separator: separator.length > 0 ? separator.slice(0, 8) : TOP_STRIP_DEFAULTS.separator,
+    repeatCount: Number.isFinite(repeatCount) ? Math.max(2, Math.min(12, Math.round(repeatCount))) : TOP_STRIP_DEFAULTS.repeatCount,
+    animationSeconds: Number.isFinite(animationSeconds)
+      ? Math.max(8, Math.min(120, Math.round(animationSeconds)))
+      : TOP_STRIP_DEFAULTS.animationSeconds,
+    textColor: normalizeHexColor(row.textColor, TOP_STRIP_DEFAULTS.textColor),
+    backgroundColor: normalizeHexColor(row.backgroundColor, TOP_STRIP_DEFAULTS.backgroundColor),
+  };
+};
+
+const parseTopStripPayloadFromBanner = (banner: any): TopStripPayload | null => {
+  const ctaLink = String(banner?.ctaLink || '');
+  if (!ctaLink.startsWith(TOP_STRIP_BANNER_PREFIX)) return null;
+  try {
+    const encoded = ctaLink.slice(TOP_STRIP_BANNER_PREFIX.length);
+    const parsed = JSON.parse(decodeURIComponent(encoded));
+    return normalizeTopStripPayload(parsed);
+  } catch {
+    return null;
+  }
+};
+
 const topStripReadPaths = [
   '/homepage-sections/admin/top-strip',
   '/homepage/admin/top-strip',
@@ -89,7 +150,7 @@ const topStripWritePaths = [
   '/admin/homepage-sections/top-strip',
 ];
 
-async function readTopStripWithFallback<T>() {
+async function readTopStripWithFallback<T>(mode: 'admin' | 'public') {
   let lastError: unknown = null;
   for (const path of topStripReadPaths) {
     try {
@@ -102,6 +163,34 @@ async function readTopStripWithFallback<T>() {
       throw error;
     }
   }
+
+  try {
+    if (mode === 'admin') {
+      const adminBanners = await apiService.get<{ success: boolean; data: any[] }>('/banners/admin/all');
+      const topStripBanner = (adminBanners.data || []).find(
+        (banner: any) => String(banner?.section || '').toUpperCase() === TOP_STRIP_BANNER_SECTION
+      );
+      const parsed = parseTopStripPayloadFromBanner(topStripBanner);
+      return {
+        success: true,
+        data: parsed || { ...TOP_STRIP_DEFAULTS },
+      } as T;
+    }
+    const publicBanners = await apiService.get<{ success: boolean; data: any[] }>('/banners', {
+      params: { section: TOP_STRIP_BANNER_SECTION },
+    });
+    const topStripBanner = Array.isArray(publicBanners.data) ? publicBanners.data[0] : null;
+    const parsed = parseTopStripPayloadFromBanner(topStripBanner);
+    return {
+      success: true,
+      data: parsed || { ...TOP_STRIP_DEFAULTS },
+    } as T;
+  } catch (bannerFallbackError) {
+    if (!isRetryableRouteError(bannerFallbackError)) {
+      throw bannerFallbackError;
+    }
+  }
+
   throw lastError ?? new Error('Top strip route not found.');
 }
 
@@ -125,6 +214,42 @@ async function writeTopStripWithFallback<T>(data: unknown) {
       }
     }
   }
+
+  try {
+    const normalized = normalizeTopStripPayload(data);
+    const payloadString = `${TOP_STRIP_BANNER_PREFIX}${encodeURIComponent(JSON.stringify(normalized))}`;
+    const adminBanners = await apiService.get<{ success: boolean; data: any[] }>('/banners/admin/all');
+    const topStripBanner = (adminBanners.data || []).find(
+      (banner: any) => String(banner?.section || '').toUpperCase() === TOP_STRIP_BANNER_SECTION
+    );
+    const payload = {
+      name: topStripBanner?.name || 'Top Strip Settings',
+      section: TOP_STRIP_BANNER_SECTION,
+      title: topStripBanner?.title || 'Top Strip',
+      subtitle: normalized.messages.join(' | '),
+      ctaText: 'SYSTEM_TOP_STRIP',
+      ctaLink: payloadString,
+      images:
+        Array.isArray(topStripBanner?.images) && topStripBanner.images.length > 0
+          ? topStripBanner.images
+          : [TOP_STRIP_BANNER_PLACEHOLDER_IMAGE],
+      isActive: true,
+      displayOrder: Number(topStripBanner?.displayOrder || 0),
+    };
+    const response = topStripBanner?.id
+      ? await apiService.put<{ success: boolean; data: any }>(`/banners/${topStripBanner.id}`, payload)
+      : await apiService.post<{ success: boolean; data: any }>('/banners', payload);
+    const parsed = parseTopStripPayloadFromBanner(response?.data);
+    return {
+      success: true,
+      data: parsed || normalized,
+    } as T;
+  } catch (bannerWriteError) {
+    if (!isRetryableRouteError(bannerWriteError)) {
+      throw bannerWriteError;
+    }
+  }
+
   throw lastError ?? new Error('Top strip route not found.');
 }
 
@@ -923,7 +1048,7 @@ const homepageSectionsApi = {
         textColor: string;
         backgroundColor: string;
       };
-    }>(),
+    }>('public'),
 
   getCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/countries'),
@@ -993,7 +1118,7 @@ const homepageSectionsApi = {
         source?: 'DATABASE' | 'DEFAULT';
         updatedAt?: string | null;
       };
-    }>(),
+    }>('admin'),
 
   updateAdminTopStrip: (data: {
     messages: string[];
