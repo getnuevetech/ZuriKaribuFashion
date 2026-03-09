@@ -253,6 +253,53 @@ async function writeTopStripWithFallback<T>(data: unknown) {
   throw lastError ?? new Error('Top strip route not found.');
 }
 
+const countryImageGenerationPaths = [
+  '/homepage-sections/admin/country-image-generation',
+  '/homepage/admin/country-image-generation',
+  '/admin/country-image-generation',
+  '/admin/homepage/country-image-generation',
+  '/admin/homepage-sections/country-image-generation',
+];
+
+async function readCountryImageGenerationWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of countryImageGenerationPaths) {
+    try {
+      return await apiService.get<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) {
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Country image generation route not found.');
+}
+
+async function writeCountryImageGenerationWithFallback<T>(data: unknown) {
+  let lastError: unknown = null;
+  for (const path of countryImageGenerationPaths) {
+    try {
+      return await apiService.put<T>(path, data);
+    } catch (putError) {
+      lastError = putError;
+      if (!isRetryableRouteError(putError)) {
+        throw putError;
+      }
+    }
+    try {
+      return await apiService.patch<T>(path, data);
+    } catch (patchError) {
+      lastError = patchError;
+      if (!isRetryableRouteError(patchError)) {
+        throw patchError;
+      }
+    }
+  }
+  throw lastError ?? new Error('Country image generation route not found.');
+}
+
 // Auth API
 const authApi = {
   login: (email: string, password: string) =>
@@ -1121,7 +1168,7 @@ const homepageSectionsApi = {
     }>('admin'),
 
   getAdminCountryImageGeneration: () =>
-    apiService.get<{
+    readCountryImageGenerationWithFallback<{
       success: boolean;
       data: {
         enabled: boolean;
@@ -1132,7 +1179,7 @@ const homepageSectionsApi = {
         responseImagePath: string;
         requestMethod: 'GET' | 'POST';
       };
-    }>('/homepage-sections/admin/country-image-generation'),
+    }>(),
 
   updateAdminCountryImageGeneration: (data: {
     enabled?: boolean;
@@ -1143,7 +1190,7 @@ const homepageSectionsApi = {
     responseImagePath?: string;
     requestMethod?: 'GET' | 'POST';
   }) =>
-    apiService.put<{
+    writeCountryImageGenerationWithFallback<{
       success: boolean;
       data: {
         enabled: boolean;
@@ -1154,7 +1201,7 @@ const homepageSectionsApi = {
         responseImagePath: string;
         requestMethod: 'GET' | 'POST';
       };
-    }>('/homepage-sections/admin/country-image-generation', data),
+    }>(data),
 
   updateAdminTopStrip: (data: {
     messages: string[];

@@ -21,6 +21,7 @@ function parsePagination(pageValue: unknown, limitValue: unknown, defaultLimit =
 }
 
 const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
+const HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY = 'HOMEPAGE_COUNTRY_IMAGE_GENERATION';
 const ADMIN_TOP_STRIP_DEFAULTS = {
   messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
   separator: '•',
@@ -36,6 +37,24 @@ const adminTopStripUpdateSchema = z.object({
   animationSeconds: z.coerce.number().int().min(8).max(120).optional(),
   textColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
   backgroundColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+});
+const ADMIN_COUNTRY_IMAGE_GENERATION_DEFAULTS = {
+  enabled: true,
+  apiUrl: 'https://image.pollinations.ai/prompt/{prompt}',
+  apiKey: '',
+  model: 'flux',
+  promptTemplate: 'High quality fashion editorial image inspired by {country}. Keywords: {keywords}. Fabrics: {fabrics}.',
+  responseImagePath: 'url',
+  requestMethod: 'GET' as 'GET' | 'POST',
+};
+const adminCountryImageGenerationUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  apiUrl: z.string().trim().optional(),
+  apiKey: z.string().trim().optional(),
+  model: z.string().trim().optional(),
+  promptTemplate: z.string().trim().min(1).optional(),
+  responseImagePath: z.string().trim().min(1).optional(),
+  requestMethod: z.enum(['GET', 'POST']).optional(),
 });
 
 const normalizeHexColor = (value: unknown, fallback: string) => {
@@ -66,6 +85,28 @@ const normalizeAdminTopStripSettings = (raw: unknown) => {
       : ADMIN_TOP_STRIP_DEFAULTS.animationSeconds,
     textColor: normalizeHexColor(row.textColor, ADMIN_TOP_STRIP_DEFAULTS.textColor),
     backgroundColor: normalizeHexColor(row.backgroundColor, ADMIN_TOP_STRIP_DEFAULTS.backgroundColor),
+  };
+};
+
+const normalizeAdminCountryImageGenerationSettings = (raw: unknown) => {
+  if (!raw || typeof raw !== 'object') return { ...ADMIN_COUNTRY_IMAGE_GENERATION_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const requestMethod = String(row.requestMethod || '').toUpperCase();
+  return {
+    enabled:
+      typeof row.enabled === 'boolean' ? row.enabled : ADMIN_COUNTRY_IMAGE_GENERATION_DEFAULTS.enabled,
+    apiUrl: typeof row.apiUrl === 'string' ? row.apiUrl.trim() : ADMIN_COUNTRY_IMAGE_GENERATION_DEFAULTS.apiUrl,
+    apiKey: typeof row.apiKey === 'string' ? row.apiKey.trim() : ADMIN_COUNTRY_IMAGE_GENERATION_DEFAULTS.apiKey,
+    model: typeof row.model === 'string' ? row.model.trim() : ADMIN_COUNTRY_IMAGE_GENERATION_DEFAULTS.model,
+    promptTemplate:
+      typeof row.promptTemplate === 'string' && row.promptTemplate.trim().length > 0
+        ? row.promptTemplate.trim()
+        : ADMIN_COUNTRY_IMAGE_GENERATION_DEFAULTS.promptTemplate,
+    responseImagePath:
+      typeof row.responseImagePath === 'string' && row.responseImagePath.trim().length > 0
+        ? row.responseImagePath.trim()
+        : ADMIN_COUNTRY_IMAGE_GENERATION_DEFAULTS.responseImagePath,
+    requestMethod: requestMethod === 'POST' ? 'POST' : 'GET',
   };
 };
 
@@ -128,6 +169,54 @@ const saveAdminTopStripSettings = async (input: unknown) => {
      VALUES ($1, $2, $3, NOW(), NOW())`,
     randomUUID(),
     HOMEPAGE_TOP_STRIP_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+
+const readAdminCountryImageGenerationSettings = async () => {
+  await ensureHomepageSectionSettingTable();
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return { rowId: null as string | null, settings: { ...ADMIN_COUNTRY_IMAGE_GENERATION_DEFAULTS } };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizeAdminCountryImageGenerationSettings(JSON.parse(String(row.value || '{}'))),
+    };
+  } catch {
+    return { rowId: String(row.id), settings: { ...ADMIN_COUNTRY_IMAGE_GENERATION_DEFAULTS } };
+  }
+};
+
+const saveAdminCountryImageGenerationSettings = async (input: unknown) => {
+  const parsed = adminCountryImageGenerationUpdateSchema.parse(input);
+  const merged = normalizeAdminCountryImageGenerationSettings(parsed);
+  const existing = await readAdminCountryImageGenerationSettings();
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY,
     payload
   );
   return merged;
@@ -3139,6 +3228,42 @@ router.patch('/top-strip', async (req, res) => {
     }
     console.error('Error updating admin top strip settings:', error);
     res.status(500).json({ success: false, message: 'Failed to update top strip settings.' });
+  }
+});
+
+router.get('/country-image-generation', authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings } = await readAdminCountryImageGenerationSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching admin country image generation settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch country image generation settings.' });
+  }
+});
+
+router.put('/country-image-generation', authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveAdminCountryImageGenerationSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating admin country image generation settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update country image generation settings.' });
+  }
+});
+
+router.patch('/country-image-generation', authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveAdminCountryImageGenerationSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating admin country image generation settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update country image generation settings.' });
   }
 });
 
