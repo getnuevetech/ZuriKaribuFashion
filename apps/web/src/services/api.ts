@@ -78,6 +78,7 @@ type TopStripPayload = {
   animationSeconds: number;
   fontSize: number;
   isBold: boolean;
+  pauseOnHover: boolean;
   textColor: string;
   backgroundColor: string;
 };
@@ -89,6 +90,7 @@ const TOP_STRIP_DEFAULTS: TopStripPayload = {
   animationSeconds: 20,
   fontSize: 12,
   isBold: false,
+  pauseOnHover: true,
   textColor: '#ffffff',
   backgroundColor: '#000000',
 };
@@ -112,6 +114,7 @@ const normalizeTopStripPayload = (raw: unknown): TopStripPayload => {
   const repeatCount = Number(row.repeatCount);
   const animationSeconds = Number(row.animationSeconds);
   const fontSize = Number(row.fontSize);
+  const pauseOnHover = typeof row.pauseOnHover === 'boolean' ? row.pauseOnHover : TOP_STRIP_DEFAULTS.pauseOnHover;
   const separator = String(row.separator || '').trim();
   return {
     messages: messages.length > 0 ? messages : [...TOP_STRIP_DEFAULTS.messages],
@@ -122,6 +125,7 @@ const normalizeTopStripPayload = (raw: unknown): TopStripPayload => {
       : TOP_STRIP_DEFAULTS.animationSeconds,
     fontSize: Number.isFinite(fontSize) ? Math.max(10, Math.min(40, Math.round(fontSize))) : TOP_STRIP_DEFAULTS.fontSize,
     isBold: typeof row.isBold === 'boolean' ? row.isBold : TOP_STRIP_DEFAULTS.isBold,
+    pauseOnHover,
     textColor: normalizeHexColor(row.textColor, TOP_STRIP_DEFAULTS.textColor),
     backgroundColor: normalizeHexColor(row.backgroundColor, TOP_STRIP_DEFAULTS.backgroundColor),
   };
@@ -1101,6 +1105,7 @@ const homepageSectionsApi = {
         animationSeconds: number;
         fontSize: number;
         isBold: boolean;
+        pauseOnHover: boolean;
         textColor: string;
         backgroundColor: string;
       };
@@ -1171,6 +1176,7 @@ const homepageSectionsApi = {
         animationSeconds: number;
         fontSize: number;
         isBold: boolean;
+        pauseOnHover: boolean;
         textColor: string;
         backgroundColor: string;
         source?: 'DATABASE' | 'DEFAULT';
@@ -1221,6 +1227,7 @@ const homepageSectionsApi = {
     animationSeconds?: number;
     fontSize?: number;
     isBold?: boolean;
+    pauseOnHover?: boolean;
     textColor?: string;
     backgroundColor?: string;
   }) =>
@@ -1233,6 +1240,7 @@ const homepageSectionsApi = {
         animationSeconds: number;
         fontSize: number;
         isBold: boolean;
+        pauseOnHover: boolean;
         textColor: string;
         backgroundColor: string;
       };

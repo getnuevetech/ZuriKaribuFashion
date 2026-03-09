@@ -14,6 +14,7 @@ type TopStripSettings = {
   animationSeconds: number;
   fontSize: number;
   isBold: boolean;
+  pauseOnHover: boolean;
   textColor: string;
   backgroundColor: string;
 };
@@ -25,6 +26,7 @@ const TOP_STRIP_DEFAULTS: TopStripSettings = {
   animationSeconds: 20,
   fontSize: 12,
   isBold: false,
+  pauseOnHover: true,
   textColor: '#ffffff',
   backgroundColor: '#000000',
 };
@@ -90,6 +92,7 @@ const normalizeTopStripSettings = (raw: unknown): TopStripSettings => {
   const repeatCountRaw = Number(row.repeatCount);
   const animationSecondsRaw = Number(row.animationSeconds);
   const fontSizeRaw = Number(row.fontSize);
+  const pauseOnHover = typeof row.pauseOnHover === 'boolean' ? row.pauseOnHover : TOP_STRIP_DEFAULTS.pauseOnHover;
   return {
     messages: messages.length > 0 ? messages : [...TOP_STRIP_DEFAULTS.messages],
     separator,
@@ -99,6 +102,7 @@ const normalizeTopStripSettings = (raw: unknown): TopStripSettings => {
       : TOP_STRIP_DEFAULTS.animationSeconds,
     fontSize: Number.isFinite(fontSizeRaw) ? Math.max(10, Math.min(40, Math.round(fontSizeRaw))) : TOP_STRIP_DEFAULTS.fontSize,
     isBold: typeof row.isBold === 'boolean' ? row.isBold : TOP_STRIP_DEFAULTS.isBold,
+    pauseOnHover,
     textColor: normalizeHexColor(row.textColor, TOP_STRIP_DEFAULTS.textColor),
     backgroundColor: normalizeHexColor(row.backgroundColor, TOP_STRIP_DEFAULTS.backgroundColor),
   };

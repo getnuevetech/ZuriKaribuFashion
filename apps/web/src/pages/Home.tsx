@@ -178,6 +178,25 @@ const iconByName: Record<string, any> = {
   Truck,
 };
 
+const normalizeIconKey = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
+
+const iconByNormalizedName: Record<string, any> = {
+  search: Search,
+  eye: Eye,
+  sparkles: Sparkles,
+  sparkle: Sparkles,
+  creditcard: CreditCard,
+  card: CreditCard,
+  star: Star,
+  truck: Truck,
+  delivery: Truck,
+  shipped: Truck,
+};
+
 const kimiFeaturedDesigns: FeaturedProduct[] = [
   { id: '1', name: 'Exclusive Gorgeous', price: 1428.57, image: 'https://picsum.photos/seed/kimi-custom-1/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
   { id: '2', name: 'My Skkentele', price: 714.29, image: 'https://picsum.photos/seed/kimi-custom-2/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
@@ -396,7 +415,6 @@ export default function Home() {
 
   const { data: howItWorksData } = useQuery({
     queryKey: ['homepageHowItWorks'],
-    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getHowItWorks();
       return response.success ? response.data : null;
@@ -524,10 +542,13 @@ export default function Home() {
 
   const howItWorks = useMemo(
     () =>
-      (USE_DYNAMIC_HOMEPAGE && Array.isArray(howItWorksData) && howItWorksData.length > 0 ? howItWorksData : kimiHowItWorks).slice(0, 6).map((item: any, index: number) => ({
+      (Array.isArray(howItWorksData) && howItWorksData.length > 0 ? howItWorksData : kimiHowItWorks).slice(0, 6).map((item: any, index: number) => ({
         id: Number(item.id ?? index + 1),
         title: asText(item.title, kimiHowItWorks[index % kimiHowItWorks.length].title),
-        icon: iconByName[asText(item.icon, '')] || kimiHowItWorks[index % kimiHowItWorks.length].icon,
+        icon:
+          iconByName[asText(item.icon, '')] ||
+          iconByNormalizedName[normalizeIconKey(item.icon)] ||
+          kimiHowItWorks[index % kimiHowItWorks.length].icon,
       })),
     [howItWorksData],
   );

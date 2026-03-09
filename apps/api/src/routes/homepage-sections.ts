@@ -390,6 +390,7 @@ const topStripUpdateSchema = z.object({
   animationSeconds: z.number().int().min(8).max(120).optional(),
   fontSize: z.number().int().min(10).max(40).optional(),
   isBold: z.boolean().optional(),
+  pauseOnHover: z.boolean().optional(),
   textColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
   backgroundColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
 });
@@ -401,6 +402,7 @@ type TopStripSettings = {
   animationSeconds: number;
   fontSize: number;
   isBold: boolean;
+  pauseOnHover: boolean;
   textColor: string;
   backgroundColor: string;
 };
@@ -412,6 +414,7 @@ const TOP_STRIP_DEFAULTS: TopStripSettings = {
   animationSeconds: 20,
   fontSize: 12,
   isBold: false,
+  pauseOnHover: true,
   textColor: '#ffffff',
   backgroundColor: '#000000',
 };
@@ -435,6 +438,7 @@ const normalizeTopStripSettings = (raw: unknown): TopStripSettings => {
   const animationSeconds = getNumber(row.animationSeconds) ?? TOP_STRIP_DEFAULTS.animationSeconds;
   const fontSize = getNumber(row.fontSize) ?? TOP_STRIP_DEFAULTS.fontSize;
   const isBold = getBoolean(row.isBold) ?? TOP_STRIP_DEFAULTS.isBold;
+  const pauseOnHover = getBoolean(row.pauseOnHover) ?? TOP_STRIP_DEFAULTS.pauseOnHover;
   const textColor = normalizeHexColor(row.textColor, TOP_STRIP_DEFAULTS.textColor);
   const backgroundColor = normalizeHexColor(row.backgroundColor, TOP_STRIP_DEFAULTS.backgroundColor);
   return {
@@ -444,6 +448,7 @@ const normalizeTopStripSettings = (raw: unknown): TopStripSettings => {
     animationSeconds: Math.max(8, Math.min(120, Math.round(animationSeconds))),
     fontSize: Math.max(10, Math.min(40, Math.round(fontSize))),
     isBold: Boolean(isBold),
+    pauseOnHover: Boolean(pauseOnHover),
     textColor,
     backgroundColor,
   };

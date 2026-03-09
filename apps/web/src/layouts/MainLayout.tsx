@@ -16,6 +16,7 @@ const TOP_STRIP_DEFAULTS = {
   animationSeconds: 20,
   fontSize: 12,
   isBold: false,
+  pauseOnHover: true,
   textColor: '#ffffff',
   backgroundColor: '#000000',
 };
@@ -23,6 +24,7 @@ const TOP_STRIP_DEFAULTS = {
 export default function MainLayout() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isTopStripHovered, setIsTopStripHovered] = useState(false);
   const { isAuthenticated, logout, user } = useAuthStore();
   const { getItemCount } = useCartStore();
   const navigate = useNavigate();
@@ -71,6 +73,7 @@ export default function MainLayout() {
   );
   const topStripFontSize = Math.max(10, Math.min(40, Number(topStripContent?.fontSize || TOP_STRIP_DEFAULTS.fontSize)));
   const topStripIsBold = Boolean(topStripContent?.isBold ?? TOP_STRIP_DEFAULTS.isBold);
+  const topStripPauseOnHover = Boolean(topStripContent?.pauseOnHover ?? TOP_STRIP_DEFAULTS.pauseOnHover);
   const topStripTextColor = String(topStripContent?.textColor || TOP_STRIP_DEFAULTS.textColor);
   const topStripBackgroundColor = String(topStripContent?.backgroundColor || TOP_STRIP_DEFAULTS.backgroundColor);
 
@@ -103,8 +106,16 @@ export default function MainLayout() {
             backgroundColor: topStripBackgroundColor,
             color: topStripTextColor,
           }}
+          onMouseEnter={() => setIsTopStripHovered(true)}
+          onMouseLeave={() => setIsTopStripHovered(false)}
         >
-          <div className="animate-marquee whitespace-nowrap flex gap-8" style={{ animationDuration: `${topStripAnimationSeconds}s` }}>
+          <div
+            className="animate-marquee whitespace-nowrap flex gap-8"
+            style={{
+              animationDuration: `${topStripAnimationSeconds}s`,
+              animationPlayState: topStripPauseOnHover && isTopStripHovered ? 'paused' : 'running',
+            }}
+          >
             {[...Array(topStripRepeatCount)].map((_, i) => (
               <div
                 key={i}

@@ -13,6 +13,7 @@ interface TopStripContent {
   animationSeconds: number;
   fontSize: number;
   isBold: boolean;
+  pauseOnHover: boolean;
   textColor: string;
   backgroundColor: string;
   source?: 'DATABASE' | 'DEFAULT';
@@ -778,6 +779,9 @@ function TopStripTable({ data, onEdit }: { data: TopStripContent | null; onEdit:
               <span className="rounded-full bg-gray-100 px-2 py-1">
                 Weight: {data?.isBold ? 'Bold' : 'Regular'}
               </span>
+              <span className="rounded-full bg-gray-100 px-2 py-1">
+                Pause on hover: {data?.pauseOnHover ? 'Enabled' : 'Disabled'}
+              </span>
               <span className="rounded-full bg-gray-100 px-2 py-1 inline-flex items-center gap-2">
                 <span
                   className="inline-block h-3 w-3 rounded border border-gray-300"
@@ -1176,6 +1180,7 @@ function SectionModal({
         isBold: Boolean(item.isBold),
         textColor: item.textColor || '#ffffff',
         backgroundColor: item.backgroundColor || '#000000',
+        pauseOnHover: Boolean(item.pauseOnHover ?? true),
       };
     }
     return item || getDefaultFormData(type);
@@ -1195,6 +1200,7 @@ function SectionModal({
           animationSeconds: 20,
           fontSize: 12,
           isBold: false,
+          pauseOnHover: true,
           textColor: '#ffffff',
           backgroundColor: '#000000',
         };
@@ -1319,6 +1325,7 @@ function SectionModal({
             animationSeconds: Number(formData.animationSeconds) || 20,
             fontSize: Number(formData.fontSize) || 12,
             isBold: Boolean(formData.isBold),
+            pauseOnHover: Boolean(formData.pauseOnHover ?? true),
             textColor: String(formData.textColor || '#ffffff').trim().toLowerCase(),
             backgroundColor: String(formData.backgroundColor || '#000000').trim().toLowerCase(),
           };
@@ -1523,6 +1530,18 @@ function SectionModal({
               />
               <label htmlFor="top-strip-bold" className="text-sm font-medium text-gray-700">
                 Bold text
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="top-strip-pause-on-hover"
+                type="checkbox"
+                checked={!!formData.pauseOnHover}
+                onChange={(e) => setFormData({ ...formData, pauseOnHover: e.target.checked })}
+                className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+              />
+              <label htmlFor="top-strip-pause-on-hover" className="text-sm font-medium text-gray-700">
+                Pause marquee on mouse hover
               </label>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

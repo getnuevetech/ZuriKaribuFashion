@@ -29,6 +29,7 @@ const ADMIN_TOP_STRIP_DEFAULTS = {
   animationSeconds: 20,
   fontSize: 12,
   isBold: false,
+  pauseOnHover: true,
   textColor: '#ffffff',
   backgroundColor: '#000000',
 };
@@ -39,6 +40,7 @@ const adminTopStripUpdateSchema = z.object({
   animationSeconds: z.coerce.number().int().min(8).max(120).optional(),
   fontSize: z.coerce.number().int().min(10).max(40).optional(),
   isBold: z.boolean().optional(),
+  pauseOnHover: z.boolean().optional(),
   textColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
   backgroundColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
 });
@@ -91,6 +93,8 @@ const normalizeAdminTopStripSettings = (raw: unknown) => {
       ? Math.max(10, Math.min(40, Math.round(Number(row.fontSize))))
       : ADMIN_TOP_STRIP_DEFAULTS.fontSize,
     isBold: typeof row.isBold === 'boolean' ? row.isBold : ADMIN_TOP_STRIP_DEFAULTS.isBold,
+    pauseOnHover:
+      typeof row.pauseOnHover === 'boolean' ? row.pauseOnHover : ADMIN_TOP_STRIP_DEFAULTS.pauseOnHover,
     textColor: normalizeHexColor(row.textColor, ADMIN_TOP_STRIP_DEFAULTS.textColor),
     backgroundColor: normalizeHexColor(row.backgroundColor, ADMIN_TOP_STRIP_DEFAULTS.backgroundColor),
   };
