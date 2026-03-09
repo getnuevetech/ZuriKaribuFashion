@@ -1,4 +1,4 @@
-import { Outlet, Link, useNavigate } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Menu, ShoppingBag, User, X } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -23,11 +23,12 @@ const TOP_STRIP_DEFAULTS = {
 
 export default function MainLayout() {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isHamburgerOpen, setIsHamburgerOpen] = useState(false);
   const [isTopStripHovered, setIsTopStripHovered] = useState(false);
   const { isAuthenticated, logout, user } = useAuthStore();
   const { getItemCount } = useCartStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const { data: footerContent } = useQuery({
     queryKey: ['homepageFooterForHeader'],
     enabled: USE_DYNAMIC_HOMEPAGE,
@@ -90,12 +91,27 @@ export default function MainLayout() {
     navigate('/');
   };
 
-  const navLinks = [
-    { label: 'Home', href: '#' },
-    { label: 'Shop', href: '#shop' },
-    { label: 'Designers', href: '#designers' },
-    { label: 'About', href: '#about' },
+  const leftNavLinks = [
+    { label: 'Home', href: '/' },
+    { label: 'Shop', href: '/#shop' },
   ];
+  const rightNavLinks = [
+    { label: 'About Us', href: '/#about' },
+    { label: 'Contact Us', href: '/#contact' },
+  ];
+  const hamburgerLinks = [
+    { label: 'Home', href: '/' },
+    { label: 'Shop', href: '/#shop' },
+    { label: 'Ready To Wear', href: '/ready-to-wear' },
+    { label: 'Fabric To Buy', href: '/fabrics' },
+    { label: 'Custom To Wear', href: '/designs' },
+    { label: 'About Us', href: '/#about' },
+    { label: 'Contact Us', href: '/#contact' },
+  ];
+  const isHeroHeader = location.pathname === '/' && !isScrolled;
+  const menuTextClass = isHeroHeader ? 'text-white/90 hover:text-white' : 'text-black hover:text-black/70';
+  const iconTextClass = isHeroHeader ? 'text-white' : 'text-black';
+  const hoverSurfaceClass = isHeroHeader ? 'hover:bg-white/15' : 'hover:bg-black/5';
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -140,28 +156,66 @@ export default function MainLayout() {
         }`}
       >
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <div className="flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-2">
-              <span className="font-['Oswald'] text-xl sm:text-2xl font-semibold tracking-wide">
+          <div className="relative flex items-center justify-between">
+            <div className="flex items-center gap-4 lg:gap-8">
+              <div className="relative">
+                <button
+                  onClick={() => setIsHamburgerOpen((prev) => !prev)}
+                  className={`rounded-full p-2 transition-colors ${iconTextClass} ${hoverSurfaceClass}`}
+                  aria-label="Toggle site menu"
+                >
+                  {isHamburgerOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                </button>
+                {isHamburgerOpen ? (
+                  <div className="absolute left-0 top-full z-50 mt-3 w-64 rounded-xl border border-gray-100 bg-white p-2 shadow-xl">
+                    <nav className="flex flex-col">
+                      {hamburgerLinks.map((link) => (
+                        <a
+                          key={link.label}
+                          href={link.href}
+                          onClick={() => setIsHamburgerOpen(false)}
+                          className="rounded-lg px-3 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50"
+                        >
+                          {link.label}
+                        </a>
+                      ))}
+                    </nav>
+                  </div>
+                ) : null}
+              </div>
+              <nav className="hidden lg:flex items-center gap-8">
+                {leftNavLinks.map((link) => (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    className={`text-sm font-medium link-underline transition-colors ${menuTextClass}`}
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </nav>
+            </div>
+
+            <Link to="/" className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
+              <span className={`font-['Oswald'] text-xl sm:text-2xl font-semibold tracking-wide ${menuTextClass}`}>
                 {brandName.toUpperCase()}
               </span>
             </Link>
 
-            <nav className="hidden lg:flex items-center gap-8">
-              {navLinks.map((link) => (
-                <a
-                  key={link.label}
-                  href={link.href}
-                  className="text-sm font-medium link-underline"
-                >
-                  {link.label}
-                </a>
-              ))}
-            </nav>
-
             <div className="flex items-center gap-2 lg:gap-4">
+              <nav className="hidden lg:flex items-center gap-8 pr-3">
+                {rightNavLinks.map((link) => (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    className={`text-sm font-medium link-underline transition-colors ${menuTextClass}`}
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </nav>
               <div className="hidden md:block">
-                <select className="w-20 h-8 text-xs border-none bg-transparent">
+                <select className={`h-8 w-20 border-none bg-transparent text-xs ${iconTextClass}`}>
                   <option>USD</option>
                   <option>EUR</option>
                   <option>GBP</option>
@@ -171,7 +225,7 @@ export default function MainLayout() {
               </div>
               <Link
                 to="/cart"
-                className="relative p-2 hover:bg-black/5 rounded-full transition-colors"
+                className={`relative rounded-full p-2 transition-colors ${iconTextClass} ${hoverSurfaceClass}`}
               >
                 <ShoppingBag className="w-5 h-5" />
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-black text-white text-[10px] rounded-full flex items-center justify-center">
@@ -181,7 +235,7 @@ export default function MainLayout() {
 
               {isAuthenticated ? (
                 <div className="relative group">
-                  <button className="p-2 hover:bg-black/5 rounded-full transition-colors">
+                  <button className={`rounded-full p-2 transition-colors ${iconTextClass} ${hoverSurfaceClass}`}>
                     <User className="w-5 h-5" />
                   </button>
                   <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
@@ -212,46 +266,13 @@ export default function MainLayout() {
               ) : (
                 <Link
                   to="/login"
-                  className="hidden sm:flex items-center gap-2 text-sm font-medium hover:opacity-70 transition-opacity"
+                  className={`hidden sm:flex items-center gap-2 text-sm font-medium transition-colors ${menuTextClass}`}
                 >
                   Sign In
                 </Link>
               )}
-
-              <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="lg:hidden p-2"
-              >
-                {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-              </button>
             </div>
           </div>
-
-          {isMobileMenuOpen && (
-            <div className="lg:hidden mt-4 pb-4 border-t border-black/10 pt-4 animate-fade-in">
-              <nav className="flex flex-col gap-4">
-                {navLinks.map((link) => (
-                  <a
-                    key={link.label}
-                    href={link.href}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="text-lg font-medium"
-                  >
-                    {link.label}
-                  </a>
-                ))}
-                {!isAuthenticated && (
-                  <Link
-                    to="/login"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="text-lg font-medium flex items-center gap-2"
-                  >
-                    <User className="w-5 h-5" /> Sign In
-                  </Link>
-                )}
-              </nav>
-            </div>
-          )}
         </div>
       </header>
 

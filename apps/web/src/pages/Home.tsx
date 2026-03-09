@@ -983,7 +983,7 @@ export default function Home() {
       ) : null}
 
       {sectionVisibility.categories ? (
-      <section className="py-20 lg:py-32 bg-white">
+      <section id="shop" className="py-20 lg:py-32 bg-white">
         <div className="w-full px-2 sm:px-4 lg:px-8 xl:px-12">
           <div className="text-center mb-16">
             <h2 className="font-['Oswald'] text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">Shop by Category</h2>
@@ -1248,6 +1248,7 @@ export default function Home() {
 
       {sectionVisibility.heritage ? (
       <section
+        id="about"
         className="relative py-32 lg:py-48 bg-fixed bg-cover bg-center"
         style={{ backgroundImage: `url(${heritage.image})` }}
       >
@@ -1358,7 +1359,7 @@ export default function Home() {
       ) : null}
 
       {sectionVisibility.cta ? (
-      <section className="py-16 lg:py-24 bg-white border-t border-gray-100">
+      <section id="contact" className="py-16 lg:py-24 bg-white border-t border-gray-100">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="max-w-xl mx-auto text-center">
             <h2 className="font-['Oswald'] text-2xl sm:text-3xl font-bold mb-3">Join the Movement</h2>
