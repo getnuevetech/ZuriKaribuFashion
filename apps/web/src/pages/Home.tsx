@@ -620,8 +620,16 @@ export default function Home() {
     }),
     [heritageData],
   );
-  const promoBadgeValue = asText(promoBadgeData?.valueText, '50+');
-  const promoBadgeLabel = asText(promoBadgeData?.labelText, 'New Arrivals');
+  const promoBadgeValue = asText(
+    promoBadgeData?.valueText,
+    managedBannersBySection.get('PROMO_BADGE')?.title,
+    '50+'
+  );
+  const promoBadgeLabel = asText(
+    promoBadgeData?.labelText,
+    managedBannersBySection.get('PROMO_BADGE')?.subtitle,
+    'New Arrivals'
+  );
 
   useEffect(() => {
     const timer = setInterval(() => {

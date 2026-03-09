@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Plus, 
   Edit2, 
@@ -38,6 +38,14 @@ interface PromoBadgeSettings {
   labelText: string;
 }
 
+const PROMO_BADGE_FALLBACK_SECTION = 'PROMO_BADGE';
+const PROMO_BADGE_DEFAULTS: PromoBadgeSettings = {
+  valueText: '50+',
+  labelText: 'New Arrivals',
+};
+const PROMO_BADGE_FALLBACK_IMAGE =
+  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+
 const SECTIONS = [
   { value: 'BANNER_1', label: 'Banner 1 (After Featured Designs)' },
   { value: 'BANNER_2', label: 'Banner 2 (After Featured Ready To Wear)' },
@@ -54,8 +62,7 @@ export default function AdminBanners() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [promoBadge, setPromoBadge] = useState<PromoBadgeSettings>({
-    valueText: '50+',
-    labelText: 'New Arrivals',
+    ...PROMO_BADGE_DEFAULTS,
   });
 
   // Form state
@@ -75,6 +82,39 @@ export default function AdminBanners() {
     fetchBanners();
   }, []);
 
+  const visibleBanners = useMemo(
+    () => banners.filter((banner) => String(banner.section || '').toUpperCase() !== PROMO_BADGE_FALLBACK_SECTION),
+    [banners]
+  );
+
+  const isRetryableRouteError = (error: unknown) => {
+    const status = Number((error as any)?.response?.status || 0);
+    const message = String((error as any)?.response?.data?.message || (error as any)?.message || '').toLowerCase();
+    return status === 404 || status === 405 || message.includes('route not found') || message.includes('not found');
+  };
+
+  const upsertPromoBadgeFallbackBanner = async () => {
+    const existing = banners.find(
+      (banner) => String(banner.section || '').toUpperCase() === PROMO_BADGE_FALLBACK_SECTION
+    );
+    const payload = {
+      name: existing?.name || 'Promo Badge Settings',
+      section: PROMO_BADGE_FALLBACK_SECTION,
+      title: promoBadge.valueText || PROMO_BADGE_DEFAULTS.valueText,
+      subtitle: promoBadge.labelText || PROMO_BADGE_DEFAULTS.labelText,
+      ctaText: '',
+      ctaLink: '',
+      images: existing?.images?.length ? existing.images : [PROMO_BADGE_FALLBACK_IMAGE],
+      isActive: true,
+      displayOrder: typeof existing?.displayOrder === 'number' ? existing.displayOrder : 0,
+    };
+    if (existing) {
+      await api.admin.updateBanner(existing.id, payload);
+      return;
+    }
+    await api.admin.createBanner(payload);
+  };
+
   const fetchBanners = async () => {
     try {
       setLoading(true);
@@ -85,11 +125,28 @@ export default function AdminBanners() {
       if (bannersResponse.success) {
         setBanners(bannersResponse.data);
       }
+      const fallbackBanner = Array.isArray(bannersResponse.data)
+        ? bannersResponse.data.find(
+            (banner: Banner) => String(banner.section || '').toUpperCase() === PROMO_BADGE_FALLBACK_SECTION
+          )
+        : null;
+      const fallbackBadge: PromoBadgeSettings | null = fallbackBanner
+        ? {
+            valueText: fallbackBanner.title || PROMO_BADGE_DEFAULTS.valueText,
+            labelText: fallbackBanner.subtitle || PROMO_BADGE_DEFAULTS.labelText,
+          }
+        : null;
       if (promoBadgeResponse && promoBadgeResponse.success && promoBadgeResponse.data) {
+        const responseValue = promoBadgeResponse.data.valueText || PROMO_BADGE_DEFAULTS.valueText;
+        const responseLabel = promoBadgeResponse.data.labelText || PROMO_BADGE_DEFAULTS.labelText;
+        const responseLooksDefault =
+          responseValue === PROMO_BADGE_DEFAULTS.valueText && responseLabel === PROMO_BADGE_DEFAULTS.labelText;
         setPromoBadge({
-          valueText: promoBadgeResponse.data.valueText || '50+',
-          labelText: promoBadgeResponse.data.labelText || 'New Arrivals',
+          valueText: fallbackBadge && responseLooksDefault ? fallbackBadge.valueText : responseValue,
+          labelText: fallbackBadge && responseLooksDefault ? fallbackBadge.labelText : responseLabel,
         });
+      } else if (fallbackBadge) {
+        setPromoBadge(fallbackBadge);
       }
     } catch (error) {
       console.error('Failed to fetch banners:', error);
@@ -189,8 +246,17 @@ export default function AdminBanners() {
             labelText: promoBadge.labelText,
           });
         } catch (promoBadgeError) {
-          console.error('Failed to save promo badge settings:', promoBadgeError);
-          window.alert('Promotional banner was saved, but promo badge text could not be saved. Please try again after backend redeploy.');
+          if (isRetryableRouteError(promoBadgeError)) {
+            try {
+              await upsertPromoBadgeFallbackBanner();
+            } catch (fallbackSaveError) {
+              console.error('Failed to save promo badge fallback banner:', fallbackSaveError);
+              window.alert('Promotional banner was saved, but promo badge text could not be saved.');
+            }
+          } else {
+            console.error('Failed to save promo badge settings:', promoBadgeError);
+            window.alert((promoBadgeError as any)?.response?.data?.message || 'Promotional banner was saved, but promo badge text could not be saved.');
+          }
         }
       }
 
@@ -283,7 +349,7 @@ export default function AdminBanners() {
 
       {/* Banners Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {banners.map((banner) => (
+        {visibleBanners.map((banner) => (
           <div 
             key={banner.id} 
             className={`bg-white rounded-xl border overflow-hidden ${
@@ -387,7 +453,7 @@ export default function AdminBanners() {
         ))}
       </div>
 
-      {banners.length === 0 && (
+      {visibleBanners.length === 0 && (
         <div className="text-center py-16 bg-gray-50 rounded-xl">
           <ImageIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No banners yet</h3>
