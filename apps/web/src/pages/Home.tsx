@@ -344,7 +344,7 @@ const asText = (...values: any[]) => {
 
 const normalizeCategoryCtaText = (_value: unknown) => 'SHOP NOW';
 const CTA_BUTTON_BASE_CLASS =
-  'inline-flex items-center justify-center gap-2 rounded-none border px-8 py-3 text-sm font-semibold tracking-wider transition-colors duration-200';
+  'inline-flex items-center justify-center gap-2 rounded-none border px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200';
 const CTA_BUTTON_DARK_CLASS = `${CTA_BUTTON_BASE_CLASS} border-black bg-black text-white hover:bg-white hover:text-black`;
 const CTA_BUTTON_LIGHT_CLASS = `${CTA_BUTTON_BASE_CLASS} border-black bg-white text-black hover:bg-black hover:text-white`;
 const CTA_BUTTON_OVERLAY_CLASS = `${CTA_BUTTON_BASE_CLASS} border-white bg-transparent text-white hover:bg-white hover:text-black`;
