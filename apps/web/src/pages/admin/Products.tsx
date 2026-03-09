@@ -90,8 +90,9 @@ export default function AdminProducts() {
   };
 
   const getImagePolicy = (type: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR') => {
-    if (type === 'READY_TO_WEAR') return { min: 3, max: 4, label: 'Ready To Wear' };
-    return { min: 4, max: 6, label: type === 'DESIGN' ? 'Custom To Wear / Designer' : 'Designer / Fabric' };
+    if (type === 'FABRIC') return { min: 3, max: 4, label: 'Fabrics To Buy' };
+    if (type === 'READY_TO_WEAR') return { min: 4, max: 5, label: 'Ready To Wear' };
+    return { min: 4, max: 6, label: 'Custom To Wear' };
   };
 
   const currencySymbolByCode: Record<string, string> = {

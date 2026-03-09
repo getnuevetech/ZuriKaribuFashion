@@ -595,13 +595,16 @@ const getDefaultFeaturedSectionForType = (productType: ProductType): z.infer<typ
 };
 
 const getImagePolicyForProductType = (productType: ProductType) => {
+  if (productType === ProductType.FABRIC) {
+    return { min: 3, max: 4, label: 'Fabrics To Buy' };
+  }
   if (productType === ProductType.READY_TO_WEAR) {
-    return { min: 3, max: 4, label: 'Ready To Wear' };
+    return { min: 4, max: 5, label: 'Ready To Wear' };
   }
   if (productType === ProductType.DESIGN) {
-    return { min: 4, max: 6, label: 'Custom To Wear / Designer' };
+    return { min: 4, max: 6, label: 'Custom To Wear' };
   }
-  return { min: 4, max: 6, label: 'Fabric / Designer' };
+  return { min: 4, max: 6, label: 'Custom To Wear' };
 };
 
 let adminRbacSchemaEnsured = false;
