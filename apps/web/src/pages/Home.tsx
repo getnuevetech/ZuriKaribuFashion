@@ -710,7 +710,11 @@ export default function Home() {
           </div>
         ) : null}
 
-        <div className="absolute bottom-8 right-4 sm:right-6 lg:right-12 xl:right-20 flex gap-2">
+        <div
+          className={`absolute left-1/2 -translate-x-1/2 flex gap-2 z-10 ${
+            sectionVisibility.countries ? 'bottom-28' : 'bottom-8'
+          }`}
+        >
           {heroSlides.map((_, index) => (
             <button
               key={index}
