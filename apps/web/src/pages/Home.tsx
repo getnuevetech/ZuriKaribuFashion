@@ -367,6 +367,7 @@ function ProductCarousel({
 export default function Home() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
+  const [hoveredHowItWorksId, setHoveredHowItWorksId] = useState<number | null>(null);
   const customStripRef = useRef<HTMLDivElement>(null);
   const rtwStripRef = useRef<HTMLDivElement>(null);
   const fabricsStripRef = useRef<HTMLDivElement>(null);
@@ -562,6 +563,7 @@ export default function Home() {
     [howItWorksData],
   );
   const howItWorksIconColor = asText(howItWorksStyleData?.iconColor, '#111827');
+  const howItWorksIconHoverColor = asText(howItWorksStyleData?.iconHoverColor, '#ffffff');
 
   const designers = useMemo(() => {
     if (!USE_DYNAMIC_HOMEPAGE) return kimiDesigners;
@@ -745,9 +747,17 @@ export default function Home() {
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {howItWorks.map((step, index) => (
-              <div key={step.id} className="group flex flex-col items-center text-center relative">
+              <div
+                key={step.id}
+                className="group flex flex-col items-center text-center relative"
+                onMouseEnter={() => setHoveredHowItWorksId(step.id)}
+                onMouseLeave={() => setHoveredHowItWorksId(null)}
+              >
                 <div className="relative w-20 h-20 bg-white rounded-full border border-gray-200 flex items-center justify-center card-hover group-hover:bg-black group-hover:border-black transition-all duration-300 mb-4">
-                  <step.icon className="w-8 h-8 transition-colors duration-300" style={{ color: howItWorksIconColor }} />
+                  <step.icon
+                    className="w-8 h-8 transition-colors duration-300"
+                    style={{ color: hoveredHowItWorksId === step.id ? howItWorksIconHoverColor : howItWorksIconColor }}
+                  />
                   <span className="absolute -top-1 -right-1 w-6 h-6 bg-black text-white rounded-full flex items-center justify-center text-xs font-bold">
                     {index + 1}
                   </span>

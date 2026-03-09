@@ -272,6 +272,86 @@ const countryImageGenerationPaths = [
   '/admin/homepage-sections/country-image-generation',
 ];
 
+type HowItWorksStylePayload = {
+  iconColor: string;
+  iconHoverColor: string;
+};
+
+const HOW_IT_WORKS_STYLE_DEFAULTS: HowItWorksStylePayload = {
+  iconColor: '#111827',
+  iconHoverColor: '#ffffff',
+};
+
+const normalizeHowItWorksStylePayload = (raw: unknown): HowItWorksStylePayload => {
+  if (!raw || typeof raw !== 'object') return { ...HOW_IT_WORKS_STYLE_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  return {
+    iconColor: normalizeHexColor(row.iconColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconColor),
+    iconHoverColor: normalizeHexColor(row.iconHoverColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconHoverColor),
+  };
+};
+
+const howItWorksStyleReadPaths = [
+  '/homepage-sections/admin/how-it-works-style',
+  '/homepage/admin/how-it-works-style',
+  '/admin/how-it-works-style',
+  '/admin/homepage/how-it-works-style',
+  '/admin/homepage-sections/how-it-works-style',
+  '/homepage-sections/how-it-works-style',
+  '/homepage/how-it-works-style',
+];
+
+const howItWorksStyleWritePaths = [
+  '/homepage-sections/admin/how-it-works-style',
+  '/homepage/admin/how-it-works-style',
+  '/admin/how-it-works-style',
+  '/admin/homepage/how-it-works-style',
+  '/admin/homepage-sections/how-it-works-style',
+];
+
+async function readHowItWorksStyleWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of howItWorksStyleReadPaths) {
+    try {
+      return await apiService.get<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) {
+        continue;
+      }
+      throw error;
+    }
+  }
+  return {
+    success: true,
+    data: { ...HOW_IT_WORKS_STYLE_DEFAULTS },
+  } as T;
+}
+
+async function writeHowItWorksStyleWithFallback<T>(data: unknown) {
+  const normalized = normalizeHowItWorksStylePayload(data);
+  let lastError: unknown = null;
+  for (const path of howItWorksStyleWritePaths) {
+    try {
+      return await apiService.put<T>(path, normalized);
+    } catch (putError) {
+      lastError = putError;
+      if (!isRetryableRouteError(putError)) {
+        throw putError;
+      }
+    }
+    try {
+      return await apiService.patch<T>(path, normalized);
+    } catch (patchError) {
+      lastError = patchError;
+      if (!isRetryableRouteError(patchError)) {
+        throw patchError;
+      }
+    }
+  }
+  throw lastError ?? new Error('How it works style route not found.');
+}
+
 async function readCountryImageGenerationWithFallback<T>() {
   let lastError: unknown = null;
   for (const path of countryImageGenerationPaths) {
@@ -1118,7 +1198,10 @@ const homepageSectionsApi = {
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/how-it-works'),
 
   getHowItWorksStyle: () =>
-    apiService.get<{ success: boolean; data: { iconColor: string } }>('/homepage-sections/how-it-works-style'),
+    readHowItWorksStyleWithFallback<{
+      success: boolean;
+      data: { iconColor: string; iconHoverColor: string };
+    }>(),
 
   getCategories: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/categories'),
@@ -1287,16 +1370,16 @@ const homepageSectionsApi = {
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/admin/how-it-works'),
 
   getAdminHowItWorksStyle: () =>
-    apiService.get<{
+    readHowItWorksStyleWithFallback<{
       success: boolean;
-      data: { iconColor: string; source?: 'DATABASE' | 'DEFAULT'; updatedAt?: string | null };
-    }>('/homepage-sections/admin/how-it-works-style'),
+      data: { iconColor: string; iconHoverColor: string; source?: 'DATABASE' | 'DEFAULT'; updatedAt?: string | null };
+    }>(),
 
-  updateAdminHowItWorksStyle: (data: { iconColor?: string }) =>
-    apiService.put<{
+  updateAdminHowItWorksStyle: (data: { iconColor?: string; iconHoverColor?: string }) =>
+    writeHowItWorksStyleWithFallback<{
       success: boolean;
-      data: { iconColor: string };
-    }>('/homepage-sections/admin/how-it-works-style', data),
+      data: { iconColor: string; iconHoverColor: string };
+    }>(data),
 
   createHowItWorksStep: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/homepage-sections/admin/how-it-works', data),

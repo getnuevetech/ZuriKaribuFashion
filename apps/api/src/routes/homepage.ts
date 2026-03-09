@@ -6,6 +6,7 @@ import { Permissions } from '../rbac';
 
 const router = Router();
 const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
+const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
 
 type TopStripSettings = {
   messages: string[];
@@ -19,6 +20,11 @@ type TopStripSettings = {
   backgroundColor: string;
 };
 
+type HowItWorksStyleSettings = {
+  iconColor: string;
+  iconHoverColor: string;
+};
+
 const TOP_STRIP_DEFAULTS: TopStripSettings = {
   messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
   separator: '•',
@@ -29,6 +35,11 @@ const TOP_STRIP_DEFAULTS: TopStripSettings = {
   pauseOnHover: true,
   textColor: '#ffffff',
   backgroundColor: '#000000',
+};
+
+const HOW_IT_WORKS_STYLE_DEFAULTS: HowItWorksStyleSettings = {
+  iconColor: '#111827',
+  iconHoverColor: '#ffffff',
 };
 
 let homepageSettingsSchemaEnsured = false;
@@ -108,6 +119,15 @@ const normalizeTopStripSettings = (raw: unknown): TopStripSettings => {
   };
 };
 
+const normalizeHowItWorksStyleSettings = (raw: unknown): HowItWorksStyleSettings => {
+  if (!raw || typeof raw !== 'object') return { ...HOW_IT_WORKS_STYLE_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  return {
+    iconColor: normalizeHexColor(row.iconColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconColor),
+    iconHoverColor: normalizeHexColor(row.iconHoverColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconHoverColor),
+  };
+};
+
 const readTopStripSettings = async () => {
   const rows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT "id", "value"
@@ -157,6 +177,55 @@ const saveTopStripSettings = async (rawInput: unknown) => {
   return merged;
 };
 
+const readHowItWorksStyleSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return { rowId: null as string | null, settings: { ...HOW_IT_WORKS_STYLE_DEFAULTS } };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizeHowItWorksStyleSettings(JSON.parse(String(row.value || '{}'))),
+    };
+  } catch {
+    return { rowId: String(row.id), settings: { ...HOW_IT_WORKS_STYLE_DEFAULTS } };
+  }
+};
+
+const saveHowItWorksStyleSettings = async (rawInput: unknown) => {
+  const existing = await readHowItWorksStyleSettings();
+  const merged = normalizeHowItWorksStyleSettings({
+    ...existing.settings,
+    ...(rawInput && typeof rawInput === 'object' ? (rawInput as Record<string, unknown>) : {}),
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+
 // ==================== PUBLIC ENDPOINTS (for frontend) ====================
 
 router.get('/top-strip', async (_req, res) => {
@@ -171,6 +240,22 @@ router.get('/top-strip', async (_req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch top strip settings',
+    });
+  }
+});
+
+router.get('/how-it-works-style', async (_req, res) => {
+  try {
+    const { settings } = await readHowItWorksStyleSettings();
+    res.json({
+      success: true,
+      data: settings,
+    });
+  } catch (error) {
+    console.error('Error fetching how it works style settings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch how it works style settings',
     });
   }
 });
@@ -497,6 +582,54 @@ router.patch('/admin/top-strip', authenticate, authorizePermissions(Permissions.
     res.status(500).json({
       success: false,
       message: 'Failed to update top strip settings',
+    });
+  }
+});
+
+router.get('/admin/how-it-works-style', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings } = await readHowItWorksStyleSettings();
+    res.json({
+      success: true,
+      data: settings,
+    });
+  } catch (error) {
+    console.error('Error fetching admin how it works style settings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch how it works style settings',
+    });
+  }
+});
+
+router.put('/admin/how-it-works-style', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveHowItWorksStyleSettings(req.body);
+    res.json({
+      success: true,
+      data: settings,
+    });
+  } catch (error) {
+    console.error('Error updating admin how it works style settings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update how it works style settings',
+    });
+  }
+});
+
+router.patch('/admin/how-it-works-style', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveHowItWorksStyleSettings(req.body);
+    res.json({
+      success: true,
+      data: settings,
+    });
+  } catch (error) {
+    console.error('Error updating admin how it works style settings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update how it works style settings',
     });
   }
 });

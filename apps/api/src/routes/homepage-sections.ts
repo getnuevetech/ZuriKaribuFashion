@@ -398,6 +398,7 @@ const topStripUpdateSchema = z.object({
 
 const howItWorksStyleUpdateSchema = z.object({
   iconColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+  iconHoverColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
 });
 
 type TopStripSettings = {
@@ -414,6 +415,7 @@ type TopStripSettings = {
 
 type HowItWorksStyleSettings = {
   iconColor: string;
+  iconHoverColor: string;
 };
 
 const TOP_STRIP_DEFAULTS: TopStripSettings = {
@@ -430,6 +432,7 @@ const TOP_STRIP_DEFAULTS: TopStripSettings = {
 
 const HOW_IT_WORKS_STYLE_DEFAULTS: HowItWorksStyleSettings = {
   iconColor: '#111827',
+  iconHoverColor: '#ffffff',
 };
 
 const normalizeHexColor = (value: unknown, fallback: string) => {
@@ -472,6 +475,7 @@ const normalizeHowItWorksStyleSettings = (raw: unknown): HowItWorksStyleSettings
   const row = raw as Record<string, unknown>;
   return {
     iconColor: normalizeHexColor(row.iconColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconColor),
+    iconHoverColor: normalizeHexColor(row.iconHoverColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconHoverColor),
   };
 };
 
@@ -1187,6 +1191,20 @@ router.get('/admin/how-it-works-style', authenticate, authorizePermissions(Permi
 });
 
 router.put('/admin/how-it-works-style', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = howItWorksStyleUpdateSchema.parse(req.body);
+    const settings = await saveHowItWorksStyleSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating how it works style settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update how it works style settings.' });
+  }
+});
+
+router.patch('/admin/how-it-works-style', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const payload = howItWorksStyleUpdateSchema.parse(req.body);
     const settings = await saveHowItWorksStyleSettings(payload);
