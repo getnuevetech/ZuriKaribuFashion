@@ -458,7 +458,6 @@ export default function Home() {
 
   const { data: testimonialsData } = useQuery({
     queryKey: ['testimonialsPublic'],
-    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getTestimonials();
       return response.success ? response.data : null;
@@ -595,7 +594,7 @@ export default function Home() {
 
   const testimonials = useMemo(
     () =>
-      (USE_DYNAMIC_HOMEPAGE && Array.isArray(testimonialsData) && testimonialsData.length > 0 ? testimonialsData : kimiTestimonials).map((item: any, index: number) => ({
+      (Array.isArray(testimonialsData) && testimonialsData.length > 0 ? testimonialsData : kimiTestimonials).map((item: any, index: number) => ({
         id: String(item.id ?? index),
         name: asText(item.name, kimiTestimonials[index % kimiTestimonials.length].name),
         location: asText(item.location, kimiTestimonials[index % kimiTestimonials.length].location),

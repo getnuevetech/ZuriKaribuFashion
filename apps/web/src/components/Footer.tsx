@@ -4,12 +4,9 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 
-const USE_DYNAMIC_HOMEPAGE = import.meta.env.VITE_HOMEPAGE_MODE === 'dynamic';
-
 export default function Footer() {
   const { data: footerContent } = useQuery({
     queryKey: ['homepageFooterContent'],
-    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getFooter();
       return response.success ? response.data : null;
