@@ -89,6 +89,7 @@ const ensureVendorProfilesForRoleUsers = async () => {
 const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
 const HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY = 'HOMEPAGE_COUNTRY_IMAGE_GENERATION';
 const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
+const HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY = 'HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION';
 const ADMIN_TOP_STRIP_DEFAULTS = {
   messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
   separator: '•',
@@ -125,6 +126,9 @@ const ADMIN_HOW_IT_WORKS_STYLE_DEFAULTS = {
   iconColor: '#111827',
   iconHoverColor: '#ffffff',
 };
+const ADMIN_FEATURED_PRODUCT_DESCRIPTION_DEFAULTS = {
+  wordLimit: 12,
+};
 const BLOG_AUDIENCE_TYPES = ['SELLER', 'DESIGNER', 'COUNTRY', 'OTHER'] as const;
 type BlogAudienceType = (typeof BLOG_AUDIENCE_TYPES)[number];
 const adminCountryImageGenerationUpdateSchema = z.object({
@@ -140,6 +144,9 @@ const adminHowItWorksStyleUpdateSchema = z.object({
   enabled: z.boolean().optional(),
   iconColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
   iconHoverColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+});
+const adminFeaturedProductDescriptionUpdateSchema = z.object({
+  wordLimit: z.coerce.number().int().min(5).max(60),
 });
 const adminBlogCreateSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -220,6 +227,16 @@ const normalizeAdminHowItWorksStyleSettings = (raw: unknown) => {
     enabled: typeof row.enabled === 'boolean' ? row.enabled : ADMIN_HOW_IT_WORKS_STYLE_DEFAULTS.enabled,
     iconColor: normalizeHexColor(row.iconColor, ADMIN_HOW_IT_WORKS_STYLE_DEFAULTS.iconColor),
     iconHoverColor: normalizeHexColor(row.iconHoverColor, ADMIN_HOW_IT_WORKS_STYLE_DEFAULTS.iconHoverColor),
+  };
+};
+const normalizeAdminFeaturedProductDescriptionSettings = (raw: unknown) => {
+  if (!raw || typeof raw !== 'object') return { ...ADMIN_FEATURED_PRODUCT_DESCRIPTION_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const wordLimitRaw = Number(row.wordLimit);
+  return {
+    wordLimit: Number.isFinite(wordLimitRaw)
+      ? Math.max(5, Math.min(60, Math.round(wordLimitRaw)))
+      : ADMIN_FEATURED_PRODUCT_DESCRIPTION_DEFAULTS.wordLimit,
   };
 };
 
@@ -433,6 +450,52 @@ const saveAdminHowItWorksStyleSettings = async (input: unknown) => {
      VALUES ($1, $2, $3, NOW(), NOW())`,
     randomUUID(),
     HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+const readAdminFeaturedProductDescriptionSettings = async () => {
+  await ensureHomepageSectionSettingTable();
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return { rowId: null as string | null, settings: { ...ADMIN_FEATURED_PRODUCT_DESCRIPTION_DEFAULTS } };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizeAdminFeaturedProductDescriptionSettings(JSON.parse(String(row.value || '{}'))),
+    };
+  } catch {
+    return { rowId: String(row.id), settings: { ...ADMIN_FEATURED_PRODUCT_DESCRIPTION_DEFAULTS } };
+  }
+};
+const saveAdminFeaturedProductDescriptionSettings = async (input: unknown) => {
+  const parsed = adminFeaturedProductDescriptionUpdateSchema.parse(input);
+  const merged = normalizeAdminFeaturedProductDescriptionSettings(parsed);
+  const existing = await readAdminFeaturedProductDescriptionSettings();
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY,
     payload
   );
   return merged;
@@ -3586,6 +3649,42 @@ router.patch('/country-image-generation', authorizePermissions(Permissions.HOMEP
     }
     console.error('Error updating admin country image generation settings:', error);
     res.status(500).json({ success: false, message: 'Failed to update country image generation settings.' });
+  }
+});
+
+router.get('/featured-product-description-settings', authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings } = await readAdminFeaturedProductDescriptionSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching featured product description settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch featured product description settings.' });
+  }
+});
+
+router.put('/featured-product-description-settings', authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveAdminFeaturedProductDescriptionSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating featured product description settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update featured product description settings.' });
+  }
+});
+
+router.patch('/featured-product-description-settings', authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveAdminFeaturedProductDescriptionSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating featured product description settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update featured product description settings.' });
   }
 });
 

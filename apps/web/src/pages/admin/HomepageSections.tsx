@@ -171,6 +171,9 @@ interface CountryImageGenerationSettings {
   responseImagePath: string;
   requestMethod: 'GET' | 'POST';
 }
+interface FeaturedProductDescriptionSettings {
+  wordLimit: number;
+}
 
 const FALLBACK_AFRICAN_COUNTRY_OPTIONS: CountryOption[] = [
   { code: 'DZ', name: 'Algeria', flag: '🇩🇿' },
@@ -273,6 +276,10 @@ export default function HomepageSections() {
     requestMethod: 'POST',
   });
   const [countryImageSaving, setCountryImageSaving] = useState(false);
+  const [featuredProductDescriptionSettings, setFeaturedProductDescriptionSettings] = useState<FeaturedProductDescriptionSettings>({
+    wordLimit: 12,
+  });
+  const [featuredProductDescriptionSaving, setFeaturedProductDescriptionSaving] = useState(false);
   const [howItWorksStyle, setHowItWorksStyle] = useState<HowItWorksStyleSettings>({
     enabled: false,
     iconColor: '#111827',
@@ -294,6 +301,9 @@ export default function HomepageSections() {
 
   useEffect(() => {
     fetchCountryImageSettings();
+  }, []);
+  useEffect(() => {
+    fetchFeaturedProductDescriptionSettings();
   }, []);
 
   useEffect(() => {
@@ -432,6 +442,18 @@ export default function HomepageSections() {
       console.error('Error fetching how it works style settings:', error);
     }
   };
+  const fetchFeaturedProductDescriptionSettings = async () => {
+    try {
+      const response = await api.homepageSections.getAdminFeaturedProductDescriptionSettings();
+      if (response.success && response.data) {
+        setFeaturedProductDescriptionSettings({
+          wordLimit: Math.max(5, Math.min(60, Number(response.data.wordLimit) || 12)),
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching featured product description settings:', error);
+    }
+  };
 
   const handleSaveHowItWorksStyleSettings = async () => {
     setHowItWorksStyleSaving(true);
@@ -474,6 +496,25 @@ export default function HomepageSections() {
       window.alert(error?.response?.data?.message || 'Failed to save country image generation settings.');
     } finally {
       setCountryImageSaving(false);
+    }
+  };
+  const handleSaveFeaturedProductDescriptionSettings = async () => {
+    setFeaturedProductDescriptionSaving(true);
+    try {
+      const response = await api.homepageSections.updateAdminFeaturedProductDescriptionSettings({
+        wordLimit: Math.max(5, Math.min(60, Number(featuredProductDescriptionSettings.wordLimit) || 12)),
+      });
+      if (response.success && response.data) {
+        setFeaturedProductDescriptionSettings({
+          wordLimit: Math.max(5, Math.min(60, Number(response.data.wordLimit) || 12)),
+        });
+        window.alert('Featured product description word limit saved.');
+      }
+    } catch (error: any) {
+      console.error('Error saving featured product description settings:', error);
+      window.alert(error?.response?.data?.message || 'Failed to save featured product description settings.');
+    } finally {
+      setFeaturedProductDescriptionSaving(false);
     }
   };
 
@@ -743,6 +784,36 @@ export default function HomepageSections() {
         <div>
           <Button onClick={handleSaveCountryImageSettings} disabled={countryImageSaving}>
             {countryImageSaving ? 'Saving...' : 'Save Image Generation Settings'}
+          </Button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Featured Product Description</h2>
+          <p className="text-sm text-gray-500">
+            Control how many words are shown for product descriptions in featured frontpage cards.
+          </p>
+        </div>
+        <div className="max-w-sm">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Description Word Limit</label>
+          <input
+            type="number"
+            value={featuredProductDescriptionSettings.wordLimit}
+            onChange={(e) =>
+              setFeaturedProductDescriptionSettings({
+                wordLimit: Math.max(5, Math.min(60, parseInt(e.target.value, 10) || 12)),
+              })
+            }
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+            min={5}
+            max={60}
+          />
+          <p className="mt-1 text-xs text-gray-500">Allowed range: 5 to 60 words.</p>
+        </div>
+        <div>
+          <Button onClick={handleSaveFeaturedProductDescriptionSettings} disabled={featuredProductDescriptionSaving}>
+            {featuredProductDescriptionSaving ? 'Saving...' : 'Save Description Word Limit'}
           </Button>
         </div>
       </div>

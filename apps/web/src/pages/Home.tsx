@@ -375,6 +375,14 @@ const asText = (...values: any[]) => {
   }
   return '';
 };
+const trimToWordLimit = (text: string, limit: number) => {
+  const words = String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length <= limit) return words.join(' ');
+  return `${words.slice(0, limit).join(' ')}…`;
+};
 
 const normalizeCategoryCtaText = (_value: unknown) => 'SHOP NOW';
 const CTA_BUTTON_BASE_CLASS =
@@ -389,7 +397,8 @@ const productBasePath = (productType: string) => {
   return '/ready-to-wear';
 };
 
-function ProductCard({ product }: { product: FeaturedProduct }) {
+function ProductCard({ product, descriptionWordLimit }: { product: FeaturedProduct; descriptionWordLimit: number }) {
+  const description = trimToWordLimit(asText(product.description, ''), Math.max(5, Math.min(60, descriptionWordLimit)));
   return (
     <Link to={`${productBasePath(product.productType)}/${product.id}`} className="group block">
       <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-gray-100 mb-4 img-zoom">
@@ -404,6 +413,9 @@ function ProductCard({ product }: { product: FeaturedProduct }) {
       <div>
         <h3 className="font-semibold text-lg group-hover:text-gray-600 transition-colors">{product.name}</h3>
         <p className="text-gray-500 text-sm line-clamp-1">{product.designer}</p>
+        {description ? (
+          <p className="text-gray-500 text-xs line-clamp-2 mt-1">{description}</p>
+        ) : null}
         <p className="font-semibold mt-1">${Number(product.price || 0).toFixed(2)}</p>
       </div>
     </Link>
@@ -420,6 +432,7 @@ function ProductCarousel({
   viewAllLink,
   loading,
   itemWidthClassName = 'w-72',
+  descriptionWordLimit,
 }: {
   title: string;
   subtitle: string;
@@ -430,6 +443,7 @@ function ProductCarousel({
   viewAllLink: string;
   loading: boolean;
   itemWidthClassName?: string;
+  descriptionWordLimit: number;
 }) {
   return (
     <section className="py-16 lg:py-24 bg-white">
@@ -465,7 +479,7 @@ function ProductCarousel({
           >
             {products.map((product) => (
               <div key={product.id} className={`flex-shrink-0 ${itemWidthClassName}`}>
-                <ProductCard product={product} />
+                <ProductCard product={product} descriptionWordLimit={descriptionWordLimit} />
               </div>
             ))}
           </div>
@@ -577,6 +591,13 @@ export default function Home() {
       return response.success ? response.data : null;
     },
   });
+  const { data: featuredDescriptionSettingsData } = useQuery({
+    queryKey: ['homepageFeaturedDescriptionSettings'],
+    queryFn: async () => {
+      const response = await api.homepageSections.getFeaturedProductDescriptionSettings();
+      return response.success ? response.data : null;
+    },
+  });
 
   const { data: visibilityData } = useQuery({
     queryKey: ['homepageVisibility'],
@@ -629,6 +650,10 @@ export default function Home() {
     () => (Array.isArray(statsStrip.items) ? statsStrip.items.filter((item) => item.isActive !== false) : []),
     [statsStrip.items]
   );
+  const featuredDescriptionWordLimit = useMemo(() => {
+    const raw = Number((featuredDescriptionSettingsData as any)?.wordLimit);
+    return Number.isFinite(raw) ? Math.max(5, Math.min(60, Math.round(raw))) : 12;
+  }, [featuredDescriptionSettingsData]);
 
   const heroSlides = useMemo(
     () => {
@@ -1030,6 +1055,7 @@ export default function Home() {
           onRight={() => scrollStrip(customStripRef, 'right')}
           viewAllLink="/designs"
           loading={featuredLoading}
+          descriptionWordLimit={featuredDescriptionWordLimit}
         />
       ) : null}
 
@@ -1066,6 +1092,7 @@ export default function Home() {
           onRight={() => scrollStrip(rtwStripRef, 'right')}
           viewAllLink="/ready-to-wear"
           loading={featuredLoading}
+          descriptionWordLimit={featuredDescriptionWordLimit}
         />
       ) : null}
 
@@ -1102,6 +1129,7 @@ export default function Home() {
           onRight={() => scrollStrip(fabricsStripRef, 'right')}
           viewAllLink="/fabrics"
           loading={featuredLoading}
+          descriptionWordLimit={featuredDescriptionWordLimit}
         />
       ) : null}
 

@@ -99,6 +99,9 @@ type StatsStripPayload = {
   suffixColor: string;
   labelColor: string;
 };
+type FeaturedProductDescriptionSettingsPayload = {
+  wordLimit: number;
+};
 
 const TOP_STRIP_DEFAULTS: TopStripPayload = {
   messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
@@ -125,6 +128,9 @@ const STATS_STRIP_DEFAULTS: StatsStripPayload = {
   valueColor: '#ffffff',
   suffixColor: '#facc15',
   labelColor: '#d1d5db',
+};
+const FEATURED_PRODUCT_DESCRIPTION_SETTINGS_DEFAULTS: FeaturedProductDescriptionSettingsPayload = {
+  wordLimit: 12,
 };
 
 const TOP_STRIP_BANNER_SECTION = 'TOP_STRIP';
@@ -232,6 +238,15 @@ const statsStripReadPaths = [
 const statsStripWritePaths = [
   '/homepage-sections/admin/stats-strip',
   '/admin/stats-strip',
+];
+const featuredProductDescriptionReadPaths = [
+  '/homepage-sections/admin/featured-product-description-settings',
+  '/admin/featured-product-description-settings',
+  '/homepage-sections/featured-product-description-settings',
+];
+const featuredProductDescriptionWritePaths = [
+  '/homepage-sections/admin/featured-product-description-settings',
+  '/admin/featured-product-description-settings',
 ];
 
 const topStripWritePaths = [
@@ -378,6 +393,44 @@ async function writeStatsStripWithFallback<T>(data: unknown) {
     }
   }
   throw lastError ?? new Error('Stats strip route not found.');
+}
+async function readFeaturedProductDescriptionSettingsWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of featuredProductDescriptionReadPaths) {
+    try {
+      return await apiService.get<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  return {
+    success: true,
+    data: { ...FEATURED_PRODUCT_DESCRIPTION_SETTINGS_DEFAULTS },
+  } as T;
+}
+async function writeFeaturedProductDescriptionSettingsWithFallback<T>(data: unknown) {
+  const parsedWordLimit = Number((data as any)?.wordLimit);
+  const normalized = {
+    wordLimit: Number.isFinite(parsedWordLimit) ? Math.max(5, Math.min(60, Math.round(parsedWordLimit))) : 12,
+  };
+  let lastError: unknown = null;
+  for (const path of featuredProductDescriptionWritePaths) {
+    try {
+      return await apiService.put<T>(path, normalized);
+    } catch (putError) {
+      lastError = putError;
+      if (!isRetryableRouteError(putError)) throw putError;
+    }
+    try {
+      return await apiService.patch<T>(path, normalized);
+    } catch (patchError) {
+      lastError = patchError;
+      if (!isRetryableRouteError(patchError)) throw patchError;
+    }
+  }
+  throw lastError ?? new Error('Featured product description settings route not found.');
 }
 
 const countryImageGenerationPaths = [
@@ -1627,6 +1680,11 @@ const homepageSectionsApi = {
         labelColor: string;
       };
     }>(),
+  getFeaturedProductDescriptionSettings: () =>
+    readFeaturedProductDescriptionSettingsWithFallback<{
+      success: boolean;
+      data: { wordLimit: number };
+    }>(),
 
   getCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/countries'),
@@ -1722,6 +1780,11 @@ const homepageSectionsApi = {
         updatedAt?: string | null;
       };
     }>(),
+  getAdminFeaturedProductDescriptionSettings: () =>
+    readFeaturedProductDescriptionSettingsWithFallback<{
+      success: boolean;
+      data: { wordLimit: number; source?: 'DATABASE' | 'DEFAULT'; updatedAt?: string | null };
+    }>(),
 
   getAdminCountryImageGeneration: () =>
     readCountryImageGenerationWithFallback<{
@@ -1806,6 +1869,11 @@ const homepageSectionsApi = {
         suffixColor: string;
         labelColor: string;
       };
+    }>(data),
+  updateAdminFeaturedProductDescriptionSettings: (data: { wordLimit: number }) =>
+    writeFeaturedProductDescriptionSettingsWithFallback<{
+      success: boolean;
+      data: { wordLimit: number };
     }>(data),
 
   getAdminCountryOptions: () =>

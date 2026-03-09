@@ -13,6 +13,7 @@ const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
 const HOMEPAGE_STATS_STRIP_SETTINGS_KEY = 'HOMEPAGE_STATS_STRIP';
 const HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY = 'HOMEPAGE_COUNTRY_IMAGE_GENERATION';
 const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
+const HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY = 'HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION';
 const SPOTLIGHT_LINK_MODES = ['DEFAULT_STORE', 'CUSTOM_URL', 'BLOG'] as const;
 type SpotlightLinkMode = (typeof SPOTLIGHT_LINK_MODES)[number];
 const HOMEPAGE_SECTION_VISIBILITY_META = [
@@ -519,6 +520,9 @@ const statsStripUpdateSchema = z.object({
   suffixColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
   labelColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
 });
+const featuredProductDescriptionUpdateSchema = z.object({
+  wordLimit: z.number().int().min(5).max(60),
+});
 
 const howItWorksStyleUpdateSchema = z.object({
   enabled: z.boolean().optional(),
@@ -554,6 +558,9 @@ type StatsStripSettings = {
   suffixColor: string;
   labelColor: string;
 };
+type FeaturedProductDescriptionSettings = {
+  wordLimit: number;
+};
 
 type HowItWorksStyleSettings = {
   enabled: boolean;
@@ -586,6 +593,9 @@ const STATS_STRIP_DEFAULTS: StatsStripSettings = {
   valueColor: '#ffffff',
   suffixColor: '#facc15',
   labelColor: '#d1d5db',
+};
+const FEATURED_PRODUCT_DESCRIPTION_DEFAULTS: FeaturedProductDescriptionSettings = {
+  wordLimit: 12,
 };
 
 const HOW_IT_WORKS_STYLE_DEFAULTS: HowItWorksStyleSettings = {
@@ -664,6 +674,14 @@ const normalizeStatsStripSettings = (raw: unknown): StatsStripSettings => {
     valueColor: normalizeHexColor(row.valueColor, STATS_STRIP_DEFAULTS.valueColor),
     suffixColor: normalizeHexColor(row.suffixColor, STATS_STRIP_DEFAULTS.suffixColor),
     labelColor: normalizeHexColor(row.labelColor, STATS_STRIP_DEFAULTS.labelColor),
+  };
+};
+const normalizeFeaturedProductDescriptionSettings = (raw: unknown): FeaturedProductDescriptionSettings => {
+  if (!raw || typeof raw !== 'object') return { ...FEATURED_PRODUCT_DESCRIPTION_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const wordLimit = getNumber(row.wordLimit) ?? FEATURED_PRODUCT_DESCRIPTION_DEFAULTS.wordLimit;
+  return {
+    wordLimit: Math.max(5, Math.min(60, Math.round(wordLimit))),
   };
 };
 
@@ -938,6 +956,62 @@ const saveStatsStripSettings = async (next: unknown) => {
      VALUES ($1, $2, $3, NOW(), NOW())`,
     randomUUID(),
     HOMEPAGE_STATS_STRIP_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+const readFeaturedProductDescriptionSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: { ...FEATURED_PRODUCT_DESCRIPTION_DEFAULTS },
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  let parsed = { ...FEATURED_PRODUCT_DESCRIPTION_DEFAULTS };
+  try {
+    parsed = normalizeFeaturedProductDescriptionSettings(JSON.parse(String(row.value || '{}')));
+  } catch {
+    parsed = { ...FEATURED_PRODUCT_DESCRIPTION_DEFAULTS };
+  }
+  return {
+    rowId: String(row.id),
+    settings: parsed,
+    source: 'DATABASE' as const,
+    updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+  };
+};
+const saveFeaturedProductDescriptionSettings = async (next: Partial<FeaturedProductDescriptionSettings>) => {
+  const existing = await readFeaturedProductDescriptionSettings();
+  const merged = normalizeFeaturedProductDescriptionSettings({
+    ...existing.settings,
+    ...next,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY,
     payload
   );
   return merged;
@@ -1332,6 +1406,15 @@ router.get('/stats-strip', async (_req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch stats strip settings.' });
   }
 });
+router.get('/featured-product-description-settings', async (_req, res) => {
+  try {
+    const { settings } = await readFeaturedProductDescriptionSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching featured product description settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch featured product description settings.' });
+  }
+});
 
 router.get('/how-it-works-style', async (_req, res) => {
   try {
@@ -1657,6 +1740,27 @@ router.get('/admin/stats-strip', authenticate, authorizePermissions(Permissions.
     res.status(500).json({ success: false, message: 'Failed to fetch stats strip settings.' });
   }
 });
+router.get(
+  '/admin/featured-product-description-settings',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (_req, res) => {
+    try {
+      const { settings, source, updatedAt } = await readFeaturedProductDescriptionSettings();
+      res.json({
+        success: true,
+        data: {
+          ...settings,
+          source,
+          updatedAt,
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching admin featured product description settings:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch featured product description settings.' });
+    }
+  }
+);
 
 router.put('/admin/top-strip', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
@@ -1697,6 +1801,42 @@ router.patch('/admin/stats-strip', authenticate, authorizePermissions(Permission
     res.status(500).json({ success: false, message: 'Failed to update stats strip settings.' });
   }
 });
+router.put(
+  '/admin/featured-product-description-settings',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (req, res) => {
+    try {
+      const payload = featuredProductDescriptionUpdateSchema.parse(req.body);
+      const settings = await saveFeaturedProductDescriptionSettings(payload);
+      res.json({ success: true, data: settings });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      console.error('Error updating featured product description settings:', error);
+      res.status(500).json({ success: false, message: 'Failed to update featured product description settings.' });
+    }
+  }
+);
+router.patch(
+  '/admin/featured-product-description-settings',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (req, res) => {
+    try {
+      const payload = featuredProductDescriptionUpdateSchema.parse(req.body);
+      const settings = await saveFeaturedProductDescriptionSettings(payload);
+      res.json({ success: true, data: settings });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      console.error('Error updating featured product description settings:', error);
+      res.status(500).json({ success: false, message: 'Failed to update featured product description settings.' });
+    }
+  }
+);
 
 router.get('/admin/how-it-works-style', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
   try {
