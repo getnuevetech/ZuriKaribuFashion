@@ -53,7 +53,9 @@ export default function CustomerProfile() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState('');
   const [googleSuccess, setGoogleSuccess] = useState('');
-  const googleClientId = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
+  const googleClientId = String(
+    import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || ''
+  ).trim();
   
   const fullName = user?.firstName && user?.lastName 
     ? `${user.firstName} ${user.lastName}` 

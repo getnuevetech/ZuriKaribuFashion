@@ -17,7 +17,9 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const googleClientId = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
+  const googleClientId = String(
+    import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || ''
+  ).trim();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,14 +76,20 @@ export default function Login() {
           </div>
         )}
 
-        {googleClientId ? (
-          <div className="rounded-lg border bg-white p-4">
-            <p className="mb-3 text-center text-sm text-gray-600">Sign in with Google</p>
+        <div className="rounded-lg border bg-white p-4">
+          <p className="mb-3 text-center text-sm text-gray-600">Sign in with Google</p>
+          {googleClientId ? (
             <div className="flex justify-center">
               <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google login was cancelled or failed.')} />
             </div>
-          </div>
-        ) : null}
+          ) : (
+            <p className="text-center text-xs text-amber-700">
+              Google login is currently unavailable. Missing frontend environment variable:
+              {' '}
+              <span className="font-semibold">VITE_GOOGLE_CLIENT_ID</span>.
+            </p>
+          )}
+        </div>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <div className="space-y-4">
