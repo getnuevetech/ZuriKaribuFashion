@@ -116,6 +116,7 @@ interface DesignerOption {
   id: string;
   businessName: string;
   country: string;
+  vendorType?: 'DESIGNER' | 'SELLER';
 }
 
 interface HowItWorksStyleSettings {
@@ -1285,6 +1286,8 @@ function SectionModal({
   const [uploading, setUploading] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
   const effectiveCountryOptions = countryOptions.length > 0 ? countryOptions : FALLBACK_AFRICAN_COUNTRY_OPTIONS;
+  const designerProfiles = designers.filter((item) => item.vendorType !== 'SELLER');
+  const sellerProfiles = designers.filter((item) => item.vendorType === 'SELLER');
 
   function getDefaultFormData(sectionType: SectionType) {
     switch (sectionType) {
@@ -1869,20 +1872,34 @@ function SectionModal({
         return (
           <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Designer</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Designer / Seller</label>
               <select
                 value={formData.designerId || ''}
                 onChange={(e) => setFormData({ ...formData, designerId: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                 required
               >
-                <option value="">Select designer</option>
-                {designers.map((designer) => (
-                  <option key={designer.id} value={designer.id}>
-                    {designer.businessName}
-                    {designer.country ? ` (${designer.country})` : ''}
-                  </option>
-                ))}
+                <option value="">Select profile</option>
+                {designerProfiles.length > 0 ? (
+                  <optgroup label="Designers">
+                    {designerProfiles.map((designer) => (
+                      <option key={designer.id} value={designer.id}>
+                        {designer.businessName}
+                        {designer.country ? ` (${designer.country})` : ''} [Designer]
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {sellerProfiles.length > 0 ? (
+                  <optgroup label="Sellers">
+                    {sellerProfiles.map((seller) => (
+                      <option key={seller.id} value={seller.id}>
+                        {seller.businessName}
+                        {seller.country ? ` (${seller.country})` : ''} [Seller]
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
               </select>
             </div>
             <div>

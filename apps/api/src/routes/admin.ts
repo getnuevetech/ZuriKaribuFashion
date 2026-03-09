@@ -2339,16 +2339,18 @@ router.get('/designer-options', async (_req, res, next) => {
         user: item.user,
       }),
       country: String(item.country || '').trim(),
+      vendorType: 'DESIGNER' as const,
     }));
     const sellers = sellersRaw.map((item) => ({
       id: item.id,
-      businessName: `${getVendorDisplayName({
+      businessName: getVendorDisplayName({
         id: item.id,
         roleLabel: 'Fabric Seller',
         businessName: item.businessName,
         user: item.user,
-      })} [Seller]`,
+      }),
       country: String(item.country || '').trim(),
+      vendorType: 'SELLER' as const,
     }));
     res.json({
       success: true,

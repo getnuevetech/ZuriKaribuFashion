@@ -1421,6 +1421,7 @@ router.get('/admin/designer-options', authenticate, authorizePermissions(Permiss
         id: item.id,
         businessName: businessName || fallbackName,
         country: String(item.country || '').trim(),
+        vendorType: 'DESIGNER' as const,
       };
     });
     const sellers = sellersRaw.map((item) => {
@@ -1431,8 +1432,9 @@ router.get('/admin/designer-options', authenticate, authorizePermissions(Permiss
         `Seller ${String(item.id || '').slice(0, 8)}`;
       return {
         id: item.id,
-        businessName: `${businessName || fallbackName} [Seller]`,
+        businessName: businessName || fallbackName,
         country: String(item.country || '').trim(),
+        vendorType: 'SELLER' as const,
       };
     });
     const options = [...designers, ...sellers].sort((a, b) => a.businessName.localeCompare(b.businessName));

@@ -399,16 +399,24 @@ async function readDesignerOptionsWithFallback<T>() {
     const productOptions = await apiService.get<{
       success: boolean;
       data?: {
-        designers?: Array<{ id: string; businessName: string; country: string }>;
-        sellers?: Array<{ id: string; businessName: string; country: string }>;
+        designers?: Array<{ id: string; businessName: string; country: string; vendorType?: 'DESIGNER' | 'SELLER' }>;
+        sellers?: Array<{ id: string; businessName: string; country: string; vendorType?: 'DESIGNER' | 'SELLER' }>;
       };
     }>('/admin/products/options');
-    const designers = Array.isArray(productOptions?.data?.designers) ? productOptions.data.designers : [];
+    const designers = Array.isArray(productOptions?.data?.designers)
+      ? productOptions.data.designers.map((item) => ({
+          id: item.id,
+          businessName: item.businessName,
+          country: item.country,
+          vendorType: 'DESIGNER' as const,
+        }))
+      : [];
     const sellers = Array.isArray(productOptions?.data?.sellers)
       ? productOptions.data.sellers.map((item) => ({
           id: item.id,
-          businessName: `${String(item.businessName || '').trim() || 'Seller'} [Seller]`,
+          businessName: String(item.businessName || '').trim() || 'Seller',
           country: item.country,
+          vendorType: 'SELLER' as const,
         }))
       : [];
     return {
@@ -1409,7 +1417,10 @@ const homepageSectionsApi = {
     ),
 
   getAdminDesignerOptions: () =>
-    readDesignerOptionsWithFallback<{ success: boolean; data: Array<{ id: string; businessName: string; country: string }> }>(),
+    readDesignerOptionsWithFallback<{
+      success: boolean;
+      data: Array<{ id: string; businessName: string; country: string; vendorType?: 'DESIGNER' | 'SELLER' }>;
+    }>(),
 
   getAdminCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/admin/countries'),
