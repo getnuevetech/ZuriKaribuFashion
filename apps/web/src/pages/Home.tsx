@@ -447,7 +447,7 @@ function ProductCarousel({
 }) {
   return (
     <section className="py-16 lg:py-24 bg-white">
-      <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+      <div className="w-full px-2 sm:px-4 lg:px-8 xl:px-12">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10">
           <div>
             <p className="inline-flex mb-3 px-2 py-1 border border-black text-xs tracking-wider font-semibold">FEATURED</p>
@@ -474,7 +474,7 @@ function ProductCarousel({
         ) : (
           <div
             ref={stripRef}
-            className="flex gap-6 overflow-x-auto scrollbar-hide pb-4 -mx-4 px-4 sm:-mx-0 sm:px-0"
+            className="flex gap-6 overflow-x-auto scrollbar-hide pb-4 -mx-2 px-2 sm:-mx-0 sm:px-0"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {products.map((product) => (
