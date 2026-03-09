@@ -323,6 +323,72 @@ const designerOptionsReadPaths = [
   '/admin/designer-options',
 ];
 
+type NormalizedDesignerOption = {
+  id: string;
+  businessName: string;
+  country: string;
+  vendorType: 'DESIGNER' | 'SELLER';
+};
+
+const normalizeDesignerOptionRows = (
+  rows: unknown[],
+  defaultVendorType: 'DESIGNER' | 'SELLER'
+): NormalizedDesignerOption[] =>
+  rows
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const row = entry as Record<string, unknown>;
+      const id = String(
+        row.id ??
+          row.profileId ??
+          row.designerId ??
+          row.sellerId ??
+          row.userId ??
+          ''
+      ).trim();
+      if (!id) return null;
+      const vendorTypeRaw = String(row.vendorType || '').trim().toUpperCase();
+      const vendorType: 'DESIGNER' | 'SELLER' =
+        vendorTypeRaw === 'SELLER' ? 'SELLER' : defaultVendorType;
+      const businessName = String(
+        row.businessName ??
+          row.name ??
+          row.fullName ??
+          row.displayName ??
+          row.email ??
+          `${vendorType === 'SELLER' ? 'Seller' : 'Designer'} ${id.slice(0, 8)}`
+      ).trim();
+      const country = String(row.country ?? row.location ?? '').trim();
+      return {
+        id,
+        businessName: businessName || `${vendorType === 'SELLER' ? 'Seller' : 'Designer'} ${id.slice(0, 8)}`,
+        country,
+        vendorType,
+      };
+    })
+    .filter((row): row is NormalizedDesignerOption => Boolean(row));
+
+const normalizeDesignerOptionsPayload = (payload: unknown): NormalizedDesignerOption[] => {
+  const data = (payload as any)?.data ?? payload;
+  let combined: NormalizedDesignerOption[] = [];
+
+  if (Array.isArray(data)) {
+    combined = normalizeDesignerOptionRows(data, 'DESIGNER');
+  } else if (data && typeof data === 'object') {
+    const row = data as Record<string, unknown>;
+    const designers = Array.isArray(row.designers) ? normalizeDesignerOptionRows(row.designers, 'DESIGNER') : [];
+    const sellers = Array.isArray(row.sellers) ? normalizeDesignerOptionRows(row.sellers, 'SELLER') : [];
+    combined = [...designers, ...sellers];
+  }
+
+  const byId = new Map<string, NormalizedDesignerOption>();
+  for (const item of combined) {
+    if (!item.id) continue;
+    if (!byId.has(item.id)) byId.set(item.id, item);
+  }
+  return Array.from(byId.values()).sort((a, b) => a.businessName.localeCompare(b.businessName));
+};
+
 async function readHowItWorksStyleWithFallback<T>() {
   let lastError: unknown = null;
   for (const path of howItWorksStyleReadPaths) {
@@ -384,9 +450,18 @@ async function readHomepageCategoriesWithFallback<T>() {
 
 async function readDesignerOptionsWithFallback<T>() {
   let lastError: unknown = null;
+  let sawEmptySuccess = false;
   for (const path of designerOptionsReadPaths) {
     try {
-      return await apiService.get<T>(path);
+      const response = await apiService.get<any>(path);
+      const normalized = normalizeDesignerOptionsPayload(response);
+      if (normalized.length > 0) {
+        return {
+          success: true,
+          data: normalized,
+        } as T;
+      }
+      sawEmptySuccess = true;
     } catch (error) {
       lastError = error;
       if (isRetryableRouteError(error)) {
@@ -396,37 +471,30 @@ async function readDesignerOptionsWithFallback<T>() {
     }
   }
   try {
-    const productOptions = await apiService.get<{
-      success: boolean;
-      data?: {
-        designers?: Array<{ id: string; businessName: string; country: string; vendorType?: 'DESIGNER' | 'SELLER' }>;
-        sellers?: Array<{ id: string; businessName: string; country: string; vendorType?: 'DESIGNER' | 'SELLER' }>;
-      };
-    }>('/admin/products/options');
-    const designers = Array.isArray(productOptions?.data?.designers)
-      ? productOptions.data.designers.map((item) => ({
-          id: item.id,
-          businessName: item.businessName,
-          country: item.country,
-          vendorType: 'DESIGNER' as const,
-        }))
-      : [];
-    const sellers = Array.isArray(productOptions?.data?.sellers)
-      ? productOptions.data.sellers.map((item) => ({
-          id: item.id,
-          businessName: String(item.businessName || '').trim() || 'Seller',
-          country: item.country,
-          vendorType: 'SELLER' as const,
-        }))
-      : [];
+    const productOptions = await apiService.get<any>('/admin/products/options');
+    const designers = normalizeDesignerOptionRows(
+      Array.isArray(productOptions?.data?.designers) ? productOptions.data.designers : [],
+      'DESIGNER'
+    );
+    const sellers = normalizeDesignerOptionRows(
+      Array.isArray(productOptions?.data?.sellers) ? productOptions.data.sellers : [],
+      'SELLER'
+    );
+    const combined = [...designers, ...sellers];
     return {
       success: true,
-      data: [...designers, ...sellers],
+      data: combined,
     } as T;
   } catch (fallbackError) {
     if (!isRetryableRouteError(fallbackError)) {
       throw fallbackError;
     }
+  }
+  if (sawEmptySuccess) {
+    return {
+      success: true,
+      data: [],
+    } as T;
   }
   throw lastError ?? new Error('Designer options route not found.');
 }

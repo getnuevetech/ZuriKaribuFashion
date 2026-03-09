@@ -1942,6 +1942,11 @@ function SectionModal({
                 required
               >
                 <option value="">Select profile</option>
+                {designerProfiles.length === 0 && sellerProfiles.length === 0 ? (
+                  <option value="" disabled>
+                    No designer/seller profiles found yet
+                  </option>
+                ) : null}
                 {designerProfiles.length > 0 ? (
                   <optgroup label="Designers">
                     {designerProfiles.map((designer) => (
