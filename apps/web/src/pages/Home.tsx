@@ -407,7 +407,6 @@ export default function Home() {
 
   const { data: categoriesData } = useQuery({
     queryKey: ['homepageCategories'],
-    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getCategories();
       return response.success ? response.data : null;
@@ -538,7 +537,7 @@ export default function Home() {
 
   const categories = useMemo(
     () =>
-      (USE_DYNAMIC_HOMEPAGE && Array.isArray(categoriesData) && categoriesData.length > 0 ? categoriesData : kimiCategories).slice(0, 3).map((item: any, index: number) => ({
+      (Array.isArray(categoriesData) && categoriesData.length > 0 ? categoriesData : kimiCategories).slice(0, 3).map((item: any, index: number) => ({
         id: String(item.id ?? index),
         title: asText(item.title, kimiCategories[index % kimiCategories.length].title),
         description: asText(item.description, kimiCategories[index % kimiCategories.length].description),
@@ -731,7 +730,7 @@ export default function Home() {
                   <p className="text-white/80 text-sm mb-4">{category.description}</p>
                   <span className="inline-flex items-center px-4 py-2" style={{ border: '1px solid currentColor' }}>
                     <span className="border-white text-white hover:bg-white hover:text-black rounded-none text-xs tracking-wider">
-                      {category.ctaText || 'SHOP NOW'} <ChevronRight className="ml-1 w-4 h-4" />
+                      {category.ctaText || 'SHOP NOW'}
                     </span>
                   </span>
                 </div>
