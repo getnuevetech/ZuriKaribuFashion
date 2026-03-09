@@ -115,6 +115,64 @@ interface DesignerOption {
   country: string;
 }
 
+const FALLBACK_AFRICAN_COUNTRY_OPTIONS: CountryOption[] = [
+  { code: 'DZ', name: 'Algeria', flag: '🇩🇿' },
+  { code: 'AO', name: 'Angola', flag: '🇦🇴' },
+  { code: 'BJ', name: 'Benin', flag: '🇧🇯' },
+  { code: 'BW', name: 'Botswana', flag: '🇧🇼' },
+  { code: 'BF', name: 'Burkina Faso', flag: '🇧🇫' },
+  { code: 'BI', name: 'Burundi', flag: '🇧🇮' },
+  { code: 'CV', name: 'Cabo Verde', flag: '🇨🇻' },
+  { code: 'CM', name: 'Cameroon', flag: '🇨🇲' },
+  { code: 'CF', name: 'Central African Republic', flag: '🇨🇫' },
+  { code: 'TD', name: 'Chad', flag: '🇹🇩' },
+  { code: 'KM', name: 'Comoros', flag: '🇰🇲' },
+  { code: 'CG', name: 'Congo', flag: '🇨🇬' },
+  { code: 'CD', name: 'Democratic Republic of the Congo', flag: '🇨🇩' },
+  { code: 'CI', name: "Cote d'Ivoire", flag: '🇨🇮' },
+  { code: 'DJ', name: 'Djibouti', flag: '🇩🇯' },
+  { code: 'EG', name: 'Egypt', flag: '🇪🇬' },
+  { code: 'GQ', name: 'Equatorial Guinea', flag: '🇬🇶' },
+  { code: 'ER', name: 'Eritrea', flag: '🇪🇷' },
+  { code: 'SZ', name: 'Eswatini', flag: '🇸🇿' },
+  { code: 'ET', name: 'Ethiopia', flag: '🇪🇹' },
+  { code: 'GA', name: 'Gabon', flag: '🇬🇦' },
+  { code: 'GM', name: 'Gambia', flag: '🇬🇲' },
+  { code: 'GH', name: 'Ghana', flag: '🇬🇭' },
+  { code: 'GN', name: 'Guinea', flag: '🇬🇳' },
+  { code: 'GW', name: 'Guinea-Bissau', flag: '🇬🇼' },
+  { code: 'KE', name: 'Kenya', flag: '🇰🇪' },
+  { code: 'LS', name: 'Lesotho', flag: '🇱🇸' },
+  { code: 'LR', name: 'Liberia', flag: '🇱🇷' },
+  { code: 'LY', name: 'Libya', flag: '🇱🇾' },
+  { code: 'MG', name: 'Madagascar', flag: '🇲🇬' },
+  { code: 'MW', name: 'Malawi', flag: '🇲🇼' },
+  { code: 'ML', name: 'Mali', flag: '🇲🇱' },
+  { code: 'MR', name: 'Mauritania', flag: '🇲🇷' },
+  { code: 'MU', name: 'Mauritius', flag: '🇲🇺' },
+  { code: 'MA', name: 'Morocco', flag: '🇲🇦' },
+  { code: 'MZ', name: 'Mozambique', flag: '🇲🇿' },
+  { code: 'NA', name: 'Namibia', flag: '🇳🇦' },
+  { code: 'NE', name: 'Niger', flag: '🇳🇪' },
+  { code: 'NG', name: 'Nigeria', flag: '🇳🇬' },
+  { code: 'RW', name: 'Rwanda', flag: '🇷🇼' },
+  { code: 'ST', name: 'Sao Tome and Principe', flag: '🇸🇹' },
+  { code: 'SN', name: 'Senegal', flag: '🇸🇳' },
+  { code: 'SC', name: 'Seychelles', flag: '🇸🇨' },
+  { code: 'SL', name: 'Sierra Leone', flag: '🇸🇱' },
+  { code: 'SO', name: 'Somalia', flag: '🇸🇴' },
+  { code: 'ZA', name: 'South Africa', flag: '🇿🇦' },
+  { code: 'SS', name: 'South Sudan', flag: '🇸🇸' },
+  { code: 'SD', name: 'Sudan', flag: '🇸🇩' },
+  { code: 'TZ', name: 'Tanzania', flag: '🇹🇿' },
+  { code: 'TG', name: 'Togo', flag: '🇹🇬' },
+  { code: 'TN', name: 'Tunisia', flag: '🇹🇳' },
+  { code: 'UG', name: 'Uganda', flag: '🇺🇬' },
+  { code: 'EH', name: 'Western Sahara', flag: '🇪🇭' },
+  { code: 'ZM', name: 'Zambia', flag: '🇿🇲' },
+  { code: 'ZW', name: 'Zimbabwe', flag: '🇿🇼' },
+];
+
 const TABS = [
   { id: 'topStrip' as SectionType, label: 'Top Strip', icon: Layout },
   { id: 'countries' as SectionType, label: 'Countries', icon: Globe },
@@ -224,13 +282,20 @@ export default function HomepageSections() {
         api.homepageSections.getAdminDesignerOptions(),
       ]);
       if (countryOptionsRes.success) {
-        setCountryOptions(countryOptionsRes.data || []);
+        setCountryOptions(
+          Array.isArray(countryOptionsRes.data) && countryOptionsRes.data.length > 0
+            ? countryOptionsRes.data
+            : FALLBACK_AFRICAN_COUNTRY_OPTIONS
+        );
+      } else {
+        setCountryOptions(FALLBACK_AFRICAN_COUNTRY_OPTIONS);
       }
       if (designerOptionsRes.success) {
         setDesignerOptions(designerOptionsRes.data || []);
       }
     } catch (error) {
       console.error('Error fetching homepage auxiliary options:', error);
+      setCountryOptions(FALLBACK_AFRICAN_COUNTRY_OPTIONS);
     }
   };
 

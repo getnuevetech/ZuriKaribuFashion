@@ -64,11 +64,19 @@ const isRouteNotFoundError = (error: unknown) =>
   (error as AxiosError)?.response?.status === 404;
 const isMethodNotAllowedError = (error: unknown) =>
   (error as AxiosError)?.response?.status === 405;
+const isRouteNotFoundMessageError = (error: unknown) => {
+  const message = String((error as AxiosError)?.response?.data?.message || '').toLowerCase();
+  return message.includes('route not found') || message.includes('not found');
+};
+const isRetryableRouteError = (error: unknown) =>
+  isRouteNotFoundError(error) || isMethodNotAllowedError(error) || isRouteNotFoundMessageError(error);
 
 const topStripReadPaths = [
   '/homepage-sections/admin/top-strip',
   '/homepage/admin/top-strip',
   '/admin/top-strip',
+  '/admin/homepage/top-strip',
+  '/admin/homepage-sections/top-strip',
   '/homepage-sections/top-strip',
   '/homepage/top-strip',
 ];
@@ -77,6 +85,8 @@ const topStripWritePaths = [
   '/homepage-sections/admin/top-strip',
   '/homepage/admin/top-strip',
   '/admin/top-strip',
+  '/admin/homepage/top-strip',
+  '/admin/homepage-sections/top-strip',
 ];
 
 async function readTopStripWithFallback<T>() {
@@ -86,7 +96,7 @@ async function readTopStripWithFallback<T>() {
       return await apiService.get<T>(path);
     } catch (error) {
       lastError = error;
-      if (isRouteNotFoundError(error)) {
+      if (isRetryableRouteError(error)) {
         continue;
       }
       throw error;
@@ -102,7 +112,7 @@ async function writeTopStripWithFallback<T>(data: unknown) {
       return await apiService.put<T>(path, data);
     } catch (putError) {
       lastError = putError;
-      if (!isRouteNotFoundError(putError) && !isMethodNotAllowedError(putError)) {
+      if (!isRetryableRouteError(putError)) {
         throw putError;
       }
     }
@@ -110,7 +120,7 @@ async function writeTopStripWithFallback<T>(data: unknown) {
       return await apiService.patch<T>(path, data);
     } catch (patchError) {
       lastError = patchError;
-      if (!isRouteNotFoundError(patchError) && !isMethodNotAllowedError(patchError)) {
+      if (!isRetryableRouteError(patchError)) {
         throw patchError;
       }
     }
