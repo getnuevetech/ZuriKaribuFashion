@@ -1115,16 +1115,15 @@ export default function Home() {
                 href={heritage.ctaLink}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center px-8 py-3"
-                style={{ border: '1px solid currentColor' }}
+                className="inline-flex items-center px-8 py-3 border border-white text-white transition-colors hover:bg-white hover:text-black"
               >
-                <span className="rounded-none border-white text-white hover:bg-white hover:text-black text-sm tracking-wider">
+                <span className="rounded-none border-white text-sm tracking-wider">
                   {heritage.ctaText} <ArrowRight className="ml-2 w-4 h-4 inline" />
                 </span>
               </a>
             ) : (
-              <Link to={heritage.ctaLink} className="inline-flex items-center px-8 py-3" style={{ border: '1px solid currentColor' }}>
-                <span className="rounded-none border-white text-white hover:bg-white hover:text-black text-sm tracking-wider">
+              <Link to={heritage.ctaLink} className="inline-flex items-center px-8 py-3 border border-white text-white transition-colors hover:bg-white hover:text-black">
+                <span className="rounded-none border-white text-sm tracking-wider">
                   {heritage.ctaText} <ArrowRight className="ml-2 w-4 h-4 inline" />
                 </span>
               </Link>
