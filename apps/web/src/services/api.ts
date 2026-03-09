@@ -1557,6 +1557,9 @@ async function readAdminBlogsWithFallback<T>(params?: { search?: string; audienc
       throw error;
     }
   }
+  if (isRetryableRouteError(lastError)) {
+    throw new Error('Blog module is not deployed on the backend yet. Redeploy the API service and retry.');
+  }
   throw lastError ?? new Error('Blog admin route not found.');
 }
 
@@ -1570,6 +1573,9 @@ async function readAdminBlogOptionsWithFallback<T>(params?: { audienceType?: 'SE
       if (isRetryableRouteError(error)) continue;
       throw error;
     }
+  }
+  if (isRetryableRouteError(lastError)) {
+    throw new Error('Blog module is not deployed on the backend yet. Redeploy the API service and retry.');
   }
   throw lastError ?? new Error('Blog option route not found.');
 }
@@ -1585,6 +1591,9 @@ async function createAdminBlogWithFallback<T>(data: unknown) {
       throw error;
     }
   }
+  if (isRetryableRouteError(lastError)) {
+    throw new Error('Blog module is not deployed on the backend yet. Redeploy the API service and retry.');
+  }
   throw lastError ?? new Error('Blog create route not found.');
 }
 
@@ -1599,6 +1608,9 @@ async function updateAdminBlogWithFallback<T>(id: string, data: unknown) {
       throw error;
     }
   }
+  if (isRetryableRouteError(lastError)) {
+    throw new Error('Blog module is not deployed on the backend yet. Redeploy the API service and retry.');
+  }
   throw lastError ?? new Error('Blog update route not found.');
 }
 
@@ -1612,6 +1624,9 @@ async function deleteAdminBlogWithFallback<T>(id: string) {
       if (isRetryableRouteError(error)) continue;
       throw error;
     }
+  }
+  if (isRetryableRouteError(lastError)) {
+    throw new Error('Blog module is not deployed on the backend yet. Redeploy the API service and retry.');
   }
   throw lastError ?? new Error('Blog delete route not found.');
 }

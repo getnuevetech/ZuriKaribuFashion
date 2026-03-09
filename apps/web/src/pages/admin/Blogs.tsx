@@ -84,7 +84,7 @@ export default function AdminBlogs() {
       }
     } catch (fetchError) {
       console.error('Failed to fetch blogs:', fetchError);
-      setError((fetchError as any)?.response?.data?.message || 'Failed to load blogs.');
+      setError((fetchError as any)?.response?.data?.message || (fetchError as any)?.message || 'Failed to load blogs.');
     } finally {
       setLoading(false);
     }
@@ -150,7 +150,7 @@ export default function AdminBlogs() {
       await fetchBlogs();
     } catch (saveError: any) {
       console.error('Failed to save blog:', saveError);
-      setError(saveError?.response?.data?.message || 'Failed to save blog.');
+      setError(saveError?.response?.data?.message || saveError?.message || 'Failed to save blog.');
     } finally {
       setSaving(false);
     }
@@ -166,7 +166,7 @@ export default function AdminBlogs() {
       await fetchBlogs();
     } catch (deleteError: any) {
       console.error('Failed to delete blog:', deleteError);
-      setError(deleteError?.response?.data?.message || 'Failed to delete blog.');
+      setError(deleteError?.response?.data?.message || deleteError?.message || 'Failed to delete blog.');
     }
   };
 
