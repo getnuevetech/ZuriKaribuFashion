@@ -39,6 +39,7 @@ interface PromoBadgeSettings {
 }
 
 const PROMO_BADGE_FALLBACK_SECTION = 'PROMO_BADGE';
+const BLOG_STORY_FALLBACK_SECTION = 'BLOG_STORY';
 const PROMO_BADGE_DEFAULTS: PromoBadgeSettings = {
   valueText: '50+',
   labelText: 'New Arrivals',
@@ -83,7 +84,11 @@ export default function AdminBanners() {
   }, []);
 
   const visibleBanners = useMemo(
-    () => banners.filter((banner) => String(banner.section || '').toUpperCase() !== PROMO_BADGE_FALLBACK_SECTION),
+    () =>
+      banners.filter((banner) => {
+        const section = String(banner.section || '').toUpperCase();
+        return section !== PROMO_BADGE_FALLBACK_SECTION && section !== BLOG_STORY_FALLBACK_SECTION;
+      }),
     [banners]
   );
 

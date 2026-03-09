@@ -1599,6 +1599,185 @@ const homepageSectionsApi = {
 const adminBlogReadPaths = ['/blogs/admin', '/admin/blogs'];
 const adminBlogOptionPaths = ['/blogs/admin/options', '/admin/blogs/options'];
 const adminBlogWritePaths = ['/blogs/admin', '/admin/blogs'];
+const BLOGS_FALLBACK_SECTION = 'BLOG_STORY';
+const BLOGS_FALLBACK_META_PREFIX = 'BLOG_JSON:';
+const BLOGS_FALLBACK_IMAGE =
+  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+
+const normalizeBlogAudienceType = (value: unknown): 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER' => {
+  const normalized = String(value || '').trim().toUpperCase();
+  return normalized === 'SELLER' || normalized === 'DESIGNER' || normalized === 'COUNTRY' ? normalized : 'OTHER';
+};
+
+const slugifyBlog = (value: unknown) =>
+  String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 200);
+
+const parseFallbackBlogMeta = (value: unknown) => {
+  const raw = String(value || '').trim();
+  if (!raw) return {};
+  const jsonText = raw.startsWith(BLOGS_FALLBACK_META_PREFIX) ? raw.slice(BLOGS_FALLBACK_META_PREFIX.length) : raw;
+  try {
+    const parsed = JSON.parse(jsonText);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+};
+
+const mapFallbackBannerToBlog = (row: any) => {
+  if (String(row?.section || '').toUpperCase() !== BLOGS_FALLBACK_SECTION) return null;
+  const meta = parseFallbackBlogMeta(row?.ctaLink);
+  const slug = slugifyBlog(meta.slug || row?.name || row?.title) || `story-${String(row?.id || '').slice(0, 8)}`;
+  const content = String(meta.content || '').trim();
+  const excerpt = String(meta.excerpt || row?.subtitle || '').trim();
+  const coverImage = String(meta.coverImage || row?.images?.[0] || '').trim();
+  const targetName = String(meta.targetName || '').trim();
+  const targetEntityId = String(meta.targetEntityId || '').trim();
+  const isPublished = typeof meta.isPublished === 'boolean' ? Boolean(meta.isPublished) : Boolean(row?.isActive);
+  const publishedAt = isPublished
+    ? String(meta.publishedAt || row?.updatedAt || row?.createdAt || '')
+    : null;
+  return {
+    id: String(row?.id || ''),
+    title: String(row?.title || row?.name || 'Untitled Story').trim(),
+    slug,
+    excerpt: excerpt || null,
+    content: content || excerpt || '',
+    audienceType: normalizeBlogAudienceType(meta.audienceType || row?.ctaText),
+    targetName: targetName || null,
+    targetEntityId: targetEntityId || null,
+    coverImage: coverImage || null,
+    isPublished,
+    publishedAt,
+    createdAt: String(meta.createdAt || row?.createdAt || ''),
+    updatedAt: String(row?.updatedAt || meta.updatedAt || row?.createdAt || ''),
+    link: `/stories/${slug}`,
+  };
+};
+type FallbackBlogRow = NonNullable<ReturnType<typeof mapFallbackBannerToBlog>>;
+
+async function readFallbackBlogsFromBannerStore() {
+  const response = await adminApi.getBanners();
+  const rows = Array.isArray((response as any)?.data) ? (response as any).data : [];
+  return rows
+    .map(mapFallbackBannerToBlog)
+    .filter((row): row is FallbackBlogRow => Boolean(row))
+    .sort((a, b) => {
+      const left = Date.parse(a.updatedAt || '') || 0;
+      const right = Date.parse(b.updatedAt || '') || 0;
+      return right - left;
+    });
+}
+
+async function readFallbackPublishedBlogsFromBannerStore(params?: {
+  audienceType?: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER';
+}) {
+  const response = await bannersApi.getBanners(BLOGS_FALLBACK_SECTION);
+  const rows = Array.isArray((response as any)?.data) ? (response as any).data : [];
+  const normalizedAudience = params?.audienceType ? normalizeBlogAudienceType(params.audienceType) : '';
+  return rows
+    .map(mapFallbackBannerToBlog)
+    .filter((row): row is FallbackBlogRow => Boolean(row))
+    .filter((row) => row.isPublished)
+    .filter((row) => (!normalizedAudience ? true : row.audienceType === normalizedAudience))
+    .sort((a, b) => {
+      const left = Date.parse(a.publishedAt || a.updatedAt || '') || 0;
+      const right = Date.parse(b.publishedAt || b.updatedAt || '') || 0;
+      return right - left;
+    });
+}
+
+const applyAdminBlogFilters = (
+  rows: FallbackBlogRow[],
+  params?: { search?: string; audienceType?: string; status?: 'PUBLISHED' | 'DRAFT' }
+) => {
+  const search = String(params?.search || '').trim().toLowerCase();
+  const audience = params?.audienceType ? normalizeBlogAudienceType(params.audienceType) : '';
+  const status = String(params?.status || '').trim().toUpperCase();
+  return rows.filter((row) => {
+    const matchesSearch =
+      !search ||
+      row.title.toLowerCase().includes(search) ||
+      row.slug.toLowerCase().includes(search) ||
+      String(row.excerpt || '').toLowerCase().includes(search);
+    const matchesAudience = !audience || row.audienceType === audience;
+    const matchesStatus = !status || (status === 'PUBLISHED' ? row.isPublished : !row.isPublished);
+    return matchesSearch && matchesAudience && matchesStatus;
+  });
+};
+
+async function generateUniqueFallbackBlogSlug(title: unknown, explicit?: unknown, excludeId?: string) {
+  const base = slugifyBlog(explicit || title) || `story-${Date.now()}`;
+  const rows = await readFallbackBlogsFromBannerStore();
+  const used = new Set(
+    rows.filter((row) => !excludeId || row.id !== excludeId).map((row) => String(row.slug || '').toLowerCase())
+  );
+  if (!used.has(base.toLowerCase())) return base;
+  let suffix = 2;
+  let candidate = `${base}-${suffix}`;
+  while (used.has(candidate.toLowerCase())) {
+    suffix += 1;
+    candidate = `${base}-${suffix}`;
+  }
+  return candidate;
+}
+
+const toFallbackBannerPayloadFromBlog = (
+  input: {
+    title?: unknown;
+    slug?: unknown;
+    excerpt?: unknown;
+    content?: unknown;
+    audienceType?: unknown;
+    targetName?: unknown;
+    targetEntityId?: unknown;
+    coverImage?: unknown;
+    isPublished?: unknown;
+  },
+  existing?: ReturnType<typeof mapFallbackBannerToBlog> | null
+) => {
+  const title = String(input.title ?? existing?.title ?? '').trim() || 'Untitled Story';
+  const slug = slugifyBlog(input.slug ?? existing?.slug ?? title) || `story-${Date.now()}`;
+  const excerpt = String(input.excerpt ?? existing?.excerpt ?? '').trim();
+  const content = String(input.content ?? existing?.content ?? '').trim() || excerpt || title;
+  const audienceType = normalizeBlogAudienceType(input.audienceType ?? existing?.audienceType);
+  const targetName = String(input.targetName ?? existing?.targetName ?? '').trim();
+  const targetEntityId = String(input.targetEntityId ?? existing?.targetEntityId ?? '').trim();
+  const coverImage = String(input.coverImage ?? existing?.coverImage ?? '').trim();
+  const isPublished =
+    typeof input.isPublished === 'boolean' ? input.isPublished : Boolean(existing?.isPublished);
+  const now = new Date().toISOString();
+  const publishedAt = isPublished ? String(existing?.publishedAt || now) : null;
+  const meta = {
+    slug,
+    content,
+    excerpt,
+    audienceType,
+    targetName: targetName || null,
+    targetEntityId: targetEntityId || null,
+    coverImage: coverImage || null,
+    isPublished,
+    publishedAt,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  };
+  return {
+    name: `BLOG:${slug}`,
+    section: BLOGS_FALLBACK_SECTION,
+    title,
+    subtitle: excerpt || null,
+    ctaText: audienceType,
+    ctaLink: `${BLOGS_FALLBACK_META_PREFIX}${JSON.stringify(meta)}`,
+    images: [coverImage || existing?.coverImage || BLOGS_FALLBACK_IMAGE],
+    isActive: isPublished,
+    displayOrder: 0,
+  };
+};
 
 async function readAdminBlogsWithFallback<T>(params?: { search?: string; audienceType?: string; status?: 'PUBLISHED' | 'DRAFT' }) {
   let lastError: unknown = null;
@@ -1612,7 +1791,11 @@ async function readAdminBlogsWithFallback<T>(params?: { search?: string; audienc
     }
   }
   if (isRetryableRouteError(lastError)) {
-    throw new Error('Blog module is not deployed on the backend yet. Redeploy the API service and retry.');
+    const fallbackRows = await readFallbackBlogsFromBannerStore();
+    return {
+      success: true,
+      data: applyAdminBlogFilters(fallbackRows, params),
+    } as T;
   }
   throw lastError ?? new Error('Blog admin route not found.');
 }
@@ -1629,7 +1812,21 @@ async function readAdminBlogOptionsWithFallback<T>(params?: { audienceType?: 'SE
     }
   }
   if (isRetryableRouteError(lastError)) {
-    throw new Error('Blog module is not deployed on the backend yet. Redeploy the API service and retry.');
+    const fallbackRows = await readFallbackBlogsFromBannerStore();
+    const normalizedAudience = params?.audienceType ? normalizeBlogAudienceType(params.audienceType) : '';
+    return {
+      success: true,
+      data: fallbackRows
+        .filter((row) => row.isPublished)
+        .filter((row) => (!normalizedAudience ? true : row.audienceType === normalizedAudience))
+        .map((row) => ({
+          id: row.id,
+          title: row.title,
+          slug: row.slug,
+          audienceType: row.audienceType,
+          link: row.link,
+        })),
+    } as T;
   }
   throw lastError ?? new Error('Blog option route not found.');
 }
@@ -1646,7 +1843,23 @@ async function createAdminBlogWithFallback<T>(data: unknown) {
     }
   }
   if (isRetryableRouteError(lastError)) {
-    throw new Error('Blog module is not deployed on the backend yet. Redeploy the API service and retry.');
+    const input = (data || {}) as any;
+    const uniqueSlug = await generateUniqueFallbackBlogSlug(input.title, input.slug);
+    const payload = toFallbackBannerPayloadFromBlog({
+      ...input,
+      slug: uniqueSlug,
+      isPublished: Boolean(input.isPublished),
+    });
+    const created = await adminApi.createBanner(payload);
+    const mapped = mapFallbackBannerToBlog((created as any)?.data);
+    if (!mapped) {
+      throw new Error('Failed to create blog.');
+    }
+    return {
+      success: true,
+      data: mapped,
+      message: 'Blog created.',
+    } as T;
   }
   throw lastError ?? new Error('Blog create route not found.');
 }
@@ -1663,7 +1876,34 @@ async function updateAdminBlogWithFallback<T>(id: string, data: unknown) {
     }
   }
   if (isRetryableRouteError(lastError)) {
-    throw new Error('Blog module is not deployed on the backend yet. Redeploy the API service and retry.');
+    const input = (data || {}) as any;
+    const fallbackRows = await readFallbackBlogsFromBannerStore();
+    const existing = fallbackRows.find((row) => row.id === id);
+    if (!existing) {
+      throw new Error('Blog not found.');
+    }
+    const nextSlug =
+      input.slug !== undefined
+        ? await generateUniqueFallbackBlogSlug(input.title ?? existing.title, input.slug, id)
+        : existing.slug;
+    const payload = toFallbackBannerPayloadFromBlog(
+      {
+        ...existing,
+        ...input,
+        slug: nextSlug,
+      },
+      existing
+    );
+    const updated = await adminApi.updateBanner(id, payload);
+    const mapped = mapFallbackBannerToBlog((updated as any)?.data);
+    if (!mapped) {
+      throw new Error('Failed to update blog.');
+    }
+    return {
+      success: true,
+      data: mapped,
+      message: 'Blog updated.',
+    } as T;
   }
   throw lastError ?? new Error('Blog update route not found.');
 }
@@ -1680,7 +1920,11 @@ async function deleteAdminBlogWithFallback<T>(id: string) {
     }
   }
   if (isRetryableRouteError(lastError)) {
-    throw new Error('Blog module is not deployed on the backend yet. Redeploy the API service and retry.');
+    await adminApi.deleteBanner(id);
+    return {
+      success: true,
+      message: 'Blog deleted.',
+    } as T;
   }
   throw lastError ?? new Error('Blog delete route not found.');
 }
@@ -1727,11 +1971,32 @@ const adminBlogsApi = {
 };
 
 const blogsApi = {
-  getPublished: (params?: { audienceType?: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER' }) =>
-    apiService.get<{ success: boolean; data: any[] }>('/blogs', { params }),
+  getPublished: async (params?: { audienceType?: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER' }) => {
+    try {
+      return await apiService.get<{ success: boolean; data: any[] }>('/blogs', { params });
+    } catch (error) {
+      if (!isRetryableRouteError(error)) throw error;
+      const rows = await readFallbackPublishedBlogsFromBannerStore(params);
+      return { success: true, data: rows };
+    }
+  },
 
-  getBySlug: (slug: string) =>
-    apiService.get<{ success: boolean; data: any }>(`/blogs/${encodeURIComponent(slug)}`),
+  getBySlug: async (slug: string) => {
+    try {
+      return await apiService.get<{ success: boolean; data: any }>(`/blogs/${encodeURIComponent(slug)}`);
+    } catch (error) {
+      if (!isRetryableRouteError(error)) throw error;
+      const rows = await readFallbackPublishedBlogsFromBannerStore();
+      const normalized = String(slug || '').trim().toLowerCase();
+      const row = rows.find((item) => String(item.slug || '').toLowerCase() === normalized);
+      if (!row) {
+        const notFoundError = new Error('Story not found.');
+        (notFoundError as any).response = { status: 404, data: { success: false, message: 'Story not found.' } };
+        throw notFoundError;
+      }
+      return { success: true, data: row };
+    }
+  },
 
   getAdminBlogs: (params?: { search?: string; audienceType?: string; status?: 'PUBLISHED' | 'DRAFT' }) =>
     adminBlogsApi.getAdminBlogs(params),
