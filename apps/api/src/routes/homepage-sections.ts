@@ -12,6 +12,8 @@ const HOMEPAGE_VISIBILITY_SETTINGS_KEY = 'HOMEPAGE_SECTION_VISIBILITY';
 const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
 const HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY = 'HOMEPAGE_COUNTRY_IMAGE_GENERATION';
 const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
+const SPOTLIGHT_LINK_MODES = ['DEFAULT_STORE', 'CUSTOM_URL', 'BLOG'] as const;
+type SpotlightLinkMode = (typeof SPOTLIGHT_LINK_MODES)[number];
 const HOMEPAGE_SECTION_VISIBILITY_META = [
   { key: 'topStrip', label: 'Top Announcement Strip', description: 'Scrolling announcement bar above the hero banner.' },
   { key: 'hero', label: 'Hero Banner', description: 'Top hero carousel section.' },
@@ -65,9 +67,86 @@ const ensureHomepageSettingsSchema = async () => {
   }
 };
 
+let spotlightLinkSchemaEnsured = false;
+let spotlightLinkSchemaPromise: Promise<void> | null = null;
+const ensureSpotlightLinkSchema = async () => {
+  if (spotlightLinkSchemaEnsured) return;
+  if (spotlightLinkSchemaPromise) {
+    await spotlightLinkSchemaPromise;
+    return;
+  }
+  spotlightLinkSchemaPromise = (async () => {
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "DesignerSpotlightLink" (
+        "id" TEXT NOT NULL,
+        "spotlightId" TEXT NOT NULL,
+        "linkMode" TEXT NOT NULL DEFAULT 'DEFAULT_STORE',
+        "externalUrl" TEXT,
+        "blogPostId" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "DesignerSpotlightLink_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "DesignerSpotlightLink_spotlightId_key" ON "DesignerSpotlightLink"("spotlightId")`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "DesignerSpotlightLink_blogPostId_idx" ON "DesignerSpotlightLink"("blogPostId")`
+    );
+    spotlightLinkSchemaEnsured = true;
+  })();
+  try {
+    await spotlightLinkSchemaPromise;
+  } finally {
+    spotlightLinkSchemaPromise = null;
+  }
+};
+
+let blogSchemaEnsured = false;
+let blogSchemaPromise: Promise<void> | null = null;
+const ensureBlogSchema = async () => {
+  if (blogSchemaEnsured) return;
+  if (blogSchemaPromise) {
+    await blogSchemaPromise;
+    return;
+  }
+  blogSchemaPromise = (async () => {
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "BlogPost" (
+        "id" TEXT NOT NULL,
+        "title" TEXT NOT NULL,
+        "slug" TEXT NOT NULL,
+        "excerpt" TEXT,
+        "content" TEXT NOT NULL,
+        "audienceType" TEXT NOT NULL,
+        "targetName" TEXT,
+        "targetEntityId" TEXT,
+        "coverImage" TEXT,
+        "isPublished" BOOLEAN NOT NULL DEFAULT false,
+        "publishedAt" TIMESTAMP(3),
+        "createdBy" TEXT,
+        "updatedBy" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "BlogPost_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "BlogPost_slug_key" ON "BlogPost"("slug")`);
+    blogSchemaEnsured = true;
+  })();
+  try {
+    await blogSchemaPromise;
+  } finally {
+    blogSchemaPromise = null;
+  }
+};
+
 router.use(async (_req, _res, next) => {
   try {
     await ensureHomepageSettingsSchema();
+    await ensureSpotlightLinkSchema();
+    await ensureBlogSchema();
   } catch (error) {
     console.error('Failed to ensure homepage settings schema:', error);
   }
@@ -281,24 +360,50 @@ const normalizeCategoryInput = (input: any) => {
 };
 const shopCategoryUpdateSchema = shopCategoryCreateSchema.partial();
 
-const designerSpotlightCreateSchema = z.object({
+const designerSpotlightBaseSchema = z.object({
   designerId: z.string().uuid(),
   quote: z.string().min(1),
   bio: z.string().min(1),
   image: z.string().min(1),
+  linkMode: z.enum(SPOTLIGHT_LINK_MODES).optional(),
+  externalUrl: z.preprocess((value) => getString(value), z.string().url().optional()),
+  blogPostId: z.preprocess((value) => getString(value), z.string().uuid().optional()),
   displayOrder: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
 });
+
+const validateDesignerSpotlightLinkInputs = (value: any, ctx: z.RefinementCtx) => {
+  const linkMode = value.linkMode || 'DEFAULT_STORE';
+  if (linkMode === 'CUSTOM_URL' && !value.externalUrl) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'externalUrl is required when linkMode is CUSTOM_URL.',
+      path: ['externalUrl'],
+    });
+  }
+  if (linkMode === 'BLOG' && !value.blogPostId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'blogPostId is required when linkMode is BLOG.',
+      path: ['blogPostId'],
+    });
+  }
+};
+
+const designerSpotlightCreateSchema = designerSpotlightBaseSchema.superRefine(validateDesignerSpotlightLinkInputs);
 const normalizeDesignerSpotlightInput = (input: any) => ({
   ...input,
   designerId: getString(input?.designerId) ?? input?.designerId,
   quote: getString(input?.quote) ?? getString(input?.headline) ?? input?.quote,
   bio: getString(input?.bio) ?? getString(input?.description) ?? input?.bio,
   image: getString(input?.image) ?? input?.image,
+  linkMode: getString(input?.linkMode)?.toUpperCase() ?? input?.linkMode,
+  externalUrl: getString(input?.externalUrl) ?? getString(input?.ctaLink) ?? input?.externalUrl,
+  blogPostId: getString(input?.blogPostId) ?? input?.blogPostId,
   displayOrder: getNumber(input?.displayOrder) ?? input?.displayOrder,
   isActive: getBoolean(input?.isActive) ?? input?.isActive,
 });
-const designerSpotlightUpdateSchema = designerSpotlightCreateSchema.partial();
+const designerSpotlightUpdateSchema = designerSpotlightBaseSchema.partial().superRefine(validateDesignerSpotlightLinkInputs);
 
 const heritageCreateSchema = z.object({
   title: z.string().min(1),
@@ -948,6 +1053,109 @@ const readSpotlightProfilesByIds = async (ids: string[]): Promise<Map<string, Sp
   return mapped;
 };
 
+type SpotlightLinkConfig = {
+  linkMode: SpotlightLinkMode;
+  externalUrl: string | null;
+  blogPostId: string | null;
+};
+
+type BlogLinkMeta = {
+  id: string;
+  slug: string;
+  title: string;
+  audienceType: string;
+  isPublished: boolean;
+};
+
+const normalizeSpotlightLinkMode = (value: unknown): SpotlightLinkMode =>
+  SPOTLIGHT_LINK_MODES.includes(String(value || '').toUpperCase() as SpotlightLinkMode)
+    ? (String(value || '').toUpperCase() as SpotlightLinkMode)
+    : 'DEFAULT_STORE';
+
+const normalizeSpotlightLinkConfig = (raw: any): SpotlightLinkConfig => ({
+  linkMode: normalizeSpotlightLinkMode(raw?.linkMode),
+  externalUrl: getString(raw?.externalUrl) || null,
+  blogPostId: getString(raw?.blogPostId) || null,
+});
+
+const readSpotlightLinkMap = async (spotlightIds: string[]) => {
+  await ensureSpotlightLinkSchema();
+  const uniqueIds = Array.from(new Set(spotlightIds.map((id) => String(id || '').trim()).filter(Boolean)));
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "spotlightId","linkMode","externalUrl","blogPostId"
+     FROM "DesignerSpotlightLink"`
+  );
+  const map = new Map<string, SpotlightLinkConfig>();
+  for (const row of rows || []) {
+    const spotlightId = String(row.spotlightId || '').trim();
+    if (!spotlightId) continue;
+    if (uniqueIds.length > 0 && !uniqueIds.includes(spotlightId)) continue;
+    map.set(spotlightId, normalizeSpotlightLinkConfig(row));
+  }
+  return map;
+};
+
+const readBlogLinkMetaMap = async (blogIds: string[], publishedOnly = false) => {
+  await ensureBlogSchema();
+  const uniqueIds = Array.from(new Set(blogIds.map((id) => String(id || '').trim()).filter(Boolean)));
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id","slug","title","audienceType","isPublished"
+     FROM "BlogPost"`
+  );
+  const map = new Map<string, BlogLinkMeta>();
+  for (const row of rows || []) {
+    const id = String(row.id || '').trim();
+    if (!id || !uniqueIds.includes(id)) continue;
+    const isPublished = Boolean(row.isPublished);
+    if (publishedOnly && !isPublished) continue;
+    map.set(id, {
+      id,
+      slug: String(row.slug || ''),
+      title: String(row.title || ''),
+      audienceType: String(row.audienceType || '').toUpperCase(),
+      isPublished,
+    });
+  }
+  return map;
+};
+
+const upsertSpotlightLinkConfig = async (spotlightId: string, input: Partial<SpotlightLinkConfig>) => {
+  await ensureSpotlightLinkSchema();
+  const normalized = normalizeSpotlightLinkConfig(input);
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id" FROM "DesignerSpotlightLink" WHERE "spotlightId" = $1 LIMIT 1`,
+    spotlightId
+  );
+  const existing = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (existing?.id) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "DesignerSpotlightLink"
+       SET "linkMode" = $1, "externalUrl" = $2, "blogPostId" = $3, "updatedAt" = NOW()
+       WHERE "id" = $4`,
+      normalized.linkMode,
+      normalized.externalUrl,
+      normalized.blogPostId,
+      String(existing.id)
+    );
+    return normalized;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "DesignerSpotlightLink" ("id","spotlightId","linkMode","externalUrl","blogPostId","createdAt","updatedAt")
+     VALUES ($1,$2,$3,$4,$5,NOW(),NOW())`,
+    randomUUID(),
+    spotlightId,
+    normalized.linkMode,
+    normalized.externalUrl,
+    normalized.blogPostId
+  );
+  return normalized;
+};
+
+const deleteSpotlightLinkConfig = async (spotlightId: string) => {
+  await ensureSpotlightLinkSchema();
+  await prisma.$executeRawUnsafe(`DELETE FROM "DesignerSpotlightLink" WHERE "spotlightId" = $1`, spotlightId);
+};
+
 // ==================== PUBLIC ENDPOINTS ====================
 
 router.get('/visibility', async (_req, res) => {
@@ -1059,6 +1267,17 @@ router.get('/designer-spotlight', async (req, res) => {
     }
 
     const profilesById = await readSpotlightProfilesByIds([spotlight.designerId]);
+    const spotlightLinkMap = await readSpotlightLinkMap([spotlight.id]);
+    const spotlightLink = spotlightLinkMap.get(spotlight.id) || {
+      linkMode: 'DEFAULT_STORE' as SpotlightLinkMode,
+      externalUrl: null,
+      blogPostId: null,
+    };
+    const blogMap =
+      spotlightLink.blogPostId
+        ? await readBlogLinkMetaMap([spotlightLink.blogPostId], true)
+        : new Map<string, BlogLinkMeta>();
+    const blog = spotlightLink.blogPostId ? blogMap.get(spotlightLink.blogPostId) || null : null;
     const profile = profilesById.get(spotlight.designerId) || null;
 
     res.json({
@@ -1074,6 +1293,18 @@ router.get('/designer-spotlight', async (req, res) => {
             }
           : null,
         vendorType: profile?.vendorType || null,
+        linkMode: spotlightLink.linkMode,
+        externalUrl: spotlightLink.externalUrl,
+        blogPostId: spotlightLink.blogPostId,
+        blog: blog
+          ? {
+              id: blog.id,
+              slug: blog.slug,
+              title: blog.title,
+              audienceType: blog.audienceType,
+              url: `/stories/${blog.slug}`,
+            }
+          : null,
       },
     });
   } catch (error) {
@@ -1094,7 +1325,19 @@ router.get('/designer-spotlights', async (req, res) => {
     });
 
     const designerIds = spotlights.map((spotlight) => spotlight.designerId);
-    const profilesById = await readSpotlightProfilesByIds(designerIds);
+    const spotlightIds = spotlights.map((spotlight) => spotlight.id);
+    const [profilesById, spotlightLinkMap] = await Promise.all([
+      readSpotlightProfilesByIds(designerIds),
+      readSpotlightLinkMap(spotlightIds),
+    ]);
+    const blogIds = Array.from(
+      new Set(
+        spotlights
+          .map((spotlight) => spotlightLinkMap.get(spotlight.id)?.blogPostId || null)
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+    const blogMap = await readBlogLinkMetaMap(blogIds, true);
 
     res.json({
       success: true,
@@ -1109,6 +1352,20 @@ router.get('/designer-spotlights', async (req, res) => {
             }
           : null,
         vendorType: profilesById.get(spotlight.designerId)?.vendorType || null,
+        linkMode: spotlightLinkMap.get(spotlight.id)?.linkMode || 'DEFAULT_STORE',
+        externalUrl: spotlightLinkMap.get(spotlight.id)?.externalUrl || null,
+        blogPostId: spotlightLinkMap.get(spotlight.id)?.blogPostId || null,
+        blog:
+          spotlightLinkMap.get(spotlight.id)?.blogPostId &&
+          blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))
+            ? {
+                id: blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.id,
+                slug: blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.slug,
+                title: blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.title,
+                audienceType: blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.audienceType,
+                url: `/stories/${blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.slug}`,
+              }
+            : null,
       })),
     });
   } catch (error) {
@@ -1667,7 +1924,19 @@ router.get('/admin/designer-spotlight', authenticate, authorizePermissions(Permi
       orderBy: { displayOrder: 'asc' },
     });
     const designerIds = spotlights.map((spotlight) => spotlight.designerId);
-    const profilesById = await readSpotlightProfilesByIds(designerIds);
+    const spotlightIds = spotlights.map((spotlight) => spotlight.id);
+    const [profilesById, spotlightLinkMap] = await Promise.all([
+      readSpotlightProfilesByIds(designerIds),
+      readSpotlightLinkMap(spotlightIds),
+    ]);
+    const blogIds = Array.from(
+      new Set(
+        spotlights
+          .map((spotlight) => spotlightLinkMap.get(spotlight.id)?.blogPostId || null)
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+    const blogMap = await readBlogLinkMetaMap(blogIds, false);
     const data = spotlights.map((spotlight) => ({
       ...spotlight,
       designer: profilesById.get(spotlight.designerId)
@@ -1678,6 +1947,21 @@ router.get('/admin/designer-spotlight', authenticate, authorizePermissions(Permi
           }
         : null,
       vendorType: profilesById.get(spotlight.designerId)?.vendorType || null,
+      linkMode: spotlightLinkMap.get(spotlight.id)?.linkMode || 'DEFAULT_STORE',
+      externalUrl: spotlightLinkMap.get(spotlight.id)?.externalUrl || null,
+      blogPostId: spotlightLinkMap.get(spotlight.id)?.blogPostId || null,
+      blog:
+        spotlightLinkMap.get(spotlight.id)?.blogPostId &&
+        blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))
+          ? {
+              id: blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.id,
+              slug: blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.slug,
+              title: blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.title,
+              audienceType: blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.audienceType,
+              isPublished: blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.isPublished,
+              url: `/stories/${blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.slug}`,
+            }
+          : null,
     }));
 
     res.json({ success: true, data });
@@ -1688,9 +1972,29 @@ router.get('/admin/designer-spotlight', authenticate, authorizePermissions(Permi
 
 router.post('/admin/designer-spotlight', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
-    const data = designerSpotlightCreateSchema.parse(normalizeDesignerSpotlightInput(req.body));
-    const spotlight = await prisma.designerSpotlight.create({ data });
-    res.status(201).json({ success: true, data: spotlight });
+    const parsed = designerSpotlightCreateSchema.parse(normalizeDesignerSpotlightInput(req.body));
+    if (parsed.linkMode === 'BLOG' && parsed.blogPostId) {
+      const blogMap = await readBlogLinkMetaMap([parsed.blogPostId], false);
+      if (!blogMap.has(parsed.blogPostId)) {
+        return res.status(400).json({ success: false, message: 'Selected blog post was not found.' });
+      }
+    }
+    const spotlight = await prisma.designerSpotlight.create({
+      data: {
+        designerId: parsed.designerId,
+        quote: parsed.quote,
+        bio: parsed.bio,
+        image: parsed.image,
+        displayOrder: parsed.displayOrder,
+        isActive: parsed.isActive,
+      },
+    });
+    const linkConfig = await upsertSpotlightLinkConfig(spotlight.id, {
+      linkMode: normalizeSpotlightLinkMode(parsed.linkMode),
+      externalUrl: parsed.externalUrl || null,
+      blogPostId: parsed.blogPostId || null,
+    });
+    res.status(201).json({ success: true, data: { ...spotlight, ...linkConfig } });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to create spotlight' });
   }
@@ -1699,11 +2003,35 @@ router.post('/admin/designer-spotlight', authenticate, authorizePermissions(Perm
 router.put('/admin/designer-spotlight/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const data = designerSpotlightUpdateSchema.parse(normalizeDesignerSpotlightInput(req.body));
+    if (data.linkMode === 'BLOG' && data.blogPostId) {
+      const blogMap = await readBlogLinkMetaMap([data.blogPostId], false);
+      if (!blogMap.has(data.blogPostId)) {
+        return res.status(400).json({ success: false, message: 'Selected blog post was not found.' });
+      }
+    }
     const spotlight = await prisma.designerSpotlight.update({
       where: { id: req.params.id },
-      data,
+      data: {
+        ...(data.designerId ? { designerId: data.designerId } : {}),
+        ...(data.quote ? { quote: data.quote } : {}),
+        ...(data.bio ? { bio: data.bio } : {}),
+        ...(data.image ? { image: data.image } : {}),
+        ...(typeof data.displayOrder === 'number' ? { displayOrder: data.displayOrder } : {}),
+        ...(typeof data.isActive === 'boolean' ? { isActive: data.isActive } : {}),
+      },
     });
-    res.json({ success: true, data: spotlight });
+    const existingLinkMap = await readSpotlightLinkMap([spotlight.id]);
+    const existingLink = existingLinkMap.get(spotlight.id) || {
+      linkMode: 'DEFAULT_STORE' as SpotlightLinkMode,
+      externalUrl: null,
+      blogPostId: null,
+    };
+    const linkConfig = await upsertSpotlightLinkConfig(spotlight.id, {
+      linkMode: normalizeSpotlightLinkMode(data.linkMode ?? existingLink.linkMode),
+      externalUrl: data.externalUrl !== undefined ? data.externalUrl || null : existingLink.externalUrl,
+      blogPostId: data.blogPostId !== undefined ? data.blogPostId || null : existingLink.blogPostId,
+    });
+    res.json({ success: true, data: { ...spotlight, ...linkConfig } });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to update spotlight' });
   }
@@ -1711,6 +2039,7 @@ router.put('/admin/designer-spotlight/:id', authenticate, authorizePermissions(P
 
 router.delete('/admin/designer-spotlight/:id', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
   try {
+    await deleteSpotlightLinkConfig(req.params.id);
     await prisma.designerSpotlight.delete({ where: { id: req.params.id } });
     res.json({ success: true, message: 'Spotlight deleted' });
   } catch (error) {

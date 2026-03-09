@@ -1533,6 +1533,53 @@ const homepageSectionsApi = {
     apiService.put<{ success: boolean; data: any }>(`/homepage-sections/admin/footer/${id}`, data),
 };
 
+const blogsApi = {
+  getPublished: (params?: { audienceType?: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER' }) =>
+    apiService.get<{ success: boolean; data: any[] }>('/blogs', { params }),
+
+  getBySlug: (slug: string) =>
+    apiService.get<{ success: boolean; data: any }>(`/blogs/${encodeURIComponent(slug)}`),
+
+  getAdminBlogs: (params?: { search?: string; audienceType?: string; status?: 'PUBLISHED' | 'DRAFT' }) =>
+    apiService.get<{ success: boolean; data: any[] }>('/blogs/admin', { params }),
+
+  getAdminOptions: (params?: { audienceType?: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER' }) =>
+    apiService.get<{
+      success: boolean;
+      data: Array<{ id: string; title: string; slug: string; audienceType: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER'; link: string }>;
+    }>('/blogs/admin/options', { params }),
+
+  createAdminBlog: (data: {
+    title: string;
+    slug?: string;
+    excerpt?: string;
+    content: string;
+    audienceType: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER';
+    targetName?: string;
+    targetEntityId?: string;
+    coverImage?: string;
+    isPublished?: boolean;
+  }) => apiService.post<{ success: boolean; data: any; message?: string }>('/blogs/admin', data),
+
+  updateAdminBlog: (
+    id: string,
+    data: {
+      title?: string;
+      slug?: string;
+      excerpt?: string;
+      content?: string;
+      audienceType?: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER';
+      targetName?: string;
+      targetEntityId?: string;
+      coverImage?: string;
+      isPublished?: boolean;
+    }
+  ) => apiService.put<{ success: boolean; data: any; message?: string }>(`/blogs/admin/${id}`, data),
+
+  deleteAdminBlog: (id: string) =>
+    apiService.delete<{ success: boolean; message?: string }>(`/blogs/admin/${id}`),
+};
+
 // Export combined API
 export const api = {
   auth: authApi,
@@ -1549,6 +1596,7 @@ export const api = {
   upload: uploadApi,
   homepage: homepageApi,
   homepageSections: homepageSectionsApi,
+  blogs: blogsApi,
 };
 
 // Named exports for direct import
@@ -1567,6 +1615,7 @@ export {
   uploadApi,
   homepageApi,
   homepageSectionsApi,
+  blogsApi,
   apiService,
   httpClient,
 };

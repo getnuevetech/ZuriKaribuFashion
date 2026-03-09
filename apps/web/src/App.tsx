@@ -20,6 +20,7 @@ import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import StoryPage from './pages/Story';
 
 // Customer Pages
 import CustomerDashboard from './pages/customer/Dashboard';
@@ -36,6 +37,7 @@ import AdminPricingRules from './pages/admin/PricingRules';
 import AdminBanners from './pages/admin/Banners';
 import AdminHomepage from './pages/admin/Homepage';
 import AdminHomepageSections from './pages/admin/HomepageSections';
+import AdminBlogs from './pages/admin/Blogs';
 import AdminRoleManagement from './pages/admin/RoleManagement';
 import AdminVendorProfiles from './pages/admin/VendorProfiles';
 import AdminSessionAudit from './pages/admin/SessionAudit';
@@ -90,6 +92,7 @@ function App() {
               <Route path="/ready-to-wear/:id" element={<ReadyToWearDetail />} />
               <Route path="/try-on/:id" element={<TryOn />} />
               <Route path="/cart" element={<Cart />} />
+              <Route path="/stories/:slug" element={<StoryPage />} />
             </Route>
 
             {/* Auth Routes */}
@@ -223,6 +226,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['homepage:manage']}>
                       <AdminHomepageSections />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/blogs"
+                  element={
+                    <AdminPermissionGuard required={['homepage:manage']}>
+                      <AdminBlogs />
                     </AdminPermissionGuard>
                   }
                 />

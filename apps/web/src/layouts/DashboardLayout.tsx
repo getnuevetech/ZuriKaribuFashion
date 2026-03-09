@@ -17,6 +17,7 @@ import {
   Layers,
   DollarSign,
   Image as ImageIcon,
+  FileText,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -53,6 +54,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Banners', href: '/admin/banners', icon: ImageIcon },
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
     { label: 'Homepage Sections', href: '/admin/homepage-sections', icon: LayoutGrid },
+    { label: 'Blogs', href: '/admin/blogs', icon: FileText },
   ],
   seller: [
     { label: 'Dashboard', href: '/seller', icon: LayoutDashboard },
@@ -113,6 +115,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/banners': ['banners:manage'],
       '/admin/homepage': ['homepage:manage'],
       '/admin/homepage-sections': ['homepage:manage'],
+      '/admin/blogs': ['homepage:manage'],
     };
     const required = permissionByHref[href] || [];
     if (required.length === 0) return true;

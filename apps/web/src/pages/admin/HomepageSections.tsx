@@ -58,12 +58,31 @@ interface DesignerSpotlight {
   quote: string;
   bio: string;
   image: string;
+  linkMode?: 'DEFAULT_STORE' | 'CUSTOM_URL' | 'BLOG';
+  externalUrl?: string | null;
+  blogPostId?: string | null;
+  blog?: {
+    id: string;
+    title: string;
+    slug: string;
+    audienceType: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER';
+    link: string;
+  } | null;
+  vendorType?: 'DESIGNER' | 'SELLER' | null;
   displayOrder: number;
   isActive: boolean;
   designer?: {
     businessName: string;
     country: string;
   };
+}
+
+interface BlogOption {
+  id: string;
+  title: string;
+  slug: string;
+  audienceType: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER';
+  link: string;
 }
 
 interface HeritageSection {
@@ -223,6 +242,7 @@ export default function HomepageSections() {
   const [visibilityLoading, setVisibilityLoading] = useState(false);
   const [countryOptions, setCountryOptions] = useState<CountryOption[]>([]);
   const [designerOptions, setDesignerOptions] = useState<DesignerOption[]>([]);
+  const [blogOptions, setBlogOptions] = useState<BlogOption[]>([]);
   const [countryImageSettings, setCountryImageSettings] = useState<CountryImageGenerationSettings>({
     enabled: false,
     apiUrl: '',
@@ -320,9 +340,10 @@ export default function HomepageSections() {
   };
 
   const fetchAuxiliaryOptions = async () => {
-    const [countryOptionsResult, designerOptionsResult] = await Promise.allSettled([
+    const [countryOptionsResult, designerOptionsResult, blogOptionsResult] = await Promise.allSettled([
       api.homepageSections.getAdminCountryOptions(),
       api.homepageSections.getAdminDesignerOptions(),
+      api.blogs.getAdminOptions(),
     ]);
 
     if (countryOptionsResult.status === 'fulfilled' && countryOptionsResult.value.success) {
@@ -342,6 +363,15 @@ export default function HomepageSections() {
         console.error('Error fetching designer options:', designerOptionsResult.reason);
       }
       setDesignerOptions([]);
+    }
+
+    if (blogOptionsResult.status === 'fulfilled' && blogOptionsResult.value.success) {
+      setBlogOptions(Array.isArray(blogOptionsResult.value.data) ? blogOptionsResult.value.data : []);
+    } else {
+      if (blogOptionsResult.status === 'rejected') {
+        console.error('Error fetching blog options:', blogOptionsResult.reason);
+      }
+      setBlogOptions([]);
     }
   };
 
@@ -840,6 +870,7 @@ export default function HomepageSections() {
           item={editingItem}
           countryOptions={countryOptions}
           designers={designerOptions}
+          blogOptions={blogOptions}
           onClose={closeModal}
           onSave={handleSave}
         />
@@ -1258,6 +1289,7 @@ function SectionModal({
   item,
   countryOptions,
   designers,
+  blogOptions,
   onClose,
   onSave,
 }: {
@@ -1265,6 +1297,7 @@ function SectionModal({
   item: any;
   countryOptions: CountryOption[];
   designers: DesignerOption[];
+  blogOptions: BlogOption[];
   onClose: () => void;
   onSave: () => void;
 }) {
@@ -1288,6 +1321,11 @@ function SectionModal({
   const effectiveCountryOptions = countryOptions.length > 0 ? countryOptions : FALLBACK_AFRICAN_COUNTRY_OPTIONS;
   const designerProfiles = designers.filter((item) => item.vendorType !== 'SELLER');
   const sellerProfiles = designers.filter((item) => item.vendorType === 'SELLER');
+  const selectedSpotlightProfile = designers.find((item) => item.id === String(formData?.designerId || ''));
+  const spotlightAudienceType = selectedSpotlightProfile?.vendorType === 'SELLER' ? 'SELLER' : 'DESIGNER';
+  const filteredBlogOptions = blogOptions.filter(
+    (item) => item.audienceType === spotlightAudienceType || item.audienceType === 'OTHER'
+  );
 
   function getDefaultFormData(sectionType: SectionType) {
     switch (sectionType) {
@@ -1310,7 +1348,17 @@ function SectionModal({
       case 'categories':
         return { key: '', title: '', description: '', image: '', ctaText: 'Shop Now', ctaLink: '', displayOrder: 0, isActive: true };
       case 'designerSpotlight':
-        return { designerId: '', quote: '', bio: '', image: '', displayOrder: 0, isActive: true };
+        return {
+          designerId: '',
+          quote: '',
+          bio: '',
+          image: '',
+          linkMode: 'DEFAULT_STORE',
+          externalUrl: '',
+          blogPostId: '',
+          displayOrder: 0,
+          isActive: true,
+        };
       case 'heritage':
         return { title: '', subtitle: '', image: '', ctaText: 'Read Our Story', ctaLink: '/about', displayOrder: 0, isActive: true };
       case 'testimonials':
@@ -1341,6 +1389,20 @@ function SectionModal({
       flag: option.flag,
     }));
   }, [type, effectiveCountryOptions]);
+
+  useEffect(() => {
+    if (type !== 'designerSpotlight') return;
+    setFormData((prev: any) => {
+      const next = { ...prev };
+      if (String(next.linkMode || 'DEFAULT_STORE') !== 'CUSTOM_URL') {
+        next.externalUrl = '';
+      }
+      if (String(next.linkMode || 'DEFAULT_STORE') !== 'BLOG') {
+        next.blogPostId = '';
+      }
+      return next;
+    });
+  }, [type, formData?.linkMode]);
 
   const handleCountryNameChange = (countryName: string) => {
     const option = countryOptionByName.get(String(countryName || '').trim().toLowerCase());
@@ -1922,6 +1984,49 @@ function SectionModal({
                 required
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Link Destination</label>
+              <select
+                value={formData.linkMode || 'DEFAULT_STORE'}
+                onChange={(e) => setFormData({ ...formData, linkMode: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              >
+                <option value="DEFAULT_STORE">Default store page</option>
+                <option value="CUSTOM_URL">Custom URL</option>
+                <option value="BLOG">Blog story</option>
+              </select>
+            </div>
+            {String(formData.linkMode || 'DEFAULT_STORE') === 'CUSTOM_URL' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Custom URL</label>
+                <input
+                  type="url"
+                  value={formData.externalUrl || ''}
+                  onChange={(e) => setFormData({ ...formData, externalUrl: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  placeholder="https://example.com/story"
+                  required
+                />
+              </div>
+            ) : null}
+            {String(formData.linkMode || 'DEFAULT_STORE') === 'BLOG' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select Blog Story</label>
+                <select
+                  value={formData.blogPostId || ''}
+                  onChange={(e) => setFormData({ ...formData, blogPostId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  required
+                >
+                  <option value="">Select story</option>
+                  {filteredBlogOptions.map((blog) => (
+                    <option key={blog.id} value={blog.id}>
+                      [{blog.audienceType}] {blog.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
           </>
         );
       case 'heritage':

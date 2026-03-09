@@ -571,11 +571,16 @@ export default function Home() {
     if (Array.isArray(designerSpotlightsData) && designerSpotlightsData.length > 0) {
       return designerSpotlightsData.slice(0, 3).map((item: any, index: number) => ({
         id: String(item.id ?? index),
+        profileId: String(item.designerId || ''),
+        vendorType: String(item.vendorType || 'DESIGNER').toUpperCase(),
         name: asText(item.name, item.designer?.businessName, kimiDesigners[index % kimiDesigners.length].name),
         country: asText(item.country, item.designer?.country, kimiDesigners[index % kimiDesigners.length].country),
         flag: asText(item.flag, countryFlags[item?.country], '🌍'),
         quote: asText(item.quote, kimiDesigners[index % kimiDesigners.length].quote),
         image: asText(item.image, kimiDesigners[index % kimiDesigners.length].image),
+        linkMode: asText(item.linkMode, 'DEFAULT_STORE').toUpperCase(),
+        externalUrl: asText(item.externalUrl, ''),
+        blog: item.blog || null,
       }));
     }
     return kimiDesigners;
@@ -640,6 +645,23 @@ export default function Home() {
     });
     event.preventDefault();
   };
+
+  const resolveSpotlightHref = (designer: any) => {
+    const linkMode = String(designer?.linkMode || 'DEFAULT_STORE').toUpperCase();
+    if (linkMode === 'CUSTOM_URL' && designer?.externalUrl) {
+      return String(designer.externalUrl);
+    }
+    if (linkMode === 'BLOG' && designer?.blog?.slug) {
+      return `/stories/${encodeURIComponent(String(designer.blog.slug))}`;
+    }
+    const profileId = String(designer?.profileId || '').trim();
+    if (String(designer?.vendorType || '').toUpperCase() === 'SELLER') {
+      return profileId ? `/fabrics?sellerId=${encodeURIComponent(profileId)}` : '/fabrics';
+    }
+    return profileId ? `/designs?designerId=${encodeURIComponent(profileId)}` : '/designs';
+  };
+
+  const isExternalHref = (href: string) => /^https?:\/\//i.test(String(href || ''));
 
   return (
     <div className="min-h-screen bg-white">
@@ -945,22 +967,37 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {designers.map((designer) => (
-              <div key={designer.id} className="group relative overflow-hidden rounded-xl">
-                <div className="aspect-[3/4] overflow-hidden">
-                  <img src={designer.image} alt={designer.name} className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105 grayscale group-hover:grayscale-0" />
-                </div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-80 group-hover:opacity-90 transition-opacity" />
-                <div className="absolute bottom-0 left-0 right-0 p-6">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-2xl">{designer.flag}</span>
-                    <span className="text-white/70 text-sm">{designer.country}</span>
+            {designers.map((designer) => {
+              const href = resolveSpotlightHref(designer);
+              const content = (
+                <>
+                  <div className="aspect-[3/4] overflow-hidden">
+                    <img src={designer.image} alt={designer.name} className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105 grayscale group-hover:grayscale-0" />
                   </div>
-                  <h3 className="font-['Oswald'] text-2xl font-bold text-white mb-2">{designer.name}</h3>
-                  <p className="text-white/80 text-sm italic">&ldquo;{designer.quote}&rdquo;</p>
-                </div>
-              </div>
-            ))}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-80 group-hover:opacity-90 transition-opacity" />
+                  <div className="absolute bottom-0 left-0 right-0 p-6">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-2xl">{designer.flag}</span>
+                      <span className="text-white/70 text-sm">{designer.country}</span>
+                    </div>
+                    <h3 className="font-['Oswald'] text-2xl font-bold text-white mb-2">{designer.name}</h3>
+                    <p className="text-white/80 text-sm italic">&ldquo;{designer.quote}&rdquo;</p>
+                  </div>
+                </>
+              );
+              if (isExternalHref(href)) {
+                return (
+                  <a key={designer.id} href={href} target="_blank" rel="noopener noreferrer" className="group relative overflow-hidden rounded-xl block">
+                    {content}
+                  </a>
+                );
+              }
+              return (
+                <Link key={designer.id} to={href} className="group relative overflow-hidden rounded-xl block">
+                  {content}
+                </Link>
+              );
+            })}
           </div>
 
           <div className="text-center mt-10">
