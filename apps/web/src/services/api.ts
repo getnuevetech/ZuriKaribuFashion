@@ -31,7 +31,13 @@ httpClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     const url = error.config?.url || '';
-    const isAuthRequest = url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/google');
+    const isAuthRequest =
+      url.includes('/auth/login') ||
+      url.includes('/auth/register') ||
+      url.includes('/auth/google') ||
+      url.endsWith('/google') ||
+      url.includes('/google-login') ||
+      url.includes('/login/google');
     if (error.response?.status === 401 && !isAuthRequest) {
       useAuthStore.getState().logout();
       if (window.location.pathname !== '/login') {
@@ -804,22 +810,70 @@ async function writeCountryImageGenerationWithFallback<T>(data: unknown) {
   throw lastError ?? new Error('Country image generation route not found.');
 }
 
+const googleLoginPaths = ['/auth/google', '/google', '/auth/google-login', '/auth/login/google'];
+const googleLinkStatusPaths = ['/auth/google/link-status', '/google/link-status', '/auth/google-link-status'];
+const googleLinkPaths = ['/auth/google/link', '/google/link', '/auth/google-link'];
+
+async function postWithRouteFallback<T>(paths: string[], data: unknown) {
+  let lastError: unknown = null;
+  for (const path of paths) {
+    try {
+      return await apiService.post<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Route not found.');
+}
+
+async function getWithRouteFallback<T>(paths: string[]) {
+  let lastError: unknown = null;
+  for (const path of paths) {
+    try {
+      return await apiService.get<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Route not found.');
+}
+
+async function deleteWithRouteFallback<T>(paths: string[]) {
+  let lastError: unknown = null;
+  for (const path of paths) {
+    try {
+      return await apiService.delete<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Route not found.');
+}
+
 // Auth API
 const authApi = {
   login: (email: string, password: string) =>
     apiService.post<{ success: boolean; data: { user: any; token: string | null } }>('/auth/login', { email, password }),
 
   loginWithGoogle: (idToken: string) =>
-    apiService.post<{ success: boolean; data: { user: any; token: string | null } }>('/auth/google', { idToken }),
+    postWithRouteFallback<{ success: boolean; data: { user: any; token: string | null } }>(googleLoginPaths, { idToken }),
 
   getGoogleLinkStatus: () =>
-    apiService.get<{ success: boolean; data: { linked: boolean; email: string | null; linkedAt: string | null } }>('/auth/google/link-status'),
+    getWithRouteFallback<{ success: boolean; data: { linked: boolean; email: string | null; linkedAt: string | null } }>(
+      googleLinkStatusPaths
+    ),
 
   linkGoogleAccount: (idToken: string) =>
-    apiService.post<{ success: boolean; data: { linked: boolean; email: string } }>('/auth/google/link', { idToken }),
+    postWithRouteFallback<{ success: boolean; data: { linked: boolean; email: string } }>(googleLinkPaths, { idToken }),
 
   unlinkGoogleAccount: () =>
-    apiService.delete<{ success: boolean; data: { linked: boolean } }>('/auth/google/link'),
+    deleteWithRouteFallback<{ success: boolean; data: { linked: boolean } }>(googleLinkPaths),
 
   register: (data: any) =>
     apiService.post<{ success: boolean; data: { user: any; token: string | null } }>('/auth/register', data),
