@@ -1172,6 +1172,7 @@ function SectionModal({
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [generatingImage, setGeneratingImage] = useState(false);
   const effectiveCountryOptions = countryOptions.length > 0 ? countryOptions : FALLBACK_AFRICAN_COUNTRY_OPTIONS;
 
   function getDefaultFormData(sectionType: SectionType) {
@@ -1250,6 +1251,33 @@ function SectionModal({
       console.error('Error uploading image:', error);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleGenerateCountryImage = async () => {
+    if (type !== 'countries') return;
+    setGeneratingImage(true);
+    try {
+      const response = await api.homepageSections.generateCountryImage({
+        countryCode: String(formData.countryCode || '').trim().toUpperCase() || undefined,
+        country: String(formData.name || '').trim() || undefined,
+        fabrics: String(formData.fabrics || '').trim() || undefined,
+        imageKeyword: String(formData.imageKeyword || '').trim() || undefined,
+      });
+      if (response.success && response.data?.image) {
+        setFormData((prev: any) => ({
+          ...prev,
+          image: response.data.image,
+          name: response.data.country || prev.name,
+          countryCode: response.data.countryCode || prev.countryCode,
+          flag: response.data.flag || prev.flag,
+        }));
+      }
+    } catch (error: any) {
+      console.error('Error generating country image:', error);
+      window.alert(error?.response?.data?.message || 'Failed to generate country image.');
+    } finally {
+      setGeneratingImage(false);
     }
   };
 
@@ -1559,6 +1587,25 @@ function SectionModal({
               <p className="mt-1 text-xs text-gray-500">
                 If image is empty when saving, system auto-generates from this keyword and country details.
               </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={formData.image || ''}
+                  onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  placeholder="Auto-generated or paste image URL"
+                />
+                <Button
+                  type="button"
+                  onClick={handleGenerateCountryImage}
+                  disabled={generatingImage}
+                >
+                  {generatingImage ? 'Generating...' : 'Generate'}
+                </Button>
+              </div>
             </div>
           </>
         );

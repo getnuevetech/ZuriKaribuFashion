@@ -1195,6 +1195,17 @@ const homepageSectionsApi = {
   updateCountry: (id: string, data: any) =>
     apiService.put<{ success: boolean; data: any }>(`/homepage-sections/admin/countries/${id}`, data),
 
+  generateCountryImage: (data: {
+    countryCode?: string;
+    country?: string;
+    fabrics?: string;
+    imageKeyword?: string;
+  }) =>
+    apiService.post<{
+      success: boolean;
+      data: { image: string; country: string; countryCode: string | null; flag: string | null };
+    }>('/homepage-sections/admin/countries/generate-image', data),
+
   deleteCountry: (id: string) =>
     apiService.delete<{ success: boolean }>(`/homepage-sections/admin/countries/${id}`),
 

@@ -202,6 +202,17 @@ const countryCreateSchema = z.object({
   isActive: z.boolean().optional(),
 });
 const countryUpdateSchema = countryCreateSchema.partial();
+const countryImageGenerateSchema = z
+  .object({
+    countryCode: z.string().trim().min(2).max(3).optional(),
+    country: z.string().trim().optional(),
+    fabrics: z.string().trim().optional(),
+    imageKeyword: z.string().trim().optional(),
+  })
+  .refine((data) => Boolean(getString(data.countryCode) || getString(data.country)), {
+    message: 'Country code or country name is required.',
+    path: ['countryCode'],
+  });
 
 const normalizeCountryInput = (input: any) => {
   const countryCode = String(input?.countryCode || '').trim().toUpperCase();
@@ -1152,6 +1163,35 @@ router.post('/admin/countries', authenticate, authorizePermissions(Permissions.H
       return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
     }
     res.status(500).json({ success: false, message: 'Failed to create country' });
+  }
+});
+
+router.post('/admin/countries/generate-image', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = countryImageGenerateSchema.parse(req.body);
+    const countryCode = String(payload.countryCode || '').trim().toUpperCase();
+    const selected = countryCode ? AFRICAN_COUNTRY_OPTION_BY_CODE.get(countryCode) : undefined;
+    const countryName = selected?.name || getString(payload.country) || 'African country';
+    const imageUrl = await generateCountryImage({
+      country: countryName,
+      fabrics: getString(payload.fabrics) || undefined,
+      imageKeyword: getString(payload.imageKeyword) || undefined,
+    });
+    res.json({
+      success: true,
+      data: {
+        image: imageUrl,
+        country: countryName,
+        countryCode: selected?.code || countryCode || null,
+        flag: selected?.flag || (countryCode ? countryCodeToFlag(countryCode) : null),
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error generating country image:', error);
+    res.status(500).json({ success: false, message: 'Failed to generate country image.' });
   }
 });
 

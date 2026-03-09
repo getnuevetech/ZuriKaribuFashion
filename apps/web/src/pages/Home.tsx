@@ -502,7 +502,6 @@ export default function Home() {
   const countries = useMemo<CountryCard[]>(
     () =>
       (USE_DYNAMIC_HOMEPAGE && Array.isArray(countriesData) && countriesData.length > 0 ? countriesData : kimiCountries)
-        .slice(0, 3)
         .map((country: any) => ({
           name: asText(country.name, 'Country'),
           flag: asText(country.flag, countryFlags[country?.name], '🌍'),
