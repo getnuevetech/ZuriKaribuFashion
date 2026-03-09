@@ -830,6 +830,7 @@ export default function HomepageSections() {
             {activeTab === 'designerSpotlight' && (
               <DesignerSpotlightTable
                 data={designerSpotlights}
+                designers={designerOptions}
                 onEdit={openModal}
                 onToggle={handleToggleActive}
                 onDelete={handleDelete}
@@ -1098,12 +1099,16 @@ function CategoriesTable({ data, onEdit, onToggle, onDelete }: any) {
   );
 }
 
-function DesignerSpotlightTable({ data, onEdit, onToggle, onDelete }: any) {
+function DesignerSpotlightTable({ data, designers, onEdit, onToggle, onDelete }: any) {
+  const profileById = new Map(
+    (Array.isArray(designers) ? designers : []).map((profile: DesignerOption) => [profile.id, profile])
+  );
   return (
     <table className="min-w-full divide-y divide-gray-200">
       <thead className="bg-gray-50">
         <tr>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Designer</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Card</th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Designer / Seller</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quote</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bio</th>
           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -1111,14 +1116,32 @@ function DesignerSpotlightTable({ data, onEdit, onToggle, onDelete }: any) {
         </tr>
       </thead>
       <tbody className="bg-white divide-y divide-gray-200">
-        {data.map((item: DesignerSpotlight) => (
+        {data.map((item: DesignerSpotlight) => {
+          const linkedProfile = profileById.get(String(item.designerId || ''));
+          const linkedName =
+            item.designer?.businessName ||
+            linkedProfile?.businessName ||
+            `Profile ${String(item.designerId || '').slice(0, 8)}`;
+          const linkedCountry = item.designer?.country || linkedProfile?.country || '';
+          const linkedVendorType =
+            String(item.vendorType || linkedProfile?.vendorType || 'DESIGNER').toUpperCase() === 'SELLER'
+              ? 'Seller'
+              : 'Designer';
+          return (
           <tr key={item.id} className="hover:bg-gray-50">
             <td className="px-6 py-4 whitespace-nowrap">
               <div className="flex items-center">
                 {item.image && (
-                  <img src={item.image} alt={item.designer?.businessName} className="h-10 w-10 object-cover mr-3" />
+                  <img src={item.image} alt={linkedName} className="h-10 w-10 object-cover mr-3" />
                 )}
-                <span className="text-sm font-medium text-gray-900">{item.designer?.businessName || 'Unknown'}</span>
+                <span className="text-sm font-medium text-gray-900">Spotlight Card</span>
+              </div>
+            </td>
+            <td className="px-6 py-4 text-sm text-gray-900">
+              <div className="font-medium">{linkedName}</div>
+              <div className="text-xs text-gray-500">
+                {linkedVendorType}
+                {linkedCountry ? ` • ${linkedCountry}` : ''}
               </div>
             </td>
             <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">{item.quote}</td>
@@ -1142,7 +1165,7 @@ function DesignerSpotlightTable({ data, onEdit, onToggle, onDelete }: any) {
               </div>
             </td>
           </tr>
-        ))}
+        )})}
       </tbody>
     </table>
   );
