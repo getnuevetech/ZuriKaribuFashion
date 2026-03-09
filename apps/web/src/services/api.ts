@@ -1533,21 +1533,89 @@ const homepageSectionsApi = {
     apiService.put<{ success: boolean; data: any }>(`/homepage-sections/admin/footer/${id}`, data),
 };
 
-const blogsApi = {
-  getPublished: (params?: { audienceType?: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER' }) =>
-    apiService.get<{ success: boolean; data: any[] }>('/blogs', { params }),
+const adminBlogReadPaths = ['/blogs/admin', '/admin/blogs'];
+const adminBlogOptionPaths = ['/blogs/admin/options', '/admin/blogs/options'];
+const adminBlogWritePaths = ['/blogs/admin', '/admin/blogs'];
 
-  getBySlug: (slug: string) =>
-    apiService.get<{ success: boolean; data: any }>(`/blogs/${encodeURIComponent(slug)}`),
+async function readAdminBlogsWithFallback<T>(params?: { search?: string; audienceType?: string; status?: 'PUBLISHED' | 'DRAFT' }) {
+  let lastError: unknown = null;
+  for (const path of adminBlogReadPaths) {
+    try {
+      return await apiService.get<T>(path, { params });
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Blog admin route not found.');
+}
 
+async function readAdminBlogOptionsWithFallback<T>(params?: { audienceType?: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER' }) {
+  let lastError: unknown = null;
+  for (const path of adminBlogOptionPaths) {
+    try {
+      return await apiService.get<T>(path, { params });
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Blog option route not found.');
+}
+
+async function createAdminBlogWithFallback<T>(data: unknown) {
+  let lastError: unknown = null;
+  for (const path of adminBlogWritePaths) {
+    try {
+      return await apiService.post<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Blog create route not found.');
+}
+
+async function updateAdminBlogWithFallback<T>(id: string, data: unknown) {
+  let lastError: unknown = null;
+  for (const path of adminBlogWritePaths) {
+    try {
+      return await apiService.put<T>(`${path}/${id}`, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Blog update route not found.');
+}
+
+async function deleteAdminBlogWithFallback<T>(id: string) {
+  let lastError: unknown = null;
+  for (const path of adminBlogWritePaths) {
+    try {
+      return await apiService.delete<T>(`${path}/${id}`);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Blog delete route not found.');
+}
+
+const adminBlogsApi = {
   getAdminBlogs: (params?: { search?: string; audienceType?: string; status?: 'PUBLISHED' | 'DRAFT' }) =>
-    apiService.get<{ success: boolean; data: any[] }>('/blogs/admin', { params }),
+    readAdminBlogsWithFallback<{ success: boolean; data: any[] }>(params),
 
   getAdminOptions: (params?: { audienceType?: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER' }) =>
-    apiService.get<{
+    readAdminBlogOptionsWithFallback<{
       success: boolean;
       data: Array<{ id: string; title: string; slug: string; audienceType: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER'; link: string }>;
-    }>('/blogs/admin/options', { params }),
+    }>(params),
 
   createAdminBlog: (data: {
     title: string;
@@ -1559,7 +1627,7 @@ const blogsApi = {
     targetEntityId?: string;
     coverImage?: string;
     isPublished?: boolean;
-  }) => apiService.post<{ success: boolean; data: any; message?: string }>('/blogs/admin', data),
+  }) => createAdminBlogWithFallback<{ success: boolean; data: any; message?: string }>(data),
 
   updateAdminBlog: (
     id: string,
@@ -1574,10 +1642,54 @@ const blogsApi = {
       coverImage?: string;
       isPublished?: boolean;
     }
-  ) => apiService.put<{ success: boolean; data: any; message?: string }>(`/blogs/admin/${id}`, data),
+  ) => updateAdminBlogWithFallback<{ success: boolean; data: any; message?: string }>(id, data),
 
   deleteAdminBlog: (id: string) =>
-    apiService.delete<{ success: boolean; message?: string }>(`/blogs/admin/${id}`),
+    deleteAdminBlogWithFallback<{ success: boolean; message?: string }>(id),
+};
+
+const blogsApi = {
+  getPublished: (params?: { audienceType?: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER' }) =>
+    apiService.get<{ success: boolean; data: any[] }>('/blogs', { params }),
+
+  getBySlug: (slug: string) =>
+    apiService.get<{ success: boolean; data: any }>(`/blogs/${encodeURIComponent(slug)}`),
+
+  getAdminBlogs: (params?: { search?: string; audienceType?: string; status?: 'PUBLISHED' | 'DRAFT' }) =>
+    adminBlogsApi.getAdminBlogs(params),
+
+  getAdminOptions: (params?: { audienceType?: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER' }) =>
+    adminBlogsApi.getAdminOptions(params),
+
+  createAdminBlog: (data: {
+    title: string;
+    slug?: string;
+    excerpt?: string;
+    content: string;
+    audienceType: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER';
+    targetName?: string;
+    targetEntityId?: string;
+    coverImage?: string;
+    isPublished?: boolean;
+  }) => adminBlogsApi.createAdminBlog(data),
+
+  updateAdminBlog: (
+    id: string,
+    data: {
+      title?: string;
+      slug?: string;
+      excerpt?: string;
+      content?: string;
+      audienceType?: 'SELLER' | 'DESIGNER' | 'COUNTRY' | 'OTHER';
+      targetName?: string;
+      targetEntityId?: string;
+      coverImage?: string;
+      isPublished?: boolean;
+    }
+  ) => adminBlogsApi.updateAdminBlog(id, data),
+
+  deleteAdminBlog: (id: string) =>
+    adminBlogsApi.deleteAdminBlog(id),
 };
 
 // Export combined API

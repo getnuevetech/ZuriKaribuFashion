@@ -73,6 +73,7 @@ export default function AdminBlogs() {
   const fetchBlogs = async () => {
     try {
       setLoading(true);
+      setError('');
       const response = await api.blogs.getAdminBlogs({
         search: search || undefined,
         audienceType: audienceFilter || undefined,
@@ -83,7 +84,7 @@ export default function AdminBlogs() {
       }
     } catch (fetchError) {
       console.error('Failed to fetch blogs:', fetchError);
-      setError('Failed to load blogs.');
+      setError((fetchError as any)?.response?.data?.message || 'Failed to load blogs.');
     } finally {
       setLoading(false);
     }
