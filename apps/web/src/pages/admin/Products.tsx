@@ -52,6 +52,9 @@ export default function AdminProducts() {
   const [imagesDirty, setImagesDirty] = useState(false);
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [currencyMatrix, setCurrencyMatrix] = useState<CurrencyMatrixRow[]>([]);
+  const [taxonomySaving, setTaxonomySaving] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newMaterialName, setNewMaterialName] = useState('');
   const [options, setOptions] = useState<{
     categories: Array<{ id: string; name: string }>;
     materials: Array<{ id: string; name: string }>;
@@ -106,6 +109,19 @@ export default function AdminProducts() {
     ETB: 'Br',
   };
 
+  const slugify = (value: string) =>
+    String(value || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 120);
+
+  const normalizeOwnerName = (name: string | undefined, role: 'Seller' | 'Designer', id: string) => {
+    const trimmed = String(name || '').trim();
+    return trimmed || `${role} ${String(id || '').slice(0, 8)}`;
+  };
+
   useEffect(() => {
     void Promise.all([fetchProducts(), fetchOptions()]);
   }, []);
@@ -143,70 +159,192 @@ export default function AdminProducts() {
   }, [selectedOwnerCountry, currencyMatrix]);
 
   const fetchOptions = async () => {
+    const [productOptionsResult, currencyResult, ownerResult, categoriesResult, materialsResult] = await Promise.allSettled([
+      api.admin.getProductOptions(),
+      api.currency.getConfig(),
+      api.homepageSections.getAdminDesignerOptions(),
+      api.admin.getCategories(),
+      api.admin.getMaterials(),
+    ]);
+
+    const productOptions =
+      productOptionsResult.status === 'fulfilled' && productOptionsResult.value.success
+        ? productOptionsResult.value.data
+        : null;
+    const categoriesFromProducts = Array.isArray(productOptions?.categories) ? productOptions.categories : [];
+    const materialsFromProducts = Array.isArray(productOptions?.materials) ? productOptions.materials : [];
+    const sellersFromProducts = Array.isArray(productOptions?.sellers) ? productOptions.sellers : [];
+    const designersFromProducts = Array.isArray(productOptions?.designers) ? productOptions.designers : [];
+
+    const categoriesFromAdmin =
+      categoriesResult.status === 'fulfilled' && categoriesResult.value.success && Array.isArray(categoriesResult.value.data)
+        ? categoriesResult.value.data
+        : [];
+    const materialsFromAdmin =
+      materialsResult.status === 'fulfilled' && materialsResult.value.success && Array.isArray(materialsResult.value.data)
+        ? materialsResult.value.data
+        : [];
+
+    const ownerFallbackRows =
+      ownerResult.status === 'fulfilled' && ownerResult.value.success && Array.isArray(ownerResult.value.data)
+        ? ownerResult.value.data
+        : [];
+
+    const fallbackSellers = ownerFallbackRows
+      .filter((item) => String(item.vendorType || '').toUpperCase() === 'SELLER')
+      .map((item) => ({
+        id: String(item.id || ''),
+        businessName: normalizeOwnerName(String(item.businessName || ''), 'Seller', String(item.id || '')),
+        country: String(item.country || '').trim(),
+      }));
+    const fallbackDesigners = ownerFallbackRows
+      .filter((item) => String(item.vendorType || 'DESIGNER').toUpperCase() !== 'SELLER')
+      .map((item) => ({
+        id: String(item.id || ''),
+        businessName: normalizeOwnerName(String(item.businessName || ''), 'Designer', String(item.id || '')),
+        country: String(item.country || '').trim(),
+      }));
+
+    setOptions({
+      categories:
+        (categoriesFromProducts.length > 0 ? categoriesFromProducts : categoriesFromAdmin).map((item: any) => ({
+          id: String(item.id || ''),
+          name: String(item.name || '').trim(),
+        })),
+      materials:
+        (materialsFromProducts.length > 0 ? materialsFromProducts : materialsFromAdmin).map((item: any) => ({
+          id: String(item.id || ''),
+          name: String(item.name || '').trim(),
+        })),
+      sellers:
+        (sellersFromProducts.length > 0 ? sellersFromProducts : fallbackSellers).map((item: any) => ({
+          id: String(item.id || ''),
+          businessName: normalizeOwnerName(item.businessName, 'Seller', item.id),
+          country: String(item.country || '').trim(),
+        })),
+      designers:
+        (designersFromProducts.length > 0 ? designersFromProducts : fallbackDesigners).map((item: any) => ({
+          id: String(item.id || ''),
+          businessName: normalizeOwnerName(item.businessName, 'Designer', item.id),
+          country: String(item.country || '').trim(),
+        })),
+    });
+
+    if (currencyResult.status === 'fulfilled' && currencyResult.value.success) {
+      setCurrencyMatrix(Array.isArray(currencyResult.value.data?.matrix) ? currencyResult.value.data.matrix : []);
+    }
+  };
+
+  const createCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    if (name.length < 2) {
+      setError('Category name must be at least 2 characters.');
+      return;
+    }
     try {
-      const [response, currencyResponse] = await Promise.all([
-        api.admin.getProductOptions(),
-        api.currency.getConfig(),
-      ]);
-      if (response.success) {
-        const normalizeOwnerName = (name: string | undefined, role: 'Seller' | 'Designer', id: string) => {
-          const trimmed = String(name || '').trim();
-          return trimmed || `${role} ${String(id || '').slice(0, 8)}`;
-        };
-        setOptions({
-          categories: Array.isArray(response.data?.categories) ? response.data.categories : [],
-          materials: Array.isArray(response.data?.materials) ? response.data.materials : [],
-          sellers: Array.isArray(response.data?.sellers)
-            ? response.data.sellers.map((item: any) => ({
-                id: String(item.id || ''),
-                businessName: normalizeOwnerName(item.businessName, 'Seller', item.id),
-                country: String(item.country || '').trim(),
-              }))
-            : [],
-          designers: Array.isArray(response.data?.designers)
-            ? response.data.designers.map((item: any) => ({
-                id: String(item.id || ''),
-                businessName: normalizeOwnerName(item.businessName, 'Designer', item.id),
-                country: String(item.country || '').trim(),
-              }))
-            : [],
-        });
-      }
-      const currentSellers = Array.isArray(response.data?.sellers) ? response.data.sellers : [];
-      const currentDesigners = Array.isArray(response.data?.designers) ? response.data.designers : [];
-      if (currentSellers.length === 0 && currentDesigners.length === 0) {
-        try {
-          const ownerFallback = await api.homepageSections.getAdminDesignerOptions();
-          if (ownerFallback.success && Array.isArray(ownerFallback.data) && ownerFallback.data.length > 0) {
-            const sellers = ownerFallback.data
-              .filter((item) => String(item.vendorType || '').toUpperCase() === 'SELLER')
-              .map((item) => ({
-                id: String(item.id || ''),
-                businessName: String(item.businessName || '').trim() || `Seller ${String(item.id || '').slice(0, 8)}`,
-                country: String(item.country || '').trim(),
-              }));
-            const designers = ownerFallback.data
-              .filter((item) => String(item.vendorType || 'DESIGNER').toUpperCase() !== 'SELLER')
-              .map((item) => ({
-                id: String(item.id || ''),
-                businessName: String(item.businessName || '').trim() || `Designer ${String(item.id || '').slice(0, 8)}`,
-                country: String(item.country || '').trim(),
-              }));
-            setOptions((prev) => ({
-              ...prev,
-              sellers,
-              designers,
-            }));
-          }
-        } catch (ownerFallbackError) {
-          console.error('Failed to load seller/designer fallback options', ownerFallbackError);
-        }
-      }
-      if (currencyResponse.success) {
-        setCurrencyMatrix(Array.isArray(currencyResponse.data?.matrix) ? currencyResponse.data.matrix : []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch product options', err);
+      setTaxonomySaving(true);
+      setError('');
+      await api.admin.createCategory({
+        name,
+        slug: slugify(name),
+        description: '',
+        sortOrder: options.categories.length,
+      });
+      setNewCategoryName('');
+      await fetchOptions();
+      setSuccess('Category saved.');
+    } catch (createError: any) {
+      setError(createError?.response?.data?.message || 'Failed to create category.');
+    } finally {
+      setTaxonomySaving(false);
+    }
+  };
+
+  const createMaterial = async () => {
+    const name = newMaterialName.trim();
+    if (!name) return;
+    if (name.length < 2) {
+      setError('Material type name must be at least 2 characters.');
+      return;
+    }
+    try {
+      setTaxonomySaving(true);
+      setError('');
+      await api.admin.createMaterial({
+        name,
+        slug: slugify(name),
+        description: '',
+      });
+      setNewMaterialName('');
+      await fetchOptions();
+      setSuccess('Material type saved.');
+    } catch (createError: any) {
+      setError(createError?.response?.data?.message || 'Failed to create material type.');
+    } finally {
+      setTaxonomySaving(false);
+    }
+  };
+
+  const renameCategory = async (id: string, currentName: string) => {
+    const nextName = window.prompt('Update category name', currentName)?.trim();
+    if (!nextName || nextName === currentName) return;
+    try {
+      setTaxonomySaving(true);
+      setError('');
+      await api.admin.updateCategory(id, { name: nextName });
+      await fetchOptions();
+      setSuccess('Category updated.');
+    } catch (updateError: any) {
+      setError(updateError?.response?.data?.message || 'Failed to update category.');
+    } finally {
+      setTaxonomySaving(false);
+    }
+  };
+
+  const renameMaterial = async (id: string, currentName: string) => {
+    const nextName = window.prompt('Update material type name', currentName)?.trim();
+    if (!nextName || nextName === currentName) return;
+    try {
+      setTaxonomySaving(true);
+      setError('');
+      await api.admin.updateMaterial(id, { name: nextName });
+      await fetchOptions();
+      setSuccess('Material type updated.');
+    } catch (updateError: any) {
+      setError(updateError?.response?.data?.message || 'Failed to update material type.');
+    } finally {
+      setTaxonomySaving(false);
+    }
+  };
+
+  const removeCategory = async (id: string) => {
+    if (!window.confirm('Delete this category?')) return;
+    try {
+      setTaxonomySaving(true);
+      setError('');
+      await api.admin.deleteCategory(id);
+      await fetchOptions();
+      setSuccess('Category deleted.');
+    } catch (deleteError: any) {
+      setError(deleteError?.response?.data?.message || 'Failed to delete category.');
+    } finally {
+      setTaxonomySaving(false);
+    }
+  };
+
+  const removeMaterial = async (id: string) => {
+    if (!window.confirm('Delete this material type?')) return;
+    try {
+      setTaxonomySaving(true);
+      setError('');
+      await api.admin.deleteMaterial(id);
+      await fetchOptions();
+      setSuccess('Material type deleted.');
+    } catch (deleteError: any) {
+      setError(deleteError?.response?.data?.message || 'Failed to delete material type.');
+    } finally {
+      setTaxonomySaving(false);
     }
   };
 
@@ -530,6 +668,75 @@ export default function AdminProducts() {
         </Button>
       </div>
 
+      <div className="rounded-xl border bg-white p-4">
+        <div className="mb-3">
+          <h2 className="text-sm font-semibold text-gray-900">Product Taxonomy Management</h2>
+          <p className="text-xs text-gray-500">
+            Manage material types used for Fabrics and categories used for Custom/Ready-to-Wear uploads.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="rounded-lg border p-3">
+            <p className="mb-2 text-sm font-medium text-gray-800">Categories (Custom/Ready-to-Wear)</p>
+            <div className="mb-2 flex gap-2">
+              <input
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="Add category name"
+                className="w-full rounded border px-3 py-2 text-sm"
+              />
+              <Button type="button" size="sm" onClick={createCategory} disabled={taxonomySaving || !newCategoryName.trim()}>
+                Add
+              </Button>
+            </div>
+            <div className="max-h-36 space-y-1 overflow-y-auto pr-1">
+              {options.categories.map((item) => (
+                <div key={item.id} className="flex items-center justify-between rounded border px-2 py-1 text-sm">
+                  <span className="truncate">{item.name}</span>
+                  <div className="ml-2 flex shrink-0 gap-2">
+                    <button type="button" onClick={() => renameCategory(item.id, item.name)} className="text-amber-600 hover:text-amber-800">
+                      Edit
+                    </button>
+                    <button type="button" onClick={() => removeCategory(item.id)} className="text-red-600 hover:text-red-800">
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="mb-2 text-sm font-medium text-gray-800">Material Types (Fabrics)</p>
+            <div className="mb-2 flex gap-2">
+              <input
+                value={newMaterialName}
+                onChange={(e) => setNewMaterialName(e.target.value)}
+                placeholder="Add material type"
+                className="w-full rounded border px-3 py-2 text-sm"
+              />
+              <Button type="button" size="sm" onClick={createMaterial} disabled={taxonomySaving || !newMaterialName.trim()}>
+                Add
+              </Button>
+            </div>
+            <div className="max-h-36 space-y-1 overflow-y-auto pr-1">
+              {options.materials.map((item) => (
+                <div key={item.id} className="flex items-center justify-between rounded border px-2 py-1 text-sm">
+                  <span className="truncate">{item.name}</span>
+                  <div className="ml-2 flex shrink-0 gap-2">
+                    <button type="button" onClick={() => renameMaterial(item.id, item.name)} className="text-amber-600 hover:text-amber-800">
+                      Edit
+                    </button>
+                    <button type="button" onClick={() => removeMaterial(item.id)} className="text-red-600 hover:text-red-800">
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Tabs */}
       <div className="border-b">
         <div className="flex gap-6">
@@ -735,8 +942,8 @@ export default function AdminProducts() {
         </div>
       </div>
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-xl bg-white p-6">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-2xl rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
             <h3 className="mb-4 text-xl font-bold text-gray-900">{editing ? 'Edit Product' : 'Add Product'}</h3>
             <form onSubmit={saveProduct} className="space-y-3">
               {!editing && (
@@ -824,6 +1031,9 @@ export default function AdminProducts() {
                   <>
                     <select required={!editing} value={form.sellerId} onChange={(e) => setForm((prev) => ({ ...prev, sellerId: e.target.value }))} className="rounded border px-3 py-2">
                       <option value="">Select seller</option>
+                      {options.sellers.length === 0 ? (
+                        <option value="" disabled>No sellers available</option>
+                      ) : null}
                       {options.sellers.map((item) => (
                         <option key={item.id} value={item.id}>{item.businessName} ({item.country})</option>
                       ))}
@@ -839,6 +1049,9 @@ export default function AdminProducts() {
                   <>
                     <select required={!editing} value={form.designerId} onChange={(e) => setForm((prev) => ({ ...prev, designerId: e.target.value }))} className="rounded border px-3 py-2">
                       <option value="">Select designer</option>
+                      {options.designers.length === 0 ? (
+                        <option value="" disabled>No designers available</option>
+                      ) : null}
                       {options.designers.map((item) => (
                         <option key={item.id} value={item.id}>{item.businessName} ({item.country})</option>
                       ))}
