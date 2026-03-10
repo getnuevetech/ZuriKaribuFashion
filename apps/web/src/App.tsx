@@ -37,6 +37,7 @@ import AdminPricingRules from './pages/admin/PricingRules';
 import AdminBanners from './pages/admin/Banners';
 import AdminHomepage from './pages/admin/Homepage';
 import AdminHomepageSections from './pages/admin/HomepageSections';
+import AdminHomepageVisibility from './pages/admin/HomepageVisibility';
 import AdminBlogs from './pages/admin/Blogs';
 import AdminRoleManagement from './pages/admin/RoleManagement';
 import AdminVendorProfiles from './pages/admin/VendorProfiles';
@@ -218,6 +219,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['homepage:manage']}>
                       <AdminHomepage />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/homepage-visibility"
+                  element={
+                    <AdminPermissionGuard required={['homepage:manage']}>
+                      <AdminHomepageVisibility />
                     </AdminPermissionGuard>
                   }
                 />

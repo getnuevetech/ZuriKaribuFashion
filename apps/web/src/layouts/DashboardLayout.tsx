@@ -18,6 +18,7 @@ import {
   DollarSign,
   Image as ImageIcon,
   FileText,
+  Eye,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -53,6 +54,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Orders', href: '/admin/orders', icon: ShoppingBag },
     { label: 'Banners', href: '/admin/banners', icon: ImageIcon },
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
+    { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: Eye },
     { label: 'Homepage Sections', href: '/admin/homepage-sections', icon: LayoutGrid },
     { label: 'Blogs', href: '/admin/blogs', icon: FileText },
   ],
@@ -114,6 +116,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/orders': ['orders:manage'],
       '/admin/banners': ['banners:manage'],
       '/admin/homepage': ['homepage:manage'],
+      '/admin/homepage-visibility': ['homepage:manage'],
       '/admin/homepage-sections': ['homepage:manage'],
       '/admin/blogs': ['homepage:manage'],
     };
