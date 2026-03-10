@@ -75,6 +75,8 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+// Legacy compatibility alias for older frontend auth paths (/api/google, /api/google-link, ...)
+app.use('/api', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/fabric-seller', fabricSellerRoutes);
 app.use('/api/designer', designerRoutes);
