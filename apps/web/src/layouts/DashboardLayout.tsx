@@ -19,6 +19,7 @@ import {
   Image as ImageIcon,
   FileText,
   Eye,
+  CreditCard,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -51,6 +52,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Currency Matrix', href: '/admin/currency', icon: DollarSign },
     { label: 'Products', href: '/admin/products', icon: Package },
     { label: 'Pricing Rules', href: '/admin/pricing', icon: DollarSign },
+    { label: 'Payments', href: '/admin/payments', icon: CreditCard },
     { label: 'Orders', href: '/admin/orders', icon: ShoppingBag },
     { label: 'Banners', href: '/admin/banners', icon: ImageIcon },
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
@@ -113,6 +115,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/currency': ['currency:manage'],
       '/admin/products': ['products:manage'],
       '/admin/pricing': ['pricing:manage'],
+      '/admin/payments': ['payments:manage'],
       '/admin/orders': ['orders:manage'],
       '/admin/banners': ['banners:manage'],
       '/admin/homepage': ['homepage:manage'],

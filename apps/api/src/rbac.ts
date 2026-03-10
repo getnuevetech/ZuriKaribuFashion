@@ -27,6 +27,7 @@ export const Permissions = {
   ORDERS_UPDATE_ASSIGNED: 'orders:update:assigned',
   ORDERS_UPDATE_ALL: 'orders:update:all',
   PAYMENTS_CREATE: 'payments:create',
+  PAYMENTS_MANAGE: 'payments:manage',
   UPLOADS_CREATE: 'uploads:create',
   HOMEPAGE_MANAGE: 'homepage:manage',
   BANNERS_MANAGE: 'banners:manage',
@@ -113,6 +114,12 @@ export const PERMISSION_CATALOG: PermissionCatalogEntry[] = [
     label: 'Manage currency matrix',
     group: 'OPERATIONS',
     description: 'Manage exchange rates, currency rules, and overrides.',
+  },
+  {
+    key: Permissions.PAYMENTS_MANAGE,
+    label: 'Manage payment integrations',
+    group: 'OPERATIONS',
+    description: 'Configure payment providers, credentials, and runtime payment fields.',
   },
   {
     key: Permissions.TRAFFIC_READ,

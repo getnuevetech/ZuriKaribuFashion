@@ -1888,6 +1888,43 @@ const adminApi = {
   deletePricingRule: (id: string) =>
     apiService.delete(`/admin/pricing-rules/${id}`),
 
+  getPaymentIntegrations: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        providers: any[];
+        builtinProviderKeys: string[];
+      };
+    }>('/payments/admin/integrations'),
+
+  createPaymentIntegration: (data: {
+    providerKey: string;
+    displayName?: string;
+    checkoutType?: 'INLINE' | 'REDIRECT';
+    mode?: 'TEST' | 'LIVE';
+    isActive?: boolean;
+    configSchema?: any[];
+    configValues?: Record<string, any>;
+    notes?: string | null;
+  }) =>
+    apiService.post<{ success: boolean; data: any }>('/payments/admin/integrations', data),
+
+  updatePaymentIntegration: (
+    providerKey: string,
+    data: {
+      displayName?: string;
+      checkoutType?: 'INLINE' | 'REDIRECT';
+      mode?: 'TEST' | 'LIVE';
+      isActive?: boolean;
+      configSchema?: any[];
+      configValues?: Record<string, any>;
+      notes?: string | null;
+    }
+  ) => apiService.put<{ success: boolean; data: any }>(`/payments/admin/integrations/${providerKey}`, data),
+
+  deletePaymentIntegration: (providerKey: string) =>
+    apiService.delete<{ success: boolean; message?: string }>(`/payments/admin/integrations/${providerKey}`),
+
   getOrders: (params?: { status?: string; page?: number; limit?: number }) =>
     apiService.get<{ success: boolean; data: { orders: any[]; pagination: any } }>('/admin/orders', { params }),
 
@@ -2147,6 +2184,52 @@ const qaApi = {
 
 // Payments API
 const paymentsApi = {
+  getOptions: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        providers: Array<{
+          providerKey: string;
+          displayName: string;
+          checkoutType: 'INLINE' | 'REDIRECT';
+          mode: 'TEST' | 'LIVE';
+          publicConfig?: Record<string, any>;
+        }>;
+      };
+    }>('/payments/options'),
+
+  createPaymentSession: (data: {
+    providerKey: string;
+    amount: number;
+    currency: string;
+    reference?: string;
+    returnUrl?: string;
+    cancelUrl?: string;
+    customer?: { email?: string; name?: string; phone?: string };
+  }) =>
+    apiService.post<{
+      success: boolean;
+      data: {
+        providerKey: string;
+        flow: 'INLINE' | 'REDIRECT';
+        reference: string;
+        clientSecret?: string;
+        paymentIntentId?: string;
+        checkoutUrl?: string;
+      };
+    }>('/payments/create-session', data),
+
+  verifyPayment: (data: { providerKey: string; reference: string; payerId?: string }) =>
+    apiService.post<{
+      success: boolean;
+      data: {
+        providerKey: string;
+        isPaid: boolean;
+        paymentReference: string;
+        status: string;
+      };
+    }>('/payments/verify', data),
+
   createPaymentIntent: (data: { amount: number; currency: string }) =>
     apiService.post<{ success: boolean; data: { clientSecret: string; paymentIntentId: string } }>('/payments/create-intent', data),
 

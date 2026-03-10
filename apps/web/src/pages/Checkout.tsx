@@ -33,6 +33,14 @@ interface ShippingAddress {
   phone: string;
 }
 
+interface PaymentProviderOption {
+  providerKey: string;
+  displayName: string;
+  checkoutType: 'INLINE' | 'REDIRECT';
+  mode: 'TEST' | 'LIVE';
+  publicConfig?: Record<string, any>;
+}
+
 export default function Checkout() {
   const navigate = useNavigate();
   const stripe = useStripe();
@@ -47,7 +55,8 @@ export default function Checkout() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [orderNumbers, setOrderNumbers] = useState<string[]>([]);
   const [suggestedProducts, setSuggestedProducts] = useState<any[]>([]);
-  const [paymentMethod] = useState<'STRIPE'>('STRIPE');
+  const [paymentProviders, setPaymentProviders] = useState<PaymentProviderOption[]>([]);
+  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<string>('STRIPE');
   
   const fullName = user?.firstName && user?.lastName 
     ? `${user.firstName} ${user.lastName}` 
@@ -69,12 +78,43 @@ export default function Checkout() {
 
   const shipping = totalPrice > 200 ? 0 : 25;
   const finalTotal = totalPrice + shipping;
+  const selectedProvider = paymentProviders.find((entry) => entry.providerKey === selectedPaymentProvider) || null;
   const currentStepSummary =
     step === 'shipping'
       ? 'Step 1 of 3: Shipping details'
       : step === 'payment'
         ? 'Step 2 of 3: Secure payment'
         : 'Step 3 of 3: Confirmation';
+
+  useEffect(() => {
+    api.payments
+      .getOptions()
+      .then((response) => {
+        if (response.success && Array.isArray(response.data?.providers) && response.data.providers.length > 0) {
+          const providers = response.data.providers.map((entry) => ({
+            providerKey: String(entry.providerKey || 'STRIPE').toUpperCase(),
+            displayName: String(entry.displayName || entry.providerKey || 'Payment Provider'),
+            checkoutType: entry.checkoutType === 'REDIRECT' ? 'REDIRECT' : 'INLINE',
+            mode: entry.mode === 'LIVE' ? 'LIVE' : 'TEST',
+            publicConfig: entry.publicConfig || {},
+          }));
+          setPaymentProviders(providers);
+          setSelectedPaymentProvider((current) => {
+            const preferred = providers.find((entry) => entry.providerKey === current);
+            return preferred ? preferred.providerKey : providers[0].providerKey;
+          });
+          return;
+        }
+        setPaymentProviders([
+          { providerKey: 'STRIPE', displayName: 'Stripe', checkoutType: 'INLINE', mode: 'TEST', publicConfig: {} },
+        ]);
+      })
+      .catch(() => {
+        setPaymentProviders([
+          { providerKey: 'STRIPE', displayName: 'Stripe', checkoutType: 'INLINE', mode: 'TEST', publicConfig: {} },
+        ]);
+      });
+  }, []);
 
   useEffect(() => {
     api.products
@@ -95,18 +135,41 @@ export default function Checkout() {
     setError(null);
 
     try {
-      // Create payment intent
-      const response = await api.payments.createPaymentIntent({
+      const providerKey = selectedProvider?.providerKey || 'STRIPE';
+      const response = await api.payments.createPaymentSession({
+        providerKey,
         amount: Math.round(finalTotal * 100), // Convert to cents
         currency: 'usd',
+        returnUrl: `${window.location.origin}/checkout?payment_provider=${providerKey}`,
+        cancelUrl: `${window.location.origin}/checkout?payment_provider=${providerKey}&payment_cancelled=true`,
+        customer: {
+          email: user?.email || undefined,
+          name: shippingAddress.fullName || undefined,
+          phone: shippingAddress.phone || undefined,
+        },
       });
 
-      if (response.success) {
+      if (response.success && response.data?.flow === 'INLINE') {
         setClientSecret(response.data.clientSecret);
         setStep('payment');
+        return;
       }
+      if (response.success && response.data?.flow === 'REDIRECT' && response.data.checkoutUrl) {
+        sessionStorage.setItem(
+          'checkout_pending_payment',
+          JSON.stringify({
+            providerKey,
+            reference: response.data.reference,
+            shippingAddress,
+            createdAt: Date.now(),
+          })
+        );
+        window.location.href = response.data.checkoutUrl;
+        return;
+      }
+      throw new Error('Payment provider could not initialize checkout.');
     } catch (err: any) {
-      setError(err.message || 'Failed to initialize payment');
+      setError(err?.response?.data?.message || err.message || 'Failed to initialize payment');
     } finally {
       setLoading(false);
     }
@@ -152,13 +215,13 @@ export default function Checkout() {
     if (paymentIntent.status === 'succeeded') {
       setStep('review');
       // Create orders
-      await createOrders(paymentIntent.id);
+      await createOrders(paymentIntent.id, selectedPaymentProvider);
     }
 
     setLoading(false);
   };
 
-  const createOrders = async (paymentIntentId: string) => {
+  const createOrders = async (paymentIntentId: string, paymentMethod: string) => {
     try {
       const addressResponse = await api.customer.addAddress({
         label: 'Checkout Address',
@@ -228,6 +291,62 @@ export default function Checkout() {
       setError('Payment succeeded but order creation failed. Please contact support.');
     }
   };
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const providerKey = String(searchParams.get('payment_provider') || '').toUpperCase();
+    if (!providerKey) return;
+    const wasCancelled = searchParams.get('payment_cancelled') === 'true';
+    if (wasCancelled) {
+      setError('Payment was cancelled before completion. You can try again.');
+      sessionStorage.removeItem('checkout_pending_payment');
+      return;
+    }
+    const pendingRaw = sessionStorage.getItem('checkout_pending_payment');
+    if (!pendingRaw) return;
+    let pending: any = null;
+    try {
+      pending = JSON.parse(pendingRaw);
+    } catch {
+      sessionStorage.removeItem('checkout_pending_payment');
+      return;
+    }
+    if (!pending || String(pending.providerKey || '').toUpperCase() !== providerKey) return;
+    const reference =
+      providerKey === 'FLUTTERWAVE'
+        ? searchParams.get('tx_ref') || searchParams.get('transaction_id') || pending.reference
+        : searchParams.get('token') || pending.reference;
+    if (!reference) {
+      setError('Unable to verify payment reference from the provider callback.');
+      return;
+    }
+    if (pending.shippingAddress && typeof pending.shippingAddress === 'object') {
+      setShippingAddress((prev) => ({ ...prev, ...pending.shippingAddress }));
+    }
+    setSelectedPaymentProvider(providerKey);
+    setLoading(true);
+    setError(null);
+    api.payments
+      .verifyPayment({
+        providerKey,
+        reference,
+        payerId: searchParams.get('PayerID') || undefined,
+      })
+      .then(async (verifyResponse) => {
+        if (!verifyResponse.success || !verifyResponse.data?.isPaid) {
+          throw new Error('Payment could not be verified as completed.');
+        }
+        setStep('review');
+        await createOrders(String(verifyResponse.data.paymentReference || reference), providerKey);
+      })
+      .catch((err: any) => {
+        setError(err?.response?.data?.message || err.message || 'Unable to verify redirected payment.');
+      })
+      .finally(() => {
+        setLoading(false);
+        sessionStorage.removeItem('checkout_pending_payment');
+      });
+  }, []);
 
   const cardElementOptions = {
     style: {
@@ -432,6 +551,24 @@ export default function Checkout() {
 
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Payment Provider *
+                    </label>
+                    <select
+                      required
+                      value={selectedPaymentProvider}
+                      onChange={(e) => setSelectedPaymentProvider(e.target.value)}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    >
+                      {paymentProviders.map((provider) => (
+                        <option key={provider.providerKey} value={provider.providerKey}>
+                          {provider.displayName} ({provider.mode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Phone Number *
                     </label>
                     <input
@@ -449,7 +586,11 @@ export default function Checkout() {
                   className="w-full mt-6"
                   disabled={loading}
                 >
-                  {loading ? 'Processing...' : 'Step 2: Continue to Payment'}
+                  {loading
+                    ? 'Processing...'
+                    : selectedProvider?.checkoutType === 'REDIRECT'
+                      ? `Pay with ${selectedProvider?.displayName || 'Provider'}`
+                      : 'Step 2: Continue to Payment'}
                 </Button>
               </form>
             )}
@@ -460,7 +601,7 @@ export default function Checkout() {
                   <CreditCard className="w-5 h-5 text-amber-600" />
                   <h2 className="text-lg font-semibold">Payment Details</h2>
                 </div>
-                <p className="mb-4 text-sm text-gray-500">Payment method: Card (Stripe)</p>
+                <p className="mb-4 text-sm text-gray-500">Payment method: Card ({selectedProvider?.displayName || 'Stripe'})</p>
 
                 <div className="p-4 bg-gray-50 rounded-lg mb-6">
                   <div className="flex items-center gap-2 mb-4">
