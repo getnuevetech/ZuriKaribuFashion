@@ -70,7 +70,24 @@ app.use('/uploads', (req, res, next) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    deployment: {
+      commit:
+        process.env.RAILWAY_GIT_COMMIT_SHA ||
+        process.env.GIT_COMMIT_SHA ||
+        process.env.COMMIT_SHA ||
+        null,
+      branch:
+        process.env.RAILWAY_GIT_BRANCH ||
+        process.env.GIT_BRANCH ||
+        process.env.BRANCH ||
+        null,
+      service: process.env.RAILWAY_SERVICE_NAME || null,
+      environment: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || null,
+    },
+  });
 });
 
 // API Routes
