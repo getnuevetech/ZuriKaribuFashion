@@ -156,6 +156,16 @@ interface DesignerProfileCompletion {
   fields?: VendorProfileField[];
 }
 
+const DEFAULT_DESIGNER_PROFILE_FIELDS: VendorProfileField[] = [
+  { key: 'businessName', label: 'Business Name', fieldType: 'TEXT', required: true, isActive: true },
+  { key: 'businessEmail', label: 'Business Email', fieldType: 'TEXT', required: true, isActive: true },
+  { key: 'businessPhone', label: 'Business Phone', fieldType: 'TEXT', required: true, isActive: true },
+  { key: 'country', label: 'Country', fieldType: 'TEXT', required: true, isActive: true },
+  { key: 'city', label: 'City', fieldType: 'TEXT', required: true, isActive: true },
+  { key: 'address', label: 'Address', fieldType: 'TEXTAREA', required: false, isActive: true },
+  { key: 'bio', label: 'Bio', fieldType: 'TEXTAREA', required: false, isActive: true },
+];
+
 const LOCATION_COUNTRIES = getCountryOptions();
 const COUNTRY_FIELD_HINTS = ['country', 'businesscountry', 'vendorcountry'];
 const CITY_FIELD_HINTS = ['city', 'businesscity', 'vendorcity', 'town'];
@@ -175,6 +185,28 @@ const isCityGovernanceField = (field: VendorProfileField) => {
   const key = normalizeFieldKey(field.key);
   const label = normalizeFieldKey(field.label);
   return CITY_FIELD_HINTS.some((hint) => key.includes(hint) || label.includes(hint));
+};
+
+const getDesignerProfileFallbackValue = (profile: DesignerProfileCompletion['profile'] | undefined, key: string) => {
+  const normalized = normalizeFieldKey(key);
+  if (!profile) return '';
+  if (normalized.includes('businessname') || normalized.includes('brandname') || normalized.includes('companyname')) {
+    return String(profile.businessName || '');
+  }
+  if (normalized.includes('businessemail') || normalized === 'email' || normalized.includes('companyemail')) {
+    return String(profile.businessEmail || '');
+  }
+  if (normalized.includes('businessphone') || normalized.includes('phone')) {
+    return String(profile.businessPhone || '');
+  }
+  if (normalized.includes('country')) return String(profile.country || '');
+  if (normalized.includes('city') || normalized.includes('town')) return String(profile.city || '');
+  if (normalized.includes('address')) return String(profile.address || '');
+  if (normalized.includes('website')) return String(profile.website || '');
+  if (normalized.includes('bio') || normalized.includes('about') || normalized.includes('description')) {
+    return String(profile.bio || '');
+  }
+  return '';
 };
 
 export default function DesignerDashboard() {
@@ -405,12 +437,14 @@ export default function DesignerDashboard() {
         const dynamicData = completion?.profileData && typeof completion.profileData === 'object'
           ? completion.profileData
           : {};
-        for (const field of (completion?.fields || []).filter((entry) => entry.isActive !== false)) {
+        const configuredFields = (completion?.fields || []).filter((entry) => entry.isActive !== false);
+        const fieldsToUse = configuredFields.length > 0 ? configuredFields : DEFAULT_DESIGNER_PROFILE_FIELDS;
+        for (const field of fieldsToUse) {
           const rawValue = (dynamicData as Record<string, unknown>)[field.key];
           nextProfileForm[field.key] = Array.isArray(rawValue)
             ? rawValue.join(', ')
             : rawValue === undefined || rawValue === null
-              ? ''
+              ? getDesignerProfileFallbackValue(completion.profile, field.key)
               : String(rawValue);
         }
         setProfileForm(nextProfileForm);
@@ -644,7 +678,7 @@ export default function DesignerDashboard() {
     setSubmittingProfile(true);
     try {
       const dynamicPayload: Record<string, string | number | boolean | string[]> = {};
-      for (const field of profileCompletion.fields || []) {
+      for (const field of activeProfileFields) {
         if (!field?.key) continue;
         const raw = String(profileForm[field.key] ?? '').trim();
         if (field.fieldType === 'NUMBER') {
@@ -707,7 +741,10 @@ export default function DesignerDashboard() {
   }, [productRows, productSearch, productTypeFilter, productStatusFilter, productCategoryFilter]);
   const featuredRows = productRows.filter((item) => item.isFeatured);
   const pendingOrders = orders.filter(o => o.status === 'PENDING');
-  const activeProfileFields = (profileCompletion?.fields || []).filter((field) => field.isActive !== false);
+  const activeProfileFields = useMemo(() => {
+    const configured = (profileCompletion?.fields || []).filter((field) => field.isActive !== false);
+    return configured.length > 0 ? configured : DEFAULT_DESIGNER_PROFILE_FIELDS;
+  }, [profileCompletion?.fields]);
   const selectedProfileCountryField = activeProfileFields.find(isCountryGovernanceField);
   const selectedProfileCountry = selectedProfileCountryField
     ? profileForm[selectedProfileCountryField.key] || ''
