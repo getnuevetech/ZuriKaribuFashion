@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Scissors, 
   DollarSign, 
@@ -16,7 +16,9 @@ import {
   MessageSquare,
   ArrowRight,
   TrendingDown,
-  Palette
+  Palette,
+  Search,
+  Filter
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
@@ -215,6 +217,10 @@ export default function DesignerDashboard() {
   const [submittingProfile, setSubmittingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [productSearch, setProductSearch] = useState('');
+  const [productTypeFilter, setProductTypeFilter] = useState('');
+  const [productStatusFilter, setProductStatusFilter] = useState('');
+  const [productCategoryFilter, setProductCategoryFilter] = useState('');
 
   const syncTabWithUrl = (tab: 'overview' | 'designs' | 'featured' | 'orders') => {
     setActiveTab(tab);
@@ -685,6 +691,20 @@ export default function DesignerDashboard() {
     ...designs.map((item) => ({ ...item, productType: 'CUSTOM_TO_WEAR' as const })),
     ...readyProducts.map((item) => ({ ...item, productType: 'READY_TO_WEAR' as const })),
   ];
+  const filteredProductRows = useMemo(() => {
+    const normalizedSearch = productSearch.trim().toLowerCase();
+    return productRows.filter((item) => {
+      if (productTypeFilter && item.productType !== productTypeFilter) return false;
+      if (productStatusFilter && String(item.status || '').toUpperCase() !== productStatusFilter.toUpperCase()) return false;
+      if (productCategoryFilter && String(item.category?.name || '') !== productCategoryFilter) return false;
+      if (!normalizedSearch) return true;
+      return (
+        String(item.name || '').toLowerCase().includes(normalizedSearch) ||
+        String(item.category?.name || '').toLowerCase().includes(normalizedSearch) ||
+        String(item.productType || '').toLowerCase().includes(normalizedSearch)
+      );
+    });
+  }, [productRows, productSearch, productTypeFilter, productStatusFilter, productCategoryFilter]);
   const featuredRows = productRows.filter((item) => item.isFeatured);
   const pendingOrders = orders.filter(o => o.status === 'PENDING');
   const activeProfileFields = (profileCompletion?.fields || []).filter((field) => field.isActive !== false);
@@ -1007,89 +1027,158 @@ export default function DesignerDashboard() {
       )}
 
       {activeTab === 'designs' && (
-        <div className="bg-white rounded-xl p-6 shadow-sm border">
-          <div className="flex items-center justify-between mb-6">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">My Products</h2>
             <Button size="sm" onClick={openCreateDesignModal} disabled={!profileCompletion?.canUpload}>
               <Plus className="w-4 h-4 mr-2" />
               Add Custom Product
             </Button>
           </div>
-          <DataTable
-            columns={[
-              {
-                key: 'name',
-                header: 'Product',
-                render: (item) => (
-                  <div className="flex items-center gap-3">
-                    <img src={item.images?.[0] || '/images/placeholder.jpg'} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
-                    <div>
-                      <p className="font-medium text-gray-900">{item.name}</p>
-                      <p className="text-xs text-gray-500">
-                        {item.productType === 'READY_TO_WEAR' ? 'Ready To Wear' : 'Custom To Wear'}
-                      </p>
-                    </div>
-                  </div>
-                ),
-              },
-              { key: 'category.name', header: 'Category' },
-              {
-                key: 'basePrice',
-                header: 'Price',
-                render: (item) => {
-                  const code = String(item.listingCurrencyCode || 'USD').toUpperCase();
-                  const local = Number(item.listingLocalPrice || item.basePrice || 0);
-                  const usd = Number(item.listingUsdPrice || item.basePrice || 0);
-                  if (code === 'USD') return `$${usd.toFixed(2)}`;
-                  return `${code} ${local.toFixed(2)} · USD ${usd.toFixed(2)}`;
-                },
-              },
-              { key: 'orderCount', header: 'Orders' },
-              {
-                key: 'isFeatured',
-                header: 'Featured',
-                render: (item) => (
-                  <Badge variant={item.isFeatured ? 'green' : 'gray'}>
-                    {item.isFeatured ? 'YES' : 'NO'}
-                  </Badge>
-                ),
-              },
-              {
-                key: 'status',
-                header: 'Status',
-                render: (item) => (
-                  <Badge variant={item.status === 'ACTIVE' ? 'green' : 'gray'}>
-                    {item.status}
-                  </Badge>
-                ),
-              },
-            ]}
-            data={productRows}
-            keyExtractor={(item) => `${item.productType}-${item.id}`}
-            searchable
-            searchKeys={['name', 'category.name', 'productType']}
-            emptyMessage="No products found."
-            actions={(item) => (
-              <div className="flex gap-2">
-                {item.productType !== 'READY_TO_WEAR' ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openEditDesignModal(item as Design)}
-                    disabled={!profileCompletion?.canUpload}
-                    title="Edit product"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                ) : null}
-                <Button variant="outline" size="sm" asChild>
-                  <Link to={item.productType === 'READY_TO_WEAR' ? `/ready-to-wear/${item.id}` : `/designs/${item.id}`}>
-                    <Eye className="w-4 h-4" />
-                  </Link>
-                </Button>
+
+          <div className="flex flex-wrap gap-3">
+            <div className="w-full md:w-[320px]">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={productSearch}
+                  onChange={(event) => setProductSearch(event.target.value)}
+                  className="w-full rounded-lg border py-2 pl-10 pr-4"
+                />
               </div>
-            )}
-          />
+            </div>
+            <select
+              value={productTypeFilter}
+              onChange={(event) => setProductTypeFilter(event.target.value)}
+              className="rounded-lg border px-4 py-2"
+            >
+              <option value="">All Types</option>
+              <option value="CUSTOM_TO_WEAR">Custom To Wear</option>
+              <option value="READY_TO_WEAR">Ready To Wear</option>
+            </select>
+            <select
+              value={productStatusFilter}
+              onChange={(event) => setProductStatusFilter(event.target.value)}
+              className="rounded-lg border px-4 py-2"
+            >
+              <option value="">All Status</option>
+              <option value="DRAFT">Draft</option>
+              <option value="PENDING_REVIEW">Pending Review</option>
+              <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Rejected</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
+            <select
+              value={productCategoryFilter}
+              onChange={(event) => setProductCategoryFilter(event.target.value)}
+              className="rounded-lg border px-4 py-2"
+            >
+              <option value="">All Categories</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.name}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+            <Button variant="outline" onClick={() => setProductSearch((prev) => prev.trimStart())}>
+              <Filter className="mr-2 h-4 w-4" />
+              Filter
+            </Button>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Product</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Type</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Price</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Category</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Featured</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Status</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Orders</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProductRows.map((item) => {
+                    const code = String(item.listingCurrencyCode || 'USD').toUpperCase();
+                    const local = Number(item.listingLocalPrice || item.basePrice || 0);
+                    const usd = Number(item.listingUsdPrice || item.basePrice || 0);
+                    const priceText = code === 'USD' ? `$${usd.toFixed(2)}` : `${code} ${local.toFixed(2)} · USD ${usd.toFixed(2)}`;
+                    return (
+                      <tr key={`${item.productType}-${item.id}`} className="border-b last:border-0 hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <img src={item.images?.[0] || '/images/placeholder.jpg'} alt={item.name} className="h-10 w-10 rounded-lg object-cover" />
+                            <div>
+                              <p className="font-medium text-gray-900">{item.name}</p>
+                              <p className="text-sm text-gray-500">{item.productType === 'READY_TO_WEAR' ? 'Ready To Wear' : 'Custom To Wear'}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant="secondary">{item.productType}</Badge>
+                        </td>
+                        <td className="px-4 py-3 font-medium">{priceText}</td>
+                        <td className="px-4 py-3 text-gray-600">{item.category?.name || 'Category'}</td>
+                        <td className="px-4 py-3">
+                          <Badge variant={item.isFeatured ? 'green' : 'gray'}>{item.isFeatured ? 'YES' : 'NO'}</Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant={
+                              item.status === 'APPROVED'
+                                ? 'green'
+                                : item.status === 'PENDING_REVIEW'
+                                  ? 'yellow'
+                                  : item.status === 'REJECTED'
+                                    ? 'red'
+                                    : 'gray'
+                            }
+                          >
+                            {item.status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">{item.orderCount}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-2">
+                            {item.productType !== 'READY_TO_WEAR' ? (
+                              <button
+                                onClick={() => openEditDesignModal(item as Design)}
+                                disabled={!profileCompletion?.canUpload}
+                                className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                title="Edit product"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </button>
+                            ) : null}
+                            <Link
+                              to={item.productType === 'READY_TO_WEAR' ? `/ready-to-wear/${item.id}` : `/designs/${item.id}`}
+                              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                              title="View"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredProductRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-500">
+                        No products found for the selected filters.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 

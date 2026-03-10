@@ -17,6 +17,7 @@ interface Product {
   sellerId?: string;
   designerId?: string;
   ownerName: string;
+  ownerCountry?: string | null;
   category: string;
   orderCount: number;
   image?: string | null;
@@ -45,6 +46,9 @@ export default function AdminProducts() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [countryFilter, setCountryFilter] = useState('');
+  const [materialFilter, setMaterialFilter] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'fabrics' | 'designs' | 'ready-to-wear'>('all');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
@@ -153,6 +157,61 @@ export default function AdminProducts() {
   }, [activeTab, typeFilter]);
 
   const activeProductType = (editing?.type || form.type) as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+  const countryOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          products
+            .map((item) => String(item.ownerCountry || '').trim())
+            .filter(Boolean)
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [products]
+  );
+  const ownerOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          products
+            .map((item) => String(item.ownerName || '').trim())
+            .filter(Boolean)
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [products]
+  );
+  const materialOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          products
+            .filter((item) => item.type === 'FABRIC')
+            .map((item) => String(item.category || '').trim())
+            .filter(Boolean)
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [products]
+  );
+  const filteredProducts = useMemo(
+    () =>
+      products.filter((product) => {
+        if (countryFilter && String(product.ownerCountry || '').trim().toLowerCase() !== countryFilter.toLowerCase()) {
+          return false;
+        }
+        if (ownerFilter && String(product.ownerName || '').trim().toLowerCase() !== ownerFilter.toLowerCase()) {
+          return false;
+        }
+        if (materialFilter) {
+          if (product.type !== 'FABRIC') return false;
+          if (String(product.category || '').trim().toLowerCase() !== materialFilter.toLowerCase()) return false;
+        }
+        return true;
+      }),
+    [products, countryFilter, ownerFilter, materialFilter]
+  );
+  const selectedVisibleIds = useMemo(
+    () => filteredProducts.filter((product) => selectedIds.includes(product.id)).map((product) => product.id),
+    [filteredProducts, selectedIds]
+  );
   const selectedOwnerUserId = useMemo(() => {
     if (activeProductType === 'FABRIC') {
       const seller = options.sellers.find((item) => item.id === form.sellerId);
@@ -169,6 +228,11 @@ export default function AdminProducts() {
     const designer = options.designers.find((item) => item.id === form.designerId);
     return String(designer?.country || '').trim();
   }, [activeProductType, options.sellers, options.designers, form.sellerId, form.designerId]);
+
+  useEffect(() => {
+    const visibleIdSet = new Set(filteredProducts.map((item) => item.id));
+    setSelectedIds((prev) => prev.filter((id) => visibleIdSet.has(id)));
+  }, [filteredProducts]);
 
   const selectedLocalCurrency = useMemo(() => {
     if (!selectedOwnerCountry) return null;
@@ -922,8 +986,8 @@ export default function AdminProducts() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-4">
-        <div className="flex-1 min-w-[200px]">
+      <div className="flex flex-wrap gap-3">
+        <div className="w-full md:w-[320px]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -957,13 +1021,49 @@ export default function AdminProducts() {
           <option value="REJECTED">Rejected</option>
           <option value="ARCHIVED">Archived</option>
         </select>
+        <select
+          value={countryFilter}
+          onChange={(e) => setCountryFilter(e.target.value)}
+          className="px-4 py-2 border rounded-lg"
+        >
+          <option value="">All Countries</option>
+          {countryOptions.map((country) => (
+            <option key={country} value={country}>
+              {country}
+            </option>
+          ))}
+        </select>
+        <select
+          value={materialFilter}
+          onChange={(e) => setMaterialFilter(e.target.value)}
+          className="px-4 py-2 border rounded-lg"
+        >
+          <option value="">All Materials</option>
+          {materialOptions.map((material) => (
+            <option key={material} value={material}>
+              {material}
+            </option>
+          ))}
+        </select>
+        <select
+          value={ownerFilter}
+          onChange={(e) => setOwnerFilter(e.target.value)}
+          className="px-4 py-2 border rounded-lg"
+        >
+          <option value="">All Seller/Designer</option>
+          {ownerOptions.map((owner) => (
+            <option key={owner} value={owner}>
+              {owner}
+            </option>
+          ))}
+        </select>
         <Button variant="outline" onClick={fetchProducts}>
           <Filter className="w-4 h-4 mr-2" />
           Filter
         </Button>
       </div>
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
-        <span className="text-sm font-medium text-amber-900">{selectedIds.length} selected</span>
+        <span className="text-sm font-medium text-amber-900">{selectedVisibleIds.length} selected</span>
         <select
           value={bulkAction}
           onChange={(e) => setBulkAction(e.target.value as ModerationAction)}
@@ -995,9 +1095,9 @@ export default function AdminProducts() {
                 <th className="py-3 px-4">
                   <input
                     type="checkbox"
-                    checked={products.length > 0 && selectedIds.length === products.length}
+                    checked={filteredProducts.length > 0 && selectedVisibleIds.length === filteredProducts.length}
                     onChange={(e) =>
-                      setSelectedIds(e.target.checked ? products.map((product) => product.id) : [])
+                      setSelectedIds(e.target.checked ? filteredProducts.map((product) => product.id) : [])
                     }
                   />
                 </th>
@@ -1011,7 +1111,7 @@ export default function AdminProducts() {
               </tr>
             </thead>
             <tbody>
-              {products.map((product) => (
+              {filteredProducts.map((product) => (
                 <tr key={product.id} className="border-b last:border-0 hover:bg-gray-50">
                   <td className="py-3 px-4">
                     <input

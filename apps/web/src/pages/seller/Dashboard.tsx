@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Package, 
   DollarSign, 
@@ -14,7 +14,9 @@ import {
   Clock,
   BarChart3,
   MapPin,
-  ArrowRight
+  ArrowRight,
+  Search,
+  Filter
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
@@ -183,6 +185,9 @@ export default function SellerDashboard() {
   const [submittingProfile, setSubmittingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [fabricSearch, setFabricSearch] = useState('');
+  const [fabricStatusFilter, setFabricStatusFilter] = useState('');
+  const [fabricMaterialFilter, setFabricMaterialFilter] = useState('');
 
   const syncTabWithUrl = (tab: 'overview' | 'fabrics' | 'featured' | 'orders') => {
     setActiveTab(tab);
@@ -565,6 +570,25 @@ export default function SellerDashboard() {
   const lowStockFabrics = fabrics.filter(f => f.stockMeters < 20);
   const featuredFabrics = fabrics.filter((fabric) => fabric.isFeatured);
   const pendingOrders = orders.filter(o => o.status === 'CONFIRMED');
+  const filteredFabrics = useMemo(() => {
+    const normalizedSearch = fabricSearch.trim().toLowerCase();
+    return fabrics.filter((item) => {
+      if (fabricStatusFilter && String(item.status || '').toUpperCase() !== fabricStatusFilter.toUpperCase()) {
+        return false;
+      }
+      if (fabricMaterialFilter) {
+        const materialId = String(item.materialTypeId || '');
+        const materialName = String(item.materialType?.name || '');
+        if (materialId !== fabricMaterialFilter && materialName !== fabricMaterialFilter) return false;
+      }
+      if (!normalizedSearch) return true;
+      return (
+        String(item.name || '').toLowerCase().includes(normalizedSearch) ||
+        String(item.description || '').toLowerCase().includes(normalizedSearch) ||
+        String(item.materialType?.name || '').toLowerCase().includes(normalizedSearch)
+      );
+    });
+  }, [fabrics, fabricSearch, fabricStatusFilter, fabricMaterialFilter]);
   const activeProfileFields = (profileCompletion?.fields || []).filter((field) => field.isActive !== false);
   const selectedProfileCountryField = activeProfileFields.find(isCountryGovernanceField);
   const selectedProfileCountry = selectedProfileCountryField
@@ -888,86 +912,152 @@ export default function SellerDashboard() {
       )}
 
       {activeTab === 'fabrics' && (
-        <div className="bg-white rounded-xl p-6 shadow-sm border">
-          <div className="flex items-center justify-between mb-6">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">My Fabrics</h2>
             <Button size="sm" onClick={openCreateProductModal} disabled={!profileCompletion?.canUpload}>
               <Plus className="w-4 h-4 mr-2" />
               Add Product
             </Button>
           </div>
-          <DataTable
-            columns={[
-              { 
-                key: 'name', 
-                header: 'Fabric',
-                render: (item) => (
-                  <div className="flex items-center gap-3">
-                    <img src={item.images[0] || '/images/placeholder.jpg'} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
-                    <div>
-                      <p className="font-medium text-gray-900">{item.name}</p>
-                      <p className="text-xs text-gray-500">{item.materialType?.name}</p>
-                    </div>
-                  </div>
-                )
-              },
-              { 
-                key: 'pricePerMeter', 
-                header: 'Price',
-                render: (item) => {
-                  const code = String(item.listingCurrencyCode || 'USD').toUpperCase();
-                  const local = Number(item.listingLocalPrice || item.pricePerMeter || 0);
-                  const usd = Number(item.listingUsdPrice || item.pricePerMeter || 0);
-                  if (code === 'USD') return `$${usd.toFixed(2)} / yd`;
-                  return `${code} ${local.toFixed(2)} / yd · USD ${usd.toFixed(2)}`;
-                }
-              },
-              { 
-                key: 'stockMeters', 
-                header: 'Stock',
-                render: (item) => (
-                  <span className={item.stockMeters < 20 ? 'text-red-600 font-medium' : ''}>
-                    {item.stockMeters}m
-                  </span>
-                )
-              },
-              { key: 'orderCount', header: 'Orders' },
-              { 
-                key: 'status', 
-                header: 'Status',
-                render: (item) => (
-                  <Badge variant={item.status === 'ACTIVE' ? 'green' : 'gray'}>
-                    {item.status}
-                  </Badge>
-                )
-              },
-            ]}
-            data={fabrics}
-            keyExtractor={(item) => item.id}
-            searchable
-            searchKeys={['name', 'materialType.name']}
-            actions={(item) => (
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openEditProductModal(item)}
-                  title="Edit product"
-                  disabled={!profileCompletion?.canUpload}
-                >
-                  <Edit className="w-4 h-4" />
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => openStockModal(item)} title="Update stock">
-                  <Package className="w-4 h-4" />
-                </Button>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to={`/fabrics/${item.id}`}>
-                    <Eye className="w-4 h-4" />
-                  </Link>
-                </Button>
+
+          <div className="flex flex-wrap gap-3">
+            <div className="w-full md:w-[320px]">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={fabricSearch}
+                  onChange={(event) => setFabricSearch(event.target.value)}
+                  className="w-full rounded-lg border py-2 pl-10 pr-4"
+                />
               </div>
-            )}
-          />
+            </div>
+            <select
+              value={fabricMaterialFilter}
+              onChange={(event) => setFabricMaterialFilter(event.target.value)}
+              className="rounded-lg border px-4 py-2"
+            >
+              <option value="">All Materials</option>
+              {materialOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={fabricStatusFilter}
+              onChange={(event) => setFabricStatusFilter(event.target.value)}
+              className="rounded-lg border px-4 py-2"
+            >
+              <option value="">All Status</option>
+              <option value="DRAFT">Draft</option>
+              <option value="PENDING_REVIEW">Pending Review</option>
+              <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Rejected</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
+            <Button variant="outline" onClick={() => setFabricSearch((prev) => prev.trimStart())}>
+              <Filter className="mr-2 h-4 w-4" />
+              Filter
+            </Button>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Product</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Type</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Price</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Stock</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Status</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Orders</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredFabrics.map((item) => {
+                    const code = String(item.listingCurrencyCode || 'USD').toUpperCase();
+                    const local = Number(item.listingLocalPrice || item.pricePerMeter || 0);
+                    const usd = Number(item.listingUsdPrice || item.pricePerMeter || 0);
+                    const priceText = code === 'USD' ? `$${usd.toFixed(2)} / yd` : `${code} ${local.toFixed(2)} / yd · USD ${usd.toFixed(2)}`;
+                    return (
+                      <tr key={item.id} className="border-b last:border-0 hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <img src={item.images?.[0] || '/images/placeholder.jpg'} alt={item.name} className="h-10 w-10 rounded-lg object-cover" />
+                            <div>
+                              <p className="font-medium text-gray-900">{item.name}</p>
+                              <p className="text-sm text-gray-500">{item.materialType?.name || 'Material'}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant="secondary">FABRIC</Badge>
+                        </td>
+                        <td className="px-4 py-3 font-medium">{priceText}</td>
+                        <td className="px-4 py-3">
+                          <span className={item.stockMeters < 20 ? 'font-medium text-red-600' : ''}>{item.stockMeters} yd</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant={
+                              item.status === 'APPROVED'
+                                ? 'green'
+                                : item.status === 'PENDING_REVIEW'
+                                  ? 'yellow'
+                                  : item.status === 'REJECTED'
+                                    ? 'red'
+                                    : 'gray'
+                            }
+                          >
+                            {item.status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">{item.orderCount}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={() => openEditProductModal(item)}
+                              disabled={!profileCompletion?.canUpload}
+                              className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Edit product"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => openStockModal(item)}
+                              className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-700"
+                              title="Update stock"
+                            >
+                              <Package className="h-4 w-4" />
+                            </button>
+                            <Link
+                              to={`/fabrics/${item.id}`}
+                              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                              title="View"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredFabrics.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-500">
+                        No products found for the selected filters.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
