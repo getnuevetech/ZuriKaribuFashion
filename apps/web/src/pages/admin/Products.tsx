@@ -156,10 +156,10 @@ export default function AdminProducts() {
   const selectedOwnerUserId = useMemo(() => {
     if (activeProductType === 'FABRIC') {
       const seller = options.sellers.find((item) => item.id === form.sellerId);
-      return String(seller?.ownerUserId || seller?.id || '').trim();
+      return String(seller?.ownerUserId || '').trim();
     }
     const designer = options.designers.find((item) => item.id === form.designerId);
-    return String(designer?.ownerUserId || designer?.id || '').trim();
+    return String(designer?.ownerUserId || '').trim();
   }, [activeProductType, options.sellers, options.designers, form.sellerId, form.designerId]);
   const selectedOwnerCountry = useMemo(() => {
     if (activeProductType === 'FABRIC') {
@@ -182,12 +182,15 @@ export default function AdminProducts() {
   }, [selectedOwnerCountry, currencyMatrix]);
 
   const fetchOptions = async () => {
-    const [productOptionsResult, currencyResult, ownerResult, categoriesResult, materialsResult] = await Promise.allSettled([
+    const [productOptionsResult, currencyResult, ownerResult, categoriesResult, materialsResult, sellerProfilesResult, designerProfilesResult] =
+      await Promise.allSettled([
       api.admin.getProductOptions(),
       api.currency.getConfig(),
       api.homepageSections.getAdminDesignerOptions(),
       api.admin.getCategories(),
       api.admin.getMaterials(),
+      api.admin.getVendorProfiles({ role: 'FABRIC_SELLER', page: 1, limit: 500 }),
+      api.admin.getVendorProfiles({ role: 'FASHION_DESIGNER', page: 1, limit: 500 }),
     ]);
 
     const productOptions =
@@ -213,22 +216,84 @@ export default function AdminProducts() {
         ? ownerResult.value.data
         : [];
 
+    const sellerProfileRows =
+      sellerProfilesResult.status === 'fulfilled' && sellerProfilesResult.value.success
+        ? Array.isArray(sellerProfilesResult.value.data?.profiles)
+          ? sellerProfilesResult.value.data.profiles
+          : []
+        : [];
+    const designerProfileRows =
+      designerProfilesResult.status === 'fulfilled' && designerProfilesResult.value.success
+        ? Array.isArray(designerProfilesResult.value.data?.profiles)
+          ? designerProfilesResult.value.data.profiles
+          : []
+        : [];
+
+    const fallbackSellerProfiles = sellerProfileRows.map((item: any) => {
+      const profileId = String(item.profileId || item.id || '').trim();
+      const ownerUserId = String(item.userId || item.ownerUserId || '').trim();
+      return {
+        id: profileId,
+        ownerUserId,
+        businessName: normalizeOwnerName(
+          String(item.businessName || `${item.user?.firstName || ''} ${item.user?.lastName || ''}`.trim() || item.user?.email || ''),
+          'Seller',
+          profileId || ownerUserId
+        ),
+        country: String(item.profileData?.country || item.country || '').trim(),
+      };
+    }).filter((item) => item.id);
+    const fallbackDesignerProfiles = designerProfileRows.map((item: any) => {
+      const profileId = String(item.profileId || item.id || '').trim();
+      const ownerUserId = String(item.userId || item.ownerUserId || '').trim();
+      return {
+        id: profileId,
+        ownerUserId,
+        businessName: normalizeOwnerName(
+          String(item.businessName || `${item.user?.firstName || ''} ${item.user?.lastName || ''}`.trim() || item.user?.email || ''),
+          'Designer',
+          profileId || ownerUserId
+        ),
+        country: String(item.profileData?.country || item.country || '').trim(),
+      };
+    }).filter((item) => item.id);
+
     const fallbackSellers = ownerFallbackRows
-      .filter((item) => String(item.vendorType || '').toUpperCase() === 'SELLER')
+      .filter((item) => {
+        const type = String(item.vendorType || item.role || '').toUpperCase();
+        return type === 'SELLER' || type === 'FABRIC_SELLER';
+      })
       .map((item) => ({
         id: String(item.id || ''),
-        ownerUserId: String(item.ownerUserId || item.userId || item.id || ''),
+        ownerUserId: String(item.ownerUserId || item.userId || ''),
         businessName: normalizeOwnerName(String(item.businessName || ''), 'Seller', String(item.id || '')),
         country: String(item.country || '').trim(),
       }));
     const fallbackDesigners = ownerFallbackRows
-      .filter((item) => String(item.vendorType || 'DESIGNER').toUpperCase() !== 'SELLER')
+      .filter((item) => {
+        const type = String(item.vendorType || item.role || '').toUpperCase();
+        return type === 'DESIGNER' || type === 'FASHION_DESIGNER';
+      })
       .map((item) => ({
         id: String(item.id || ''),
-        ownerUserId: String(item.ownerUserId || item.userId || item.id || ''),
+        ownerUserId: String(item.ownerUserId || item.userId || ''),
         businessName: normalizeOwnerName(String(item.businessName || ''), 'Designer', String(item.id || '')),
         country: String(item.country || '').trim(),
       }));
+
+    const sellerSource = sellersFromProducts.length > 0 ? sellersFromProducts : (fallbackSellerProfiles.length > 0 ? fallbackSellerProfiles : fallbackSellers);
+    const designerSource =
+      designersFromProducts.length > 0 ? designersFromProducts : (fallbackDesignerProfiles.length > 0 ? fallbackDesignerProfiles : fallbackDesigners);
+    const sellerUserIdByProfileId = new Map(
+      fallbackSellerProfiles
+        .filter((item) => item.id && item.ownerUserId)
+        .map((item) => [item.id, item.ownerUserId] as const)
+    );
+    const designerUserIdByProfileId = new Map(
+      fallbackDesignerProfiles
+        .filter((item) => item.id && item.ownerUserId)
+        .map((item) => [item.id, item.ownerUserId] as const)
+    );
 
     setOptions({
       categories:
@@ -242,16 +307,22 @@ export default function AdminProducts() {
           name: String(item.name || '').trim(),
         })),
       sellers:
-        (sellersFromProducts.length > 0 ? sellersFromProducts : fallbackSellers).map((item: any) => ({
-          id: String(item.id || ''),
-          ownerUserId: String(item.ownerUserId || item.userId || item.id || ''),
+        sellerSource.map((item: any) => ({
+          id: String(item.id || '').trim(),
+          ownerUserId:
+            String(item.ownerUserId || item.userId || '').trim() ||
+            sellerUserIdByProfileId.get(String(item.id || '').trim()) ||
+            undefined,
           businessName: normalizeOwnerName(item.businessName, 'Seller', item.id),
           country: String(item.country || '').trim(),
         })),
       designers:
-        (designersFromProducts.length > 0 ? designersFromProducts : fallbackDesigners).map((item: any) => ({
-          id: String(item.id || ''),
-          ownerUserId: String(item.ownerUserId || item.userId || item.id || ''),
+        designerSource.map((item: any) => ({
+          id: String(item.id || '').trim(),
+          ownerUserId:
+            String(item.ownerUserId || item.userId || '').trim() ||
+            designerUserIdByProfileId.get(String(item.id || '').trim()) ||
+            undefined,
           businessName: normalizeOwnerName(item.businessName, 'Designer', item.id),
           country: String(item.country || '').trim(),
         })),
