@@ -1697,11 +1697,17 @@ const designerApi = {
   createDesign: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/designer/designs', data),
 
+  updateDesign: (designId: string, data: any) =>
+    apiService.patch<{ success: boolean; data: any }>(`/designer/designs/${designId}`, data),
+
   getReadyToWear: () =>
     apiService.get<{ success: boolean; data: any[] }>('/designer/ready-to-wear'),
 
   createReadyToWear: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/designer/ready-to-wear', data),
+
+  updateReadyToWear: (productId: string, data: any) =>
+    apiService.patch<{ success: boolean; data: any }>(`/designer/ready-to-wear/${productId}`, data),
 
   getOrders: () =>
     apiService.get<{ success: boolean; data: any[] }>('/designer/orders'),
