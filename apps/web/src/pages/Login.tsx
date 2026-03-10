@@ -68,7 +68,12 @@ export default function Login() {
         setError('Google login failed. Please try again.');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Google login failed');
+      const message = String(err?.response?.data?.message || '').trim();
+      if (message.toLowerCase().includes('route not found')) {
+        setError('Google login is not available on the current backend deployment yet. Please redeploy the API service.');
+      } else {
+        setError(message || 'Google login failed');
+      }
     } finally {
       setLoading(false);
     }

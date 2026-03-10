@@ -145,7 +145,12 @@ export default function Register() {
         setError('Google sign up failed. Please try again.');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Google sign up failed');
+      const message = String(err?.response?.data?.message || '').trim();
+      if (message.toLowerCase().includes('route not found')) {
+        setError('Google sign up is not available on the current backend deployment yet. Please redeploy the API service.');
+      } else {
+        setError(message || 'Google sign up failed');
+      }
     } finally {
       setLoading(false);
     }
