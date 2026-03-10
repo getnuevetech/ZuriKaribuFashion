@@ -381,6 +381,12 @@ export default function SellerDashboard() {
       const completionFieldCount = completionPayload && Array.isArray((completionPayload as any)?.fields)
         ? (completionPayload as any).fields.filter((entry: any) => entry?.isActive !== false).length
         : 0;
+      const profileRoutesMissing =
+        !dashboardCompletion &&
+        completionFieldCount === 0 &&
+        governanceFields.length === 0 &&
+        String(profileCompletionCallStatus).toLowerCase().includes('route not found') &&
+        String(profileFieldsCallStatus).toLowerCase().includes('route not found');
 
       if (completionPayload) {
         const completion = completionPayload as SellerProfileCompletion;
@@ -455,6 +461,38 @@ export default function SellerDashboard() {
           governanceFieldCount: governanceFields.length,
           effectiveFieldCount: governanceFields.length,
           sampleFieldKeys: governanceFields.slice(0, 5).map((field: any) => String(field?.key || '')).filter(Boolean),
+        });
+      } else if (profileRoutesMissing && dashboardRes?.success) {
+        const fallbackProfile = dashboardRes.data?.profile || {};
+        setProfileCompletion({
+          canUpload: true,
+          profileStatus: 'APPROVED',
+          profile: {
+            businessName: String(fallbackProfile?.businessName || ''),
+            businessEmail: String(fallbackProfile?.businessEmail || ''),
+            businessPhone: String(fallbackProfile?.businessPhone || ''),
+            country: String(fallbackProfile?.country || ''),
+            city: String(fallbackProfile?.city || ''),
+            address: String(fallbackProfile?.address || ''),
+            website: String(fallbackProfile?.website || ''),
+            storefrontPath: String(fallbackProfile?.storefrontPath || ''),
+          },
+          profileData: {},
+          fields: [],
+        });
+        setProfileForm({});
+        setProfileMessage(null);
+        setGovernanceDebug({
+          dashboardCall: settledCallStatus(dashboardResult),
+          fabricsCall: settledCallStatus(fabricsResult),
+          ordersCall: settledCallStatus(ordersResult),
+          profileCompletionCall: `${profileCompletionCallStatus} (isolated)`,
+          profileFieldsCall: `${profileFieldsCallStatus} (isolated)`,
+          completionFieldCount,
+          governanceFieldCount: governanceFields.length,
+          effectiveFieldCount: 0,
+          sampleFieldKeys: [],
+          error: 'Governance endpoints missing in deployment; compatibility mode enabled.',
         });
       } else {
         setProfileMessage('Unable to load vendor application fields right now. Please refresh the page.');
