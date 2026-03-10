@@ -1182,7 +1182,14 @@ const productsApi = {
   getMaterials: () =>
     apiService.get<{ success: boolean; data: any[] }>('/products/materials'),
 
-  getFabrics: (params?: { country?: string; materialTypeId?: string; search?: string; page?: number; limit?: number }) =>
+  getFabrics: (params?: {
+    country?: string;
+    materialTypeId?: string;
+    sellerId?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) =>
     apiService.get<{ success: boolean; data: { fabrics: any[]; pagination: any } }>('/products/fabrics', { params }),
 
   getFabric: (id: string) =>
@@ -1191,7 +1198,14 @@ const productsApi = {
   getFabricById: (id: string) =>
     apiService.get<{ success: boolean; data: any }>(`/products/fabrics/${id}`),
 
-  getDesigns: (params?: { categoryId?: string; country?: string; search?: string; page?: number; limit?: number }) =>
+  getDesigns: (params?: {
+    categoryId?: string;
+    country?: string;
+    designerId?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) =>
     apiService.get<{ success: boolean; data: { designs: any[]; pagination: any } }>('/products/designs', { params }),
 
   getDesign: (id: string) =>
@@ -1200,7 +1214,14 @@ const productsApi = {
   getDesignById: (id: string) =>
     apiService.get<{ success: boolean; data: any }>(`/products/designs/${id}`),
 
-  getReadyToWear: (params?: { categoryId?: string; country?: string; search?: string; page?: number; limit?: number }) =>
+  getReadyToWear: (params?: {
+    categoryId?: string;
+    country?: string;
+    designerId?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) =>
     apiService.get<{ success: boolean; data: { products: any[]; pagination: any } }>('/products/ready-to-wear', { params }),
 
   getReadyToWearProduct: (id: string) =>
@@ -1648,6 +1669,12 @@ const sellerApi = {
   getFabrics: () =>
     apiService.get<{ success: boolean; data: any[] }>('/fabric-seller/fabrics'),
 
+  getProfileCompletion: () =>
+    apiService.get<{ success: boolean; data: any }>('/fabric-seller/profile-completion'),
+
+  updateProfileCompletion: (data: any) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>('/fabric-seller/profile-completion', data),
+
   createFabric: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/fabric-seller/fabrics', data),
 
@@ -1693,6 +1720,12 @@ const designerApi = {
 
   getDesigns: () =>
     apiService.get<{ success: boolean; data: any[] }>('/designer/designs'),
+
+  getProfileCompletion: () =>
+    apiService.get<{ success: boolean; data: any }>('/designer/profile-completion'),
+
+  updateProfileCompletion: (data: any) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>('/designer/profile-completion', data),
 
   createDesign: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/designer/designs', data),

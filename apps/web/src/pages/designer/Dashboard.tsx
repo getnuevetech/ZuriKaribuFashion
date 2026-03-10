@@ -55,6 +55,21 @@ interface Design {
   orderCount: number;
   status: string;
   createdAt: string;
+  isFeatured?: boolean;
+  featuredSections?: string[];
+}
+
+interface ReadyProduct {
+  id: string;
+  name: string;
+  description: string;
+  category: { name: string };
+  basePrice: number;
+  status: string;
+  images: string[];
+  orderCount: number;
+  isFeatured?: boolean;
+  featuredSections?: string[];
 }
 
 interface DesignOrder {
@@ -101,15 +116,46 @@ interface DesignFormState {
   measurementLines: string;
 }
 
+interface VendorProfileField {
+  key: string;
+  label: string;
+  fieldType: string;
+  required?: boolean;
+  options?: string[];
+  helpText?: string;
+  placeholder?: string;
+  isActive?: boolean;
+}
+
+interface DesignerProfileCompletion {
+  canUpload: boolean;
+  profileStatus: 'INCOMPLETE' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  profileReviewNotes?: string | null;
+  profile: {
+    businessName?: string;
+    businessEmail?: string;
+    businessPhone?: string;
+    country?: string;
+    city?: string;
+    address?: string;
+    website?: string;
+    bio?: string;
+    storefrontPath?: string;
+  };
+  profileData?: Record<string, any>;
+  fields?: VendorProfileField[];
+}
+
 export default function DesignerDashboard() {
   const [stats, setStats] = useState<DesignerStats | null>(null);
   const [designs, setDesigns] = useState<Design[]>([]);
   const [orders, setOrders] = useState<DesignOrder[]>([]);
+  const [readyProducts, setReadyProducts] = useState<ReadyProduct[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [categories, setCategories] = useState<ProductCategoryOption[]>([]);
   const [fabricOptions, setFabricOptions] = useState<FabricOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'designs' | 'orders'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'designs' | 'featured' | 'orders'>('overview');
   const [showDesignModal, setShowDesignModal] = useState(false);
   const [isSavingDesign, setIsSavingDesign] = useState(false);
   const [designError, setDesignError] = useState<string | null>(null);
@@ -125,9 +171,13 @@ export default function DesignerDashboard() {
     yardsByFabricId: {},
     measurementLines: 'chest|cm|required\nwaist|cm|required\nhips|cm|required',
   });
+  const [profileCompletion, setProfileCompletion] = useState<DesignerProfileCompletion | null>(null);
+  const [profileForm, setProfileForm] = useState<Record<string, string>>({});
+  const [submittingProfile, setSubmittingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const syncTabWithUrl = (tab: 'overview' | 'designs' | 'orders') => {
+  const syncTabWithUrl = (tab: 'overview' | 'designs' | 'featured' | 'orders') => {
     setActiveTab(tab);
     if (tab === 'overview') {
       setSearchParams({});
@@ -142,7 +192,7 @@ export default function DesignerDashboard() {
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam === 'designs' || tabParam === 'orders' || tabParam === 'overview') {
+    if (tabParam === 'designs' || tabParam === 'featured' || tabParam === 'orders' || tabParam === 'overview') {
       setActiveTab(tabParam);
     } else {
       setActiveTab('overview');
@@ -152,12 +202,14 @@ export default function DesignerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsRes, designsRes, ordersRes, categoriesRes, fabricsRes] = await Promise.all([
+      const [statsRes, designsRes, readyRes, ordersRes, categoriesRes, fabricsRes, profileRes] = await Promise.all([
         api.designer.getDashboard(),
         api.designer.getDesigns(),
+        api.designer.getReadyToWear(),
         api.designer.getOrders(),
         api.products.getCategories(),
         api.products.getFabrics({ limit: 200 }),
+        api.designer.getProfileCompletion(),
       ]);
 
       const toAddressObject = (value: any) => {
@@ -238,8 +290,25 @@ export default function DesignerDashboard() {
           orderCount: Number(design?._count?.orderItems || 0),
           status: design.status || 'DRAFT',
           createdAt: design.createdAt,
+          isFeatured: Boolean(design.isFeatured),
+          featuredSections: Array.isArray(design.featuredSections) ? design.featuredSections : [],
         }));
         setDesigns(mappedDesigns);
+      }
+      if (readyRes.success) {
+        const mappedReady = (readyRes.data || []).map((item: any) => ({
+          id: String(item.id),
+          name: item.name || 'Ready To Wear',
+          description: item.description || '',
+          category: item.category || { name: 'Category' },
+          basePrice: Number(item.basePrice || 0),
+          status: item.status || 'DRAFT',
+          images: Array.isArray(item.images) ? item.images.map((img: any) => img?.url).filter(Boolean) : [],
+          orderCount: Number(item?._count?.orderItems || 0),
+          isFeatured: Boolean(item.isFeatured),
+          featuredSections: Array.isArray(item.featuredSections) ? item.featuredSections : [],
+        }));
+        setReadyProducts(mappedReady);
       }
       if (ordersRes.success) setOrders(mappedOrders);
       if (categoriesRes.success) {
@@ -252,6 +321,32 @@ export default function DesignerDashboard() {
       if (fabricsRes.success) {
         const rows = Array.isArray(fabricsRes.data?.fabrics) ? fabricsRes.data.fabrics : [];
         setFabricOptions(rows.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Fabric') })));
+      }
+      if (profileRes.success) {
+        const completion = profileRes.data as DesignerProfileCompletion;
+        setProfileCompletion(completion);
+        const nextProfileForm: Record<string, string> = {
+          businessName: String(completion?.profile?.businessName || ''),
+          businessEmail: String(completion?.profile?.businessEmail || ''),
+          businessPhone: String(completion?.profile?.businessPhone || ''),
+          country: String(completion?.profile?.country || ''),
+          city: String(completion?.profile?.city || ''),
+          address: String(completion?.profile?.address || ''),
+          website: String(completion?.profile?.website || ''),
+          bio: String(completion?.profile?.bio || ''),
+        };
+        const dynamicData = completion?.profileData && typeof completion.profileData === 'object'
+          ? completion.profileData
+          : {};
+        for (const field of completion?.fields || []) {
+          const rawValue = (dynamicData as Record<string, unknown>)[field.key];
+          nextProfileForm[field.key] = Array.isArray(rawValue)
+            ? rawValue.join(', ')
+            : rawValue === undefined || rawValue === null
+              ? ''
+              : String(rawValue);
+        }
+        setProfileForm(nextProfileForm);
       }
       
       // Mock activities
@@ -324,6 +419,10 @@ export default function DesignerDashboard() {
   };
 
   const openCreateDesignModal = () => {
+    if (!profileCompletion?.canUpload) {
+      setDesignError('Complete and submit your full vendor profile for admin approval before uploading products.');
+      return;
+    }
     resetDesignForm();
     setShowDesignModal(true);
   };
@@ -467,8 +566,56 @@ export default function DesignerDashboard() {
     }
   };
 
+  const handleSubmitProfile = async () => {
+    if (!profileCompletion) return;
+    setProfileMessage(null);
+    setSubmittingProfile(true);
+    try {
+      const dynamicPayload: Record<string, string | number | boolean | string[]> = {};
+      for (const field of profileCompletion.fields || []) {
+        if (!field?.key) continue;
+        const raw = String(profileForm[field.key] ?? '').trim();
+        if (field.fieldType === 'NUMBER') {
+          dynamicPayload[field.key] = raw ? Number(raw) : '';
+        } else if (field.fieldType === 'MULTI_SELECT') {
+          dynamicPayload[field.key] = raw
+            ? raw
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean)
+            : [];
+        } else {
+          dynamicPayload[field.key] = raw;
+        }
+      }
+      const response = await api.designer.updateProfileCompletion({
+        businessName: String(profileForm.businessName || '').trim(),
+        businessEmail: String(profileForm.businessEmail || '').trim() || undefined,
+        businessPhone: String(profileForm.businessPhone || '').trim() || undefined,
+        country: String(profileForm.country || '').trim(),
+        city: String(profileForm.city || '').trim(),
+        address: String(profileForm.address || '').trim(),
+        website: String(profileForm.website || '').trim() || undefined,
+        bio: String(profileForm.bio || '').trim() || undefined,
+        profileData: dynamicPayload,
+      });
+      if (response.success) {
+        setProfileCompletion(response.data);
+        setProfileMessage(response.message || 'Profile submitted successfully.');
+      }
+    } catch (error: any) {
+      setProfileMessage(error?.message || 'Unable to submit profile right now.');
+    } finally {
+      setSubmittingProfile(false);
+    }
+  };
+
+  const productRows = [
+    ...designs.map((item) => ({ ...item, productType: 'CUSTOM_TO_WEAR' as const })),
+    ...readyProducts.map((item) => ({ ...item, productType: 'READY_TO_WEAR' as const })),
+  ];
+  const featuredRows = productRows.filter((item) => item.isFeatured);
   const pendingOrders = orders.filter(o => o.status === 'PENDING');
-  const inProductionOrders = orders.filter(o => o.status === 'IN_PRODUCTION');
 
   if (loading) {
     return (
@@ -485,12 +632,123 @@ export default function DesignerDashboard() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Designer Dashboard</h1>
           <p className="text-gray-500 mt-1">Manage your designs and track orders</p>
+          {profileCompletion?.profile?.storefrontPath ? (
+            <a
+              href={profileCompletion.profile.storefrontPath}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex text-sm text-amber-700 hover:underline"
+            >
+              Storefront: {profileCompletion.profile.storefrontPath}
+            </a>
+          ) : null}
         </div>
-        <Button onClick={openCreateDesignModal}>
+        <Button onClick={openCreateDesignModal} disabled={!profileCompletion?.canUpload}>
           <Plus className="w-4 h-4 mr-2" />
           Add Design Product
         </Button>
       </div>
+
+      {!profileCompletion?.canUpload ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-amber-900">Complete vendor profile before uploading</h2>
+            <p className="text-sm text-amber-800 mt-1">
+              Status: <span className="font-semibold">{profileCompletion?.profileStatus || 'INCOMPLETE'}</span>. Upload actions stay locked until admin approval.
+            </p>
+            {profileCompletion?.profileReviewNotes ? (
+              <p className="text-sm text-amber-900 mt-1">Admin note: {profileCompletion.profileReviewNotes}</p>
+            ) : null}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {[
+              ['businessName', 'Business Name'],
+              ['businessEmail', 'Business Email'],
+              ['businessPhone', 'Business Phone'],
+              ['country', 'Country'],
+              ['city', 'City'],
+              ['address', 'Address'],
+              ['website', 'Website'],
+              ['bio', 'Bio'],
+            ].map(([key, label]) => (
+              <div key={key} className={key === 'address' || key === 'bio' ? 'md:col-span-2' : ''}>
+                <label className="block text-xs font-semibold text-amber-900 mb-1">{label}</label>
+                {key === 'bio' ? (
+                  <textarea
+                    value={profileForm[key] || ''}
+                    onChange={(event) => setProfileForm((prev) => ({ ...prev, [key]: event.target.value }))}
+                    className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm min-h-[90px]"
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={profileForm[key] || ''}
+                    onChange={(event) => setProfileForm((prev) => ({ ...prev, [key]: event.target.value }))}
+                    className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {(profileCompletion?.fields || []).filter((field) => field.isActive !== false).length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {(profileCompletion?.fields || [])
+                .filter((field) => field.isActive !== false)
+                .map((field) => {
+                  const value = profileForm[field.key] || '';
+                  const isTextArea = field.fieldType === 'TEXTAREA';
+                  const isSelect = field.fieldType === 'SELECT' && Array.isArray(field.options) && field.options.length > 0;
+                  return (
+                    <div key={field.key} className={isTextArea ? 'md:col-span-2' : ''}>
+                      <label className="block text-xs font-semibold text-amber-900 mb-1">
+                        {field.label}
+                        {field.required ? <span className="text-red-600 ml-1">*</span> : null}
+                      </label>
+                      {isSelect ? (
+                        <select
+                          value={value}
+                          onChange={(event) => setProfileForm((prev) => ({ ...prev, [field.key]: event.target.value }))}
+                          className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm"
+                        >
+                          <option value="">Select...</option>
+                          {(field.options || []).map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      ) : isTextArea ? (
+                        <textarea
+                          value={value}
+                          onChange={(event) => setProfileForm((prev) => ({ ...prev, [field.key]: event.target.value }))}
+                          className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm min-h-[90px]"
+                        />
+                      ) : (
+                        <input
+                          type={field.fieldType === 'NUMBER' ? 'number' : 'text'}
+                          value={value}
+                          onChange={(event) => setProfileForm((prev) => ({ ...prev, [field.key]: event.target.value }))}
+                          placeholder={field.placeholder || ''}
+                          className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm"
+                        />
+                      )}
+                      {field.helpText ? <p className="mt-1 text-xs text-amber-700">{field.helpText}</p> : null}
+                    </div>
+                  );
+                })}
+            </div>
+          ) : null}
+
+          {profileMessage ? <p className="text-sm text-amber-900">{profileMessage}</p> : null}
+          <div>
+            <Button size="sm" onClick={handleSubmitProfile} disabled={submittingProfile}>
+              {submittingProfile ? 'Submitting...' : 'Submit for Admin Approval'}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -531,7 +789,7 @@ export default function DesignerDashboard() {
       {/* Tabs */}
       <div className="border-b">
         <div className="flex gap-6">
-          {(['overview', 'designs', 'orders'] as const).map((tab) => (
+          {(['overview', 'designs', 'featured', 'orders'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => syncTabWithUrl(tab)}
@@ -651,66 +909,126 @@ export default function DesignerDashboard() {
       {activeTab === 'designs' && (
         <div className="bg-white rounded-xl p-6 shadow-sm border">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">My Designs</h2>
-            <Button size="sm" onClick={openCreateDesignModal}>
+            <h2 className="text-lg font-semibold text-gray-900">My Products</h2>
+            <Button size="sm" onClick={openCreateDesignModal} disabled={!profileCompletion?.canUpload}>
               <Plus className="w-4 h-4 mr-2" />
-              Add Product
+              Add Custom Product
             </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {designs.map((design) => (
-              <div key={design.id} className="border rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
-                <div className="relative">
-                  <img
-                    src={design.images[0] || '/images/placeholder.jpg'}
-                    alt={design.name}
-                    className="w-full h-56 object-cover"
-                  />
-                  <Badge 
-                    variant={design.status === 'ACTIVE' ? 'green' : 'gray'}
-                    className="absolute top-3 right-3"
-                  >
-                    {design.status}
+          <DataTable
+            columns={[
+              {
+                key: 'name',
+                header: 'Product',
+                render: (item) => (
+                  <div className="flex items-center gap-3">
+                    <img src={item.images?.[0] || '/images/placeholder.jpg'} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
+                    <div>
+                      <p className="font-medium text-gray-900">{item.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {item.productType === 'READY_TO_WEAR' ? 'Ready To Wear' : 'Custom To Wear'}
+                      </p>
+                    </div>
+                  </div>
+                ),
+              },
+              { key: 'category.name', header: 'Category' },
+              { key: 'basePrice', header: 'Price', render: (item) => `$${Number(item.basePrice || 0).toFixed(2)}` },
+              { key: 'orderCount', header: 'Orders' },
+              {
+                key: 'isFeatured',
+                header: 'Featured',
+                render: (item) => (
+                  <Badge variant={item.isFeatured ? 'green' : 'gray'}>
+                    {item.isFeatured ? 'YES' : 'NO'}
                   </Badge>
-                </div>
-                <div className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{design.name}</h3>
-                      <p className="text-sm text-gray-500">{design.category.name}</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 grid grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-xs text-gray-500">Price</p>
-                      <p className="font-medium text-amber-700">${design.basePrice}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Rating</p>
-                      <p className="font-medium text-gray-900">⭐ {Number(design.rating || 0).toFixed(1)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Orders</p>
-                      <p className="font-medium text-gray-900">{design.orderCount}</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openEditDesignModal(design)}>
-                      <Edit className="w-4 h-4 mr-1" />
-                      Edit
-                    </Button>
-                    <Button variant="outline" size="sm" className="flex-1" asChild>
-                      <Link to={`/designs/${design.id}`}>
-                        <Eye className="w-4 h-4 mr-1" />
-                        View
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
+                ),
+              },
+              {
+                key: 'status',
+                header: 'Status',
+                render: (item) => (
+                  <Badge variant={item.status === 'ACTIVE' ? 'green' : 'gray'}>
+                    {item.status}
+                  </Badge>
+                ),
+              },
+            ]}
+            data={productRows}
+            keyExtractor={(item) => `${item.productType}-${item.id}`}
+            searchable
+            searchKeys={['name', 'category.name', 'productType']}
+            emptyMessage="No products found."
+            actions={(item) => (
+              <div className="flex gap-2">
+                {item.productType !== 'READY_TO_WEAR' ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEditDesignModal(item as Design)}
+                    disabled={!profileCompletion?.canUpload}
+                    title="Edit product"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                ) : null}
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={item.productType === 'READY_TO_WEAR' ? `/ready-to-wear/${item.id}` : `/designs/${item.id}`}>
+                    <Eye className="w-4 h-4" />
+                  </Link>
+                </Button>
               </div>
-            ))}
-          </div>
+            )}
+          />
         </div>
+      )}
+
+      {activeTab === 'featured' && (
+        <DataTable
+          title="Featured Products"
+          columns={[
+            {
+              key: 'name',
+              header: 'Product',
+              render: (item) => (
+                <div className="flex items-center gap-3">
+                  <img src={item.images?.[0] || '/images/placeholder.jpg'} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
+                  <div>
+                    <p className="font-medium text-gray-900">{item.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {item.productType === 'READY_TO_WEAR' ? 'Ready To Wear' : 'Custom To Wear'}
+                    </p>
+                  </div>
+                </div>
+              ),
+            },
+            { key: 'basePrice', header: 'Price', render: (item) => `$${Number(item.basePrice || 0).toFixed(2)}` },
+            {
+              key: 'featuredSections',
+              header: 'Homepage Sections',
+              render: (item) => (
+                <span className="text-xs text-gray-600">{(item.featuredSections || []).join(', ') || 'Featured'}</span>
+              ),
+            },
+            {
+              key: 'status',
+              header: 'Status',
+              render: (item) => <Badge variant={item.status === 'ACTIVE' ? 'green' : 'gray'}>{item.status}</Badge>,
+            },
+          ]}
+          data={featuredRows}
+          keyExtractor={(item) => `${item.productType}-${item.id}`}
+          searchable
+          searchKeys={['name', 'productType']}
+          emptyMessage="No featured products yet. Ask admin to feature one of your products."
+          actions={(item) => (
+            <Button variant="outline" size="sm" asChild>
+              <Link to={item.productType === 'READY_TO_WEAR' ? `/ready-to-wear/${item.id}` : `/designs/${item.id}`}>
+                <Eye className="w-4 h-4" />
+              </Link>
+            </Button>
+          )}
+        />
       )}
 
       {showDesignModal && (

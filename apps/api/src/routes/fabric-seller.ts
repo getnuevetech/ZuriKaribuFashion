@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { randomUUID } from 'crypto';
 import { prisma, UserRole, ProductStatus } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 
 const router = Router();
+let sellerGovernanceSchemaEnsured = false;
 
 router.use(authenticate);
 router.use(authorizePermissions(Permissions.SELLER_ACCESS));
@@ -41,6 +43,159 @@ async function resolveSellerProfile(userId: string) {
   });
 }
 
+async function ensureSellerGovernanceSchema() {
+  if (sellerGovernanceSchemaEnsured) return;
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "VendorProfileField" (
+      "id" TEXT NOT NULL,
+      "role" TEXT NOT NULL,
+      "key" TEXT NOT NULL,
+      "label" TEXT NOT NULL,
+      "fieldType" TEXT NOT NULL,
+      "placeholder" TEXT,
+      "helpText" TEXT,
+      "required" BOOLEAN NOT NULL DEFAULT false,
+      "options" JSONB,
+      "sortOrder" INTEGER NOT NULL DEFAULT 0,
+      "isActive" BOOLEAN NOT NULL DEFAULT true,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "VendorProfileField_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "VendorProfileSubmission" (
+      "id" TEXT NOT NULL,
+      "role" TEXT NOT NULL,
+      "userId" TEXT NOT NULL,
+      "businessName" TEXT,
+      "profileStatus" TEXT NOT NULL DEFAULT 'SUBMITTED',
+      "profileData" JSONB,
+      "profileSubmittedAt" TIMESTAMP(3),
+      "profileReviewedAt" TIMESTAMP(3),
+      "profileReviewNotes" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "VendorProfileSubmission_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "VendorProfileSubmission_role_userId_key" ON "VendorProfileSubmission"("role","userId")`
+  );
+  sellerGovernanceSchemaEnsured = true;
+}
+
+type VendorProfileStatus = 'INCOMPLETE' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+
+const normalizeVendorProfileStatus = (value: unknown): VendorProfileStatus => {
+  const normalized = String(value || '').toUpperCase();
+  if (normalized === 'INCOMPLETE' || normalized === 'SUBMITTED' || normalized === 'APPROVED' || normalized === 'REJECTED') {
+    return normalized;
+  }
+  return 'INCOMPLETE';
+};
+
+const slugify = (value: string) =>
+  String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120);
+
+async function readSellerSubmission(userId: string) {
+  await ensureSellerGovernanceSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<any>>(
+    `SELECT "id","profileStatus","profileData","profileSubmittedAt","profileReviewedAt","profileReviewNotes"
+     FROM "VendorProfileSubmission"
+     WHERE "role" = 'FABRIC_SELLER' AND "userId" = $1
+     LIMIT 1`,
+    userId
+  );
+  return rows[0] || null;
+}
+
+async function readSellerProfileFields() {
+  try {
+    await ensureSellerGovernanceSchema();
+    const rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT "id","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive"
+       FROM "VendorProfileField"
+       WHERE "role" = 'FABRIC_SELLER'
+       ORDER BY "sortOrder" ASC, "createdAt" ASC`
+    );
+    return rows.map((row) => ({
+      ...row,
+      required: Boolean(row.required),
+      isActive: Boolean(row.isActive),
+      options: Array.isArray(row.options) ? row.options : [],
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function getSellerProfileCompletion(userId: string) {
+  const profile = await resolveSellerProfile(userId);
+  if (!profile) return null;
+
+  const [submission, fields] = await Promise.all([readSellerSubmission(userId), readSellerProfileFields()]);
+  const status = submission
+    ? normalizeVendorProfileStatus(submission.profileStatus)
+    : profile.isVerified
+      ? 'APPROVED'
+      : 'INCOMPLETE';
+  const canUpload = status === 'APPROVED' || Boolean(profile.isVerified);
+  const brandSlug = slugify(profile.businessName || '');
+  const storefrontPath = `/store/seller/${encodeURIComponent(profile.id)}/${encodeURIComponent(brandSlug || 'store')}`;
+
+  return {
+    role: 'FABRIC_SELLER',
+    canUpload,
+    profileStatus: status,
+    profile: {
+      id: profile.id,
+      businessName: profile.businessName,
+      businessEmail: profile.businessEmail,
+      businessPhone: profile.businessPhone,
+      country: profile.country,
+      city: profile.city,
+      address: profile.address,
+      isVerified: profile.isVerified,
+      storefrontPath,
+      storefrontSlug: brandSlug,
+    },
+    profileData: submission?.profileData || {},
+    profileSubmittedAt: submission?.profileSubmittedAt || null,
+    profileReviewedAt: submission?.profileReviewedAt || null,
+    profileReviewNotes: submission?.profileReviewNotes || null,
+    fields,
+  };
+}
+
+async function ensureSellerCanUpload(userId: string) {
+  const completion = await getSellerProfileCompletion(userId);
+  if (!completion) {
+    return {
+      allowed: false,
+      statusCode: 404,
+      message: 'Seller profile not found.',
+    };
+  }
+  if (completion.canUpload) {
+    return { allowed: true, completion };
+  }
+  return {
+    allowed: false,
+    statusCode: 403,
+    message:
+      completion.profileStatus === 'REJECTED'
+        ? 'Your vendor profile was rejected. Please update your profile and resubmit for approval.'
+        : 'Complete and submit your full vendor profile for admin approval before uploading products.',
+    completion,
+  };
+}
+
 async function computeFinalFabricPrice(baseSellerPrice: number, sellerCountry: string) {
   const markupRule = await prisma.pricingRule.findFirst({
     where: {
@@ -72,7 +227,8 @@ async function computeFinalFabricPrice(baseSellerPrice: number, sellerCountry: s
 // Get seller dashboard
 router.get('/dashboard', async (req, res, next) => {
   try {
-    const profile = await resolveSellerProfile(req.user!.id);
+    const completion = await getSellerProfileCompletion(req.user!.id);
+    const profile = completion?.profile;
 
     if (!profile) {
       return res.status(404).json({
@@ -97,6 +253,7 @@ router.get('/dashboard', async (req, res, next) => {
       success: true,
       data: {
         profile,
+        profileCompletion: completion,
         stats: {
           totalFabrics,
           totalOrders,
@@ -131,10 +288,151 @@ router.get('/fabrics', async (req, res, next) => {
       },
       orderBy: { createdAt: 'desc' },
     });
+    const featuredRows =
+      fabrics.length > 0
+        ? await prisma.featuredProduct.findMany({
+            where: {
+              productType: 'FABRIC',
+              productId: { in: fabrics.map((item) => item.id) },
+              isActive: true,
+            },
+            select: {
+              productId: true,
+              section: true,
+            },
+          })
+        : [];
+
+    const featuredByFabricId = new Map<string, string[]>();
+    for (const row of featuredRows) {
+      const existing = featuredByFabricId.get(row.productId) || [];
+      if (!existing.includes(row.section)) existing.push(row.section);
+      featuredByFabricId.set(row.productId, existing);
+    }
 
     res.json({
       success: true,
-      data: fabrics,
+      data: fabrics.map((item) => {
+        const featuredSections = featuredByFabricId.get(item.id) || [];
+        return {
+          ...item,
+          isFeatured: featuredSections.length > 0,
+          featuredSections,
+        };
+      }),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/profile-completion', async (req, res, next) => {
+  try {
+    const completion = await getSellerProfileCompletion(req.user!.id);
+    if (!completion) {
+      return res.status(404).json({
+        success: false,
+        message: 'Seller profile not found.',
+      });
+    }
+    res.json({
+      success: true,
+      data: completion,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/profile-completion', async (req, res, next) => {
+  try {
+    const payload = z
+      .object({
+        businessName: z.string().min(2).optional(),
+        businessEmail: z.string().email().optional(),
+        businessPhone: z.string().min(3).optional(),
+        country: z.string().min(2).optional(),
+        city: z.string().min(2).optional(),
+        address: z.string().min(3).optional(),
+        profileData: z.record(z.union([z.string(), z.number(), z.boolean(), z.array(z.string())])).optional(),
+      })
+      .parse(req.body);
+
+    const current = await getSellerProfileCompletion(req.user!.id);
+    if (!current) {
+      return res.status(404).json({
+        success: false,
+        message: 'Seller profile not found.',
+      });
+    }
+
+    const mergedProfileData = {
+      ...(current.profileData && typeof current.profileData === 'object' ? current.profileData : {}),
+      ...(payload.profileData || {}),
+    };
+    const missingDynamicRequired = (current.fields || [])
+      .filter((field: any) => field.isActive && field.required)
+      .filter((field: any) => {
+        const value = (mergedProfileData as Record<string, unknown>)[field.key];
+        if (Array.isArray(value)) return value.length === 0;
+        return String(value ?? '').trim().length === 0;
+      })
+      .map((field: any) => field.label || field.key);
+
+    const businessName = payload.businessName ?? current.profile.businessName ?? '';
+    const country = payload.country ?? current.profile.country ?? '';
+    const city = payload.city ?? current.profile.city ?? '';
+    const missingCoreRequired = [];
+    if (!String(businessName).trim()) missingCoreRequired.push('Business name');
+    if (!String(country).trim()) missingCoreRequired.push('Country');
+    if (!String(city).trim()) missingCoreRequired.push('City');
+    const missing = [...missingCoreRequired, ...missingDynamicRequired];
+    if (missing.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Please complete required fields: ${missing.join(', ')}`,
+      });
+    }
+
+    await prisma.fabricSellerProfile.update({
+      where: { id: current.profile.id },
+      data: {
+        businessName: String(businessName).trim(),
+        businessEmail: payload.businessEmail ?? current.profile.businessEmail ?? null,
+        businessPhone: payload.businessPhone ?? current.profile.businessPhone ?? null,
+        country: String(country).trim(),
+        city: String(city).trim(),
+        address: payload.address ?? current.profile.address ?? '',
+        isVerified: false,
+      },
+    });
+
+    const now = new Date();
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "VendorProfileSubmission"
+        ("id","role","userId","businessName","profileStatus","profileData","profileSubmittedAt","profileReviewedAt","profileReviewNotes","updatedAt")
+       VALUES ($1,'FABRIC_SELLER',$2,$3,'SUBMITTED',$4::jsonb,$5,NULL,NULL,NOW())
+       ON CONFLICT ("role","userId")
+       DO UPDATE SET
+         "businessName" = EXCLUDED."businessName",
+         "profileStatus" = EXCLUDED."profileStatus",
+         "profileData" = EXCLUDED."profileData",
+         "profileSubmittedAt" = EXCLUDED."profileSubmittedAt",
+         "profileReviewedAt" = NULL,
+         "profileReviewNotes" = NULL,
+         "updatedAt" = NOW()`,
+      randomUUID(),
+      req.user!.id,
+      String(businessName).trim(),
+      JSON.stringify(mergedProfileData),
+      now
+    );
+
+    const completion = await getSellerProfileCompletion(req.user!.id);
+    res.json({
+      success: true,
+      message: 'Profile submitted successfully. Admin review is now required before product uploads.',
+      data: completion,
     });
   } catch (error) {
     next(error);
@@ -204,13 +502,17 @@ router.post('/fabrics', async (req, res, next) => {
 
     const data = schema.parse(req.body);
 
-    const profile = await resolveSellerProfile(req.user!.id);
-
-    if (!profile) {
-      return res.status(404).json({
+    const uploadAccess = await ensureSellerCanUpload(req.user!.id);
+    if (!uploadAccess.allowed) {
+      return res.status(Number(uploadAccess.statusCode || 403)).json({
         success: false,
-        message: 'Seller profile not found.',
+        message: uploadAccess.message,
+        data: uploadAccess.completion || null,
       });
+    }
+    const profile = await resolveSellerProfile(req.user!.id);
+    if (!profile) {
+      return res.status(404).json({ success: false, message: 'Seller profile not found.' });
     }
 
     const finalPrice = await computeFinalFabricPrice(data.sellerPrice, profile.country);
@@ -279,6 +581,15 @@ router.patch('/fabrics/:id', async (req, res, next) => {
         .optional(),
     });
     const data = schema.parse(req.body);
+
+    const uploadAccess = await ensureSellerCanUpload(req.user!.id);
+    if (!uploadAccess.allowed) {
+      return res.status(Number(uploadAccess.statusCode || 403)).json({
+        success: false,
+        message: uploadAccess.message,
+        data: uploadAccess.completion || null,
+      });
+    }
 
     const profile = await resolveSellerProfile(req.user!.id);
     if (!profile) {

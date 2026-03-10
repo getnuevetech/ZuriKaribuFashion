@@ -50,7 +50,7 @@ router.get('/materials', async (req, res, next) => {
 // Get fabrics with filters
 router.get('/fabrics', async (req, res, next) => {
   try {
-    const { country, materialTypeId, search, page, limit } = req.query;
+    const { country, materialTypeId, sellerId, search, page, limit } = req.query;
 
     const where: any = {
       status: ProductStatus.APPROVED,
@@ -63,6 +63,9 @@ router.get('/fabrics', async (req, res, next) => {
 
     if (materialTypeId) {
       where.materialTypeId = materialTypeId as string;
+    }
+    if (sellerId) {
+      where.sellerId = sellerId as string;
     }
 
     if (search) {
@@ -82,7 +85,7 @@ router.get('/fabrics', async (req, res, next) => {
         include: {
           materialType: true,
           seller: {
-            select: { country: true, city: true, businessName: true },
+            select: { id: true, country: true, city: true, businessName: true },
           },
           images: true,
         },
@@ -188,6 +191,7 @@ router.get('/designs', async (req, res, next) => {
           category: true,
           designer: {
             select: {
+              id: true,
               businessName: true,
               country: true,
               city: true,
@@ -324,6 +328,7 @@ router.get('/ready-to-wear', async (req, res, next) => {
           category: true,
           designer: {
             select: {
+              id: true,
               businessName: true,
               country: true,
               city: true,

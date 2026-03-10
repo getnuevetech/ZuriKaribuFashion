@@ -339,7 +339,8 @@ router.post('/register', async (req, res, next) => {
       lastName,
       phone: data.phone,
       role: data.role as UserRole,
-      status: data.role === 'CUSTOMER' ? UserStatus.ACTIVE : UserStatus.PENDING, // Sellers/designers need approval
+      // Vendors can log in immediately to complete full profile submission.
+      status: UserStatus.ACTIVE,
     };
 
     // Add role-specific profile
@@ -410,7 +411,7 @@ router.post('/register', async (req, res, next) => {
       success: true,
       message: data.role === 'CUSTOMER' 
         ? 'Registration successful! Welcome to African Fashion.'
-        : 'Registration submitted! Your account is pending approval.',
+        : 'Registration successful! Please complete your full vendor profile for admin approval before uploading products.',
       data: {
         user,
         token,
@@ -563,8 +564,16 @@ router.post('/login', async (req, res, next) => {
       });
     }
 
-    // Check status
-    if (user.status === UserStatus.PENDING) {
+    const isVendor =
+      user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER;
+
+    // Backfill legacy vendor accounts that were previously created as PENDING.
+    if (user.status === UserStatus.PENDING && isVendor) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { status: UserStatus.ACTIVE },
+      });
+    } else if (user.status === UserStatus.PENDING) {
       return res.status(403).json({
         success: false,
         message: 'Your account is pending approval. Please wait for admin verification.',
@@ -720,7 +729,15 @@ const handleGoogleLogin = async (req: any, res: any, next: any) => {
       await upsertGoogleAuthLink({ userId: user.id, googleSub, email });
     }
 
-    if (user.status === UserStatus.PENDING) {
+    const isVendor =
+      user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER;
+
+    if (user.status === UserStatus.PENDING && isVendor) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { status: UserStatus.ACTIVE },
+      });
+    } else if (user.status === UserStatus.PENDING) {
       return res.status(403).json({
         success: false,
         message: 'Your account is pending approval. Please wait for admin verification.',

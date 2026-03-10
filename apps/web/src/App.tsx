@@ -22,6 +22,8 @@ import Checkout from './pages/Checkout';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import StoryPage from './pages/Story';
+import SellerStorefront from './pages/storefront/SellerStorefront';
+import DesignerStorefront from './pages/storefront/DesignerStorefront';
 
 // Customer Pages
 import CustomerDashboard from './pages/customer/Dashboard';
@@ -96,6 +98,8 @@ function App() {
               <Route path="/try-on/:id" element={<TryOn />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/stories/:slug" element={<StoryPage />} />
+              <Route path="/store/seller/:profileId/:brandSlug" element={<SellerStorefront />} />
+              <Route path="/store/designer/:profileId/:brandSlug" element={<DesignerStorefront />} />
             </Route>
 
             {/* Auth Routes */}
