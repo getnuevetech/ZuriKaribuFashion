@@ -87,6 +87,7 @@ const ensureVendorProfilesForRoleUsers = async () => {
 };
 
 const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
+const HOMEPAGE_STATS_STRIP_SETTINGS_KEY = 'HOMEPAGE_STATS_STRIP';
 const HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY = 'HOMEPAGE_COUNTRY_IMAGE_GENERATION';
 const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
 const HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY = 'HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION';
@@ -126,6 +127,21 @@ const ADMIN_HOW_IT_WORKS_STYLE_DEFAULTS = {
   iconColor: '#111827',
   iconHoverColor: '#ffffff',
 };
+const ADMIN_STATS_STRIP_DEFAULTS = {
+  items: [
+    { value: '120', suffix: '+', label: 'COUNTRIES', displayOrder: 0, isActive: true },
+    { value: '50', suffix: 'K+', label: 'DESIGNERS', displayOrder: 1, isActive: true },
+    { value: '1', suffix: 'M+', label: 'FABRICS', displayOrder: 2, isActive: true },
+    { value: '100', suffix: 'K+', label: 'PRODUCTS', displayOrder: 3, isActive: true },
+  ],
+  backgroundImage: '',
+  backgroundColor: '#111827',
+  overlayColor: '#000000',
+  overlayOpacity: 45,
+  valueColor: '#ffffff',
+  suffixColor: '#facc15',
+  labelColor: '#d1d5db',
+};
 const ADMIN_FEATURED_PRODUCT_DESCRIPTION_DEFAULTS = {
   wordLimit: 12,
 };
@@ -144,6 +160,23 @@ const adminHowItWorksStyleUpdateSchema = z.object({
   enabled: z.boolean().optional(),
   iconColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
   iconHoverColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+});
+const adminStatsStripItemUpdateSchema = z.object({
+  value: z.string().trim().min(1).max(20),
+  suffix: z.string().trim().max(8).optional(),
+  label: z.string().trim().min(1).max(40),
+  displayOrder: z.coerce.number().int().min(0).max(100).optional(),
+  isActive: z.boolean().optional(),
+});
+const adminStatsStripUpdateSchema = z.object({
+  items: z.array(adminStatsStripItemUpdateSchema).min(1).max(8),
+  backgroundImage: z.string().trim().optional(),
+  backgroundColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+  overlayColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+  overlayOpacity: z.coerce.number().int().min(0).max(100).optional(),
+  valueColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+  suffixColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+  labelColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
 });
 const adminFeaturedProductDescriptionUpdateSchema = z.object({
   wordLimit: z.coerce.number().int().min(5).max(60),
@@ -227,6 +260,45 @@ const normalizeAdminHowItWorksStyleSettings = (raw: unknown) => {
     enabled: typeof row.enabled === 'boolean' ? row.enabled : ADMIN_HOW_IT_WORKS_STYLE_DEFAULTS.enabled,
     iconColor: normalizeHexColor(row.iconColor, ADMIN_HOW_IT_WORKS_STYLE_DEFAULTS.iconColor),
     iconHoverColor: normalizeHexColor(row.iconHoverColor, ADMIN_HOW_IT_WORKS_STYLE_DEFAULTS.iconHoverColor),
+  };
+};
+const normalizeAdminStatsStripSettings = (raw: unknown) => {
+  if (!raw || typeof raw !== 'object') {
+    return { ...ADMIN_STATS_STRIP_DEFAULTS, items: [...ADMIN_STATS_STRIP_DEFAULTS.items] };
+  }
+  const row = raw as Record<string, unknown>;
+  const items = Array.isArray(row.items)
+    ? row.items
+        .map((entry, index) => {
+          if (!entry || typeof entry !== 'object') return null;
+          const item = entry as Record<string, unknown>;
+          const value = String(item.value || '').trim();
+          const label = String(item.label || '').trim().toUpperCase();
+          if (!value || !label) return null;
+          const suffix = String(item.suffix || '').trim();
+          const displayOrderRaw = Number(item.displayOrder);
+          return {
+            value: value.slice(0, 20),
+            suffix: suffix.slice(0, 8),
+            label: label.slice(0, 40),
+            displayOrder: Number.isFinite(displayOrderRaw) ? Math.max(0, Math.min(100, Math.round(displayOrderRaw))) : index,
+            isActive: typeof item.isActive === 'boolean' ? item.isActive : true,
+          };
+        })
+        .filter((entry): entry is (typeof ADMIN_STATS_STRIP_DEFAULTS.items)[number] => Boolean(entry))
+        .sort((a, b) => a.displayOrder - b.displayOrder)
+    : [];
+  return {
+    items: items.length > 0 ? items : [...ADMIN_STATS_STRIP_DEFAULTS.items],
+    backgroundImage: typeof row.backgroundImage === 'string' ? row.backgroundImage.trim() : ADMIN_STATS_STRIP_DEFAULTS.backgroundImage,
+    backgroundColor: normalizeHexColor(row.backgroundColor, ADMIN_STATS_STRIP_DEFAULTS.backgroundColor),
+    overlayColor: normalizeHexColor(row.overlayColor, ADMIN_STATS_STRIP_DEFAULTS.overlayColor),
+    overlayOpacity: Number.isFinite(Number(row.overlayOpacity))
+      ? Math.max(0, Math.min(100, Math.round(Number(row.overlayOpacity))))
+      : ADMIN_STATS_STRIP_DEFAULTS.overlayOpacity,
+    valueColor: normalizeHexColor(row.valueColor, ADMIN_STATS_STRIP_DEFAULTS.valueColor),
+    suffixColor: normalizeHexColor(row.suffixColor, ADMIN_STATS_STRIP_DEFAULTS.suffixColor),
+    labelColor: normalizeHexColor(row.labelColor, ADMIN_STATS_STRIP_DEFAULTS.labelColor),
   };
 };
 const normalizeAdminFeaturedProductDescriptionSettings = (raw: unknown) => {
@@ -475,6 +547,52 @@ const readAdminFeaturedProductDescriptionSettings = async () => {
   } catch {
     return { rowId: String(row.id), settings: { ...ADMIN_FEATURED_PRODUCT_DESCRIPTION_DEFAULTS } };
   }
+};
+const readAdminStatsStripSettings = async () => {
+  await ensureHomepageSectionSettingTable();
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_STATS_STRIP_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return { rowId: null as string | null, settings: { ...ADMIN_STATS_STRIP_DEFAULTS, items: [...ADMIN_STATS_STRIP_DEFAULTS.items] } };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizeAdminStatsStripSettings(JSON.parse(String(row.value || '{}'))),
+    };
+  } catch {
+    return { rowId: String(row.id), settings: { ...ADMIN_STATS_STRIP_DEFAULTS, items: [...ADMIN_STATS_STRIP_DEFAULTS.items] } };
+  }
+};
+const saveAdminStatsStripSettings = async (input: unknown) => {
+  const parsed = adminStatsStripUpdateSchema.parse(input);
+  const merged = normalizeAdminStatsStripSettings(parsed);
+  const existing = await readAdminStatsStripSettings();
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_STATS_STRIP_SETTINGS_KEY,
+    payload
+  );
+  return merged;
 };
 const saveAdminFeaturedProductDescriptionSettings = async (input: unknown) => {
   const parsed = adminFeaturedProductDescriptionUpdateSchema.parse(input);
@@ -3581,6 +3699,42 @@ router.patch('/top-strip', async (req, res) => {
     }
     console.error('Error updating admin top strip settings:', error);
     res.status(500).json({ success: false, message: 'Failed to update top strip settings.' });
+  }
+});
+
+router.get('/stats-strip', authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings } = await readAdminStatsStripSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching stats strip settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch stats strip settings.' });
+  }
+});
+
+router.put('/stats-strip', authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveAdminStatsStripSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating stats strip settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update stats strip settings.' });
+  }
+});
+
+router.patch('/stats-strip', authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveAdminStatsStripSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating stats strip settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update stats strip settings.' });
   }
 });
 

@@ -240,14 +240,21 @@ const topStripReadPathsPublic = [
 ];
 const statsStripReadPathsAdmin = [
   '/homepage-sections/admin/stats-strip',
+  '/homepage/admin/stats-strip',
   '/admin/stats-strip',
+  '/admin/homepage/stats-strip',
+  '/admin/homepage-sections/stats-strip',
 ];
 const statsStripReadPathsPublic = [
   '/homepage-sections/stats-strip',
+  '/homepage/stats-strip',
 ];
 const statsStripWritePaths = [
   '/homepage-sections/admin/stats-strip',
+  '/homepage/admin/stats-strip',
   '/admin/stats-strip',
+  '/admin/homepage/stats-strip',
+  '/admin/homepage-sections/stats-strip',
 ];
 const featuredProductDescriptionReadPathsAdmin = [
   '/homepage-sections/admin/featured-product-description-settings',
