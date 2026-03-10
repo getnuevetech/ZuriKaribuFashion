@@ -124,6 +124,7 @@ const getProfileDataObject = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 
 const isEmptyProfileValue = (value: unknown) => {
+  if (value === null || value === undefined) return true;
   if (Array.isArray(value)) return value.length === 0;
   return String(value ?? '').trim().length === 0;
 };
@@ -418,7 +419,7 @@ router.patch('/profile-completion', async (req, res, next) => {
         city: z.string().min(2).optional(),
         address: z.string().min(3).optional(),
         bio: z.string().optional(),
-        profileData: z.record(z.union([z.string(), z.number(), z.boolean(), z.array(z.string())])).optional(),
+        profileData: z.record(z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()])).optional(),
       })
       .parse(req.body);
 

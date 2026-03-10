@@ -455,7 +455,12 @@ export default function SellerDashboard() {
         if (!field?.key) continue;
         const raw = String(profileForm[field.key] ?? '').trim();
         if (field.fieldType === 'NUMBER') {
-          dynamicPayload[field.key] = raw ? Number(raw) : '';
+          if (!raw) {
+            dynamicPayload[field.key] = '';
+          } else {
+            const parsed = Number(raw);
+            dynamicPayload[field.key] = Number.isFinite(parsed) ? parsed : raw;
+          }
         } else if (field.fieldType === 'MULTI_SELECT') {
           dynamicPayload[field.key] = raw
             ? raw
@@ -475,7 +480,13 @@ export default function SellerDashboard() {
         setProfileMessage(response.message || 'Profile submitted successfully.');
       }
     } catch (error: any) {
-      setProfileMessage(error?.message || 'Unable to submit profile right now.');
+      const issueText = Array.isArray(error?.response?.data?.issues)
+        ? error.response.data.issues
+            .map((issue: any) => String(issue?.message || '').trim())
+            .filter(Boolean)
+            .join(', ')
+        : '';
+      setProfileMessage(issueText || error?.response?.data?.message || error?.message || 'Unable to submit profile right now.');
     } finally {
       setSubmittingProfile(false);
     }
