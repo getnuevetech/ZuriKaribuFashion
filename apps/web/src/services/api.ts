@@ -38,9 +38,24 @@ httpClient.interceptors.response.use(
       url.endsWith('/google') ||
       url.includes('/google-login') ||
       url.includes('/login/google');
+    const isProtectedPath = (() => {
+      const pathname = window.location.pathname || '/';
+      const protectedPrefixes = [
+        '/admin',
+        '/seller',
+        '/designer',
+        '/dashboard',
+        '/orders',
+        '/profile',
+        '/measurements',
+        '/qa',
+        '/checkout',
+      ];
+      return protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+    })();
     if (error.response?.status === 401 && !isAuthRequest) {
       useAuthStore.getState().logout();
-      if (window.location.pathname !== '/login') {
+      if (isProtectedPath && window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
     }
