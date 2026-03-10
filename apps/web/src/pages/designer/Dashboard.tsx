@@ -157,6 +157,9 @@ interface DesignerProfileCompletion {
 }
 
 interface GovernanceDebugInfo {
+  dashboardCall: string;
+  designsCall: string;
+  ordersCall: string;
   profileCompletionCall: string;
   profileFieldsCall: string;
   completionFieldCount: number;
@@ -300,6 +303,17 @@ export default function DesignerDashboard() {
       const profileRes = profileResult.status === 'fulfilled' ? profileResult.value : null;
       const profileFieldsRes = profileFieldsResult.status === 'fulfilled' ? profileFieldsResult.value : null;
       const currencyRes = currencyResult.status === 'fulfilled' ? currencyResult.value : null;
+      const settledCallStatus = (result: PromiseSettledResult<any>) => {
+        if (result.status === 'fulfilled') {
+          return result.value?.success
+            ? 'success'
+            : `api-failed:${String(result.value?.message || 'unknown')}`;
+        }
+        const reason = result.reason as any;
+        const status = reason?.response?.status;
+        const message = String(reason?.response?.data?.message || reason?.message || 'unknown');
+        return `request-failed:${status ?? 'no-status'}:${message.slice(0, 120)}`;
+      };
 
       const toAddressObject = (value: any) => {
         if (!value) return null;
@@ -466,6 +480,9 @@ export default function DesignerDashboard() {
           setProfileMessage('Vendor governance fields are empty for Fashion Designer. Please verify API deployment and re-save Vendor Profile Governance fields.');
         }
         setGovernanceDebug({
+          dashboardCall: settledCallStatus(statsResult),
+          designsCall: settledCallStatus(designsResult),
+          ordersCall: settledCallStatus(ordersResult),
           profileCompletionCall:
             profileResult.status === 'fulfilled'
               ? profileRes?.success
@@ -510,6 +527,9 @@ export default function DesignerDashboard() {
         setProfileForm(nextProfileForm);
         setProfileMessage('Vendor profile governance loaded directly. Complete and submit for admin approval.');
         setGovernanceDebug({
+          dashboardCall: settledCallStatus(statsResult),
+          designsCall: settledCallStatus(designsResult),
+          ordersCall: settledCallStatus(ordersResult),
           profileCompletionCall:
             profileResult.status === 'fulfilled'
               ? profileRes?.success
@@ -530,6 +550,9 @@ export default function DesignerDashboard() {
       } else {
         setProfileMessage('Unable to load vendor application fields right now. Please refresh the page.');
         setGovernanceDebug({
+          dashboardCall: settledCallStatus(statsResult),
+          designsCall: settledCallStatus(designsResult),
+          ordersCall: settledCallStatus(ordersResult),
           profileCompletionCall:
             profileResult.status === 'fulfilled'
               ? profileRes?.success
@@ -583,6 +606,9 @@ export default function DesignerDashboard() {
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
       setGovernanceDebug({
+        dashboardCall: 'not-reached',
+        designsCall: 'not-reached',
+        ordersCall: 'not-reached',
         profileCompletionCall: 'not-reached',
         profileFieldsCall: 'not-reached',
         completionFieldCount: 0,
@@ -1008,6 +1034,9 @@ export default function DesignerDashboard() {
           {governanceDebug ? (
             <div className="rounded-lg border border-amber-300 bg-amber-100/60 p-3 text-xs text-amber-950">
               <p className="font-semibold">Governance debug (temporary)</p>
+              <p>dashboard: {governanceDebug.dashboardCall}</p>
+              <p>designs: {governanceDebug.designsCall}</p>
+              <p>orders: {governanceDebug.ordersCall}</p>
               <p>profile-completion: {governanceDebug.profileCompletionCall}</p>
               <p>profile-fields: {governanceDebug.profileFieldsCall}</p>
               <p>completion fields: {governanceDebug.completionFieldCount}</p>
