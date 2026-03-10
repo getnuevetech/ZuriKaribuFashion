@@ -244,19 +244,17 @@ async function readSellerSubmission(userId: string) {
 async function readSellerProfileFields() {
   try {
     await ensureSellerGovernanceSchema();
-    const queryByRoles = async (roles: string[]) => {
-      const placeholders = roles.map((_, index) => `$${index + 1}`).join(',');
-      return prisma.$queryRawUnsafe<Array<any>>(
-        `SELECT "id","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive"
-         FROM "VendorProfileField"
-         WHERE UPPER("role") IN (${placeholders})
-         ORDER BY "sortOrder" ASC, "key" ASC`,
-        ...roles.map((role) => role.toUpperCase())
-      );
-    };
-
-    const rows = await queryByRoles(['FABRIC_SELLER']);
-    const sourceRows = rows.length > 0 ? rows : await queryByRoles(['FABRIC_SELLER', 'SELLER']);
+    const rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT "id","role","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive"
+       FROM "VendorProfileField"
+       ORDER BY "sortOrder" ASC, "key" ASC`
+    );
+    const normalizeRoleToken = (value: unknown) =>
+      String(value || '')
+        .toUpperCase()
+        .replace(/[^A-Z]/g, '');
+    const allowedRoles = new Set(['FABRICSELLER', 'SELLER']);
+    const sourceRows = rows.filter((row) => allowedRoles.has(normalizeRoleToken(row.role)));
     return sourceRows.map((row) => ({
       ...row,
       required: Boolean(row.required),
@@ -502,6 +500,21 @@ router.get('/profile-completion', async (req, res, next) => {
     res.json({
       success: true,
       data: completion,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/profile-fields', async (_req, res, next) => {
+  try {
+    const fields = await readSellerProfileFields();
+    res.json({
+      success: true,
+      data: {
+        role: 'FABRIC_SELLER',
+        fields,
+      },
     });
   } catch (error) {
     next(error);

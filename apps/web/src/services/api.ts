@@ -1722,6 +1722,9 @@ const sellerApi = {
   getProfileCompletion: () =>
     apiService.get<{ success: boolean; data: any }>('/fabric-seller/profile-completion'),
 
+  getProfileFields: () =>
+    apiService.get<{ success: boolean; data: { role: string; fields: any[] } }>('/fabric-seller/profile-fields'),
+
   updateProfileCompletion: (data: any) =>
     apiService.patch<{ success: boolean; data: any; message?: string }>('/fabric-seller/profile-completion', data),
 
@@ -1773,6 +1776,9 @@ const designerApi = {
 
   getProfileCompletion: () =>
     apiService.get<{ success: boolean; data: any }>('/designer/profile-completion'),
+
+  getProfileFields: () =>
+    apiService.get<{ success: boolean; data: { role: string; fields: any[] } }>('/designer/profile-fields'),
 
   updateProfileCompletion: (data: any) =>
     apiService.patch<{ success: boolean; data: any; message?: string }>('/designer/profile-completion', data),

@@ -239,12 +239,13 @@ export default function SellerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [dashboardResult, fabricsResult, ordersResult, materialsResult, profileResult, currencyResult] = await Promise.allSettled([
+      const [dashboardResult, fabricsResult, ordersResult, materialsResult, profileResult, profileFieldsResult, currencyResult] = await Promise.allSettled([
         api.seller.getDashboard(),
         api.seller.getFabrics(),
         api.seller.getOrders(),
         api.products.getMaterials(),
         api.seller.getProfileCompletion(),
+        api.seller.getProfileFields(),
         api.currency.getMyOptions(),
       ]);
       const dashboardRes = dashboardResult.status === 'fulfilled' ? dashboardResult.value : null;
@@ -252,6 +253,7 @@ export default function SellerDashboard() {
       const ordersRes = ordersResult.status === 'fulfilled' ? ordersResult.value : null;
       const materialsRes = materialsResult.status === 'fulfilled' ? materialsResult.value : null;
       const profileRes = profileResult.status === 'fulfilled' ? profileResult.value : null;
+      const profileFieldsRes = profileFieldsResult.status === 'fulfilled' ? profileFieldsResult.value : null;
       const currencyRes = currencyResult.status === 'fulfilled' ? currencyResult.value : null;
 
       if (dashboardRes?.success) {
@@ -342,17 +344,26 @@ export default function SellerDashboard() {
           : dashboardRes?.success
             ? dashboardRes.data?.profileCompletion
             : null;
+      const governanceFields = profileFieldsRes?.success && Array.isArray(profileFieldsRes.data?.fields)
+        ? profileFieldsRes.data.fields.filter((entry: any) => entry?.isActive !== false)
+        : [];
 
       if (completionPayload) {
         const completion = completionPayload as SellerProfileCompletion;
+        const completionFields = Array.isArray(completion?.fields)
+          ? completion.fields.filter((entry: any) => entry?.isActive !== false)
+          : [];
+        const effectiveFields = completionFields.length > 0 ? completionFields : governanceFields;
         setProfileMessage(null);
-        setProfileCompletion(completion);
+        setProfileCompletion({
+          ...completion,
+          fields: effectiveFields,
+        });
         const nextProfileForm: Record<string, string> = {};
         const dynamicData = completion?.profileData && typeof completion.profileData === 'object'
           ? completion.profileData
           : {};
-        const configuredFields = (completion?.fields || []).filter((entry) => entry.isActive !== false);
-        for (const field of configuredFields) {
+        for (const field of effectiveFields) {
           const rawValue = (dynamicData as Record<string, unknown>)[field.key];
           nextProfileForm[field.key] = Array.isArray(rawValue)
             ? rawValue.join(', ')
@@ -361,6 +372,34 @@ export default function SellerDashboard() {
               : String(rawValue);
         }
         setProfileForm(nextProfileForm);
+        if (effectiveFields.length === 0) {
+          setProfileMessage('Vendor governance fields are empty for Fabric Seller. Please verify API deployment and re-save Vendor Profile Governance fields.');
+        }
+      } else if (governanceFields.length > 0) {
+        const fallbackProfile = (dashboardRes?.success ? dashboardRes.data?.profile : null) || {};
+        const syntheticCompletion: SellerProfileCompletion = {
+          canUpload: false,
+          profileStatus: 'INCOMPLETE',
+          profile: {
+            businessName: String(fallbackProfile?.businessName || ''),
+            businessEmail: String(fallbackProfile?.businessEmail || ''),
+            businessPhone: String(fallbackProfile?.businessPhone || ''),
+            country: String(fallbackProfile?.country || ''),
+            city: String(fallbackProfile?.city || ''),
+            address: String(fallbackProfile?.address || ''),
+            website: String(fallbackProfile?.website || ''),
+            storefrontPath: String(fallbackProfile?.storefrontPath || ''),
+          },
+          profileData: {},
+          fields: governanceFields,
+        };
+        setProfileCompletion(syntheticCompletion);
+        const nextProfileForm: Record<string, string> = {};
+        for (const field of governanceFields) {
+          nextProfileForm[field.key] = getSellerProfilePrefillValue(syntheticCompletion.profile, field.key);
+        }
+        setProfileForm(nextProfileForm);
+        setProfileMessage('Vendor profile governance loaded directly. Complete and submit for admin approval.');
       } else {
         setProfileMessage('Unable to load vendor application fields right now. Please refresh the page.');
       }
