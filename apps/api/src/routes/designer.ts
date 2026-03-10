@@ -108,6 +108,9 @@ async function ensureDesignerGovernanceSchema() {
     `ALTER TABLE "VendorProfileField" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
   );
   await prisma.$executeRawUnsafe(
+    `ALTER TABLE "VendorProfileField" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
+  );
+  await prisma.$executeRawUnsafe(
     `UPDATE "VendorProfileField" SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL`
   );
   await prisma.$executeRawUnsafe(
@@ -244,22 +247,19 @@ async function readDesignerSubmission(userId: string) {
 async function readDesignerProfileFields() {
   try {
     await ensureDesignerGovernanceSchema();
-    const rows = await prisma.$queryRawUnsafe<Array<any>>(
-      `SELECT "id","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive"
-       FROM "VendorProfileField"
-       WHERE "role" = 'FASHION_DESIGNER'
-       ORDER BY "sortOrder" ASC, "createdAt" ASC`
-    );
-    const legacyRows =
-      rows.length > 0
-        ? []
-        : await prisma.$queryRawUnsafe<Array<any>>(
-            `SELECT "id","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive"
-             FROM "VendorProfileField"
-             WHERE UPPER("role") IN ('FASHION_DESIGNER','DESIGNER')
-             ORDER BY "sortOrder" ASC, "createdAt" ASC`
-          );
-    const sourceRows = rows.length > 0 ? rows : legacyRows;
+    const queryByRoles = async (roles: string[]) => {
+      const placeholders = roles.map((_, index) => `$${index + 1}`).join(',');
+      return prisma.$queryRawUnsafe<Array<any>>(
+        `SELECT "id","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive"
+         FROM "VendorProfileField"
+         WHERE UPPER("role") IN (${placeholders})
+         ORDER BY "sortOrder" ASC, "key" ASC`,
+        ...roles.map((role) => role.toUpperCase())
+      );
+    };
+
+    const rows = await queryByRoles(['FASHION_DESIGNER']);
+    const sourceRows = rows.length > 0 ? rows : await queryByRoles(['FASHION_DESIGNER', 'DESIGNER']);
     return sourceRows.map((row) => ({
       ...row,
       required: Boolean(row.required),
@@ -283,23 +283,10 @@ async function readDesignerProfileFields() {
   }
 }
 
-function buildDefaultDesignerProfileFields() {
-  return [
-    { id: 'default-business-name', key: 'businessName', label: 'Business Name', fieldType: 'TEXT', required: true, options: [], isActive: true, sortOrder: 1 },
-    { id: 'default-business-email', key: 'businessEmail', label: 'Business Email', fieldType: 'TEXT', required: true, options: [], isActive: true, sortOrder: 2 },
-    { id: 'default-business-phone', key: 'businessPhone', label: 'Business Phone', fieldType: 'TEXT', required: true, options: [], isActive: true, sortOrder: 3 },
-    { id: 'default-country', key: 'country', label: 'Country', fieldType: 'TEXT', required: true, options: [], isActive: true, sortOrder: 4 },
-    { id: 'default-city', key: 'city', label: 'City', fieldType: 'TEXT', required: true, options: [], isActive: true, sortOrder: 5 },
-    { id: 'default-address', key: 'address', label: 'Address', fieldType: 'TEXTAREA', required: false, options: [], isActive: true, sortOrder: 6 },
-    { id: 'default-bio', key: 'bio', label: 'Bio', fieldType: 'TEXTAREA', required: false, options: [], isActive: true, sortOrder: 7 },
-  ] as Array<any>;
-}
-
 async function getDesignerProfileCompletion(userId: string) {
   const profile = await resolveDesignerProfile(userId);
   if (!profile) return null;
-  const [submission, fieldsRaw] = await Promise.all([readDesignerSubmission(userId), readDesignerProfileFields()]);
-  const fields = fieldsRaw.length > 0 ? fieldsRaw : buildDefaultDesignerProfileFields();
+  const [submission, fields] = await Promise.all([readDesignerSubmission(userId), readDesignerProfileFields()]);
   const fieldKeys = (fields || []).map((field: any) => String(field?.key || '')).filter(Boolean);
   const profileData = {
     ...getProfileDataObject(submission?.profileData),

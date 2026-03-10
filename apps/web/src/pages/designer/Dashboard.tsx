@@ -156,16 +156,6 @@ interface DesignerProfileCompletion {
   fields?: VendorProfileField[];
 }
 
-const DEFAULT_DESIGNER_PROFILE_FIELDS: VendorProfileField[] = [
-  { key: 'businessName', label: 'Business Name', fieldType: 'TEXT', required: true, isActive: true },
-  { key: 'businessEmail', label: 'Business Email', fieldType: 'TEXT', required: true, isActive: true },
-  { key: 'businessPhone', label: 'Business Phone', fieldType: 'TEXT', required: true, isActive: true },
-  { key: 'country', label: 'Country', fieldType: 'TEXT', required: true, isActive: true },
-  { key: 'city', label: 'City', fieldType: 'TEXT', required: true, isActive: true },
-  { key: 'address', label: 'Address', fieldType: 'TEXTAREA', required: false, isActive: true },
-  { key: 'bio', label: 'Bio', fieldType: 'TEXTAREA', required: false, isActive: true },
-];
-
 const LOCATION_COUNTRIES = getCountryOptions();
 const COUNTRY_FIELD_HINTS = ['country', 'businesscountry', 'vendorcountry'];
 const CITY_FIELD_HINTS = ['city', 'businesscity', 'vendorcity', 'town'];
@@ -187,7 +177,7 @@ const isCityGovernanceField = (field: VendorProfileField) => {
   return CITY_FIELD_HINTS.some((hint) => key.includes(hint) || label.includes(hint));
 };
 
-const getDesignerProfileFallbackValue = (profile: DesignerProfileCompletion['profile'] | undefined, key: string) => {
+const getDesignerProfilePrefillValue = (profile: DesignerProfileCompletion['profile'] | undefined, key: string) => {
   const normalized = normalizeFieldKey(key);
   if (!profile) return '';
   if (normalized.includes('businessname') || normalized.includes('brandname') || normalized.includes('companyname')) {
@@ -438,13 +428,12 @@ export default function DesignerDashboard() {
           ? completion.profileData
           : {};
         const configuredFields = (completion?.fields || []).filter((entry) => entry.isActive !== false);
-        const fieldsToUse = configuredFields.length > 0 ? configuredFields : DEFAULT_DESIGNER_PROFILE_FIELDS;
-        for (const field of fieldsToUse) {
+        for (const field of configuredFields) {
           const rawValue = (dynamicData as Record<string, unknown>)[field.key];
           nextProfileForm[field.key] = Array.isArray(rawValue)
             ? rawValue.join(', ')
             : rawValue === undefined || rawValue === null
-              ? getDesignerProfileFallbackValue(completion.profile, field.key)
+              ? getDesignerProfilePrefillValue(completion.profile, field.key)
               : String(rawValue);
         }
         setProfileForm(nextProfileForm);
@@ -741,10 +730,10 @@ export default function DesignerDashboard() {
   }, [productRows, productSearch, productTypeFilter, productStatusFilter, productCategoryFilter]);
   const featuredRows = productRows.filter((item) => item.isFeatured);
   const pendingOrders = orders.filter(o => o.status === 'PENDING');
-  const activeProfileFields = useMemo(() => {
-    const configured = (profileCompletion?.fields || []).filter((field) => field.isActive !== false);
-    return configured.length > 0 ? configured : DEFAULT_DESIGNER_PROFILE_FIELDS;
-  }, [profileCompletion?.fields]);
+  const activeProfileFields = useMemo(
+    () => (profileCompletion?.fields || []).filter((field) => field.isActive !== false),
+    [profileCompletion?.fields]
+  );
   const selectedProfileCountryField = activeProfileFields.find(isCountryGovernanceField);
   const selectedProfileCountry = selectedProfileCountryField
     ? profileForm[selectedProfileCountryField.key] || ''
@@ -900,7 +889,7 @@ export default function DesignerDashboard() {
 
           {profileMessage ? <p className="text-sm text-amber-900">{profileMessage}</p> : null}
           <div>
-            <Button size="sm" onClick={handleSubmitProfile} disabled={submittingProfile}>
+            <Button size="sm" onClick={handleSubmitProfile} disabled={submittingProfile || activeProfileFields.length === 0}>
               {submittingProfile ? 'Submitting...' : 'Submit for Admin Approval'}
             </Button>
           </div>
