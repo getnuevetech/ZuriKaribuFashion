@@ -125,6 +125,16 @@ interface SellerProfileCompletion {
   fields?: VendorProfileField[];
 }
 
+interface GovernanceDebugInfo {
+  profileCompletionCall: string;
+  profileFieldsCall: string;
+  completionFieldCount: number;
+  governanceFieldCount: number;
+  effectiveFieldCount: number;
+  sampleFieldKeys: string[];
+  error?: string;
+}
+
 const LOCATION_COUNTRIES = getCountryOptions();
 const COUNTRY_FIELD_HINTS = ['country', 'businesscountry', 'vendorcountry'];
 const CITY_FIELD_HINTS = ['city', 'businesscity', 'vendorcity', 'town'];
@@ -203,6 +213,7 @@ export default function SellerDashboard() {
   const [profileForm, setProfileForm] = useState<Record<string, string>>({});
   const [submittingProfile, setSubmittingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [governanceDebug, setGovernanceDebug] = useState<GovernanceDebugInfo | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [fabricSearch, setFabricSearch] = useState('');
   const [fabricStatusFilter, setFabricStatusFilter] = useState('');
@@ -347,6 +358,9 @@ export default function SellerDashboard() {
       const governanceFields = profileFieldsRes?.success && Array.isArray(profileFieldsRes.data?.fields)
         ? profileFieldsRes.data.fields.filter((entry: any) => entry?.isActive !== false)
         : [];
+      const completionFieldCount = completionPayload && Array.isArray((completionPayload as any)?.fields)
+        ? (completionPayload as any).fields.filter((entry: any) => entry?.isActive !== false).length
+        : 0;
 
       if (completionPayload) {
         const completion = completionPayload as SellerProfileCompletion;
@@ -375,6 +389,24 @@ export default function SellerDashboard() {
         if (effectiveFields.length === 0) {
           setProfileMessage('Vendor governance fields are empty for Fabric Seller. Please verify API deployment and re-save Vendor Profile Governance fields.');
         }
+        setGovernanceDebug({
+          profileCompletionCall:
+            profileResult.status === 'fulfilled'
+              ? profileRes?.success
+                ? 'success'
+                : `api-failed:${String((profileRes as any)?.message || 'unknown')}`
+              : 'request-failed',
+          profileFieldsCall:
+            profileFieldsResult.status === 'fulfilled'
+              ? profileFieldsRes?.success
+                ? 'success'
+                : `api-failed:${String((profileFieldsRes as any)?.message || 'unknown')}`
+              : 'request-failed',
+          completionFieldCount,
+          governanceFieldCount: governanceFields.length,
+          effectiveFieldCount: effectiveFields.length,
+          sampleFieldKeys: governanceFields.slice(0, 5).map((field: any) => String(field?.key || '')).filter(Boolean),
+        });
       } else if (governanceFields.length > 0) {
         const fallbackProfile = (dashboardRes?.success ? dashboardRes.data?.profile : null) || {};
         const syntheticCompletion: SellerProfileCompletion = {
@@ -400,8 +432,44 @@ export default function SellerDashboard() {
         }
         setProfileForm(nextProfileForm);
         setProfileMessage('Vendor profile governance loaded directly. Complete and submit for admin approval.');
+        setGovernanceDebug({
+          profileCompletionCall:
+            profileResult.status === 'fulfilled'
+              ? profileRes?.success
+                ? 'success'
+                : `api-failed:${String((profileRes as any)?.message || 'unknown')}`
+              : 'request-failed',
+          profileFieldsCall:
+            profileFieldsResult.status === 'fulfilled'
+              ? profileFieldsRes?.success
+                ? 'success'
+                : `api-failed:${String((profileFieldsRes as any)?.message || 'unknown')}`
+              : 'request-failed',
+          completionFieldCount,
+          governanceFieldCount: governanceFields.length,
+          effectiveFieldCount: governanceFields.length,
+          sampleFieldKeys: governanceFields.slice(0, 5).map((field: any) => String(field?.key || '')).filter(Boolean),
+        });
       } else {
         setProfileMessage('Unable to load vendor application fields right now. Please refresh the page.');
+        setGovernanceDebug({
+          profileCompletionCall:
+            profileResult.status === 'fulfilled'
+              ? profileRes?.success
+                ? 'success'
+                : `api-failed:${String((profileRes as any)?.message || 'unknown')}`
+              : 'request-failed',
+          profileFieldsCall:
+            profileFieldsResult.status === 'fulfilled'
+              ? profileFieldsRes?.success
+                ? 'success'
+                : `api-failed:${String((profileFieldsRes as any)?.message || 'unknown')}`
+              : 'request-failed',
+          completionFieldCount,
+          governanceFieldCount: governanceFields.length,
+          effectiveFieldCount: 0,
+          sampleFieldKeys: [],
+        });
       }
       
       // Mock activities
@@ -437,6 +505,15 @@ export default function SellerDashboard() {
       ]);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
+      setGovernanceDebug({
+        profileCompletionCall: 'not-reached',
+        profileFieldsCall: 'not-reached',
+        completionFieldCount: 0,
+        governanceFieldCount: 0,
+        effectiveFieldCount: 0,
+        sampleFieldKeys: [],
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
     } finally {
       setLoading(false);
     }
@@ -806,6 +883,18 @@ export default function SellerDashboard() {
           )}
 
           {profileMessage ? <p className="text-sm text-amber-900">{profileMessage}</p> : null}
+          {governanceDebug ? (
+            <div className="rounded-lg border border-amber-300 bg-amber-100/60 p-3 text-xs text-amber-950">
+              <p className="font-semibold">Governance debug (temporary)</p>
+              <p>profile-completion: {governanceDebug.profileCompletionCall}</p>
+              <p>profile-fields: {governanceDebug.profileFieldsCall}</p>
+              <p>completion fields: {governanceDebug.completionFieldCount}</p>
+              <p>governance fields: {governanceDebug.governanceFieldCount}</p>
+              <p>effective fields used: {governanceDebug.effectiveFieldCount}</p>
+              <p>sample keys: {governanceDebug.sampleFieldKeys.join(', ') || 'none'}</p>
+              {governanceDebug.error ? <p>error: {governanceDebug.error}</p> : null}
+            </div>
+          ) : null}
           <div>
             <Button size="sm" onClick={handleSubmitProfile} disabled={submittingProfile || activeProfileFields.length === 0}>
               {submittingProfile ? 'Submitting...' : 'Submit for Admin Approval'}
