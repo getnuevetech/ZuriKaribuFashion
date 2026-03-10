@@ -647,8 +647,7 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
-// Google Sign-In (ID token flow)
-router.post(['/google', '/google-login', '/login/google'], async (req, res, next) => {
+const handleGoogleLogin = async (req: any, res: any, next: any) => {
   try {
     if (GOOGLE_CLIENT_IDS.length === 0) {
       return res.status(503).json({
@@ -802,9 +801,14 @@ router.post(['/google', '/google-login', '/login/google'], async (req, res, next
   } catch (error) {
     return next(error);
   }
-});
+};
 
-router.get(['/google/link-status', '/google-link-status'], authenticate, async (req, res, next) => {
+// Google Sign-In (ID token flow)
+router.post('/google', handleGoogleLogin);
+router.post('/google-login', handleGoogleLogin);
+router.post('/login/google', handleGoogleLogin);
+
+const handleGoogleLinkStatus = async (req: any, res: any, next: any) => {
   try {
     const link = await getGoogleAuthLinkByUserId(req.user!.id);
     return res.json({
@@ -818,9 +822,12 @@ router.get(['/google/link-status', '/google-link-status'], authenticate, async (
   } catch (error) {
     return next(error);
   }
-});
+};
 
-router.post(['/google/link', '/google-link'], authenticate, async (req, res, next) => {
+router.get('/google/link-status', authenticate, handleGoogleLinkStatus);
+router.get('/google-link-status', authenticate, handleGoogleLinkStatus);
+
+const handleGoogleLink = async (req: any, res: any, next: any) => {
   try {
     if (GOOGLE_CLIENT_IDS.length === 0) {
       return res.status(503).json({
@@ -876,9 +883,12 @@ router.post(['/google/link', '/google-link'], authenticate, async (req, res, nex
   } catch (error) {
     return next(error);
   }
-});
+};
 
-router.delete(['/google/link', '/google-link'], authenticate, async (req, res, next) => {
+router.post('/google/link', authenticate, handleGoogleLink);
+router.post('/google-link', authenticate, handleGoogleLink);
+
+const handleGoogleUnlink = async (req: any, res: any, next: any) => {
   try {
     await ensureGoogleAuthSchema();
     await prisma.$executeRawUnsafe(
@@ -893,7 +903,10 @@ router.delete(['/google/link', '/google-link'], authenticate, async (req, res, n
   } catch (error) {
     return next(error);
   }
-});
+};
+
+router.delete('/google/link', authenticate, handleGoogleUnlink);
+router.delete('/google-link', authenticate, handleGoogleUnlink);
 
 // Get current user
 router.get('/me', authenticate, async (req, res, next) => {
