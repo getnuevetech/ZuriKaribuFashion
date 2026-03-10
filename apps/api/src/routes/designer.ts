@@ -250,7 +250,17 @@ async function readDesignerProfileFields() {
        WHERE "role" = 'FASHION_DESIGNER'
        ORDER BY "sortOrder" ASC, "createdAt" ASC`
     );
-    return rows.map((row) => ({
+    const legacyRows =
+      rows.length > 0
+        ? []
+        : await prisma.$queryRawUnsafe<Array<any>>(
+            `SELECT "id","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive"
+             FROM "VendorProfileField"
+             WHERE UPPER("role") IN ('FASHION_DESIGNER','DESIGNER')
+             ORDER BY "sortOrder" ASC, "createdAt" ASC`
+          );
+    const sourceRows = rows.length > 0 ? rows : legacyRows;
+    return sourceRows.map((row) => ({
       ...row,
       required: Boolean(row.required),
       isActive: row.isActive !== false,
@@ -273,10 +283,23 @@ async function readDesignerProfileFields() {
   }
 }
 
+function buildDefaultDesignerProfileFields() {
+  return [
+    { id: 'default-business-name', key: 'businessName', label: 'Business Name', fieldType: 'TEXT', required: true, options: [], isActive: true, sortOrder: 1 },
+    { id: 'default-business-email', key: 'businessEmail', label: 'Business Email', fieldType: 'TEXT', required: true, options: [], isActive: true, sortOrder: 2 },
+    { id: 'default-business-phone', key: 'businessPhone', label: 'Business Phone', fieldType: 'TEXT', required: true, options: [], isActive: true, sortOrder: 3 },
+    { id: 'default-country', key: 'country', label: 'Country', fieldType: 'TEXT', required: true, options: [], isActive: true, sortOrder: 4 },
+    { id: 'default-city', key: 'city', label: 'City', fieldType: 'TEXT', required: true, options: [], isActive: true, sortOrder: 5 },
+    { id: 'default-address', key: 'address', label: 'Address', fieldType: 'TEXTAREA', required: false, options: [], isActive: true, sortOrder: 6 },
+    { id: 'default-bio', key: 'bio', label: 'Bio', fieldType: 'TEXTAREA', required: false, options: [], isActive: true, sortOrder: 7 },
+  ] as Array<any>;
+}
+
 async function getDesignerProfileCompletion(userId: string) {
   const profile = await resolveDesignerProfile(userId);
   if (!profile) return null;
-  const [submission, fields] = await Promise.all([readDesignerSubmission(userId), readDesignerProfileFields()]);
+  const [submission, fieldsRaw] = await Promise.all([readDesignerSubmission(userId), readDesignerProfileFields()]);
+  const fields = fieldsRaw.length > 0 ? fieldsRaw : buildDefaultDesignerProfileFields();
   const fieldKeys = (fields || []).map((field: any) => String(field?.key || '')).filter(Boolean);
   const profileData = {
     ...getProfileDataObject(submission?.profileData),
