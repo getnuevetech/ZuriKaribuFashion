@@ -260,19 +260,11 @@ export default function SellerDashboard() {
       if (profileRes.success) {
         const completion = profileRes.data as SellerProfileCompletion;
         setProfileCompletion(completion);
-        const nextProfileForm: Record<string, string> = {
-          businessName: String(completion?.profile?.businessName || ''),
-          businessEmail: String(completion?.profile?.businessEmail || ''),
-          businessPhone: String(completion?.profile?.businessPhone || ''),
-          country: String(completion?.profile?.country || ''),
-          city: String(completion?.profile?.city || ''),
-          address: String(completion?.profile?.address || ''),
-          website: String(completion?.profile?.website || ''),
-        };
+        const nextProfileForm: Record<string, string> = {};
         const dynamicData = completion?.profileData && typeof completion.profileData === 'object'
           ? completion.profileData
           : {};
-        for (const field of completion?.fields || []) {
+        for (const field of (completion?.fields || []).filter((entry) => entry.isActive !== false)) {
           const rawValue = (dynamicData as Record<string, unknown>)[field.key];
           nextProfileForm[field.key] = Array.isArray(rawValue)
             ? rawValue.join(', ')
@@ -476,13 +468,6 @@ export default function SellerDashboard() {
         }
       }
       const response = await api.seller.updateProfileCompletion({
-        businessName: String(profileForm.businessName || '').trim(),
-        businessEmail: String(profileForm.businessEmail || '').trim() || undefined,
-        businessPhone: String(profileForm.businessPhone || '').trim() || undefined,
-        country: String(profileForm.country || '').trim(),
-        city: String(profileForm.city || '').trim(),
-        address: String(profileForm.address || '').trim(),
-        website: String(profileForm.website || '').trim() || undefined,
         profileData: dynamicPayload,
       });
       if (response.success) {
@@ -544,28 +529,6 @@ export default function SellerDashboard() {
             ) : null}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {[
-              ['businessName', 'Business Name'],
-              ['businessEmail', 'Business Email'],
-              ['businessPhone', 'Business Phone'],
-              ['country', 'Country'],
-              ['city', 'City'],
-              ['address', 'Address'],
-              ['website', 'Website'],
-            ].map(([key, label]) => (
-              <div key={key} className={key === 'address' ? 'md:col-span-2' : ''}>
-                <label className="block text-xs font-semibold text-amber-900 mb-1">{label}</label>
-                <input
-                  type="text"
-                  value={profileForm[key] || ''}
-                  onChange={(event) => setProfileForm((prev) => ({ ...prev, [key]: event.target.value }))}
-                  className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm"
-                />
-              </div>
-            ))}
-          </div>
-
           {(profileCompletion?.fields || []).filter((field) => field.isActive !== false).length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {(profileCompletion?.fields || [])
@@ -613,7 +576,11 @@ export default function SellerDashboard() {
                   );
                 })}
             </div>
-          ) : null}
+          ) : (
+            <p className="text-sm text-amber-900">
+              No vendor application fields are configured yet. Ask admin to set them in Vendor Profile Governance.
+            </p>
+          )}
 
           {profileMessage ? <p className="text-sm text-amber-900">{profileMessage}</p> : null}
           <div>

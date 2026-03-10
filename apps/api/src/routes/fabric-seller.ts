@@ -103,6 +103,58 @@ const slugify = (value: string) =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 120);
 
+const normalizeFieldKey = (value: unknown) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+const PROFILE_FIELD_ALIASES = {
+  businessName: ['businessname', 'brandname', 'companyname'],
+  businessEmail: ['businessemail', 'brandemail', 'companyemail', 'email'],
+  businessPhone: ['businessphone', 'brandphone', 'companyphone', 'phone', 'phonenumber'],
+  country: ['country'],
+  city: ['city', 'town'],
+  address: ['address', 'streetaddress'],
+} as const;
+
+const getProfileDataObject = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+const isEmptyProfileValue = (value: unknown) => {
+  if (Array.isArray(value)) return value.length === 0;
+  return String(value ?? '').trim().length === 0;
+};
+
+const findKeyByAlias = (keys: string[], aliases: readonly string[]) => {
+  const aliasSet = new Set(aliases.map((item) => normalizeFieldKey(item)));
+  return keys.find((key) => aliasSet.has(normalizeFieldKey(key)));
+};
+
+const readAliasValue = (profileData: Record<string, unknown>, aliases: readonly string[]) => {
+  const key = findKeyByAlias(Object.keys(profileData), aliases);
+  if (!key) return undefined;
+  return profileData[key];
+};
+
+const writeAliasValue = (
+  profileData: Record<string, unknown>,
+  aliases: readonly string[],
+  value: unknown,
+  fieldKeys: string[]
+) => {
+  const existingKey = findKeyByAlias(Object.keys(profileData), aliases);
+  if (existingKey) {
+    profileData[existingKey] = value;
+    return;
+  }
+  const configuredKey = findKeyByAlias(fieldKeys, aliases);
+  if (configuredKey) {
+    profileData[configuredKey] = value;
+    return;
+  }
+  profileData[aliases[0]] = value;
+};
+
 async function readSellerSubmission(userId: string) {
   await ensureSellerGovernanceSchema();
   const rows = await prisma.$queryRawUnsafe<Array<any>>(
@@ -140,6 +192,16 @@ async function getSellerProfileCompletion(userId: string) {
   if (!profile) return null;
 
   const [submission, fields] = await Promise.all([readSellerSubmission(userId), readSellerProfileFields()]);
+  const fieldKeys = (fields || []).map((field: any) => String(field?.key || '')).filter(Boolean);
+  const profileData = {
+    ...getProfileDataObject(submission?.profileData),
+  };
+  writeAliasValue(profileData, PROFILE_FIELD_ALIASES.businessName, profile.businessName || '', fieldKeys);
+  writeAliasValue(profileData, PROFILE_FIELD_ALIASES.businessEmail, profile.businessEmail || '', fieldKeys);
+  writeAliasValue(profileData, PROFILE_FIELD_ALIASES.businessPhone, profile.businessPhone || '', fieldKeys);
+  writeAliasValue(profileData, PROFILE_FIELD_ALIASES.country, profile.country || '', fieldKeys);
+  writeAliasValue(profileData, PROFILE_FIELD_ALIASES.city, profile.city || '', fieldKeys);
+  writeAliasValue(profileData, PROFILE_FIELD_ALIASES.address, profile.address || '', fieldKeys);
   const status = submission
     ? normalizeVendorProfileStatus(submission.profileStatus)
     : profile.isVerified
@@ -165,7 +227,7 @@ async function getSellerProfileCompletion(userId: string) {
       storefrontPath,
       storefrontSlug: brandSlug,
     },
-    profileData: submission?.profileData || {},
+    profileData,
     profileSubmittedAt: submission?.profileSubmittedAt || null,
     profileReviewedAt: submission?.profileReviewedAt || null,
     profileReviewNotes: submission?.profileReviewNotes || null,
@@ -366,27 +428,70 @@ router.patch('/profile-completion', async (req, res, next) => {
       });
     }
 
-    const mergedProfileData = {
-      ...(current.profileData && typeof current.profileData === 'object' ? current.profileData : {}),
-      ...(payload.profileData || {}),
+    const mergedProfileData: Record<string, unknown> = {
+      ...getProfileDataObject(current.profileData),
+      ...getProfileDataObject(payload.profileData),
     };
-    const missingDynamicRequired = (current.fields || [])
-      .filter((field: any) => field.isActive && field.required)
-      .filter((field: any) => {
-        const value = (mergedProfileData as Record<string, unknown>)[field.key];
-        if (Array.isArray(value)) return value.length === 0;
-        return String(value ?? '').trim().length === 0;
-      })
+    const fieldKeys = (current.fields || []).map((field: any) => String(field?.key || '')).filter(Boolean);
+
+    const businessName = String(
+      payload.businessName ??
+        readAliasValue(mergedProfileData, PROFILE_FIELD_ALIASES.businessName) ??
+        current.profile.businessName ??
+        ''
+    ).trim();
+    const businessEmail = String(
+      payload.businessEmail ??
+        readAliasValue(mergedProfileData, PROFILE_FIELD_ALIASES.businessEmail) ??
+        current.profile.businessEmail ??
+        ''
+    ).trim();
+    const businessPhone = String(
+      payload.businessPhone ??
+        readAliasValue(mergedProfileData, PROFILE_FIELD_ALIASES.businessPhone) ??
+        current.profile.businessPhone ??
+        ''
+    ).trim();
+    const country = String(
+      payload.country ??
+        readAliasValue(mergedProfileData, PROFILE_FIELD_ALIASES.country) ??
+        current.profile.country ??
+        ''
+    ).trim();
+    const city = String(
+      payload.city ??
+        readAliasValue(mergedProfileData, PROFILE_FIELD_ALIASES.city) ??
+        current.profile.city ??
+        ''
+    ).trim();
+    const address = String(
+      payload.address ??
+        readAliasValue(mergedProfileData, PROFILE_FIELD_ALIASES.address) ??
+        current.profile.address ??
+        ''
+    ).trim();
+
+    writeAliasValue(mergedProfileData, PROFILE_FIELD_ALIASES.businessName, businessName, fieldKeys);
+    writeAliasValue(mergedProfileData, PROFILE_FIELD_ALIASES.businessEmail, businessEmail, fieldKeys);
+    writeAliasValue(mergedProfileData, PROFILE_FIELD_ALIASES.businessPhone, businessPhone, fieldKeys);
+    writeAliasValue(mergedProfileData, PROFILE_FIELD_ALIASES.country, country, fieldKeys);
+    writeAliasValue(mergedProfileData, PROFILE_FIELD_ALIASES.city, city, fieldKeys);
+    writeAliasValue(mergedProfileData, PROFILE_FIELD_ALIASES.address, address, fieldKeys);
+
+    const activeFields = (current.fields || []).filter((field: any) => field.isActive !== false);
+    const requiredFields = activeFields.filter((field: any) => field.required);
+    const missingGovernanceRequired = requiredFields
+      .filter((field: any) => isEmptyProfileValue(mergedProfileData[String(field.key)]))
       .map((field: any) => field.label || field.key);
 
-    const businessName = payload.businessName ?? current.profile.businessName ?? '';
-    const country = payload.country ?? current.profile.country ?? '';
-    const city = payload.city ?? current.profile.city ?? '';
-    const missingCoreRequired = [];
-    if (!String(businessName).trim()) missingCoreRequired.push('Business name');
-    if (!String(country).trim()) missingCoreRequired.push('Country');
-    if (!String(city).trim()) missingCoreRequired.push('City');
-    const missing = [...missingCoreRequired, ...missingDynamicRequired];
+    const hasGovernanceFields = activeFields.length > 0;
+    const missingFallbackRequired: string[] = [];
+    if (!hasGovernanceFields) {
+      if (!businessName) missingFallbackRequired.push('Business name');
+      if (!country) missingFallbackRequired.push('Country');
+      if (!city) missingFallbackRequired.push('City');
+    }
+    const missing = [...missingGovernanceRequired, ...missingFallbackRequired];
     if (missing.length > 0) {
       return res.status(400).json({
         success: false,
@@ -397,12 +502,12 @@ router.patch('/profile-completion', async (req, res, next) => {
     await prisma.fabricSellerProfile.update({
       where: { id: current.profile.id },
       data: {
-        businessName: String(businessName).trim(),
-        businessEmail: payload.businessEmail ?? current.profile.businessEmail ?? null,
-        businessPhone: payload.businessPhone ?? current.profile.businessPhone ?? null,
-        country: String(country).trim(),
-        city: String(city).trim(),
-        address: payload.address ?? current.profile.address ?? '',
+        businessName,
+        businessEmail: businessEmail || String(current.profile.businessEmail || '').trim() || 'not-provided@example.com',
+        businessPhone: businessPhone || String(current.profile.businessPhone || '').trim() || 'N/A',
+        country,
+        city,
+        address,
         isVerified: false,
       },
     });
@@ -423,7 +528,7 @@ router.patch('/profile-completion', async (req, res, next) => {
          "updatedAt" = NOW()`,
       randomUUID(),
       req.user!.id,
-      String(businessName).trim(),
+      businessName,
       JSON.stringify(mergedProfileData),
       now
     );
