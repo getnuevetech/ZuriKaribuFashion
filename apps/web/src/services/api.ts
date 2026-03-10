@@ -141,6 +141,8 @@ const FEATURED_PRODUCT_DESCRIPTION_SETTINGS_DEFAULTS: FeaturedProductDescription
 
 const TOP_STRIP_BANNER_SECTION = 'TOP_STRIP';
 const TOP_STRIP_BANNER_PREFIX = 'TOP_STRIP_JSON:';
+const STATS_STRIP_BANNER_SECTION = 'STATS_STRIP';
+const STATS_STRIP_BANNER_PREFIX = 'STATS_STRIP_JSON:';
 const TOP_STRIP_BANNER_PLACEHOLDER_IMAGE =
   'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 
@@ -222,6 +224,17 @@ const parseTopStripPayloadFromBanner = (banner: any): TopStripPayload | null => 
     const encoded = ctaLink.slice(TOP_STRIP_BANNER_PREFIX.length);
     const parsed = JSON.parse(decodeURIComponent(encoded));
     return normalizeTopStripPayload(parsed);
+  } catch {
+    return null;
+  }
+};
+const parseStatsStripPayloadFromBanner = (banner: any): StatsStripPayload | null => {
+  const ctaLink = String(banner?.ctaLink || '');
+  if (!ctaLink.startsWith(STATS_STRIP_BANNER_PREFIX)) return null;
+  try {
+    const encoded = ctaLink.slice(STATS_STRIP_BANNER_PREFIX.length);
+    const parsed = JSON.parse(decodeURIComponent(encoded));
+    return normalizeStatsStripPayload(parsed);
   } catch {
     return null;
   }
@@ -395,6 +408,39 @@ async function readStatsStripWithFallback<T>(mode: 'admin' | 'public') {
       throw error;
     }
   }
+
+  try {
+    if (mode === 'admin') {
+      const adminBanners = await apiService.get<{ success: boolean; data: any[] }>('/banners/admin/all');
+      const statsStripBanner = (adminBanners.data || []).find(
+        (banner: any) => String(banner?.section || '').toUpperCase() === STATS_STRIP_BANNER_SECTION
+      );
+      const parsed = parseStatsStripPayloadFromBanner(statsStripBanner);
+      if (parsed) {
+        return {
+          success: true,
+          data: parsed,
+        } as T;
+      }
+    } else {
+      const publicBanners = await apiService.get<{ success: boolean; data: any[] }>('/banners', {
+        params: { section: STATS_STRIP_BANNER_SECTION },
+      });
+      const statsStripBanner = Array.isArray(publicBanners.data) ? publicBanners.data[0] : null;
+      const parsed = parseStatsStripPayloadFromBanner(statsStripBanner);
+      if (parsed) {
+        return {
+          success: true,
+          data: parsed,
+        } as T;
+      }
+    }
+  } catch (bannerFallbackError) {
+    if (!isRetryableRouteError(bannerFallbackError)) {
+      throw bannerFallbackError;
+    }
+  }
+
   return {
     success: true,
     data: { ...STATS_STRIP_DEFAULTS, items: [...STATS_STRIP_DEFAULTS.items] },
@@ -415,6 +461,39 @@ async function writeStatsStripWithFallback<T>(data: unknown) {
     } catch (patchError) {
       lastError = patchError;
       if (!isRetryableRouteError(patchError)) throw patchError;
+    }
+  }
+  try {
+    const payloadString = `${STATS_STRIP_BANNER_PREFIX}${encodeURIComponent(JSON.stringify(normalized))}`;
+    const adminBanners = await apiService.get<{ success: boolean; data: any[] }>('/banners/admin/all');
+    const statsStripBanner = (adminBanners.data || []).find(
+      (banner: any) => String(banner?.section || '').toUpperCase() === STATS_STRIP_BANNER_SECTION
+    );
+    const payload = {
+      name: statsStripBanner?.name || 'Stats Strip Settings',
+      section: STATS_STRIP_BANNER_SECTION,
+      title: statsStripBanner?.title || 'Stats Strip',
+      subtitle: normalized.items.filter((item) => item.isActive).map((item) => `${item.value}${item.suffix || ''} ${item.label}`).join(' | '),
+      ctaText: 'SYSTEM_STATS_STRIP',
+      ctaLink: payloadString,
+      images:
+        Array.isArray(statsStripBanner?.images) && statsStripBanner.images.length > 0
+          ? statsStripBanner.images
+          : [TOP_STRIP_BANNER_PLACEHOLDER_IMAGE],
+      isActive: true,
+      displayOrder: Number(statsStripBanner?.displayOrder || 0),
+    };
+    const response = statsStripBanner?.id
+      ? await apiService.put<{ success: boolean; data: any }>(`/banners/${statsStripBanner.id}`, payload)
+      : await apiService.post<{ success: boolean; data: any }>('/banners', payload);
+    const parsed = parseStatsStripPayloadFromBanner(response?.data);
+    return {
+      success: true,
+      data: parsed || normalized,
+    } as T;
+  } catch (bannerWriteError) {
+    if (!isRetryableRouteError(bannerWriteError)) {
+      throw bannerWriteError;
     }
   }
   throw lastError ?? new Error('Stats strip route not found.');
