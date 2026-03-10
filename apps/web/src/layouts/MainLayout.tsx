@@ -4,6 +4,7 @@ import { Menu, ShoppingBag, User, X } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
+import { useCurrencyStore } from '../store/currencyStore';
 import { api } from '../services/api';
 import Footer from '../components/Footer';
 import { getHomeRouteForUser, normalizeRole } from '../auth/rbac';
@@ -27,6 +28,7 @@ export default function MainLayout() {
   const [isTopStripHovered, setIsTopStripHovered] = useState(false);
   const { isAuthenticated, logout, user } = useAuthStore();
   const { getItemCount } = useCartStore();
+  const { selectedCurrency, supportedCurrencies, hydrateFromConfig, setSelectedCurrency } = useCurrencyStore();
   const navigate = useNavigate();
   const location = useLocation();
   const { data: footerContent } = useQuery({
@@ -48,6 +50,13 @@ export default function MainLayout() {
     queryKey: ['homepageTopStrip'],
     queryFn: async () => {
       const response = await api.homepageSections.getTopStrip();
+      return response.success ? response.data : null;
+    },
+  });
+  const { data: currencyConfig } = useQuery({
+    queryKey: ['currencyConfigForLayout'],
+    queryFn: async () => {
+      const response = await api.currency.getConfig();
       return response.success ? response.data : null;
     },
   });
@@ -85,6 +94,12 @@ export default function MainLayout() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    if (currencyConfig) {
+      hydrateFromConfig(currencyConfig);
+    }
+  }, [currencyConfig, hydrateFromConfig]);
 
   const handleLogout = () => {
     logout();
@@ -215,12 +230,16 @@ export default function MainLayout() {
                 ))}
               </nav>
               <div className="hidden md:block">
-                <select className={`h-8 w-20 border-none bg-transparent text-xs ${iconTextClass}`}>
-                  <option>USD</option>
-                  <option>EUR</option>
-                  <option>GBP</option>
-                  <option>NGN</option>
-                  <option>GHS</option>
+                <select
+                  className={`h-8 min-w-[88px] border-none bg-transparent text-xs ${iconTextClass}`}
+                  value={selectedCurrency}
+                  onChange={(event) => setSelectedCurrency(event.target.value)}
+                >
+                  {(supportedCurrencies || ['USD']).map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
                 </select>
               </div>
               <Link

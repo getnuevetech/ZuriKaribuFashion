@@ -51,6 +51,9 @@ interface Fabric {
   minOrderMeters: number;
   isFeatured?: boolean;
   featuredSections?: string[];
+  listingCurrencyCode?: string;
+  listingLocalPrice?: number;
+  listingUsdPrice?: number;
 }
 
 interface FabricOrder {
@@ -87,6 +90,7 @@ interface FabricFormState {
   minYards: string;
   stockYards: string;
   imageUrls: string;
+  priceCurrencyCode: string;
 }
 
 interface VendorProfileField {
@@ -141,6 +145,16 @@ export default function SellerDashboard() {
     minYards: '1',
     stockYards: '0',
     imageUrls: '',
+    priceCurrencyCode: 'USD',
+  });
+  const [currencyOptions, setCurrencyOptions] = useState<{
+    defaultCurrency: string;
+    allowedCurrencies: string[];
+    usdPerUnitByCurrency: Record<string, number>;
+  }>({
+    defaultCurrency: 'USD',
+    allowedCurrencies: ['USD'],
+    usdPerUnitByCurrency: { USD: 1 },
   });
   const [profileCompletion, setProfileCompletion] = useState<SellerProfileCompletion | null>(null);
   const [profileForm, setProfileForm] = useState<Record<string, string>>({});
@@ -179,18 +193,20 @@ export default function SellerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [dashboardResult, fabricsResult, ordersResult, materialsResult, profileResult] = await Promise.allSettled([
+      const [dashboardResult, fabricsResult, ordersResult, materialsResult, profileResult, currencyResult] = await Promise.allSettled([
         api.seller.getDashboard(),
         api.seller.getFabrics(),
         api.seller.getOrders(),
         api.products.getMaterials(),
         api.seller.getProfileCompletion(),
+        api.currency.getMyOptions(),
       ]);
       const dashboardRes = dashboardResult.status === 'fulfilled' ? dashboardResult.value : null;
       const fabricsRes = fabricsResult.status === 'fulfilled' ? fabricsResult.value : null;
       const ordersRes = ordersResult.status === 'fulfilled' ? ordersResult.value : null;
       const materialsRes = materialsResult.status === 'fulfilled' ? materialsResult.value : null;
       const profileRes = profileResult.status === 'fulfilled' ? profileResult.value : null;
+      const currencyRes = currencyResult.status === 'fulfilled' ? currencyResult.value : null;
 
       if (dashboardRes?.success) {
         const baseStats = dashboardRes.data?.stats || {};
@@ -223,8 +239,20 @@ export default function SellerDashboard() {
           minOrderMeters: Number(item.minYards ?? 1),
           isFeatured: Boolean(item.isFeatured),
           featuredSections: Array.isArray(item.featuredSections) ? item.featuredSections : [],
+          listingCurrencyCode: String(item.listingCurrencyCode || 'USD'),
+          listingLocalPrice: Number(item.listingLocalPrice || item.sellerPrice || 0),
+          listingUsdPrice: Number(item.listingUsdPrice || item.sellerPrice || 0),
         }));
         setFabrics(mappedFabrics);
+      }
+      if (currencyRes?.success) {
+        setCurrencyOptions({
+          defaultCurrency: String(currencyRes.data?.defaultCurrency || 'USD'),
+          allowedCurrencies: Array.isArray(currencyRes.data?.allowedCurrencies)
+            ? currencyRes.data.allowedCurrencies.map((entry: any) => String(entry || '').toUpperCase()).filter(Boolean)
+            : ['USD'],
+          usdPerUnitByCurrency: (currencyRes.data?.usdPerUnitByCurrency || { USD: 1 }) as Record<string, number>,
+        });
       }
       if (materialsRes?.success) {
         const options = Array.isArray(materialsRes.data)
@@ -363,6 +391,7 @@ export default function SellerDashboard() {
       minYards: '1',
       stockYards: '0',
       imageUrls: '',
+      priceCurrencyCode: currencyOptions.defaultCurrency || 'USD',
     });
     setSelectedFabric(null);
     setIsEditMode(false);
@@ -386,10 +415,11 @@ export default function SellerDashboard() {
       name: fabric.name,
       description: fabric.description || '',
       materialTypeId: fabric.materialTypeId || materialOptions[0]?.id || '',
-      sellerPrice: String(fabric.pricePerMeter || ''),
+      sellerPrice: String(fabric.listingLocalPrice || fabric.pricePerMeter || ''),
       minYards: String(fabric.minOrderMeters || 1),
       stockYards: String(fabric.stockMeters || 0),
       imageUrls: (fabric.images || []).join('\n'),
+      priceCurrencyCode: String(fabric.listingCurrencyCode || currencyOptions.defaultCurrency || 'USD'),
     });
     setShowProductModal(true);
   };
@@ -440,6 +470,7 @@ export default function SellerDashboard() {
         description: productForm.description.trim(),
         materialTypeId: productForm.materialTypeId,
         sellerPrice: Number(productForm.sellerPrice || 0),
+        priceCurrencyCode: productForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD',
         minYards: Number(productForm.minYards || 1),
         stockYards: Number(productForm.stockYards || 0),
         images,
@@ -512,6 +543,13 @@ export default function SellerDashboard() {
   const lowStockFabrics = fabrics.filter(f => f.stockMeters < 20);
   const featuredFabrics = fabrics.filter((fabric) => fabric.isFeatured);
   const pendingOrders = orders.filter(o => o.status === 'CONFIRMED');
+  const selectedListingCurrency = String(productForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD').toUpperCase();
+  const selectedUsdPerUnit = Number(currencyOptions.usdPerUnitByCurrency?.[selectedListingCurrency] || 1);
+  const localPricePreview = Number(productForm.sellerPrice || 0);
+  const usdPricePreview =
+    selectedListingCurrency === 'USD'
+      ? localPricePreview
+      : Number((localPricePreview * selectedUsdPerUnit).toFixed(2));
 
   if (loading) {
     return (
@@ -805,7 +843,13 @@ export default function SellerDashboard() {
               { 
                 key: 'pricePerMeter', 
                 header: 'Price',
-                render: (item) => `$${item.pricePerMeter}/m`
+                render: (item) => {
+                  const code = String(item.listingCurrencyCode || 'USD').toUpperCase();
+                  const local = Number(item.listingLocalPrice || item.pricePerMeter || 0);
+                  const usd = Number(item.listingUsdPrice || item.pricePerMeter || 0);
+                  if (code === 'USD') return `$${usd.toFixed(2)} / yd`;
+                  return `${code} ${local.toFixed(2)} / yd · USD ${usd.toFixed(2)}`;
+                }
               },
               { 
                 key: 'stockMeters', 
@@ -1005,7 +1049,9 @@ export default function SellerDashboard() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Seller Price (USD)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Seller Price ({selectedListingCurrency})
+                </label>
                 <input
                   type="number"
                   min="0"
@@ -1014,6 +1060,22 @@ export default function SellerDashboard() {
                   onChange={(e) => setProductForm((prev) => ({ ...prev, sellerPrice: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                 />
+                <p className="mt-1 text-xs text-gray-500">Converted USD: ${usdPricePreview.toFixed(2)}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Listing Currency</label>
+                <select
+                  value={productForm.priceCurrencyCode}
+                  onChange={(e) => setProductForm((prev) => ({ ...prev, priceCurrencyCode: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  disabled={(currencyOptions.allowedCurrencies || []).length <= 1}
+                >
+                  {(currencyOptions.allowedCurrencies || [currencyOptions.defaultCurrency || 'USD']).map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Yards</label>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../../services/api';
+import { useCurrencyStore } from '../../store/currencyStore';
 
 interface StoreFabric {
   id: string;
@@ -14,6 +15,7 @@ export default function SellerStorefront() {
   const [loading, setLoading] = useState(true);
   const [storeName, setStoreName] = useState('Seller Store');
   const [items, setItems] = useState<StoreFabric[]>([]);
+  const { formatFromUsd } = useCurrencyStore();
 
   useEffect(() => {
     const load = async () => {
@@ -54,7 +56,7 @@ export default function SellerStorefront() {
                   className="h-48 w-full rounded-lg object-cover"
                 />
                 <p className="mt-3 text-sm font-semibold text-gray-900">{item.name}</p>
-                <p className="text-sm text-amber-700">${Number(item.finalPrice || 0).toFixed(2)}</p>
+                <p className="text-sm text-amber-700">{formatFromUsd(Number(item.finalPrice || 0))}</p>
               </Link>
             ))}
           </div>

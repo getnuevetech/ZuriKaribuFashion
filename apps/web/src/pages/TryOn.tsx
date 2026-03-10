@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useCartStore } from '../store/cartStore';
+import { useCurrencyStore } from '../store/currencyStore';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 
@@ -144,6 +145,7 @@ export default function TryOn() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { items, addItem } = useCartStore();
+  const { formatFromUsd } = useCurrencyStore();
   
   const fabricId = searchParams.get('fabric');
   const [design, setDesign] = useState<any>(null);
@@ -397,7 +399,7 @@ export default function TryOn() {
               
               <div className="flex items-baseline gap-2 mb-4">
                 <span className="text-2xl font-bold text-amber-700">
-                  ${((design?.basePrice || 0) + (fabric?.pricePerMeter || 0) * 3).toFixed(2)}
+                  {formatFromUsd((design?.basePrice || 0) + (fabric?.pricePerMeter || 0) * 3)}
                 </span>
                 <span className="text-gray-500 text-sm">total</span>
               </div>
@@ -405,11 +407,11 @@ export default function TryOn() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Design:</span>
-                  <span className="font-medium">${design?.basePrice}</span>
+                  <span className="font-medium">{formatFromUsd(design?.basePrice || 0)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Fabric ({fabric?.name}):</span>
-                  <span className="font-medium">${fabric?.pricePerMeter}/m × 3m</span>
+                  <span className="font-medium">{formatFromUsd(fabric?.pricePerMeter || 0)}/yd × 3yd</span>
                 </div>
               </div>
             </div>
@@ -427,7 +429,7 @@ export default function TryOn() {
                   <div>
                     <p className="font-medium text-gray-900">{fabric.name}</p>
                     <p className="text-sm text-gray-500">{fabric.seller?.businessName}</p>
-                    <p className="text-sm text-amber-600">${fabric.pricePerMeter}/meter</p>
+                    <p className="text-sm text-amber-600">{formatFromUsd(fabric.pricePerMeter)}/yard</p>
                   </div>
                 </div>
               )}

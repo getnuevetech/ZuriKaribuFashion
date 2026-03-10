@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, ShoppingCart, Heart, Star, MapPin, Ruler, Loader2 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { api } from '../services/api';
+import { useCurrencyStore } from '../store/currencyStore';
 
 interface Fabric {
   id: string;
@@ -45,6 +46,7 @@ export default function FabricDetail() {
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(2);
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const { formatFromUsd } = useCurrencyStore();
 
   useEffect(() => {
     const fetchFabric = async () => {
@@ -152,14 +154,14 @@ export default function FabricDetail() {
             </div>
 
             <p className="text-3xl font-bold text-coral-500">
-              ${fabric.pricePerMeter}<span className="text-lg text-gray-500 font-normal">/meter</span>
+              {formatFromUsd(fabric.pricePerMeter)}<span className="text-lg text-gray-500 font-normal">/yard</span>
             </p>
 
             <p className="text-gray-600 leading-relaxed">{fabric.description}</p>
 
             {/* Quantity Selector */}
             <div className="flex items-center gap-4">
-              <span className="font-medium">Quantity (meters):</span>
+              <span className="font-medium">Quantity (yards):</span>
               <div className="flex items-center border rounded-lg">
                 <button
                   onClick={() => setQuantity(Math.max(fabric.minOrderMeters || 1, quantity - 1))}
@@ -175,14 +177,14 @@ export default function FabricDetail() {
                   +
                 </button>
               </div>
-              <span className="text-sm text-gray-500">Min: {fabric.minOrderMeters || 1}m</span>
+              <span className="text-sm text-gray-500">Min: {fabric.minOrderMeters || 1} yd</span>
             </div>
 
             {/* Total */}
             <div className="bg-gray-100 p-4 rounded-lg">
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Total:</span>
-                <span className="text-2xl font-bold text-coral-500">${(fabric.pricePerMeter * quantity).toFixed(2)}</span>
+                <span className="text-2xl font-bold text-coral-500">{formatFromUsd(fabric.pricePerMeter * quantity)}</span>
               </div>
             </div>
 

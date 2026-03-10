@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../../services/api';
+import { useCurrencyStore } from '../../store/currencyStore';
 
 interface StoreDesign {
   id: string;
@@ -23,6 +24,7 @@ export default function DesignerStorefront() {
   const [storeName, setStoreName] = useState('Designer Store');
   const [designs, setDesigns] = useState<StoreDesign[]>([]);
   const [ready, setReady] = useState<StoreReady[]>([]);
+  const { formatFromUsd } = useCurrencyStore();
 
   useEffect(() => {
     const load = async () => {
@@ -82,7 +84,7 @@ export default function DesignerStorefront() {
                   />
                   <p className="mt-3 text-sm font-semibold text-gray-900">{item.name}</p>
                   <p className="text-sm text-amber-700">
-                    ${Number(item.finalPrice ?? item.basePrice ?? 0).toFixed(2)}
+                    {formatFromUsd(Number(item.finalPrice ?? item.basePrice ?? 0))}
                   </p>
                 </Link>
               ))}
@@ -102,7 +104,7 @@ export default function DesignerStorefront() {
                     className="h-48 w-full rounded-lg object-cover"
                   />
                   <p className="mt-3 text-sm font-semibold text-gray-900">{item.name}</p>
-                  <p className="text-sm text-amber-700">${Number(item.basePrice || 0).toFixed(2)}</p>
+                  <p className="text-sm text-amber-700">{formatFromUsd(Number(item.basePrice || 0))}</p>
                 </Link>
               ))}
             </div>

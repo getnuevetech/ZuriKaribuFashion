@@ -130,6 +130,9 @@ router.get('/my-options', authenticate, async (req, res, next) => {
       country: safeCountry,
       matrix,
       rules,
+      includeUsdFallback:
+        req.user?.role !== UserRole.FABRIC_SELLER &&
+        req.user?.role !== UserRole.FASHION_DESIGNER,
     });
 
     res.json({

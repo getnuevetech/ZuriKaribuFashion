@@ -11,6 +11,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { useCurrencyStore } from '../../store/currencyStore';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 
@@ -65,6 +66,7 @@ export default function CustomerOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const { formatFromUsd } = useCurrencyStore();
 
   useEffect(() => {
     fetchOrders();
@@ -173,7 +175,7 @@ export default function CustomerOrders() {
                     </p>
                   </div>
                   <p className="text-xl font-bold text-amber-700">
-                    ${totalAmount.toFixed(2)}
+                    {formatFromUsd(totalAmount)}
                   </p>
                 </div>
 

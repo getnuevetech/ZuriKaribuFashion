@@ -5,6 +5,7 @@ import Button from '../components/ui/Button';
 import { api } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
+import { useCurrencyStore } from '../store/currencyStore';
 
 interface ReadyToWearProduct {
   id: string;
@@ -45,6 +46,7 @@ const countryFlags: Record<string, string> = {
 export default function ReadyToWearDetail() {
   const { id } = useParams();
   const { user } = useAuthStore();
+  const { formatFromUsd } = useCurrencyStore();
   const { addReadyToWearItem } = useCartStore();
   const [product, setProduct] = useState<ReadyToWearProduct | null>(null);
   const [loading, setLoading] = useState(true);
@@ -222,9 +224,9 @@ export default function ReadyToWearDetail() {
 
             {/* Price */}
             <div className="flex items-baseline gap-3">
-              <p className="text-3xl font-bold text-coral-500">${selectedUnitPrice.toFixed(2)}</p>
+              <p className="text-3xl font-bold text-coral-500">{formatFromUsd(selectedUnitPrice)}</p>
               {hasDiscount && (
-                <p className="text-xl text-gray-400 line-through">${product.originalPrice}</p>
+                <p className="text-xl text-gray-400 line-through">{formatFromUsd(Number(product.originalPrice || 0))}</p>
               )}
             </div>
 
@@ -298,7 +300,7 @@ export default function ReadyToWearDetail() {
             <div className="bg-gray-100 p-4 rounded-lg">
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Total:</span>
-                <span className="text-2xl font-bold text-coral-500">${(selectedUnitPrice * quantity).toFixed(2)}</span>
+                <span className="text-2xl font-bold text-coral-500">{formatFromUsd(selectedUnitPrice * quantity)}</span>
               </div>
             </div>
 
@@ -377,7 +379,7 @@ export default function ReadyToWearDetail() {
         <div className="mx-auto flex max-w-7xl items-center gap-3">
           <div className="min-w-0">
             <p className="text-xs text-gray-500">Total</p>
-            <p className="text-lg font-bold text-coral-600">${(selectedUnitPrice * quantity).toFixed(2)}</p>
+            <p className="text-lg font-bold text-coral-600">{formatFromUsd(selectedUnitPrice * quantity)}</p>
           </div>
           <Link to={`/ready-to-wear/${product.id}/try-on`} className="flex-1">
             <Button variant="outline" className="w-full text-xs">

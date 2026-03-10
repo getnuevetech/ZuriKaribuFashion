@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
+import { useCurrencyStore } from '../store/currencyStore';
 import { api } from '../services/api';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -37,6 +38,7 @@ export default function Checkout() {
   const elements = useElements();
   const { user } = useAuthStore();
   const { items, totalPrice, clearCart } = useCartStore();
+  const { formatFromUsd, selectedCurrency } = useCurrencyStore();
   
   const [step, setStep] = useState<'shipping' | 'payment' | 'review'>('shipping');
   const [loading, setLoading] = useState(false);
@@ -466,7 +468,7 @@ export default function Checkout() {
                     className="flex-1"
                     disabled={!stripe || loading}
                   >
-                    {loading ? 'Processing...' : `Step 3: Pay $${finalTotal.toFixed(2)}`}
+                    {loading ? 'Processing...' : `Step 3: Pay ${formatFromUsd(finalTotal)}`}
                   </Button>
                 </div>
               </form>
@@ -525,12 +527,11 @@ export default function Checkout() {
                       )}
                     </div>
                     <p className="font-medium text-sm">
-                      $
-                      {(
+                      {formatFromUsd(
                         item.kind === 'READY_TO_WEAR'
                           ? item.unitPrice * item.quantity
                           : item.totalPrice
-                      ).toFixed(2)}
+                      )}
                     </p>
                   </div>
                 ))}
@@ -539,12 +540,12 @@ export default function Checkout() {
               <div className="space-y-2 py-4 border-t">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Subtotal</span>
-                  <span className="font-medium">${totalPrice.toFixed(2)}</span>
+                  <span className="font-medium">{formatFromUsd(totalPrice)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Shipping</span>
                   <span className={shipping === 0 ? 'text-green-600' : ''}>
-                    {shipping === 0 ? 'FREE' : `$${shipping.toFixed(2)}`}
+                    {shipping === 0 ? 'FREE' : formatFromUsd(shipping)}
                   </span>
                 </div>
               </div>
@@ -552,9 +553,12 @@ export default function Checkout() {
               <div className="flex justify-between items-center pt-4 border-t">
                 <span className="text-lg font-semibold">Total</span>
                 <span className="text-2xl font-bold text-amber-700">
-                  ${finalTotal.toFixed(2)}
+                  {formatFromUsd(finalTotal)}
                 </span>
               </div>
+              {selectedCurrency !== 'USD' ? (
+                <p className="mt-2 text-xs text-gray-500">Payments are currently settled in USD at checkout.</p>
+              ) : null}
             </div>
 
             {/* Delivery Info */}

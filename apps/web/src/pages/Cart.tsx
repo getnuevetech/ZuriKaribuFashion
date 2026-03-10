@@ -11,12 +11,14 @@ import {
   Shield
 } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
+import { useCurrencyStore } from '../store/currencyStore';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 
 export default function Cart() {
   const navigate = useNavigate();
   const { items, removeItem, updateItem, clearCart, totalPrice, itemCount } = useCartStore();
+  const { formatFromUsd } = useCurrencyStore();
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(false);
 
@@ -207,20 +209,19 @@ export default function Cart() {
                       </div>
                       <div className="text-right">
                         <p className="text-lg font-bold text-amber-700">
-                          $
-                          {(
+                          {formatFromUsd(
                             item.kind === 'READY_TO_WEAR'
                               ? item.unitPrice * item.quantity
                               : item.totalPrice
-                          ).toFixed(2)}
+                          )}
                         </p>
                         {item.kind === 'READY_TO_WEAR' ? (
                           <p className="text-xs text-gray-500">
-                            ${item.unitPrice.toFixed(2)} × {item.quantity}
+                            {formatFromUsd(item.unitPrice)} × {item.quantity}
                           </p>
                         ) : (
                           <p className="text-xs text-gray-500">
-                            ${item.basePrice} + ${(item.fabricPrice * item.fabricMeters).toFixed(2)}
+                            {formatFromUsd(item.basePrice)} + {formatFromUsd(item.fabricPrice * item.fabricMeters)}
                           </p>
                         )}
                       </div>
@@ -272,18 +273,18 @@ export default function Cart() {
               <div className="space-y-2 py-4 border-t">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Subtotal ({itemCount} items)</span>
-                  <span className="font-medium">${totalPrice.toFixed(2)}</span>
+                  <span className="font-medium">{formatFromUsd(totalPrice)}</span>
                 </div>
                 {promoApplied && (
                   <div className="flex justify-between text-sm text-green-600">
                     <span>Discount (10%)</span>
-                    <span>-${discount.toFixed(2)}</span>
+                    <span>-{formatFromUsd(discount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Shipping</span>
                   <span className={shipping === 0 ? 'text-green-600' : ''}>
-                    {shipping === 0 ? 'FREE' : `$${shipping.toFixed(2)}`}
+                    {shipping === 0 ? 'FREE' : formatFromUsd(shipping)}
                   </span>
                 </div>
               </div>
@@ -291,7 +292,7 @@ export default function Cart() {
               <div className="flex justify-between items-center pt-4 border-t">
                 <span className="text-lg font-semibold">Total</span>
                 <span className="text-2xl font-bold text-amber-700">
-                  ${finalTotal.toFixed(2)}
+                  {formatFromUsd(finalTotal)}
                 </span>
               </div>
 
@@ -314,7 +315,7 @@ export default function Cart() {
                   <Truck className="w-5 h-5 text-amber-600" />
                   <div>
                     <p className="font-medium text-sm">Free Shipping</p>
-                    <p className="text-xs text-gray-500">On orders over $200</p>
+                    <p className="text-xs text-gray-500">On orders over {formatFromUsd(200)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -340,7 +341,7 @@ export default function Cart() {
         <div className="mx-auto flex max-w-7xl items-center gap-3">
           <div className="min-w-0">
             <p className="text-xs text-gray-500">Total</p>
-            <p className="text-lg font-bold text-amber-700">${finalTotal.toFixed(2)}</p>
+            <p className="text-lg font-bold text-amber-700">{formatFromUsd(finalTotal)}</p>
           </div>
           <Button className="flex-1 text-xs" onClick={() => navigate('/checkout')}>
             Continue to Checkout

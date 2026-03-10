@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Search, Loader2, Heart } from 'lucide-react';
 import { api } from '../services/api';
+import { useCurrencyStore } from '../store/currencyStore';
 
 interface Category {
   id: string;
@@ -66,6 +67,7 @@ export default function ReadyToWear() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { formatFromUsd } = useCurrencyStore();
 
   const [filters, setFilters] = useState({
     search: searchParams.get('search') || '',
@@ -314,7 +316,7 @@ export default function ReadyToWear() {
                       ) : null}
                       <h3 className="font-semibold text-gray-900 group-hover:text-coral-500 transition-colors">{product.name}</h3>
                       <p className="text-sm text-gray-500 mt-1">{product.designer?.businessName || 'Designer'}</p>
-                      <p className="text-coral-500 font-semibold mt-2">${defaultPrice.toFixed(2)}</p>
+                      <p className="text-coral-500 font-semibold mt-2">{formatFromUsd(defaultPrice)}</p>
                       <div className="flex flex-wrap gap-1 mt-2">
                         {availableSizes.slice(0, 4).map((size) => (
                           <span key={size} className="text-xs bg-gray-100 px-2 py-1 rounded">

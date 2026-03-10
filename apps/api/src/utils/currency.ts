@@ -427,8 +427,9 @@ export function getAllowedCurrenciesForVendor(params: {
   country: string;
   matrix: AfricanCurrencyRow[];
   rules: CurrencyListingRule[];
+  includeUsdFallback?: boolean;
 }) {
-  const { role, userId, country, matrix, rules } = params;
+  const { role, userId, country, matrix, rules, includeUsdFallback = false } = params;
   const defaultCurrency = getDefaultCurrencyForCountry(country, matrix);
   const allowed = new Set<string>([defaultCurrency]);
 
@@ -444,7 +445,9 @@ export function getAllowedCurrenciesForVendor(params: {
     }
   }
 
-  allowed.add('USD');
+  if (includeUsdFallback) {
+    allowed.add('USD');
+  }
   return {
     defaultCurrency,
     allowedCurrencies: Array.from(allowed).filter((code) => code === 'USD' || getUsdPerUnit(code, matrix) > 0),

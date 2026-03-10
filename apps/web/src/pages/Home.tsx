@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
+import { useCurrencyStore } from '../store/currencyStore';
 
 type HeroSlide = {
   id: string;
@@ -397,6 +398,7 @@ const productBasePath = (productType: string) => {
 
 function ProductCard({ product, descriptionWordLimit }: { product: FeaturedProduct; descriptionWordLimit: number }) {
   const description = trimToWordLimit(asText(product.description, ''), Math.max(5, Math.min(60, descriptionWordLimit)));
+  const { formatFromUsd } = useCurrencyStore();
   return (
     <Link to={`${productBasePath(product.productType)}/${product.id}`} className="group block">
       <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-gray-100 mb-4 img-zoom">
@@ -414,7 +416,7 @@ function ProductCard({ product, descriptionWordLimit }: { product: FeaturedProdu
         {description ? (
           <p className="text-gray-500 text-xs line-clamp-2 mt-1">{description}</p>
         ) : null}
-        <p className="font-semibold mt-1">${Number(product.price || 0).toFixed(2)}</p>
+        <p className="font-semibold mt-1">{formatFromUsd(Number(product.price || 0))}</p>
       </div>
     </Link>
   );

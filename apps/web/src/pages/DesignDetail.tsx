@@ -16,6 +16,7 @@ import {
 import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
+import { useCurrencyStore } from '../store/currencyStore';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 
@@ -63,6 +64,7 @@ export default function DesignDetail() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { addItem } = useCartStore();
+  const { formatFromUsd } = useCurrencyStore();
   
   const [design, setDesign] = useState<Design | null>(null);
   const [loading, setLoading] = useState(true);
@@ -295,12 +297,12 @@ export default function DesignDetail() {
             <div className="p-4 bg-amber-50 rounded-xl">
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-bold text-amber-700">
-                  ${calculateTotal().toFixed(2)}
+                  {formatFromUsd(calculateTotal())}
                 </span>
                 <span className="text-gray-500">total price</span>
               </div>
               <p className="text-sm text-gray-600 mt-1">
-                Base: ${design.basePrice} + Fabric (varies by selection)
+                Base: {formatFromUsd(design.basePrice)} + Fabric (varies by selection)
               </p>
             </div>
 
@@ -379,7 +381,7 @@ export default function DesignDetail() {
                               </div>
                               <div className="text-right">
                                 <p className="font-semibold text-amber-700">
-                                  ${fabric.pricePerMeter}/meter
+                                  {formatFromUsd(fabric.pricePerMeter)}/meter
                                 </p>
                                 <p className="text-xs text-gray-500">
                                   {minMeters}-{maxMeters} meters needed

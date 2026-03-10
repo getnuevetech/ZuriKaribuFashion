@@ -4,6 +4,14 @@ import { randomUUID } from 'crypto';
 import { prisma, UserRole, ProductStatus } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
+import {
+  convertLocalToUsd,
+  getAllowedCurrenciesForVendor,
+  getCurrencyState,
+  getProductCurrencyMetadata,
+  getUsdPerUnit,
+  setProductCurrencyMetadata,
+} from '../utils/currency';
 
 const router = Router();
 let designerGovernanceSchemaEnsured = false;
@@ -104,6 +112,38 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 120);
+
+const normalizeCurrencyCode = (value: unknown) => String(value || '').trim().toUpperCase();
+
+async function resolveDesignerListingPrice(params: {
+  userId: string;
+  country: string;
+  localPriceInput: number;
+  requestedCurrencyCode?: string;
+}) {
+  const { matrix, rules } = await getCurrencyState();
+  const { defaultCurrency, allowedCurrencies } = getAllowedCurrenciesForVendor({
+    role: UserRole.FASHION_DESIGNER,
+    userId: params.userId,
+    country: params.country,
+    matrix,
+    rules,
+    includeUsdFallback: false,
+  });
+  const requested = normalizeCurrencyCode(params.requestedCurrencyCode);
+  const selectedCurrency =
+    requested && allowedCurrencies.includes(requested) ? requested : defaultCurrency;
+  const localPrice = Number(params.localPriceInput || 0);
+  const usdPrice = convertLocalToUsd(localPrice, selectedCurrency, matrix);
+  return {
+    selectedCurrency,
+    localPrice,
+    usdPrice,
+    usdPerUnit: getUsdPerUnit(selectedCurrency, matrix) || 1,
+    defaultCurrency,
+    allowedCurrencies,
+  };
+}
 
 const normalizeFieldKey = (value: unknown) =>
   String(value || '')
@@ -373,15 +413,24 @@ router.get('/designs', async (req, res, next) => {
       if (!existing.includes(row.section)) existing.push(row.section);
       featuredByProductId.set(row.productId, existing);
     }
+    const metadataRows = await Promise.all(
+      designs.map(async (item) => [item.id, await getProductCurrencyMetadata('DESIGN', item.id)] as const)
+    );
+    const metadataByDesignId = new Map<string, any>(metadataRows);
 
     res.json({
       success: true,
       data: designs.map((item) => {
         const featuredSections = featuredByProductId.get(item.id) || [];
+        const currencyMeta = metadataByDesignId.get(item.id) || null;
         return {
           ...item,
           isFeatured: featuredSections.length > 0,
           featuredSections,
+          listingCurrencyCode: String(currencyMeta?.currencyCode || 'USD'),
+          listingLocalPrice: Number(currencyMeta?.localPrice || item.basePrice || 0),
+          listingUsdPrice: Number(currencyMeta?.usdPrice || item.basePrice || 0),
+          listingExchangeRate: Number(currencyMeta?.exchangeRate || 1),
         };
       }),
     });
@@ -563,6 +612,7 @@ router.post('/designs', async (req, res, next) => {
       description: z.string().min(10),
       categoryId: z.string().uuid(),
       basePrice: z.number().positive(),
+      priceCurrencyCode: z.string().min(3).max(8).optional(),
       suitableFabricIds: z.array(z.object({
         fabricId: z.string().uuid(),
         yardsNeeded: z.number().min(1),
@@ -594,7 +644,13 @@ router.post('/designs', async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Designer profile not found.' });
     }
 
-    const finalPrice = await computeFinalDesignPrice(data.basePrice, profile.country);
+    const pricing = await resolveDesignerListingPrice({
+      userId: req.user!.id,
+      country: profile.country,
+      localPriceInput: data.basePrice,
+      requestedCurrencyCode: data.priceCurrencyCode,
+    });
+    const finalPrice = await computeFinalDesignPrice(pricing.usdPrice, profile.country);
 
     const design = await prisma.design.create({
       data: {
@@ -602,7 +658,7 @@ router.post('/designs', async (req, res, next) => {
         name: data.name,
         description: data.description,
         categoryId: data.categoryId,
-        basePrice: data.basePrice,
+        basePrice: pricing.usdPrice,
         finalPrice,
         status: ProductStatus.PENDING_REVIEW,
         suitableFabrics: {
@@ -631,6 +687,15 @@ router.post('/designs', async (req, res, next) => {
       where: { id: profile.id },
       data: { totalDesigns: { increment: 1 } },
     });
+    await setProductCurrencyMetadata({
+      userId: req.user!.id,
+      productType: 'DESIGN',
+      productId: design.id,
+      currencyCode: pricing.selectedCurrency,
+      localPrice: pricing.localPrice,
+      usdPrice: pricing.usdPrice,
+      exchangeRate: pricing.usdPerUnit,
+    });
 
     res.status(201).json({
       success: true,
@@ -651,6 +716,7 @@ router.patch('/designs/:id', async (req, res, next) => {
       description: z.string().min(10).optional(),
       categoryId: z.string().uuid().optional(),
       basePrice: z.number().positive().optional(),
+      priceCurrencyCode: z.string().min(3).max(8).optional(),
       suitableFabricIds: z
         .array(
           z.object({
@@ -710,8 +776,17 @@ router.patch('/designs/:id', async (req, res, next) => {
       });
     }
 
-    const nextBasePrice = Number(data.basePrice ?? existing.basePrice);
-    const nextFinalPrice = await computeFinalDesignPrice(nextBasePrice, profile.country);
+    const pricing =
+      data.basePrice !== undefined
+        ? await resolveDesignerListingPrice({
+            userId: req.user!.id,
+            country: profile.country,
+            localPriceInput: data.basePrice,
+            requestedCurrencyCode: data.priceCurrencyCode,
+          })
+        : null;
+    const nextBasePriceUsd = Number(pricing?.usdPrice ?? existing.basePrice);
+    const nextFinalPrice = await computeFinalDesignPrice(nextBasePriceUsd, profile.country);
 
     const updated = await prisma.$transaction(async (tx) => {
       if (data.suitableFabricIds) {
@@ -728,7 +803,7 @@ router.patch('/designs/:id', async (req, res, next) => {
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.description !== undefined ? { description: data.description } : {}),
         ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
-        ...(data.basePrice !== undefined ? { basePrice: data.basePrice } : {}),
+        ...(data.basePrice !== undefined ? { basePrice: nextBasePriceUsd } : {}),
         finalPrice: nextFinalPrice,
         status: ProductStatus.PENDING_REVIEW,
       };
@@ -766,6 +841,17 @@ router.patch('/designs/:id', async (req, res, next) => {
       });
     });
 
+    if (pricing) {
+      await setProductCurrencyMetadata({
+        userId: req.user!.id,
+        productType: 'DESIGN',
+        productId: id,
+        currencyCode: pricing.selectedCurrency,
+        localPrice: pricing.localPrice,
+        usdPrice: pricing.usdPrice,
+        exchangeRate: pricing.usdPerUnit,
+      });
+    }
     res.json({
       success: true,
       message: 'Design updated successfully.',
@@ -818,15 +904,24 @@ router.get('/ready-to-wear', async (req, res, next) => {
       if (!existing.includes(row.section)) existing.push(row.section);
       featuredByProductId.set(row.productId, existing);
     }
+    const metadataRows = await Promise.all(
+      products.map(async (item) => [item.id, await getProductCurrencyMetadata('READY_TO_WEAR', item.id)] as const)
+    );
+    const metadataByProductId = new Map<string, any>(metadataRows);
 
     res.json({
       success: true,
       data: products.map((item) => {
         const featuredSections = featuredByProductId.get(item.id) || [];
+        const currencyMeta = metadataByProductId.get(item.id) || null;
         return {
           ...item,
           isFeatured: featuredSections.length > 0,
           featuredSections,
+          listingCurrencyCode: String(currencyMeta?.currencyCode || 'USD'),
+          listingLocalPrice: Number(currencyMeta?.localPrice || item.basePrice || 0),
+          listingUsdPrice: Number(currencyMeta?.usdPrice || item.basePrice || 0),
+          listingExchangeRate: Number(currencyMeta?.exchangeRate || 1),
         };
       }),
     });
@@ -843,6 +938,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
       description: z.string().min(10),
       categoryId: z.string().uuid(),
       basePrice: z.number().positive(),
+      priceCurrencyCode: z.string().min(3).max(8).optional(),
       sizes: z.array(z.object({
         size: z.string(),
         price: z.number().positive(),
@@ -869,16 +965,25 @@ router.post('/ready-to-wear', async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Designer profile not found.' });
     }
 
+    const pricing = await resolveDesignerListingPrice({
+      userId: req.user!.id,
+      country: profile.country,
+      localPriceInput: data.basePrice,
+      requestedCurrencyCode: data.priceCurrencyCode,
+    });
     const product = await prisma.readyToWear.create({
       data: {
         designerId: profile.id,
         name: data.name,
         description: data.description,
         categoryId: data.categoryId,
-        basePrice: data.basePrice,
+        basePrice: pricing.usdPrice,
         status: ProductStatus.PENDING_REVIEW,
         sizeVariations: {
-          create: data.sizes,
+          create: data.sizes.map((row) => ({
+            ...row,
+            price: Number((Number(row.price || 0) * pricing.usdPerUnit).toFixed(2)),
+          })),
         },
         images: {
           create: data.images.map((img, i) => ({
@@ -893,6 +998,15 @@ router.post('/ready-to-wear', async (req, res, next) => {
         sizeVariations: true,
         images: true,
       },
+    });
+    await setProductCurrencyMetadata({
+      userId: req.user!.id,
+      productType: 'READY_TO_WEAR',
+      productId: product.id,
+      currencyCode: pricing.selectedCurrency,
+      localPrice: pricing.localPrice,
+      usdPrice: pricing.usdPrice,
+      exchangeRate: pricing.usdPerUnit,
     });
 
     res.status(201).json({
@@ -914,6 +1028,7 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
       description: z.string().min(10).optional(),
       categoryId: z.string().uuid().optional(),
       basePrice: z.number().positive().optional(),
+      priceCurrencyCode: z.string().min(3).max(8).optional(),
       sizes: z
         .array(
           z.object({
@@ -964,6 +1079,24 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
       });
     }
 
+    const existingPriceRow = await prisma.readyToWear.findFirst({
+      where: { id, designerId: profile.id },
+      select: { basePrice: true },
+    });
+    const existingCurrencyMeta = await getProductCurrencyMetadata('READY_TO_WEAR', id);
+    const pricing =
+      data.basePrice !== undefined
+        ? await resolveDesignerListingPrice({
+            userId: req.user!.id,
+            country: profile.country,
+            localPriceInput: data.basePrice,
+            requestedCurrencyCode: data.priceCurrencyCode,
+          })
+        : null;
+    const nextBasePriceUsd = Number(pricing?.usdPrice ?? existingPriceRow?.basePrice ?? 0);
+    const effectiveUsdPerUnit = Number(pricing?.usdPerUnit ?? existingCurrencyMeta?.exchangeRate ?? 1);
+    const effectiveCurrencyCode = String(pricing?.selectedCurrency || existingCurrencyMeta?.currencyCode || 'USD');
+
     const updated = await prisma.$transaction(async (tx) => {
       if (data.sizes) {
         await tx.readyToWearSize.deleteMany({ where: { readyToWearId: id } });
@@ -976,11 +1109,19 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.description !== undefined ? { description: data.description } : {}),
         ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
-        ...(data.basePrice !== undefined ? { basePrice: data.basePrice } : {}),
+        ...(data.basePrice !== undefined ? { basePrice: nextBasePriceUsd } : {}),
         status: ProductStatus.PENDING_REVIEW,
       };
       if (data.sizes) {
-        payload.sizeVariations = { create: data.sizes };
+        payload.sizeVariations = {
+          create: data.sizes.map((row) => ({
+            ...row,
+            price:
+              effectiveCurrencyCode === 'USD'
+                ? Number(row.price || 0)
+                : Number((Number(row.price || 0) * effectiveUsdPerUnit).toFixed(2)),
+          })),
+        };
       }
       if (data.images) {
         payload.images = {
@@ -1003,6 +1144,17 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
       });
     });
 
+    if (pricing) {
+      await setProductCurrencyMetadata({
+        userId: req.user!.id,
+        productType: 'READY_TO_WEAR',
+        productId: id,
+        currencyCode: pricing.selectedCurrency,
+        localPrice: pricing.localPrice,
+        usdPrice: pricing.usdPrice,
+        exchangeRate: pricing.usdPerUnit,
+      });
+    }
     res.json({
       success: true,
       message: 'Ready-to-wear product updated successfully.',

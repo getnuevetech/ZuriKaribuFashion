@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, ShoppingBag, Sparkles } from 'lucide-react';
 import { api } from '../services/api';
 import { useCartStore } from '../store/cartStore';
+import { useCurrencyStore } from '../store/currencyStore';
 import Button from '../components/ui/Button';
 
 interface ReadyToWearProduct {
@@ -33,6 +34,7 @@ export default function ReadyToWearTryOn() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { addReadyToWearItem } = useCartStore();
+  const { formatFromUsd } = useCurrencyStore();
   const [product, setProduct] = useState<ReadyToWearProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedSize, setSelectedSize] = useState('');
@@ -232,7 +234,7 @@ export default function ReadyToWearTryOn() {
             </p>
             <div className="mt-4 rounded-lg bg-gray-50 p-4">
               <p className="text-sm text-gray-600">Estimated total</p>
-              <p className="text-2xl font-bold text-coral-600">${(unitPrice * quantity).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-coral-600">{formatFromUsd(unitPrice * quantity)}</p>
             </div>
             <Button variant="outline" className="mt-4 w-full" onClick={() => navigate('/cart')}>
               Go to Cart
@@ -244,7 +246,7 @@ export default function ReadyToWearTryOn() {
         <div className="mx-auto flex max-w-7xl items-center gap-3">
           <div className="min-w-0">
             <p className="text-xs text-gray-500">Estimated total</p>
-            <p className="text-lg font-bold text-coral-600">${(unitPrice * quantity).toFixed(2)}</p>
+            <p className="text-lg font-bold text-coral-600">{formatFromUsd(unitPrice * quantity)}</p>
           </div>
           <Button variant="outline" className="flex-1 text-xs" onClick={handleGeneratePreview}>
             Preview

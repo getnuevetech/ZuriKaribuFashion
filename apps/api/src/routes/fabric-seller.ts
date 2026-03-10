@@ -4,6 +4,14 @@ import { randomUUID } from 'crypto';
 import { prisma, UserRole, ProductStatus } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
+import {
+  convertLocalToUsd,
+  getAllowedCurrenciesForVendor,
+  getCurrencyState,
+  getProductCurrencyMetadata,
+  getUsdPerUnit,
+  setProductCurrencyMetadata,
+} from '../utils/currency';
 
 const router = Router();
 let sellerGovernanceSchemaEnsured = false;
@@ -102,6 +110,38 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 120);
+
+const normalizeCurrencyCode = (value: unknown) => String(value || '').trim().toUpperCase();
+
+async function resolveSellerListingPrice(params: {
+  userId: string;
+  country: string;
+  localPriceInput: number;
+  requestedCurrencyCode?: string;
+}) {
+  const { matrix, rules } = await getCurrencyState();
+  const { defaultCurrency, allowedCurrencies } = getAllowedCurrenciesForVendor({
+    role: UserRole.FABRIC_SELLER,
+    userId: params.userId,
+    country: params.country,
+    matrix,
+    rules,
+    includeUsdFallback: false,
+  });
+  const requested = normalizeCurrencyCode(params.requestedCurrencyCode);
+  const selectedCurrency =
+    requested && allowedCurrencies.includes(requested) ? requested : defaultCurrency;
+  const localPrice = Number(params.localPriceInput || 0);
+  const usdPrice = convertLocalToUsd(localPrice, selectedCurrency, matrix);
+  return {
+    selectedCurrency,
+    localPrice,
+    usdPrice,
+    usdPerUnit: getUsdPerUnit(selectedCurrency, matrix) || 1,
+    defaultCurrency,
+    allowedCurrencies,
+  };
+}
 
 const normalizeFieldKey = (value: unknown) =>
   String(value || '')
@@ -372,15 +412,24 @@ router.get('/fabrics', async (req, res, next) => {
       if (!existing.includes(row.section)) existing.push(row.section);
       featuredByFabricId.set(row.productId, existing);
     }
+    const metadataRows = await Promise.all(
+      fabrics.map(async (item) => [item.id, await getProductCurrencyMetadata('FABRIC', item.id)] as const)
+    );
+    const metadataByFabricId = new Map<string, any>(metadataRows);
 
     res.json({
       success: true,
       data: fabrics.map((item) => {
         const featuredSections = featuredByFabricId.get(item.id) || [];
+        const currencyMeta = metadataByFabricId.get(item.id) || null;
         return {
           ...item,
           isFeatured: featuredSections.length > 0,
           featuredSections,
+          listingCurrencyCode: String(currencyMeta?.currencyCode || 'USD'),
+          listingLocalPrice: Number(currencyMeta?.localPrice || item.sellerPrice || 0),
+          listingUsdPrice: Number(currencyMeta?.usdPrice || item.sellerPrice || 0),
+          listingExchangeRate: Number(currencyMeta?.exchangeRate || 1),
         };
       }),
     });
@@ -598,6 +647,7 @@ router.post('/fabrics', async (req, res, next) => {
       description: z.string().min(10),
       materialTypeId: z.string().uuid(),
       sellerPrice: z.number().positive(),
+      priceCurrencyCode: z.string().min(3).max(8).optional(),
       minYards: z.number().min(1),
       stockYards: z.number().min(0),
       images: z.array(z.object({
@@ -621,7 +671,13 @@ router.post('/fabrics', async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Seller profile not found.' });
     }
 
-    const finalPrice = await computeFinalFabricPrice(data.sellerPrice, profile.country);
+    const pricing = await resolveSellerListingPrice({
+      userId: req.user!.id,
+      country: profile.country,
+      localPriceInput: data.sellerPrice,
+      requestedCurrencyCode: data.priceCurrencyCode,
+    });
+    const finalPrice = await computeFinalFabricPrice(pricing.usdPrice, profile.country);
 
     const fabric = await prisma.fabric.create({
       data: {
@@ -629,7 +685,7 @@ router.post('/fabrics', async (req, res, next) => {
         name: data.name,
         description: data.description,
         materialTypeId: data.materialTypeId,
-        sellerPrice: data.sellerPrice,
+        sellerPrice: pricing.usdPrice,
         finalPrice,
         minYards: data.minYards,
         stockYards: data.stockYards,
@@ -653,6 +709,15 @@ router.post('/fabrics', async (req, res, next) => {
       where: { id: profile.id },
       data: { totalFabrics: { increment: 1 } },
     });
+    await setProductCurrencyMetadata({
+      userId: req.user!.id,
+      productType: 'FABRIC',
+      productId: fabric.id,
+      currencyCode: pricing.selectedCurrency,
+      localPrice: pricing.localPrice,
+      usdPrice: pricing.usdPrice,
+      exchangeRate: pricing.usdPerUnit,
+    });
 
     res.status(201).json({
       success: true,
@@ -673,6 +738,7 @@ router.patch('/fabrics/:id', async (req, res, next) => {
       description: z.string().min(10).optional(),
       materialTypeId: z.string().uuid().optional(),
       sellerPrice: z.number().positive().optional(),
+      priceCurrencyCode: z.string().min(3).max(8).optional(),
       minYards: z.number().min(1).optional(),
       stockYards: z.number().min(0).optional(),
       images: z
@@ -716,8 +782,18 @@ router.patch('/fabrics/:id', async (req, res, next) => {
       });
     }
 
-    const nextSellerPrice = Number(data.sellerPrice ?? existing.sellerPrice);
-    const nextFinalPrice = await computeFinalFabricPrice(nextSellerPrice, profile.country);
+    const pricing =
+      data.sellerPrice !== undefined
+        ? await resolveSellerListingPrice({
+            userId: req.user!.id,
+            country: profile.country,
+            localPriceInput: data.sellerPrice,
+            requestedCurrencyCode: data.priceCurrencyCode,
+          })
+        : null;
+
+    const nextSellerPriceUsd = Number(pricing?.usdPrice ?? existing.sellerPrice);
+    const nextFinalPrice = await computeFinalFabricPrice(nextSellerPriceUsd, profile.country);
 
     const updated = await prisma.$transaction(async (tx) => {
       if (data.images) {
@@ -727,7 +803,7 @@ router.patch('/fabrics/:id', async (req, res, next) => {
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.description !== undefined ? { description: data.description } : {}),
         ...(data.materialTypeId !== undefined ? { materialTypeId: data.materialTypeId } : {}),
-        ...(data.sellerPrice !== undefined ? { sellerPrice: data.sellerPrice } : {}),
+        ...(data.sellerPrice !== undefined ? { sellerPrice: nextSellerPriceUsd } : {}),
         ...(data.minYards !== undefined ? { minYards: data.minYards } : {}),
         ...(data.stockYards !== undefined ? { stockYards: data.stockYards } : {}),
         finalPrice: nextFinalPrice,
@@ -752,6 +828,17 @@ router.patch('/fabrics/:id', async (req, res, next) => {
       });
     });
 
+    if (pricing) {
+      await setProductCurrencyMetadata({
+        userId: req.user!.id,
+        productType: 'FABRIC',
+        productId: id,
+        currencyCode: pricing.selectedCurrency,
+        localPrice: pricing.localPrice,
+        usdPrice: pricing.usdPrice,
+        exchangeRate: pricing.usdPerUnit,
+      });
+    }
     res.json({
       success: true,
       message: 'Fabric updated successfully.',

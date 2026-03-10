@@ -57,6 +57,9 @@ interface Design {
   createdAt: string;
   isFeatured?: boolean;
   featuredSections?: string[];
+  listingCurrencyCode?: string;
+  listingLocalPrice?: number;
+  listingUsdPrice?: number;
 }
 
 interface ReadyProduct {
@@ -70,6 +73,9 @@ interface ReadyProduct {
   orderCount: number;
   isFeatured?: boolean;
   featuredSections?: string[];
+  listingCurrencyCode?: string;
+  listingLocalPrice?: number;
+  listingUsdPrice?: number;
 }
 
 interface DesignOrder {
@@ -114,6 +120,7 @@ interface DesignFormState {
   selectedFabricIds: string[];
   yardsByFabricId: Record<string, string>;
   measurementLines: string;
+  priceCurrencyCode: string;
 }
 
 interface VendorProfileField {
@@ -170,6 +177,16 @@ export default function DesignerDashboard() {
     selectedFabricIds: [],
     yardsByFabricId: {},
     measurementLines: 'chest|cm|required\nwaist|cm|required\nhips|cm|required',
+    priceCurrencyCode: 'USD',
+  });
+  const [currencyOptions, setCurrencyOptions] = useState<{
+    defaultCurrency: string;
+    allowedCurrencies: string[];
+    usdPerUnitByCurrency: Record<string, number>;
+  }>({
+    defaultCurrency: 'USD',
+    allowedCurrencies: ['USD'],
+    usdPerUnitByCurrency: { USD: 1 },
   });
   const [profileCompletion, setProfileCompletion] = useState<DesignerProfileCompletion | null>(null);
   const [profileForm, setProfileForm] = useState<Record<string, string>>({});
@@ -202,7 +219,7 @@ export default function DesignerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsResult, designsResult, readyResult, ordersResult, categoriesResult, fabricsResult, profileResult] = await Promise.allSettled([
+      const [statsResult, designsResult, readyResult, ordersResult, categoriesResult, fabricsResult, profileResult, currencyResult] = await Promise.allSettled([
         api.designer.getDashboard(),
         api.designer.getDesigns(),
         api.designer.getReadyToWear(),
@@ -210,6 +227,7 @@ export default function DesignerDashboard() {
         api.products.getCategories(),
         api.products.getFabrics({ limit: 200 }),
         api.designer.getProfileCompletion(),
+        api.currency.getMyOptions(),
       ]);
       const statsRes = statsResult.status === 'fulfilled' ? statsResult.value : null;
       const designsRes = designsResult.status === 'fulfilled' ? designsResult.value : null;
@@ -218,6 +236,7 @@ export default function DesignerDashboard() {
       const categoriesRes = categoriesResult.status === 'fulfilled' ? categoriesResult.value : null;
       const fabricsRes = fabricsResult.status === 'fulfilled' ? fabricsResult.value : null;
       const profileRes = profileResult.status === 'fulfilled' ? profileResult.value : null;
+      const currencyRes = currencyResult.status === 'fulfilled' ? currencyResult.value : null;
 
       const toAddressObject = (value: any) => {
         if (!value) return null;
@@ -299,6 +318,9 @@ export default function DesignerDashboard() {
           createdAt: design.createdAt,
           isFeatured: Boolean(design.isFeatured),
           featuredSections: Array.isArray(design.featuredSections) ? design.featuredSections : [],
+          listingCurrencyCode: String(design.listingCurrencyCode || 'USD'),
+          listingLocalPrice: Number(design.listingLocalPrice || design.basePrice || 0),
+          listingUsdPrice: Number(design.listingUsdPrice || design.basePrice || 0),
         }));
         setDesigns(mappedDesigns);
       }
@@ -314,6 +336,9 @@ export default function DesignerDashboard() {
           orderCount: Number(item?._count?.orderItems || 0),
           isFeatured: Boolean(item.isFeatured),
           featuredSections: Array.isArray(item.featuredSections) ? item.featuredSections : [],
+          listingCurrencyCode: String(item.listingCurrencyCode || 'USD'),
+          listingLocalPrice: Number(item.listingLocalPrice || item.basePrice || 0),
+          listingUsdPrice: Number(item.listingUsdPrice || item.basePrice || 0),
         }));
         setReadyProducts(mappedReady);
       }
@@ -328,6 +353,15 @@ export default function DesignerDashboard() {
       if (fabricsRes?.success) {
         const rows = Array.isArray(fabricsRes.data?.fabrics) ? fabricsRes.data.fabrics : [];
         setFabricOptions(rows.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Fabric') })));
+      }
+      if (currencyRes?.success) {
+        setCurrencyOptions({
+          defaultCurrency: String(currencyRes.data?.defaultCurrency || 'USD'),
+          allowedCurrencies: Array.isArray(currencyRes.data?.allowedCurrencies)
+            ? currencyRes.data.allowedCurrencies.map((entry: any) => String(entry || '').toUpperCase()).filter(Boolean)
+            : ['USD'],
+          usdPerUnitByCurrency: (currencyRes.data?.usdPerUnitByCurrency || { USD: 1 }) as Record<string, number>,
+        });
       }
       const completionPayload =
         profileRes?.success
@@ -419,6 +453,7 @@ export default function DesignerDashboard() {
       selectedFabricIds: [],
       yardsByFabricId: {},
       measurementLines: 'chest|cm|required\nwaist|cm|required\nhips|cm|required',
+      priceCurrencyCode: currencyOptions.defaultCurrency || 'USD',
     });
     setSelectedDesign(null);
     setIsEditMode(false);
@@ -454,11 +489,12 @@ export default function DesignerDashboard() {
       name: design.name,
       description: design.description || '',
       categoryId: design.categoryId || categories[0]?.id || '',
-      basePrice: String(design.basePrice || ''),
+      basePrice: String(design.listingLocalPrice || design.basePrice || ''),
       imageUrls: (design.images || []).join('\n'),
       selectedFabricIds: (design.suitableFabrics || []).map((item) => item.fabricId).filter(Boolean),
       yardsByFabricId,
       measurementLines: measurementLines || 'chest|cm|required\nwaist|cm|required\nhips|cm|required',
+      priceCurrencyCode: String(design.listingCurrencyCode || currencyOptions.defaultCurrency || 'USD'),
     });
     setShowDesignModal(true);
   };
@@ -550,6 +586,7 @@ export default function DesignerDashboard() {
       description: designForm.description.trim(),
       categoryId: designForm.categoryId,
       basePrice: Number(designForm.basePrice),
+      priceCurrencyCode: designForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD',
       suitableFabricIds,
       measurementVariables,
       images,
@@ -628,6 +665,13 @@ export default function DesignerDashboard() {
   ];
   const featuredRows = productRows.filter((item) => item.isFeatured);
   const pendingOrders = orders.filter(o => o.status === 'PENDING');
+  const selectedListingCurrency = String(designForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD').toUpperCase();
+  const selectedUsdPerUnit = Number(currencyOptions.usdPerUnitByCurrency?.[selectedListingCurrency] || 1);
+  const localPricePreview = Number(designForm.basePrice || 0);
+  const usdPricePreview =
+    selectedListingCurrency === 'USD'
+      ? localPricePreview
+      : Number((localPricePreview * selectedUsdPerUnit).toFixed(2));
 
   if (loading) {
     return (
@@ -918,7 +962,17 @@ export default function DesignerDashboard() {
                 ),
               },
               { key: 'category.name', header: 'Category' },
-              { key: 'basePrice', header: 'Price', render: (item) => `$${Number(item.basePrice || 0).toFixed(2)}` },
+              {
+                key: 'basePrice',
+                header: 'Price',
+                render: (item) => {
+                  const code = String(item.listingCurrencyCode || 'USD').toUpperCase();
+                  const local = Number(item.listingLocalPrice || item.basePrice || 0);
+                  const usd = Number(item.listingUsdPrice || item.basePrice || 0);
+                  if (code === 'USD') return `$${usd.toFixed(2)}`;
+                  return `${code} ${local.toFixed(2)} · USD ${usd.toFixed(2)}`;
+                },
+              },
               { key: 'orderCount', header: 'Orders' },
               {
                 key: 'isFeatured',
@@ -987,7 +1041,17 @@ export default function DesignerDashboard() {
                 </div>
               ),
             },
-            { key: 'basePrice', header: 'Price', render: (item) => `$${Number(item.basePrice || 0).toFixed(2)}` },
+            {
+              key: 'basePrice',
+              header: 'Price',
+              render: (item) => {
+                const code = String(item.listingCurrencyCode || 'USD').toUpperCase();
+                const local = Number(item.listingLocalPrice || item.basePrice || 0);
+                const usd = Number(item.listingUsdPrice || item.basePrice || 0);
+                if (code === 'USD') return `$${usd.toFixed(2)}`;
+                return `${code} ${local.toFixed(2)} · USD ${usd.toFixed(2)}`;
+              },
+            },
             {
               key: 'featuredSections',
               header: 'Homepage Sections',
@@ -1065,7 +1129,9 @@ export default function DesignerDashboard() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Base Price (USD)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Base Price ({selectedListingCurrency})
+                </label>
                 <input
                   type="number"
                   min="0"
@@ -1074,6 +1140,23 @@ export default function DesignerDashboard() {
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, basePrice: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                 />
+                <p className="mt-1 text-xs text-gray-500">Converted USD: ${usdPricePreview.toFixed(2)}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Listing Currency</label>
+                <select
+                  value={designForm.priceCurrencyCode}
+                  onChange={(e) => setDesignForm((prev) => ({ ...prev, priceCurrencyCode: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  disabled={(currencyOptions.allowedCurrencies || []).length <= 1}
+                >
+                  {(currencyOptions.allowedCurrencies || [currencyOptions.defaultCurrency || 'USD']).map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="md:col-span-2">
