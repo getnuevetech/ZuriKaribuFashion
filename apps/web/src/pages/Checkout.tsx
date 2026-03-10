@@ -63,6 +63,12 @@ export default function Checkout() {
 
   const shipping = totalPrice > 200 ? 0 : 25;
   const finalTotal = totalPrice + shipping;
+  const currentStepSummary =
+    step === 'shipping'
+      ? 'Step 1 of 3: Shipping details'
+      : step === 'payment'
+        ? 'Step 2 of 3: Secure payment'
+        : 'Step 3 of 3: Confirmation';
 
   useEffect(() => {
     api.products
@@ -238,7 +244,7 @@ export default function Checkout() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pb-24 md:pb-8">
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -253,37 +259,38 @@ export default function Checkout() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Checkout</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Checkout</h1>
+        <p className="mt-2 mb-6 text-sm text-gray-500">{currentStepSummary}</p>
 
         {/* Progress Steps */}
-        <div className="flex items-center justify-center mb-8">
-          <div className="flex items-center">
+        <div className="mb-8 overflow-x-auto">
+          <div className="mx-auto flex min-w-[520px] items-center justify-center">
             <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
               step === 'shipping' ? 'bg-amber-600 text-white' : 'bg-green-500 text-white'
             }`}>
               {step === 'shipping' ? '1' : <Check className="w-5 h-5" />}
             </div>
-            <span className={`ml-2 font-medium ${step === 'shipping' ? 'text-amber-600' : 'text-green-600'}`}>
+            <span className={`ml-2 text-sm font-medium ${step === 'shipping' ? 'text-amber-600' : 'text-green-600'}`}>
               Shipping
             </span>
-          </div>
-          <div className="w-16 h-0.5 bg-gray-200 mx-4" />
-          <div className={`flex items-center ${step === 'payment' ? 'text-amber-600' : step === 'review' ? 'text-green-600' : 'text-gray-400'}`}>
+            <div className="w-16 h-0.5 bg-gray-200 mx-4" />
+            <div className={`flex items-center ${step === 'payment' ? 'text-amber-600' : step === 'review' ? 'text-green-600' : 'text-gray-400'}`}>
             <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
               step === 'payment' ? 'bg-amber-600 text-white' : step === 'review' ? 'bg-green-500 text-white' : 'bg-gray-200'
             }`}>
               {step === 'review' ? <Check className="w-5 h-5" /> : '2'}
             </div>
-            <span className="ml-2 font-medium">Payment</span>
-          </div>
-          <div className="w-16 h-0.5 bg-gray-200 mx-4" />
-          <div className={`flex items-center ${step === 'review' ? 'text-amber-600' : 'text-gray-400'}`}>
+              <span className="ml-2 text-sm font-medium">Payment</span>
+            </div>
+            <div className="w-16 h-0.5 bg-gray-200 mx-4" />
+            <div className={`flex items-center ${step === 'review' ? 'text-amber-600' : 'text-gray-400'}`}>
             <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
               step === 'review' ? 'bg-amber-600 text-white' : 'bg-gray-200'
             }`}>
               3
             </div>
-            <span className="ml-2 font-medium">Review</span>
+              <span className="ml-2 text-sm font-medium">Review</span>
+            </div>
           </div>
         </div>
 
@@ -303,6 +310,9 @@ export default function Checkout() {
                   <MapPin className="w-5 h-5 text-amber-600" />
                   <h2 className="text-lg font-semibold">Shipping Address</h2>
                 </div>
+                <p className="mb-5 text-sm text-gray-500">
+                  Enter delivery details exactly as they appear on your local courier records.
+                </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
@@ -422,7 +432,7 @@ export default function Checkout() {
                   className="w-full mt-6"
                   disabled={loading}
                 >
-                  {loading ? 'Processing...' : 'Continue to Payment'}
+                  {loading ? 'Processing...' : 'Step 2: Continue to Payment'}
                 </Button>
               </form>
             )}
@@ -433,6 +443,7 @@ export default function Checkout() {
                   <CreditCard className="w-5 h-5 text-amber-600" />
                   <h2 className="text-lg font-semibold">Payment Details</h2>
                 </div>
+                <p className="mb-4 text-sm text-gray-500">Payment method: Card (Stripe)</p>
 
                 <div className="p-4 bg-gray-50 rounded-lg mb-6">
                   <div className="flex items-center gap-2 mb-4">
@@ -455,7 +466,7 @@ export default function Checkout() {
                     className="flex-1"
                     disabled={!stripe || loading}
                   >
-                    {loading ? 'Processing...' : `Pay $${finalTotal.toFixed(2)}`}
+                    {loading ? 'Processing...' : `Step 3: Pay $${finalTotal.toFixed(2)}`}
                   </Button>
                 </div>
               </form>
@@ -468,13 +479,16 @@ export default function Checkout() {
                 </div>
                 <h2 className="text-xl font-semibold text-gray-900 mb-2">Order Confirmed!</h2>
                 <p className="text-gray-600 mb-4">
-                  Your payment was successful. We're processing your order.
+                  Your payment was successful. We are processing your order now.
                 </p>
                 {orderNumbers.length > 0 ? (
                   <p className="text-sm text-gray-700 mb-3">
                     Order No: <span className="font-semibold">{orderNumbers.join(', ')}</span>
                   </p>
                 ) : null}
+                <p className="text-xs text-gray-500 mb-3">
+                  A confirmation email is sent when email delivery is enabled on the server.
+                </p>
                 <div className="animate-pulse">
                   <p className="text-sm text-gray-500">Redirecting to your orders...</p>
                 </div>

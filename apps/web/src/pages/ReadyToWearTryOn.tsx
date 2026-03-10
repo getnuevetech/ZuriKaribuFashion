@@ -92,11 +92,16 @@ export default function ReadyToWearTryOn() {
 
   const handleGeneratePreview = async () => {
     setPreviewGenerated(false);
+    setMessage('');
     await new Promise((resolve) => setTimeout(resolve, 1000));
     setPreviewGenerated(true);
   };
 
   const handleAddToCart = async () => {
+    if (!previewGenerated) {
+      setMessage('Please generate a preview before adding to cart.');
+      return;
+    }
     if (!selectedSize) {
       setMessage('Please select a size before adding to cart.');
       return;
@@ -118,12 +123,18 @@ export default function ReadyToWearTryOn() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 py-8 pb-24 md:pb-8">
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
         <button onClick={() => navigate(-1)} className="inline-flex items-center text-gray-500 hover:text-coral-500 mb-6">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </button>
+
+        <div className="mb-6 flex flex-wrap gap-2 text-xs">
+          <span className="rounded-full border border-gray-300 bg-white px-3 py-1">Step 1: Set measurements</span>
+          <span className="rounded-full border border-gray-300 bg-white px-3 py-1">Step 2: Generate preview</span>
+          <span className="rounded-full border border-gray-300 bg-white px-3 py-1">Step 3: Add to bag</span>
+        </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="bg-white rounded-xl border p-6">
@@ -144,12 +155,13 @@ export default function ReadyToWearTryOn() {
                     min={key === 'height' ? 145 : 60}
                     max={key === 'height' ? 210 : 140}
                     value={value}
-                    onChange={(event) =>
+                    onChange={(event) => {
                       setMeasurements((previous) => ({
                         ...previous,
                         [key]: Number(event.target.value),
-                      }))
-                    }
+                      }));
+                      setPreviewGenerated(false);
+                    }}
                     className="w-full"
                   />
                   <p className="text-xs text-gray-500 mt-1">{value} cm</p>
@@ -162,7 +174,10 @@ export default function ReadyToWearTryOn() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Size</label>
                 <select
                   value={selectedSize}
-                  onChange={(event) => setSelectedSize(event.target.value)}
+                  onChange={(event) => {
+                    setSelectedSize(event.target.value);
+                    setPreviewGenerated(false);
+                  }}
                   className="w-full border rounded-lg px-3 py-2"
                 >
                   <option value="">Select size</option>
@@ -179,7 +194,10 @@ export default function ReadyToWearTryOn() {
                   type="number"
                   min={1}
                   value={quantity}
-                  onChange={(event) => setQuantity(Math.max(1, Number(event.target.value || 1)))}
+                  onChange={(event) => {
+                    setQuantity(Math.max(1, Number(event.target.value || 1)));
+                    setPreviewGenerated(false);
+                  }}
                   className="w-full border rounded-lg px-3 py-2"
                 />
               </div>
@@ -187,13 +205,14 @@ export default function ReadyToWearTryOn() {
 
             <div className="mt-6 flex flex-wrap gap-3">
               <Button variant="outline" onClick={handleGeneratePreview}>
-                Generate Preview
+                Step 2: Generate Preview
               </Button>
-              <Button onClick={handleAddToCart} disabled={adding}>
+              <Button onClick={handleAddToCart} disabled={adding || !previewGenerated}>
                 <ShoppingBag className="w-4 h-4 mr-2" />
-                {adding ? 'Adding...' : 'Add to Cart'}
+                {adding ? 'Adding...' : 'Step 3: Add to Bag'}
               </Button>
             </div>
+            <p className="mt-3 text-xs text-gray-500">For best fit, regenerate preview after changing size, quantity, or measurements.</p>
             {message ? <p className="mt-3 text-sm text-emerald-700">{message}</p> : null}
           </div>
 
@@ -219,6 +238,20 @@ export default function ReadyToWearTryOn() {
               Go to Cart
             </Button>
           </div>
+        </div>
+      </div>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 p-3 shadow-lg backdrop-blur md:hidden">
+        <div className="mx-auto flex max-w-7xl items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-xs text-gray-500">Estimated total</p>
+            <p className="text-lg font-bold text-coral-600">${(unitPrice * quantity).toFixed(2)}</p>
+          </div>
+          <Button variant="outline" className="flex-1 text-xs" onClick={handleGeneratePreview}>
+            Preview
+          </Button>
+          <Button className="flex-1 text-xs" onClick={handleAddToCart} disabled={adding || !previewGenerated}>
+            Add to Bag
+          </Button>
         </div>
       </div>
     </div>

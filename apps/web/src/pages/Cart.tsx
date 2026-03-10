@@ -38,17 +38,20 @@ export default function Cart() {
             <ShoppingBag className="w-12 h-12 text-gray-400" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Your Cart is Empty</h2>
-          <p className="text-gray-600 mb-6">Discover beautiful African designs and add them to your cart.</p>
-          <Button onClick={() => navigate('/ready-to-wear')}>
-            Browse Products
-          </Button>
+          <p className="text-gray-600 mb-6">Your shopping bag is empty. Start with Ready-to-Wear or Custom-to-Wear.</p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Button onClick={() => navigate('/ready-to-wear')}>Shop Ready To Wear</Button>
+            <Button variant="outline" onClick={() => navigate('/designs')}>
+              Shop Custom To Wear
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pb-24 md:pb-8">
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -64,6 +67,7 @@ export default function Cart() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Shopping Cart</h1>
+        <p className="text-sm text-gray-500 mb-6">Step 1 of 3: Review your items and continue to checkout.</p>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Cart Items */}
@@ -295,7 +299,7 @@ export default function Cart() {
                 className="w-full mt-6"
                 onClick={() => navigate('/checkout')}
               >
-                Proceed to Checkout
+                Step 2: Continue to Checkout
               </Button>
 
               <p className="text-xs text-gray-500 text-center mt-3">
@@ -330,6 +334,17 @@ export default function Cart() {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 p-3 shadow-lg backdrop-blur md:hidden">
+        <div className="mx-auto flex max-w-7xl items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-xs text-gray-500">Total</p>
+            <p className="text-lg font-bold text-amber-700">${finalTotal.toFixed(2)}</p>
+          </div>
+          <Button className="flex-1 text-xs" onClick={() => navigate('/checkout')}>
+            Continue to Checkout
+          </Button>
         </div>
       </div>
     </div>

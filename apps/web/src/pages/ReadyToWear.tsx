@@ -77,6 +77,17 @@ export default function ReadyToWear() {
     () => resolveCategoryIdFromQuery(filters.category, categories),
     [filters.category, categories]
   );
+  const selectedCategoryLabel = useMemo(() => {
+    if (!filters.category) return 'All Categories';
+    const normalized = filters.category.toLowerCase();
+    const matched = categories.find(
+      (category) =>
+        category.id.toLowerCase() === normalized ||
+        (category.slug || '').toLowerCase() === normalized ||
+        category.name.toLowerCase() === normalized
+    );
+    return matched?.name || filters.category;
+  }, [categories, filters.category]);
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -149,6 +160,11 @@ export default function ReadyToWear() {
               <p className="text-lg text-white text-opacity-80">
                 Browse by category, pick your size, and check out quickly.
               </p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-white/20 px-3 py-1 text-white">1. Choose product</span>
+                <span className="rounded-full bg-white/20 px-3 py-1 text-white">2. Optional try-on</span>
+                <span className="rounded-full bg-white/20 px-3 py-1 text-white">3. Add to cart & checkout</span>
+              </div>
             </div>
           </div>
         </div>
@@ -202,6 +218,26 @@ export default function ReadyToWear() {
       </div>
 
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 py-8">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm">
+          <p className="text-gray-600">
+            Showing <span className="font-semibold text-gray-900">{products.length}</span> product
+            {products.length === 1 ? '' : 's'} in{' '}
+            <span className="font-medium">{selectedCategoryLabel}</span>
+          </p>
+          {(filters.search || filters.category) ? (
+            <button
+              type="button"
+              onClick={() => {
+                const next = { search: '', category: '', page: 1 };
+                setFilters(next);
+                updateUrl(next);
+              }}
+              className="text-coral-600 hover:underline"
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </div>
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-10 h-10 animate-spin text-coral-500" />
@@ -212,7 +248,18 @@ export default function ReadyToWear() {
           </div>
         ) : products.length === 0 ? (
           <div className="text-center py-16 bg-white border rounded-xl">
-            <p className="text-gray-600">No ready-to-wear products found for this category/filter.</p>
+            <p className="text-gray-600 mb-4">No ready-to-wear products found for this category/filter.</p>
+            <button
+              type="button"
+              onClick={() => {
+                const next = { search: '', category: '', page: 1 };
+                setFilters(next);
+                updateUrl(next);
+              }}
+              className="inline-flex rounded-full border border-black px-5 py-2 text-sm font-medium hover:bg-black hover:text-white"
+            >
+              Reset and browse all
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">

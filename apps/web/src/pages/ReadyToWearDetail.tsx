@@ -146,13 +146,19 @@ export default function ReadyToWearDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 py-8 pb-28 md:pb-8">
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
         {/* Breadcrumb */}
         <Link to="/ready-to-wear" className="inline-flex items-center text-gray-500 hover:text-coral-500 mb-6">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Ready to Wear
         </Link>
+
+        <div className="mb-6 flex flex-wrap gap-2 text-xs">
+          <span className="rounded-full border border-gray-300 bg-white px-3 py-1">Step 1: Choose size & color</span>
+          <span className="rounded-full border border-gray-300 bg-white px-3 py-1">Step 2: Optional virtual try-on</span>
+          <span className="rounded-full border border-gray-300 bg-white px-3 py-1">Step 3: Add to cart</span>
+        </div>
 
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Images */}
@@ -300,13 +306,13 @@ export default function ReadyToWearDetail() {
             <div className="flex flex-col gap-3">
               <Link to={`/ready-to-wear/${product.id}/try-on`} className="w-full">
                 <Button variant="outline" className="w-full py-3">
-                  Virtual Try-On
+                  Try On This Look
                 </Button>
               </Link>
               <div className="flex gap-4">
                 <Button className="flex-1 py-4" onClick={handleAddToCart}>
-                <ShoppingCart className="w-5 h-5 mr-2" />
-                Add to Cart
+                  <ShoppingCart className="w-5 h-5 mr-2" />
+                  Add to Bag
                 </Button>
                 <Button
                   variant="outline"
@@ -317,7 +323,12 @@ export default function ReadyToWearDetail() {
                 </Button>
               </div>
               {addToCartMessage ? (
-                <p className="text-sm text-emerald-700">{addToCartMessage}</p>
+                <div className="space-y-2">
+                  <p className="text-sm text-emerald-700">{addToCartMessage}</p>
+                  <Link to="/cart" className="inline-flex text-sm font-medium text-coral-600 hover:underline">
+                    Go to Cart & Checkout
+                  </Link>
+                </div>
               ) : null}
             </div>
 
@@ -360,6 +371,22 @@ export default function ReadyToWearDetail() {
               )}
             </div>
           </div>
+        </div>
+      </div>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 p-3 shadow-lg backdrop-blur md:hidden">
+        <div className="mx-auto flex max-w-7xl items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-xs text-gray-500">Total</p>
+            <p className="text-lg font-bold text-coral-600">${(selectedUnitPrice * quantity).toFixed(2)}</p>
+          </div>
+          <Link to={`/ready-to-wear/${product.id}/try-on`} className="flex-1">
+            <Button variant="outline" className="w-full text-xs">
+              Try On
+            </Button>
+          </Link>
+          <Button className="flex-1 text-xs" onClick={handleAddToCart}>
+            Add to Bag
+          </Button>
         </div>
       </div>
     </div>
