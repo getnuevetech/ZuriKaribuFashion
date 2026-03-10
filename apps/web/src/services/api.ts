@@ -251,6 +251,24 @@ const topStripReadPathsPublic = [
   '/homepage-sections/top-strip',
   '/homepage/top-strip',
 ];
+const homepageVisibilityReadPathsPublic = [
+  '/homepage-sections/visibility',
+  '/homepage/visibility',
+];
+const homepageVisibilityReadPathsAdmin = [
+  '/homepage-sections/admin/visibility',
+  '/homepage/admin/visibility',
+  '/admin/visibility',
+  '/admin/homepage/visibility',
+  '/admin/homepage-sections/visibility',
+];
+const homepageVisibilityWritePathsAdmin = [
+  '/homepage-sections/admin/visibility',
+  '/homepage/admin/visibility',
+  '/admin/visibility',
+  '/admin/homepage/visibility',
+  '/admin/homepage-sections/visibility',
+];
 const statsStripReadPathsAdmin = [
   '/homepage-sections/admin/stats-strip',
   '/homepage/admin/stats-strip',
@@ -288,6 +306,53 @@ const topStripWritePaths = [
   '/admin/homepage/top-strip',
   '/admin/homepage-sections/top-strip',
 ];
+
+async function readHomepageVisibilityPublicWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of homepageVisibilityReadPathsPublic) {
+    try {
+      return await apiService.get<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Homepage visibility route not found.');
+}
+
+async function readHomepageVisibilityAdminWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of homepageVisibilityReadPathsAdmin) {
+    try {
+      return await apiService.get<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Admin homepage visibility route not found.');
+}
+
+async function writeHomepageVisibilityAdminWithFallback<T>(visibility: Record<string, boolean>) {
+  let lastError: unknown = null;
+  for (const path of homepageVisibilityWritePathsAdmin) {
+    try {
+      return await apiService.put<T>(path, { visibility });
+    } catch (putError) {
+      lastError = putError;
+      if (!isRetryableRouteError(putError)) throw putError;
+    }
+    try {
+      return await apiService.patch<T>(path, { visibility });
+    } catch (patchError) {
+      lastError = patchError;
+      if (!isRetryableRouteError(patchError)) throw patchError;
+    }
+  }
+  throw lastError ?? new Error('Admin homepage visibility route not found.');
+}
 
 async function readTopStripWithFallback<T>(mode: 'admin' | 'public') {
   let lastError: unknown = null;
@@ -1806,10 +1871,10 @@ const homepageApi = {
 const homepageSectionsApi = {
   // Public endpoints
   getVisibility: () =>
-    apiService.get<{
+    readHomepageVisibilityPublicWithFallback<{
       success: boolean;
       data: Record<string, boolean>;
-    }>('/homepage-sections/visibility'),
+    }>(),
 
   getTopStrip: () =>
     readTopStripWithFallback<{
@@ -1878,7 +1943,7 @@ const homepageSectionsApi = {
 
   // Admin endpoints - Countries
   getAdminVisibility: () =>
-    apiService.get<{
+    readHomepageVisibilityAdminWithFallback<{
       success: boolean;
       data: {
         source: 'DATABASE' | 'DEFAULT';
@@ -1890,10 +1955,10 @@ const homepageSectionsApi = {
           enabled: boolean;
         }>;
       };
-    }>('/homepage-sections/admin/visibility'),
+    }>(),
 
   updateAdminVisibility: (visibility: Record<string, boolean>) =>
-    apiService.put<{
+    writeHomepageVisibilityAdminWithFallback<{
       success: boolean;
       data: {
         source: 'DATABASE' | 'DEFAULT';
@@ -1905,7 +1970,7 @@ const homepageSectionsApi = {
           enabled: boolean;
         }>;
       };
-    }>('/homepage-sections/admin/visibility', { visibility }),
+    }>(visibility),
 
   getAdminTopStrip: () =>
     readTopStripWithFallback<{

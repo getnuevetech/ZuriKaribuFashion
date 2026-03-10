@@ -16,8 +16,6 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 
-const USE_DYNAMIC_HOMEPAGE = import.meta.env.VITE_HOMEPAGE_MODE === 'dynamic';
-
 type HeroSlide = {
   id: string;
   image: string;
@@ -446,7 +444,7 @@ function ProductCarousel({
   descriptionWordLimit: number;
 }) {
   return (
-    <section className="py-16 lg:py-24 bg-white">
+    <section className="py-8 lg:py-12 bg-white">
       <div className="w-full px-2 sm:px-4 lg:px-8 xl:px-12">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10">
           <div>
@@ -601,7 +599,6 @@ export default function Home() {
 
   const { data: visibilityData } = useQuery({
     queryKey: ['homepageVisibility'],
-    enabled: USE_DYNAMIC_HOMEPAGE,
     queryFn: async () => {
       const response = await api.homepageSections.getVisibility();
       return response.success ? response.data : null;
@@ -609,7 +606,7 @@ export default function Home() {
   });
 
   const sectionVisibility = useMemo<HomepageVisibility>(() => {
-    if (!USE_DYNAMIC_HOMEPAGE || !visibilityData) {
+    if (!visibilityData) {
       return DEFAULT_HOMEPAGE_VISIBILITY;
     }
     return {
@@ -943,7 +940,7 @@ export default function Home() {
 
       {sectionVisibility.statsStrip && activeStatsItems.length > 0 ? (
       <section
-        className="relative overflow-hidden py-10"
+        className="relative overflow-hidden py-5"
         style={{
           backgroundColor: asText(statsStrip.backgroundColor, '#111827'),
           backgroundImage: asText(statsStrip.backgroundImage) ? `url(${asText(statsStrip.backgroundImage)})` : 'none',
@@ -983,7 +980,7 @@ export default function Home() {
       ) : null}
 
       {sectionVisibility.categories ? (
-      <section id="shop" className="py-20 lg:py-32 bg-white">
+      <section id="shop" className="py-10 lg:py-16 bg-white">
         <div className="w-full px-2 sm:px-4 lg:px-8 xl:px-12">
           <div className="text-center mb-16">
             <h2 className="font-['Oswald'] text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">Shop by Category</h2>
@@ -1013,7 +1010,7 @@ export default function Home() {
       ) : null}
 
       {sectionVisibility.howItWorks ? (
-      <section className="py-16 lg:py-24 bg-gray-50">
+      <section className="py-8 lg:py-12 bg-gray-50">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {howItWorks.map((step, index) => (
@@ -1060,7 +1057,7 @@ export default function Home() {
       ) : null}
 
       {managedBannersBySection.get('BANNER_1') ? (
-        <section className="py-12 bg-white">
+        <section className="py-6 bg-white">
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
             <div className="relative overflow-hidden rounded-xl">
               <img
@@ -1097,7 +1094,7 @@ export default function Home() {
       ) : null}
 
       {managedBannersBySection.get('BANNER_2') ? (
-        <section className="py-12 bg-white">
+        <section className="py-6 bg-white">
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
             <div className="relative overflow-hidden rounded-xl">
               <img
@@ -1134,7 +1131,7 @@ export default function Home() {
       ) : null}
 
       {sectionVisibility.promoBanner ? (
-      <section className="py-20 lg:py-32 bg-gray-50">
+      <section className="py-10 lg:py-16 bg-gray-50">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
@@ -1189,7 +1186,7 @@ export default function Home() {
       ) : null}
 
       {sectionVisibility.designerSpotlight ? (
-      <section className="py-20 lg:py-32 bg-white">
+      <section className="py-10 lg:py-16 bg-white">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="text-center mb-16">
             <span className="mb-4 rounded-none border-black text-xs tracking-wider inline-flex border px-2.5 py-0.5 font-medium">
@@ -1249,7 +1246,7 @@ export default function Home() {
       {sectionVisibility.heritage ? (
       <section
         id="about"
-        className="relative py-32 lg:py-48 bg-fixed bg-cover bg-center"
+        className="relative py-16 lg:py-24 bg-fixed bg-cover bg-center"
         style={{ backgroundImage: `url(${heritage.image})` }}
       >
         <div className="absolute inset-0 bg-black/60" />
@@ -1282,7 +1279,7 @@ export default function Home() {
       ) : null}
 
       {sectionVisibility.testimonials ? (
-      <section className="py-20 lg:py-32 bg-white">
+      <section className="py-10 lg:py-16 bg-white">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="text-center mb-16">
             <h2 className="font-['Oswald'] text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">What Our Customers Say</h2>
@@ -1338,7 +1335,7 @@ export default function Home() {
       ) : null}
 
       {sectionVisibility.cta ? (
-      <section className="py-20 lg:py-32 bg-gray-50">
+      <section className="py-10 lg:py-16 bg-gray-50">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="max-w-3xl mx-auto text-center">
             <h2 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl font-bold mb-6">Ready to Wear African Fashion?</h2>
@@ -1359,7 +1356,7 @@ export default function Home() {
       ) : null}
 
       {sectionVisibility.cta ? (
-      <section id="contact" className="py-16 lg:py-24 bg-white border-t border-gray-100">
+      <section id="contact" className="py-8 lg:py-12 bg-white border-t border-gray-100">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="max-w-xl mx-auto text-center">
             <h2 className="font-['Oswald'] text-2xl sm:text-3xl font-bold mb-3">Join the Movement</h2>
