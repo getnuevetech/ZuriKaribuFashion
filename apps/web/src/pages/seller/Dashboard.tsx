@@ -179,15 +179,20 @@ export default function SellerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [dashboardRes, fabricsRes, ordersRes, materialsRes, profileRes] = await Promise.all([
+      const [dashboardResult, fabricsResult, ordersResult, materialsResult, profileResult] = await Promise.allSettled([
         api.seller.getDashboard(),
         api.seller.getFabrics(),
         api.seller.getOrders(),
         api.products.getMaterials(),
         api.seller.getProfileCompletion(),
       ]);
+      const dashboardRes = dashboardResult.status === 'fulfilled' ? dashboardResult.value : null;
+      const fabricsRes = fabricsResult.status === 'fulfilled' ? fabricsResult.value : null;
+      const ordersRes = ordersResult.status === 'fulfilled' ? ordersResult.value : null;
+      const materialsRes = materialsResult.status === 'fulfilled' ? materialsResult.value : null;
+      const profileRes = profileResult.status === 'fulfilled' ? profileResult.value : null;
 
-      if (dashboardRes.success) {
+      if (dashboardRes?.success) {
         const baseStats = dashboardRes.data?.stats || {};
         setStats({
           totalFabrics: Number(baseStats.totalFabrics || 0),
@@ -201,7 +206,7 @@ export default function SellerDashboard() {
           revenueChange: 0,
         });
       }
-      if (fabricsRes.success) {
+      if (fabricsRes?.success) {
         const mappedFabrics = (fabricsRes.data || []).map((item: any) => ({
           id: String(item.id),
           name: item.name || 'Fabric',
@@ -221,13 +226,13 @@ export default function SellerDashboard() {
         }));
         setFabrics(mappedFabrics);
       }
-      if (materialsRes.success) {
+      if (materialsRes?.success) {
         const options = Array.isArray(materialsRes.data)
           ? materialsRes.data.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Material') }))
           : [];
         setMaterialOptions(options);
       }
-      if (ordersRes.success) {
+      if (ordersRes?.success) {
         const toAddressObject = (value: any) => {
           if (!value) return null;
           if (typeof value === 'object') return value;
@@ -257,8 +262,16 @@ export default function SellerDashboard() {
         });
         setOrders(mappedOrders);
       }
-      if (profileRes.success) {
-        const completion = profileRes.data as SellerProfileCompletion;
+      const completionPayload =
+        profileRes?.success
+          ? profileRes.data
+          : dashboardRes?.success
+            ? dashboardRes.data?.profileCompletion
+            : null;
+
+      if (completionPayload) {
+        const completion = completionPayload as SellerProfileCompletion;
+        setProfileMessage(null);
         setProfileCompletion(completion);
         const nextProfileForm: Record<string, string> = {};
         const dynamicData = completion?.profileData && typeof completion.profileData === 'object'
@@ -273,6 +286,8 @@ export default function SellerDashboard() {
               : String(rawValue);
         }
         setProfileForm(nextProfileForm);
+      } else {
+        setProfileMessage('Unable to load vendor application fields right now. Please refresh the page.');
       }
       
       // Mock activities
@@ -591,7 +606,7 @@ export default function SellerDashboard() {
             </div>
           ) : (
             <p className="text-sm text-amber-900">
-              No vendor application fields are configured yet. Ask admin to set them in Vendor Profile Governance.
+              Vendor application fields are unavailable right now. Please refresh, or ask admin to re-save Vendor Profile Governance fields.
             </p>
           )}
 

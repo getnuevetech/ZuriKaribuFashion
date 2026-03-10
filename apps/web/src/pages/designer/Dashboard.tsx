@@ -202,7 +202,7 @@ export default function DesignerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsRes, designsRes, readyRes, ordersRes, categoriesRes, fabricsRes, profileRes] = await Promise.all([
+      const [statsResult, designsResult, readyResult, ordersResult, categoriesResult, fabricsResult, profileResult] = await Promise.allSettled([
         api.designer.getDashboard(),
         api.designer.getDesigns(),
         api.designer.getReadyToWear(),
@@ -211,6 +211,13 @@ export default function DesignerDashboard() {
         api.products.getFabrics({ limit: 200 }),
         api.designer.getProfileCompletion(),
       ]);
+      const statsRes = statsResult.status === 'fulfilled' ? statsResult.value : null;
+      const designsRes = designsResult.status === 'fulfilled' ? designsResult.value : null;
+      const readyRes = readyResult.status === 'fulfilled' ? readyResult.value : null;
+      const ordersRes = ordersResult.status === 'fulfilled' ? ordersResult.value : null;
+      const categoriesRes = categoriesResult.status === 'fulfilled' ? categoriesResult.value : null;
+      const fabricsRes = fabricsResult.status === 'fulfilled' ? fabricsResult.value : null;
+      const profileRes = profileResult.status === 'fulfilled' ? profileResult.value : null;
 
       const toAddressObject = (value: any) => {
         if (!value) return null;
@@ -225,7 +232,7 @@ export default function DesignerDashboard() {
         return null;
       };
 
-      const mappedOrders: DesignOrder[] = ordersRes.success
+      const mappedOrders: DesignOrder[] = ordersRes?.success
         ? (ordersRes.data || []).map((item: any) => {
             const shippingAddress = toAddressObject(item.order?.shippingAddress);
             const createdAt = item.order?.createdAt || item.createdAt;
@@ -247,7 +254,7 @@ export default function DesignerDashboard() {
           })
         : [];
 
-      if (statsRes.success) {
+      if (statsRes?.success) {
         const baseStats = statsRes.data?.stats || {};
         setStats({
           totalDesigns: Number(baseStats.totalDesigns || 0),
@@ -263,7 +270,7 @@ export default function DesignerDashboard() {
           orderChange: 0,
         });
       }
-      if (designsRes.success) {
+      if (designsRes?.success) {
         const mappedDesigns = (designsRes.data || []).map((design: any) => ({
           id: String(design.id),
           name: design.name || 'Design',
@@ -295,7 +302,7 @@ export default function DesignerDashboard() {
         }));
         setDesigns(mappedDesigns);
       }
-      if (readyRes.success) {
+      if (readyRes?.success) {
         const mappedReady = (readyRes.data || []).map((item: any) => ({
           id: String(item.id),
           name: item.name || 'Ready To Wear',
@@ -310,20 +317,27 @@ export default function DesignerDashboard() {
         }));
         setReadyProducts(mappedReady);
       }
-      if (ordersRes.success) setOrders(mappedOrders);
-      if (categoriesRes.success) {
+      if (ordersRes?.success) setOrders(mappedOrders);
+      if (categoriesRes?.success) {
         setCategories(
           Array.isArray(categoriesRes.data)
             ? categoriesRes.data.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Category') }))
             : []
         );
       }
-      if (fabricsRes.success) {
+      if (fabricsRes?.success) {
         const rows = Array.isArray(fabricsRes.data?.fabrics) ? fabricsRes.data.fabrics : [];
         setFabricOptions(rows.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Fabric') })));
       }
-      if (profileRes.success) {
-        const completion = profileRes.data as DesignerProfileCompletion;
+      const completionPayload =
+        profileRes?.success
+          ? profileRes.data
+          : statsRes?.success
+            ? statsRes.data?.profileCompletion
+            : null;
+      if (completionPayload) {
+        const completion = completionPayload as DesignerProfileCompletion;
+        setProfileMessage(null);
         setProfileCompletion(completion);
         const nextProfileForm: Record<string, string> = {};
         const dynamicData = completion?.profileData && typeof completion.profileData === 'object'
@@ -338,6 +352,8 @@ export default function DesignerDashboard() {
               : String(rawValue);
         }
         setProfileForm(nextProfileForm);
+      } else {
+        setProfileMessage('Unable to load vendor application fields right now. Please refresh the page.');
       }
       
       // Mock activities
@@ -706,7 +722,7 @@ export default function DesignerDashboard() {
             </div>
           ) : (
             <p className="text-sm text-amber-900">
-              No vendor application fields are configured yet. Ask admin to set them in Vendor Profile Governance.
+              Vendor application fields are unavailable right now. Please refresh, or ask admin to re-save Vendor Profile Governance fields.
             </p>
           )}
 
