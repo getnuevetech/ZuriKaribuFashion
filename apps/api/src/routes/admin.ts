@@ -705,7 +705,9 @@ const adminProductCreateSchema = z.object({
   materialTypeId: z.string().optional(),
   sellerId: z.string().optional(),
   designerId: z.string().optional(),
-  price: z.coerce.number().positive(),
+  price: z.coerce.number().positive().optional(),
+  basePrice: z.coerce.number().positive().optional(),
+  sellerPrice: z.coerce.number().positive().optional(),
   minYards: z.coerce.number().int().min(1).optional(),
   stockYards: z.coerce.number().int().min(0).optional(),
   stock: z.coerce.number().int().min(0).optional(),
@@ -722,6 +724,8 @@ const adminProductUpdateSchema = z.object({
   categoryId: z.string().optional(),
   materialTypeId: z.string().optional(),
   price: z.coerce.number().positive().optional(),
+  basePrice: z.coerce.number().positive().optional(),
+  sellerPrice: z.coerce.number().positive().optional(),
   minYards: z.coerce.number().int().min(1).optional(),
   stockYards: z.coerce.number().int().min(0).optional(),
   stock: z.coerce.number().int().min(0).optional(),
@@ -2830,6 +2834,13 @@ router.get('/products', async (req, res, next) => {
 router.post('/products', async (req, res, next) => {
   try {
     const payload = adminProductCreateSchema.parse(req.body);
+    const resolvedPrice = Number(payload.price ?? payload.basePrice ?? payload.sellerPrice);
+    if (!Number.isFinite(resolvedPrice) || resolvedPrice <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'price/basePrice is required and must be greater than 0.',
+      });
+    }
     const normalizedImages = Array.from(
       new Set(
         [
@@ -2857,8 +2868,8 @@ router.post('/products', async (req, res, next) => {
           materialTypeId: payload.materialTypeId,
           name: payload.name.trim(),
           description: payload.description.trim(),
-          sellerPrice: payload.price,
-          finalPrice: payload.price,
+          sellerPrice: resolvedPrice,
+          finalPrice: resolvedPrice,
           minYards: payload.minYards ?? 1,
           stockYards: payload.stockYards ?? 0,
           status: payload.status ?? ProductStatus.DRAFT,
@@ -2884,8 +2895,8 @@ router.post('/products', async (req, res, next) => {
           materialTypeId: payload.materialTypeId || null,
           name: payload.name.trim(),
           description: payload.description.trim(),
-          basePrice: payload.price,
-          finalPrice: payload.price,
+          basePrice: resolvedPrice,
+          finalPrice: resolvedPrice,
           status: payload.status ?? ProductStatus.DRAFT,
           isAvailable: payload.isAvailable ?? true,
           images: normalizedImages.length > 0
@@ -2907,7 +2918,7 @@ router.post('/products', async (req, res, next) => {
         categoryId: payload.categoryId,
         name: payload.name.trim(),
         description: payload.description.trim(),
-        basePrice: payload.price,
+        basePrice: resolvedPrice,
         status: payload.status ?? ProductStatus.DRAFT,
         isAvailable: payload.isAvailable ?? true,
         images: normalizedImages.length > 0
@@ -2919,7 +2930,7 @@ router.post('/products', async (req, res, next) => {
           create: [
             {
               size: payload.size || 'M',
-              price: payload.price,
+              price: resolvedPrice,
               stock: payload.stock ?? 0,
             },
           ],
@@ -2936,6 +2947,7 @@ router.patch('/products/:type/:id', async (req, res, next) => {
   try {
     const type = adminProductTypeSchema.parse(String(req.params.type || '').toUpperCase());
     const payload = adminProductUpdateSchema.parse(req.body);
+    const resolvedPrice = payload.price ?? payload.basePrice ?? payload.sellerPrice;
     const hasImagesPayload =
       Array.isArray(payload.images) || (typeof payload.image === 'string' && String(payload.image).trim().length > 0);
     const normalizedImages = Array.from(
@@ -2964,8 +2976,8 @@ router.patch('/products/:type/:id', async (req, res, next) => {
           name: payload.name?.trim(),
           description: payload.description?.trim(),
           materialTypeId: payload.materialTypeId,
-          sellerPrice: payload.price,
-          finalPrice: payload.price,
+          sellerPrice: resolvedPrice,
+          finalPrice: resolvedPrice,
           minYards: payload.minYards,
           stockYards: payload.stockYards,
           status: payload.status,
@@ -2995,8 +3007,8 @@ router.patch('/products/:type/:id', async (req, res, next) => {
           description: payload.description?.trim(),
           categoryId: payload.categoryId,
           materialTypeId: payload.materialTypeId || null,
-          basePrice: payload.price,
-          finalPrice: payload.price,
+          basePrice: resolvedPrice,
+          finalPrice: resolvedPrice,
           status: payload.status,
           isAvailable: payload.isAvailable,
         },
@@ -3022,7 +3034,7 @@ router.patch('/products/:type/:id', async (req, res, next) => {
         name: payload.name?.trim(),
         description: payload.description?.trim(),
         categoryId: payload.categoryId,
-        basePrice: payload.price,
+        basePrice: resolvedPrice,
         status: payload.status,
         isAvailable: payload.isAvailable,
       },
@@ -3039,7 +3051,7 @@ router.patch('/products/:type/:id', async (req, res, next) => {
         });
       }
     }
-    if (payload.price !== undefined || payload.stock !== undefined) {
+    if (resolvedPrice !== undefined || payload.stock !== undefined) {
       const existingSize = await prisma.readyToWearSize.findFirst({
         where: { readyToWearId: updated.id },
         orderBy: { size: 'asc' },
@@ -3048,7 +3060,7 @@ router.patch('/products/:type/:id', async (req, res, next) => {
         await prisma.readyToWearSize.update({
           where: { id: existingSize.id },
           data: {
-            price: payload.price ?? undefined,
+            price: resolvedPrice ?? undefined,
             stock: payload.stock ?? undefined,
           },
         });

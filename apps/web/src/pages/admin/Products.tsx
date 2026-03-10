@@ -463,6 +463,7 @@ export default function AdminProducts() {
       setError('');
       setModalError('');
       const currentType = (editing?.type || form.type) as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+      const resolvedPrice = Number(form.price);
       if (!String(form.name || '').trim()) {
         setModalError('Product name is required.');
         setSaving(false);
@@ -473,7 +474,7 @@ export default function AdminProducts() {
         setSaving(false);
         return;
       }
-      if (!Number.isFinite(Number(form.price)) || Number(form.price) <= 0) {
+      if (!Number.isFinite(resolvedPrice) || resolvedPrice <= 0) {
         setModalError('Base price must be greater than 0.');
         setSaving(false);
         return;
@@ -518,7 +519,9 @@ export default function AdminProducts() {
         await api.admin.updateProduct(editing.type, editing.id, {
           name: form.name,
           description: form.description,
-          price: form.price,
+          price: resolvedPrice,
+          basePrice: resolvedPrice,
+          sellerPrice: resolvedPrice,
           ownerUserId: selectedOwnerUserId || undefined,
           status: resolvedStatus,
           isAvailable: resolvedIsAvailable,
@@ -534,7 +537,9 @@ export default function AdminProducts() {
           type: form.type,
           name: form.name,
           description: form.description,
-          price: form.price,
+          price: resolvedPrice,
+          basePrice: resolvedPrice,
+          sellerPrice: resolvedPrice,
           ownerUserId: selectedOwnerUserId || undefined,
           sellerId: form.type === 'FABRIC' ? form.sellerId : undefined,
           designerId: form.type !== 'FABRIC' ? form.designerId : undefined,
