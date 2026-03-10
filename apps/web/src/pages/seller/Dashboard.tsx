@@ -602,10 +602,6 @@ export default function SellerDashboard() {
   };
 
   const openCreateProductModal = () => {
-    if (!profileCompletion?.canUpload) {
-      setProductError('Complete and submit your full vendor profile for admin approval before uploading products.');
-      return;
-    }
     resetProductForm();
     setShowProductModal(true);
   };
@@ -808,18 +804,18 @@ export default function SellerDashboard() {
             </a>
           ) : null}
         </div>
-        <Button onClick={openCreateProductModal} disabled={!profileCompletion?.canUpload}>
+        <Button onClick={openCreateProductModal}>
           <Plus className="w-4 h-4 mr-2" />
           Add Fabric Product
         </Button>
       </div>
 
-      {!profileCompletion?.canUpload ? (
+      {profileCompletion ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-4">
           <div>
-            <h2 className="text-lg font-semibold text-amber-900">Complete vendor profile before uploading</h2>
+            <h2 className="text-lg font-semibold text-amber-900">Vendor governance profile</h2>
             <p className="text-sm text-amber-800 mt-1">
-              Status: <span className="font-semibold">{profileCompletion?.profileStatus || 'INCOMPLETE'}</span>. Upload actions stay locked until admin approval.
+              Status: <span className="font-semibold">{profileCompletion?.profileStatus || 'INCOMPLETE'}</span>. Upload restriction is temporarily disabled while governance fields are validated.
             </p>
             {profileCompletion?.profileReviewNotes ? (
               <p className="text-sm text-amber-900 mt-1">Admin note: {profileCompletion.profileReviewNotes}</p>
@@ -1109,7 +1105,7 @@ export default function SellerDashboard() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">My Fabrics</h2>
-            <Button size="sm" onClick={openCreateProductModal} disabled={!profileCompletion?.canUpload}>
+            <Button size="sm" onClick={openCreateProductModal}>
               <Plus className="w-4 h-4 mr-2" />
               Add Product
             </Button>
@@ -1216,8 +1212,7 @@ export default function SellerDashboard() {
                           <div className="flex flex-wrap gap-2">
                             <button
                               onClick={() => openEditProductModal(item)}
-                              disabled={!profileCompletion?.canUpload}
-                              className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
                               title="Edit product"
                             >
                               <Edit className="h-4 w-4" />

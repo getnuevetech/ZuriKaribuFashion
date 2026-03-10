@@ -326,29 +326,6 @@ async function getSellerProfileCompletion(userId: string) {
   };
 }
 
-async function ensureSellerCanUpload(userId: string) {
-  const completion = await getSellerProfileCompletion(userId);
-  if (!completion) {
-    return {
-      allowed: false,
-      statusCode: 404,
-      message: 'Seller profile not found.',
-    };
-  }
-  if (completion.canUpload) {
-    return { allowed: true, completion };
-  }
-  return {
-    allowed: false,
-    statusCode: 403,
-    message:
-      completion.profileStatus === 'REJECTED'
-        ? 'Your vendor profile was rejected. Please update your profile and resubmit for approval.'
-        : 'Complete and submit your full vendor profile for admin approval before uploading products.',
-    completion,
-  };
-}
-
 async function computeFinalFabricPrice(baseSellerPrice: number, sellerCountry: string) {
   const markupRule = await prisma.pricingRule.findFirst({
     where: {
@@ -722,15 +699,6 @@ router.post('/fabrics', async (req, res, next) => {
     });
 
     const data = schema.parse(req.body);
-
-    const uploadAccess = await ensureSellerCanUpload(req.user!.id);
-    if (!uploadAccess.allowed) {
-      return res.status(Number(uploadAccess.statusCode || 403)).json({
-        success: false,
-        message: uploadAccess.message,
-        data: uploadAccess.completion || null,
-      });
-    }
     const profile = await resolveSellerProfile(req.user!.id);
     if (!profile) {
       return res.status(404).json({ success: false, message: 'Seller profile not found.' });
@@ -818,15 +786,6 @@ router.patch('/fabrics/:id', async (req, res, next) => {
         .optional(),
     });
     const data = schema.parse(req.body);
-
-    const uploadAccess = await ensureSellerCanUpload(req.user!.id);
-    if (!uploadAccess.allowed) {
-      return res.status(Number(uploadAccess.statusCode || 403)).json({
-        success: false,
-        message: uploadAccess.message,
-        data: uploadAccess.completion || null,
-      });
-    }
 
     const profile = await resolveSellerProfile(req.user!.id);
     if (!profile) {

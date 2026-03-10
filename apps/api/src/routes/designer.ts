@@ -330,25 +330,6 @@ async function getDesignerProfileCompletion(userId: string) {
   };
 }
 
-async function ensureDesignerCanUpload(userId: string) {
-  const completion = await getDesignerProfileCompletion(userId);
-  if (!completion) {
-    return { allowed: false, statusCode: 404, message: 'Designer profile not found.' };
-  }
-  if (completion.canUpload) {
-    return { allowed: true, completion };
-  }
-  return {
-    allowed: false,
-    statusCode: 403,
-    message:
-      completion.profileStatus === 'REJECTED'
-        ? 'Your vendor profile was rejected. Please update your profile and resubmit for approval.'
-        : 'Complete and submit your full vendor profile for admin approval before uploading products.',
-    completion,
-  };
-}
-
 async function computeFinalDesignPrice(basePrice: number, designerCountry: string) {
   let finalPrice = basePrice;
   const markupRule = await prisma.pricingRule.findFirst({
@@ -695,15 +676,6 @@ router.post('/designs', async (req, res, next) => {
     });
 
     const data = schema.parse(req.body);
-
-    const uploadAccess = await ensureDesignerCanUpload(req.user!.id);
-    if (!uploadAccess.allowed) {
-      return res.status(Number(uploadAccess.statusCode || 403)).json({
-        success: false,
-        message: uploadAccess.message,
-        data: uploadAccess.completion || null,
-      });
-    }
     const profile = await resolveDesignerProfile(req.user!.id);
     if (!profile) {
       return res.status(404).json({ success: false, message: 'Designer profile not found.' });
@@ -812,15 +784,6 @@ router.patch('/designs/:id', async (req, res, next) => {
         .optional(),
     });
     const data = schema.parse(req.body);
-
-    const uploadAccess = await ensureDesignerCanUpload(req.user!.id);
-    if (!uploadAccess.allowed) {
-      return res.status(Number(uploadAccess.statusCode || 403)).json({
-        success: false,
-        message: uploadAccess.message,
-        data: uploadAccess.completion || null,
-      });
-    }
 
     const profile = await resolveDesignerProfile(req.user!.id);
     if (!profile) {
@@ -1016,15 +979,6 @@ router.post('/ready-to-wear', async (req, res, next) => {
     });
 
     const data = schema.parse(req.body);
-
-    const uploadAccess = await ensureDesignerCanUpload(req.user!.id);
-    if (!uploadAccess.allowed) {
-      return res.status(Number(uploadAccess.statusCode || 403)).json({
-        success: false,
-        message: uploadAccess.message,
-        data: uploadAccess.completion || null,
-      });
-    }
     const profile = await resolveDesignerProfile(req.user!.id);
     if (!profile) {
       return res.status(404).json({ success: false, message: 'Designer profile not found.' });
@@ -1115,15 +1069,6 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         .optional(),
     });
     const data = schema.parse(req.body);
-
-    const uploadAccess = await ensureDesignerCanUpload(req.user!.id);
-    if (!uploadAccess.allowed) {
-      return res.status(Number(uploadAccess.statusCode || 403)).json({
-        success: false,
-        message: uploadAccess.message,
-        data: uploadAccess.completion || null,
-      });
-    }
 
     const profile = await resolveDesignerProfile(req.user!.id);
     if (!profile) {

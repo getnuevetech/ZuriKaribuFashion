@@ -670,10 +670,6 @@ export default function DesignerDashboard() {
   };
 
   const openCreateDesignModal = () => {
-    if (!profileCompletion?.canUpload) {
-      setDesignError('Complete and submit your full vendor profile for admin approval before uploading products.');
-      return;
-    }
     resetDesignForm();
     setShowDesignModal(true);
   };
@@ -931,18 +927,18 @@ export default function DesignerDashboard() {
             </a>
           ) : null}
         </div>
-        <Button onClick={openCreateDesignModal} disabled={!profileCompletion?.canUpload}>
+        <Button onClick={openCreateDesignModal}>
           <Plus className="w-4 h-4 mr-2" />
           Add Design Product
         </Button>
       </div>
 
-      {!profileCompletion?.canUpload ? (
+      {profileCompletion ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-4">
           <div>
-            <h2 className="text-lg font-semibold text-amber-900">Complete vendor profile before uploading</h2>
+            <h2 className="text-lg font-semibold text-amber-900">Vendor governance profile</h2>
             <p className="text-sm text-amber-800 mt-1">
-              Status: <span className="font-semibold">{profileCompletion?.profileStatus || 'INCOMPLETE'}</span>. Upload actions stay locked until admin approval.
+              Status: <span className="font-semibold">{profileCompletion?.profileStatus || 'INCOMPLETE'}</span>. Upload restriction is temporarily disabled while governance fields are validated.
             </p>
             {profileCompletion?.profileReviewNotes ? (
               <p className="text-sm text-amber-900 mt-1">Admin note: {profileCompletion.profileReviewNotes}</p>
@@ -1229,7 +1225,7 @@ export default function DesignerDashboard() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">My Products</h2>
-            <Button size="sm" onClick={openCreateDesignModal} disabled={!profileCompletion?.canUpload}>
+            <Button size="sm" onClick={openCreateDesignModal}>
               <Plus className="w-4 h-4 mr-2" />
               Add Custom Product
             </Button>
@@ -1348,8 +1344,7 @@ export default function DesignerDashboard() {
                             {item.productType !== 'READY_TO_WEAR' ? (
                               <button
                                 onClick={() => openEditDesignModal(item as Design)}
-                                disabled={!profileCompletion?.canUpload}
-                                className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
                                 title="Edit product"
                               >
                                 <Edit className="h-4 w-4" />
