@@ -15,6 +15,7 @@ import Fabrics from './pages/Fabrics';
 import FabricDetail from './pages/FabricDetail';
 import ReadyToWear from './pages/ReadyToWear';
 import ReadyToWearDetail from './pages/ReadyToWearDetail';
+import ReadyToWearTryOn from './pages/ReadyToWearTryOn';
 import TryOn from './pages/TryOn';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
@@ -91,6 +92,7 @@ function App() {
               <Route path="/fabrics/:id" element={<FabricDetail />} />
               <Route path="/ready-to-wear" element={<ReadyToWear />} />
               <Route path="/ready-to-wear/:id" element={<ReadyToWearDetail />} />
+              <Route path="/ready-to-wear/:id/try-on" element={<ReadyToWearTryOn />} />
               <Route path="/try-on/:id" element={<TryOn />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/stories/:slug" element={<StoryPage />} />

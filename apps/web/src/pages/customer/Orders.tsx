@@ -18,22 +18,32 @@ interface Order {
   id: string;
   orderNumber: string;
   status: string;
-  totalAmount: number;
+  type?: string;
+  total?: number;
+  totalAmount?: number;
   createdAt: string;
-  design: {
-    name: string;
-    images: string[];
+  designOrder?: {
+    status?: string;
+    design?: {
+      name: string;
+      images?: Array<{ url: string }>;
+    };
   };
-  fabric: {
-    name: string;
-    images: string[];
+  fabricOrder?: {
+    status?: string;
+    fabric?: {
+      name: string;
+      images?: Array<{ url: string }>;
+    };
   };
-  designer: {
-    businessName: string;
-  };
-  designStatus: string;
-  fabricStatus: string;
-  shippingStatus: string;
+  readyToWearItems?: Array<{
+    size: string;
+    quantity: number;
+    readyToWear?: {
+      name: string;
+      images?: Array<{ url: string }>;
+    };
+  }>;
 }
 
 const statusConfig: Record<string, { icon: any; color: string; label: string }> = {
@@ -50,6 +60,7 @@ const statusConfig: Record<string, { icon: any; color: string; label: string }> 
 export default function CustomerOrders() {
   const [searchParams] = useSearchParams();
   const success = searchParams.get('success');
+  const orderNumbersFromRedirect = searchParams.get('orders');
   
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +75,7 @@ export default function CustomerOrders() {
       setLoading(true);
       const response = await api.customer.getOrders();
       if (response.success) {
-        setOrders(response.data.orders || response.data);
+        setOrders((response.data.orders || response.data || []) as Order[]);
       }
     } catch (error) {
       console.error('Failed to fetch orders:', error);
@@ -93,7 +104,10 @@ export default function CustomerOrders() {
           <CheckCircle className="w-5 h-5 text-green-600" />
           <div>
             <p className="font-medium text-green-900">Order placed successfully!</p>
-            <p className="text-sm text-green-700">You can track your order status below.</p>
+            <p className="text-sm text-green-700">
+              You can track your order status below.
+              {orderNumbersFromRedirect ? ` Order No: ${orderNumbersFromRedirect}` : ''}
+            </p>
           </div>
         </div>
       )}
@@ -117,16 +131,32 @@ export default function CustomerOrders() {
         <div className="text-center py-16 bg-white rounded-xl border">
           <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No orders yet</h3>
-          <p className="text-gray-500 mb-4">Start exploring designs and place your first order.</p>
-          <Button onClick={() => window.location.href = '/designs'}>
-            Browse Designs
+          <p className="text-gray-500 mb-4">Start exploring products and place your first order.</p>
+          <Button onClick={() => window.location.href = '/ready-to-wear'}>
+            Browse Products
           </Button>
         </div>
       ) : (
         <div className="space-y-4">
           {filteredOrders.map((order) => {
-            const StatusIcon = statusConfig[order.status]?.icon || Clock;
             const statusColor = statusConfig[order.status]?.color || 'gray';
+            const mainReadyToWearItem = order.readyToWearItems?.[0];
+            const productName =
+              mainReadyToWearItem?.readyToWear?.name ||
+              order.designOrder?.design?.name ||
+              'Order Item';
+            const productImage =
+              mainReadyToWearItem?.readyToWear?.images?.[0]?.url ||
+              order.designOrder?.design?.images?.[0]?.url ||
+              '/images/placeholder.jpg';
+            const productDetailText = mainReadyToWearItem
+              ? `Size ${mainReadyToWearItem.size} · Qty ${mainReadyToWearItem.quantity}`
+              : order.fabricOrder?.fabric?.name
+                ? `Fabric: ${order.fabricOrder.fabric.name}`
+                : 'Custom Order';
+            const totalAmount = Number(order.total ?? order.totalAmount ?? 0);
+            const designStatus = order.designOrder?.status || 'N/A';
+            const fabricStatus = order.fabricOrder?.status || (mainReadyToWearItem ? 'N/A' : 'PENDING');
             
             return (
               <div key={order.id} className="bg-white rounded-xl p-6 shadow-sm border">
@@ -143,20 +173,19 @@ export default function CustomerOrders() {
                     </p>
                   </div>
                   <p className="text-xl font-bold text-amber-700">
-                    ${order.totalAmount.toFixed(2)}
+                    ${totalAmount.toFixed(2)}
                   </p>
                 </div>
 
                 <div className="flex gap-4 mb-4">
                   <img
-                    src={order.design.images[0]}
-                    alt={order.design.name}
+                    src={productImage}
+                    alt={productName}
                     className="w-24 h-32 object-cover rounded-lg"
                   />
                   <div className="flex-1">
-                    <h4 className="font-medium text-gray-900">{order.design.name}</h4>
-                    <p className="text-sm text-gray-500">by {order.designer.businessName}</p>
-                    <p className="text-sm text-gray-500 mt-1">Fabric: {order.fabric.name}</p>
+                    <h4 className="font-medium text-gray-900">{productName}</h4>
+                    <p className="text-sm text-gray-500 mt-1">{productDetailText}</p>
                     
                     {/* Progress Bar */}
                     <div className="mt-4">
@@ -188,16 +217,16 @@ export default function CustomerOrders() {
                   <div className="flex gap-2">
                     <div className="flex items-center gap-2 text-sm">
                       <div className={`w-2 h-2 rounded-full ${
-                        order.designStatus === 'COMPLETED' ? 'bg-green-500' : 'bg-yellow-500'
+                        designStatus === 'COMPLETED' ? 'bg-green-500' : 'bg-yellow-500'
                       }`} />
-                      <span className="text-gray-600">Design: {order.designStatus}</span>
+                      <span className="text-gray-600">Design: {designStatus}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <div className={`w-2 h-2 rounded-full ${
-                        order.fabricStatus === 'DELIVERED' ? 'bg-green-500' : 
-                        order.fabricStatus === 'SHIPPED' ? 'bg-blue-500' : 'bg-yellow-500'
+                        fabricStatus === 'DELIVERED' ? 'bg-green-500' : 
+                        fabricStatus === 'SHIPPED' ? 'bg-blue-500' : 'bg-yellow-500'
                       }`} />
-                      <span className="text-gray-600">Fabric: {order.fabricStatus}</span>
+                      <span className="text-gray-600">Fabric: {fabricStatus}</span>
                     </div>
                   </div>
                   <div className="flex gap-2">

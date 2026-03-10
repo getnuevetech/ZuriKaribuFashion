@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   CardElement, 
   useStripe, 
@@ -42,6 +42,9 @@ export default function Checkout() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [orderNumbers, setOrderNumbers] = useState<string[]>([]);
+  const [suggestedProducts, setSuggestedProducts] = useState<any[]>([]);
+  const [paymentMethod] = useState<'STRIPE'>('STRIPE');
   
   const fullName = user?.firstName && user?.lastName 
     ? `${user.firstName} ${user.lastName}` 
@@ -60,6 +63,19 @@ export default function Checkout() {
 
   const shipping = totalPrice > 200 ? 0 : 25;
   const finalTotal = totalPrice + shipping;
+
+  useEffect(() => {
+    api.products
+      .getReadyToWear({ limit: 4 })
+      .then((response) => {
+        if (response.success) {
+          setSuggestedProducts(Array.isArray(response.data?.products) ? response.data.products : []);
+        }
+      })
+      .catch(() => {
+        setSuggestedProducts([]);
+      });
+  }, []);
 
   const handleShippingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,24 +164,53 @@ export default function Checkout() {
       }
 
       const shippingAddressId = addressResponse.data.id;
+      const createdOrderNumbers: string[] = [];
 
-      for (const item of items) {
+      const customItems = items.filter((item) => item.kind === 'CUSTOM_DESIGN');
+      const readyToWearItems = items.filter((item) => item.kind === 'READY_TO_WEAR');
+
+      for (const item of customItems) {
         if (!item.designId || !item.fabricId) {
           continue;
         }
 
-        await api.orders.createCustomDesignOrder({
+        const orderResponse = await api.orders.createCustomDesignOrder({
           designId: item.designId,
           fabricId: item.fabricId,
           yards: item.fabricMeters,
           measurements: item.measurements || {},
           shippingAddressId,
-          paymentMethod: 'STRIPE',
+          paymentMethod,
           paymentIntentId,
         });
+        if (orderResponse.success && orderResponse.data?.orderNumber) {
+          createdOrderNumbers.push(orderResponse.data.orderNumber);
+        }
       }
+
+      if (readyToWearItems.length > 0) {
+        const readyOrderResponse = await api.orders.createReadyToWearOrder({
+          items: readyToWearItems.map((item) => ({
+            readyToWearId: item.readyToWearId,
+            size: item.selectedSize,
+            quantity: item.quantity,
+          })),
+          shippingAddressId,
+          paymentMethod,
+          paymentIntentId,
+        });
+        if (readyOrderResponse.success && readyOrderResponse.data?.orderNumber) {
+          createdOrderNumbers.push(readyOrderResponse.data.orderNumber);
+        }
+      }
+
+      setOrderNumbers(createdOrderNumbers);
       clearCart();
-      navigate('/orders?success=true');
+      const orderParams = new URLSearchParams({ success: 'true' });
+      if (createdOrderNumbers.length > 0) {
+        orderParams.set('orders', createdOrderNumbers.join(','));
+      }
+      navigate(`/orders?${orderParams.toString()}`);
     } catch (err) {
       console.error('Failed to create orders:', err);
       setError('Payment succeeded but order creation failed. Please contact support.');
@@ -425,6 +470,11 @@ export default function Checkout() {
                 <p className="text-gray-600 mb-4">
                   Your payment was successful. We're processing your order.
                 </p>
+                {orderNumbers.length > 0 ? (
+                  <p className="text-sm text-gray-700 mb-3">
+                    Order No: <span className="font-semibold">{orderNumbers.join(', ')}</span>
+                  </p>
+                ) : null}
                 <div className="animate-pulse">
                   <p className="text-sm text-gray-500">Redirecting to your orders...</p>
                 </div>
@@ -441,16 +491,33 @@ export default function Checkout() {
                 {items.map((item, index) => (
                   <div key={index} className="flex gap-3">
                     <img
-                      src={item.designImage}
-                      alt={item.designName}
+                      src={item.kind === 'READY_TO_WEAR' ? item.productImage : item.designImage}
+                      alt={item.kind === 'READY_TO_WEAR' ? item.productName : item.designName}
                       className="w-16 h-20 object-cover"
                     />
                     <div className="flex-1">
-                      <p className="font-medium text-sm text-gray-900">{item.designName}</p>
-                      <p className="text-xs text-gray-500">{item.fabricName}</p>
-                      <p className="text-xs text-gray-500">{item.fabricMeters}m fabric</p>
+                      {item.kind === 'READY_TO_WEAR' ? (
+                        <>
+                          <p className="font-medium text-sm text-gray-900">{item.productName}</p>
+                          <p className="text-xs text-gray-500">Size {item.selectedSize}</p>
+                          <p className="text-xs text-gray-500">Qty {item.quantity}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-medium text-sm text-gray-900">{item.designName}</p>
+                          <p className="text-xs text-gray-500">{item.fabricName}</p>
+                          <p className="text-xs text-gray-500">{item.fabricMeters}m fabric</p>
+                        </>
+                      )}
                     </div>
-                    <p className="font-medium text-sm">${item.totalPrice.toFixed(2)}</p>
+                    <p className="font-medium text-sm">
+                      $
+                      {(
+                        item.kind === 'READY_TO_WEAR'
+                          ? item.unitPrice * item.quantity
+                          : item.totalPrice
+                      ).toFixed(2)}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -516,6 +583,34 @@ export default function Checkout() {
                 Estimated delivery: {new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toLocaleDateString()} - {new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toLocaleDateString()}
               </p>
             </div>
+
+            {suggestedProducts.length > 0 ? (
+              <div className="bg-white rounded-xl p-6 shadow-sm border">
+                <h3 className="font-semibold mb-3">You may also like</h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  Suggestions are optional and will not interrupt your current checkout.
+                </p>
+                <div className="space-y-3">
+                  {suggestedProducts.map((product) => (
+                    <Link
+                      key={product.id}
+                      to={`/ready-to-wear/${product.id}`}
+                      className="flex items-center gap-3 rounded-lg border p-2 hover:bg-gray-50"
+                    >
+                      <img
+                        src={product.images?.[0]?.url || '/images/placeholder.jpg'}
+                        alt={product.name}
+                        className="h-14 w-12 object-cover rounded"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{product.name}</p>
+                        <p className="text-xs text-gray-500 truncate">{product.category?.name || 'Ready to Wear'}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

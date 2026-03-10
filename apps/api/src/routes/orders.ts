@@ -3,10 +3,63 @@ import { z } from 'zod';
 import { prisma, UserRole, OrderType, OrderStatus, PaymentStatus, ProductStatus } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
+import nodemailer from 'nodemailer';
 
 const router = Router();
 
 router.use(authenticate);
+
+let cachedTransporter: nodemailer.Transporter | null | undefined;
+
+function getOrderMailer(): nodemailer.Transporter | null {
+  if (cachedTransporter !== undefined) {
+    return cachedTransporter;
+  }
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!host || !user || !pass) {
+    cachedTransporter = null;
+    return null;
+  }
+  cachedTransporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+    auth: { user, pass },
+  });
+  return cachedTransporter;
+}
+
+async function sendOrderConfirmationEmail(params: {
+  to: string;
+  orderNumber: string;
+  orderType: string;
+  total: number;
+  itemCount: number;
+}) {
+  const transporter = getOrderMailer();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  if (!transporter || !from || !params.to) {
+    return;
+  }
+  const totalText = Number(params.total || 0).toFixed(2);
+  await transporter.sendMail({
+    from,
+    to: params.to,
+    subject: `Order Confirmation: ${params.orderNumber}`,
+    text: `Thank you for your order!\n\nOrder Number: ${params.orderNumber}\nOrder Type: ${params.orderType}\nItems: ${params.itemCount}\nTotal: $${totalText}\n\nYour order has been received and is now being processed.`,
+    html: `
+      <p>Thank you for your order.</p>
+      <p><strong>Order Number:</strong> ${params.orderNumber}</p>
+      <p><strong>Order Type:</strong> ${params.orderType}</p>
+      <p><strong>Items:</strong> ${params.itemCount}</p>
+      <p><strong>Total:</strong> $${totalText}</p>
+      <p>Your order has been received and is now being processed.</p>
+    `,
+  });
+}
 
 // Get order by ID (with role-based access)
 router.get('/:id', authorizePermissions(Permissions.ORDERS_READ_SELF, Permissions.ORDERS_READ_ASSIGNED, Permissions.ORDERS_READ_ALL), async (req, res, next) => {
@@ -299,6 +352,15 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       message: 'Order created successfully. Please complete payment.',
       data: order,
     });
+    void sendOrderConfirmationEmail({
+      to: req.user!.email,
+      orderNumber: order.orderNumber,
+      orderType: 'Custom Design',
+      total,
+      itemCount: 1,
+    }).catch((error) => {
+      console.error('Failed to send custom-design order confirmation email:', error);
+    });
   } catch (error) {
     next(error);
   }
@@ -471,6 +533,15 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       success: true,
       message: 'Order created successfully. Please complete payment.',
       data: order,
+    });
+    void sendOrderConfirmationEmail({
+      to: req.user!.email,
+      orderNumber: order.orderNumber,
+      orderType: 'Ready To Wear',
+      total,
+      itemCount: validatedItems.reduce((count, item) => count + Number(item.quantity || 0), 0),
+    }).catch((error) => {
+      console.error('Failed to send ready-to-wear order confirmation email:', error);
     });
   } catch (error) {
     next(error);

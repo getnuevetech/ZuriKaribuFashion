@@ -16,7 +16,7 @@ import Badge from '../components/ui/Badge';
 
 export default function Cart() {
   const navigate = useNavigate();
-  const { items, removeItem, updateItem, clearCart, totalPrice } = useCartStore();
+  const { items, removeItem, updateItem, clearCart, totalPrice, itemCount } = useCartStore();
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(false);
 
@@ -39,8 +39,8 @@ export default function Cart() {
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Your Cart is Empty</h2>
           <p className="text-gray-600 mb-6">Discover beautiful African designs and add them to your cart.</p>
-          <Button onClick={() => navigate('/designs')}>
-            Browse Designs
+          <Button onClick={() => navigate('/ready-to-wear')}>
+            Browse Products
           </Button>
         </div>
       </div>
@@ -53,7 +53,7 @@ export default function Cart() {
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <button 
-            onClick={() => navigate('/designs')}
+            onClick={() => navigate('/ready-to-wear')}
             className="flex items-center text-gray-600 hover:text-amber-600 transition-colors"
           >
             <ChevronLeft className="w-4 h-4 mr-1" />
@@ -73,23 +73,35 @@ export default function Cart() {
                 <div className="flex gap-4">
                   {/* Images */}
                   <div className="flex-shrink-0 relative">
-                    <img
-                      src={item.designImage}
-                      alt={item.designName}
-                      className="w-24 h-32 object-cover rounded-lg"
-                    />
-                    <img
-                      src={item.fabricImage}
-                      alt={item.fabricName}
-                      className="w-12 h-16 object-cover absolute -bottom-2 -right-2 border-2 border-white shadow-md"
-                    />
+                    {item.kind === 'READY_TO_WEAR' ? (
+                      <img
+                        src={item.productImage}
+                        alt={item.productName}
+                        className="w-24 h-32 object-cover rounded-lg"
+                      />
+                    ) : (
+                      <>
+                        <img
+                          src={item.designImage}
+                          alt={item.designName}
+                          className="w-24 h-32 object-cover rounded-lg"
+                        />
+                        <img
+                          src={item.fabricImage}
+                          alt={item.fabricName}
+                          className="w-12 h-16 object-cover absolute -bottom-2 -right-2 border-2 border-white shadow-md"
+                        />
+                      </>
+                    )}
                   </div>
 
                   {/* Details */}
                   <div className="flex-1">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="font-semibold text-gray-900">{item.designName}</h3>
+                        <h3 className="font-semibold text-gray-900">
+                          {item.kind === 'READY_TO_WEAR' ? item.productName : item.designName}
+                        </h3>
                         <p className="text-sm text-gray-500">by {item.designerName}</p>
                       </div>
                       <button
@@ -101,55 +113,112 @@ export default function Cart() {
                     </div>
 
                     <div className="mt-3 space-y-2">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Badge variant="outline" className="text-xs">Fabric</Badge>
-                        <span className="text-gray-600">{item.fabricName}</span>
-                        <span className="text-gray-400">·</span>
-                        <span className="text-gray-600">{item.fabricMeters} meters</span>
-                      </div>
-
-                      {/* Measurements Summary */}
-                      {Object.keys(item.measurements).length > 0 && (
+                      {item.kind === 'READY_TO_WEAR' ? (
                         <div className="flex items-center gap-2 text-sm">
-                          <Badge variant="outline" className="text-xs">Measurements</Badge>
-                          <span className="text-gray-600">
-                            {Object.entries(item.measurements)
-                              .slice(0, 3)
-                              .map(([k, v]) => `${k}: ${v}cm`)
-                              .join(', ')}
-                            {Object.keys(item.measurements).length > 3 && '...'}
-                          </span>
+                          <Badge variant="outline" className="text-xs">Ready To Wear</Badge>
+                          <span className="text-gray-600">Size {item.selectedSize}</span>
+                          {item.selectedColor ? (
+                            <>
+                              <span className="text-gray-400">·</span>
+                              <span className="text-gray-600">Color {item.selectedColor}</span>
+                            </>
+                          ) : null}
                         </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Badge variant="outline" className="text-xs">Fabric</Badge>
+                            <span className="text-gray-600">{item.fabricName}</span>
+                            <span className="text-gray-400">·</span>
+                            <span className="text-gray-600">{item.fabricMeters} meters</span>
+                          </div>
+
+                          {Object.keys(item.measurements).length > 0 && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <Badge variant="outline" className="text-xs">Measurements</Badge>
+                              <span className="text-gray-600">
+                                {Object.entries(item.measurements)
+                                  .slice(0, 3)
+                                  .map(([k, v]) => `${k}: ${v}cm`)
+                                  .join(', ')}
+                                {Object.keys(item.measurements).length > 3 && '...'}
+                              </span>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
 
                     <div className="flex justify-between items-end mt-4">
                       <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => updateItem(index, { 
-                            fabricMeters: Math.max(1, item.fabricMeters - 0.5) 
-                          })}
-                          className="w-8 h-8 flex items-center justify-center border rounded-lg hover:bg-gray-50"
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <span className="font-medium w-12 text-center">{item.fabricMeters}m</span>
-                        <button
-                          onClick={() => updateItem(index, { 
-                            fabricMeters: item.fabricMeters + 0.5 
-                          })}
-                          className="w-8 h-8 flex items-center justify-center border rounded-lg hover:bg-gray-50"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
+                        {item.kind === 'READY_TO_WEAR' ? (
+                          <>
+                            <button
+                              onClick={() =>
+                                updateItem(index, {
+                                  quantity: Math.max(1, item.quantity - 1),
+                                } as any)
+                              }
+                              className="w-8 h-8 flex items-center justify-center border rounded-lg hover:bg-gray-50"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <span className="font-medium w-12 text-center">{item.quantity}</span>
+                            <button
+                              onClick={() =>
+                                updateItem(index, {
+                                  quantity: item.quantity + 1,
+                                } as any)
+                              }
+                              className="w-8 h-8 flex items-center justify-center border rounded-lg hover:bg-gray-50"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() =>
+                                updateItem(index, {
+                                  fabricMeters: Math.max(1, item.fabricMeters - 0.5),
+                                } as any)
+                              }
+                              className="w-8 h-8 flex items-center justify-center border rounded-lg hover:bg-gray-50"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <span className="font-medium w-12 text-center">{item.fabricMeters}m</span>
+                            <button
+                              onClick={() =>
+                                updateItem(index, {
+                                  fabricMeters: item.fabricMeters + 0.5,
+                                } as any)
+                              }
+                              className="w-8 h-8 flex items-center justify-center border rounded-lg hover:bg-gray-50"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                       <div className="text-right">
                         <p className="text-lg font-bold text-amber-700">
-                          ${item.totalPrice.toFixed(2)}
+                          $
+                          {(
+                            item.kind === 'READY_TO_WEAR'
+                              ? item.unitPrice * item.quantity
+                              : item.totalPrice
+                          ).toFixed(2)}
                         </p>
-                        <p className="text-xs text-gray-500">
-                          ${item.basePrice} + ${(item.fabricPrice * item.fabricMeters).toFixed(2)}
-                        </p>
+                        {item.kind === 'READY_TO_WEAR' ? (
+                          <p className="text-xs text-gray-500">
+                            ${item.unitPrice.toFixed(2)} × {item.quantity}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-500">
+                            ${item.basePrice} + ${(item.fabricPrice * item.fabricMeters).toFixed(2)}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -198,7 +267,7 @@ export default function Cart() {
               {/* Cost Breakdown */}
               <div className="space-y-2 py-4 border-t">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Subtotal ({items.length} items)</span>
+                  <span className="text-gray-600">Subtotal ({itemCount} items)</span>
                   <span className="font-medium">${totalPrice.toFixed(2)}</span>
                 </div>
                 {promoApplied && (

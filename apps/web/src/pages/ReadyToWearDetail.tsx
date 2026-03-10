@@ -3,6 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, ShoppingCart, Heart, Star, MapPin, Truck, Check, Loader2 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { api } from '../services/api';
+import { useCartStore } from '../store/cartStore';
+import { useAuthStore } from '../store/authStore';
 
 interface ReadyToWearProduct {
   id: string;
@@ -19,6 +21,7 @@ interface ReadyToWearProduct {
     reviewCount: number;
   };
   category?: { id: string; name: string };
+  sizeVariations?: Array<{ id?: string; size: string; price: number; stock?: number }>;
   sizes?: string[];
   colors?: string[];
   material?: string;
@@ -41,14 +44,17 @@ const countryFlags: Record<string, string> = {
 
 export default function ReadyToWearDetail() {
   const { id } = useParams();
+  const { user } = useAuthStore();
+  const { addReadyToWearItem } = useCartStore();
   const [product, setProduct] = useState<ReadyToWearProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState(0);
-  const [selectedSize, setSelectedSize] = useState('M');
+  const [selectedSize, setSelectedSize] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [addToCartMessage, setAddToCartMessage] = useState('');
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -59,8 +65,11 @@ export default function ReadyToWearDetail() {
         const response = await api.products.getReadyToWearProduct(id);
         if (response.success) {
           setProduct(response.data);
-          if (response.data.sizes && response.data.sizes.length > 0) {
-            setSelectedSize(response.data.sizes[0]);
+          const firstAvailableSize = (response.data.sizeVariations || [])
+            .find((variation: any) => Number(variation?.stock || 0) > 0)?.size;
+          const fallbackSize = response.data.sizes?.[0];
+          if (firstAvailableSize || fallbackSize) {
+            setSelectedSize(firstAvailableSize || fallbackSize);
           }
           if (response.data.colors && response.data.colors.length > 0) {
             setSelectedColor(response.data.colors[0]);
@@ -101,7 +110,40 @@ export default function ReadyToWearDetail() {
   }
 
   const flag = countryFlags[product.designer?.country] || '🌍';
-  const hasDiscount = product.originalPrice && product.originalPrice > product.price;
+  const matchingVariation = (product.sizeVariations || []).find((variation) => variation.size === selectedSize);
+  const selectedUnitPrice = Number(matchingVariation?.price || product.price || 0);
+  const hasDiscount = product.originalPrice && product.originalPrice > selectedUnitPrice;
+  const availableSizes =
+    (product.sizeVariations || [])
+      .filter((variation) => Number(variation.stock || 0) > 0)
+      .map((variation) => variation.size)
+      .filter(Boolean) || product.sizes || [];
+
+  const handleAddToCart = () => {
+    if (!product) return;
+    if (!selectedSize) {
+      setAddToCartMessage('Please select a size before adding to cart.');
+      return;
+    }
+
+    addReadyToWearItem({
+      readyToWearId: product.id,
+      productName: product.name,
+      productImage: product.images?.[0]?.url || '/images/placeholder.jpg',
+      selectedSize,
+      selectedColor: selectedColor || undefined,
+      quantity,
+      unitPrice: selectedUnitPrice,
+      designerName: product.designer?.businessName || 'Designer',
+      categoryName: product.category?.name,
+      tryOnMeasurements: {},
+    });
+    setAddToCartMessage(
+      user
+        ? 'Added to cart. You can proceed to checkout.'
+        : 'Added to cart. Sign in during checkout to complete your order.'
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -174,7 +216,7 @@ export default function ReadyToWearDetail() {
 
             {/* Price */}
             <div className="flex items-baseline gap-3">
-              <p className="text-3xl font-bold text-coral-500">${product.price}</p>
+              <p className="text-3xl font-bold text-coral-500">${selectedUnitPrice.toFixed(2)}</p>
               {hasDiscount && (
                 <p className="text-xl text-gray-400 line-through">${product.originalPrice}</p>
               )}
@@ -205,11 +247,11 @@ export default function ReadyToWearDetail() {
             )}
 
             {/* Size Selection */}
-            {product.sizes && product.sizes.length > 0 && (
+            {availableSizes.length > 0 && (
               <div>
                 <span className="font-medium">Size: {selectedSize}</span>
                 <div className="flex gap-2 mt-2 flex-wrap">
-                  {product.sizes.map((size) => (
+                  {availableSizes.map((size) => (
                     <button
                       key={size}
                       onClick={() => setSelectedSize(size)}
@@ -250,23 +292,33 @@ export default function ReadyToWearDetail() {
             <div className="bg-gray-100 p-4 rounded-lg">
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Total:</span>
-                <span className="text-2xl font-bold text-coral-500">${(product.price * quantity).toFixed(2)}</span>
+                <span className="text-2xl font-bold text-coral-500">${(selectedUnitPrice * quantity).toFixed(2)}</span>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex gap-4">
-              <Button className="flex-1 py-4">
+            <div className="flex flex-col gap-3">
+              <Link to={`/ready-to-wear/${product.id}/try-on`} className="w-full">
+                <Button variant="outline" className="w-full py-3">
+                  Virtual Try-On
+                </Button>
+              </Link>
+              <div className="flex gap-4">
+                <Button className="flex-1 py-4" onClick={handleAddToCart}>
                 <ShoppingCart className="w-5 h-5 mr-2" />
                 Add to Cart
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setIsWishlisted(!isWishlisted)}
-                className={`px-6 ${isWishlisted ? 'text-red-500 border-red-500' : ''}`}
-              >
-                <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-current' : ''}`} />
-              </Button>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsWishlisted(!isWishlisted)}
+                  className={`px-6 ${isWishlisted ? 'text-red-500 border-red-500' : ''}`}
+                >
+                  <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-current' : ''}`} />
+                </Button>
+              </div>
+              {addToCartMessage ? (
+                <p className="text-sm text-emerald-700">{addToCartMessage}</p>
+              ) : null}
             </div>
 
             {/* Designer Info */}
