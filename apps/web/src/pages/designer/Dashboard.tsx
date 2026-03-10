@@ -590,6 +590,8 @@ export default function DesignerDashboard() {
       if (response.success) {
         setProfileCompletion(response.data);
         setProfileMessage(response.message || 'Profile submitted successfully.');
+      } else {
+        setProfileMessage(response.message || 'Unable to submit profile right now.');
       }
     } catch (error: any) {
       const issueText = Array.isArray(error?.response?.data?.issues)
