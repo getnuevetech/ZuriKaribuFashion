@@ -1235,8 +1235,8 @@ const adminApi = {
       data: {
         categories: Array<{ id: string; name: string }>;
         materials: Array<{ id: string; name: string }>;
-        sellers: Array<{ id: string; businessName: string; country: string }>;
-        designers: Array<{ id: string; businessName: string; country: string }>;
+        sellers: Array<{ id: string; businessName: string; country: string; ownerUserId?: string; userId?: string }>;
+        designers: Array<{ id: string; businessName: string; country: string; ownerUserId?: string; userId?: string }>;
       };
     }>('/admin/products/options'),
 
@@ -1958,7 +1958,14 @@ const homepageSectionsApi = {
   getAdminDesignerOptions: () =>
     readDesignerOptionsWithFallback<{
       success: boolean;
-      data: Array<{ id: string; businessName: string; country: string; vendorType?: 'DESIGNER' | 'SELLER' }>;
+      data: Array<{
+        id: string;
+        businessName: string;
+        country: string;
+        ownerUserId?: string;
+        userId?: string;
+        vendorType?: 'DESIGNER' | 'SELLER';
+      }>;
     }>(),
 
   getAdminCountries: () =>

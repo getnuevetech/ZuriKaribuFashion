@@ -2380,7 +2380,7 @@ router.get('/products/options', async (_req, res, next) => {
           businessName: true,
           country: true,
           user: {
-            select: { firstName: true, lastName: true, email: true },
+            select: { id: true, firstName: true, lastName: true, email: true },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -2391,7 +2391,7 @@ router.get('/products/options', async (_req, res, next) => {
           businessName: true,
           country: true,
           user: {
-            select: { firstName: true, lastName: true, email: true },
+            select: { id: true, firstName: true, lastName: true, email: true },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -2401,6 +2401,7 @@ router.get('/products/options', async (_req, res, next) => {
     const sellers = sellersRaw.map((item) => {
       return {
         id: item.id,
+        ownerUserId: item.user?.id || item.id,
         businessName: getVendorDisplayName({
           id: item.id,
           roleLabel: 'Fabric Seller',
@@ -2414,6 +2415,7 @@ router.get('/products/options', async (_req, res, next) => {
     const designers = designersRaw.map((item) => {
       return {
         id: item.id,
+        ownerUserId: item.user?.id || item.id,
         businessName: getVendorDisplayName({
           id: item.id,
           roleLabel: 'Designer',
@@ -2448,7 +2450,7 @@ router.get('/designer-options', async (_req, res, next) => {
           businessName: true,
           country: true,
           user: {
-            select: { firstName: true, lastName: true, email: true },
+            select: { id: true, firstName: true, lastName: true, email: true },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -2459,7 +2461,7 @@ router.get('/designer-options', async (_req, res, next) => {
           businessName: true,
           country: true,
           user: {
-            select: { firstName: true, lastName: true, email: true },
+            select: { id: true, firstName: true, lastName: true, email: true },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -2467,6 +2469,7 @@ router.get('/designer-options', async (_req, res, next) => {
     ]);
     const designers = designersRaw.map((item) => ({
       id: item.id,
+      ownerUserId: item.user?.id || item.id,
       businessName: getVendorDisplayName({
         id: item.id,
         roleLabel: 'Designer',
@@ -2478,6 +2481,7 @@ router.get('/designer-options', async (_req, res, next) => {
     }));
     const sellers = sellersRaw.map((item) => ({
       id: item.id,
+      ownerUserId: item.user?.id || item.id,
       businessName: getVendorDisplayName({
         id: item.id,
         roleLabel: 'Fabric Seller',

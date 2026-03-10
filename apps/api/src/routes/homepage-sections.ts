@@ -1987,7 +1987,7 @@ router.get('/admin/designer-options', authenticate, authorizePermissions(Permiss
           businessName: true,
           country: true,
           user: {
-            select: { firstName: true, lastName: true, email: true },
+            select: { id: true, firstName: true, lastName: true, email: true },
           },
         },
         orderBy: [{ createdAt: 'desc' }],
@@ -1998,7 +1998,7 @@ router.get('/admin/designer-options', authenticate, authorizePermissions(Permiss
           businessName: true,
           country: true,
           user: {
-            select: { firstName: true, lastName: true, email: true },
+            select: { id: true, firstName: true, lastName: true, email: true },
           },
         },
         orderBy: [{ createdAt: 'desc' }],
@@ -2013,6 +2013,7 @@ router.get('/admin/designer-options', authenticate, authorizePermissions(Permiss
         `Designer ${String(item.id || '').slice(0, 8)}`;
       return {
         id: item.id,
+        ownerUserId: item.user?.id || item.id,
         businessName: businessName || fallbackName,
         country: String(item.country || '').trim(),
         vendorType: 'DESIGNER' as const,
@@ -2026,6 +2027,7 @@ router.get('/admin/designer-options', authenticate, authorizePermissions(Permiss
         `Seller ${String(item.id || '').slice(0, 8)}`;
       return {
         id: item.id,
+        ownerUserId: item.user?.id || item.id,
         businessName: businessName || fallbackName,
         country: String(item.country || '').trim(),
         vendorType: 'SELLER' as const,

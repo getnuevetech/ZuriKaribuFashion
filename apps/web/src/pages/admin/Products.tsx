@@ -59,8 +59,8 @@ export default function AdminProducts() {
   const [options, setOptions] = useState<{
     categories: Array<{ id: string; name: string }>;
     materials: Array<{ id: string; name: string }>;
-    sellers: Array<{ id: string; businessName: string; country: string }>;
-    designers: Array<{ id: string; businessName: string; country: string }>;
+    sellers: Array<{ id: string; businessName: string; country: string; ownerUserId?: string }>;
+    designers: Array<{ id: string; businessName: string; country: string; ownerUserId?: string }>;
   }>({ categories: [], materials: [], sellers: [], designers: [] });
   const [form, setForm] = useState({
     type: 'FABRIC' as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR',
@@ -153,6 +153,14 @@ export default function AdminProducts() {
   }, [activeTab, typeFilter]);
 
   const activeProductType = (editing?.type || form.type) as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+  const selectedOwnerUserId = useMemo(() => {
+    if (activeProductType === 'FABRIC') {
+      const seller = options.sellers.find((item) => item.id === form.sellerId);
+      return String(seller?.ownerUserId || seller?.id || '').trim();
+    }
+    const designer = options.designers.find((item) => item.id === form.designerId);
+    return String(designer?.ownerUserId || designer?.id || '').trim();
+  }, [activeProductType, options.sellers, options.designers, form.sellerId, form.designerId]);
   const selectedOwnerCountry = useMemo(() => {
     if (activeProductType === 'FABRIC') {
       const seller = options.sellers.find((item) => item.id === form.sellerId);
@@ -209,6 +217,7 @@ export default function AdminProducts() {
       .filter((item) => String(item.vendorType || '').toUpperCase() === 'SELLER')
       .map((item) => ({
         id: String(item.id || ''),
+        ownerUserId: String(item.ownerUserId || item.userId || item.id || ''),
         businessName: normalizeOwnerName(String(item.businessName || ''), 'Seller', String(item.id || '')),
         country: String(item.country || '').trim(),
       }));
@@ -216,6 +225,7 @@ export default function AdminProducts() {
       .filter((item) => String(item.vendorType || 'DESIGNER').toUpperCase() !== 'SELLER')
       .map((item) => ({
         id: String(item.id || ''),
+        ownerUserId: String(item.ownerUserId || item.userId || item.id || ''),
         businessName: normalizeOwnerName(String(item.businessName || ''), 'Designer', String(item.id || '')),
         country: String(item.country || '').trim(),
       }));
@@ -234,12 +244,14 @@ export default function AdminProducts() {
       sellers:
         (sellersFromProducts.length > 0 ? sellersFromProducts : fallbackSellers).map((item: any) => ({
           id: String(item.id || ''),
+          ownerUserId: String(item.ownerUserId || item.userId || item.id || ''),
           businessName: normalizeOwnerName(item.businessName, 'Seller', item.id),
           country: String(item.country || '').trim(),
         })),
       designers:
         (designersFromProducts.length > 0 ? designersFromProducts : fallbackDesigners).map((item: any) => ({
           id: String(item.id || ''),
+          ownerUserId: String(item.ownerUserId || item.userId || item.id || ''),
           businessName: normalizeOwnerName(item.businessName, 'Designer', item.id),
           country: String(item.country || '').trim(),
         })),
@@ -507,6 +519,7 @@ export default function AdminProducts() {
           name: form.name,
           description: form.description,
           price: form.price,
+          ownerUserId: selectedOwnerUserId || undefined,
           status: resolvedStatus,
           isAvailable: resolvedIsAvailable,
           images: imagesDirty ? form.images : undefined,
@@ -522,6 +535,7 @@ export default function AdminProducts() {
           name: form.name,
           description: form.description,
           price: form.price,
+          ownerUserId: selectedOwnerUserId || undefined,
           sellerId: form.type === 'FABRIC' ? form.sellerId : undefined,
           designerId: form.type !== 'FABRIC' ? form.designerId : undefined,
           materialTypeId: form.type === 'FABRIC' || form.type === 'DESIGN' ? form.materialTypeId || undefined : undefined,
