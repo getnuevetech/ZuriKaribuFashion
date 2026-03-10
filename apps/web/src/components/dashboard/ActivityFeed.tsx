@@ -2,7 +2,7 @@ import { Clock, User, ShoppingBag, Package, CheckCircle, AlertCircle } from 'luc
 
 interface Activity {
   id: string;
-  type: 'order' | 'user' | 'product' | 'review' | 'system';
+  type: 'order' | 'user' | 'product' | 'review' | 'inventory' | 'system';
   title: string;
   description: string;
   timestamp: string;
@@ -23,6 +23,7 @@ const typeConfig = {
   user: { icon: User, color: 'bg-green-100 text-green-600' },
   product: { icon: Package, color: 'bg-purple-100 text-purple-600' },
   review: { icon: CheckCircle, color: 'bg-amber-100 text-amber-600' },
+  inventory: { icon: Package, color: 'bg-orange-100 text-orange-600' },
   system: { icon: AlertCircle, color: 'bg-gray-100 text-gray-600' },
 };
 

@@ -40,6 +40,8 @@ interface SellerStats {
 interface Fabric {
   id: string;
   name: string;
+  description: string;
+  materialTypeId?: string;
   pricePerMeter: number;
   stockMeters: number;
   images: string[];
@@ -70,6 +72,21 @@ interface Activity {
   timestamp: string;
 }
 
+interface MaterialOption {
+  id: string;
+  name: string;
+}
+
+interface FabricFormState {
+  name: string;
+  description: string;
+  materialTypeId: string;
+  sellerPrice: string;
+  minYards: string;
+  stockYards: string;
+  imageUrls: string;
+}
+
 export default function SellerDashboard() {
   const [stats, setStats] = useState<SellerStats | null>(null);
   const [fabrics, setFabrics] = useState<Fabric[]>([]);
@@ -78,8 +95,22 @@ export default function SellerDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'fabrics' | 'orders'>('overview');
   const [showStockModal, setShowStockModal] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
+  const [productError, setProductError] = useState<string | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [materialOptions, setMaterialOptions] = useState<MaterialOption[]>([]);
   const [selectedFabric, setSelectedFabric] = useState<Fabric | null>(null);
   const [newStock, setNewStock] = useState(0);
+  const [productForm, setProductForm] = useState<FabricFormState>({
+    name: '',
+    description: '',
+    materialTypeId: '',
+    sellerPrice: '',
+    minYards: '1',
+    stockYards: '0',
+    imageUrls: '',
+  });
   const [searchParams, setSearchParams] = useSearchParams();
 
   const syncTabWithUrl = (tab: 'overview' | 'fabrics' | 'orders') => {
@@ -104,13 +135,20 @@ export default function SellerDashboard() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    if (materialOptions.length > 0 && !productForm.materialTypeId) {
+      setProductForm((prev) => ({ ...prev, materialTypeId: materialOptions[0].id }));
+    }
+  }, [materialOptions, productForm.materialTypeId]);
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [dashboardRes, fabricsRes, ordersRes] = await Promise.all([
+      const [dashboardRes, fabricsRes, ordersRes, materialsRes] = await Promise.all([
         api.seller.getDashboard(),
         api.seller.getFabrics(),
-        api.seller.getOrders()
+        api.seller.getOrders(),
+        api.products.getMaterials(),
       ]);
 
       if (dashboardRes.success) {
@@ -131,6 +169,8 @@ export default function SellerDashboard() {
         const mappedFabrics = (fabricsRes.data || []).map((item: any) => ({
           id: String(item.id),
           name: item.name || 'Fabric',
+          description: item.description || '',
+          materialTypeId: item.materialTypeId || item.materialType?.id || '',
           pricePerMeter: Number(item.finalPrice ?? item.sellerPrice ?? 0),
           stockMeters: Number(item.stockYards ?? 0),
           images: Array.isArray(item.images)
@@ -142,6 +182,12 @@ export default function SellerDashboard() {
           minOrderMeters: Number(item.minYards ?? 1),
         }));
         setFabrics(mappedFabrics);
+      }
+      if (materialsRes.success) {
+        const options = Array.isArray(materialsRes.data)
+          ? materialsRes.data.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Material') }))
+          : [];
+        setMaterialOptions(options);
       }
       if (ordersRes.success) {
         const toAddressObject = (value: any) => {
@@ -238,6 +284,108 @@ export default function SellerDashboard() {
     setShowStockModal(true);
   };
 
+  const resetProductForm = () => {
+    setProductForm({
+      name: '',
+      description: '',
+      materialTypeId: materialOptions[0]?.id || '',
+      sellerPrice: '',
+      minYards: '1',
+      stockYards: '0',
+      imageUrls: '',
+    });
+    setSelectedFabric(null);
+    setIsEditMode(false);
+    setProductError(null);
+  };
+
+  const openCreateProductModal = () => {
+    resetProductForm();
+    setShowProductModal(true);
+  };
+
+  const openEditProductModal = (fabric: Fabric) => {
+    setSelectedFabric(fabric);
+    setIsEditMode(true);
+    setProductError(null);
+    setProductForm({
+      name: fabric.name,
+      description: fabric.description || '',
+      materialTypeId: fabric.materialTypeId || materialOptions[0]?.id || '',
+      sellerPrice: String(fabric.pricePerMeter || ''),
+      minYards: String(fabric.minOrderMeters || 1),
+      stockYards: String(fabric.stockMeters || 0),
+      imageUrls: (fabric.images || []).join('\n'),
+    });
+    setShowProductModal(true);
+  };
+
+  const parseImageInputs = (value: string) =>
+    value
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((url) => ({ url }));
+
+  const handleSaveProduct = async () => {
+    setProductError(null);
+    const images = parseImageInputs(productForm.imageUrls);
+    if (!productForm.name.trim()) {
+      setProductError('Fabric name is required.');
+      return;
+    }
+    if (!productForm.description.trim() || productForm.description.trim().length < 10) {
+      setProductError('Description must be at least 10 characters.');
+      return;
+    }
+    if (!productForm.materialTypeId) {
+      setProductError('Please select a material type.');
+      return;
+    }
+    if (Number(productForm.sellerPrice || 0) <= 0) {
+      setProductError('Seller price must be greater than zero.');
+      return;
+    }
+    if (Number(productForm.minYards || 0) < 1) {
+      setProductError('Minimum yards must be at least 1.');
+      return;
+    }
+    if (Number(productForm.stockYards || 0) < 0) {
+      setProductError('Stock yards cannot be negative.');
+      return;
+    }
+    if (images.length < 3 || images.length > 4) {
+      setProductError('Fabrics require 3 to 4 images.');
+      return;
+    }
+
+    setIsSavingProduct(true);
+    try {
+      const payload = {
+        name: productForm.name.trim(),
+        description: productForm.description.trim(),
+        materialTypeId: productForm.materialTypeId,
+        sellerPrice: Number(productForm.sellerPrice || 0),
+        minYards: Number(productForm.minYards || 1),
+        stockYards: Number(productForm.stockYards || 0),
+        images,
+      };
+      if (isEditMode && selectedFabric) {
+        await api.seller.updateFabric(selectedFabric.id, payload);
+      } else {
+        await api.seller.createFabric(payload);
+      }
+      setShowProductModal(false);
+      resetProductForm();
+      await fetchDashboardData();
+      syncTabWithUrl('fabrics');
+    } catch (error: any) {
+      setProductError(error?.message || 'Unable to save fabric right now.');
+    } finally {
+      setIsSavingProduct(false);
+    }
+  };
+
   const lowStockFabrics = fabrics.filter(f => f.stockMeters < 20);
   const pendingOrders = orders.filter(o => o.status === 'CONFIRMED');
 
@@ -257,11 +405,9 @@ export default function SellerDashboard() {
           <h1 className="text-2xl font-bold text-gray-900">Seller Dashboard</h1>
           <p className="text-gray-500 mt-1">Manage your fabrics and track sales</p>
         </div>
-        <Button asChild>
-          <Link to="/seller?tab=fabrics">
-            <Plus className="w-4 h-4 mr-2" />
-            Manage Fabrics
-          </Link>
+        <Button onClick={openCreateProductModal}>
+          <Plus className="w-4 h-4 mr-2" />
+          Add Fabric Product
         </Button>
       </div>
 
@@ -428,11 +574,9 @@ export default function SellerDashboard() {
         <div className="bg-white rounded-xl p-6 shadow-sm border">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-gray-900">My Fabrics</h2>
-            <Button size="sm" asChild>
-              <Link to="/seller?tab=fabrics">
-                <Plus className="w-4 h-4 mr-2" />
-                Add/Manage Fabric
-              </Link>
+            <Button size="sm" onClick={openCreateProductModal}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Product
             </Button>
           </div>
           <DataTable
@@ -442,7 +586,7 @@ export default function SellerDashboard() {
                 header: 'Fabric',
                 render: (item) => (
                   <div className="flex items-center gap-3">
-                    <img src={item.images[0]} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
+                    <img src={item.images[0] || '/images/placeholder.jpg'} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
                     <div>
                       <p className="font-medium text-gray-900">{item.name}</p>
                       <p className="text-xs text-gray-500">{item.materialType?.name}</p>
@@ -481,8 +625,11 @@ export default function SellerDashboard() {
             searchKeys={['name', 'materialType.name']}
             actions={(item) => (
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => openStockModal(item)}>
+                <Button variant="outline" size="sm" onClick={() => openEditProductModal(item)} title="Edit product">
                   <Edit className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => openStockModal(item)} title="Update stock">
+                  <Package className="w-4 h-4" />
                 </Button>
                 <Button variant="outline" size="sm" asChild>
                   <Link to={`/fabrics/${item.id}`}>
@@ -549,6 +696,122 @@ export default function SellerDashboard() {
             </div>
           )}
         />
+      )}
+
+      {/* Product Create/Edit Modal */}
+      {showProductModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-2xl rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              {isEditMode ? 'Update Fabric Product' : 'Add Fabric Product'}
+            </h3>
+            <p className="text-sm text-gray-500 mb-5">Fabrics require 3 to 4 image URLs.</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fabric Name</label>
+                <input
+                  type="text"
+                  value={productForm.name}
+                  onChange={(e) => setProductForm((prev) => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  placeholder="e.g. Premium Ankara Cotton"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={productForm.description}
+                  onChange={(e) => setProductForm((prev) => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg min-h-[90px]"
+                  placeholder="Describe fabric quality, weave, and best use."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Material Type</label>
+                <select
+                  value={productForm.materialTypeId}
+                  onChange={(e) => setProductForm((prev) => ({ ...prev, materialTypeId: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                >
+                  {materialOptions.length === 0 ? (
+                    <option value="">No material types found</option>
+                  ) : null}
+                  {materialOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Seller Price (USD)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={productForm.sellerPrice}
+                  onChange={(e) => setProductForm((prev) => ({ ...prev, sellerPrice: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Yards</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={productForm.minYards}
+                  onChange={(e) => setProductForm((prev) => ({ ...prev, minYards: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Stock Yards</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={productForm.stockYards}
+                  onChange={(e) => setProductForm((prev) => ({ ...prev, stockYards: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Image URLs (one per line)</label>
+                <textarea
+                  value={productForm.imageUrls}
+                  onChange={(e) => setProductForm((prev) => ({ ...prev, imageUrls: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg min-h-[120px]"
+                  placeholder={'https://.../image1.jpg\nhttps://.../image2.jpg\nhttps://.../image3.jpg'}
+                />
+              </div>
+            </div>
+
+            {productError ? (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {productError}
+              </div>
+            ) : null}
+
+            <div className="mt-6 flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowProductModal(false);
+                  resetProductForm();
+                }}
+                disabled={isSavingProduct}
+              >
+                Cancel
+              </Button>
+              <Button className="flex-1" onClick={handleSaveProduct} disabled={isSavingProduct}>
+                {isSavingProduct ? 'Saving...' : isEditMode ? 'Update Product' : 'Add Product'}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Stock Update Modal */}

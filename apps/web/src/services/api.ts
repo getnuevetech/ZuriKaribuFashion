@@ -1651,6 +1651,9 @@ const sellerApi = {
   createFabric: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/fabric-seller/fabrics', data),
 
+  updateFabric: (fabricId: string, data: any) =>
+    apiService.patch<{ success: boolean; data: any }>(`/fabric-seller/fabrics/${fabricId}`, data),
+
   getOrders: () =>
     apiService.get<{ success: boolean; data: any[] }>('/fabric-seller/orders'),
 
