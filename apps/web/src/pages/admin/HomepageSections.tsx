@@ -132,8 +132,31 @@ interface FooterContent {
   email: string;
   phone: string;
   address: string;
-  socialLinks?: string;
+  socialLinks?: string | Record<string, unknown>;
   copyright: string;
+}
+type FooterLinkMode = 'CUSTOM_URL' | 'BLOG';
+type FooterMenuKey = 'shop' | 'company' | 'support';
+interface FooterMenuLink {
+  label: string;
+  href: string;
+}
+interface FooterPolicyConfig {
+  label: string;
+  href: string;
+  linkMode: FooterLinkMode;
+  blogPostId: string;
+  externalUrl: string;
+}
+interface FooterSocialConfig {
+  instagram: string;
+  facebook: string;
+  twitter: string;
+  menus: Record<FooterMenuKey, FooterMenuLink[]>;
+  policies: {
+    privacy: FooterPolicyConfig;
+    terms: FooterPolicyConfig;
+  };
 }
 
 interface VisibilitySection {
@@ -177,6 +200,42 @@ interface FeaturedProductDescriptionSettings {
 
 const FEATURED_DESCRIPTION_PREVIEW_TEXT =
   'Hand-finished African fashion piece crafted with premium fabric for modern style and everyday comfort.';
+const FOOTER_MENU_DEFAULTS: Record<FooterMenuKey, FooterMenuLink[]> = {
+  shop: [
+    { label: 'Ready To Wear', href: '/ready-to-wear' },
+    { label: 'Custom To Wear', href: '/designs' },
+    { label: 'Fabrics To Buy', href: '/fabrics' },
+    { label: 'New Arrivals', href: '/ready-to-wear' },
+  ],
+  company: [
+    { label: 'About Us', href: '/#about' },
+    { label: 'Our Designers', href: '/designs' },
+    { label: 'Sustainability', href: '/#about' },
+    { label: 'Careers', href: '/#contact' },
+  ],
+  support: [
+    { label: 'Contact Us', href: '/#contact' },
+    { label: 'FAQs', href: '/#contact' },
+    { label: 'Shipping Info', href: '/#contact' },
+    { label: 'Returns', href: '/#contact' },
+  ],
+};
+const FOOTER_POLICY_DEFAULTS = {
+  privacy: {
+    label: 'Privacy Policy',
+    href: '#',
+    linkMode: 'CUSTOM_URL' as FooterLinkMode,
+    blogPostId: '',
+    externalUrl: '#',
+  },
+  terms: {
+    label: 'Terms of Service',
+    href: '#',
+    linkMode: 'CUSTOM_URL' as FooterLinkMode,
+    blogPostId: '',
+    externalUrl: '#',
+  },
+};
 
 const trimPreviewToWordLimit = (text: string, limit: number) => {
   const words = String(text || '')
@@ -185,6 +244,83 @@ const trimPreviewToWordLimit = (text: string, limit: number) => {
     .filter(Boolean);
   if (words.length <= limit) return words.join(' ');
   return `${words.slice(0, limit).join(' ')}…`;
+};
+const toFooterMenuTextarea = (links: FooterMenuLink[]) => links.map((item) => `${item.label}|${item.href}`).join('\n');
+const parseFooterMenuTextarea = (value: string): FooterMenuLink[] =>
+  String(value || '')
+    .split('\n')
+    .map((line) => {
+      const parts = line.split('|');
+      const label = String(parts[0] || '').trim();
+      const href = String(parts.slice(1).join('|') || '').trim();
+      if (!label || !href) return null;
+      return { label, href };
+    })
+    .filter((entry): entry is FooterMenuLink => Boolean(entry));
+const parseFooterSocialConfig = (raw: unknown): FooterSocialConfig => {
+  const parsed =
+    typeof raw === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(raw);
+          } catch {
+            return null;
+          }
+        })()
+      : raw && typeof raw === 'object'
+        ? raw
+        : null;
+  if (!parsed || typeof parsed !== 'object') {
+    return {
+      instagram: '#',
+      facebook: '#',
+      twitter: '#',
+      menus: { ...FOOTER_MENU_DEFAULTS },
+      policies: { ...FOOTER_POLICY_DEFAULTS },
+    };
+  }
+  const row = parsed as Record<string, any>;
+  const menus = row.menus && typeof row.menus === 'object' ? row.menus : {};
+  const policies = row.policies && typeof row.policies === 'object' ? row.policies : {};
+  const normalizeMenu = (key: FooterMenuKey) => {
+    const fallback = FOOTER_MENU_DEFAULTS[key];
+    const rawMenu = Array.isArray(menus[key]) ? menus[key] : [];
+    const parsedMenu = rawMenu
+      .map((entry: any) => {
+        if (!entry || typeof entry !== 'object') return null;
+        const label = String(entry.label || '').trim();
+        const href = String(entry.href || entry.url || '').trim();
+        if (!label || !href) return null;
+        return { label, href };
+      })
+      .filter((entry: FooterMenuLink | null): entry is FooterMenuLink => Boolean(entry));
+    return parsedMenu.length > 0 ? parsedMenu : fallback;
+  };
+  const normalizePolicy = (key: 'privacy' | 'terms') => {
+    const policy = policies[key] && typeof policies[key] === 'object' ? policies[key] : {};
+    const fallback = FOOTER_POLICY_DEFAULTS[key];
+    return {
+      label: String(policy.label || fallback.label),
+      href: String(policy.href || policy.link || policy.externalUrl || fallback.href),
+      linkMode: String(policy.linkMode || '').toUpperCase() === 'BLOG' ? 'BLOG' : 'CUSTOM_URL',
+      blogPostId: String(policy.blogPostId || ''),
+      externalUrl: String(policy.externalUrl || policy.href || policy.link || fallback.externalUrl),
+    };
+  };
+  return {
+    instagram: String(row.instagram || '#'),
+    facebook: String(row.facebook || '#'),
+    twitter: String(row.twitter || '#'),
+    menus: {
+      shop: normalizeMenu('shop'),
+      company: normalizeMenu('company'),
+      support: normalizeMenu('support'),
+    },
+    policies: {
+      privacy: normalizePolicy('privacy'),
+      terms: normalizePolicy('terms'),
+    },
+  };
 };
 
 const FALLBACK_AFRICAN_COUNTRY_OPTIONS: CountryOption[] = [
@@ -1545,6 +1681,38 @@ function SectionModal({
         ctaLink: link,
       };
     }
+    if (type === 'footer' && item) {
+      const config = parseFooterSocialConfig(item.socialLinks);
+      const resolveBlogFromHref = (href: string) =>
+        blogOptions.find(
+          (blog) => String(blog.link || '').trim() === href || `/stories/${blog.slug}` === href
+        );
+      const termsFromHref = resolveBlogFromHref(config.policies.terms.href);
+      const privacyFromHref = resolveBlogFromHref(config.policies.privacy.href);
+      const termsLinkMode: FooterLinkMode =
+        config.policies.terms.linkMode === 'BLOG' || Boolean(config.policies.terms.blogPostId || termsFromHref)
+          ? 'BLOG'
+          : 'CUSTOM_URL';
+      const privacyLinkMode: FooterLinkMode =
+        config.policies.privacy.linkMode === 'BLOG' || Boolean(config.policies.privacy.blogPostId || privacyFromHref)
+          ? 'BLOG'
+          : 'CUSTOM_URL';
+      return {
+        ...item,
+        instagram: config.instagram,
+        facebook: config.facebook,
+        twitter: config.twitter,
+        shopMenuText: toFooterMenuTextarea(config.menus.shop),
+        companyMenuText: toFooterMenuTextarea(config.menus.company),
+        supportMenuText: toFooterMenuTextarea(config.menus.support),
+        termsLinkMode,
+        termsBlogPostId: config.policies.terms.blogPostId || termsFromHref?.id || '',
+        termsExternalUrl: config.policies.terms.externalUrl || config.policies.terms.href || '#',
+        privacyLinkMode,
+        privacyBlogPostId: config.policies.privacy.blogPostId || privacyFromHref?.id || '',
+        privacyExternalUrl: config.policies.privacy.externalUrl || config.policies.privacy.href || '#',
+      };
+    }
     return item || getDefaultFormData(type);
   });
   const [saving, setSaving] = useState(false);
@@ -1623,7 +1791,26 @@ function SectionModal({
       case 'testimonials':
         return { name: '', initials: '', location: '', quote: '', avatar: '', displayOrder: 0, isActive: true };
       case 'footer':
-        return { companyName: '', tagline: '', email: '', phone: '', address: '', socialLinks: '', copyright: '' };
+        return {
+          companyName: '',
+          tagline: '',
+          email: '',
+          phone: '',
+          address: '',
+          copyright: '',
+          instagram: '#',
+          facebook: '#',
+          twitter: '#',
+          shopMenuText: toFooterMenuTextarea(FOOTER_MENU_DEFAULTS.shop),
+          companyMenuText: toFooterMenuTextarea(FOOTER_MENU_DEFAULTS.company),
+          supportMenuText: toFooterMenuTextarea(FOOTER_MENU_DEFAULTS.support),
+          termsLinkMode: 'CUSTOM_URL',
+          termsBlogPostId: '',
+          termsExternalUrl: '#',
+          privacyLinkMode: 'CUSTOM_URL',
+          privacyBlogPostId: '',
+          privacyExternalUrl: '#',
+        };
       default:
         return {};
     }
@@ -1676,6 +1863,19 @@ function SectionModal({
       return next;
     });
   }, [type, formData?.linkMode]);
+  useEffect(() => {
+    if (type !== 'footer') return;
+    setFormData((prev: any) => {
+      const next = { ...prev };
+      if (String(next.termsLinkMode || 'CUSTOM_URL') !== 'BLOG') {
+        next.termsBlogPostId = '';
+      }
+      if (String(next.privacyLinkMode || 'CUSTOM_URL') !== 'BLOG') {
+        next.privacyBlogPostId = '';
+      }
+      return next;
+    });
+  }, [type, formData?.termsLinkMode, formData?.privacyLinkMode]);
 
   const handleCountryNameChange = (countryName: string) => {
     const option = countryOptionByName.get(String(countryName || '').trim().toLowerCase());
@@ -1873,13 +2073,60 @@ function SectionModal({
           return { ...formData, initials };
         }
         if (type === 'footer') {
+          const termsMode = String(formData.termsLinkMode || 'CUSTOM_URL').toUpperCase() === 'BLOG' ? 'BLOG' : 'CUSTOM_URL';
+          const privacyMode =
+            String(formData.privacyLinkMode || 'CUSTOM_URL').toUpperCase() === 'BLOG' ? 'BLOG' : 'CUSTOM_URL';
+          const termsBlog = blogOptions.find((blog) => blog.id === String(formData.termsBlogPostId || ''));
+          const privacyBlog = blogOptions.find((blog) => blog.id === String(formData.privacyBlogPostId || ''));
+          const termsHref =
+            termsMode === 'BLOG'
+              ? String(termsBlog?.link || '').trim()
+              : String(formData.termsExternalUrl || '#').trim();
+          const privacyHref =
+            privacyMode === 'BLOG'
+              ? String(privacyBlog?.link || '').trim()
+              : String(formData.privacyExternalUrl || '#').trim();
+          if (termsMode === 'BLOG' && !termsHref) {
+            throw new Error('Please select a blog story for Terms of Service.');
+          }
+          if (privacyMode === 'BLOG' && !privacyHref) {
+            throw new Error('Please select a blog story for Privacy Policy.');
+          }
+          const shopMenu = parseFooterMenuTextarea(String(formData.shopMenuText || ''));
+          const companyMenu = parseFooterMenuTextarea(String(formData.companyMenuText || ''));
+          const supportMenu = parseFooterMenuTextarea(String(formData.supportMenuText || ''));
           return {
             companyName: formData.companyName || undefined,
             tagline: formData.tagline || undefined,
             email: formData.email || undefined,
             phone: formData.phone || undefined,
             address: formData.address || undefined,
-            socialLinks: formData.socialLinks || undefined,
+            socialLinks: {
+              instagram: String(formData.instagram || '#').trim() || '#',
+              facebook: String(formData.facebook || '#').trim() || '#',
+              twitter: String(formData.twitter || '#').trim() || '#',
+              menus: {
+                shop: shopMenu,
+                company: companyMenu,
+                support: supportMenu,
+              },
+              policies: {
+                terms: {
+                  label: 'Terms of Service',
+                  linkMode: termsMode,
+                  blogPostId: termsMode === 'BLOG' ? String(formData.termsBlogPostId || '') : '',
+                  externalUrl: termsMode === 'CUSTOM_URL' ? termsHref : '',
+                  href: termsHref || '#',
+                },
+                privacy: {
+                  label: 'Privacy Policy',
+                  linkMode: privacyMode,
+                  blogPostId: privacyMode === 'BLOG' ? String(formData.privacyBlogPostId || '') : '',
+                  externalUrl: privacyMode === 'CUSTOM_URL' ? privacyHref : '',
+                  href: privacyHref || '#',
+                },
+              },
+            },
             copyright: formData.copyright || undefined,
           };
         }
@@ -2702,15 +2949,142 @@ function SectionModal({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Social Links JSON</label>
-              <textarea
-                value={formData.socialLinks || ''}
-                onChange={(e) => setFormData({ ...formData, socialLinks: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                rows={3}
-                placeholder='{"instagram":"https://...","facebook":"https://...","twitter":"https://..."}'
-              />
+            <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-gray-900">Social Links</h4>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Instagram</label>
+                  <input
+                    type="text"
+                    value={formData.instagram || ''}
+                    onChange={(e) => setFormData({ ...formData, instagram: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    placeholder="https://instagram.com/..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Facebook</label>
+                  <input
+                    type="text"
+                    value={formData.facebook || ''}
+                    onChange={(e) => setFormData({ ...formData, facebook: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    placeholder="https://facebook.com/..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Twitter / X</label>
+                  <input
+                    type="text"
+                    value={formData.twitter || ''}
+                    onChange={(e) => setFormData({ ...formData, twitter: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    placeholder="https://x.com/..."
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-gray-900">Policy Links</h4>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-700">Terms of Service</p>
+                  <select
+                    value={formData.termsLinkMode || 'CUSTOM_URL'}
+                    onChange={(e) => setFormData({ ...formData, termsLinkMode: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  >
+                    <option value="CUSTOM_URL">Custom / External URL</option>
+                    <option value="BLOG">Blog Story</option>
+                  </select>
+                  {String(formData.termsLinkMode || 'CUSTOM_URL') === 'BLOG' ? (
+                    <select
+                      value={formData.termsBlogPostId || ''}
+                      onChange={(e) => setFormData({ ...formData, termsBlogPostId: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    >
+                      <option value="">Select blog story</option>
+                      {blogOptions.map((blog) => (
+                        <option key={blog.id} value={blog.id}>
+                          [{blog.audienceType}] {blog.title}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={formData.termsExternalUrl || ''}
+                      onChange={(e) => setFormData({ ...formData, termsExternalUrl: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                      placeholder="/stories/terms or https://..."
+                    />
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-700">Privacy Policy</p>
+                  <select
+                    value={formData.privacyLinkMode || 'CUSTOM_URL'}
+                    onChange={(e) => setFormData({ ...formData, privacyLinkMode: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  >
+                    <option value="CUSTOM_URL">Custom / External URL</option>
+                    <option value="BLOG">Blog Story</option>
+                  </select>
+                  {String(formData.privacyLinkMode || 'CUSTOM_URL') === 'BLOG' ? (
+                    <select
+                      value={formData.privacyBlogPostId || ''}
+                      onChange={(e) => setFormData({ ...formData, privacyBlogPostId: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    >
+                      <option value="">Select blog story</option>
+                      {blogOptions.map((blog) => (
+                        <option key={blog.id} value={blog.id}>
+                          [{blog.audienceType}] {blog.title}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={formData.privacyExternalUrl || ''}
+                      onChange={(e) => setFormData({ ...formData, privacyExternalUrl: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                      placeholder="/stories/privacy or https://..."
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-gray-900">Footer Menus</h4>
+              <p className="text-xs text-gray-500">Use one item per line in this format: <span className="font-medium">Label|URL</span></p>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Shop Menu</label>
+                <textarea
+                  value={formData.shopMenuText || ''}
+                  onChange={(e) => setFormData({ ...formData, shopMenuText: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  rows={4}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Company Menu</label>
+                <textarea
+                  value={formData.companyMenuText || ''}
+                  onChange={(e) => setFormData({ ...formData, companyMenuText: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  rows={4}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Support Menu</label>
+                <textarea
+                  value={formData.supportMenuText || ''}
+                  onChange={(e) => setFormData({ ...formData, supportMenuText: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  rows={4}
+                />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Copyright</label>
