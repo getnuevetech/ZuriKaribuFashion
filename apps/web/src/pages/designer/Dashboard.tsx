@@ -283,15 +283,13 @@ export default function DesignerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsResult, designsResult, readyResult, ordersResult, categoriesResult, fabricsResult, profileResult, profileFieldsResult, currencyResult] = await Promise.allSettled([
+      const [statsResult, designsResult, readyResult, ordersResult, categoriesResult, fabricsResult, currencyResult] = await Promise.allSettled([
         api.designer.getDashboard(),
         api.designer.getDesigns(),
         api.designer.getReadyToWear(),
         api.designer.getOrders(),
         api.products.getCategories(),
         api.products.getFabrics({ limit: 200 }),
-        api.designer.getProfileCompletion(),
-        api.designer.getProfileFields(),
         api.currency.getMyOptions(),
       ]);
       const statsRes = statsResult.status === 'fulfilled' ? statsResult.value : null;
@@ -300,8 +298,6 @@ export default function DesignerDashboard() {
       const ordersRes = ordersResult.status === 'fulfilled' ? ordersResult.value : null;
       const categoriesRes = categoriesResult.status === 'fulfilled' ? categoriesResult.value : null;
       const fabricsRes = fabricsResult.status === 'fulfilled' ? fabricsResult.value : null;
-      const profileRes = profileResult.status === 'fulfilled' ? profileResult.value : null;
-      const profileFieldsRes = profileFieldsResult.status === 'fulfilled' ? profileFieldsResult.value : null;
       const currencyRes = currencyResult.status === 'fulfilled' ? currencyResult.value : null;
       const settledCallStatus = (result: PromiseSettledResult<any>) => {
         if (result.status === 'fulfilled') {
@@ -314,6 +310,21 @@ export default function DesignerDashboard() {
         const message = String(reason?.response?.data?.message || reason?.message || 'unknown');
         return `request-failed:${status ?? 'no-status'}:${message.slice(0, 120)}`;
       };
+      const dashboardCompletion = statsRes?.success ? statsRes.data?.profileCompletion : null;
+      let profileCompletionCallStatus = dashboardCompletion ? 'from-dashboard' : 'skipped';
+      let profileFieldsCallStatus = dashboardCompletion ? 'from-dashboard' : 'skipped';
+      let profileRes: any = null;
+      let profileFieldsRes: any = null;
+      if (!dashboardCompletion) {
+        const [profileResult, profileFieldsResult] = await Promise.allSettled([
+          api.designer.getProfileCompletion(),
+          api.designer.getProfileFields(),
+        ]);
+        profileRes = profileResult.status === 'fulfilled' ? profileResult.value : null;
+        profileFieldsRes = profileFieldsResult.status === 'fulfilled' ? profileFieldsResult.value : null;
+        profileCompletionCallStatus = settledCallStatus(profileResult);
+        profileFieldsCallStatus = settledCallStatus(profileFieldsResult);
+      }
 
       const toAddressObject = (value: any) => {
         if (!value) return null;
@@ -440,12 +451,7 @@ export default function DesignerDashboard() {
           usdPerUnitByCurrency: (currencyRes.data?.usdPerUnitByCurrency || { USD: 1 }) as Record<string, number>,
         });
       }
-      const completionPayload =
-        profileRes?.success
-          ? profileRes.data
-          : statsRes?.success
-            ? statsRes.data?.profileCompletion
-            : null;
+      const completionPayload = dashboardCompletion || (profileRes?.success ? profileRes.data : null);
       const governanceFields = profileFieldsRes?.success && Array.isArray(profileFieldsRes.data?.fields)
         ? profileFieldsRes.data.fields.filter((entry: any) => entry?.isActive !== false)
         : [];
@@ -483,18 +489,8 @@ export default function DesignerDashboard() {
           dashboardCall: settledCallStatus(statsResult),
           designsCall: settledCallStatus(designsResult),
           ordersCall: settledCallStatus(ordersResult),
-          profileCompletionCall:
-            profileResult.status === 'fulfilled'
-              ? profileRes?.success
-                ? 'success'
-                : `api-failed:${String((profileRes as any)?.message || 'unknown')}`
-              : 'request-failed',
-          profileFieldsCall:
-            profileFieldsResult.status === 'fulfilled'
-              ? profileFieldsRes?.success
-                ? 'success'
-                : `api-failed:${String((profileFieldsRes as any)?.message || 'unknown')}`
-              : 'request-failed',
+          profileCompletionCall: profileCompletionCallStatus,
+          profileFieldsCall: profileFieldsCallStatus,
           completionFieldCount,
           governanceFieldCount: governanceFields.length,
           effectiveFieldCount: effectiveFields.length,
@@ -530,18 +526,8 @@ export default function DesignerDashboard() {
           dashboardCall: settledCallStatus(statsResult),
           designsCall: settledCallStatus(designsResult),
           ordersCall: settledCallStatus(ordersResult),
-          profileCompletionCall:
-            profileResult.status === 'fulfilled'
-              ? profileRes?.success
-                ? 'success'
-                : `api-failed:${String((profileRes as any)?.message || 'unknown')}`
-              : 'request-failed',
-          profileFieldsCall:
-            profileFieldsResult.status === 'fulfilled'
-              ? profileFieldsRes?.success
-                ? 'success'
-                : `api-failed:${String((profileFieldsRes as any)?.message || 'unknown')}`
-              : 'request-failed',
+          profileCompletionCall: profileCompletionCallStatus,
+          profileFieldsCall: profileFieldsCallStatus,
           completionFieldCount,
           governanceFieldCount: governanceFields.length,
           effectiveFieldCount: governanceFields.length,
@@ -553,18 +539,8 @@ export default function DesignerDashboard() {
           dashboardCall: settledCallStatus(statsResult),
           designsCall: settledCallStatus(designsResult),
           ordersCall: settledCallStatus(ordersResult),
-          profileCompletionCall:
-            profileResult.status === 'fulfilled'
-              ? profileRes?.success
-                ? 'success'
-                : `api-failed:${String((profileRes as any)?.message || 'unknown')}`
-              : 'request-failed',
-          profileFieldsCall:
-            profileFieldsResult.status === 'fulfilled'
-              ? profileFieldsRes?.success
-                ? 'success'
-                : `api-failed:${String((profileFieldsRes as any)?.message || 'unknown')}`
-              : 'request-failed',
+          profileCompletionCall: profileCompletionCallStatus,
+          profileFieldsCall: profileFieldsCallStatus,
           completionFieldCount,
           governanceFieldCount: governanceFields.length,
           effectiveFieldCount: 0,
