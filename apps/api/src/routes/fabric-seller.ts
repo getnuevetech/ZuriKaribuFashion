@@ -90,6 +90,36 @@ async function ensureSellerGovernanceSchema() {
   await prisma.$executeRawUnsafe(
     `CREATE UNIQUE INDEX IF NOT EXISTS "VendorProfileSubmission_role_userId_key" ON "VendorProfileSubmission"("role","userId")`
   );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "VendorProfileField" ADD COLUMN IF NOT EXISTS "createdById" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "VendorProfileField" ADD COLUMN IF NOT EXISTS "updatedById" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "VendorProfileField" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "VendorProfileField" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "VendorProfileField" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
+  );
+  await prisma.$executeRawUnsafe(
+    `UPDATE "VendorProfileField" SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
+  );
+  await prisma.$executeRawUnsafe(
+    `UPDATE "VendorProfileSubmission" SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "VendorProfileField_role_key_key" ON "VendorProfileField"("role","key")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "VendorProfileField_role_sortOrder_idx" ON "VendorProfileField"("role","sortOrder")`
+  );
   sellerGovernanceSchemaEnsured = true;
 }
 
@@ -220,8 +250,20 @@ async function readSellerProfileFields() {
     return rows.map((row) => ({
       ...row,
       required: Boolean(row.required),
-      isActive: Boolean(row.isActive),
-      options: Array.isArray(row.options) ? row.options : [],
+      isActive: row.isActive !== false,
+      options:
+        Array.isArray(row.options)
+          ? row.options
+          : typeof row.options === 'string'
+            ? (() => {
+                try {
+                  const parsed = JSON.parse(row.options);
+                  return Array.isArray(parsed) ? parsed : [];
+                } catch {
+                  return [];
+                }
+              })()
+            : [],
     }));
   } catch {
     return [];

@@ -252,7 +252,7 @@ export default function AdminVendorProfiles() {
             <p className="text-sm text-gray-600">
               Admin-defined required fields for <span className="font-medium">{roleLabel}</span> full profile completion.
             </p>
-            <Button size="sm" variant="outline" onClick={addField}>
+            <Button size="sm" variant="outline" type="button" onClick={addField}>
               Add Field
             </Button>
           </div>
@@ -311,7 +311,7 @@ export default function AdminVendorProfiles() {
                       />
                       Required
                     </label>
-                    <Button size="sm" variant="outline" onClick={() => removeField(index)}>
+                    <Button size="sm" variant="outline" type="button" onClick={() => removeField(index)}>
                       Remove
                     </Button>
                   </div>
