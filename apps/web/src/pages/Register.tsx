@@ -134,7 +134,13 @@ export default function Register() {
       const response = await api.auth.loginWithGoogle(credential);
       if (response.success && response.data?.token) {
         login(response.data.user, response.data.token);
-        navigate(getHomeRouteForUser(response.data.user));
+        const targetRoute = getHomeRouteForUser(response.data.user);
+        navigate(targetRoute, { replace: true });
+        window.setTimeout(() => {
+          if (window.location.pathname === '/register') {
+            window.location.assign(targetRoute);
+          }
+        }, 0);
       } else {
         setError('Google sign up failed. Please try again.');
       }

@@ -981,9 +981,9 @@ async function writeCountryImageGenerationWithFallback<T>(data: unknown) {
   throw lastError ?? new Error('Country image generation route not found.');
 }
 
-const googleLoginPaths = ['/auth/google', '/google', '/auth/google-login', '/auth/login/google'];
-const googleLinkStatusPaths = ['/auth/google/link-status', '/google/link-status', '/auth/google-link-status'];
-const googleLinkPaths = ['/auth/google/link', '/google/link', '/auth/google-link'];
+const googleLoginPaths = ['/auth/google', '/auth/google-login', '/auth/login/google'];
+const googleLinkStatusPaths = ['/auth/google/link-status', '/auth/google-link-status'];
+const googleLinkPaths = ['/auth/google/link', '/auth/google-link'];
 
 async function postWithRouteFallback<T>(paths: string[], data: unknown) {
   let lastError: unknown = null;

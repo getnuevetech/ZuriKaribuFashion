@@ -30,7 +30,13 @@ export default function Login() {
       const response = await api.auth.login(formData.email, formData.password);
       if (response.success) {
         login(response.data.user, response.data.token);
-        navigate(getHomeRouteForUser(response.data.user));
+        const targetRoute = getHomeRouteForUser(response.data.user);
+        navigate(targetRoute, { replace: true });
+        window.setTimeout(() => {
+          if (window.location.pathname === '/login') {
+            window.location.assign(targetRoute);
+          }
+        }, 0);
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid email or password');
@@ -51,7 +57,13 @@ export default function Login() {
       const response = await api.auth.loginWithGoogle(credential);
       if (response.success && response.data?.token) {
         login(response.data.user, response.data.token);
-        navigate(getHomeRouteForUser(response.data.user));
+        const targetRoute = getHomeRouteForUser(response.data.user);
+        navigate(targetRoute, { replace: true });
+        window.setTimeout(() => {
+          if (window.location.pathname === '/login') {
+            window.location.assign(targetRoute);
+          }
+        }, 0);
       } else {
         setError('Google login failed. Please try again.');
       }

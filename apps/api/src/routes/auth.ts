@@ -648,7 +648,7 @@ router.post('/login', async (req, res, next) => {
 });
 
 // Google Sign-In (ID token flow)
-router.post('/google', async (req, res, next) => {
+router.post(['/google', '/google-login', '/login/google'], async (req, res, next) => {
   try {
     if (GOOGLE_CLIENT_IDS.length === 0) {
       return res.status(503).json({
@@ -804,7 +804,7 @@ router.post('/google', async (req, res, next) => {
   }
 });
 
-router.get('/google/link-status', authenticate, async (req, res, next) => {
+router.get(['/google/link-status', '/google-link-status'], authenticate, async (req, res, next) => {
   try {
     const link = await getGoogleAuthLinkByUserId(req.user!.id);
     return res.json({
@@ -820,7 +820,7 @@ router.get('/google/link-status', authenticate, async (req, res, next) => {
   }
 });
 
-router.post('/google/link', authenticate, async (req, res, next) => {
+router.post(['/google/link', '/google-link'], authenticate, async (req, res, next) => {
   try {
     if (GOOGLE_CLIENT_IDS.length === 0) {
       return res.status(503).json({
@@ -878,7 +878,7 @@ router.post('/google/link', authenticate, async (req, res, next) => {
   }
 });
 
-router.delete('/google/link', authenticate, async (req, res, next) => {
+router.delete(['/google/link', '/google-link'], authenticate, async (req, res, next) => {
   try {
     await ensureGoogleAuthSchema();
     await prisma.$executeRawUnsafe(
