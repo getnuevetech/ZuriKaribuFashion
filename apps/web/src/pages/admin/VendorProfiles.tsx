@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { api } from '../../services/api';
+import { getCityOptionsByCountryCode, getCountryOptions, resolveCountryCode, resolveCountryName } from '../../data/locationOptions';
 
 type VendorRole = 'FABRIC_SELLER' | 'FASHION_DESIGNER';
 type VendorProfileStatus = 'INCOMPLETE' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
@@ -59,6 +60,9 @@ export default function AdminVendorProfiles() {
     address: '',
     phone: '',
   });
+  const countryOptions = useMemo(() => getCountryOptions(), []);
+  const newVendorCountryCode = resolveCountryCode(newVendor.country);
+  const cityOptions = useMemo(() => getCityOptionsByCountryCode(newVendorCountryCode), [newVendorCountryCode]);
 
   const roleLabel = role === 'FABRIC_SELLER' ? 'Fabric Seller' : 'Fashion Designer';
 
@@ -582,19 +586,38 @@ export default function AdminVendorProfiles() {
                   placeholder="Last name"
                   className="rounded border px-3 py-2 text-sm"
                 />
-                <input
+                <select
                   required
-                  value={newVendor.country}
-                  onChange={(e) => setNewVendor((prev) => ({ ...prev, country: e.target.value }))}
-                  placeholder="Country"
+                  value={newVendorCountryCode}
+                  onChange={(e) =>
+                    setNewVendor((prev) => ({
+                      ...prev,
+                      country: resolveCountryName(e.target.value),
+                      city: '',
+                    }))
+                  }
                   className="rounded border px-3 py-2 text-sm"
-                />
-                <input
+                >
+                  <option value="">Select country</option>
+                  {countryOptions.map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.name}
+                    </option>
+                  ))}
+                </select>
+                <select
                   value={newVendor.city}
                   onChange={(e) => setNewVendor((prev) => ({ ...prev, city: e.target.value }))}
-                  placeholder="City (optional)"
                   className="rounded border px-3 py-2 text-sm"
-                />
+                  disabled={!newVendor.country}
+                >
+                  <option value="">{newVendor.country ? 'Select city (optional)' : 'Select country first'}</option>
+                  {cityOptions.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
                 <input
                   value={newVendor.phone}
                   onChange={(e) => setNewVendor((prev) => ({ ...prev, phone: e.target.value }))}

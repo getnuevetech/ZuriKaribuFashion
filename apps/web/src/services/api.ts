@@ -1298,6 +1298,11 @@ const adminPromoBadgeWriteAttempts = [
   { method: 'put', path: '/admin/banners/promo-badge' },
   { method: 'patch', path: '/admin/banners/promo-badge' },
 ] as const;
+const adminCreateMinimalVendorPaths = [
+  '/admin/vendor-profiles/create-minimal',
+  '/admin/vendor-profile/create-minimal',
+  '/admin/vendors/create-minimal',
+];
 
 async function readAdminPromoBadgeWithFallback<T>() {
   let lastError: unknown = null;
@@ -1338,6 +1343,51 @@ async function writeAdminPromoBadgeWithFallback<T>(data: { valueText: string; la
     }
   }
   throw lastError ?? new Error('Promo badge settings route not found.');
+}
+
+async function createMinimalVendorWithFallback<T>(data: {
+  role: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  businessName: string;
+  country: string;
+  city?: string;
+  address?: string;
+  phone?: string;
+}) {
+  let lastError: unknown = null;
+  for (const path of adminCreateMinimalVendorPaths) {
+    try {
+      return await apiService.post<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+
+  // Compatibility fallback for older backends that only support /admin/users.
+  if (!isRetryableRouteError(lastError)) {
+    throw lastError ?? new Error('Vendor creation route not found.');
+  }
+  const fallbackResponse = await apiService.post<{ success: boolean; data: any; message?: string }>('/admin/users', {
+    email: data.email,
+    firstName: data.firstName,
+    lastName: data.lastName,
+    password: data.password,
+    role: data.role,
+    status: 'PENDING',
+    phone: data.phone,
+  });
+  return {
+    success: Boolean(fallbackResponse?.success),
+    message:
+      fallbackResponse?.message ||
+      'Vendor user created. If location/profile fields are blank, update Vendor Profile Governance and ask vendor to complete profile on first login.',
+    data: fallbackResponse?.data,
+  } as T;
 }
 
 const adminApi = {
@@ -1437,7 +1487,7 @@ const adminApi = {
     city?: string;
     address?: string;
     phone?: string;
-  }) => apiService.post<{ success: boolean; data: any; message?: string }>('/admin/vendor-profiles/create-minimal', data),
+  }) => createMinimalVendorWithFallback<{ success: boolean; data: any; message?: string }>(data),
 
   getProducts: (params?: {
     search?: string;

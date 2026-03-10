@@ -6,6 +6,7 @@ import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import Button from '../components/ui/Button';
 import { getHomeRouteForUser } from '../auth/rbac';
+import { getCityOptionsByCountryCode, getCountryOptions, resolveCountryCode, resolveCountryName } from '../data/locationOptions';
 
 type UserRole = 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER';
 
@@ -60,6 +61,9 @@ export default function Register() {
   const googleClientId = String(
     import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || ''
   ).trim();
+  const countryOptions = getCountryOptions();
+  const selectedCountryCode = resolveCountryCode(formData.country);
+  const cityOptions = getCityOptionsByCountryCode(selectedCountryCode);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -343,18 +347,22 @@ export default function Register() {
                 </label>
                 <select
                   required
-                  value={formData.country}
-                  onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                  value={selectedCountryCode}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      country: resolveCountryName(e.target.value),
+                      city: '',
+                    })
+                  }
                   className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 >
                   <option value="">Select country</option>
-                  <option value="NG">Nigeria</option>
-                  <option value="GH">Ghana</option>
-                  <option value="KE">Kenya</option>
-                  <option value="ZA">South Africa</option>
-                  <option value="US">United States</option>
-                  <option value="GB">United Kingdom</option>
-                  <option value="CA">Canada</option>
+                  {countryOptions.map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -379,14 +387,20 @@ export default function Register() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     City *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     required
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                     className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    placeholder="City"
-                  />
+                    disabled={!formData.country}
+                  >
+                    <option value="">{formData.country ? 'Select city' : 'Select country first'}</option>
+                    {cityOptions.map((city) => (
+                      <option key={city} value={city}>
+                        {city}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
             </div>

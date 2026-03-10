@@ -17,6 +17,7 @@ import {
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import { useCurrencyStore } from '../store/currencyStore';
+import { getCityOptionsByCountryCode, getCountryOptions, resolveCountryCode } from '../data/locationOptions';
 import { api } from '../services/api';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -62,6 +63,9 @@ export default function Checkout() {
     country: '',
     phone: '',
   });
+  const countryOptions = getCountryOptions();
+  const shippingCountryCode = resolveCountryCode(shippingAddress.country);
+  const cityOptions = getCityOptionsByCountryCode(shippingCountryCode);
 
   const shipping = totalPrice > 200 ? 0 : 25;
   const finalTotal = totalPrice + shipping;
@@ -357,15 +361,47 @@ export default function Checkout() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Country *
+                    </label>
+                    <select
+                      required
+                      value={shippingAddress.country}
+                      onChange={(e) =>
+                        setShippingAddress((prev) => ({
+                          ...prev,
+                          country: e.target.value,
+                          city: '',
+                        }))
+                      }
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    >
+                      <option value="">Select country</option>
+                      {countryOptions.map((country) => (
+                        <option key={country.code} value={country.code}>
+                          {country.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       City *
                     </label>
-                    <input
-                      type="text"
+                    <select
                       required
                       value={shippingAddress.city}
                       onChange={(e) => setShippingAddress(prev => ({ ...prev, city: e.target.value }))}
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    />
+                      disabled={!shippingAddress.country}
+                    >
+                      <option value="">{shippingAddress.country ? 'Select city' : 'Select country first'}</option>
+                      {cityOptions.map((city) => (
+                        <option key={city} value={city}>
+                          {city}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
@@ -392,27 +428,6 @@ export default function Checkout() {
                       onChange={(e) => setShippingAddress(prev => ({ ...prev, postalCode: e.target.value }))}
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Country *
-                    </label>
-                    <select
-                      required
-                      value={shippingAddress.country}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, country: e.target.value }))}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    >
-                      <option value="">Select country</option>
-                      <option value="US">United States</option>
-                      <option value="NG">Nigeria</option>
-                      <option value="GH">Ghana</option>
-                      <option value="KE">Kenya</option>
-                      <option value="ZA">South Africa</option>
-                      <option value="GB">United Kingdom</option>
-                      <option value="CA">Canada</option>
-                    </select>
                   </div>
 
                   <div className="md:col-span-2">

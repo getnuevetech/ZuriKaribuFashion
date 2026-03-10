@@ -14,6 +14,7 @@ import { api } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import { getCityOptionsByCountryCode, getCountryOptions, resolveCountryCode } from '../../data/locationOptions';
 
 interface Address {
   id: string;
@@ -80,6 +81,9 @@ export default function CustomerProfile() {
     phone: '',
     isDefault: false,
   });
+  const countryOptions = getCountryOptions();
+  const addressCountryCode = resolveCountryCode(newAddress.country);
+  const cityOptions = getCityOptionsByCountryCode(addressCountryCode);
 
   useEffect(() => {
     fetchAddresses();
@@ -452,14 +456,20 @@ export default function CustomerProfile() {
                   className="w-full px-4 py-2 border rounded-lg"
                 />
               </div>
-              <input
-                type="text"
-                placeholder="City"
+              <select
                 value={newAddress.city}
                 onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
                 className="px-4 py-2 border rounded-lg"
                 required
-              />
+                disabled={!newAddress.country}
+              >
+                <option value="">{newAddress.country ? 'Select city' : 'Select country first'}</option>
+                {cityOptions.map((city) => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
+              </select>
               <input
                 type="text"
                 placeholder="State"
@@ -478,18 +488,22 @@ export default function CustomerProfile() {
               />
               <select
                 value={newAddress.country}
-                onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
+                onChange={(e) =>
+                  setNewAddress({
+                    ...newAddress,
+                    country: e.target.value,
+                    city: '',
+                  })
+                }
                 className="px-4 py-2 border rounded-lg"
                 required
               >
                 <option value="">Select Country</option>
-                <option value="US">United States</option>
-                <option value="NG">Nigeria</option>
-                <option value="GH">Ghana</option>
-                <option value="KE">Kenya</option>
-                <option value="ZA">South Africa</option>
-                <option value="GB">United Kingdom</option>
-                <option value="CA">Canada</option>
+                {countryOptions.map((country) => (
+                  <option key={country.code} value={country.code}>
+                    {country.name}
+                  </option>
+                ))}
               </select>
               <div className="md:col-span-2">
                 <input

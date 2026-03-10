@@ -26,6 +26,7 @@ import DataTable from '../../components/dashboard/DataTable';
 import { BarChart, LineChart } from '../../components/dashboard/SimpleChart';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import { getCityOptionsByCountryCode, getCountryOptions, resolveCountryCode, resolveCountryName } from '../../data/locationOptions';
 
 interface DesignerStats {
   totalDesigns: number;
@@ -152,6 +153,27 @@ interface DesignerProfileCompletion {
   profileData?: Record<string, any>;
   fields?: VendorProfileField[];
 }
+
+const LOCATION_COUNTRIES = getCountryOptions();
+const COUNTRY_FIELD_HINTS = ['country', 'businesscountry', 'vendorcountry'];
+const CITY_FIELD_HINTS = ['city', 'businesscity', 'vendorcity', 'town'];
+
+const normalizeFieldKey = (value: unknown) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+const isCountryGovernanceField = (field: VendorProfileField) => {
+  const key = normalizeFieldKey(field.key);
+  const label = normalizeFieldKey(field.label);
+  return COUNTRY_FIELD_HINTS.some((hint) => key.includes(hint) || label.includes(hint));
+};
+
+const isCityGovernanceField = (field: VendorProfileField) => {
+  const key = normalizeFieldKey(field.key);
+  const label = normalizeFieldKey(field.label);
+  return CITY_FIELD_HINTS.some((hint) => key.includes(hint) || label.includes(hint));
+};
 
 export default function DesignerDashboard() {
   const [stats, setStats] = useState<DesignerStats | null>(null);
@@ -665,6 +687,12 @@ export default function DesignerDashboard() {
   ];
   const featuredRows = productRows.filter((item) => item.isFeatured);
   const pendingOrders = orders.filter(o => o.status === 'PENDING');
+  const activeProfileFields = (profileCompletion?.fields || []).filter((field) => field.isActive !== false);
+  const selectedProfileCountryField = activeProfileFields.find(isCountryGovernanceField);
+  const selectedProfileCountry = selectedProfileCountryField
+    ? profileForm[selectedProfileCountryField.key] || ''
+    : profileCompletion?.profile?.country || '';
+  const profileCityOptions = getCityOptionsByCountryCode(resolveCountryCode(selectedProfileCountry));
   const selectedListingCurrency = String(designForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD').toUpperCase();
   const selectedUsdPerUnit = Number(currencyOptions.usdPerUnitByCurrency?.[selectedListingCurrency] || 1);
   const localPricePreview = Number(designForm.basePrice || 0);
@@ -717,21 +745,64 @@ export default function DesignerDashboard() {
             ) : null}
           </div>
 
-          {(profileCompletion?.fields || []).filter((field) => field.isActive !== false).length > 0 ? (
+          {activeProfileFields.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {(profileCompletion?.fields || [])
-                .filter((field) => field.isActive !== false)
-                .map((field) => {
+              {activeProfileFields.map((field) => {
                   const value = profileForm[field.key] || '';
                   const isTextArea = field.fieldType === 'TEXTAREA';
                   const isSelect = field.fieldType === 'SELECT' && Array.isArray(field.options) && field.options.length > 0;
+                  const isCountryField = isCountryGovernanceField(field);
+                  const isCityField = isCityGovernanceField(field);
                   return (
                     <div key={field.key} className={isTextArea ? 'md:col-span-2' : ''}>
                       <label className="block text-xs font-semibold text-amber-900 mb-1">
                         {field.label}
                         {field.required ? <span className="text-red-600 ml-1">*</span> : null}
                       </label>
-                      {isSelect ? (
+                      {isCountryField ? (
+                        <select
+                          value={resolveCountryCode(value)}
+                          onChange={(event) =>
+                            setProfileForm((prev) => {
+                              const next = { ...prev, [field.key]: resolveCountryName(event.target.value) };
+                              for (const entry of activeProfileFields) {
+                                if (entry.key !== field.key && isCityGovernanceField(entry)) {
+                                  next[entry.key] = '';
+                                }
+                              }
+                              return next;
+                            })
+                          }
+                          className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm"
+                        >
+                          <option value="">Select country...</option>
+                          {LOCATION_COUNTRIES.map((country) => (
+                            <option key={country.code} value={country.code}>
+                              {country.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : isCityField ? (
+                        <select
+                          value={value}
+                          onChange={(event) => setProfileForm((prev) => ({ ...prev, [field.key]: event.target.value }))}
+                          className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm"
+                          disabled={!selectedProfileCountry}
+                        >
+                          <option value="">
+                            {selectedProfileCountry
+                              ? profileCityOptions.length > 0
+                                ? 'Select city...'
+                                : 'No cities found for selected country'
+                              : 'Select country first'}
+                          </option>
+                          {profileCityOptions.map((city) => (
+                            <option key={city} value={city}>
+                              {city}
+                            </option>
+                          ))}
+                        </select>
+                      ) : isSelect ? (
                         <select
                           value={value}
                           onChange={(event) => setProfileForm((prev) => ({ ...prev, [field.key]: event.target.value }))}

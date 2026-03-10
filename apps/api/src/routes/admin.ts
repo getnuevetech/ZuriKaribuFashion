@@ -1370,7 +1370,7 @@ router.patch('/users/:id', async (req, res, next) => {
   }
 });
 
-router.post('/vendor-profiles/create-minimal', async (req, res, next) => {
+const handleCreateMinimalVendor = async (req: any, res: any, next: any) => {
   try {
     const payload = vendorCreateMinimalSchema.parse(req.body);
     const hashedPassword = await bcrypt.hash(payload.password, 10);
@@ -1437,7 +1437,11 @@ router.post('/vendor-profiles/create-minimal', async (req, res, next) => {
     }
     next(error);
   }
-});
+};
+
+router.post('/vendor-profiles/create-minimal', handleCreateMinimalVendor);
+router.post('/vendor-profile/create-minimal', handleCreateMinimalVendor);
+router.post('/vendors/create-minimal', handleCreateMinimalVendor);
 
 // Get pending approvals
 router.get('/users/pending', async (req, res, next) => {
