@@ -1002,15 +1002,38 @@ const googleLinkPaths = [
   '/google-link',
 ];
 
+const buildAuthBaseCandidates = () => {
+  const candidates: string[] = [];
+  const pushUnique = (value: unknown) => {
+    const normalized = String(value || '').trim().replace(/\/+$/, '');
+    if (!normalized) return;
+    if (!candidates.includes(normalized)) candidates.push(normalized);
+  };
+  pushUnique(API_URL);
+  if (typeof window !== 'undefined') {
+    pushUnique(`${window.location.origin}/api`);
+  }
+  return candidates;
+};
+
+const joinBaseAndPath = (base: string, path: string) => {
+  if (/^https?:\/\//i.test(path)) return path;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${normalizedPath}`;
+};
+
 async function postWithRouteFallback<T>(paths: string[], data: unknown) {
   let lastError: unknown = null;
-  for (const path of paths) {
-    try {
-      return await apiService.post<T>(path, data);
-    } catch (error) {
-      lastError = error;
-      if (isRetryableRouteError(error)) continue;
-      throw error;
+  const baseCandidates = buildAuthBaseCandidates();
+  for (const base of baseCandidates) {
+    for (const path of paths) {
+      try {
+        return await apiService.post<T>(joinBaseAndPath(base, path), data);
+      } catch (error) {
+        lastError = error;
+        if (isRetryableRouteError(error)) continue;
+        throw error;
+      }
     }
   }
   throw lastError ?? new Error('Route not found.');
@@ -1018,13 +1041,16 @@ async function postWithRouteFallback<T>(paths: string[], data: unknown) {
 
 async function getWithRouteFallback<T>(paths: string[]) {
   let lastError: unknown = null;
-  for (const path of paths) {
-    try {
-      return await apiService.get<T>(path);
-    } catch (error) {
-      lastError = error;
-      if (isRetryableRouteError(error)) continue;
-      throw error;
+  const baseCandidates = buildAuthBaseCandidates();
+  for (const base of baseCandidates) {
+    for (const path of paths) {
+      try {
+        return await apiService.get<T>(joinBaseAndPath(base, path));
+      } catch (error) {
+        lastError = error;
+        if (isRetryableRouteError(error)) continue;
+        throw error;
+      }
     }
   }
   throw lastError ?? new Error('Route not found.');
@@ -1032,13 +1058,16 @@ async function getWithRouteFallback<T>(paths: string[]) {
 
 async function deleteWithRouteFallback<T>(paths: string[]) {
   let lastError: unknown = null;
-  for (const path of paths) {
-    try {
-      return await apiService.delete<T>(path);
-    } catch (error) {
-      lastError = error;
-      if (isRetryableRouteError(error)) continue;
-      throw error;
+  const baseCandidates = buildAuthBaseCandidates();
+  for (const base of baseCandidates) {
+    for (const path of paths) {
+      try {
+        return await apiService.delete<T>(joinBaseAndPath(base, path));
+      } catch (error) {
+        lastError = error;
+        if (isRetryableRouteError(error)) continue;
+        throw error;
+      }
     }
   }
   throw lastError ?? new Error('Route not found.');
