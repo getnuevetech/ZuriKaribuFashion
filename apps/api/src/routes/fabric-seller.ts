@@ -384,6 +384,9 @@ router.get('/dashboard', async (req, res, next) => {
       data: {
         profile,
         profileCompletion: completion,
+        governanceFields: Array.isArray((completion as any)?.fields) ? (completion as any).fields : [],
+        profileStatus: completion?.profileStatus || 'INCOMPLETE',
+        canUpload: Boolean(completion?.canUpload),
         stats: {
           totalFabrics,
           totalOrders,

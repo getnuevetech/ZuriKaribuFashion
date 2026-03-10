@@ -452,9 +452,12 @@ export default function DesignerDashboard() {
         });
       }
       const completionPayload = dashboardCompletion || (profileRes?.success ? profileRes.data : null);
+      const dashboardGovernanceFields = statsRes?.success && Array.isArray(statsRes.data?.governanceFields)
+        ? statsRes.data.governanceFields.filter((entry: any) => entry?.isActive !== false)
+        : [];
       const governanceFields = profileFieldsRes?.success && Array.isArray(profileFieldsRes.data?.fields)
         ? profileFieldsRes.data.fields.filter((entry: any) => entry?.isActive !== false)
-        : [];
+        : dashboardGovernanceFields;
       const completionFieldCount = completionPayload && Array.isArray((completionPayload as any)?.fields)
         ? (completionPayload as any).fields.filter((entry: any) => entry?.isActive !== false).length
         : 0;
