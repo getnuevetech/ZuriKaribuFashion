@@ -115,6 +115,62 @@ async function readSellerProfileCompletionWithFallback<T>() {
   throw lastError ?? new Error('Seller profile-completion route not found.');
 }
 
+async function readSellerDashboardWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/fabric-seller/dashboard', '/seller/dashboard']) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Seller dashboard route not found.');
+}
+
+async function readSellerFabricsWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/fabric-seller/fabrics', '/seller/fabrics']) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Seller fabrics route not found.');
+}
+
+async function readSellerOrdersWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/fabric-seller/orders', '/seller/orders']) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Seller orders route not found.');
+}
+
+async function writeSellerProfileCompletionWithFallback<T>(data: any) {
+  let lastError: unknown = null;
+  for (const path of ['/fabric-seller/profile-completion', '/seller/profile-completion']) {
+    try {
+      return await apiService.patch<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Seller profile-completion update route not found.');
+}
+
 async function readSellerProfileFieldsWithFallback<T>() {
   let lastError: unknown = null;
   for (const path of ['/fabric-seller/profile-fields', '/seller/profile-fields']) {
@@ -129,6 +185,62 @@ async function readSellerProfileFieldsWithFallback<T>() {
   throw lastError ?? new Error('Seller profile-fields route not found.');
 }
 
+async function readDesignerDashboardWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/designer/dashboard', '/fashion-designer/dashboard']) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Designer dashboard route not found.');
+}
+
+async function readDesignerDesignsWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/designer/designs', '/fashion-designer/designs']) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Designer designs route not found.');
+}
+
+async function readDesignerReadyToWearWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/designer/ready-to-wear', '/fashion-designer/ready-to-wear']) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Designer ready-to-wear route not found.');
+}
+
+async function readDesignerOrdersWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/designer/orders', '/fashion-designer/orders']) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Designer orders route not found.');
+}
+
 async function readDesignerProfileCompletionWithFallback<T>() {
   let lastError: unknown = null;
   for (const path of ['/designer/profile-completion', '/fashion-designer/profile-completion']) {
@@ -141,6 +253,20 @@ async function readDesignerProfileCompletionWithFallback<T>() {
     }
   }
   throw lastError ?? new Error('Designer profile-completion route not found.');
+}
+
+async function writeDesignerProfileCompletionWithFallback<T>(data: any) {
+  let lastError: unknown = null;
+  for (const path of ['/designer/profile-completion', '/fashion-designer/profile-completion']) {
+    try {
+      return await apiService.patch<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Designer profile-completion update route not found.');
 }
 
 async function readDesignerProfileFieldsWithFallback<T>() {
@@ -1794,10 +1920,10 @@ const adminApi = {
 // Fabric Seller API
 const sellerApi = {
   getDashboard: () =>
-    apiService.get<{ success: boolean; data: any }>('/fabric-seller/dashboard', noCacheRequestConfig()),
+    readSellerDashboardWithFallback<{ success: boolean; data: any }>(),
 
   getFabrics: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/fabric-seller/fabrics', noCacheRequestConfig()),
+    readSellerFabricsWithFallback<{ success: boolean; data: any[] }>(),
 
   getProfileCompletion: () =>
     readSellerProfileCompletionWithFallback<{ success: boolean; data: any }>(),
@@ -1806,7 +1932,7 @@ const sellerApi = {
     readSellerProfileFieldsWithFallback<{ success: boolean; data: { role: string; fields: any[] } }>(),
 
   updateProfileCompletion: (data: any) =>
-    apiService.patch<{ success: boolean; data: any; message?: string }>('/fabric-seller/profile-completion', data),
+    writeSellerProfileCompletionWithFallback<{ success: boolean; data: any; message?: string }>(data),
 
   createFabric: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/fabric-seller/fabrics', data),
@@ -1815,10 +1941,10 @@ const sellerApi = {
     apiService.patch<{ success: boolean; data: any }>(`/fabric-seller/fabrics/${fabricId}`, data),
 
   getOrders: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/fabric-seller/orders', noCacheRequestConfig()),
+    readSellerOrdersWithFallback<{ success: boolean; data: any[] }>(),
 
   getStats: async () => {
-    const response = await apiService.get<{ success: boolean; data: any }>('/fabric-seller/dashboard');
+    const response = await readSellerDashboardWithFallback<{ success: boolean; data: any }>();
     if (!response.success) {
       return response;
     }
@@ -1849,10 +1975,10 @@ const sellerApi = {
 // Designer API
 const designerApi = {
   getDashboard: () =>
-    apiService.get<{ success: boolean; data: any }>('/designer/dashboard', noCacheRequestConfig()),
+    readDesignerDashboardWithFallback<{ success: boolean; data: any }>(),
 
   getDesigns: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/designer/designs', noCacheRequestConfig()),
+    readDesignerDesignsWithFallback<{ success: boolean; data: any[] }>(),
 
   getProfileCompletion: () =>
     readDesignerProfileCompletionWithFallback<{ success: boolean; data: any }>(),
@@ -1861,7 +1987,7 @@ const designerApi = {
     readDesignerProfileFieldsWithFallback<{ success: boolean; data: { role: string; fields: any[] } }>(),
 
   updateProfileCompletion: (data: any) =>
-    apiService.patch<{ success: boolean; data: any; message?: string }>('/designer/profile-completion', data),
+    writeDesignerProfileCompletionWithFallback<{ success: boolean; data: any; message?: string }>(data),
 
   createDesign: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/designer/designs', data),
@@ -1870,7 +1996,7 @@ const designerApi = {
     apiService.patch<{ success: boolean; data: any }>(`/designer/designs/${designId}`, data),
 
   getReadyToWear: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/designer/ready-to-wear', noCacheRequestConfig()),
+    readDesignerReadyToWearWithFallback<{ success: boolean; data: any[] }>(),
 
   createReadyToWear: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/designer/ready-to-wear', data),
@@ -1879,10 +2005,10 @@ const designerApi = {
     apiService.patch<{ success: boolean; data: any }>(`/designer/ready-to-wear/${productId}`, data),
 
   getOrders: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/designer/orders', noCacheRequestConfig()),
+    readDesignerOrdersWithFallback<{ success: boolean; data: any[] }>(),
 
   getStats: async () => {
-    const response = await apiService.get<{ success: boolean; data: any }>('/designer/dashboard');
+    const response = await readDesignerDashboardWithFallback<{ success: boolean; data: any }>();
     if (!response.success) {
       return response;
     }
