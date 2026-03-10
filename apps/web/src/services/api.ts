@@ -77,6 +77,71 @@ const isRouteNotFoundMessageError = (error: unknown) => {
 const isRetryableRouteError = (error: unknown) =>
   isRouteNotFoundError(error) || isMethodNotAllowedError(error) || isRouteNotFoundMessageError(error);
 
+const noCacheRequestConfig = () => ({
+  params: { _r: Date.now() },
+  headers: {
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0',
+  },
+});
+
+async function readSellerProfileCompletionWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/fabric-seller/profile-completion', '/seller/profile-completion']) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Seller profile-completion route not found.');
+}
+
+async function readSellerProfileFieldsWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/fabric-seller/profile-fields', '/seller/profile-fields']) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Seller profile-fields route not found.');
+}
+
+async function readDesignerProfileCompletionWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/designer/profile-completion', '/fashion-designer/profile-completion']) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Designer profile-completion route not found.');
+}
+
+async function readDesignerProfileFieldsWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/designer/profile-fields', '/fashion-designer/profile-fields']) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Designer profile-fields route not found.');
+}
+
 type TopStripPayload = {
   messages: string[];
   separator: string;
@@ -1714,16 +1779,16 @@ const adminApi = {
 // Fabric Seller API
 const sellerApi = {
   getDashboard: () =>
-    apiService.get<{ success: boolean; data: any }>('/fabric-seller/dashboard'),
+    apiService.get<{ success: boolean; data: any }>('/fabric-seller/dashboard', noCacheRequestConfig()),
 
   getFabrics: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/fabric-seller/fabrics'),
+    apiService.get<{ success: boolean; data: any[] }>('/fabric-seller/fabrics', noCacheRequestConfig()),
 
   getProfileCompletion: () =>
-    apiService.get<{ success: boolean; data: any }>('/fabric-seller/profile-completion'),
+    readSellerProfileCompletionWithFallback<{ success: boolean; data: any }>(),
 
   getProfileFields: () =>
-    apiService.get<{ success: boolean; data: { role: string; fields: any[] } }>('/fabric-seller/profile-fields'),
+    readSellerProfileFieldsWithFallback<{ success: boolean; data: { role: string; fields: any[] } }>(),
 
   updateProfileCompletion: (data: any) =>
     apiService.patch<{ success: boolean; data: any; message?: string }>('/fabric-seller/profile-completion', data),
@@ -1735,7 +1800,7 @@ const sellerApi = {
     apiService.patch<{ success: boolean; data: any }>(`/fabric-seller/fabrics/${fabricId}`, data),
 
   getOrders: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/fabric-seller/orders'),
+    apiService.get<{ success: boolean; data: any[] }>('/fabric-seller/orders', noCacheRequestConfig()),
 
   getStats: async () => {
     const response = await apiService.get<{ success: boolean; data: any }>('/fabric-seller/dashboard');
@@ -1769,16 +1834,16 @@ const sellerApi = {
 // Designer API
 const designerApi = {
   getDashboard: () =>
-    apiService.get<{ success: boolean; data: any }>('/designer/dashboard'),
+    apiService.get<{ success: boolean; data: any }>('/designer/dashboard', noCacheRequestConfig()),
 
   getDesigns: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/designer/designs'),
+    apiService.get<{ success: boolean; data: any[] }>('/designer/designs', noCacheRequestConfig()),
 
   getProfileCompletion: () =>
-    apiService.get<{ success: boolean; data: any }>('/designer/profile-completion'),
+    readDesignerProfileCompletionWithFallback<{ success: boolean; data: any }>(),
 
   getProfileFields: () =>
-    apiService.get<{ success: boolean; data: { role: string; fields: any[] } }>('/designer/profile-fields'),
+    readDesignerProfileFieldsWithFallback<{ success: boolean; data: { role: string; fields: any[] } }>(),
 
   updateProfileCompletion: (data: any) =>
     apiService.patch<{ success: boolean; data: any; message?: string }>('/designer/profile-completion', data),
@@ -1790,7 +1855,7 @@ const designerApi = {
     apiService.patch<{ success: boolean; data: any }>(`/designer/designs/${designId}`, data),
 
   getReadyToWear: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/designer/ready-to-wear'),
+    apiService.get<{ success: boolean; data: any[] }>('/designer/ready-to-wear', noCacheRequestConfig()),
 
   createReadyToWear: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/designer/ready-to-wear', data),
@@ -1799,7 +1864,7 @@ const designerApi = {
     apiService.patch<{ success: boolean; data: any }>(`/designer/ready-to-wear/${productId}`, data),
 
   getOrders: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/designer/orders'),
+    apiService.get<{ success: boolean; data: any[] }>('/designer/orders', noCacheRequestConfig()),
 
   getStats: async () => {
     const response = await apiService.get<{ success: boolean; data: any }>('/designer/dashboard');
