@@ -16,7 +16,9 @@ import {
   MapPin,
   ArrowRight,
   Search,
-  Filter
+  Filter,
+  Upload,
+  X
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
@@ -191,6 +193,8 @@ export default function SellerDashboard() {
   const [productError, setProductError] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [materialOptions, setMaterialOptions] = useState<MaterialOption[]>([]);
+  const [uploadingProductImage, setUploadingProductImage] = useState(false);
+  const [productImageUrlInput, setProductImageUrlInput] = useState('');
   const [selectedFabric, setSelectedFabric] = useState<Fabric | null>(null);
   const [newStock, setNewStock] = useState(0);
   const [productForm, setProductForm] = useState<FabricFormState>({
@@ -586,6 +590,7 @@ export default function SellerDashboard() {
       imageUrls: '',
       priceCurrencyCode: currencyOptions.defaultCurrency || 'USD',
     });
+    setProductImageUrlInput('');
     setSelectedFabric(null);
     setIsEditMode(false);
     setProductError(null);
@@ -611,6 +616,7 @@ export default function SellerDashboard() {
       priceCurrencyCode: String(fabric.listingCurrencyCode || currencyOptions.defaultCurrency || 'USD'),
     });
     setShowProductModal(true);
+    setProductImageUrlInput('');
   };
 
   const parseImageInputs = (value: string) =>
@@ -619,6 +625,56 @@ export default function SellerDashboard() {
       .map((line) => line.trim())
       .filter(Boolean)
       .map((url) => ({ url }));
+
+  const normalizeImageList = (urls: string[]) =>
+    Array.from(new Set(urls.map((url) => String(url || '').trim()).filter(Boolean))).slice(0, 4);
+
+  const writeProductImageList = (urls: string[]) => {
+    const next = normalizeImageList(urls);
+    setProductForm((prev) => ({ ...prev, imageUrls: next.join('\n') }));
+  };
+
+  const handleProductImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+    try {
+      setUploadingProductImage(true);
+      setProductError(null);
+      const uploadResults = await Promise.all(
+        files.map(async (file) => {
+          const data = new FormData();
+          data.append('image', file);
+          const response = await api.upload.image(data);
+          return response.success && response.data?.url ? response.data.url : null;
+        })
+      );
+      const uploadedUrls = uploadResults.filter((url): url is string => Boolean(url));
+      if (uploadedUrls.length === 0) {
+        setProductError('Image upload failed.');
+        return;
+      }
+      const current = parseImageInputs(productForm.imageUrls).map((entry) => entry.url);
+      writeProductImageList([...current, ...uploadedUrls]);
+    } catch (error: any) {
+      setProductError(error?.response?.data?.message || error?.message || 'Failed to upload image.');
+    } finally {
+      setUploadingProductImage(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleAddProductImageUrl = () => {
+    const value = String(productImageUrlInput || '').trim();
+    if (!value) return;
+    const current = parseImageInputs(productForm.imageUrls).map((entry) => entry.url);
+    writeProductImageList([...current, value]);
+    setProductImageUrlInput('');
+  };
+
+  const handleRemoveProductImage = (url: string) => {
+    const current = parseImageInputs(productForm.imageUrls).map((entry) => entry.url);
+    writeProductImageList(current.filter((entry) => entry !== url));
+  };
 
   const handleSaveProduct = async () => {
     setProductError(null);
@@ -1440,13 +1496,50 @@ export default function SellerDashboard() {
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Image URLs (one per line)</label>
-                <textarea
-                  value={productForm.imageUrls}
-                  onChange={(e) => setProductForm((prev) => ({ ...prev, imageUrls: e.target.value }))}
-                  className="w-full px-4 py-2 border rounded-lg min-h-[120px]"
-                  placeholder={'https://.../image1.jpg\nhttps://.../image2.jpg\nhttps://.../image3.jpg'}
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product Images (minimum 3, maximum 4)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={productImageUrlInput}
+                    onChange={(event) => setProductImageUrlInput(event.target.value)}
+                    placeholder="Paste image URL and add"
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                  />
+                  <Button type="button" variant="outline" onClick={handleAddProductImageUrl}>
+                    Add URL
+                  </Button>
+                  <label className="inline-flex cursor-pointer items-center rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
+                    <Upload className="mr-2 h-4 w-4" />
+                    {uploadingProductImage ? 'Uploading...' : 'Upload'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleProductImageUpload}
+                      disabled={uploadingProductImage}
+                      multiple
+                    />
+                  </label>
+                </div>
+                <div className="mt-2 text-xs text-gray-500">
+                  {parseImageInputs(productForm.imageUrls).length} image(s) selected
+                </div>
+                {parseImageInputs(productForm.imageUrls).length > 0 ? (
+                  <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-3">
+                    {parseImageInputs(productForm.imageUrls).map((entry) => (
+                      <div key={entry.url} className="relative overflow-hidden rounded border">
+                        <img src={entry.url} alt="Fabric" className="h-20 w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveProductImage(entry.url)}
+                          className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
 

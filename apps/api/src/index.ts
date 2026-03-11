@@ -36,6 +36,7 @@ import orderWorkflowRoutes from './routes/order-workflow';
 import adminPartnerRoutes from './routes/admin-partners';
 import partnerRoutes from './routes/partner';
 import categoryPageSettingsRoutes from './routes/category-page-settings';
+import adminDesignerFabricCountryAccessRoutes from './routes/admin-designer-fabric-country-access';
 import { runStartupRepairs } from './bootstrap';
 
 const app = express();
@@ -100,6 +101,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 // Legacy compatibility alias for older frontend auth paths (/api/google, /api/google-link, ...)
 app.use('/api', authRoutes);
+app.use('/api/admin/designer-fabric-country-access', adminDesignerFabricCountryAccessRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/fabric-seller', fabricSellerRoutes);
 app.use('/api/designer', designerRoutes);

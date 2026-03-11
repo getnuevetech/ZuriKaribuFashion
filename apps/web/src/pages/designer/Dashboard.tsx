@@ -54,7 +54,14 @@ interface Design {
   basePrice: number;
   images: string[];
   category: { name: string };
-  suitableFabrics: Array<{ fabricId: string; yardsNeeded: number }>;
+  suitableFabrics: Array<{
+    fabricId: string;
+    yardsNeeded: number;
+    fabricName?: string;
+    sellerCountry?: string;
+    materialTypeId?: string;
+    materialTypeName?: string;
+  }>;
   measurementVariables: Array<{ name: string; unit: string; isRequired: boolean; instructions?: string }>;
   rating: number;
   orderCount: number;
@@ -115,6 +122,24 @@ interface ProductCategoryOption {
 interface FabricOption {
   id: string;
   name: string;
+  materialTypeId: string;
+  materialTypeName: string;
+  sellerCountry: string;
+  sellerName: string;
+  image?: string;
+  priceUsd?: number;
+}
+
+interface MeasurementTemplateOption {
+  name: string;
+  unit: string;
+  isRequired: boolean;
+  instructions?: string;
+}
+
+interface FabricMaterialOption {
+  id: string;
+  name: string;
 }
 
 interface DesignFormState {
@@ -125,7 +150,7 @@ interface DesignFormState {
   imageUrls: string;
   selectedFabricIds: string[];
   yardsByFabricId: Record<string, string>;
-  measurementLines: string;
+  selectedMeasurementNames: string[];
   priceCurrencyCode: string;
 }
 
@@ -240,6 +265,17 @@ export default function DesignerDashboard() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [categories, setCategories] = useState<ProductCategoryOption[]>([]);
   const [fabricOptions, setFabricOptions] = useState<FabricOption[]>([]);
+  const [fabricCountryOptions, setFabricCountryOptions] = useState<string[]>([]);
+  const [fabricMaterialOptions, setFabricMaterialOptions] = useState<FabricMaterialOption[]>([]);
+  const [measurementTemplateOptions, setMeasurementTemplateOptions] = useState<MeasurementTemplateOption[]>([]);
+  const [designFabricCountryFilter, setDesignFabricCountryFilter] = useState('');
+  const [designFabricMaterialFilter, setDesignFabricMaterialFilter] = useState('');
+  const [designFabricSearch, setDesignFabricSearch] = useState('');
+  const [designSelectedFabricOptionId, setDesignSelectedFabricOptionId] = useState('');
+  const [designFabricOptionsLoading, setDesignFabricOptionsLoading] = useState(false);
+  const [designFabricCache, setDesignFabricCache] = useState<Record<string, FabricOption>>({});
+  const [designUploadingImage, setDesignUploadingImage] = useState(false);
+  const [designImageUrlInput, setDesignImageUrlInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'designs' | 'featured' | 'orders'>('overview');
   const [showDesignModal, setShowDesignModal] = useState(false);
@@ -255,7 +291,7 @@ export default function DesignerDashboard() {
     imageUrls: '',
     selectedFabricIds: [],
     yardsByFabricId: {},
-    measurementLines: 'chest|cm|required\nwaist|cm|required\nhips|cm|required',
+    selectedMeasurementNames: [],
     priceCurrencyCode: 'USD',
   });
   const [showReadyModal, setShowReadyModal] = useState(false);
@@ -323,13 +359,24 @@ export default function DesignerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsResult, designsResult, readyResult, ordersResult, categoriesResult, fabricsResult, currencyResult, readySizeOptionsResult] = await Promise.allSettled([
+      const [
+        statsResult,
+        designsResult,
+        readyResult,
+        ordersResult,
+        categoriesResult,
+        fabricOptionsResult,
+        measurementTemplatesResult,
+        currencyResult,
+        readySizeOptionsResult,
+      ] = await Promise.allSettled([
         api.designer.getDashboard(),
         api.designer.getDesigns(),
         api.designer.getReadyToWear(),
         api.designer.getOrders(),
         api.products.getCategories(),
-        api.products.getFabrics({ limit: 200 }),
+        api.designer.getDesignFabricOptions({ limit: 300 }),
+        api.designer.getMeasurementTemplateOptions(),
         api.currency.getMyOptions(),
         api.designer.getReadyToWearSizeOptions(),
       ]);
@@ -338,7 +385,9 @@ export default function DesignerDashboard() {
       const readyRes = readyResult.status === 'fulfilled' ? readyResult.value : null;
       const ordersRes = ordersResult.status === 'fulfilled' ? ordersResult.value : null;
       const categoriesRes = categoriesResult.status === 'fulfilled' ? categoriesResult.value : null;
-      const fabricsRes = fabricsResult.status === 'fulfilled' ? fabricsResult.value : null;
+      const fabricOptionsRes = fabricOptionsResult.status === 'fulfilled' ? fabricOptionsResult.value : null;
+      const measurementTemplatesRes =
+        measurementTemplatesResult.status === 'fulfilled' ? measurementTemplatesResult.value : null;
       const currencyRes = currencyResult.status === 'fulfilled' ? currencyResult.value : null;
       const readySizeOptionsRes = readySizeOptionsResult.status === 'fulfilled' ? readySizeOptionsResult.value : null;
       const settledCallStatus = (result: PromiseSettledResult<any>) => {
@@ -430,6 +479,10 @@ export default function DesignerDashboard() {
             ? design.suitableFabrics.map((item: any) => ({
                 fabricId: String(item.fabricId || item.fabric?.id || ''),
                 yardsNeeded: Number(item.yardsNeeded || 1),
+                fabricName: String(item.fabric?.name || ''),
+                sellerCountry: String(item.fabric?.seller?.country || ''),
+                materialTypeId: String(item.fabric?.materialTypeId || item.fabric?.materialType?.id || ''),
+                materialTypeName: String(item.fabric?.materialType?.name || ''),
               }))
             : [],
           measurementVariables: Array.isArray(design.measurementVariables)
@@ -488,9 +541,52 @@ export default function DesignerDashboard() {
             : []
         );
       }
-      if (fabricsRes?.success) {
-        const rows = Array.isArray(fabricsRes.data?.fabrics) ? fabricsRes.data.fabrics : [];
-        setFabricOptions(rows.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Fabric') })));
+      if (fabricOptionsRes?.success) {
+        const rows = Array.isArray(fabricOptionsRes.data?.fabrics) ? fabricOptionsRes.data.fabrics : [];
+        const mappedFabrics = rows.map((item: any) => ({
+          id: String(item.id),
+          name: String(item.name || 'Fabric'),
+          materialTypeId: String(item.materialTypeId || ''),
+          materialTypeName: String(item.materialTypeName || 'Material'),
+          sellerCountry: String(item.sellerCountry || ''),
+          sellerName: String(item.sellerName || 'Fabric Seller'),
+          image: String(item.image || ''),
+          priceUsd: Number(item.priceUsd || 0),
+        }));
+        setFabricOptions(mappedFabrics);
+        setDesignFabricCache((prev) => ({
+          ...prev,
+          ...mappedFabrics.reduce<Record<string, FabricOption>>((acc, item) => {
+            acc[item.id] = item;
+            return acc;
+          }, {}),
+        }));
+        const countries = Array.isArray(fabricOptionsRes.data?.countries)
+          ? fabricOptionsRes.data.countries.map((entry: any) => String(entry || '').trim()).filter(Boolean)
+          : [];
+        const materials = Array.isArray(fabricOptionsRes.data?.materials)
+          ? fabricOptionsRes.data.materials.map((entry: any) => ({
+              id: String(entry?.id || ''),
+              name: String(entry?.name || ''),
+            }))
+          : [];
+        setFabricCountryOptions(countries);
+        setFabricMaterialOptions(materials.filter((entry) => entry.id && entry.name));
+        if (countries.length > 0 && !designFabricCountryFilter) {
+          setDesignFabricCountryFilter(countries[0]);
+        }
+      }
+      if (measurementTemplatesRes?.success) {
+        const rows = Array.isArray(measurementTemplatesRes.data) ? measurementTemplatesRes.data : [];
+        const templates = rows
+          .map((item: any) => ({
+            name: String(item?.name || '').trim(),
+            unit: String(item?.unit || 'cm').trim() || 'cm',
+            isRequired: Boolean(item?.isRequired ?? true),
+            instructions: String(item?.instructions || '').trim(),
+          }))
+          .filter((item) => item.name.length > 0);
+        setMeasurementTemplateOptions(templates);
       }
       if (currencyRes?.success) {
         setCurrencyOptions({
@@ -715,6 +811,9 @@ export default function DesignerDashboard() {
   }, [categories, designForm.categoryId]);
 
   const resetDesignForm = () => {
+    const defaultMeasurements = measurementTemplateOptions
+      .filter((item) => item.isRequired)
+      .map((item) => item.name);
     setDesignForm({
       name: '',
       description: '',
@@ -723,12 +822,14 @@ export default function DesignerDashboard() {
       imageUrls: '',
       selectedFabricIds: [],
       yardsByFabricId: {},
-      measurementLines: 'chest|cm|required\nwaist|cm|required\nhips|cm|required',
+      selectedMeasurementNames: defaultMeasurements,
       priceCurrencyCode: currencyOptions.defaultCurrency || 'USD',
     });
     setSelectedDesign(null);
     setIsEditMode(false);
     setDesignError(null);
+    setDesignImageUrlInput('');
+    setDesignSelectedFabricOptionId('');
   };
 
   const openCreateDesignModal = () => {
@@ -761,13 +862,6 @@ export default function DesignerDashboard() {
       if (item.fabricId) acc[item.fabricId] = String(item.yardsNeeded || 1);
       return acc;
     }, {});
-    const measurementLines = (design.measurementVariables || [])
-      .map((variable) =>
-        [variable.name, variable.unit || 'cm', variable.isRequired ? 'required' : 'optional', variable.instructions || '']
-          .filter(Boolean)
-          .join('|')
-      )
-      .join('\n');
 
     setSelectedDesign(design);
     setIsEditMode(true);
@@ -780,9 +874,31 @@ export default function DesignerDashboard() {
       imageUrls: (design.images || []).join('\n'),
       selectedFabricIds: (design.suitableFabrics || []).map((item) => item.fabricId).filter(Boolean),
       yardsByFabricId,
-      measurementLines: measurementLines || 'chest|cm|required\nwaist|cm|required\nhips|cm|required',
+      selectedMeasurementNames: (design.measurementVariables || []).map((item) => item.name).filter(Boolean),
       priceCurrencyCode: String(design.listingCurrencyCode || currencyOptions.defaultCurrency || 'USD'),
     });
+    const firstSellerCountry = String(design.suitableFabrics?.[0]?.sellerCountry || '').trim();
+    if (firstSellerCountry) {
+      setDesignFabricCountryFilter(firstSellerCountry);
+    }
+    setDesignFabricCache((prev) => {
+      const next = { ...prev };
+      for (const entry of design.suitableFabrics || []) {
+        const fabricId = String(entry.fabricId || '').trim();
+        if (!fabricId) continue;
+        next[fabricId] = {
+          id: fabricId,
+          name: String(entry.fabricName || `Fabric ${fabricId.slice(0, 8)}`),
+          materialTypeId: String(entry.materialTypeId || ''),
+          materialTypeName: String(entry.materialTypeName || 'Material'),
+          sellerCountry: String(entry.sellerCountry || ''),
+          sellerName: 'Fabric Seller',
+        };
+      }
+      return next;
+    });
+    setDesignSelectedFabricOptionId('');
+    setDesignImageUrlInput('');
     setShowDesignModal(true);
   };
 
@@ -796,26 +912,60 @@ export default function DesignerDashboard() {
   const normalizeReadyImageList = (urls: string[]) =>
     Array.from(new Set(urls.map((url) => String(url || '').trim()).filter(Boolean))).slice(0, 5);
 
+  const normalizeDesignImageList = (urls: string[]) =>
+    Array.from(new Set(urls.map((url) => String(url || '').trim()).filter(Boolean))).slice(0, 6);
+
+  const writeDesignImageList = (urls: string[]) => {
+    const next = normalizeDesignImageList(urls);
+    setDesignForm((prev) => ({ ...prev, imageUrls: next.join('\n') }));
+  };
+
   const writeReadyImageList = (urls: string[]) => {
     const next = normalizeReadyImageList(urls);
     setReadyForm((prev) => ({ ...prev, imageUrls: next.join('\n') }));
   };
 
-  const parseMeasurementLines = (value: string) =>
-    value
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const [name = '', unit = 'cm', required = 'required', ...rest] = line.split('|').map((item) => item.trim());
-        return {
-          name,
-          unit: unit || 'cm',
-          isRequired: required.toLowerCase() !== 'optional',
-          instructions: rest.join('|') || undefined,
-        };
-      })
-      .filter((row) => row.name);
+  const handleDesignImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+    try {
+      setDesignUploadingImage(true);
+      setDesignError(null);
+      const uploadResults = await Promise.all(
+        files.map(async (file) => {
+          const data = new FormData();
+          data.append('image', file);
+          const response = await api.upload.image(data);
+          return response.success && response.data?.url ? response.data.url : null;
+        })
+      );
+      const uploadedUrls = uploadResults.filter((url): url is string => Boolean(url));
+      if (uploadedUrls.length === 0) {
+        setDesignError('Image upload failed.');
+        return;
+      }
+      const current = parseImageInputs(designForm.imageUrls).map((entry) => entry.url);
+      writeDesignImageList([...current, ...uploadedUrls]);
+    } catch (error: any) {
+      setDesignError(error?.response?.data?.message || error?.message || 'Failed to upload image.');
+    } finally {
+      setDesignUploadingImage(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleAddDesignImageUrl = () => {
+    const value = String(designImageUrlInput || '').trim();
+    if (!value) return;
+    const current = parseImageInputs(designForm.imageUrls).map((entry) => entry.url);
+    writeDesignImageList([...current, value]);
+    setDesignImageUrlInput('');
+  };
+
+  const handleRemoveDesignImage = (url: string) => {
+    const current = parseImageInputs(designForm.imageUrls).map((entry) => entry.url);
+    writeDesignImageList(current.filter((entry) => entry !== url));
+  };
 
   const handleReadyImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
@@ -874,27 +1024,129 @@ export default function DesignerDashboard() {
     }));
   };
 
-  const toggleFabricSelection = (fabricId: string) => {
+  const addSelectedFabricFromDropdown = () => {
+    const fabricId = String(designSelectedFabricOptionId || '').trim();
+    if (!fabricId) return;
     setDesignForm((prev) => {
-      const exists = prev.selectedFabricIds.includes(fabricId);
-      const selectedFabricIds = exists
-        ? prev.selectedFabricIds.filter((id) => id !== fabricId)
-        : [...prev.selectedFabricIds, fabricId];
+      if (prev.selectedFabricIds.includes(fabricId)) return prev;
+      return {
+        ...prev,
+        selectedFabricIds: [...prev.selectedFabricIds, fabricId],
+        yardsByFabricId: {
+          ...prev.yardsByFabricId,
+          [fabricId]: prev.yardsByFabricId[fabricId] || '1',
+        },
+      };
+    });
+    setDesignSelectedFabricOptionId('');
+  };
+
+  const removeSelectedFabric = (fabricId: string) => {
+    setDesignForm((prev) => {
       const yardsByFabricId = { ...prev.yardsByFabricId };
-      if (!exists && !yardsByFabricId[fabricId]) {
-        yardsByFabricId[fabricId] = '1';
-      }
-      if (exists) {
-        delete yardsByFabricId[fabricId];
-      }
-      return { ...prev, selectedFabricIds, yardsByFabricId };
+      delete yardsByFabricId[fabricId];
+      return {
+        ...prev,
+        selectedFabricIds: prev.selectedFabricIds.filter((entry) => entry !== fabricId),
+        yardsByFabricId,
+      };
     });
   };
+
+  const loadDesignFabricOptions = async () => {
+    try {
+      setDesignFabricOptionsLoading(true);
+      const response = await api.designer.getDesignFabricOptions({
+        country: designFabricCountryFilter || undefined,
+        materialTypeId: designFabricMaterialFilter || undefined,
+        search: designFabricSearch || undefined,
+        limit: 300,
+      });
+      if (!response.success) return;
+      const rows = Array.isArray(response.data?.fabrics) ? response.data.fabrics : [];
+      const countries = Array.isArray(response.data?.countries)
+        ? response.data.countries.map((entry: any) => String(entry || '').trim()).filter(Boolean)
+        : [];
+      const materials = Array.isArray(response.data?.materials)
+        ? response.data.materials.map((entry: any) => ({
+            id: String(entry?.id || ''),
+            name: String(entry?.name || ''),
+          }))
+        : [];
+      const mappedRows = rows.map((item: any) => ({
+        id: String(item.id),
+        name: String(item.name || 'Fabric'),
+        materialTypeId: String(item.materialTypeId || ''),
+        materialTypeName: String(item.materialTypeName || 'Material'),
+        sellerCountry: String(item.sellerCountry || ''),
+        sellerName: String(item.sellerName || 'Fabric Seller'),
+        image: String(item.image || ''),
+        priceUsd: Number(item.priceUsd || 0),
+      }));
+      setFabricOptions(mappedRows);
+      setDesignFabricCache((prev) => ({
+        ...prev,
+        ...mappedRows.reduce<Record<string, FabricOption>>((acc, item) => {
+          acc[item.id] = item;
+          return acc;
+        }, {}),
+      }));
+      setFabricCountryOptions(countries);
+      setFabricMaterialOptions(materials.filter((entry) => entry.id && entry.name));
+      if (!designFabricCountryFilter && countries.length > 0) {
+        setDesignFabricCountryFilter(countries[0]);
+      }
+      if (designFabricCountryFilter && countries.length > 0 && !countries.includes(designFabricCountryFilter)) {
+        setDesignFabricCountryFilter(countries[0]);
+      }
+      if (
+        designFabricMaterialFilter &&
+        materials.length > 0 &&
+        !materials.some((entry) => entry.id === designFabricMaterialFilter)
+      ) {
+        setDesignFabricMaterialFilter('');
+      }
+    } catch (error) {
+      console.error('Failed to load design fabric options:', error);
+    } finally {
+      setDesignFabricOptionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!showDesignModal) return;
+    const timer = setTimeout(() => {
+      void loadDesignFabricOptions();
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [showDesignModal, designFabricCountryFilter, designFabricMaterialFilter, designFabricSearch]);
+
+  useEffect(() => {
+    if (!showDesignModal) return;
+    if ((designForm.selectedMeasurementNames || []).length > 0) return;
+    if (measurementTemplateOptions.length === 0) return;
+    const requiredNames = measurementTemplateOptions.filter((item) => item.isRequired).map((item) => item.name);
+    if (requiredNames.length === 0) return;
+    setDesignForm((prev) => ({
+      ...prev,
+      selectedMeasurementNames: prev.selectedMeasurementNames.length > 0 ? prev.selectedMeasurementNames : requiredNames,
+    }));
+  }, [showDesignModal, measurementTemplateOptions]);
 
   const handleSaveDesign = async () => {
     setDesignError(null);
     const images = parseImageInputs(designForm.imageUrls);
-    const measurementVariables = parseMeasurementLines(designForm.measurementLines);
+    const selectedMeasurementSet = new Set(
+      (designForm.selectedMeasurementNames || []).map((name) => String(name || '').trim()).filter(Boolean)
+    );
+    const measurementVariables = measurementTemplateOptions
+      .filter((item) => selectedMeasurementSet.has(item.name))
+      .map((item) => ({
+        name: item.name,
+        unit: item.unit || 'cm',
+        isRequired: Boolean(item.isRequired),
+        instructions: item.instructions || undefined,
+      }));
     const suitableFabricIds = designForm.selectedFabricIds.map((fabricId) => ({
       fabricId,
       yardsNeeded: Number(designForm.yardsByFabricId[fabricId] || 1),
@@ -925,7 +1177,7 @@ export default function DesignerDashboard() {
       return;
     }
     if (measurementVariables.length === 0) {
-      setDesignError('Add at least one measurement variable.');
+      setDesignError('Select at least one measurement field.');
       return;
     }
     if (suitableFabricIds.some((item) => Number(item.yardsNeeded || 0) < 1)) {
@@ -956,7 +1208,13 @@ export default function DesignerDashboard() {
       await fetchDashboardData();
       syncTabWithUrl('designs');
     } catch (error: any) {
-      setDesignError(error?.message || 'Unable to save design right now.');
+      const issueText = Array.isArray(error?.response?.data?.issues)
+        ? error.response.data.issues
+            .map((issue: any) => String(issue?.message || '').trim())
+            .filter(Boolean)
+            .join(', ')
+        : '';
+      setDesignError(issueText || error?.response?.data?.message || error?.message || 'Unable to save design right now.');
     } finally {
       setIsSavingDesign(false);
     }
@@ -1180,6 +1438,19 @@ export default function DesignerDashboard() {
     selectedListingCurrency === 'USD'
       ? localPricePreview
       : Number((localPricePreview * selectedUsdPerUnit).toFixed(2));
+  const fabricOptionById = useMemo(() => {
+    const map = new Map<string, FabricOption>();
+    for (const option of Object.values(designFabricCache)) {
+      map.set(option.id, option);
+    }
+    for (const option of fabricOptions) {
+      map.set(option.id, option);
+    }
+    return map;
+  }, [fabricOptions, designFabricCache]);
+  const selectedDesignFabricRows = designForm.selectedFabricIds
+    .map((fabricId) => fabricOptionById.get(fabricId))
+    .filter(Boolean) as FabricOption[];
 
   if (loading) {
     return (
@@ -2123,62 +2394,198 @@ export default function DesignerDashboard() {
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Image URLs (one per line)</label>
-                <textarea
-                  value={designForm.imageUrls}
-                  onChange={(e) => setDesignForm((prev) => ({ ...prev, imageUrls: e.target.value }))}
-                  className="w-full px-4 py-2 border rounded-lg min-h-[100px]"
-                  placeholder={'https://.../image1.jpg\nhttps://.../image2.jpg\nhttps://.../image3.jpg\nhttps://.../image4.jpg'}
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product Images (minimum 4, maximum 6)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={designImageUrlInput}
+                    onChange={(event) => setDesignImageUrlInput(event.target.value)}
+                    placeholder="Paste image URL and add"
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                  />
+                  <Button type="button" variant="outline" onClick={handleAddDesignImageUrl}>
+                    Add URL
+                  </Button>
+                  <label className="inline-flex cursor-pointer items-center rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
+                    <Upload className="mr-2 h-4 w-4" />
+                    {designUploadingImage ? 'Uploading...' : 'Upload'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleDesignImageUpload}
+                      disabled={designUploadingImage}
+                      multiple
+                    />
+                  </label>
+                </div>
+                <div className="mt-2 text-xs text-gray-500">
+                  {parseImageInputs(designForm.imageUrls).length} image(s) selected
+                </div>
+                {parseImageInputs(designForm.imageUrls).length > 0 ? (
+                  <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-3">
+                    {parseImageInputs(designForm.imageUrls).map((entry) => (
+                      <div key={entry.url} className="relative overflow-hidden rounded border">
+                        <img src={entry.url} alt="Design" className="h-20 w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDesignImage(entry.url)}
+                          className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Suitable Fabrics (select and set yards)</label>
-                <div className="max-h-44 overflow-y-auto rounded-lg border p-3 space-y-2">
-                  {fabricOptions.length === 0 ? (
-                    <p className="text-sm text-gray-500">No approved fabrics found.</p>
-                  ) : (
-                    fabricOptions.map((fabric) => {
-                      const selected = designForm.selectedFabricIds.includes(fabric.id);
-                      return (
-                        <div key={fabric.id} className="flex items-center gap-3">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Suitable Fabrics (country → material → fabric name)
+                </label>
+                <div className="rounded-lg border p-3 space-y-3">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Fabric Seller Country</label>
+                      <select
+                        value={designFabricCountryFilter}
+                        onChange={(event) => {
+                          setDesignFabricCountryFilter(event.target.value);
+                          setDesignFabricMaterialFilter('');
+                        }}
+                        className="w-full rounded-lg border px-3 py-2 text-sm"
+                      >
+                        <option value="">All allowed countries</option>
+                        {fabricCountryOptions.map((country) => (
+                          <option key={country} value={country}>
+                            {country}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Material Type</label>
+                      <select
+                        value={designFabricMaterialFilter}
+                        onChange={(event) => setDesignFabricMaterialFilter(event.target.value)}
+                        className="w-full rounded-lg border px-3 py-2 text-sm"
+                      >
+                        <option value="">All materials</option>
+                        {fabricMaterialOptions.map((material) => (
+                          <option key={material.id} value={material.id}>
+                            {material.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Search Fabric</label>
+                      <input
+                        type="text"
+                        value={designFabricSearch}
+                        onChange={(event) => setDesignFabricSearch(event.target.value)}
+                        className="w-full rounded-lg border px-3 py-2 text-sm"
+                        placeholder="Search by fabric name"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <select
+                      value={designSelectedFabricOptionId}
+                      onChange={(event) => setDesignSelectedFabricOptionId(event.target.value)}
+                      className="w-full rounded-lg border px-3 py-2 text-sm"
+                    >
+                      <option value="">
+                        {designFabricOptionsLoading
+                          ? 'Loading fabrics...'
+                          : fabricOptions.length > 0
+                            ? 'Select fabric name'
+                            : 'No fabrics found for selected filters'}
+                      </option>
+                      {fabricOptions.map((fabric) => (
+                        <option key={fabric.id} value={fabric.id}>
+                          {fabric.name} • {fabric.materialTypeName} • {fabric.sellerCountry}
+                        </option>
+                      ))}
+                    </select>
+                    <Button type="button" variant="outline" onClick={addSelectedFabricFromDropdown}>
+                      Add Fabric
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {selectedDesignFabricRows.length === 0 ? (
+                      <p className="text-sm text-gray-500">No suitable fabrics selected yet.</p>
+                    ) : (
+                      selectedDesignFabricRows.map((fabric) => (
+                        <div key={fabric.id} className="grid grid-cols-1 items-center gap-2 rounded border p-2 md:grid-cols-[1fr_120px_96px]">
+                          <div className="text-sm text-gray-800">
+                            <p className="font-medium">{fabric.name}</p>
+                            <p className="text-xs text-gray-500">
+                              {fabric.materialTypeName} • {fabric.sellerCountry}
+                            </p>
+                          </div>
                           <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={() => toggleFabricSelection(fabric.id)}
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={designForm.yardsByFabricId[fabric.id] || '1'}
+                            onChange={(event) =>
+                              setDesignForm((prev) => ({
+                                ...prev,
+                                yardsByFabricId: { ...prev.yardsByFabricId, [fabric.id]: event.target.value },
+                              }))
+                            }
+                            className="rounded border px-2 py-1 text-sm"
                           />
-                          <span className="flex-1 text-sm text-gray-800">{fabric.name}</span>
-                          {selected ? (
-                            <input
-                              type="number"
-                              min="1"
-                              step="1"
-                              value={designForm.yardsByFabricId[fabric.id] || '1'}
-                              onChange={(e) =>
-                                setDesignForm((prev) => ({
-                                  ...prev,
-                                  yardsByFabricId: { ...prev.yardsByFabricId, [fabric.id]: e.target.value },
-                                }))
-                              }
-                              className="w-20 px-2 py-1 border rounded text-sm"
-                            />
-                          ) : null}
+                          <Button type="button" variant="outline" size="sm" onClick={() => removeSelectedFabric(fabric.id)}>
+                            Remove
+                          </Button>
                         </div>
-                      );
-                    })
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Measurement Variables (one per line: name|unit|required/optional|instructions)
+                  Measurement Fields (admin-defined templates)
                 </label>
-                <textarea
-                  value={designForm.measurementLines}
-                  onChange={(e) => setDesignForm((prev) => ({ ...prev, measurementLines: e.target.value }))}
-                  className="w-full px-4 py-2 border rounded-lg min-h-[100px]"
-                />
+                <div className="max-h-44 overflow-y-auto rounded-lg border p-3 space-y-2">
+                  {measurementTemplateOptions.length === 0 ? (
+                    <p className="text-sm text-gray-500">No measurement templates found.</p>
+                  ) : (
+                    measurementTemplateOptions.map((template) => {
+                      const checked = designForm.selectedMeasurementNames.includes(template.name);
+                      return (
+                        <label key={template.name} className="flex items-start gap-3 text-sm text-gray-800">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) =>
+                              setDesignForm((prev) => {
+                                const next = event.target.checked
+                                  ? [...prev.selectedMeasurementNames, template.name]
+                                  : prev.selectedMeasurementNames.filter((name) => name !== template.name);
+                                return { ...prev, selectedMeasurementNames: Array.from(new Set(next)) };
+                              })
+                            }
+                          />
+                          <span>
+                            <span className="font-medium">{template.name}</span> ({template.unit})
+                            {template.isRequired ? <span className="ml-1 text-amber-700">required</span> : null}
+                            {template.instructions ? (
+                              <span className="block text-xs text-gray-500">{template.instructions}</span>
+                            ) : null}
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
 

@@ -3690,6 +3690,37 @@ const adminApi = {
     data: { status: 'APPROVED' | 'REJECTED'; notes?: string }
   ) => apiService.patch<{ success: boolean; message?: string }>(`/admin/vendor-profiles/${role}/${userId}/review`, data),
 
+  getDesignerFabricCountryAccess: (params?: { search?: string }) =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        designers: Array<{
+          designerProfileId: string;
+          designerUserId: string;
+          businessName: string;
+          email: string;
+          homeCountry: string;
+          extraCountries: string[];
+          allowedCountries: string[];
+        }>;
+        availableCountries: string[];
+      };
+    }>('/admin/designer-fabric-country-access', { params }),
+
+  updateDesignerFabricCountryAccess: (designerUserId: string, extraCountries: string[]) =>
+    apiService.put<{
+      success: boolean;
+      message?: string;
+      data: {
+        designerProfileId: string;
+        designerUserId: string;
+        businessName: string;
+        homeCountry: string;
+        extraCountries: string[];
+        allowedCountries: string[];
+      };
+    }>(`/admin/designer-fabric-country-access/${designerUserId}`, { extraCountries }),
+
   getPermissionCatalog: () =>
     apiService.get<{
       success: boolean;
@@ -4186,6 +4217,37 @@ const designerApi = {
 
   getProfileFields: () =>
     readDesignerProfileFieldsWithFallback<{ success: boolean; data: { role: string; fields: any[] } }>(),
+
+  getMeasurementTemplateOptions: () =>
+    apiService.get<{
+      success: boolean;
+      data: Array<{
+        name: string;
+        unit: string;
+        isRequired: boolean;
+        instructions?: string;
+      }>;
+    }>('/designer/measurement-template-options'),
+
+  getDesignFabricOptions: (params?: { country?: string; materialTypeId?: string; search?: string; limit?: number }) =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        allowedCountries: string[];
+        countries: string[];
+        materials: Array<{ id: string; name: string }>;
+        fabrics: Array<{
+          id: string;
+          name: string;
+          materialTypeId: string;
+          materialTypeName: string;
+          sellerCountry: string;
+          sellerName: string;
+          priceUsd: number;
+          image: string;
+        }>;
+      };
+    }>('/designer/fabric-options', { params }),
 
   updateProfileCompletion: (data: any) =>
     writeDesignerProfileCompletionWithFallback<{ success: boolean; data: any; message?: string }>(data),

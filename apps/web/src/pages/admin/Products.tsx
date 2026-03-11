@@ -41,6 +41,16 @@ interface ReadyVariantRow {
   stock: number;
 }
 
+interface DesignerFabricCountryAccessRow {
+  designerProfileId: string;
+  designerUserId: string;
+  businessName: string;
+  email: string;
+  homeCountry: string;
+  extraCountries: string[];
+  allowedCountries: string[];
+}
+
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -77,6 +87,12 @@ export default function AdminProducts() {
     sellers: Array<{ id: string; businessName: string; country: string; ownerUserId?: string }>;
     designers: Array<{ id: string; businessName: string; country: string; ownerUserId?: string }>;
   }>({ categories: [], materials: [], sellers: [], designers: [] });
+  const [designerFabricAccessRows, setDesignerFabricAccessRows] = useState<DesignerFabricCountryAccessRow[]>([]);
+  const [designerFabricAccessCountries, setDesignerFabricAccessCountries] = useState<string[]>([]);
+  const [designerFabricAccessDrafts, setDesignerFabricAccessDrafts] = useState<Record<string, string[]>>({});
+  const [designerFabricAccessLoading, setDesignerFabricAccessLoading] = useState(false);
+  const [designerFabricAccessSavingUserId, setDesignerFabricAccessSavingUserId] = useState<string | null>(null);
+  const [designerFabricAccessMessage, setDesignerFabricAccessMessage] = useState('');
   const [form, setForm] = useState({
     type: 'FABRIC' as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR',
     name: '',
@@ -153,8 +169,14 @@ export default function AdminProducts() {
     return directMessage || fallbackMessage;
   };
 
+  const normalizeCountryToken = (value: unknown) =>
+    String(value || '')
+      .trim()
+      .toLowerCase();
+
   useEffect(() => {
     void fetchOptions();
+    void fetchDesignerFabricAccess();
   }, []);
 
   useEffect(() => {
@@ -407,6 +429,47 @@ export default function AdminProducts() {
 
     if (currencyResult.status === 'fulfilled' && currencyResult.value.success) {
       setCurrencyMatrix(Array.isArray(currencyResult.value.data?.matrix) ? currencyResult.value.data.matrix : []);
+    }
+  };
+
+  const fetchDesignerFabricAccess = async () => {
+    try {
+      setDesignerFabricAccessLoading(true);
+      const response = await api.admin.getDesignerFabricCountryAccess();
+      if (!response.success) return;
+      const rows = Array.isArray(response.data?.designers) ? response.data.designers : [];
+      const countries = Array.isArray(response.data?.availableCountries) ? response.data.availableCountries : [];
+      setDesignerFabricAccessRows(rows);
+      setDesignerFabricAccessCountries(countries);
+      setDesignerFabricAccessDrafts(
+        rows.reduce<Record<string, string[]>>((acc, row) => {
+          acc[row.designerUserId] = Array.isArray(row.extraCountries) ? row.extraCountries : [];
+          return acc;
+        }, {})
+      );
+    } catch (accessError: any) {
+      setDesignerFabricAccessMessage(
+        accessError?.response?.data?.message || accessError?.message || 'Failed to load designer fabric country access.'
+      );
+    } finally {
+      setDesignerFabricAccessLoading(false);
+    }
+  };
+
+  const saveDesignerFabricAccess = async (designerUserId: string) => {
+    const selected = designerFabricAccessDrafts[designerUserId] || [];
+    try {
+      setDesignerFabricAccessSavingUserId(designerUserId);
+      setDesignerFabricAccessMessage('');
+      await api.admin.updateDesignerFabricCountryAccess(designerUserId, selected);
+      await fetchDesignerFabricAccess();
+      setDesignerFabricAccessMessage('Designer fabric country access updated.');
+    } catch (accessError: any) {
+      setDesignerFabricAccessMessage(
+        accessError?.response?.data?.message || accessError?.message || 'Failed to update designer fabric country access.'
+      );
+    } finally {
+      setDesignerFabricAccessSavingUserId(null);
     }
   };
 
@@ -1021,6 +1084,72 @@ export default function AdminProducts() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-xl border bg-white p-4">
+        <div className="mb-3">
+          <h2 className="text-sm font-semibold text-gray-900">Designer Fabric Country Access</h2>
+          <p className="text-xs text-gray-500">
+            Designers can see fabrics from their own country by default. Select additional countries for specific designers below.
+          </p>
+        </div>
+        {designerFabricAccessMessage ? (
+          <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            {designerFabricAccessMessage}
+          </div>
+        ) : null}
+        {designerFabricAccessLoading ? (
+          <p className="text-sm text-gray-500">Loading designer access settings...</p>
+        ) : (
+          <div className="space-y-3">
+            {designerFabricAccessRows.length === 0 ? (
+              <p className="text-sm text-gray-500">No designers found.</p>
+            ) : (
+              designerFabricAccessRows.map((row) => (
+                <div key={row.designerUserId} className="rounded-lg border p-3">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{row.businessName}</p>
+                      <p className="text-xs text-gray-500">
+                        {row.email || 'No email'} • Home country: {row.homeCountry || 'Not specified'}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => saveDesignerFabricAccess(row.designerUserId)}
+                      disabled={designerFabricAccessSavingUserId === row.designerUserId}
+                    >
+                      {designerFabricAccessSavingUserId === row.designerUserId ? 'Saving...' : 'Save Access'}
+                    </Button>
+                  </div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">Additional allowed countries</label>
+                  <select
+                    multiple
+                    value={designerFabricAccessDrafts[row.designerUserId] || []}
+                    onChange={(event) => {
+                      const values = Array.from(event.target.selectedOptions).map((option) => option.value);
+                      setDesignerFabricAccessDrafts((prev) => ({
+                        ...prev,
+                        [row.designerUserId]: values.filter(
+                          (entry) => normalizeCountryToken(entry) !== normalizeCountryToken(row.homeCountry)
+                        ),
+                      }));
+                    }}
+                    className="h-28 w-full rounded border px-2 py-2 text-sm"
+                  >
+                    {designerFabricAccessCountries
+                      .filter((country) => normalizeCountryToken(country) !== normalizeCountryToken(row.homeCountry))
+                      .map((country) => (
+                        <option key={`${row.designerUserId}-${country}`} value={country}>
+                          {country}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       {/* Tabs */}

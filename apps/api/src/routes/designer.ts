@@ -5,6 +5,10 @@ import { prisma, UserRole, ProductStatus } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import {
+  getAllowedFabricCountriesForDesigner,
+  isCountryAllowed,
+} from '../utils/designer-fabric-country-access';
+import {
   convertLocalToUsd,
   getAllowedCurrenciesForVendor,
   getCurrencyState,
@@ -126,6 +130,68 @@ async function ensureDesignerGovernanceSchema() {
     `CREATE INDEX IF NOT EXISTS "VendorProfileField_role_sortOrder_idx" ON "VendorProfileField"("role","sortOrder")`
   );
   designerGovernanceSchemaEnsured = true;
+}
+
+type MeasurementTemplateOption = {
+  name: string;
+  unit: string;
+  isRequired: boolean;
+  instructions?: string;
+};
+
+const DEFAULT_MEASUREMENT_TEMPLATE_OPTIONS: MeasurementTemplateOption[] = [
+  { name: 'Chest', unit: 'cm', isRequired: true, instructions: '' },
+  { name: 'Waist', unit: 'cm', isRequired: true, instructions: '' },
+  { name: 'Hips', unit: 'cm', isRequired: true, instructions: '' },
+];
+
+const normalizeCountryToken = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toLowerCase();
+
+const normalizeCountryName = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+
+const dedupeCountryList = (values: unknown[]) => {
+  const deduped = new Map<string, string>();
+  for (const value of values) {
+    const normalized = normalizeCountryName(value);
+    const token = normalizeCountryToken(normalized);
+    if (!normalized || !token) continue;
+    if (!deduped.has(token)) deduped.set(token, normalized);
+  }
+  return Array.from(deduped.values());
+};
+
+const normalizeMeasurementNameToken = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+
+async function readActiveMeasurementTemplateOptions(): Promise<MeasurementTemplateOption[]> {
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT "name","unit","isRequired","instructions"
+       FROM "MeasurementTemplate"
+       WHERE "isActive" = true
+       ORDER BY "displayOrder" ASC, "name" ASC`
+    );
+    const normalized = (Array.isArray(rows) ? rows : [])
+      .map((row) => ({
+        name: String(row?.name || '').trim(),
+        unit: String(row?.unit || 'cm').trim() || 'cm',
+        isRequired: Boolean(row?.isRequired ?? true),
+        instructions: String(row?.instructions || '').trim(),
+      }))
+      .filter((row) => row.name.length > 0);
+    return normalized.length > 0 ? normalized : [...DEFAULT_MEASUREMENT_TEMPLATE_OPTIONS];
+  } catch {
+    return [...DEFAULT_MEASUREMENT_TEMPLATE_OPTIONS];
+  }
 }
 
 type VendorProfileStatus = 'INCOMPLETE' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
@@ -463,6 +529,161 @@ router.get('/dashboard', async (req, res, next) => {
   }
 });
 
+router.get('/measurement-template-options', async (_req, res, next) => {
+  try {
+    const templates = await readActiveMeasurementTemplateOptions();
+    res.json({
+      success: true,
+      data: templates,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/fabric-options', async (req, res, next) => {
+  try {
+    const profile = await resolveDesignerProfile(req.user!.id);
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Designer profile not found.',
+      });
+    }
+
+    const requestedCountry = normalizeCountryName(req.query.country);
+    const materialTypeIdRaw = String(req.query.materialTypeId || '').trim();
+    const search = String(req.query.search || '').trim();
+    const parsedLimit = Number(req.query.limit || 200);
+    const limit = Number.isFinite(parsedLimit) ? Math.min(500, Math.max(1, Math.floor(parsedLimit))) : 200;
+
+    if (materialTypeIdRaw) {
+      const validation = z.string().uuid().safeParse(materialTypeIdRaw);
+      if (!validation.success) {
+        return res.status(400).json({
+          success: false,
+          message: 'materialTypeId must be a valid UUID.',
+        });
+      }
+    }
+
+    const allowedCountries = await getAllowedFabricCountriesForDesigner({
+      designerUserId: req.user!.id,
+      homeCountry: profile.country,
+    });
+    if (requestedCountry && !isCountryAllowed(allowedCountries, requestedCountry)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Selected fabric seller country is not allowed for this designer.',
+      });
+    }
+
+    const countryScope = requestedCountry ? [requestedCountry] : allowedCountries;
+    const scopedCountryFilters = dedupeCountryList(countryScope).map((entry) => ({
+      seller: {
+        country: {
+          equals: entry,
+          mode: 'insensitive' as const,
+        },
+      },
+    }));
+
+    const baseWhere: any = {
+      status: ProductStatus.APPROVED,
+      isAvailable: true,
+      ...(scopedCountryFilters.length > 0 ? { OR: scopedCountryFilters } : {}),
+    };
+    const filteredWhere: any = {
+      ...baseWhere,
+      ...(materialTypeIdRaw ? { materialTypeId: materialTypeIdRaw } : {}),
+      ...(search
+        ? {
+            name: {
+              contains: search,
+              mode: 'insensitive' as const,
+            },
+          }
+        : {}),
+    };
+
+    const [optionRows, fabricRows] = await Promise.all([
+      prisma.fabric.findMany({
+        where: baseWhere,
+        select: {
+          seller: {
+            select: {
+              country: true,
+            },
+          },
+          materialType: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      }),
+      prisma.fabric.findMany({
+        where: filteredWhere,
+        include: {
+          seller: {
+            select: {
+              country: true,
+              businessName: true,
+            },
+          },
+          materialType: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          images: {
+            orderBy: { sortOrder: 'asc' },
+            take: 1,
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }, { name: 'asc' }],
+        take: limit,
+      }),
+    ]);
+
+    const countryOptions = dedupeCountryList([
+      ...allowedCountries,
+      ...optionRows.map((row) => row.seller?.country),
+    ]);
+    const materialMap = new Map<string, { id: string; name: string }>();
+    for (const row of optionRows) {
+      const id = String(row.materialType?.id || '').trim();
+      const name = String(row.materialType?.name || '').trim();
+      if (!id || !name || materialMap.has(id)) continue;
+      materialMap.set(id, { id, name });
+    }
+    const materialOptions = Array.from(materialMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json({
+      success: true,
+      data: {
+        allowedCountries,
+        countries: countryOptions,
+        materials: materialOptions,
+        fabrics: fabricRows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          materialTypeId: row.materialTypeId,
+          materialTypeName: row.materialType?.name || 'Material',
+          sellerCountry: row.seller?.country || '',
+          sellerName: row.seller?.businessName || 'Fabric Seller',
+          priceUsd: Number(row.finalPrice || row.sellerPrice || 0),
+          image: row.images?.[0]?.url || '',
+        })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get designer designs
 router.get('/designs', async (req, res, next) => {
   try {
@@ -483,7 +704,12 @@ router.get('/designs', async (req, res, next) => {
         suitableFabrics: {
           include: {
             fabric: {
-              select: { name: true, seller: { select: { country: true } } },
+              select: {
+                name: true,
+                materialTypeId: true,
+                materialType: { select: { id: true, name: true } },
+                seller: { select: { country: true } },
+              },
             },
           },
         },
@@ -749,6 +975,93 @@ router.post('/designs', async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Designer profile not found.' });
     }
 
+    const allowedCountries = await getAllowedFabricCountriesForDesigner({
+      designerUserId: req.user!.id,
+      homeCountry: profile.country,
+    });
+    const selectedFabricIds = Array.from(
+      new Set((data.suitableFabricIds || []).map((item) => String(item.fabricId || '').trim()).filter(Boolean))
+    );
+    if (selectedFabricIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select at least one suitable fabric.',
+      });
+    }
+    const allowedCountryFilters = dedupeCountryList(allowedCountries).map((country) => ({
+      seller: {
+        country: {
+          equals: country,
+          mode: 'insensitive' as const,
+        },
+      },
+    }));
+    const allowedFabricRows = await prisma.fabric.findMany({
+      where: {
+        id: { in: selectedFabricIds },
+        status: ProductStatus.APPROVED,
+        isAvailable: true,
+        ...(allowedCountryFilters.length > 0 ? { OR: allowedCountryFilters } : {}),
+      },
+      select: { id: true },
+    });
+    if (allowedFabricRows.length !== selectedFabricIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'One or more selected fabrics are unavailable for this designer country access.',
+      });
+    }
+    const suitableFabricById = new Map<string, number>();
+    for (const item of data.suitableFabricIds || []) {
+      const fabricId = String(item.fabricId || '').trim();
+      if (!fabricId || suitableFabricById.has(fabricId)) continue;
+      suitableFabricById.set(fabricId, Math.max(1, Number(item.yardsNeeded || 1)));
+    }
+    const normalizedSuitableFabrics = Array.from(suitableFabricById.entries()).map(([fabricId, yardsNeeded]) => ({
+      fabricId,
+      yardsNeeded,
+    }));
+
+    const templateRows = await readActiveMeasurementTemplateOptions();
+    const templateByName = new Map(
+      templateRows.map((item) => [normalizeMeasurementNameToken(item.name), item] as const)
+    );
+    const sanitizedMeasurementVariables = (data.measurementVariables || []).map((row) => {
+      const matched = templateByName.get(normalizeMeasurementNameToken(row.name));
+      return matched
+        ? {
+            name: matched.name,
+            unit: matched.unit,
+            isRequired: matched.isRequired,
+            instructions: matched.instructions || undefined,
+          }
+        : null;
+    });
+    if (sanitizedMeasurementVariables.some((row) => !row)) {
+      return res.status(400).json({
+        success: false,
+        message: 'One or more selected measurement fields are not allowed. Please use admin-defined templates only.',
+      });
+    }
+    const normalizedMeasurements = sanitizedMeasurementVariables.filter(Boolean) as Array<{
+      name: string;
+      unit: string;
+      isRequired: boolean;
+      instructions?: string;
+    }>;
+    if (normalizedMeasurements.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select at least one measurement field.',
+      });
+    }
+    if (new Set(normalizedMeasurements.map((row) => normalizeMeasurementNameToken(row.name))).size !== normalizedMeasurements.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Duplicate measurement fields are not allowed.',
+      });
+    }
+
     const pricing = await resolveDesignerListingPrice({
       userId: req.user!.id,
       country: profile.country,
@@ -767,10 +1080,10 @@ router.post('/designs', async (req, res, next) => {
         finalPrice,
         status: ProductStatus.PENDING_REVIEW,
         suitableFabrics: {
-          create: data.suitableFabricIds,
+          create: normalizedSuitableFabrics,
         },
         measurementVariables: {
-          create: data.measurementVariables.map((v, i) => ({ ...v, sortOrder: i })),
+          create: normalizedMeasurements.map((v, i) => ({ ...v, sortOrder: i })),
         },
         images: {
           create: data.images.map((img, i) => ({
@@ -872,6 +1185,112 @@ router.patch('/designs/:id', async (req, res, next) => {
       });
     }
 
+    let normalizedSuitableFabrics:
+      | Array<{
+          fabricId: string;
+          yardsNeeded: number;
+        }>
+      | undefined = undefined;
+    if (data.suitableFabricIds) {
+      const allowedCountries = await getAllowedFabricCountriesForDesigner({
+        designerUserId: req.user!.id,
+        homeCountry: profile.country,
+      });
+      const selectedFabricIds = Array.from(
+        new Set(data.suitableFabricIds.map((item) => String(item.fabricId || '').trim()).filter(Boolean))
+      );
+      const allowedCountryFilters = dedupeCountryList(allowedCountries).map((country) => ({
+        seller: {
+          country: {
+            equals: country,
+            mode: 'insensitive' as const,
+          },
+        },
+      }));
+      const allowedFabricRows = await prisma.fabric.findMany({
+        where: {
+          id: { in: selectedFabricIds },
+          status: ProductStatus.APPROVED,
+          isAvailable: true,
+          ...(allowedCountryFilters.length > 0 ? { OR: allowedCountryFilters } : {}),
+        },
+        select: { id: true },
+      });
+      if (allowedFabricRows.length !== selectedFabricIds.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'One or more selected fabrics are unavailable for this designer country access.',
+        });
+      }
+      const suitableFabricById = new Map<string, number>();
+      for (const item of data.suitableFabricIds) {
+        const fabricId = String(item.fabricId || '').trim();
+        if (!fabricId || suitableFabricById.has(fabricId)) continue;
+        suitableFabricById.set(fabricId, Math.max(1, Number(item.yardsNeeded || 1)));
+      }
+      normalizedSuitableFabrics = Array.from(suitableFabricById.entries()).map(([fabricId, yardsNeeded]) => ({
+        fabricId,
+        yardsNeeded,
+      }));
+      if (normalizedSuitableFabrics.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please select at least one suitable fabric.',
+        });
+      }
+    }
+
+    let normalizedMeasurements:
+      | Array<{
+          name: string;
+          unit: string;
+          isRequired: boolean;
+          instructions?: string;
+        }>
+      | undefined = undefined;
+    if (data.measurementVariables) {
+      const templateRows = await readActiveMeasurementTemplateOptions();
+      const templateByName = new Map(
+        templateRows.map((item) => [normalizeMeasurementNameToken(item.name), item] as const)
+      );
+      const sanitized = data.measurementVariables.map((row) => {
+        const matched = templateByName.get(normalizeMeasurementNameToken(row.name));
+        return matched
+          ? {
+              name: matched.name,
+              unit: matched.unit,
+              isRequired: matched.isRequired,
+              instructions: matched.instructions || undefined,
+            }
+          : null;
+      });
+      if (sanitized.some((row) => !row)) {
+        return res.status(400).json({
+          success: false,
+          message: 'One or more selected measurement fields are not allowed. Please use admin-defined templates only.',
+        });
+      }
+      const casted = sanitized.filter(Boolean) as Array<{
+        name: string;
+        unit: string;
+        isRequired: boolean;
+        instructions?: string;
+      }>;
+      if (casted.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please select at least one measurement field.',
+        });
+      }
+      if (new Set(casted.map((row) => normalizeMeasurementNameToken(row.name))).size !== casted.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'Duplicate measurement fields are not allowed.',
+        });
+      }
+      normalizedMeasurements = casted;
+    }
+
     const pricing =
       data.basePrice !== undefined
         ? await resolveDesignerListingPrice({
@@ -905,11 +1324,11 @@ router.patch('/designs/:id', async (req, res, next) => {
       };
 
       if (data.suitableFabricIds) {
-        payload.suitableFabrics = { create: data.suitableFabricIds };
+        payload.suitableFabrics = { create: normalizedSuitableFabrics || [] };
       }
       if (data.measurementVariables) {
         payload.measurementVariables = {
-          create: data.measurementVariables.map((variable, index) => ({
+          create: (normalizedMeasurements || []).map((variable, index) => ({
             ...variable,
             sortOrder: index,
           })),
