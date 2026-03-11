@@ -15,6 +15,7 @@ const ADMIN_PERMISSION_ROUTE_PRIORITY: Array<{ route: string; required: string[]
   { route: '/admin/products', required: ['products:manage'] },
   { route: '/admin/pricing', required: ['pricing:manage'] },
   { route: '/admin/payments', required: ['payments:manage'] },
+  { route: '/admin/shipping', required: ['shipping:manage'] },
   { route: '/admin/homepage', required: ['homepage:manage'] },
   { route: '/admin/homepage-visibility', required: ['homepage:manage'] },
   { route: '/admin/banners', required: ['banners:manage'] },

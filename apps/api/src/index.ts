@@ -29,6 +29,7 @@ import homepageRoutes from './routes/homepage';
 import homepageSectionsRoutes from './routes/homepage-sections';
 import blogRoutes from './routes/blogs';
 import paymentRoutes from './routes/payments';
+import shippingRoutes from './routes/shipping';
 import currencyRoutes from './routes/currency';
 import { runStartupRepairs } from './bootstrap';
 
@@ -107,6 +108,7 @@ app.use('/api/homepage', homepageRoutes);
 app.use('/api/homepage-sections', homepageSectionsRoutes);
 app.use('/api/blogs', blogRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/shipping', shippingRoutes);
 app.use('/api/currency', currencyRoutes);
 
 // Error handling middleware

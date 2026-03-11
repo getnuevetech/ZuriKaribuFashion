@@ -41,6 +41,19 @@ interface PaymentProviderOption {
   publicConfig?: Record<string, any>;
 }
 
+interface ShippingQuoteOption {
+  id: string;
+  source: 'GLOBAL' | 'LOCAL';
+  providerKey: string;
+  providerName: string;
+  serviceName: string;
+  etaMinDays: number;
+  etaMaxDays: number;
+  priceUsd: number;
+  countryCode?: string;
+  city?: string | null;
+}
+
 export default function Checkout() {
   const navigate = useNavigate();
   const stripe = useStripe();
@@ -57,6 +70,9 @@ export default function Checkout() {
   const [suggestedProducts, setSuggestedProducts] = useState<any[]>([]);
   const [paymentProviders, setPaymentProviders] = useState<PaymentProviderOption[]>([]);
   const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<string>('STRIPE');
+  const [shippingQuotes, setShippingQuotes] = useState<ShippingQuoteOption[]>([]);
+  const [selectedShippingQuoteId, setSelectedShippingQuoteId] = useState<string>('');
+  const [shippingQuotesLoading, setShippingQuotesLoading] = useState(false);
   
   const fullName = user?.firstName && user?.lastName 
     ? `${user.firstName} ${user.lastName}` 
@@ -76,7 +92,10 @@ export default function Checkout() {
   const shippingCountryCode = resolveCountryCode(shippingAddress.country);
   const cityOptions = getCityOptionsByCountryCode(shippingCountryCode);
 
-  const shipping = totalPrice > 200 ? 0 : 25;
+  const fallbackShipping = totalPrice > 200 ? 0 : 25;
+  const selectedShippingQuote =
+    shippingQuotes.find((entry) => entry.id === selectedShippingQuoteId) || null;
+  const shipping = selectedShippingQuote ? Number(selectedShippingQuote.priceUsd || 0) : fallbackShipping;
   const finalTotal = totalPrice + shipping;
   const selectedProvider = paymentProviders.find((entry) => entry.providerKey === selectedPaymentProvider) || null;
   const currentStepSummary =
@@ -117,6 +136,58 @@ export default function Checkout() {
   }, []);
 
   useEffect(() => {
+    const countryCode = shippingCountryCode || shippingAddress.country;
+    const city = String(shippingAddress.city || '').trim();
+    if (!countryCode || !city) {
+      setShippingQuotes([]);
+      setSelectedShippingQuoteId('');
+      return;
+    }
+    let cancelled = false;
+    setShippingQuotesLoading(true);
+    api.shipping
+      .getOptions({
+        countryCode,
+        city,
+        subtotalUsd: Number(totalPrice || 0),
+      })
+      .then((response) => {
+        if (cancelled) return;
+        const quotes = Array.isArray(response.data?.quotes) ? response.data.quotes : [];
+        const normalizedQuotes: ShippingQuoteOption[] = quotes.map((entry: any) => ({
+          id: String(entry.id || ''),
+          source: entry.source === 'LOCAL' ? 'LOCAL' : 'GLOBAL',
+          providerKey: String(entry.providerKey || '').toUpperCase(),
+          providerName: String(entry.providerName || entry.providerKey || 'Shipping Provider'),
+          serviceName: String(entry.serviceName || 'Standard'),
+          etaMinDays: Number(entry.etaMinDays || 0),
+          etaMaxDays: Number(entry.etaMaxDays || 0),
+          priceUsd: Number(entry.priceUsd || 0),
+          countryCode: entry.countryCode ? String(entry.countryCode) : undefined,
+          city: entry.city ? String(entry.city) : null,
+        }));
+        setShippingQuotes(normalizedQuotes);
+        const recommended = String(response.data?.recommendedQuoteId || '');
+        setSelectedShippingQuoteId((current) => {
+          if (normalizedQuotes.find((entry) => entry.id === current)) return current;
+          if (recommended && normalizedQuotes.find((entry) => entry.id === recommended)) return recommended;
+          return normalizedQuotes[0]?.id || '';
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setShippingQuotes([]);
+        setSelectedShippingQuoteId('');
+      })
+      .finally(() => {
+        if (!cancelled) setShippingQuotesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [shippingAddress.country, shippingAddress.city, shippingCountryCode, totalPrice]);
+
+  useEffect(() => {
     api.products
       .getReadyToWear({ limit: 4 })
       .then((response) => {
@@ -135,6 +206,9 @@ export default function Checkout() {
     setError(null);
 
     try {
+      if (shippingQuotes.length > 0 && !selectedShippingQuote) {
+        throw new Error('Please select a shipping option to continue.');
+      }
       const providerKey = selectedProvider?.providerKey || 'STRIPE';
       const response = await api.payments.createPaymentSession({
         providerKey,
@@ -161,6 +235,7 @@ export default function Checkout() {
             providerKey,
             reference: response.data.reference,
             shippingAddress,
+            shippingQuote: selectedShippingQuote,
             createdAt: Date.now(),
           })
         );
@@ -221,7 +296,11 @@ export default function Checkout() {
     setLoading(false);
   };
 
-  const createOrders = async (paymentIntentId: string, paymentMethod: string) => {
+  const createOrders = async (
+    paymentIntentId: string,
+    paymentMethod: string,
+    shippingQuote: ShippingQuoteOption | null = selectedShippingQuote
+  ) => {
     try {
       const addressResponse = await api.customer.addAddress({
         label: 'Checkout Address',
@@ -240,6 +319,15 @@ export default function Checkout() {
 
       const shippingAddressId = addressResponse.data.id;
       const createdOrderNumbers: string[] = [];
+      const shippingPayload = {
+        shippingCostUsd: Number(shippingQuote?.priceUsd ?? shipping),
+        shippingQuoteId: shippingQuote?.id || undefined,
+        shippingProviderKey: shippingQuote?.providerKey || undefined,
+        shippingProviderName: shippingQuote?.providerName || undefined,
+        shippingServiceName: shippingQuote?.serviceName || undefined,
+        shippingEtaMinDays: Number(shippingQuote?.etaMinDays ?? 0),
+        shippingEtaMaxDays: Number(shippingQuote?.etaMaxDays ?? 0),
+      };
 
       const customItems = items.filter((item) => item.kind === 'CUSTOM_DESIGN');
       const readyToWearItems = items.filter((item) => item.kind === 'READY_TO_WEAR');
@@ -257,6 +345,7 @@ export default function Checkout() {
           shippingAddressId,
           paymentMethod,
           paymentIntentId,
+          ...shippingPayload,
         });
         if (orderResponse.success && orderResponse.data?.orderNumber) {
           createdOrderNumbers.push(orderResponse.data.orderNumber);
@@ -273,6 +362,7 @@ export default function Checkout() {
           shippingAddressId,
           paymentMethod,
           paymentIntentId,
+          ...shippingPayload,
         });
         if (readyOrderResponse.success && readyOrderResponse.data?.orderNumber) {
           createdOrderNumbers.push(readyOrderResponse.data.orderNumber);
@@ -323,6 +413,26 @@ export default function Checkout() {
     if (pending.shippingAddress && typeof pending.shippingAddress === 'object') {
       setShippingAddress((prev) => ({ ...prev, ...pending.shippingAddress }));
     }
+    const pendingShippingQuote =
+      pending.shippingQuote && typeof pending.shippingQuote === 'object'
+        ? ({
+            id: String(pending.shippingQuote.id || ''),
+            source: pending.shippingQuote.source === 'LOCAL' ? 'LOCAL' : 'GLOBAL',
+            providerKey: String(pending.shippingQuote.providerKey || '').toUpperCase(),
+            providerName: String(pending.shippingQuote.providerName || pending.shippingQuote.providerKey || 'Shipping Provider'),
+            serviceName: String(pending.shippingQuote.serviceName || 'Standard'),
+            etaMinDays: Number(pending.shippingQuote.etaMinDays || 0),
+            etaMaxDays: Number(pending.shippingQuote.etaMaxDays || 0),
+            priceUsd: Number(pending.shippingQuote.priceUsd || 0),
+          } as ShippingQuoteOption)
+        : null;
+    if (pendingShippingQuote?.id) {
+      setShippingQuotes((prev) => {
+        if (prev.find((entry) => entry.id === pendingShippingQuote.id)) return prev;
+        return [...prev, pendingShippingQuote];
+      });
+      setSelectedShippingQuoteId(pendingShippingQuote.id);
+    }
     setSelectedPaymentProvider(providerKey);
     setLoading(true);
     setError(null);
@@ -337,7 +447,11 @@ export default function Checkout() {
           throw new Error('Payment could not be verified as completed.');
         }
         setStep('review');
-        await createOrders(String(verifyResponse.data.paymentReference || reference), providerKey);
+        await createOrders(
+          String(verifyResponse.data.paymentReference || reference),
+          providerKey,
+          pendingShippingQuote
+        );
       })
       .catch((err: any) => {
         setError(err?.response?.data?.message || err.message || 'Unable to verify redirected payment.');
@@ -523,6 +637,39 @@ export default function Checkout() {
                     </select>
                   </div>
 
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Shipping Method {shippingQuotes.length > 0 ? '*' : ''}
+                    </label>
+                    {shippingQuotesLoading ? (
+                      <div className="rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                        Loading shipping options...
+                      </div>
+                    ) : shippingQuotes.length > 0 ? (
+                      <select
+                        required
+                        value={selectedShippingQuoteId}
+                        onChange={(e) => setSelectedShippingQuoteId(e.target.value)}
+                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      >
+                        {shippingQuotes.map((quote) => (
+                          <option key={quote.id} value={quote.id}>
+                            {quote.providerName} - {quote.serviceName} ({quote.etaMinDays}-{quote.etaMaxDays} days) - {formatFromUsd(quote.priceUsd)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                        Default shipping will be applied ({fallbackShipping === 0 ? 'FREE' : formatFromUsd(fallbackShipping)}).
+                      </div>
+                    )}
+                    {selectedShippingQuote ? (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Selected: {selectedShippingQuote.providerName} / {selectedShippingQuote.serviceName}
+                      </p>
+                    ) : null}
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       State/Province *
@@ -699,7 +846,10 @@ export default function Checkout() {
                   <span className="font-medium">{formatFromUsd(totalPrice)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Shipping</span>
+                  <span className="text-gray-600">
+                    Shipping
+                    {selectedShippingQuote ? ` (${selectedShippingQuote.providerName})` : ''}
+                  </span>
                   <span className={shipping === 0 ? 'text-green-600' : ''}>
                     {shipping === 0 ? 'FREE' : formatFromUsd(shipping)}
                   </span>
@@ -749,12 +899,20 @@ export default function Checkout() {
                   <Badge variant="outline" className="mt-0.5">4</Badge>
                   <div>
                     <p className="font-medium">Shipping</p>
-                    <p className="text-gray-500">5-10 business days</p>
+                    <p className="text-gray-500">
+                      {selectedShippingQuote
+                        ? `${selectedShippingQuote.etaMinDays}-${selectedShippingQuote.etaMaxDays} business days`
+                        : '5-10 business days'}
+                    </p>
                   </div>
                 </div>
               </div>
               <p className="text-xs text-gray-500 mt-4">
-                Estimated delivery: {new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toLocaleDateString()} - {new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+                Estimated delivery: {new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toLocaleDateString()} -{' '}
+                {new Date(
+                  Date.now() +
+                    ((selectedShippingQuote?.etaMaxDays || 10) + 21) * 24 * 60 * 60 * 1000
+                ).toLocaleDateString()}
               </p>
             </div>
 

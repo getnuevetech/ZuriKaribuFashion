@@ -640,6 +640,419 @@ async function verifyPaymentWithFallback<T>(data: { providerKey: string; referen
   }
 }
 
+const SHIPPING_FALLBACK_KEY = 'af_shipping_integrations_fallback_v1';
+const SHIPPING_LOCAL_OPTIONS_FALLBACK_KEY = 'af_shipping_local_options_fallback_v1';
+const SHIPPING_BUILTIN_PROVIDER_KEYS = ['UPS', 'USPS', 'FEDEX', 'DHL'];
+
+const SHIPPING_INTEGRATIONS_FALLBACK_DEFAULTS = {
+  providers: [
+    {
+      id: 'fallback-ups',
+      providerKey: 'UPS',
+      displayName: 'UPS',
+      providerType: 'GLOBAL',
+      mode: 'TEST',
+      isActive: true,
+      supportsCountries: [],
+      configSchema: [
+        { key: 'apiKey', label: 'API Key', type: 'PASSWORD', required: false, isSecret: true },
+        { key: 'apiSecret', label: 'API Secret', type: 'PASSWORD', required: false, isSecret: true },
+        { key: 'accountNumber', label: 'Account Number', type: 'TEXT', required: false },
+        { key: 'baseRateUsd', label: 'Base Rate (USD)', type: 'NUMBER', required: true },
+        { key: 'percentRate', label: 'Rate % of Subtotal', type: 'NUMBER', required: false },
+        { key: 'markupUsd', label: 'Extra Markup (USD)', type: 'NUMBER', required: false },
+        { key: 'etaMinDays', label: 'ETA Min Days', type: 'NUMBER', required: false },
+        { key: 'etaMaxDays', label: 'ETA Max Days', type: 'NUMBER', required: false },
+      ],
+      configValues: { baseRateUsd: 30, percentRate: 2.5, markupUsd: 0, etaMinDays: 4, etaMaxDays: 10 },
+      notes: 'Local fallback config',
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'fallback-usps',
+      providerKey: 'USPS',
+      displayName: 'USPS',
+      providerType: 'GLOBAL',
+      mode: 'TEST',
+      isActive: false,
+      supportsCountries: [],
+      configSchema: [],
+      configValues: { baseRateUsd: 25, percentRate: 2.2, markupUsd: 0, etaMinDays: 5, etaMaxDays: 11 },
+      notes: 'Local fallback config',
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'fallback-fedex',
+      providerKey: 'FEDEX',
+      displayName: 'FedEx',
+      providerType: 'GLOBAL',
+      mode: 'TEST',
+      isActive: false,
+      supportsCountries: [],
+      configSchema: [],
+      configValues: { baseRateUsd: 32, percentRate: 2.9, markupUsd: 0, etaMinDays: 3, etaMaxDays: 8 },
+      notes: 'Local fallback config',
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'fallback-dhl',
+      providerKey: 'DHL',
+      displayName: 'DHL',
+      providerType: 'GLOBAL',
+      mode: 'TEST',
+      isActive: false,
+      supportsCountries: [],
+      configSchema: [],
+      configValues: { baseRateUsd: 35, percentRate: 3.1, markupUsd: 0, etaMinDays: 3, etaMaxDays: 7 },
+      notes: 'Local fallback config',
+      updatedAt: new Date().toISOString(),
+    },
+  ],
+  builtinProviderKeys: SHIPPING_BUILTIN_PROVIDER_KEYS,
+};
+
+const normalizeShippingProviderKey = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_]/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64);
+
+const normalizeCountryCodeToken = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .slice(0, 2);
+
+const readShippingFallbackIntegrations = () => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return JSON.parse(JSON.stringify(SHIPPING_INTEGRATIONS_FALLBACK_DEFAULTS));
+  }
+  try {
+    const raw = window.localStorage.getItem(SHIPPING_FALLBACK_KEY);
+    if (!raw) return JSON.parse(JSON.stringify(SHIPPING_INTEGRATIONS_FALLBACK_DEFAULTS));
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return JSON.parse(JSON.stringify(SHIPPING_INTEGRATIONS_FALLBACK_DEFAULTS));
+    return {
+      providers: Array.isArray((parsed as any).providers)
+        ? (parsed as any).providers
+        : SHIPPING_INTEGRATIONS_FALLBACK_DEFAULTS.providers,
+      builtinProviderKeys: Array.isArray((parsed as any).builtinProviderKeys)
+        ? (parsed as any).builtinProviderKeys
+        : SHIPPING_INTEGRATIONS_FALLBACK_DEFAULTS.builtinProviderKeys,
+    };
+  } catch {
+    return JSON.parse(JSON.stringify(SHIPPING_INTEGRATIONS_FALLBACK_DEFAULTS));
+  }
+};
+
+const writeShippingFallbackIntegrations = (state: { providers: any[]; builtinProviderKeys: string[] }) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(SHIPPING_FALLBACK_KEY, JSON.stringify(state));
+  } catch {
+    // ignore write failures
+  }
+};
+
+const readShippingFallbackLocalOptions = () => {
+  if (typeof window === 'undefined' || !window.localStorage) return [] as any[];
+  try {
+    const raw = window.localStorage.getItem(SHIPPING_LOCAL_OPTIONS_FALLBACK_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeShippingFallbackLocalOptions = (rows: any[]) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(SHIPPING_LOCAL_OPTIONS_FALLBACK_KEY, JSON.stringify(Array.isArray(rows) ? rows : []));
+  } catch {
+    // ignore write failures
+  }
+};
+
+async function readAdminShippingIntegrationsWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/shipping/admin/integrations', '/admin/shipping/integrations']) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    const fallback = readShippingFallbackIntegrations();
+    return { success: true, data: fallback } as T;
+  }
+  throw lastError ?? new Error('Shipping integrations route not found.');
+}
+
+async function createAdminShippingIntegrationWithFallback<T>(data: any) {
+  let lastError: unknown = null;
+  for (const path of ['/shipping/admin/integrations', '/admin/shipping/integrations']) {
+    try {
+      return await apiService.post<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError ?? new Error('Shipping integration create route not found.');
+  const state = readShippingFallbackIntegrations();
+  const providerKey = normalizeShippingProviderKey(data?.providerKey);
+  if (!providerKey) throw new Error('Provider key is required.');
+  if (state.providers.some((entry: any) => String(entry.providerKey || '').toUpperCase() === providerKey)) {
+    throw new Error(`${providerKey} already exists.`);
+  }
+  const row = {
+    id: `fallback-${providerKey.toLowerCase()}-${Date.now()}`,
+    providerKey,
+    displayName: String(data?.displayName || providerKey),
+    providerType: data?.providerType === 'LOCAL' ? 'LOCAL' : 'GLOBAL',
+    mode: data?.mode === 'LIVE' ? 'LIVE' : 'TEST',
+    isActive: Boolean(data?.isActive),
+    supportsCountries: Array.isArray(data?.supportsCountries) ? data.supportsCountries : [],
+    configSchema: Array.isArray(data?.configSchema) ? data.configSchema : [],
+    configValues: data?.configValues && typeof data.configValues === 'object' ? data.configValues : {},
+    notes: data?.notes || '',
+    updatedAt: new Date().toISOString(),
+  };
+  state.providers.push(row);
+  writeShippingFallbackIntegrations(state);
+  return { success: true, data: row } as T;
+}
+
+async function updateAdminShippingIntegrationWithFallback<T>(providerKey: string, data: any) {
+  let lastError: unknown = null;
+  for (const path of [`/shipping/admin/integrations/${providerKey}`, `/admin/shipping/integrations/${providerKey}`]) {
+    try {
+      return await apiService.put<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError ?? new Error('Shipping integration update route not found.');
+  const normalizedKey = normalizeShippingProviderKey(providerKey);
+  const state = readShippingFallbackIntegrations();
+  const index = state.providers.findIndex((entry: any) => String(entry.providerKey || '').toUpperCase() === normalizedKey);
+  if (index < 0) throw new Error(`${normalizedKey} was not found in local fallback storage.`);
+  state.providers[index] = {
+    ...state.providers[index],
+    ...data,
+    providerKey: normalizedKey,
+    updatedAt: new Date().toISOString(),
+  };
+  writeShippingFallbackIntegrations(state);
+  return { success: true, data: state.providers[index] } as T;
+}
+
+async function deleteAdminShippingIntegrationWithFallback<T>(providerKey: string) {
+  let lastError: unknown = null;
+  for (const path of [`/shipping/admin/integrations/${providerKey}`, `/admin/shipping/integrations/${providerKey}`]) {
+    try {
+      return await apiService.delete<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError ?? new Error('Shipping integration delete route not found.');
+  const normalizedKey = normalizeShippingProviderKey(providerKey);
+  const state = readShippingFallbackIntegrations();
+  const isBuiltin = (state.builtinProviderKeys || []).includes(normalizedKey);
+  if (isBuiltin) {
+    state.providers = state.providers.map((entry: any) =>
+      String(entry.providerKey || '').toUpperCase() === normalizedKey ? { ...entry, isActive: false, updatedAt: new Date().toISOString() } : entry
+    );
+  } else {
+    state.providers = state.providers.filter((entry: any) => String(entry.providerKey || '').toUpperCase() !== normalizedKey);
+  }
+  writeShippingFallbackIntegrations(state);
+  return { success: true, message: 'Shipping integration removed.' } as T;
+}
+
+async function readAdminShippingLocalOptionsWithFallback<T>(params?: { countryCode?: string; city?: string; providerKey?: string }) {
+  let lastError: unknown = null;
+  for (const path of ['/shipping/admin/local-options', '/admin/shipping/local-options']) {
+    try {
+      return await apiService.get<T>(path, { params: { ...(params || {}), _r: Date.now() } });
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    const rows = readShippingFallbackLocalOptions().filter((row: any) => {
+      if (params?.countryCode && normalizeCountryCodeToken(row.countryCode) !== normalizeCountryCodeToken(params.countryCode)) return false;
+      if (params?.providerKey && normalizeShippingProviderKey(row.providerKey) !== normalizeShippingProviderKey(params.providerKey)) return false;
+      if (params?.city) {
+        const city = String(params.city || '').trim().toLowerCase();
+        if (city && String(row.city || '').trim().toLowerCase() !== city) return false;
+      }
+      return true;
+    });
+    return { success: true, data: rows } as T;
+  }
+  throw lastError ?? new Error('Shipping local-options route not found.');
+}
+
+async function createAdminShippingLocalOptionWithFallback<T>(data: any) {
+  let lastError: unknown = null;
+  for (const path of ['/shipping/admin/local-options', '/admin/shipping/local-options']) {
+    try {
+      return await apiService.post<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError ?? new Error('Shipping local option create route not found.');
+  const rows = readShippingFallbackLocalOptions();
+  const row = {
+    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    countryCode: normalizeCountryCodeToken(data?.countryCode),
+    countryName: String(data?.countryName || ''),
+    city: data?.city ? String(data.city) : null,
+    providerKey: normalizeShippingProviderKey(data?.providerKey),
+    providerName: String(data?.providerName || ''),
+    serviceName: String(data?.serviceName || 'Standard'),
+    etaMinDays: Number(data?.etaMinDays || 0),
+    etaMaxDays: Number(data?.etaMaxDays || 0),
+    priceUsd: Number(data?.priceUsd || 0),
+    isActive: data?.isActive !== false,
+    metadata: data?.metadata && typeof data.metadata === 'object' ? data.metadata : {},
+    updatedAt: new Date().toISOString(),
+  };
+  rows.push(row);
+  writeShippingFallbackLocalOptions(rows);
+  return { success: true, data: row } as T;
+}
+
+async function updateAdminShippingLocalOptionWithFallback<T>(id: string, data: any) {
+  let lastError: unknown = null;
+  for (const path of [`/shipping/admin/local-options/${id}`, `/admin/shipping/local-options/${id}`]) {
+    try {
+      return await apiService.put<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError ?? new Error('Shipping local option update route not found.');
+  const rows = readShippingFallbackLocalOptions();
+  const index = rows.findIndex((row: any) => String(row.id) === String(id));
+  if (index < 0) throw new Error('Shipping local option was not found in local fallback storage.');
+  rows[index] = { ...rows[index], ...data, id, updatedAt: new Date().toISOString() };
+  writeShippingFallbackLocalOptions(rows);
+  return { success: true, data: rows[index] } as T;
+}
+
+async function deleteAdminShippingLocalOptionWithFallback<T>(id: string) {
+  let lastError: unknown = null;
+  for (const path of [`/shipping/admin/local-options/${id}`, `/admin/shipping/local-options/${id}`]) {
+    try {
+      return await apiService.delete<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError ?? new Error('Shipping local option delete route not found.');
+  const rows = readShippingFallbackLocalOptions().filter((row: any) => String(row.id) !== String(id));
+  writeShippingFallbackLocalOptions(rows);
+  return { success: true, message: 'Shipping local option removed.' } as T;
+}
+
+async function readShippingOptionsWithFallback<T>(data: {
+  countryCode: string;
+  city?: string;
+  subtotalUsd: number;
+  weightKg?: number;
+}) {
+  try {
+    return await apiService.post<T>('/shipping/options', data);
+  } catch (error) {
+    if (!isRetryableRouteError(error)) throw error;
+    const countryCode = normalizeCountryCodeToken(data.countryCode);
+    const normalizedCity = String(data.city || '').trim().toLowerCase();
+    const subtotalUsd = Number(data.subtotalUsd || 0);
+    const weightKg = Number(data.weightKg || 0);
+    const integrationsState = readShippingFallbackIntegrations();
+    const providers = Array.isArray(integrationsState.providers) ? integrationsState.providers : [];
+    const globalQuotes = providers
+      .filter((provider: any) => Boolean(provider.isActive))
+      .filter((provider: any) => String(provider.providerType || 'GLOBAL').toUpperCase() === 'GLOBAL')
+      .filter((provider: any) => {
+        const supported = Array.isArray(provider.supportsCountries) ? provider.supportsCountries.map((entry: any) => normalizeCountryCodeToken(entry)).filter(Boolean) : [];
+        if (supported.length === 0) return true;
+        return supported.includes(countryCode);
+      })
+      .map((provider: any, index: number) => {
+        const values = provider.configValues && typeof provider.configValues === 'object' ? provider.configValues : {};
+        const baseRate = Number(values.baseRateUsd ?? 25);
+        const percentRate = Number(values.percentRate ?? 2.5);
+        const markupUsd = Number(values.markupUsd ?? 0);
+        const etaMinDays = Math.max(0, Number(values.etaMinDays ?? 4));
+        const etaMaxDays = Math.max(etaMinDays, Number(values.etaMaxDays ?? 10));
+        const weightRate = Number(values.weightRateUsdPerKg ?? 0);
+        const priceUsd = Number((baseRate + subtotalUsd * (percentRate / 100) + markupUsd + weightKg * weightRate).toFixed(2));
+        return {
+          id: `global-${normalizeShippingProviderKey(provider.providerKey || `provider-${index}`).toLowerCase()}`,
+          source: 'GLOBAL',
+          providerKey: normalizeShippingProviderKey(provider.providerKey),
+          providerName: String(provider.displayName || provider.providerKey || 'Shipping Provider'),
+          serviceName: String(values.serviceName || `${provider.displayName || provider.providerKey} Standard`),
+          etaMinDays,
+          etaMaxDays,
+          priceUsd,
+        };
+      });
+    const localRows = readShippingFallbackLocalOptions()
+      .filter((row: any) => Boolean(row.isActive))
+      .filter((row: any) => normalizeCountryCodeToken(row.countryCode) === countryCode)
+      .filter((row: any) => !normalizedCity || !row.city || String(row.city).trim().toLowerCase() === normalizedCity)
+      .map((row: any) => ({
+        id: String(row.id),
+        source: 'LOCAL',
+        providerKey: normalizeShippingProviderKey(row.providerKey),
+        providerName: String(row.providerName || row.providerKey || 'Local Carrier'),
+        serviceName: String(row.serviceName || 'Standard'),
+        etaMinDays: Number(row.etaMinDays || 0),
+        etaMaxDays: Number(row.etaMaxDays || row.etaMinDays || 0),
+        priceUsd: Number(Number(row.priceUsd || 0).toFixed(2)),
+        countryCode: normalizeCountryCodeToken(row.countryCode),
+        city: row.city ? String(row.city) : null,
+      }));
+    const quotes = [...globalQuotes, ...localRows].sort((a, b) => Number(a.priceUsd || 0) - Number(b.priceUsd || 0));
+    return {
+      success: true,
+      data: {
+        countryCode,
+        city: data.city || '',
+        quotes,
+        recommendedQuoteId: quotes[0]?.id || null,
+      },
+    } as T;
+  }
+}
+
 type TopStripPayload = {
   messages: string[];
   separator: string;
@@ -2282,6 +2695,81 @@ const adminApi = {
   deletePaymentIntegration: (providerKey: string) =>
     deleteAdminPaymentIntegrationWithFallback<{ success: boolean; message?: string }>(providerKey),
 
+  getShippingIntegrations: () =>
+    readAdminShippingIntegrationsWithFallback<{
+      success: boolean;
+      data: {
+        providers: any[];
+        builtinProviderKeys: string[];
+      };
+    }>(),
+
+  createShippingIntegration: (data: {
+    providerKey: string;
+    displayName?: string;
+    providerType?: 'GLOBAL' | 'LOCAL';
+    mode?: 'TEST' | 'LIVE';
+    isActive?: boolean;
+    supportsCountries?: string[];
+    configSchema?: any[];
+    configValues?: Record<string, any>;
+    notes?: string | null;
+  }) => createAdminShippingIntegrationWithFallback<{ success: boolean; data: any }>(data),
+
+  updateShippingIntegration: (
+    providerKey: string,
+    data: {
+      displayName?: string;
+      providerType?: 'GLOBAL' | 'LOCAL';
+      mode?: 'TEST' | 'LIVE';
+      isActive?: boolean;
+      supportsCountries?: string[];
+      configSchema?: any[];
+      configValues?: Record<string, any>;
+      notes?: string | null;
+    }
+  ) => updateAdminShippingIntegrationWithFallback<{ success: boolean; data: any }>(providerKey, data),
+
+  deleteShippingIntegration: (providerKey: string) =>
+    deleteAdminShippingIntegrationWithFallback<{ success: boolean; message?: string }>(providerKey),
+
+  getShippingLocalOptions: (params?: { countryCode?: string; city?: string; providerKey?: string }) =>
+    readAdminShippingLocalOptionsWithFallback<{ success: boolean; data: any[] }>(params),
+
+  createShippingLocalOption: (data: {
+    countryCode: string;
+    countryName: string;
+    city?: string | null;
+    providerKey: string;
+    providerName: string;
+    serviceName: string;
+    etaMinDays: number;
+    etaMaxDays: number;
+    priceUsd: number;
+    isActive?: boolean;
+    metadata?: Record<string, any>;
+  }) => createAdminShippingLocalOptionWithFallback<{ success: boolean; data: any }>(data),
+
+  updateShippingLocalOption: (
+    id: string,
+    data: {
+      countryCode?: string;
+      countryName?: string;
+      city?: string | null;
+      providerKey?: string;
+      providerName?: string;
+      serviceName?: string;
+      etaMinDays?: number;
+      etaMaxDays?: number;
+      priceUsd?: number;
+      isActive?: boolean;
+      metadata?: Record<string, any>;
+    }
+  ) => updateAdminShippingLocalOptionWithFallback<{ success: boolean; data: any }>(id, data),
+
+  deleteShippingLocalOption: (id: string) =>
+    deleteAdminShippingLocalOptionWithFallback<{ success: boolean; message?: string }>(id),
+
   getOrders: (params?: { status?: string; page?: number; limit?: number }) =>
     apiService.get<{ success: boolean; data: { orders: any[]; pagination: any } }>('/admin/orders', { params }),
 
@@ -2592,6 +3080,31 @@ const paymentsApi = {
 
   confirmPayment: (paymentIntentId: string) =>
     apiService.post<{ success: boolean; data: any }>('/payments/confirm', { paymentIntentId }),
+};
+
+// Shipping API
+const shippingApi = {
+  getOptions: (data: { countryCode: string; city?: string; subtotalUsd: number; weightKg?: number }) =>
+    readShippingOptionsWithFallback<{
+      success: boolean;
+      data: {
+        countryCode: string;
+        city: string;
+        quotes: Array<{
+          id: string;
+          source: 'GLOBAL' | 'LOCAL';
+          providerKey: string;
+          providerName: string;
+          serviceName: string;
+          etaMinDays: number;
+          etaMaxDays: number;
+          priceUsd: number;
+          countryCode?: string;
+          city?: string | null;
+        }>;
+        recommendedQuoteId: string | null;
+      };
+    }>(data),
 };
 
 // Banners API (public)
@@ -3471,6 +3984,7 @@ export const api = {
   designer: designerApi,
   qa: qaApi,
   payments: paymentsApi,
+  shipping: shippingApi,
   banners: bannersApi,
   upload: uploadApi,
   homepage: homepageApi,
@@ -3490,6 +4004,7 @@ export {
   designerApi,
   qaApi,
   paymentsApi,
+  shippingApi,
   bannersApi,
   uploadApi,
   homepageApi,

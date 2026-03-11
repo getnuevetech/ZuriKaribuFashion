@@ -28,6 +28,7 @@ export const Permissions = {
   ORDERS_UPDATE_ALL: 'orders:update:all',
   PAYMENTS_CREATE: 'payments:create',
   PAYMENTS_MANAGE: 'payments:manage',
+  SHIPPING_MANAGE: 'shipping:manage',
   UPLOADS_CREATE: 'uploads:create',
   HOMEPAGE_MANAGE: 'homepage:manage',
   BANNERS_MANAGE: 'banners:manage',
@@ -120,6 +121,12 @@ export const PERMISSION_CATALOG: PermissionCatalogEntry[] = [
     label: 'Manage payment integrations',
     group: 'OPERATIONS',
     description: 'Configure payment providers, credentials, and runtime payment fields.',
+  },
+  {
+    key: Permissions.SHIPPING_MANAGE,
+    label: 'Manage shipping integrations',
+    group: 'OPERATIONS',
+    description: 'Configure shipping providers, country/local options, and quote behavior.',
   },
   {
     key: Permissions.TRAFFIC_READ,

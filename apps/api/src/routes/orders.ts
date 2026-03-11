@@ -189,6 +189,13 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       shippingAddressId: z.string().uuid(),
       paymentMethod: z.string(),
       paymentIntentId: z.string().min(1).optional(),
+      shippingCostUsd: z.number().min(0).optional(),
+      shippingQuoteId: z.string().min(1).optional(),
+      shippingProviderKey: z.string().min(1).optional(),
+      shippingProviderName: z.string().min(1).optional(),
+      shippingServiceName: z.string().min(1).optional(),
+      shippingEtaMinDays: z.number().min(0).optional(),
+      shippingEtaMaxDays: z.number().min(0).optional(),
     });
 
     const data = schema.parse(req.body);
@@ -270,7 +277,7 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
     const fabricPrice = Number(fabric.finalPrice) * data.yards;
     const designPrice = Number(design.finalPrice);
     const subtotal = fabricPrice + designPrice;
-    const shippingCost = 25; // Fixed for now
+    const shippingCost = Number.isFinite(Number(data.shippingCostUsd)) ? Number(data.shippingCostUsd) : 25;
     const tax = subtotal * 0.08; // 8% tax
     const total = subtotal + shippingCost + tax;
     const isPaymentConfirmed = Boolean(data.paymentIntentId);
@@ -278,6 +285,16 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
 
     // Generate order number
     const orderNumber = `AF-${Date.now().toString(36).toUpperCase()}`;
+
+    const shippingSnapshot = {
+      ...address,
+      shippingQuoteId: data.shippingQuoteId || null,
+      shippingProviderKey: data.shippingProviderKey || null,
+      shippingProviderName: data.shippingProviderName || null,
+      shippingServiceName: data.shippingServiceName || null,
+      shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
+      shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
+    };
 
     // Create order with all components
     const order = await prisma.$transaction(async (tx) => {
@@ -287,7 +304,7 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
           orderNumber,
           type: OrderType.CUSTOM_DESIGN,
           customerId,
-          shippingAddress: address,
+          shippingAddress: shippingSnapshot,
           subtotal,
           shippingCost,
           tax,
@@ -386,6 +403,13 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       shippingAddressId: z.string().uuid(),
       paymentMethod: z.string(),
       paymentIntentId: z.string().min(1).optional(),
+      shippingCostUsd: z.number().min(0).optional(),
+      shippingQuoteId: z.string().min(1).optional(),
+      shippingProviderKey: z.string().min(1).optional(),
+      shippingProviderName: z.string().min(1).optional(),
+      shippingServiceName: z.string().min(1).optional(),
+      shippingEtaMinDays: z.number().min(0).optional(),
+      shippingEtaMaxDays: z.number().min(0).optional(),
     });
 
     const data = schema.parse(req.body);
@@ -466,7 +490,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
     }
 
     // Calculate totals
-    const shippingCost = 15;
+    const shippingCost = Number.isFinite(Number(data.shippingCostUsd)) ? Number(data.shippingCostUsd) : 15;
     const tax = subtotal * 0.08;
     const total = subtotal + shippingCost + tax;
     const isPaymentConfirmed = Boolean(data.paymentIntentId);
@@ -475,6 +499,16 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
     // Generate order number
     const orderNumber = `AF-${Date.now().toString(36).toUpperCase()}`;
 
+    const shippingSnapshot = {
+      ...address,
+      shippingQuoteId: data.shippingQuoteId || null,
+      shippingProviderKey: data.shippingProviderKey || null,
+      shippingProviderName: data.shippingProviderName || null,
+      shippingServiceName: data.shippingServiceName || null,
+      shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
+      shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
+    };
+
     // Create order
     const order = await prisma.$transaction(async (tx) => {
       const newOrder = await tx.order.create({
@@ -482,7 +516,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
           orderNumber,
           type: OrderType.READY_TO_WEAR,
           customerId,
-          shippingAddress: address,
+          shippingAddress: shippingSnapshot,
           subtotal,
           shippingCost,
           tax,

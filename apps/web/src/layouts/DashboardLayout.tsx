@@ -20,6 +20,7 @@ import {
   FileText,
   Eye,
   CreditCard,
+  Truck,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -53,6 +54,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Products', href: '/admin/products', icon: Package },
     { label: 'Pricing Rules', href: '/admin/pricing', icon: DollarSign },
     { label: 'Payments', href: '/admin/payments', icon: CreditCard },
+    { label: 'Shipping', href: '/admin/shipping', icon: Truck },
     { label: 'Orders', href: '/admin/orders', icon: ShoppingBag },
     { label: 'Banners', href: '/admin/banners', icon: ImageIcon },
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
@@ -116,6 +118,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/products': ['products:manage'],
       '/admin/pricing': ['pricing:manage'],
       '/admin/payments': ['payments:manage'],
+      '/admin/shipping': ['shipping:manage'],
       '/admin/orders': ['orders:manage'],
       '/admin/banners': ['banners:manage'],
       '/admin/homepage': ['homepage:manage'],
