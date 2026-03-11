@@ -4,6 +4,7 @@ import { prisma } from '../db';
 
 const DESIGNER_FABRIC_COUNTRY_ACCESS_SETTINGS_KEY = 'DESIGNER_FABRIC_COUNTRY_ACCESS_V1';
 const DESIGNER_FABRIC_COUNTRY_ACCESS_REQUESTS_SETTINGS_KEY = 'DESIGNER_FABRIC_COUNTRY_ACCESS_REQUESTS_V1';
+const REJECTED_REQUEST_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 const designerCountryAccessSettingsSchema = z.object({
   entries: z
@@ -219,14 +220,30 @@ async function writeDesignerFabricCountryAccessRequestsSettings(
   return next.requests;
 }
 
+function isRejectedRequestExpired(request: DesignerFabricCountryAccessRequest) {
+  if (request.status !== 'REJECTED') return false;
+  const baseTime = new Date(request.resolvedAt || request.updatedAt || request.createdAt).getTime();
+  if (!Number.isFinite(baseTime)) return false;
+  return Date.now() - baseTime > REJECTED_REQUEST_RETENTION_MS;
+}
+
+async function readActiveDesignerFabricCountryAccessRequests() {
+  const settings = await readDesignerFabricCountryAccessRequestsSettings();
+  const activeRequests = settings.settings.requests.filter((request) => !isRejectedRequestExpired(request));
+  if (activeRequests.length !== settings.settings.requests.length) {
+    await writeDesignerFabricCountryAccessRequestsSettings(activeRequests);
+  }
+  return activeRequests;
+}
+
 export async function listDesignerFabricCountryAccessRequests(input?: {
   designerUserId?: string;
   status?: DesignerFabricCountryAccessRequestStatus;
 }) {
-  const settings = await readDesignerFabricCountryAccessRequestsSettings();
+  const requests = await readActiveDesignerFabricCountryAccessRequests();
   const designerUserId = String(input?.designerUserId || '').trim();
   const status = String(input?.status || '').trim().toUpperCase();
-  return settings.settings.requests.filter((request) => {
+  return requests.filter((request) => {
     if (designerUserId && request.designerUserId !== designerUserId) return false;
     if (status && request.status !== status) return false;
     return true;
@@ -247,7 +264,7 @@ export async function createDesignerFabricCountryAccessRequest(input: {
     throw new Error('At least one country is required.');
   }
   const nowIso = new Date().toISOString();
-  const settings = await readDesignerFabricCountryAccessRequestsSettings();
+  const existingRequests = await readActiveDesignerFabricCountryAccessRequests();
   const request: DesignerFabricCountryAccessRequest = {
     id: randomUUID(),
     designerUserId,
@@ -257,7 +274,7 @@ export async function createDesignerFabricCountryAccessRequest(input: {
     createdAt: nowIso,
     updatedAt: nowIso,
   };
-  await writeDesignerFabricCountryAccessRequestsSettings([request, ...settings.settings.requests]);
+  await writeDesignerFabricCountryAccessRequestsSettings([request, ...existingRequests]);
   return request;
 }
 
@@ -270,13 +287,13 @@ export async function reviewDesignerFabricCountryAccessRequest(input: {
 }) {
   const requestId = String(input.requestId || '').trim();
   if (!requestId) throw new Error('Request ID is required.');
-  const settings = await readDesignerFabricCountryAccessRequestsSettings();
-  const index = settings.settings.requests.findIndex((request) => request.id === requestId);
+  const existingRequests = await readActiveDesignerFabricCountryAccessRequests();
+  const index = existingRequests.findIndex((request) => request.id === requestId);
   if (index < 0) {
     throw new Error('Request not found.');
   }
   const nowIso = new Date().toISOString();
-  const current = settings.settings.requests[index];
+  const current = existingRequests[index];
   const next: DesignerFabricCountryAccessRequest = {
     ...current,
     status: input.status,
@@ -285,7 +302,7 @@ export async function reviewDesignerFabricCountryAccessRequest(input: {
     updatedAt: nowIso,
     resolvedAt: nowIso,
   };
-  const requests = [...settings.settings.requests];
+  const requests = [...existingRequests];
   requests[index] = next;
   await writeDesignerFabricCountryAccessRequestsSettings(requests);
 

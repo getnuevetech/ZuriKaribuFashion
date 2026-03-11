@@ -675,6 +675,8 @@ const readDesignerFabricAccessRequestsFallback = (): DesignerFabricAccessFallbac
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
+    const now = Date.now();
+    const rejectedRetentionMs = 7 * 24 * 60 * 60 * 1000;
     return parsed
       .map((entry) => {
         const row = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
@@ -696,6 +698,12 @@ const readDesignerFabricAccessRequestsFallback = (): DesignerFabricAccessFallbac
         } as DesignerFabricAccessFallbackRequest;
       })
       .filter((row) => row.id && row.designerUserId && row.requestedCountries.length > 0)
+      .filter((row) => {
+        if (row.status !== 'REJECTED') return true;
+        const baseTime = new Date(row.resolvedAt || row.updatedAt || row.createdAt).getTime();
+        if (!Number.isFinite(baseTime)) return true;
+        return now - baseTime <= rejectedRetentionMs;
+      })
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   } catch {
     return [];
@@ -824,18 +832,7 @@ async function writeAdminDesignerFabricCountryAccessWithFallback<T>(designerUser
     lastError = error;
     if (!isRetryableRouteError(error)) throw error;
   }
-  const current = readDesignerFabricAccessFallbackMap();
-  current[normalizedUserId] = normalizedExtraCountries;
-  writeDesignerFabricAccessFallbackMap(current);
-  return {
-    success: true,
-    message: 'Designer fabric country access saved to local fallback.',
-    data: {
-      designerUserId: normalizedUserId,
-      extraCountries: normalizedExtraCountries,
-      allowedCountries: normalizedExtraCountries,
-    },
-  } as T;
+  throw lastError ?? new Error('Designer fabric country access route not available.');
 }
 
 async function readAdminDesignerFabricCountryAccessRequestsWithFallback<T>(params?: {
@@ -865,37 +862,7 @@ async function readAdminDesignerFabricCountryAccessRequestsWithFallback<T>(param
     lastError = error;
     if (!isRetryableRouteError(error)) throw error;
   }
-  if (!isRetryableRouteError(lastError)) throw lastError;
-  const status = String(params?.status || '').trim().toUpperCase();
-  const search = String(params?.search || '').trim().toLowerCase();
-  const page = Math.max(1, Number(params?.page || 1));
-  const limit = Math.max(1, Math.min(100, Number(params?.limit || 20)));
-  const filteredRows = readDesignerFabricAccessRequestsFallback().filter((entry) => {
-    if (status && status !== 'ALL' && entry.status !== status) return false;
-    if (!search) return true;
-    return (
-      String(entry.businessName || '').toLowerCase().includes(search) ||
-      String(entry.email || '').toLowerCase().includes(search) ||
-      String(entry.homeCountry || '').toLowerCase().includes(search) ||
-      (entry.requestedCountries || []).join(' ').toLowerCase().includes(search)
-    );
-  });
-  const total = filteredRows.length;
-  const pages = Math.max(1, Math.ceil(total / limit));
-  const safePage = Math.min(page, pages);
-  const start = (safePage - 1) * limit;
-  const rows = filteredRows.slice(start, start + limit);
-  return {
-    success: true,
-    data: rows,
-    pagination: {
-      page: safePage,
-      limit,
-      total,
-      pages,
-    },
-    message: 'Country access requests loaded from local fallback.',
-  } as T;
+  throw lastError ?? new Error('Country access requests route not available.');
 }
 
 async function reviewAdminDesignerFabricCountryAccessRequestWithFallback<T>(
@@ -913,36 +880,7 @@ async function reviewAdminDesignerFabricCountryAccessRequestWithFallback<T>(
     lastError = error;
     if (!isRetryableRouteError(error)) throw error;
   }
-  if (!isRetryableRouteError(lastError)) throw lastError;
-  const requests = readDesignerFabricAccessRequestsFallback();
-  const index = requests.findIndex((entry) => entry.id === requestId);
-  if (index < 0) {
-    throw lastError ?? new Error('Request not found.');
-  }
-  const nowIso = new Date().toISOString();
-  const current = requests[index];
-  const next = {
-    ...current,
-    status: payload.status,
-    reviewNotes: String(payload.reviewNotes || '').trim() || undefined,
-    updatedAt: nowIso,
-    resolvedAt: nowIso,
-  } as DesignerFabricAccessFallbackRequest;
-  requests[index] = next;
-  writeDesignerFabricAccessRequestsFallback(requests);
-  if (payload.status === 'APPROVED') {
-    const grantList = dedupeCountryList(payload.grantedCountries).length > 0
-      ? dedupeCountryList(payload.grantedCountries)
-      : dedupeCountryList(next.requestedCountries);
-    const accessMap = readDesignerFabricAccessFallbackMap();
-    accessMap[next.designerUserId] = dedupeCountryList([...(accessMap[next.designerUserId] || []), ...grantList]);
-    writeDesignerFabricAccessFallbackMap(accessMap);
-  }
-  return {
-    success: true,
-    message: `Request ${payload.status.toLowerCase()} successfully (local fallback).`,
-    data: next,
-  } as T;
+  throw lastError ?? new Error('Country access review route not available.');
 }
 
 async function readDesignerFabricCountryAccessSummaryWithFallback<T>() {
@@ -970,24 +908,18 @@ async function readDesignerFabricCountryAccessSummaryWithFallback<T>() {
     if (!isRetryableRouteError(error)) throw error;
   }
   if (!isRetryableRouteError(lastError)) throw lastError;
-  const currentUserId = String(useAuthStore.getState().user?.id || '').trim();
-  const accessMap = readDesignerFabricAccessFallbackMap();
   const profileCompletion = await readDesignerProfileCompletionWithFallback<any>().catch(() => null);
   const homeCountry = String(profileCompletion?.data?.profile?.country || '').trim();
-  const extraCountries = dedupeCountryList(accessMap[currentUserId] || []).filter(
-    (country) => normalizeCountryToken(country) !== normalizeCountryToken(homeCountry)
-  );
-  const allowedCountries = dedupeCountryList([homeCountry, ...extraCountries]);
-  const requests = readDesignerFabricAccessRequestsFallback().filter((entry) => entry.designerUserId === currentUserId);
+  const allowedCountries = dedupeCountryList([homeCountry]);
   return {
     success: true,
     data: {
       homeCountry,
       allowedCountries,
       availableCountries: dedupeCountryList([...allowedCountries, ...STATIC_COUNTRY_NAMES]),
-      requests,
+      requests: [],
     },
-    message: 'Designer country access loaded from local fallback.',
+    message: 'Designer country-access route unavailable; showing home-country-only fallback.',
   } as T;
 }
 
@@ -1002,30 +934,7 @@ async function createDesignerFabricCountryAccessRequestWithFallback<T>(payload: 
     lastError = error;
     if (!isRetryableRouteError(error)) throw error;
   }
-  if (!isRetryableRouteError(lastError)) throw lastError;
-  const currentUserId = String(useAuthStore.getState().user?.id || '').trim();
-  if (!currentUserId) throw lastError ?? new Error('User session not found.');
-  const profileCompletion = await readDesignerProfileCompletionWithFallback<any>().catch(() => null);
-  const nowIso = new Date().toISOString();
-  const request: DesignerFabricAccessFallbackRequest = {
-    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    designerUserId: currentUserId,
-    requestedCountries: dedupeCountryList(payload.requestedCountries),
-    reason: String(payload.reason || '').trim() || undefined,
-    status: 'PENDING',
-    createdAt: nowIso,
-    updatedAt: nowIso,
-    businessName: String(profileCompletion?.data?.profile?.businessName || '').trim() || undefined,
-    email: String(profileCompletion?.data?.profile?.businessEmail || '').trim() || undefined,
-    homeCountry: String(profileCompletion?.data?.profile?.country || '').trim() || undefined,
-  };
-  const requests = [request, ...readDesignerFabricAccessRequestsFallback()];
-  writeDesignerFabricAccessRequestsFallback(requests);
-  return {
-    success: true,
-    message: 'Country access request saved locally while backend route is unavailable.',
-    data: request,
-  } as T;
+  throw lastError ?? new Error('Country access request route not available.');
 }
 
 const PARTNER_APPS_FALLBACK_KEY = 'af_partner_apps_fallback_v1';
@@ -1067,6 +976,34 @@ const readCategoryPageSettingsFallback = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO
     return null;
   }
 };
+
+const defaultCategoryPageSettings = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR') => ({
+  bannerTitle: pageType === 'FABRIC_TO_BUY' ? 'Fabrics To Buy' : pageType === 'CUSTOM_TO_WEAR' ? 'Custom To Wear' : 'Ready To Wear',
+  bannerSubtitle: '',
+  bannerImage: '',
+  bannerHeight: 320,
+  pageSize: 24,
+  columns: 4,
+  showPagination: true,
+  featuredProductIds: [] as string[],
+  rotatingProductIds: [] as string[],
+});
+
+const toCategoryPageHref = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR', id: string) =>
+  pageType === 'FABRIC_TO_BUY' ? `/fabrics/${id}` : pageType === 'CUSTOM_TO_WEAR' ? `/designs/${id}` : `/ready-to-wear/${id}`;
+
+const optionToPreview = (
+  pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
+  option: any
+) => ({
+  id: String(option?.id || ''),
+  name: String(option?.name || '').trim() || 'Product',
+  image: String(option?.image || '').trim(),
+  priceUsd: Number(option?.priceUsd || 0),
+  country: String(option?.country || '').trim(),
+  ownerName: String(option?.ownerName || '').trim() || 'Seller',
+  href: toCategoryPageHref(pageType, String(option?.id || '')),
+});
 const writeCategoryPageSettingsFallback = (
   pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
   payload: any
@@ -1331,6 +1268,94 @@ async function readCategoryPageProductOptionsWithFallback<T>(
   } as T;
 }
 
+async function readPublicCategoryPageSettingsWithFallback<T>(
+  pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR'
+) {
+  let lastError: unknown = null;
+  for (const path of [`/category-page-settings/${pageType}`, `/category-page-settings/admin/${pageType}`]) {
+    try {
+      const response = await apiService.get<any>(path, noCacheRequestConfig());
+      const settings = response?.data?.settings || defaultCategoryPageSettings(pageType);
+      writeCategoryPageSettingsFallback(pageType, settings);
+
+      let featuredProducts = Array.isArray(response?.data?.featuredProducts) ? response.data.featuredProducts : [];
+      let rotatingProducts = Array.isArray(response?.data?.rotatingProducts) ? response.data.rotatingProducts : [];
+      const needsFeaturedHydration = featuredProducts.length === 0 && Array.isArray(settings?.featuredProductIds) && settings.featuredProductIds.length > 0;
+      const needsRotatingHydration =
+        pageType === 'READY_TO_WEAR' &&
+        rotatingProducts.length === 0 &&
+        Array.isArray(settings?.rotatingProductIds) &&
+        settings.rotatingProductIds.length > 0;
+      if (needsFeaturedHydration || needsRotatingHydration) {
+        const optionsResponse = await readCategoryPageProductOptionsWithFallback<any>(pageType, { limit: 220 });
+        const optionsRows = Array.isArray(optionsResponse?.data) ? optionsResponse.data : [];
+        const optionMap = new Map(optionsRows.map((row: any) => [String(row?.id || ''), row]));
+        if (needsFeaturedHydration) {
+          featuredProducts = (settings.featuredProductIds || [])
+            .map((id: any) => optionMap.get(String(id || '').trim()))
+            .filter(Boolean)
+            .map((row: any) => optionToPreview(pageType, row));
+        }
+        if (needsRotatingHydration) {
+          rotatingProducts = (settings.rotatingProductIds || [])
+            .map((id: any) => optionMap.get(String(id || '').trim()))
+            .filter(Boolean)
+            .map((row: any) => optionToPreview(pageType, row));
+        }
+      }
+
+      return {
+        ...(response || {}),
+        success: response?.success !== false,
+        data: {
+          ...(response?.data || {}),
+          pageType,
+          settings,
+          featuredProducts,
+          rotatingProducts,
+        },
+      } as T;
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError;
+  const settings = readCategoryPageSettingsFallback(pageType) || defaultCategoryPageSettings(pageType);
+  let featuredProducts: any[] = [];
+  let rotatingProducts: any[] = [];
+  try {
+    const optionsResponse = await readCategoryPageProductOptionsWithFallback<any>(pageType, { limit: 220 });
+    const optionsRows = Array.isArray(optionsResponse?.data) ? optionsResponse.data : [];
+    const optionMap = new Map(optionsRows.map((row: any) => [String(row?.id || ''), row]));
+    featuredProducts = (settings.featuredProductIds || [])
+      .map((id: any) => optionMap.get(String(id || '').trim()))
+      .filter(Boolean)
+      .map((row: any) => optionToPreview(pageType, row));
+    rotatingProducts =
+      pageType === 'READY_TO_WEAR'
+        ? (settings.rotatingProductIds || [])
+            .map((id: any) => optionMap.get(String(id || '').trim()))
+            .filter(Boolean)
+            .map((row: any) => optionToPreview(pageType, row))
+        : [];
+  } catch {
+    featuredProducts = [];
+    rotatingProducts = [];
+  }
+  return {
+    success: true,
+    data: {
+      pageType,
+      settings,
+      featuredProducts,
+      rotatingProducts,
+    },
+    message: 'Category page settings loaded from local fallback.',
+  } as T;
+}
+
 async function readDesignerFabricOptionsWithFallback<T>(params?: {
   country?: string;
   materialTypeId?: string;
@@ -1362,16 +1387,15 @@ async function readDesignerFabricOptionsWithFallback<T>(params?: {
     image: String(entry?.images?.[0]?.url || '').trim(),
   }));
   const profileCompletion = await readDesignerProfileCompletionWithFallback<any>().catch(() => null);
-  const currentUserId = String(useAuthStore.getState().user?.id || '').trim();
   const homeCountry = String(profileCompletion?.data?.profile?.country || '').trim();
-  const map = readDesignerFabricAccessFallbackMap();
-  const allowedCountries = dedupeCountryList([homeCountry, ...(map[currentUserId] || [])]);
+  const allowedCountries = dedupeCountryList([homeCountry]);
   const allowedTokens = new Set(allowedCountries.map((country) => normalizeCountryToken(country)));
   const requestedCountryToken = normalizeCountryToken(params?.country);
   const filteredRows = normalizedRows.filter((entry) => {
     if (!entry.id) return false;
     const countryToken = normalizeCountryToken(entry.sellerCountry);
-    if (allowedTokens.size > 0 && countryToken && !allowedTokens.has(countryToken)) return false;
+    if (allowedTokens.size === 0) return false;
+    if (countryToken && !allowedTokens.has(countryToken)) return false;
     if (requestedCountryToken && countryToken !== requestedCountryToken) return false;
     if (params?.materialTypeId && entry.materialTypeId !== params.materialTypeId) return false;
     if (params?.search && !entry.name.toLowerCase().includes(String(params.search).toLowerCase())) return false;
@@ -3637,7 +3661,7 @@ const productsApi = {
     apiService.get<{ success: boolean; data: any }>('/products/featured'),
 
   getCategoryPageSettings: (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR') =>
-    apiService.get<{
+    readPublicCategoryPageSettingsWithFallback<{
       success: boolean;
       data: {
         pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
@@ -3674,7 +3698,8 @@ const productsApi = {
           href: string;
         }>;
       };
-    }>(`/category-page-settings/${pageType}`),
+      message?: string;
+    }>(pageType),
 
   getProductLikes: (productType: 'design' | 'fabric' | 'ready-to-wear', id: string) =>
     apiService.get<{ success: boolean; data: { count: number; likedByMe: boolean } }>(
