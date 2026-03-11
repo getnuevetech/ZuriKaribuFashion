@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
-import { prisma, UserRole, ProductStatus } from '../db';
+import nodemailer from 'nodemailer';
+import { prisma, UserRole, UserStatus, ProductStatus } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import {
@@ -194,6 +195,38 @@ async function readActiveMeasurementTemplateOptions(): Promise<MeasurementTempla
   } catch {
     return [...DEFAULT_MEASUREMENT_TEMPLATE_OPTIONS];
   }
+}
+
+let cachedTransporter: nodemailer.Transporter | null | undefined;
+function getMailer(): nodemailer.Transporter | null {
+  if (cachedTransporter !== undefined) return cachedTransporter;
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!host || !user || !pass) {
+    cachedTransporter = null;
+    return null;
+  }
+  cachedTransporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+    auth: { user, pass },
+  });
+  return cachedTransporter;
+}
+async function sendEmail(input: { to: string; subject: string; text: string; html: string }) {
+  const transporter = getMailer();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  if (!transporter || !from || !input.to) return;
+  await transporter.sendMail({
+    from,
+    to: input.to,
+    subject: input.subject,
+    text: input.text,
+    html: input.html,
+  });
 }
 
 type VendorProfileStatus = 'INCOMPLETE' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
@@ -777,6 +810,58 @@ router.post('/fabric-country-access/requests', async (req, res, next) => {
       designerUserId: req.user!.id,
       requestedCountries,
       reason: payload.reason,
+    });
+    const adminUsers = await prisma.user.findMany({
+      where: {
+        role: UserRole.ADMINISTRATOR,
+        status: UserStatus.ACTIVE,
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+      },
+    });
+    if (adminUsers.length > 0) {
+      await Promise.all(
+        adminUsers.map((admin) =>
+          prisma.notification.create({
+            data: {
+              userId: admin.id,
+              type: 'SYSTEM',
+              title: 'New designer country access request',
+              message: `${profile.businessName || 'Designer'} requested fabric country access for ${requestedCountries.join(', ')}.`,
+              relatedType: 'DESIGNER_FABRIC_COUNTRY_ACCESS_REQUEST',
+              relatedId: created.id,
+            },
+          })
+        )
+      );
+      await Promise.all(
+        adminUsers.map(async (admin) => {
+          try {
+            await sendEmail({
+              to: admin.email,
+              subject: 'New designer fabric country access request',
+              text: `${profile.businessName || 'Designer'} submitted a request for ${requestedCountries.join(', ')}.${payload.reason ? `\nReason: ${payload.reason}` : ''}`,
+              html: `<p><strong>${profile.businessName || 'Designer'}</strong> submitted a fabric country access request for <strong>${requestedCountries.join(', ')}</strong>.</p>${payload.reason ? `<p>Reason: ${payload.reason}</p>` : ''}`,
+            });
+          } catch (emailError) {
+            console.error('Failed to send admin country-access request email:', emailError);
+          }
+        })
+      );
+    }
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'DESIGNER_FABRIC_COUNTRY_ACCESS_REQUEST_CREATED',
+        details: {
+          requestId: created.id,
+          requestedCountries,
+          reason: payload.reason || null,
+        },
+      },
     });
     res.status(201).json({
       success: true,

@@ -1140,13 +1140,26 @@ export default function DesignerDashboard() {
       setFabricAccessLoading(true);
       const response = await api.designer.getFabricCountryAccessSummary();
       if (!response.success) return;
-      const homeCountry = String(response.data?.homeCountry || '').trim();
+      const fallbackProfileCountry = String(selectedProfileCountry || profileCompletion?.profile?.country || '').trim();
+      const responseHomeCountry = String(response.data?.homeCountry || '').trim();
+      const homeCountry =
+        responseHomeCountry && responseHomeCountry.toLowerCase() !== 'not set'
+          ? responseHomeCountry
+          : fallbackProfileCountry;
       const allowedCountries = Array.isArray(response.data?.allowedCountries)
         ? response.data.allowedCountries.map((entry: any) => String(entry || '').trim()).filter(Boolean)
         : [];
       const availableCountries = Array.isArray(response.data?.availableCountries)
         ? response.data.availableCountries.map((entry: any) => String(entry || '').trim()).filter(Boolean)
         : [];
+      const mergedAllowedCountries = Array.from(new Set([homeCountry, ...allowedCountries].filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b)
+      );
+      const mergedAvailableCountries = Array.from(
+        new Set([...availableCountries, ...mergedAllowedCountries, ...getCountryOptions().map((entry) => entry.name)])
+      )
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b));
       const requests = Array.isArray(response.data?.requests)
         ? response.data.requests
             .map((entry: any) => ({
@@ -1166,11 +1179,11 @@ export default function DesignerDashboard() {
             .filter((entry: any) => entry.id && entry.designerUserId)
         : [];
       setFabricAccessHomeCountry(homeCountry);
-      setFabricAccessAllowedCountries(allowedCountries);
-      setFabricAccessAvailableCountries(availableCountries);
+      setFabricAccessAllowedCountries(mergedAllowedCountries);
+      setFabricAccessAvailableCountries(mergedAvailableCountries);
       setFabricAccessRequests(requests);
-      if (!designFabricCountryFilter && allowedCountries.length > 0) {
-        setDesignFabricCountryFilter(allowedCountries[0]);
+      if (!designFabricCountryFilter && mergedAllowedCountries.length > 0) {
+        setDesignFabricCountryFilter(mergedAllowedCountries[0]);
       }
     } catch (error) {
       console.error('Failed to load fabric country access summary:', error);

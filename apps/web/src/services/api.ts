@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/authStore';
+import { getCountryOptions } from '../data/locationOptions';
 
 const defaultApiUrl = import.meta.env.DEV
   ? 'http://localhost:3001/api'
@@ -100,6 +101,8 @@ const noCacheRequestConfig = () => ({
     Expires: '0',
   },
 });
+
+const STATIC_COUNTRY_NAMES = getCountryOptions().map((entry) => String(entry.name || '').trim()).filter(Boolean);
 
 async function readSellerProfileCompletionWithFallback<T>() {
   let lastError: unknown = null;
@@ -734,7 +737,18 @@ async function readAdminDesignerFabricCountryAccessWithFallback<T>(params?: { se
       map[userId] = dedupeCountryList(row?.extraCountries);
     }
     writeDesignerFabricAccessFallbackMap(map);
-    return response as T;
+    const serverAvailableCountries = Array.isArray(response?.data?.availableCountries)
+      ? response.data.availableCountries
+      : [];
+    return {
+      ...(response || {}),
+      success: response?.success !== false,
+      data: {
+        ...(response?.data || {}),
+        designers,
+        availableCountries: dedupeCountryList([...serverAvailableCountries, ...STATIC_COUNTRY_NAMES]),
+      },
+    } as T;
   } catch (error) {
     if (!isRetryableRouteError(error)) throw error;
   }
@@ -759,7 +773,10 @@ async function readAdminDesignerFabricCountryAccessWithFallback<T>(params?: { se
     sellerProfiles = [];
   }
   const availableCountries = dedupeCountryList(
-    sellerProfiles.map((entry) => entry?.profileData?.country || entry?.country).filter(Boolean)
+    [
+      ...sellerProfiles.map((entry) => entry?.profileData?.country || entry?.country).filter(Boolean),
+      ...STATIC_COUNTRY_NAMES,
+    ]
   );
   const designers = designerProfiles.map((entry) => {
     const designerUserId = String(entry?.userId || '').trim();
@@ -824,6 +841,8 @@ async function writeAdminDesignerFabricCountryAccessWithFallback<T>(designerUser
 async function readAdminDesignerFabricCountryAccessRequestsWithFallback<T>(params?: {
   status?: DesignerFabricAccessRequestStatus | 'ALL';
   search?: string;
+  page?: number;
+  limit?: number;
 }) {
   let lastError: unknown = null;
   try {
@@ -832,7 +851,16 @@ async function readAdminDesignerFabricCountryAccessRequestsWithFallback<T>(param
     });
     const rows = Array.isArray(response?.data) ? response.data : [];
     writeDesignerFabricAccessRequestsFallback(rows);
-    return response as T;
+    return {
+      ...(response || {}),
+      data: rows,
+      pagination: response?.pagination || {
+        page: Math.max(1, Number(params?.page || 1)),
+        limit: Math.max(1, Math.min(100, Number(params?.limit || 20))),
+        total: rows.length,
+        pages: Math.max(1, Math.ceil(rows.length / Math.max(1, Math.min(100, Number(params?.limit || 20))))),
+      },
+    } as T;
   } catch (error) {
     lastError = error;
     if (!isRetryableRouteError(error)) throw error;
@@ -840,7 +868,9 @@ async function readAdminDesignerFabricCountryAccessRequestsWithFallback<T>(param
   if (!isRetryableRouteError(lastError)) throw lastError;
   const status = String(params?.status || '').trim().toUpperCase();
   const search = String(params?.search || '').trim().toLowerCase();
-  const rows = readDesignerFabricAccessRequestsFallback().filter((entry) => {
+  const page = Math.max(1, Number(params?.page || 1));
+  const limit = Math.max(1, Math.min(100, Number(params?.limit || 20)));
+  const filteredRows = readDesignerFabricAccessRequestsFallback().filter((entry) => {
     if (status && status !== 'ALL' && entry.status !== status) return false;
     if (!search) return true;
     return (
@@ -850,9 +880,20 @@ async function readAdminDesignerFabricCountryAccessRequestsWithFallback<T>(param
       (entry.requestedCountries || []).join(' ').toLowerCase().includes(search)
     );
   });
+  const total = filteredRows.length;
+  const pages = Math.max(1, Math.ceil(total / limit));
+  const safePage = Math.min(page, pages);
+  const start = (safePage - 1) * limit;
+  const rows = filteredRows.slice(start, start + limit);
   return {
     success: true,
     data: rows,
+    pagination: {
+      page: safePage,
+      limit,
+      total,
+      pages,
+    },
     message: 'Country access requests loaded from local fallback.',
   } as T;
 }
@@ -907,7 +948,23 @@ async function reviewAdminDesignerFabricCountryAccessRequestWithFallback<T>(
 async function readDesignerFabricCountryAccessSummaryWithFallback<T>() {
   let lastError: unknown = null;
   try {
-    return await apiService.get<T>('/designer/fabric-country-access', noCacheRequestConfig());
+    const response = await apiService.get<any>('/designer/fabric-country-access', noCacheRequestConfig());
+    const homeCountry = String(response?.data?.homeCountry || '').trim();
+    const allowedCountries = dedupeCountryList(response?.data?.allowedCountries || []);
+    const availableCountries = dedupeCountryList([
+      ...(Array.isArray(response?.data?.availableCountries) ? response.data.availableCountries : []),
+      ...allowedCountries,
+      ...STATIC_COUNTRY_NAMES,
+    ]);
+    return {
+      ...(response || {}),
+      data: {
+        ...(response?.data || {}),
+        homeCountry,
+        allowedCountries,
+        availableCountries,
+      },
+    } as T;
   } catch (error) {
     lastError = error;
     if (!isRetryableRouteError(error)) throw error;
@@ -927,7 +984,7 @@ async function readDesignerFabricCountryAccessSummaryWithFallback<T>() {
     data: {
       homeCountry,
       allowedCountries,
-      availableCountries: [...allowedCountries],
+      availableCountries: dedupeCountryList([...allowedCountries, ...STATIC_COUNTRY_NAMES]),
       requests,
     },
     message: 'Designer country access loaded from local fallback.',
@@ -968,6 +1025,305 @@ async function createDesignerFabricCountryAccessRequestWithFallback<T>(payload: 
     success: true,
     message: 'Country access request saved locally while backend route is unavailable.',
     data: request,
+  } as T;
+}
+
+const PARTNER_APPS_FALLBACK_KEY = 'af_partner_apps_fallback_v1';
+const CATEGORY_PAGE_SETTINGS_FALLBACK_KEY_PREFIX = 'af_category_page_settings_fallback_v1_';
+
+const readPartnerAppsFallback = () => {
+  if (typeof window === 'undefined' || !window.localStorage) return [] as any[];
+  try {
+    const raw = window.localStorage.getItem(PARTNER_APPS_FALLBACK_KEY);
+    if (!raw) return [] as any[];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [] as any[];
+  }
+};
+const writePartnerAppsFallback = (rows: any[]) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(PARTNER_APPS_FALLBACK_KEY, JSON.stringify(Array.isArray(rows) ? rows : []));
+  } catch {
+    // ignore local storage failures
+  }
+};
+const slugifyPartnerName = (value: string) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || `partner-${Date.now()}`;
+
+const readCategoryPageSettingsFallback = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR') => {
+  if (typeof window === 'undefined' || !window.localStorage) return null as any;
+  try {
+    const raw = window.localStorage.getItem(`${CATEGORY_PAGE_SETTINGS_FALLBACK_KEY_PREFIX}${pageType}`);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+const writeCategoryPageSettingsFallback = (
+  pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
+  payload: any
+) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(`${CATEGORY_PAGE_SETTINGS_FALLBACK_KEY_PREFIX}${pageType}`, JSON.stringify(payload || {}));
+  } catch {
+    // ignore local storage failures
+  }
+};
+
+async function readAdminPartnerAppsWithFallback<T>() {
+  try {
+    const response = await apiService.get<any>('/admin/partners/apps', noCacheRequestConfig());
+    writePartnerAppsFallback(Array.isArray(response?.data) ? response.data : []);
+    return response as T;
+  } catch (error) {
+    if (!isRetryableRouteError(error)) throw error;
+  }
+  return {
+    success: true,
+    data: readPartnerAppsFallback(),
+    message: 'Partner apps loaded from local fallback.',
+  } as T;
+}
+async function createAdminPartnerAppWithFallback<T>(data: {
+  name: string;
+  description?: string;
+  scopes?: string[];
+  rateLimitPerMinute?: number;
+  allowedIps?: string[];
+  webhookUrl?: string;
+}) {
+  try {
+    const response = await apiService.post<any>('/admin/partners/apps', data);
+    return response as T;
+  } catch (error) {
+    if (!isRetryableRouteError(error)) throw error;
+  }
+  const nowIso = new Date().toISOString();
+  const fallbackApp = {
+    id: `local-partner-${Date.now()}`,
+    name: String(data.name || '').trim(),
+    slug: slugifyPartnerName(data.name),
+    description: String(data.description || '').trim() || null,
+    status: 'ACTIVE',
+    scopes: Array.isArray(data.scopes) && data.scopes.length > 0 ? data.scopes : ['catalog:read', 'orders:read'],
+    rateLimitPerMinute: Number(data.rateLimitPerMinute || 120),
+    allowedIps: Array.isArray(data.allowedIps) ? data.allowedIps : [],
+    webhookUrl: String(data.webhookUrl || '').trim() || null,
+    credentialCount: 1,
+    activeCredentialCount: 1,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+  writePartnerAppsFallback([fallbackApp, ...readPartnerAppsFallback()]);
+  return {
+    success: true,
+    message: 'Partner app saved locally while backend route is unavailable.',
+    data: {
+      app: fallbackApp,
+      generatedCredential: {
+        token: `local-token-${Math.random().toString(36).slice(2, 14)}`,
+        webhookSecret: `local-whsec-${Math.random().toString(36).slice(2, 14)}`,
+      },
+    },
+  } as T;
+}
+async function updateAdminPartnerAppWithFallback<T>(appId: string, data: Record<string, unknown>) {
+  try {
+    return (await apiService.patch<any>(`/admin/partners/apps/${appId}`, data)) as T;
+  } catch (error) {
+    if (!isRetryableRouteError(error)) throw error;
+  }
+  const rows = readPartnerAppsFallback();
+  const index = rows.findIndex((entry: any) => String(entry?.id) === String(appId));
+  if (index >= 0) {
+    rows[index] = { ...rows[index], ...(data || {}), updatedAt: new Date().toISOString() };
+    writePartnerAppsFallback(rows);
+  }
+  return { success: true, message: 'Partner app updated in local fallback.', data: rows[index] || null } as T;
+}
+async function rotateAdminPartnerAppKeyWithFallback<T>(appId: string, expiresAt?: string) {
+  try {
+    return (await apiService.post<any>(`/admin/partners/apps/${appId}/rotate-key`, { expiresAt })) as T;
+  } catch (error) {
+    if (!isRetryableRouteError(error)) throw error;
+  }
+  return {
+    success: true,
+    message: 'Partner credential rotated locally.',
+    data: { token: `local-token-${Math.random().toString(36).slice(2, 18)}` },
+  } as T;
+}
+async function rotateAdminPartnerWebhookSecretWithFallback<T>(appId: string) {
+  try {
+    return (await apiService.post<any>(`/admin/partners/apps/${appId}/rotate-webhook-secret`)) as T;
+  } catch (error) {
+    if (!isRetryableRouteError(error)) throw error;
+  }
+  return {
+    success: true,
+    message: 'Webhook secret rotated locally.',
+    data: { webhookSecret: `local-whsec-${Math.random().toString(36).slice(2, 18)}` },
+  } as T;
+}
+async function sendAdminPartnerTestWebhookWithFallback<T>(appId: string) {
+  try {
+    return (await apiService.post<any>(`/admin/partners/apps/${appId}/test-webhook`)) as T;
+  } catch (error) {
+    if (!isRetryableRouteError(error)) throw error;
+  }
+  return {
+    success: true,
+    message: 'Test webhook simulated in local fallback.',
+    data: { success: true, fallback: true },
+  } as T;
+}
+
+async function readAdminCategoryPageSettingsWithFallback<T>(pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR') {
+  let lastError: unknown = null;
+  for (const path of [`/category-page-settings/admin/${pageType}`, `/category-page-settings/${pageType}`]) {
+    try {
+      const response = await apiService.get<any>(path, noCacheRequestConfig());
+      if (response?.data?.settings) writeCategoryPageSettingsFallback(pageType, response.data.settings);
+      return response as T;
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError;
+  return {
+    success: true,
+    data: {
+      pageType,
+      settings: readCategoryPageSettingsFallback(pageType) || {
+        bannerTitle: pageType === 'FABRIC_TO_BUY' ? 'Fabrics To Buy' : pageType === 'CUSTOM_TO_WEAR' ? 'Custom To Wear' : 'Ready To Wear',
+        bannerSubtitle: '',
+        bannerImage: '',
+        pageSize: 24,
+        columns: 4,
+        showPagination: true,
+        featuredProductIds: [],
+      },
+      featuredProducts: [],
+    },
+    message: 'Category page settings loaded from local fallback.',
+  } as T;
+}
+async function writeAdminCategoryPageSettingsWithFallback<T>(
+  pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
+  data: Record<string, unknown>
+) {
+  let lastError: unknown = null;
+  for (const method of ['patch', 'put'] as const) {
+    try {
+      const response =
+        method === 'patch'
+          ? await apiService.patch<any>(`/category-page-settings/admin/${pageType}`, data)
+          : await apiService.put<any>(`/category-page-settings/admin/${pageType}`, data);
+      if (response?.data?.settings) writeCategoryPageSettingsFallback(pageType, response.data.settings);
+      return response as T;
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableRouteError(error)) throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError;
+  const current = readCategoryPageSettingsFallback(pageType) || {};
+  const settings = { ...current, ...(data || {}) };
+  writeCategoryPageSettingsFallback(pageType, settings);
+  return {
+    success: true,
+    data: {
+      pageType,
+      settings,
+      featuredProducts: [],
+    },
+    message: 'Category page settings saved to local fallback.',
+  } as T;
+}
+async function readCategoryPageProductOptionsWithFallback<T>(
+  pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
+  params?: { search?: string; limit?: number }
+) {
+  try {
+    const response = await apiService.get<any>(`/category-page-settings/admin/${pageType}/options`, {
+      params: { ...(params || {}), _r: Date.now() },
+    });
+    return {
+      ...(response || {}),
+      data: Array.isArray(response?.data) ? response.data : [],
+    } as T;
+  } catch (error) {
+    if (!isRetryableRouteError(error)) throw error;
+  }
+  const search = String(params?.search || '').trim().toLowerCase();
+  const limit = Math.max(10, Math.min(200, Number(params?.limit || 120)));
+  let rows: any[] = [];
+  if (pageType === 'READY_TO_WEAR') {
+    const response = await apiService.get<any>('/products/ready-to-wear', {
+      params: { limit: Math.max(200, limit), page: 1, _r: Date.now() },
+    });
+    const products = Array.isArray(response?.data?.products) ? response.data.products : [];
+    rows = products.map((entry: any) => ({
+      id: String(entry?.id || ''),
+      name: String(entry?.name || 'Ready To Wear'),
+      ownerName: String(entry?.designer?.businessName || entry?.designer?.name || 'Designer'),
+      country: String(entry?.designer?.country || ''),
+      priceUsd: Number(entry?.finalPrice || entry?.basePrice || 0),
+      image: String(entry?.images?.[0]?.url || ''),
+    }));
+  } else if (pageType === 'FABRIC_TO_BUY') {
+    const response = await apiService.get<any>('/products/fabrics', {
+      params: { limit: Math.max(200, limit), page: 1, _r: Date.now() },
+    });
+    const products = Array.isArray(response?.data?.fabrics) ? response.data.fabrics : [];
+    rows = products.map((entry: any) => ({
+      id: String(entry?.id || ''),
+      name: String(entry?.name || 'Fabric'),
+      ownerName: String(entry?.seller?.businessName || 'Seller'),
+      country: String(entry?.seller?.country || ''),
+      priceUsd: Number(entry?.finalPrice || entry?.sellerPrice || 0),
+      image: String(entry?.images?.[0]?.url || ''),
+    }));
+  } else {
+    const response = await apiService.get<any>('/products/designs', {
+      params: { limit: Math.max(200, limit), page: 1, _r: Date.now() },
+    });
+    const products = Array.isArray(response?.data?.designs) ? response.data.designs : [];
+    rows = products.map((entry: any) => ({
+      id: String(entry?.id || ''),
+      name: String(entry?.name || 'Design'),
+      ownerName: String(entry?.designer?.businessName || 'Designer'),
+      country: String(entry?.designer?.country || ''),
+      priceUsd: Number(entry?.finalPrice || entry?.basePrice || 0),
+      image: String(entry?.images?.[0]?.url || ''),
+    }));
+  }
+  const filtered = rows
+    .filter((entry) => entry.id)
+    .filter((entry) => {
+      if (!search) return true;
+      return (
+        String(entry.name || '').toLowerCase().includes(search) ||
+        String(entry.ownerName || '').toLowerCase().includes(search) ||
+        String(entry.country || '').toLowerCase().includes(search)
+      );
+    })
+    .slice(0, limit);
+  return {
+    success: true,
+    data: filtered,
+    message: 'Product options loaded from fallback products endpoint.',
   } as T;
 }
 
@@ -4193,7 +4549,12 @@ const adminApi = {
       };
     }>(designerUserId, extraCountries),
 
-  getDesignerFabricCountryAccessRequests: (params?: { status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'; search?: string }) =>
+  getDesignerFabricCountryAccessRequests: (params?: {
+    status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL';
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) =>
     readAdminDesignerFabricCountryAccessRequestsWithFallback<{
       success: boolean;
       data: Array<{
@@ -4212,6 +4573,12 @@ const adminApi = {
         email?: string;
         homeCountry?: string;
       }>;
+      pagination?: {
+        page: number;
+        limit: number;
+        total: number;
+        pages: number;
+      };
       message?: string;
     }>(params),
 
@@ -4489,7 +4856,7 @@ const adminApi = {
     apiService.patch(`/admin/orders/${orderId}/assign-qa`, { qaId }),
 
   getPartnerApps: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/admin/partners/apps'),
+    readAdminPartnerAppsWithFallback<{ success: boolean; data: any[]; message?: string }>(),
 
   createPartnerApp: (data: {
     name: string;
@@ -4498,7 +4865,7 @@ const adminApi = {
     rateLimitPerMinute?: number;
     allowedIps?: string[];
     webhookUrl?: string;
-  }) => apiService.post<{ success: boolean; data: any; message?: string }>('/admin/partners/apps', data),
+  }) => createAdminPartnerAppWithFallback<{ success: boolean; data: any; message?: string }>(data),
 
   updatePartnerApp: (
     appId: string,
@@ -4511,20 +4878,16 @@ const adminApi = {
       allowedIps?: string[];
       webhookUrl?: string | null;
     }
-  ) => apiService.patch<{ success: boolean; data: any; message?: string }>(`/admin/partners/apps/${appId}`, data),
+  ) => updateAdminPartnerAppWithFallback<{ success: boolean; data: any; message?: string }>(appId, data as any),
 
   rotatePartnerAppKey: (appId: string, expiresAt?: string) =>
-    apiService.post<{ success: boolean; data: any; message?: string }>(`/admin/partners/apps/${appId}/rotate-key`, {
-      expiresAt,
-    }),
+    rotateAdminPartnerAppKeyWithFallback<{ success: boolean; data: any; message?: string }>(appId, expiresAt),
 
   rotatePartnerWebhookSecret: (appId: string) =>
-    apiService.post<{ success: boolean; data: any; message?: string }>(
-      `/admin/partners/apps/${appId}/rotate-webhook-secret`
-    ),
+    rotateAdminPartnerWebhookSecretWithFallback<{ success: boolean; data: any; message?: string }>(appId),
 
   sendPartnerTestWebhook: (appId: string) =>
-    apiService.post<{ success: boolean; data: any; message?: string }>(`/admin/partners/apps/${appId}/test-webhook`),
+    sendAdminPartnerTestWebhookWithFallback<{ success: boolean; data: any; message?: string }>(appId),
 
   getPartnerAudit: (appId: string, params?: { page?: number; limit?: number }) =>
     apiService.get<{ success: boolean; data: any[]; pagination?: any }>(`/admin/partners/apps/${appId}/audit`, {
@@ -4549,7 +4912,7 @@ const adminApi = {
     ),
 
   getCategoryPageSettings: (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR') =>
-    apiService.get<{
+    readAdminCategoryPageSettingsWithFallback<{
       success: boolean;
       data: {
         pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
@@ -4574,7 +4937,8 @@ const adminApi = {
           href: string;
         }>;
       };
-    }>(`/category-page-settings/admin/${pageType}`),
+      message?: string;
+    }>(pageType),
 
   updateCategoryPageSettings: (
     pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
@@ -4588,7 +4952,7 @@ const adminApi = {
       featuredProductIds: string[];
     }>
   ) =>
-    apiService.patch<{
+    writeAdminCategoryPageSettingsWithFallback<{
       success: boolean;
       data: {
         pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
@@ -4612,13 +4976,13 @@ const adminApi = {
         }>;
       };
       message?: string;
-    }>(`/category-page-settings/admin/${pageType}`, data),
+    }>(pageType, data as any),
 
   getCategoryPageProductOptions: (
     pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
     params?: { search?: string; limit?: number }
   ) =>
-    apiService.get<{
+    readCategoryPageProductOptionsWithFallback<{
       success: boolean;
       data: Array<{
         id: string;
@@ -4628,7 +4992,8 @@ const adminApi = {
         priceUsd: number;
         image: string;
       }>;
-    }>(`/category-page-settings/admin/${pageType}/options`, { params }),
+      message?: string;
+    }>(pageType, params),
 
   // Banner Management
   getBanners: () =>

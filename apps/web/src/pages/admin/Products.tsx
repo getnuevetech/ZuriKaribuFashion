@@ -3,6 +3,7 @@ import { Search, Filter, Plus, Edit, Package, Scissors, Upload, Star, CheckCircl
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import { getCountryOptions } from '../../data/locationOptions';
 
 type ModerationAction = 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'SUSPEND' | 'PUBLISH' | 'UNPUBLISH';
 
@@ -68,6 +69,8 @@ interface DesignerFabricCountryAccessRequestRow {
   homeCountry?: string;
 }
 
+const STATIC_COUNTRIES = getCountryOptions().map((entry) => String(entry.name || '').trim()).filter(Boolean);
+
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -113,6 +116,14 @@ export default function AdminProducts() {
   const [designerFabricAccessRequests, setDesignerFabricAccessRequests] = useState<DesignerFabricCountryAccessRequestRow[]>([]);
   const [designerFabricAccessRequestsLoading, setDesignerFabricAccessRequestsLoading] = useState(false);
   const [designerFabricAccessReviewingRequestId, setDesignerFabricAccessReviewingRequestId] = useState<string | null>(null);
+  const [designerFabricAccessRequestStatusFilter, setDesignerFabricAccessRequestStatusFilter] = useState<
+    'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'
+  >('ALL');
+  const [designerFabricAccessRequestSearch, setDesignerFabricAccessRequestSearch] = useState('');
+  const [designerFabricAccessRequestPage, setDesignerFabricAccessRequestPage] = useState(1);
+  const [designerFabricAccessRequestLimit] = useState(20);
+  const [designerFabricAccessRequestTotalPages, setDesignerFabricAccessRequestTotalPages] = useState(1);
+  const [designerFabricAccessRequestTotal, setDesignerFabricAccessRequestTotal] = useState(0);
   const [form, setForm] = useState({
     type: 'FABRIC' as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR',
     name: '',
@@ -197,8 +208,11 @@ export default function AdminProducts() {
   useEffect(() => {
     void fetchOptions();
     void fetchDesignerFabricAccess();
-    void fetchDesignerFabricAccessRequests();
   }, []);
+
+  useEffect(() => {
+    void fetchDesignerFabricAccessRequests();
+  }, [designerFabricAccessRequestStatusFilter, designerFabricAccessRequestSearch, designerFabricAccessRequestPage]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -461,7 +475,11 @@ export default function AdminProducts() {
       const rows = Array.isArray(response.data?.designers) ? response.data.designers : [];
       const countries = Array.isArray(response.data?.availableCountries) ? response.data.availableCountries : [];
       setDesignerFabricAccessRows(rows);
-      setDesignerFabricAccessCountries(countries);
+      setDesignerFabricAccessCountries(
+        Array.from(new Set([...countries, ...STATIC_COUNTRIES].map((entry) => String(entry || '').trim()).filter(Boolean))).sort(
+          (a, b) => a.localeCompare(b)
+        )
+      );
       setDesignerFabricAccessDrafts(
         rows.reduce<Record<string, string[]>>((acc, row) => {
           acc[row.designerUserId] = Array.isArray(row.extraCountries) ? row.extraCountries : [];
@@ -480,9 +498,17 @@ export default function AdminProducts() {
   const fetchDesignerFabricAccessRequests = async () => {
     try {
       setDesignerFabricAccessRequestsLoading(true);
-      const response = await api.admin.getDesignerFabricCountryAccessRequests({ status: 'ALL' });
+      const response = await api.admin.getDesignerFabricCountryAccessRequests({
+        status: designerFabricAccessRequestStatusFilter,
+        search: designerFabricAccessRequestSearch.trim() || undefined,
+        page: designerFabricAccessRequestPage,
+        limit: designerFabricAccessRequestLimit,
+      });
       if (!response.success) return;
       setDesignerFabricAccessRequests(Array.isArray(response.data) ? response.data : []);
+      setDesignerFabricAccessRequestPage(Math.max(1, Number(response.pagination?.page || designerFabricAccessRequestPage)));
+      setDesignerFabricAccessRequestTotalPages(Math.max(1, Number(response.pagination?.pages || 1)));
+      setDesignerFabricAccessRequestTotal(Math.max(0, Number(response.pagination?.total || 0)));
     } catch (requestError: any) {
       setDesignerFabricAccessMessage(
         requestError?.response?.data?.message || requestError?.message || 'Failed to load country access requests.'
@@ -512,6 +538,7 @@ export default function AdminProducts() {
         reviewNotes: reviewNotes?.trim() || undefined,
         grantedCountries: status === 'APPROVED' ? request.requestedCountries : undefined,
       });
+      setDesignerFabricAccessRequestPage(1);
       await Promise.all([fetchDesignerFabricAccess(), fetchDesignerFabricAccessRequests()]);
       setDesignerFabricAccessMessage(
         status === 'APPROVED'
@@ -533,6 +560,7 @@ export default function AdminProducts() {
       setDesignerFabricAccessSavingUserId(designerUserId);
       setDesignerFabricAccessMessage('');
       await api.admin.updateDesignerFabricCountryAccess(designerUserId, selected);
+      setDesignerFabricAccessRequestPage(1);
       await Promise.all([fetchDesignerFabricAccess(), fetchDesignerFabricAccessRequests()]);
       setDesignerFabricAccessMessage('Designer fabric country access updated.');
     } catch (accessError: any) {
@@ -1230,6 +1258,37 @@ export default function AdminProducts() {
             Approve or reject requests submitted by designers to access additional fabric seller countries.
           </p>
         </div>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <select
+            value={designerFabricAccessRequestStatusFilter}
+            onChange={(event) => {
+              setDesignerFabricAccessRequestStatusFilter(
+                (event.target.value as 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED') || 'ALL'
+              );
+              setDesignerFabricAccessRequestPage(1);
+            }}
+            className="rounded border px-2 py-1 text-xs"
+          >
+            <option value="ALL">All statuses</option>
+            <option value="PENDING">Pending</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+          </select>
+          <input
+            type="text"
+            value={designerFabricAccessRequestSearch}
+            onChange={(event) => {
+              setDesignerFabricAccessRequestSearch(event.target.value);
+              setDesignerFabricAccessRequestPage(1);
+            }}
+            placeholder="Search designer/email/country..."
+            className="w-full rounded border px-3 py-1.5 text-xs md:w-[260px]"
+          />
+          <span className="text-xs text-gray-500">
+            {designerFabricAccessRequestTotal} total • Page {designerFabricAccessRequestPage} of{' '}
+            {designerFabricAccessRequestTotalPages}
+          </span>
+        </div>
         {designerFabricAccessRequestsLoading ? (
           <p className="text-sm text-gray-500">Loading requests...</p>
         ) : designerFabricAccessRequests.length === 0 ? (
@@ -1283,6 +1342,28 @@ export default function AdminProducts() {
                 </div>
               </div>
             ))}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setDesignerFabricAccessRequestPage((prev) => Math.max(1, prev - 1))}
+                disabled={designerFabricAccessRequestPage <= 1}
+              >
+                Previous
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setDesignerFabricAccessRequestPage((prev) =>
+                    Math.min(designerFabricAccessRequestTotalPages, prev + 1)
+                  )
+                }
+                disabled={designerFabricAccessRequestPage >= designerFabricAccessRequestTotalPages}
+              >
+                Next
+              </Button>
+            </div>
           </div>
         )}
       </div>

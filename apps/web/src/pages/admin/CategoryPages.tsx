@@ -51,6 +51,7 @@ export default function AdminCategoryPages() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshingOptions, setIsRefreshingOptions] = useState(false);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const featuredOne = settings.featuredProductIds[0] || '';
@@ -154,6 +155,28 @@ export default function AdminCategoryPages() {
     setSettings((prev) => ({ ...prev, featuredProductIds: normalized }));
   };
 
+  const handleBannerImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingBanner(true);
+      setMessage(null);
+      const formData = new FormData();
+      formData.append('image', file);
+      const response = await api.upload.image(formData);
+      if (response.success && response.data?.url) {
+        setSettings((prev) => ({ ...prev, bannerImage: String(response.data.url) }));
+      } else {
+        setMessage('Failed to upload banner image.');
+      }
+    } catch (uploadError: any) {
+      setMessage(uploadError?.response?.data?.message || uploadError?.message || 'Failed to upload banner image.');
+    } finally {
+      setIsUploadingBanner(false);
+      event.target.value = '';
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -203,14 +226,23 @@ export default function AdminCategoryPages() {
                 />
               </label>
               <label className="text-sm space-y-1">
-                <span className="text-gray-700">Banner image URL</span>
-                <input
-                  type="text"
-                  value={settings.bannerImage}
-                  onChange={(event) => setSettings((prev) => ({ ...prev, bannerImage: event.target.value }))}
-                  className="w-full rounded-md border px-3 py-2"
-                  placeholder="/images/hero-readytowear.jpg or full URL"
-                />
+                <span className="text-gray-700">Banner image</span>
+                <input type="file" accept="image/*" className="hidden" id="category-page-banner-upload" onChange={handleBannerImageUpload} />
+                <div className="flex gap-2">
+                  <label
+                    htmlFor="category-page-banner-upload"
+                    className="inline-flex cursor-pointer items-center rounded-md border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    {isUploadingBanner ? 'Uploading...' : 'Upload image'}
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.bannerImage}
+                    onChange={(event) => setSettings((prev) => ({ ...prev, bannerImage: event.target.value }))}
+                    className="w-full rounded-md border px-3 py-2"
+                    placeholder="/images/hero-readytowear.jpg or full URL"
+                  />
+                </div>
               </label>
               <label className="text-sm space-y-1 lg:col-span-2">
                 <span className="text-gray-700">Banner subtitle</span>
@@ -318,6 +350,11 @@ export default function AdminCategoryPages() {
                   </select>
                 </label>
               </div>
+              {productOptions.length === 0 && !isRefreshingOptions ? (
+                <p className="text-xs text-amber-700">
+                  No products found from this route. Try Refresh list or type search text; fallback loading is enabled.
+                </p>
+              ) : null}
             </div>
 
             {settings.bannerImage ? (

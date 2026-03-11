@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import nodemailer from 'nodemailer';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import {
@@ -37,6 +38,38 @@ const dedupeCountries = (list: unknown) => {
   }
   return Array.from(deduped.values());
 };
+
+let cachedTransporter: nodemailer.Transporter | null | undefined;
+function getMailer(): nodemailer.Transporter | null {
+  if (cachedTransporter !== undefined) return cachedTransporter;
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!host || !user || !pass) {
+    cachedTransporter = null;
+    return null;
+  }
+  cachedTransporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+    auth: { user, pass },
+  });
+  return cachedTransporter;
+}
+async function sendEmail(input: { to: string; subject: string; text: string; html: string }) {
+  const transporter = getMailer();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  if (!transporter || !from || !input.to) return;
+  await transporter.sendMail({
+    from,
+    to: input.to,
+    subject: input.subject,
+    text: input.text,
+    html: input.html,
+  });
+}
 
 router.get('/', async (req, res, next) => {
   try {
@@ -157,7 +190,15 @@ router.put('/:designerUserId', async (req, res, next) => {
 
 router.get('/requests/list', async (req, res, next) => {
   try {
-    const status = String(req.query.status || '').trim().toUpperCase();
+    const query = z
+      .object({
+        status: z.enum(['ALL', 'PENDING', 'APPROVED', 'REJECTED']).optional(),
+        search: z.string().optional(),
+        page: z.coerce.number().int().min(1).optional(),
+        limit: z.coerce.number().int().min(1).max(100).optional(),
+      })
+      .parse(req.query || {});
+    const status = String(query.status || '').trim().toUpperCase();
     const search = String(req.query.search || '').trim().toLowerCase();
     const requestRows = await listDesignerFabricCountryAccessRequests({
       status: status === 'PENDING' || status === 'APPROVED' || status === 'REJECTED' ? (status as any) : undefined,
@@ -219,7 +260,7 @@ router.get('/requests/list', async (req, res, next) => {
       ] as const)
     );
 
-    const requests = requestRows
+    const filtered = requestRows
       .map((row) => {
         const designer = designerByUserId.get(row.designerUserId);
         return {
@@ -239,10 +280,23 @@ router.get('/requests/list', async (req, res, next) => {
           row.requestedCountries.join(' ').toLowerCase().includes(search)
         );
       });
+    const page = Math.max(1, Number(query.page || 1));
+    const limit = Math.max(1, Math.min(100, Number(query.limit || 20)));
+    const total = filtered.length;
+    const pages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.min(page, pages);
+    const start = (safePage - 1) * limit;
+    const requests = filtered.slice(start, start + limit);
 
     res.json({
       success: true,
       data: requests,
+      pagination: {
+        page: safePage,
+        limit,
+        total,
+        pages,
+      },
     });
   } catch (error) {
     next(error);
@@ -260,12 +314,70 @@ router.patch('/requests/:requestId/review', async (req, res, next) => {
       })
       .parse(req.body);
 
+    const requestBefore = await listDesignerFabricCountryAccessRequests();
+    const previous = requestBefore.find((entry) => entry.id === requestId) || null;
     const updated = await reviewDesignerFabricCountryAccessRequest({
       requestId,
       status: payload.status,
       reviewedByUserId: req.user!.id,
       reviewNotes: payload.reviewNotes,
       grantedCountries: payload.grantedCountries,
+    });
+
+    const designerUser = await prisma.user.findUnique({
+      where: { id: updated.designerUserId },
+      select: { id: true, email: true, firstName: true, lastName: true },
+    });
+    if (designerUser?.id) {
+      await prisma.notification.create({
+        data: {
+          userId: designerUser.id,
+          type: payload.status === 'APPROVED' ? 'SYSTEM' : 'NEW_MESSAGE',
+          title:
+            payload.status === 'APPROVED'
+              ? 'Country access request approved'
+              : 'Country access request rejected',
+          message:
+            payload.status === 'APPROVED'
+              ? `Your request for access to ${updated.requestedCountries.join(', ')} was approved.`
+              : payload.reviewNotes || `Your request for ${updated.requestedCountries.join(', ')} was rejected.`,
+          relatedType: 'DESIGNER_FABRIC_COUNTRY_ACCESS_REQUEST',
+          relatedId: updated.id,
+        },
+      });
+      try {
+        await sendEmail({
+          to: designerUser.email,
+          subject:
+            payload.status === 'APPROVED'
+              ? 'Your fabric country access request was approved'
+              : 'Your fabric country access request was rejected',
+          text:
+            payload.status === 'APPROVED'
+              ? `Hello ${designerUser.firstName || 'Designer'}, your request for access to ${updated.requestedCountries.join(', ')} has been approved.`
+              : `Hello ${designerUser.firstName || 'Designer'}, your request for access to ${updated.requestedCountries.join(', ')} was rejected.\nReason: ${payload.reviewNotes || 'No additional notes provided.'}`,
+          html:
+            payload.status === 'APPROVED'
+              ? `<p>Hello ${designerUser.firstName || 'Designer'},</p><p>Your request for access to <strong>${updated.requestedCountries.join(', ')}</strong> has been approved.</p>`
+              : `<p>Hello ${designerUser.firstName || 'Designer'},</p><p>Your request for access to <strong>${updated.requestedCountries.join(', ')}</strong> was rejected.</p><p>Reason: ${payload.reviewNotes || 'No additional notes provided.'}</p>`,
+        });
+      } catch (emailError) {
+        console.error('Failed to send designer country-access review email:', emailError);
+      }
+    }
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'DESIGNER_FABRIC_COUNTRY_ACCESS_REQUEST_REVIEWED',
+        details: {
+          requestId: updated.id,
+          designerUserId: updated.designerUserId,
+          status: updated.status,
+          requestedCountries: updated.requestedCountries,
+          grantedCountries: payload.grantedCountries || updated.requestedCountries,
+          previousStatus: previous?.status || 'PENDING',
+        },
+      },
     });
 
     res.json({
