@@ -86,9 +86,6 @@ export default function ReadyToWearTryOn() {
     );
   }
 
-  const availableSizes = (product.sizeVariations || [])
-    .filter((variation) => Number(variation.stock || 0) > 0)
-    .map((variation) => variation.size);
   const selectedVariation = (product.sizeVariations || []).find((variation) => variation.size === selectedSize);
   const unitPrice = Number(selectedVariation?.price || 0);
 
@@ -172,23 +169,8 @@ export default function ReadyToWearTryOn() {
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Size</label>
-                <select
-                  value={selectedSize}
-                  onChange={(event) => {
-                    setSelectedSize(event.target.value);
-                    setPreviewGenerated(false);
-                  }}
-                  className="w-full border rounded-lg px-3 py-2"
-                >
-                  <option value="">Select size</option>
-                  {availableSizes.map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
+              <div className="col-span-2 rounded-lg border border-coral-100 bg-coral-50 px-3 py-2 text-xs text-coral-700">
+                Size selection is handled on the product page. Try-On here only collects measurement profile details.
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
@@ -214,7 +196,7 @@ export default function ReadyToWearTryOn() {
                 {adding ? 'Adding...' : 'Step 3: Add to Bag'}
               </Button>
             </div>
-            <p className="mt-3 text-xs text-gray-500">For best fit, regenerate preview after changing size, quantity, or measurements.</p>
+            <p className="mt-3 text-xs text-gray-500">For best fit, regenerate preview after changing quantity or measurements.</p>
             {message ? <p className="mt-3 text-sm text-emerald-700">{message}</p> : null}
           </div>
 

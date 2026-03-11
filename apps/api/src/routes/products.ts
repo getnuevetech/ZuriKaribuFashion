@@ -5,6 +5,12 @@ import { authenticate, optionalAuth } from '../middleware/auth';
 import { z } from 'zod';
 
 const router = Router();
+const HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE';
+const DEFAULT_READY_TO_WEAR_SIZE_GUIDE = {
+  title: 'Ready-To-Wear Size Guide',
+  content:
+    'Use your body measurements to select your best standard size.\n\nS: Bust 84-90cm, Waist 66-72cm, Hips 90-96cm\nM: Bust 91-98cm, Waist 73-80cm, Hips 97-104cm\nL: Bust 99-106cm, Waist 81-88cm, Hips 105-112cm\nXL: Bust 107-115cm, Waist 89-98cm, Hips 113-122cm',
+};
 
 type CanonicalProductType = 'DESIGN' | 'FABRIC' | 'READY_TO_WEAR';
 
@@ -93,6 +99,26 @@ function parsePagination(pageValue: unknown, limitValue: unknown, defaultLimit =
   return { page, limit, skip };
 }
 
+async function readReadyToWearSizeGuide() {
+  try {
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT "value" FROM "HomepageSectionSetting" WHERE "key" = $1 LIMIT 1`,
+      HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE_SETTINGS_KEY
+    );
+    const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+    if (!row) return { ...DEFAULT_READY_TO_WEAR_SIZE_GUIDE };
+    const parsed = JSON.parse(String(row.value || '{}')) as Record<string, unknown>;
+    const title = String(parsed.title || '').trim();
+    const content = String(parsed.content || '').trim();
+    return {
+      title: title.length >= 3 ? title.slice(0, 120) : DEFAULT_READY_TO_WEAR_SIZE_GUIDE.title,
+      content: content.length >= 20 ? content.slice(0, 6000) : DEFAULT_READY_TO_WEAR_SIZE_GUIDE.content,
+    };
+  } catch {
+    return { ...DEFAULT_READY_TO_WEAR_SIZE_GUIDE };
+  }
+}
+
 // Public routes (no auth required)
 
 // Get all categories
@@ -127,6 +153,11 @@ router.get('/materials', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+router.get('/ready-to-wear-size-guide', async (_req, res) => {
+  const data = await readReadyToWearSizeGuide();
+  res.json({ success: true, data });
 });
 
 // Get fabrics with filters

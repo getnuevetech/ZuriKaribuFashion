@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Heart, Star, MapPin, Truck, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Heart, Star, MapPin, Truck, Check, Loader2, Sparkles, Ruler, X } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { api } from '../services/api';
 import { useCartStore } from '../store/cartStore';
@@ -51,6 +51,22 @@ interface DiscoverProduct {
   productType: 'DESIGN' | 'FABRIC' | 'READY_TO_WEAR';
 }
 
+interface TryOnMeasurements {
+  height: number;
+  bust: number;
+  waist: number;
+  hips: number;
+  shoulder: number;
+}
+
+const DEFAULT_TRY_ON_MEASUREMENTS: TryOnMeasurements = {
+  height: 168,
+  bust: 90,
+  waist: 72,
+  hips: 98,
+  shoulder: 40,
+};
+
 export default function ReadyToWearDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -74,6 +90,14 @@ export default function ReadyToWearDetail() {
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [discoverProducts, setDiscoverProducts] = useState<DiscoverProduct[]>([]);
   const [addToCartMessage, setAddToCartMessage] = useState('');
+  const [showTryOnModal, setShowTryOnModal] = useState(false);
+  const [showSizeGuideModal, setShowSizeGuideModal] = useState(false);
+  const [tryOnMeasurements, setTryOnMeasurements] = useState<TryOnMeasurements>(DEFAULT_TRY_ON_MEASUREMENTS);
+  const [tryOnPreviewReady, setTryOnPreviewReady] = useState(false);
+  const [sizeGuide, setSizeGuide] = useState<{ title: string; content: string }>({
+    title: 'Ready-To-Wear Size Guide',
+    content: '',
+  });
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -145,6 +169,24 @@ export default function ReadyToWearDetail() {
     };
   }, [id]);
 
+  useEffect(() => {
+    let cancelled = false;
+    api.products
+      .getReadyToWearSizeGuide()
+      .then((response) => {
+        if (!cancelled && response.success) {
+          setSizeGuide({
+            title: String(response.data?.title || 'Ready-To-Wear Size Guide'),
+            content: String(response.data?.content || ''),
+          });
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -201,7 +243,7 @@ export default function ReadyToWearDetail() {
       unitPrice: selectedUnitPrice,
       designerName: product.designer?.businessName || 'Designer',
       categoryName: product.category?.name,
-      tryOnMeasurements: {},
+      tryOnMeasurements: tryOnPreviewReady ? { ...tryOnMeasurements } : {},
     });
     setAddToCartMessage(
       user
@@ -256,6 +298,17 @@ export default function ReadyToWearDetail() {
     } finally {
       setReviewSubmitting(false);
     }
+  };
+
+  const openTryOnModal = () => {
+    setTryOnPreviewReady(false);
+    setShowTryOnModal(true);
+  };
+
+  const handleGenerateTryOnPreview = async () => {
+    setTryOnPreviewReady(false);
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    setTryOnPreviewReady(true);
   };
 
   return (
@@ -374,22 +427,35 @@ export default function ReadyToWearDetail() {
 
             {/* Size Selection */}
             {availableSizes.length > 0 && (
-              <div>
-                <span className="font-medium">Size: {selectedSize}</span>
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  {availableSizes.map((size) => (
-                    <button
-                      key={size}
-                      onClick={() => setSelectedSize(size)}
-                      className={`w-12 h-12 border rounded-lg font-medium ${
-                        selectedSize === size
-                          ? 'border-coral-500 bg-coral-50 text-coral-600'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      {size}
-                    </button>
-                  ))}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Size</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowSizeGuideModal(true)}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-coral-600 hover:underline"
+                  >
+                    <Ruler className="h-3.5 w-3.5" />
+                    Size Guide
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <select
+                    value={selectedSize}
+                    onChange={(event) => setSelectedSize(event.target.value)}
+                    className="min-w-[150px] flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  >
+                    <option value="">Select size</option>
+                    {availableSizes.map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                  <Button variant="outline" className="px-3 py-2 text-xs" onClick={openTryOnModal}>
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                    Try On
+                  </Button>
                 </div>
               </div>
             )}
@@ -424,11 +490,6 @@ export default function ReadyToWearDetail() {
 
             {/* Actions */}
             <div className="flex flex-col gap-3">
-              <Link to={`/ready-to-wear/${product.id}/try-on`} className="w-full">
-                <Button variant="outline" className="w-full py-3">
-                  Try On This Look
-                </Button>
-              </Link>
               <div className="flex gap-4">
                 <Button className="flex-1 py-4" onClick={handleAddToCart}>
                   <ShoppingCart className="w-5 h-5 mr-2" />
@@ -592,17 +653,106 @@ export default function ReadyToWearDetail() {
           )}
         </section>
       </div>
+
+      {showTryOnModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
+          <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl">
+            <div className="flex items-start justify-between border-b px-5 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Virtual Try-On</h3>
+                <p className="text-xs text-gray-500">
+                  Enter your body measurements. Size selection remains separate from Try-On.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTryOnModal(false)}
+                className="rounded p-1 text-gray-500 hover:bg-gray-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              <p className="rounded-lg border border-coral-100 bg-coral-50 px-3 py-2 text-xs text-coral-700">
+                Use the same measurement profile format as Custom-to-Wear Try-On flow.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {(Object.keys(tryOnMeasurements) as Array<keyof TryOnMeasurements>).map((key) => (
+                  <label key={key} className="space-y-1">
+                    <span className="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                      {key} (cm)
+                    </span>
+                    <input
+                      type="number"
+                      min={key === 'height' ? 145 : 50}
+                      max={key === 'height' ? 220 : 180}
+                      value={tryOnMeasurements[key]}
+                      onChange={(event) => {
+                        const value = Math.max(
+                          key === 'height' ? 145 : 50,
+                          Math.min(key === 'height' ? 220 : 180, Number(event.target.value || 0))
+                        );
+                        setTryOnMeasurements((previous) => ({ ...previous, [key]: value }));
+                        setTryOnPreviewReady(false);
+                      }}
+                      className="w-full rounded-lg border px-3 py-2 text-sm"
+                    />
+                  </label>
+                ))}
+              </div>
+              <div className="rounded-lg border bg-gray-50 p-3 text-sm text-gray-700">
+                {tryOnPreviewReady
+                  ? 'Preview profile generated successfully. Continue shopping and add your selected size to cart.'
+                  : 'Generate your preview profile before closing this popup.'}
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 border-t px-5 py-4">
+              <Button variant="outline" onClick={handleGenerateTryOnPreview}>
+                Generate Preview
+              </Button>
+              <Button onClick={() => setShowTryOnModal(false)}>Done</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showSizeGuideModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
+          <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl">
+            <div className="flex items-start justify-between border-b px-5 py-4">
+              <div className="inline-flex items-center gap-2">
+                <Ruler className="h-5 w-5 text-coral-600" />
+                <h3 className="text-lg font-semibold text-gray-900">{sizeGuide.title || 'Size Guide'}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSizeGuideModal(false)}
+                className="rounded p-1 text-gray-500 hover:bg-gray-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
+              <p className="whitespace-pre-line text-sm leading-6 text-gray-700">
+                {sizeGuide.content || 'Size guide details are not configured yet.'}
+              </p>
+            </div>
+            <div className="border-t px-5 py-4 text-right">
+              <Button onClick={() => setShowSizeGuideModal(false)}>Close</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 p-3 shadow-lg backdrop-blur md:hidden">
         <div className="mx-auto flex max-w-7xl items-center gap-3">
           <div className="min-w-0">
             <p className="text-xs text-gray-500">Total</p>
             <p className="text-lg font-bold text-coral-600">{formatFromUsd(selectedUnitPrice * quantity)}</p>
           </div>
-          <Link to={`/ready-to-wear/${product.id}/try-on`} className="flex-1">
-            <Button variant="outline" className="w-full text-xs">
-              Try On
-            </Button>
-          </Link>
+          <Button variant="outline" className="flex-1 text-xs" onClick={openTryOnModal}>
+            Try On
+          </Button>
           <Button className="flex-1 text-xs" onClick={handleAddToCart}>
             Add to Bag
           </Button>

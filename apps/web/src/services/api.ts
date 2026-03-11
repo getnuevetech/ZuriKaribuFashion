@@ -2489,6 +2489,9 @@ const productsApi = {
   getReadyToWearProduct: (id: string) =>
     apiService.get<{ success: boolean; data: any }>(`/products/ready-to-wear/${id}`),
 
+  getReadyToWearSizeGuide: () =>
+    apiService.get<{ success: boolean; data: { title: string; content: string } }>('/products/ready-to-wear-size-guide'),
+
   getCountries: () =>
     apiService.get<{ success: boolean; data: string[] }>('/products/countries'),
 
@@ -2884,6 +2887,17 @@ const adminApi = {
     apiService.put<{ success: boolean; data: { sizes: Array<'S' | 'M' | 'L' | 'XL'> } }>(
       '/admin/ready-to-wear-sizes',
       { sizes }
+    ),
+
+  getReadyToWearSizeGuideSettings: () =>
+    apiService.get<{ success: boolean; data: { title: string; content: string } }>(
+      '/admin/ready-to-wear-size-guide'
+    ),
+
+  updateReadyToWearSizeGuideSettings: (payload: { title: string; content: string }) =>
+    apiService.put<{ success: boolean; data: { title: string; content: string } }>(
+      '/admin/ready-to-wear-size-guide',
+      payload
     ),
 
   getVendorProfileFields: (role: 'FABRIC_SELLER' | 'FASHION_DESIGNER') =>

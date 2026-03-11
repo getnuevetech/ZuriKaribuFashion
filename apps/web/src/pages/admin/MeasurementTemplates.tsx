@@ -30,14 +30,17 @@ export default function AdminMeasurementTemplates() {
     'L',
     'XL',
   ]);
+  const [sizeGuideTitle, setSizeGuideTitle] = useState('Ready-To-Wear Size Guide');
+  const [sizeGuideContent, setSizeGuideContent] = useState('');
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
-        const [templatesRes, sizesRes] = await Promise.all([
+        const [templatesRes, sizesRes, sizeGuideRes] = await Promise.all([
           api.admin.getMeasurementTemplates(),
           api.admin.getReadyToWearSizesSettings(),
+          api.admin.getReadyToWearSizeGuideSettings(),
         ]);
         if (templatesRes.success) {
           setRows(templatesRes.data || []);
@@ -45,6 +48,10 @@ export default function AdminMeasurementTemplates() {
         if (sizesRes.success && Array.isArray(sizesRes.data?.sizes)) {
           const normalized = READY_TO_WEAR_SIZE_OPTIONS.filter((size) => sizesRes.data.sizes.includes(size));
           setReadyToWearSizes(normalized.length >= 3 ? normalized : ['S', 'M', 'L', 'XL']);
+        }
+        if (sizeGuideRes.success) {
+          setSizeGuideTitle((sizeGuideRes.data?.title || 'Ready-To-Wear Size Guide').trim());
+          setSizeGuideContent((sizeGuideRes.data?.content || '').trim());
         }
       } catch (err: any) {
         setError(err?.response?.data?.message || 'Failed to load measurement templates.');
@@ -72,11 +79,23 @@ export default function AdminMeasurementTemplates() {
         setError('Ready-to-wear sizes must include at least 3 and at most 4 options from S, M, L, XL.');
         return;
       }
+      const cleanSizeGuideTitle = sizeGuideTitle.trim();
+      const cleanSizeGuideContent = sizeGuideContent.trim();
+      if (cleanSizeGuideTitle.length < 3 || cleanSizeGuideContent.length < 20) {
+        setError('Size guide title must be at least 3 characters and content at least 20 characters.');
+        return;
+      }
       if (payload.length > 0) {
         await api.admin.updateMeasurementTemplates(payload);
       }
-      await api.admin.updateReadyToWearSizesSettings(readyToWearSizes);
-      setSuccess('Measurement templates and ready-to-wear sizes saved successfully.');
+      await Promise.all([
+        api.admin.updateReadyToWearSizesSettings(readyToWearSizes),
+        api.admin.updateReadyToWearSizeGuideSettings({
+          title: cleanSizeGuideTitle,
+          content: cleanSizeGuideContent,
+        }),
+      ]);
+      setSuccess('Measurement templates, ready-to-wear sizes, and size guide saved successfully.');
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to save templates.');
     } finally {
@@ -149,6 +168,30 @@ export default function AdminMeasurementTemplates() {
           <p className="mt-2 text-xs text-gray-600">
             Selected: {readyToWearSizes.join(', ') || 'None'} ({readyToWearSizes.length}/4)
           </p>
+        </div>
+
+        <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+          <h3 className="text-sm font-semibold text-gray-900">Ready-To-Wear Size Guide Content</h3>
+          <p className="mt-1 text-xs text-gray-600">
+            This content appears in the size guide popup on each ready-to-wear product page.
+          </p>
+          <div className="mt-3 space-y-3">
+            <input
+              value={sizeGuideTitle}
+              onChange={(event) => setSizeGuideTitle(event.target.value)}
+              maxLength={120}
+              placeholder="Guide title"
+              className="w-full rounded-lg border bg-white px-3 py-2 text-sm"
+            />
+            <textarea
+              value={sizeGuideContent}
+              onChange={(event) => setSizeGuideContent(event.target.value)}
+              maxLength={6000}
+              rows={8}
+              placeholder="Add sizing notes and measurements for S, M, L, XL..."
+              className="w-full rounded-lg border bg-white px-3 py-2 text-sm"
+            />
+          </div>
         </div>
 
         {rows.map((row, idx) => (

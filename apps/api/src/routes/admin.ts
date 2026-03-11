@@ -92,6 +92,7 @@ const HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY = 'HOMEPAGE_COUNTRY_IMAGE_G
 const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
 const HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY = 'HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION';
 const HOMEPAGE_READY_TO_WEAR_SIZES_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZES';
+const HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE';
 const READY_TO_WEAR_STANDARD_SIZES = ['S', 'M', 'L', 'XL'] as const;
 const ADMIN_TOP_STRIP_DEFAULTS = {
   messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
@@ -150,6 +151,11 @@ const ADMIN_FEATURED_PRODUCT_DESCRIPTION_DEFAULTS = {
 const ADMIN_READY_TO_WEAR_SIZES_DEFAULTS = {
   sizes: [...READY_TO_WEAR_STANDARD_SIZES],
 };
+const ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS = {
+  title: 'Ready-To-Wear Size Guide',
+  content:
+    'Use your body measurements to select your best standard size.\n\nS: Bust 84-90cm, Waist 66-72cm, Hips 90-96cm\nM: Bust 91-98cm, Waist 73-80cm, Hips 97-104cm\nL: Bust 99-106cm, Waist 81-88cm, Hips 105-112cm\nXL: Bust 107-115cm, Waist 89-98cm, Hips 113-122cm',
+};
 const BLOG_AUDIENCE_TYPES = ['SELLER', 'DESIGNER', 'COUNTRY', 'OTHER'] as const;
 type BlogAudienceType = (typeof BLOG_AUDIENCE_TYPES)[number];
 const adminCountryImageGenerationUpdateSchema = z.object({
@@ -191,6 +197,10 @@ const adminReadyToWearSizesUpdateSchema = z.object({
     .array(z.enum(READY_TO_WEAR_STANDARD_SIZES))
     .min(3)
     .max(4),
+});
+const adminReadyToWearSizeGuideUpdateSchema = z.object({
+  title: z.string().trim().min(3).max(120),
+  content: z.string().trim().min(20).max(6000),
 });
 const adminBlogCreateSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -343,6 +353,16 @@ const normalizeAdminReadyToWearSizesSettings = (raw: unknown) => {
     return { ...ADMIN_READY_TO_WEAR_SIZES_DEFAULTS };
   }
   return { sizes: ordered };
+};
+const normalizeAdminReadyToWearSizeGuideSettings = (raw: unknown) => {
+  if (!raw || typeof raw !== 'object') return { ...ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const title = String(row.title || '').trim();
+  const content = String(row.content || '').trim();
+  return {
+    title: title.length >= 3 ? title.slice(0, 120) : ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS.title,
+    content: content.length >= 20 ? content.slice(0, 6000) : ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS.content,
+  };
 };
 
 const blogSlugify = (value: string) =>
@@ -693,6 +713,52 @@ const saveAdminReadyToWearSizesSettings = async (input: unknown) => {
      VALUES ($1, $2, $3, NOW(), NOW())`,
     randomUUID(),
     HOMEPAGE_READY_TO_WEAR_SIZES_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+const readAdminReadyToWearSizeGuideSettings = async () => {
+  await ensureHomepageSectionSettingTable();
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return { rowId: null as string | null, settings: { ...ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS } };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizeAdminReadyToWearSizeGuideSettings(JSON.parse(String(row.value || '{}'))),
+    };
+  } catch {
+    return { rowId: String(row.id), settings: { ...ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS } };
+  }
+};
+const saveAdminReadyToWearSizeGuideSettings = async (input: unknown) => {
+  const parsed = adminReadyToWearSizeGuideUpdateSchema.parse(input);
+  const merged = normalizeAdminReadyToWearSizeGuideSettings(parsed);
+  const existing = await readAdminReadyToWearSizeGuideSettings();
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE_SETTINGS_KEY,
     payload
   );
   return merged;
@@ -2345,6 +2411,45 @@ router.patch('/ready-to-wear-sizes', authorizePermissions(Permissions.MEASUREMEN
     }
     console.error('Error updating ready-to-wear sizes settings:', error);
     res.status(500).json({ success: false, message: 'Failed to update ready-to-wear sizes settings.' });
+  }
+});
+
+router.get('/ready-to-wear-size-guide', authorizePermissions(Permissions.MEASUREMENT_TEMPLATES_MANAGE), async (_req, res) => {
+  try {
+    const { settings } = await readAdminReadyToWearSizeGuideSettings();
+    res.json({
+      success: true,
+      data: settings,
+    });
+  } catch (error) {
+    console.error('Error fetching ready-to-wear size guide settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch ready-to-wear size guide settings.' });
+  }
+});
+
+router.put('/ready-to-wear-size-guide', authorizePermissions(Permissions.MEASUREMENT_TEMPLATES_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveAdminReadyToWearSizeGuideSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating ready-to-wear size guide settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update ready-to-wear size guide settings.' });
+  }
+});
+
+router.patch('/ready-to-wear-size-guide', authorizePermissions(Permissions.MEASUREMENT_TEMPLATES_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveAdminReadyToWearSizeGuideSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating ready-to-wear size guide settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update ready-to-wear size guide settings.' });
   }
 });
 
