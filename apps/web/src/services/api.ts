@@ -2918,6 +2918,384 @@ const adminCreateMinimalVendorPaths = [
   '/admin/vendor-profile/create-minimal',
   '/admin/vendors/create-minimal',
 ];
+const PROMO_CODES_FALLBACK_KEY = 'af_admin_promo_codes_fallback_v1';
+const adminPromoCodesReadPaths = ['/promotions/admin', '/promo/admin', '/admin/promotions', '/admin/promo-codes'];
+const adminPromoCodesCreatePaths = ['/promotions/admin', '/promo/admin', '/admin/promotions', '/admin/promo-codes'];
+const adminPromoCodesUpdatePaths = (id: string) => [
+  `/promotions/admin/${id}`,
+  `/promo/admin/${id}`,
+  `/admin/promotions/${id}`,
+  `/admin/promo-codes/${id}`,
+];
+const adminPromoCodesDeletePaths = (id: string) => [
+  `/promotions/admin/${id}`,
+  `/promo/admin/${id}`,
+  `/admin/promotions/${id}`,
+  `/admin/promo-codes/${id}`,
+];
+const promoPreviewPaths = ['/promotions/preview', '/promo/preview'];
+
+type PromoCriteriaFallback = {
+  productTypes?: string[];
+  productIds?: string[];
+  countries?: string[];
+  cities?: string[];
+  materialTypeIds?: string[];
+  designerIds?: string[];
+  sellerIds?: string[];
+  paymentProviders?: string[];
+  shippingProviders?: string[];
+  cardPatterns?: string[];
+  shippingQuoteIds?: string[];
+};
+
+type PromoCodeFallbackRow = {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  discountType: 'PERCENTAGE' | 'FIXED';
+  discountValue: number;
+  maxDiscountUsd?: number;
+  minOrderUsd?: number;
+  isActive: boolean;
+  startsAt?: string;
+  endsAt?: string;
+  criteria: PromoCriteriaFallback;
+};
+
+const toPromoList = (value: unknown, toUpper = false) =>
+  Array.from(
+    new Set(
+      (Array.isArray(value) ? value : [])
+        .map((entry) => String(entry || '').trim())
+        .filter(Boolean)
+        .map((entry) => (toUpper ? entry.toUpperCase() : entry))
+    )
+  );
+
+const normalizePromoFallbackRow = (input: any): PromoCodeFallbackRow | null => {
+  const code = String(input?.code || '').trim().toUpperCase();
+  if (!code) return null;
+  const discountType = String(input?.discountType || '').toUpperCase() === 'FIXED' ? 'FIXED' : 'PERCENTAGE';
+  const discountValue = Number(input?.discountValue || 0);
+  if (!Number.isFinite(discountValue) || discountValue <= 0) return null;
+  return {
+    id: String(input?.id || `local-promo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+    code,
+    name: String(input?.name || code).trim() || code,
+    description: String(input?.description || '').trim() || undefined,
+    discountType,
+    discountValue,
+    maxDiscountUsd:
+      input?.maxDiscountUsd === undefined || input?.maxDiscountUsd === null
+        ? undefined
+        : Number(input.maxDiscountUsd),
+    minOrderUsd:
+      input?.minOrderUsd === undefined || input?.minOrderUsd === null
+        ? undefined
+        : Number(input.minOrderUsd),
+    isActive: input?.isActive !== false,
+    startsAt: input?.startsAt ? String(input.startsAt) : undefined,
+    endsAt: input?.endsAt ? String(input.endsAt) : undefined,
+    criteria: {
+      productTypes: toPromoList(input?.criteria?.productTypes, true),
+      productIds: toPromoList(input?.criteria?.productIds),
+      countries: toPromoList(input?.criteria?.countries),
+      cities: toPromoList(input?.criteria?.cities),
+      materialTypeIds: toPromoList(input?.criteria?.materialTypeIds),
+      designerIds: toPromoList(input?.criteria?.designerIds),
+      sellerIds: toPromoList(input?.criteria?.sellerIds),
+      paymentProviders: toPromoList(input?.criteria?.paymentProviders, true),
+      shippingProviders: toPromoList(input?.criteria?.shippingProviders, true),
+      cardPatterns: toPromoList(input?.criteria?.cardPatterns),
+      shippingQuoteIds: toPromoList(input?.criteria?.shippingQuoteIds),
+    },
+  };
+};
+
+const readPromoCodesFallback = () => {
+  if (typeof window === 'undefined' || !window.localStorage) return [] as PromoCodeFallbackRow[];
+  try {
+    const raw = window.localStorage.getItem(PROMO_CODES_FALLBACK_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((entry) => normalizePromoFallbackRow(entry))
+      .filter((entry): entry is PromoCodeFallbackRow => Boolean(entry));
+  } catch {
+    return [];
+  }
+};
+
+const writePromoCodesFallback = (rows: PromoCodeFallbackRow[]) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(PROMO_CODES_FALLBACK_KEY, JSON.stringify(Array.isArray(rows) ? rows : []));
+  } catch {
+    // ignore storage write failures
+  }
+};
+
+const upsertPromoCodesFallback = (rows: PromoCodeFallbackRow[], row: PromoCodeFallbackRow) => {
+  const next = [...rows];
+  const byIdIndex = next.findIndex((entry) => entry.id === row.id);
+  const byCodeIndex = next.findIndex((entry) => entry.code === row.code);
+  const targetIndex = byIdIndex >= 0 ? byIdIndex : byCodeIndex;
+  if (targetIndex >= 0) {
+    next[targetIndex] = { ...next[targetIndex], ...row };
+  } else {
+    next.unshift(row);
+  }
+  return next;
+};
+
+async function readAdminPromoCodesWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of adminPromoCodesReadPaths) {
+    try {
+      const response = await apiService.get<{ success: boolean; data: any[]; message?: string }>(path);
+      const rows = Array.isArray(response?.data)
+        ? response.data.map((entry) => normalizePromoFallbackRow(entry)).filter((entry): entry is PromoCodeFallbackRow => Boolean(entry))
+        : [];
+      writePromoCodesFallback(rows);
+      return response as unknown as T;
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    return {
+      success: true,
+      data: readPromoCodesFallback(),
+      message: 'Promo routes not found on this backend deployment. Using local fallback.',
+    } as T;
+  }
+  throw lastError ?? new Error('Promo codes route not found.');
+}
+
+async function createAdminPromoCodeWithFallback<T>(payload: any) {
+  let lastError: unknown = null;
+  for (const path of adminPromoCodesCreatePaths) {
+    try {
+      const response = await apiService.post<{ success: boolean; data: any; message?: string }>(path, payload);
+      const normalized = normalizePromoFallbackRow(response?.data || payload);
+      if (normalized) {
+        const current = readPromoCodesFallback();
+        writePromoCodesFallback(upsertPromoCodesFallback(current, normalized));
+      }
+      return response as unknown as T;
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    const fallbackRow = normalizePromoFallbackRow(payload);
+    if (!fallbackRow) throw new Error('Invalid promo code payload.');
+    const rows = readPromoCodesFallback();
+    writePromoCodesFallback(upsertPromoCodesFallback(rows, fallbackRow));
+    return {
+      success: true,
+      data: fallbackRow,
+      message: 'Promo saved locally until backend promo routes are deployed.',
+    } as T;
+  }
+  throw lastError ?? new Error('Promo code create route not found.');
+}
+
+async function updateAdminPromoCodeWithFallback<T>(id: string, payload: any) {
+  let lastError: unknown = null;
+  for (const path of adminPromoCodesUpdatePaths(id)) {
+    try {
+      const response = await apiService.patch<{ success: boolean; data: any; message?: string }>(path, payload);
+      const normalized = normalizePromoFallbackRow(response?.data || { ...payload, id });
+      if (normalized) {
+        const rows = readPromoCodesFallback();
+        writePromoCodesFallback(upsertPromoCodesFallback(rows, normalized));
+      }
+      return response as unknown as T;
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    const currentRows = readPromoCodesFallback();
+    const existing = currentRows.find((entry) => entry.id === id);
+    if (!existing) {
+      throw new Error('Promo code not found in local fallback.');
+    }
+    const merged = normalizePromoFallbackRow({ ...existing, ...payload, id });
+    if (!merged) throw new Error('Invalid promo code payload.');
+    writePromoCodesFallback(upsertPromoCodesFallback(currentRows, merged));
+    return {
+      success: true,
+      data: merged,
+      message: 'Promo updated locally until backend promo routes are deployed.',
+    } as T;
+  }
+  throw lastError ?? new Error('Promo code update route not found.');
+}
+
+async function deleteAdminPromoCodeWithFallback<T>(id: string) {
+  let lastError: unknown = null;
+  for (const path of adminPromoCodesDeletePaths(id)) {
+    try {
+      const response = await apiService.delete<{ success: boolean; message?: string }>(path);
+      const rows = readPromoCodesFallback().filter((entry) => entry.id !== id);
+      writePromoCodesFallback(rows);
+      return response as unknown as T;
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    const rows = readPromoCodesFallback().filter((entry) => entry.id !== id);
+    writePromoCodesFallback(rows);
+    return {
+      success: true,
+      message: 'Promo deleted locally until backend promo routes are deployed.',
+    } as T;
+  }
+  throw lastError ?? new Error('Promo code delete route not found.');
+}
+
+const listContains = (list: string[] | undefined, value: string, toUpper = false) => {
+  if (!Array.isArray(list) || list.length === 0) return true;
+  const normalizedValue = toUpper ? String(value || '').toUpperCase() : String(value || '');
+  const normalizedList = toUpper ? list.map((entry) => String(entry || '').toUpperCase()) : list;
+  return normalizedList.includes(normalizedValue);
+};
+
+function buildPromoPreviewFromFallback(payload: {
+  code: string;
+  items: Array<{ productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; productId: string; unitPrice: number; quantity: number }>;
+  paymentProvider?: string;
+  shippingProvider?: string;
+  shippingQuoteId?: string;
+  cardFingerprint?: string;
+  country?: string;
+  city?: string;
+}) {
+  const code = String(payload.code || '').trim().toUpperCase();
+  const rows = readPromoCodesFallback();
+  const promo = rows.find((entry) => entry.code === code && entry.isActive);
+  if (!promo) {
+    throw new Error('Promo code not found or inactive.');
+  }
+  const now = Date.now();
+  if (promo.startsAt && now < new Date(promo.startsAt).getTime()) {
+    throw new Error('Promo code is not active yet.');
+  }
+  if (promo.endsAt && now > new Date(promo.endsAt).getTime()) {
+    throw new Error('Promo code has expired.');
+  }
+  const criteria = promo.criteria || {};
+  if (
+    (criteria.materialTypeIds?.length || 0) > 0 ||
+    (criteria.designerIds?.length || 0) > 0 ||
+    (criteria.sellerIds?.length || 0) > 0 ||
+    (criteria.shippingQuoteIds?.length || 0) > 0
+  ) {
+    throw new Error('Promo criteria requires backend validation. Please deploy latest API routes.');
+  }
+  if (!listContains(criteria.countries, payload.country || '')) {
+    throw new Error('Promo code does not match selected country.');
+  }
+  if (!listContains(criteria.cities, payload.city || '')) {
+    throw new Error('Promo code does not match selected city.');
+  }
+  if (!listContains(criteria.paymentProviders, payload.paymentProvider || '', true)) {
+    throw new Error('Promo code does not match selected payment option.');
+  }
+  if (!listContains(criteria.shippingProviders, payload.shippingProvider || '', true)) {
+    throw new Error('Promo code does not match selected shipping option.');
+  }
+  if (Array.isArray(criteria.cardPatterns) && criteria.cardPatterns.length > 0) {
+    const card = String(payload.cardFingerprint || '');
+    if (!criteria.cardPatterns.some((pattern) => card.startsWith(String(pattern || '')))) {
+      throw new Error('Promo code does not match card criteria.');
+    }
+  }
+  const eligibleItems = payload.items.filter((item) => {
+    if (!listContains(criteria.productTypes, item.productType, true)) return false;
+    if (!listContains(criteria.productIds, item.productId)) return false;
+    return true;
+  });
+  const subtotal = payload.items.reduce(
+    (sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 0),
+    0
+  );
+  const eligibleSubtotal = eligibleItems.reduce(
+    (sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 0),
+    0
+  );
+  if (Number(promo.minOrderUsd || 0) > subtotal) {
+    throw new Error(`Promo requires minimum order value of $${Number(promo.minOrderUsd).toFixed(2)}.`);
+  }
+  if (eligibleSubtotal <= 0) {
+    throw new Error('Promo code does not match selected products/criteria.');
+  }
+  const rawDiscount =
+    promo.discountType === 'PERCENTAGE'
+      ? (eligibleSubtotal * Number(promo.discountValue || 0)) / 100
+      : Number(promo.discountValue || 0);
+  const cappedDiscount = Number.isFinite(Number(promo.maxDiscountUsd))
+    ? Math.min(rawDiscount, Number(promo.maxDiscountUsd || 0))
+    : rawDiscount;
+  const discountUsd = Math.max(0, Math.min(eligibleSubtotal, Number(cappedDiscount || 0)));
+  return {
+    success: true,
+    data: {
+      code: promo.code,
+      name: promo.name,
+      discountType: promo.discountType,
+      discountValue: Number(promo.discountValue || 0),
+      discountUsd: Number(discountUsd.toFixed(2)),
+      subtotalUsd: Number(subtotal.toFixed(2)),
+      eligibleSubtotalUsd: Number(eligibleSubtotal.toFixed(2)),
+      matchedItems: eligibleItems.map((item) => ({
+        productType: item.productType,
+        productId: item.productId,
+      })),
+    },
+    message: 'Promo preview computed locally because promotions routes are unavailable.',
+  };
+}
+
+async function previewPromotionWithFallback<T>(payload: {
+  code: string;
+  items: Array<{ productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; productId: string; unitPrice: number; quantity: number }>;
+  paymentProvider?: string;
+  shippingProvider?: string;
+  shippingQuoteId?: string;
+  cardFingerprint?: string;
+  country?: string;
+  city?: string;
+}) {
+  let lastError: unknown = null;
+  for (const path of promoPreviewPaths) {
+    try {
+      return await apiService.post<T>(path, payload);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    return buildPromoPreviewFromFallback(payload) as T;
+  }
+  throw lastError ?? new Error('Promo preview route not found.');
+}
 
 async function readAdminPromoBadgeWithFallback<T>() {
   let lastError: unknown = null;
@@ -3247,16 +3625,16 @@ const adminApi = {
   }) => apiService.put<{ success: boolean; data: any; message?: string }>('/admin/product-labels', payload),
 
   getPromoCodes: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/promotions/admin'),
+    readAdminPromoCodesWithFallback<{ success: boolean; data: any[]; message?: string }>(),
 
   createPromoCode: (payload: any) =>
-    apiService.post<{ success: boolean; data: any; message?: string }>('/promotions/admin', payload),
+    createAdminPromoCodeWithFallback<{ success: boolean; data: any; message?: string }>(payload),
 
   updatePromoCode: (id: string, payload: any) =>
-    apiService.patch<{ success: boolean; data: any; message?: string }>(`/promotions/admin/${id}`, payload),
+    updateAdminPromoCodeWithFallback<{ success: boolean; data: any; message?: string }>(id, payload),
 
   deletePromoCode: (id: string) =>
-    apiService.delete<{ success: boolean; message?: string }>(`/promotions/admin/${id}`),
+    deleteAdminPromoCodeWithFallback<{ success: boolean; message?: string }>(id),
 
   getVendorProfileFields: (role: 'FABRIC_SELLER' | 'FASHION_DESIGNER') =>
     apiService.get<{ success: boolean; data: { role: string; fields: any[] } }>('/admin/vendor-profile/fields', {
@@ -4779,7 +5157,7 @@ const promotionsApi = {
     cardFingerprint?: string;
     country?: string;
     city?: string;
-  }) => apiService.post<{ success: boolean; data?: any; message?: string }>('/promotions/preview', payload),
+  }) => previewPromotionWithFallback<{ success: boolean; data?: any; message?: string }>(payload),
 };
 
 // Export combined API
