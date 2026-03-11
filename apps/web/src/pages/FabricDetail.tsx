@@ -6,6 +6,7 @@ import { api } from '../services/api';
 import { useCurrencyStore } from '../store/currencyStore';
 import { useAuthStore } from '../store/authStore';
 import { resolveCountryCode } from '../data/locationOptions';
+import { useCartStore } from '../store/cartStore';
 
 interface Fabric {
   id: string;
@@ -51,6 +52,7 @@ export default function FabricDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { addFabricItem } = useCartStore();
   const [fabric, setFabric] = useState<Fabric | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -161,8 +163,17 @@ export default function FabricDetail() {
     : null;
 
   const handleAddToCart = () => {
-    setCartMessage('Fabric saved. Select a design to pair this fabric for checkout.');
-    navigate('/designs');
+    if (!fabric) return;
+    addFabricItem({
+      fabricId: fabric.id,
+      fabricName: fabric.name,
+      fabricImage: fabric.images?.[selectedImage]?.url || fabric.images?.[0]?.url || '/images/placeholder.jpg',
+      yards: Math.max(1, Number(quantity || 1)),
+      pricePerYard: Number(fabric.pricePerMeter || 0),
+      sellerName: fabric.seller?.businessName || 'Seller',
+    });
+    setCartMessage('Fabric added to cart.');
+    navigate('/cart');
   };
 
   const handleToggleLike = async () => {

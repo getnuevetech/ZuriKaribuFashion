@@ -33,11 +33,32 @@ export interface ReadyToWearCartItem {
   tryOnMeasurements?: Record<string, number>;
 }
 
-export type CartItem = CustomDesignCartItem | ReadyToWearCartItem;
+export interface FabricOnlyCartItem {
+  kind: 'FABRIC_ONLY';
+  fabricId: string;
+  fabricName: string;
+  fabricImage: string;
+  yards: number;
+  pricePerYard: number;
+  sellerName: string;
+}
+
+export type CartItem = CustomDesignCartItem | ReadyToWearCartItem | FabricOnlyCartItem;
 
 type LegacyCustomItem = Omit<CustomDesignCartItem, 'kind'>;
 
 function normalizeCartItem(item: CartItem | LegacyCustomItem | any): CartItem {
+  if (item?.kind === 'FABRIC_ONLY') {
+    return {
+      kind: 'FABRIC_ONLY',
+      fabricId: String(item.fabricId || ''),
+      fabricName: String(item.fabricName || ''),
+      fabricImage: String(item.fabricImage || ''),
+      yards: Math.max(1, Number(item.yards || 1)),
+      pricePerYard: Number(item.pricePerYard || 0),
+      sellerName: String(item.sellerName || 'Seller'),
+    };
+  }
   if (item?.kind === 'READY_TO_WEAR') {
     return {
       kind: 'READY_TO_WEAR',
@@ -73,6 +94,9 @@ function normalizeCartItem(item: CartItem | LegacyCustomItem | any): CartItem {
 }
 
 function getItemTotal(item: CartItem): number {
+  if (item.kind === 'FABRIC_ONLY') {
+    return Number(item.pricePerYard || 0) * Math.max(1, Number(item.yards || 1));
+  }
   if (item.kind === 'READY_TO_WEAR') {
     return Number(item.unitPrice || 0) * Math.max(1, Number(item.quantity || 1));
   }
@@ -85,6 +109,7 @@ interface CartStore {
   items: CartItem[];
   addItem: (item: CartItem | LegacyCustomItem) => void;
   addReadyToWearItem: (item: Omit<ReadyToWearCartItem, 'kind'>) => void;
+  addFabricItem: (item: Omit<FabricOnlyCartItem, 'kind'>) => void;
   removeItem: (index: number) => void;
   updateItem: (index: number, updates: Partial<CartItem>) => void;
   clearCart: () => void;
@@ -130,6 +155,27 @@ export const useCartStore = create<CartStore>()(
           };
         });
       },
+
+      addFabricItem: (item) => {
+        const normalized = normalizeCartItem({ ...item, kind: 'FABRIC_ONLY' as const });
+        set((state) => {
+          const existingIndex = state.items.findIndex(
+            (cartItem) => cartItem.kind === 'FABRIC_ONLY' && cartItem.fabricId === normalized.fabricId
+          );
+          if (existingIndex === -1) {
+            return { items: [...state.items, normalized] };
+          }
+          const existing = state.items[existingIndex] as FabricOnlyCartItem;
+          const merged: FabricOnlyCartItem = {
+            ...existing,
+            yards: existing.yards + normalized.yards,
+            pricePerYard: normalized.pricePerYard || existing.pricePerYard,
+          };
+          return {
+            items: state.items.map((cartItem, index) => (index === existingIndex ? merged : cartItem)),
+          };
+        });
+      },
       
       removeItem: (index) => {
         set((state) => ({
@@ -147,6 +193,14 @@ export const useCartStore = create<CartStore>()(
                   ...updates,
                   quantity: Math.max(1, Number((updates as Partial<ReadyToWearCartItem>).quantity ?? item.quantity)),
                 } as ReadyToWearCartItem;
+                return merged;
+              }
+              if (item.kind === 'FABRIC_ONLY') {
+                const merged = {
+                  ...item,
+                  ...updates,
+                  yards: Math.max(1, Number((updates as Partial<FabricOnlyCartItem>).yards ?? item.yards)),
+                } as FabricOnlyCartItem;
                 return merged;
               }
               const merged = { ...item, ...updates } as CustomDesignCartItem;
@@ -174,6 +228,9 @@ export const useCartStore = create<CartStore>()(
           if (item.kind === 'READY_TO_WEAR') {
             return count + Math.max(1, Number(item.quantity || 1));
           }
+          if (item.kind === 'FABRIC_ONLY') {
+            return count + 1;
+          }
           return count + 1;
         }, 0);
       },
@@ -182,6 +239,9 @@ export const useCartStore = create<CartStore>()(
         get().items.reduce((count, item) => {
           if (item.kind === 'READY_TO_WEAR') {
             return count + Math.max(1, Number(item.quantity || 1));
+          }
+          if (item.kind === 'FABRIC_ONLY') {
+            return count + 1;
           }
           return count + 1;
         }, 0),

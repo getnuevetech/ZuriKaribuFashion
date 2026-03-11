@@ -331,6 +331,7 @@ export default function Checkout() {
 
       const customItems = items.filter((item) => item.kind === 'CUSTOM_DESIGN');
       const readyToWearItems = items.filter((item) => item.kind === 'READY_TO_WEAR');
+      const fabricOnlyItems = items.filter((item) => item.kind === 'FABRIC_ONLY');
 
       for (const item of customItems) {
         if (!item.designId || !item.fabricId) {
@@ -366,6 +367,21 @@ export default function Checkout() {
         });
         if (readyOrderResponse.success && readyOrderResponse.data?.orderNumber) {
           createdOrderNumbers.push(readyOrderResponse.data.orderNumber);
+        }
+      }
+
+      for (const item of fabricOnlyItems) {
+        if (!item.fabricId || Number(item.yards || 0) < 1) continue;
+        const fabricOrderResponse = await api.orders.createFabricOnlyOrder({
+          fabricId: item.fabricId,
+          yards: Number(item.yards || 1),
+          shippingAddressId,
+          paymentMethod,
+          paymentIntentId,
+          ...shippingPayload,
+        });
+        if (fabricOrderResponse.success && fabricOrderResponse.data?.orderNumber) {
+          createdOrderNumbers.push(fabricOrderResponse.data.orderNumber);
         }
       }
 
@@ -810,8 +826,20 @@ export default function Checkout() {
                 {items.map((item, index) => (
                   <div key={index} className="flex gap-3">
                     <img
-                      src={item.kind === 'READY_TO_WEAR' ? item.productImage : item.designImage}
-                      alt={item.kind === 'READY_TO_WEAR' ? item.productName : item.designName}
+                      src={
+                        item.kind === 'READY_TO_WEAR'
+                          ? item.productImage
+                          : item.kind === 'FABRIC_ONLY'
+                            ? item.fabricImage
+                            : item.designImage
+                      }
+                      alt={
+                        item.kind === 'READY_TO_WEAR'
+                          ? item.productName
+                          : item.kind === 'FABRIC_ONLY'
+                            ? item.fabricName
+                            : item.designName
+                      }
                       className="w-16 h-20 object-cover"
                     />
                     <div className="flex-1">
@@ -821,11 +849,17 @@ export default function Checkout() {
                           <p className="text-xs text-gray-500">Size {item.selectedSize}</p>
                           <p className="text-xs text-gray-500">Qty {item.quantity}</p>
                         </>
+                      ) : item.kind === 'FABRIC_ONLY' ? (
+                        <>
+                          <p className="font-medium text-sm text-gray-900">{item.fabricName}</p>
+                          <p className="text-xs text-gray-500">{item.sellerName}</p>
+                          <p className="text-xs text-gray-500">{item.yards} yards</p>
+                        </>
                       ) : (
                         <>
                           <p className="font-medium text-sm text-gray-900">{item.designName}</p>
                           <p className="text-xs text-gray-500">{item.fabricName}</p>
-                          <p className="text-xs text-gray-500">{item.fabricMeters}m fabric</p>
+                          <p className="text-xs text-gray-500">{item.fabricMeters} yards fabric</p>
                         </>
                       )}
                     </div>
@@ -833,6 +867,8 @@ export default function Checkout() {
                       {formatFromUsd(
                         item.kind === 'READY_TO_WEAR'
                           ? item.unitPrice * item.quantity
+                          : item.kind === 'FABRIC_ONLY'
+                            ? item.pricePerYard * item.yards
                           : item.totalPrice
                       )}
                     </p>

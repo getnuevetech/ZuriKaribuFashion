@@ -16,6 +16,7 @@ const EMPTY_ROW: MeasurementTemplate = {
   isRequired: true,
   instructions: '',
 };
+const READY_TO_WEAR_SIZE_OPTIONS: Array<'S' | 'M' | 'L' | 'XL'> = ['S', 'M', 'L', 'XL'];
 
 export default function AdminMeasurementTemplates() {
   const [rows, setRows] = useState<MeasurementTemplate[]>([]);
@@ -23,14 +24,27 @@ export default function AdminMeasurementTemplates() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [readyToWearSizes, setReadyToWearSizes] = useState<Array<'S' | 'M' | 'L' | 'XL'>>([
+    'S',
+    'M',
+    'L',
+    'XL',
+  ]);
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
-        const res = await api.admin.getMeasurementTemplates();
-        if (res.success) {
-          setRows(res.data || []);
+        const [templatesRes, sizesRes] = await Promise.all([
+          api.admin.getMeasurementTemplates(),
+          api.admin.getReadyToWearSizesSettings(),
+        ]);
+        if (templatesRes.success) {
+          setRows(templatesRes.data || []);
+        }
+        if (sizesRes.success && Array.isArray(sizesRes.data?.sizes)) {
+          const normalized = READY_TO_WEAR_SIZE_OPTIONS.filter((size) => sizesRes.data.sizes.includes(size));
+          setReadyToWearSizes(normalized.length >= 3 ? normalized : ['S', 'M', 'L', 'XL']);
         }
       } catch (err: any) {
         setError(err?.response?.data?.message || 'Failed to load measurement templates.');
@@ -54,12 +68,15 @@ export default function AdminMeasurementTemplates() {
           instructions: row.instructions?.trim() || '',
         }))
         .filter((row) => row.name.length > 0);
-      if (payload.length === 0) {
-        setError('Add at least one measurement template.');
+      if (readyToWearSizes.length < 3 || readyToWearSizes.length > 4) {
+        setError('Ready-to-wear sizes must include at least 3 and at most 4 options from S, M, L, XL.');
         return;
       }
-      await api.admin.updateMeasurementTemplates(payload);
-      setSuccess('Measurement templates saved successfully.');
+      if (payload.length > 0) {
+        await api.admin.updateMeasurementTemplates(payload);
+      }
+      await api.admin.updateReadyToWearSizesSettings(readyToWearSizes);
+      setSuccess('Measurement templates and ready-to-wear sizes saved successfully.');
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to save templates.');
     } finally {
@@ -101,6 +118,39 @@ export default function AdminMeasurementTemplates() {
       )}
 
       <div className="space-y-3 rounded-xl border bg-white p-4">
+        <div className="rounded-lg border border-amber-100 bg-amber-50 p-4">
+          <h3 className="text-sm font-semibold text-gray-900">Ready-To-Wear Standard Sizes</h3>
+          <p className="mt-1 text-xs text-gray-600">
+            Designers can only upload ready-to-wear sizes from the options you enable below.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            {READY_TO_WEAR_SIZE_OPTIONS.map((size) => {
+              const checked = readyToWearSizes.includes(size);
+              return (
+                <label key={size} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) => {
+                      setReadyToWearSizes((prev) => {
+                        if (event.target.checked) {
+                          const next = Array.from(new Set([...prev, size])) as Array<'S' | 'M' | 'L' | 'XL'>;
+                          return READY_TO_WEAR_SIZE_OPTIONS.filter((entry) => next.includes(entry));
+                        }
+                        return prev.filter((entry) => entry !== size);
+                      });
+                    }}
+                  />
+                  <span>{size}</span>
+                </label>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-xs text-gray-600">
+            Selected: {readyToWearSizes.join(', ') || 'None'} ({readyToWearSizes.length}/4)
+          </p>
+        </div>
+
         {rows.map((row, idx) => (
           <div key={idx} className="grid grid-cols-1 gap-3 rounded-lg border p-3 md:grid-cols-5">
             <input

@@ -582,6 +582,155 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
   }
 });
 
+// Create fabric-only order
+router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), async (req, res, next) => {
+  try {
+    const schema = z.object({
+      fabricId: z.string().uuid(),
+      yards: z.number().int().min(1),
+      shippingAddressId: z.string().uuid(),
+      paymentMethod: z.string(),
+      paymentIntentId: z.string().min(1).optional(),
+      shippingCostUsd: z.number().min(0).optional(),
+      shippingQuoteId: z.string().min(1).optional(),
+      shippingProviderKey: z.string().min(1).optional(),
+      shippingProviderName: z.string().min(1).optional(),
+      shippingServiceName: z.string().min(1).optional(),
+      shippingEtaMinDays: z.number().min(0).optional(),
+      shippingEtaMaxDays: z.number().min(0).optional(),
+    });
+
+    const data = schema.parse(req.body);
+    const customerId = req.user!.id;
+
+    const customerProfile = await prisma.customerProfile.findUnique({
+      where: { userId: customerId },
+      select: { id: true },
+    });
+
+    if (!customerProfile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer profile not found.',
+      });
+    }
+
+    const [fabric, address] = await Promise.all([
+      prisma.fabric.findFirst({
+        where: {
+          id: data.fabricId,
+          status: ProductStatus.APPROVED,
+          isAvailable: true,
+        },
+        include: { seller: true },
+      }),
+      prisma.address.findFirst({
+        where: { id: data.shippingAddressId, customerProfileId: customerProfile.id },
+      }),
+    ]);
+
+    if (!fabric) {
+      return res.status(404).json({ success: false, message: 'Fabric not found.' });
+    }
+    if (!address) {
+      return res.status(404).json({ success: false, message: 'Shipping address not found.' });
+    }
+    if (fabric.stockYards < data.yards) {
+      return res.status(400).json({
+        success: false,
+        message: `Not enough fabric in stock. Available: ${fabric.stockYards} yards`,
+      });
+    }
+
+    const subtotal = Number(fabric.finalPrice) * data.yards;
+    const shippingCost = Number.isFinite(Number(data.shippingCostUsd)) ? Number(data.shippingCostUsd) : 15;
+    const tax = subtotal * 0.08;
+    const total = subtotal + shippingCost + tax;
+    const isPaymentConfirmed = Boolean(data.paymentIntentId);
+    const initialStatus = isPaymentConfirmed ? OrderStatus.PAYMENT_CONFIRMED : OrderStatus.PENDING_PAYMENT;
+    const orderNumber = `AF-${Date.now().toString(36).toUpperCase()}`;
+
+    const shippingSnapshot = {
+      ...address,
+      shippingQuoteId: data.shippingQuoteId || null,
+      shippingProviderKey: data.shippingProviderKey || null,
+      shippingProviderName: data.shippingProviderName || null,
+      shippingServiceName: data.shippingServiceName || null,
+      shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
+      shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
+    };
+
+    const order = await prisma.$transaction(async (tx) => {
+      const newOrder = await tx.order.create({
+        data: {
+          orderNumber,
+          type: OrderType.FABRIC_ONLY,
+          customerId,
+          shippingAddress: shippingSnapshot,
+          subtotal,
+          shippingCost,
+          tax,
+          total,
+          paymentMethod: data.paymentMethod,
+          paymentIntentId: data.paymentIntentId,
+          paymentStatus: isPaymentConfirmed ? PaymentStatus.COMPLETED : PaymentStatus.PENDING,
+          paidAt: isPaymentConfirmed ? new Date() : null,
+          status: initialStatus,
+          fabricOrder: {
+            create: {
+              fabricId: data.fabricId,
+              sellerId: fabric.sellerId,
+              yards: data.yards,
+              pricePerYard: fabric.finalPrice,
+              totalPrice: subtotal,
+              status: 'PENDING',
+            },
+          },
+          timeline: {
+            create: {
+              status: initialStatus,
+              notes: isPaymentConfirmed
+                ? 'Fabric-only order created and payment confirmed'
+                : 'Fabric-only order created, awaiting payment',
+              updatedById: customerId,
+              updatedByRole: UserRole.CUSTOMER,
+            },
+          },
+        },
+        include: {
+          fabricOrder: true,
+        },
+      });
+
+      if (isPaymentConfirmed) {
+        await tx.fabric.update({
+          where: { id: data.fabricId },
+          data: { stockYards: { decrement: data.yards } },
+        });
+      }
+
+      return newOrder;
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Fabric order created successfully. Please complete payment.',
+      data: order,
+    });
+    void sendOrderConfirmationEmail({
+      to: req.user!.email,
+      orderNumber: order.orderNumber,
+      orderType: 'Fabric To Buy',
+      total,
+      itemCount: data.yards,
+    }).catch((error) => {
+      console.error('Failed to send fabric-only order confirmation email:', error);
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Update order status (for all parties)
 router.patch('/:id/status', authorizePermissions(Permissions.ORDERS_UPDATE_SELF, Permissions.ORDERS_UPDATE_ASSIGNED, Permissions.ORDERS_UPDATE_ALL), async (req, res, next) => {
   try {

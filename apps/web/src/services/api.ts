@@ -2557,6 +2557,9 @@ const ordersApi = {
   createReadyToWearOrder: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/orders/ready-to-wear', data),
 
+  createFabricOnlyOrder: (data: any) =>
+    apiService.post<{ success: boolean; data: any }>('/orders/fabric-only', data),
+
   updateStatus: (id: string, status: string, notes?: string) =>
     apiService.patch(`/orders/${id}/status`, { status, notes }),
 
@@ -2871,6 +2874,17 @@ const adminApi = {
 
   updateMeasurementTemplates: (templates: Array<{ name: string; unit: string; isRequired: boolean; instructions?: string }>) =>
     apiService.put('/admin/measurement-templates', { templates }),
+
+  getReadyToWearSizesSettings: () =>
+    apiService.get<{ success: boolean; data: { sizes: Array<'S' | 'M' | 'L' | 'XL'> } }>(
+      '/admin/ready-to-wear-sizes'
+    ),
+
+  updateReadyToWearSizesSettings: (sizes: Array<'S' | 'M' | 'L' | 'XL'>) =>
+    apiService.put<{ success: boolean; data: { sizes: Array<'S' | 'M' | 'L' | 'XL'> } }>(
+      '/admin/ready-to-wear-sizes',
+      { sizes }
+    ),
 
   getVendorProfileFields: (role: 'FABRIC_SELLER' | 'FASHION_DESIGNER') =>
     apiService.get<{ success: boolean; data: { role: string; fields: any[] } }>('/admin/vendor-profile/fields', {
@@ -3263,6 +3277,11 @@ const designerApi = {
 
   getReadyToWear: () =>
     readDesignerReadyToWearWithFallback<{ success: boolean; data: any[] }>(),
+
+  getReadyToWearSizeOptions: () =>
+    apiService.get<{ success: boolean; data: { sizes: string[]; standardSizes: string[] } }>(
+      '/designer/ready-to-wear-size-options'
+    ),
 
   createReadyToWear: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/designer/ready-to-wear', data),

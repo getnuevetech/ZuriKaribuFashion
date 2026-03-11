@@ -147,6 +147,45 @@ const slugify = (value: string) =>
     .slice(0, 120);
 
 const normalizeCurrencyCode = (value: unknown) => String(value || '').trim().toUpperCase();
+const READY_TO_WEAR_STANDARD_SIZES = ['S', 'M', 'L', 'XL'] as const;
+const HOMEPAGE_READY_TO_WEAR_SIZES_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZES';
+const normalizeReadyToWearSize = (value: unknown) => String(value || '').trim().toUpperCase();
+
+async function readAllowedReadyToWearSizes() {
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "HomepageSectionSetting" (
+      "id" TEXT NOT NULL,
+      "key" TEXT NOT NULL,
+      "value" TEXT NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL,
+      CONSTRAINT "HomepageSectionSetting_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "HomepageSectionSetting_key_key" ON "HomepageSectionSetting"("key")`
+  );
+  const rows = await prisma.$queryRawUnsafe<Array<{ value: string }>>(
+    `SELECT "value" FROM "HomepageSectionSetting" WHERE "key" = $1 LIMIT 1`,
+    HOMEPAGE_READY_TO_WEAR_SIZES_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) return [...READY_TO_WEAR_STANDARD_SIZES];
+  try {
+    const parsed = JSON.parse(String(row.value || '{}')) as any;
+    const list = Array.isArray(parsed?.sizes) ? parsed.sizes : [];
+    const normalizedSet = new Set(
+      list
+        .map((entry: any) => normalizeReadyToWearSize(entry))
+        .filter((entry: string) => (READY_TO_WEAR_STANDARD_SIZES as readonly string[]).includes(entry))
+    );
+    const ordered = READY_TO_WEAR_STANDARD_SIZES.filter((size) => normalizedSet.has(size));
+    if (ordered.length < 3 || ordered.length > 4) return [...READY_TO_WEAR_STANDARD_SIZES];
+    return ordered;
+  } catch {
+    return [...READY_TO_WEAR_STANDARD_SIZES];
+  }
+}
 
 async function resolveDesignerListingPrice(params: {
   userId: string;
@@ -962,6 +1001,22 @@ router.get('/ready-to-wear', async (req, res, next) => {
 });
 
 // Create ready-to-wear product
+router.get('/ready-to-wear-size-options', async (_req, res, next) => {
+  try {
+    const allowedSizes = await readAllowedReadyToWearSizes();
+    res.json({
+      success: true,
+      data: {
+        sizes: allowedSizes,
+        standardSizes: [...READY_TO_WEAR_STANDARD_SIZES],
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Create ready-to-wear product
 router.post('/ready-to-wear', async (req, res, next) => {
   try {
     const schema = z.object({
@@ -974,7 +1029,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
         size: z.string(),
         price: z.number().positive(),
         stock: z.number().min(0),
-      })),
+      })).min(3).max(4),
       images: z.array(z.object({
         url: z.string().url(),
         alt: z.string().optional(),
@@ -982,6 +1037,24 @@ router.post('/ready-to-wear', async (req, res, next) => {
     });
 
     const data = schema.parse(req.body);
+    const allowedSizes = await readAllowedReadyToWearSizes();
+    const normalizedSizes = data.sizes.map((row) => ({
+      ...row,
+      size: normalizeReadyToWearSize(row.size),
+    }));
+    const invalidSize = normalizedSizes.find((row) => !allowedSizes.includes(row.size as any));
+    if (invalidSize) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid size "${invalidSize.size}". Allowed sizes: ${allowedSizes.join(', ')}`,
+      });
+    }
+    if (new Set(normalizedSizes.map((row) => row.size)).size !== normalizedSizes.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Duplicate ready-to-wear sizes are not allowed.',
+      });
+    }
     const profile = await resolveDesignerProfile(req.user!.id);
     if (!profile) {
       return res.status(404).json({ success: false, message: 'Designer profile not found.' });
@@ -1002,7 +1075,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
         basePrice: pricing.usdPrice,
         status: ProductStatus.PENDING_REVIEW,
         sizeVariations: {
-          create: data.sizes.map((row) => ({
+          create: normalizedSizes.map((row) => ({
             ...row,
             price: Number((Number(row.price || 0) * pricing.usdPerUnit).toFixed(2)),
           })),
@@ -1059,6 +1132,8 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
             stock: z.number().min(0),
           })
         )
+        .min(3)
+        .max(4)
         .optional(),
       images: z
         .array(
@@ -1072,6 +1147,28 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         .optional(),
     });
     const data = schema.parse(req.body);
+    const allowedSizes = await readAllowedReadyToWearSizes();
+    const normalizedSizes = data.sizes
+      ? data.sizes.map((row) => ({
+          ...row,
+          size: normalizeReadyToWearSize(row.size),
+        }))
+      : undefined;
+    if (normalizedSizes) {
+      const invalidSize = normalizedSizes.find((row) => !allowedSizes.includes(row.size as any));
+      if (invalidSize) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid size "${invalidSize.size}". Allowed sizes: ${allowedSizes.join(', ')}`,
+        });
+      }
+      if (new Set(normalizedSizes.map((row) => row.size)).size !== normalizedSizes.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'Duplicate ready-to-wear sizes are not allowed.',
+        });
+      }
+    }
 
     const profile = await resolveDesignerProfile(req.user!.id);
     if (!profile) {
@@ -1125,9 +1222,9 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         ...(data.basePrice !== undefined ? { basePrice: nextBasePriceUsd } : {}),
         status: ProductStatus.PENDING_REVIEW,
       };
-      if (data.sizes) {
+      if (normalizedSizes) {
         payload.sizeVariations = {
-          create: data.sizes.map((row) => ({
+          create: normalizedSizes.map((row) => ({
             ...row,
             price:
               effectiveCurrencyCode === 'USD'

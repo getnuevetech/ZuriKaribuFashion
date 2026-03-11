@@ -40,9 +40,12 @@ export default function Cart() {
             <ShoppingBag className="w-12 h-12 text-gray-400" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Your Cart is Empty</h2>
-          <p className="text-gray-600 mb-6">Your shopping bag is empty. Start with Ready-to-Wear or Custom-to-Wear.</p>
+          <p className="text-gray-600 mb-6">Your shopping bag is empty. Start with Ready-to-Wear, Fabrics, or Custom-to-Wear.</p>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Button onClick={() => navigate('/ready-to-wear')}>Shop Ready To Wear</Button>
+            <Button variant="outline" onClick={() => navigate('/fabrics')}>
+              Shop Fabrics
+            </Button>
             <Button variant="outline" onClick={() => navigate('/designs')}>
               Shop Custom To Wear
             </Button>
@@ -85,6 +88,12 @@ export default function Cart() {
                         alt={item.productName}
                         className="w-24 h-32 object-cover rounded-lg"
                       />
+                    ) : item.kind === 'FABRIC_ONLY' ? (
+                      <img
+                        src={item.fabricImage}
+                        alt={item.fabricName}
+                        className="w-24 h-32 object-cover rounded-lg"
+                      />
                     ) : (
                       <>
                         <img
@@ -106,9 +115,15 @@ export default function Cart() {
                     <div className="flex justify-between items-start">
                       <div>
                         <h3 className="font-semibold text-gray-900">
-                          {item.kind === 'READY_TO_WEAR' ? item.productName : item.designName}
+                          {item.kind === 'READY_TO_WEAR'
+                            ? item.productName
+                            : item.kind === 'FABRIC_ONLY'
+                              ? item.fabricName
+                              : item.designName}
                         </h3>
-                        <p className="text-sm text-gray-500">by {item.designerName}</p>
+                        <p className="text-sm text-gray-500">
+                          by {item.kind === 'FABRIC_ONLY' ? item.sellerName : item.designerName}
+                        </p>
                       </div>
                       <button
                         onClick={() => removeItem(index)}
@@ -129,6 +144,11 @@ export default function Cart() {
                               <span className="text-gray-600">Color {item.selectedColor}</span>
                             </>
                           ) : null}
+                        </div>
+                      ) : item.kind === 'FABRIC_ONLY' ? (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Badge variant="outline" className="text-xs">Fabric To Buy</Badge>
+                          <span className="text-gray-600">{item.yards} yards</span>
                         </div>
                       ) : (
                         <>
@@ -181,6 +201,30 @@ export default function Cart() {
                               <Plus className="w-4 h-4" />
                             </button>
                           </>
+                        ) : item.kind === 'FABRIC_ONLY' ? (
+                          <>
+                            <button
+                              onClick={() =>
+                                updateItem(index, {
+                                  yards: Math.max(1, item.yards - 1),
+                                } as any)
+                              }
+                              className="w-8 h-8 flex items-center justify-center border rounded-lg hover:bg-gray-50"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <span className="font-medium w-12 text-center">{item.yards}yd</span>
+                            <button
+                              onClick={() =>
+                                updateItem(index, {
+                                  yards: item.yards + 1,
+                                } as any)
+                              }
+                              className="w-8 h-8 flex items-center justify-center border rounded-lg hover:bg-gray-50"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </>
                         ) : (
                           <>
                             <button
@@ -212,12 +256,18 @@ export default function Cart() {
                           {formatFromUsd(
                             item.kind === 'READY_TO_WEAR'
                               ? item.unitPrice * item.quantity
+                              : item.kind === 'FABRIC_ONLY'
+                                ? item.pricePerYard * item.yards
                               : item.totalPrice
                           )}
                         </p>
                         {item.kind === 'READY_TO_WEAR' ? (
                           <p className="text-xs text-gray-500">
                             {formatFromUsd(item.unitPrice)} × {item.quantity}
+                          </p>
+                        ) : item.kind === 'FABRIC_ONLY' ? (
+                          <p className="text-xs text-gray-500">
+                            {formatFromUsd(item.pricePerYard)} × {item.yards} yards
                           </p>
                         ) : (
                           <p className="text-xs text-gray-500">

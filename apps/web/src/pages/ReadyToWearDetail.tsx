@@ -208,6 +208,7 @@ export default function ReadyToWearDetail() {
         ? 'Added to cart. You can proceed to checkout.'
         : 'Added to cart. Sign in during checkout to complete your order.'
     );
+    navigate('/cart');
   };
 
   const handleToggleLike = async () => {
