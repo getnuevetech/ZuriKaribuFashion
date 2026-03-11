@@ -2494,6 +2494,53 @@ const productsApi = {
 
   getFeatured: () =>
     apiService.get<{ success: boolean; data: any }>('/products/featured'),
+
+  getProductLikes: (productType: 'design' | 'fabric' | 'ready-to-wear', id: string) =>
+    apiService.get<{ success: boolean; data: { count: number; likedByMe: boolean } }>(
+      `/products/${productType}/${id}/likes`
+    ),
+
+  toggleProductLike: (productType: 'design' | 'fabric' | 'ready-to-wear', id: string) =>
+    apiService.post<{ success: boolean; data: { count: number; likedByMe: boolean } }>(
+      `/products/${productType}/${id}/likes/toggle`
+    ),
+
+  getProductReviews: (productType: 'design' | 'fabric' | 'ready-to-wear', id: string, limit = 12) =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        reviews: Array<{
+          id: string;
+          rating: number;
+          title?: string | null;
+          comment: string;
+          createdAt: string;
+          customer?: { id: string; name: string } | null;
+        }>;
+        summary: { count: number; averageRating: number };
+      };
+    }>(`/products/${productType}/${id}/reviews`, { params: { limit } }),
+
+  createProductReview: (
+    productType: 'design' | 'fabric' | 'ready-to-wear',
+    id: string,
+    data: { rating: number; title?: string; comment: string }
+  ) =>
+    apiService.post<{ success: boolean; data: any }>(`/products/${productType}/${id}/reviews`, data),
+
+  getDiscoverByCountry: (productType: 'design' | 'fabric' | 'ready-to-wear', id: string, limit = 12) =>
+    apiService.get<{
+      success: boolean;
+      data: Array<{
+        id: string;
+        name: string;
+        image: string;
+        priceUsd: number;
+        country: string;
+        ownerName: string;
+        productType: 'DESIGN' | 'FABRIC' | 'READY_TO_WEAR';
+      }>;
+    }>(`/products/${productType}/${id}/discover`, { params: { limit } }),
 };
 
 // Orders API

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   Heart, 
   Share2, 
@@ -17,6 +17,7 @@ import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
 import { useCurrencyStore } from '../store/currencyStore';
+import { resolveCountryCode } from '../data/locationOptions';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 
@@ -59,6 +60,25 @@ interface Design {
   orderCount: number;
 }
 
+interface ProductReview {
+  id: string;
+  rating: number;
+  title?: string | null;
+  comment: string;
+  createdAt: string;
+  customer?: { id: string; name: string } | null;
+}
+
+interface DiscoverProduct {
+  id: string;
+  name: string;
+  image: string;
+  priceUsd: number;
+  country: string;
+  ownerName: string;
+  productType: 'DESIGN' | 'FABRIC' | 'READY_TO_WEAR';
+}
+
 export default function DesignDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -74,10 +94,56 @@ export default function DesignDetail() {
   const [measurements, setMeasurements] = useState<Record<string, number>>({});
   const [showMeasurementModal, setShowMeasurementModal] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [reviews, setReviews] = useState<ProductReview[]>([]);
+  const [reviewAverage, setReviewAverage] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [discoverProducts, setDiscoverProducts] = useState<DiscoverProduct[]>([]);
+  const [cartMessage, setCartMessage] = useState('');
   const [activeTab, setActiveTab] = useState<'details' | 'fabrics' | 'measurements'>('details');
 
   useEffect(() => {
     fetchDesign();
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    Promise.allSettled([
+      api.products.getProductLikes('design', id),
+      api.products.getProductReviews('design', id, 12),
+      api.products.getDiscoverByCountry('design', id, 12),
+    ]).then(([likesResult, reviewsResult, discoverResult]) => {
+      if (cancelled) return;
+      if (likesResult.status === 'fulfilled' && likesResult.value.success) {
+        const liked = Boolean(likesResult.value.data?.likedByMe);
+        setIsWishlisted(liked);
+        setLikeCount(Number(likesResult.value.data?.count || 0));
+      } else {
+        setIsWishlisted(false);
+        setLikeCount(0);
+      }
+      if (reviewsResult.status === 'fulfilled' && reviewsResult.value.success) {
+        setReviews(Array.isArray(reviewsResult.value.data?.reviews) ? reviewsResult.value.data.reviews : []);
+        setReviewAverage(Number(reviewsResult.value.data?.summary?.averageRating || 0));
+        setReviewCount(Number(reviewsResult.value.data?.summary?.count || 0));
+      } else {
+        setReviews([]);
+        setReviewAverage(0);
+        setReviewCount(0);
+      }
+      if (discoverResult.status === 'fulfilled' && discoverResult.value.success) {
+        setDiscoverProducts(Array.isArray(discoverResult.value.data) ? discoverResult.value.data : []);
+      } else {
+        setDiscoverProducts([]);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   const fetchDesign = async () => {
@@ -105,11 +171,6 @@ export default function DesignDetail() {
       setActiveTab('fabrics');
       return;
     }
-    
-    if (!user) {
-      navigate('/login');
-      return;
-    }
 
     const fabric = design?.suitableFabrics.find(sf => sf.fabric.id === selectedFabric);
     if (!fabric || !design) return;
@@ -131,6 +192,7 @@ export default function DesignDetail() {
     };
 
     addItem(cartItem);
+    setCartMessage('Added to cart. Continue to checkout when ready.');
     navigate('/cart');
   };
 
@@ -144,6 +206,53 @@ export default function DesignDetail() {
       return;
     }
     navigate(`/try-on/${id}?fabric=${selectedFabric}`);
+  };
+
+  const handleToggleLike = async () => {
+    if (!id) return;
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    try {
+      const response = await api.products.toggleProductLike('design', id);
+      if (response.success) {
+        const liked = Boolean(response.data?.likedByMe);
+        setIsWishlisted(liked);
+        setLikeCount(Number(response.data?.count || 0));
+      }
+    } catch (err) {
+      console.error('Failed to toggle like:', err);
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!id) return;
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    if (!reviewComment.trim()) return;
+    try {
+      setReviewSubmitting(true);
+      const response = await api.products.createProductReview('design', id, {
+        rating: reviewRating,
+        comment: reviewComment.trim(),
+      });
+      if (response.success) {
+        setReviewComment('');
+        const nextReviews = await api.products.getProductReviews('design', id, 12);
+        if (nextReviews.success) {
+          setReviews(Array.isArray(nextReviews.data?.reviews) ? nextReviews.data.reviews : []);
+          setReviewAverage(Number(nextReviews.data?.summary?.averageRating || 0));
+          setReviewCount(Number(nextReviews.data?.summary?.count || 0));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to submit review:', err);
+    } finally {
+      setReviewSubmitting(false);
+    }
   };
 
   const calculateTotal = () => {
@@ -184,6 +293,16 @@ export default function DesignDetail() {
       </div>
     );
   }
+
+  const designerFlagCode = resolveCountryCode(design.designer?.country);
+  const storefrontPath = design.designer?.id
+    ? `/store/designer/${design.designer.id}/${encodeURIComponent(
+        String(design.designer.businessName || 'designer')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '') || 'designer'
+      )}`
+    : null;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -227,11 +346,14 @@ export default function DesignDetail() {
                 </>
               )}
               <button
-                onClick={() => setIsWishlisted(!isWishlisted)}
+                onClick={handleToggleLike}
                 className="absolute top-4 right-4 w-10 h-10 bg-white bg-opacity-90 rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-colors"
               >
                 <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
               </button>
+              <div className="absolute top-4 left-4 rounded-full bg-black/65 px-2 py-1 text-xs font-medium text-white">
+                {likeCount} likes
+              </div>
             </div>
             
             {/* Thumbnails */}
@@ -268,8 +390,8 @@ export default function DesignDetail() {
               <div className="flex items-center gap-4 text-sm">
                 <div className="flex items-center gap-1">
                   <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                  <span className="font-medium">{design.rating.toFixed(1)}</span>
-                  <span className="text-gray-500">({design.reviewCount} reviews)</span>
+                  <span className="font-medium">{reviewAverage > 0 ? reviewAverage.toFixed(1) : Number(design.rating || 0).toFixed(1)}</span>
+                  <span className="text-gray-500">({reviewCount || Number(design.reviewCount || 0)} reviews)</span>
                 </div>
                 <span className="text-gray-300">|</span>
                 <span className="text-gray-600">{design.orderCount} orders</span>
@@ -278,10 +400,18 @@ export default function DesignDetail() {
 
             {/* Designer Info */}
             <div className="flex items-center gap-4 p-4 bg-white rounded-xl border">
-              <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center">
-                <span className="text-xl font-bold text-amber-700">
-                  {design.designer.businessName.charAt(0)}
-                </span>
+              <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center overflow-hidden">
+                {designerFlagCode ? (
+                  <img
+                    src={`https://flagcdn.com/w80/${designerFlagCode.toLowerCase()}.png`}
+                    alt={`${design.designer.country} flag`}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-xl font-bold text-amber-700">
+                    {design.designer.businessName.charAt(0)}
+                  </span>
+                )}
               </div>
               <div className="flex-1">
                 <h3 className="font-semibold text-gray-900">{design.designer.businessName}</h3>
@@ -290,7 +420,13 @@ export default function DesignDetail() {
                   {design.designer.city}, {design.designer.country}
                 </div>
               </div>
-              <Button variant="outline" size="sm">View Profile</Button>
+              {storefrontPath ? (
+                <Link to={storefrontPath}>
+                  <Button variant="outline" size="sm">View Storefront</Button>
+                </Link>
+              ) : (
+                <Button variant="outline" size="sm">View Profile</Button>
+              )}
             </div>
 
             {/* Price */}
@@ -481,8 +617,100 @@ export default function DesignDetail() {
                 Please select a fabric to continue
               </p>
             )}
+            {cartMessage ? (
+              <p className="text-sm text-emerald-700 text-center">{cartMessage}</p>
+            ) : null}
           </div>
         </div>
+      </div>
+
+      <div className="mx-auto mt-10 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <section className="rounded-xl border bg-white p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-gray-900">Customer Reviews</h2>
+            <p className="text-sm text-gray-500">
+              {reviewCount} reviews • {reviewAverage > 0 ? reviewAverage.toFixed(1) : '0.0'} avg
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Your Rating</label>
+              <select
+                value={reviewRating}
+                onChange={(event) => setReviewRating(Number(event.target.value))}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+              >
+                {[5, 4, 3, 2, 1].map((value) => (
+                  <option key={value} value={value}>
+                    {value} Star{value > 1 ? 's' : ''}
+                  </option>
+                ))}
+              </select>
+              <textarea
+                value={reviewComment}
+                onChange={(event) => setReviewComment(event.target.value)}
+                className="h-24 w-full rounded-lg border px-3 py-2 text-sm"
+                placeholder="Share your experience with this design..."
+              />
+              <Button onClick={handleSubmitReview} disabled={reviewSubmitting || !reviewComment.trim()} className="w-full">
+                {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {reviews.length === 0 ? (
+                <p className="text-sm text-gray-500">No reviews yet. Be the first to review this product.</p>
+              ) : (
+                reviews.map((review) => (
+                  <div key={review.id} className="rounded-lg border p-3">
+                    <div className="mb-1 flex items-center justify-between">
+                      <p className="text-sm font-semibold text-gray-900">{review.customer?.name || 'Customer'}</p>
+                      <p className="text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <p className="text-xs font-medium text-amber-600">{'★'.repeat(Math.max(1, Math.min(5, Number(review.rating || 0))))}</p>
+                    <p className="mt-1 text-sm text-gray-700">{review.comment}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-8 pb-4">
+          <h2 className="mb-4 text-xl font-semibold text-gray-900">Discover More by Country</h2>
+          {discoverProducts.length === 0 ? (
+            <p className="text-sm text-gray-500">No recommendations available yet.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+              {discoverProducts.map((entry) => {
+                const href =
+                  entry.productType === 'DESIGN'
+                    ? `/designs/${entry.id}`
+                    : entry.productType === 'FABRIC'
+                      ? `/fabrics/${entry.id}`
+                      : `/ready-to-wear/${entry.id}`;
+                return (
+                  <Link key={`${entry.productType}-${entry.id}`} to={href} className="group overflow-hidden rounded-lg border bg-white">
+                    <div className="relative aspect-[3/4] overflow-hidden bg-gray-100">
+                      <img
+                        src={entry.image || '/images/placeholder.jpg'}
+                        alt={entry.name}
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      <div className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-0.5 text-xs text-white">
+                        {entry.country}
+                      </div>
+                    </div>
+                    <div className="p-3">
+                      <p className="line-clamp-1 text-sm font-semibold text-gray-900">{entry.name}</p>
+                      <p className="line-clamp-1 text-xs text-gray-500">{entry.ownerName}</p>
+                      <p className="mt-1 text-sm font-semibold text-amber-700">{formatFromUsd(Number(entry.priceUsd || 0))}</p>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
 
       {/* Measurement Guide Modal */}

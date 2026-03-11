@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ShoppingCart, Heart, Star, MapPin, Truck, Check, Loader2 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { api } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import { useCurrencyStore } from '../store/currencyStore';
+import { resolveCountryCode } from '../data/locationOptions';
 
 interface ReadyToWearProduct {
   id: string;
@@ -31,20 +32,28 @@ interface ReadyToWearProduct {
   inStock?: boolean;
 }
 
-const countryFlags: Record<string, string> = {
-  'Ghana': '🇬🇭',
-  'Nigeria': '🇳🇬',
-  'Kenya': '🇰🇪',
-  'Senegal': '🇸🇳',
-  'Ethiopia': '🇪🇹',
-  'Morocco': '🇲🇦',
-  'Mali': '🇲🇱',
-  'South Africa': '🇿🇦',
-  'Tanzania': '🇹🇿',
-};
+interface ProductReview {
+  id: string;
+  rating: number;
+  title?: string | null;
+  comment: string;
+  createdAt: string;
+  customer?: { id: string; name: string } | null;
+}
+
+interface DiscoverProduct {
+  id: string;
+  name: string;
+  image: string;
+  priceUsd: number;
+  country: string;
+  ownerName: string;
+  productType: 'DESIGN' | 'FABRIC' | 'READY_TO_WEAR';
+}
 
 export default function ReadyToWearDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const { formatFromUsd } = useCurrencyStore();
   const { addReadyToWearItem } = useCartStore();
@@ -56,6 +65,14 @@ export default function ReadyToWearDetail() {
   const [selectedColor, setSelectedColor] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [reviews, setReviews] = useState<ProductReview[]>([]);
+  const [reviewAverage, setReviewAverage] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [discoverProducts, setDiscoverProducts] = useState<DiscoverProduct[]>([]);
   const [addToCartMessage, setAddToCartMessage] = useState('');
 
   useEffect(() => {
@@ -90,6 +107,44 @@ export default function ReadyToWearDetail() {
     fetchProduct();
   }, [id]);
 
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    Promise.allSettled([
+      api.products.getProductLikes('ready-to-wear', id),
+      api.products.getProductReviews('ready-to-wear', id, 12),
+      api.products.getDiscoverByCountry('ready-to-wear', id, 12),
+    ]).then(([likesResult, reviewsResult, discoverResult]) => {
+      if (cancelled) return;
+      if (likesResult.status === 'fulfilled' && likesResult.value.success) {
+        const count = Number(likesResult.value.data?.count || 0);
+        const liked = Boolean(likesResult.value.data?.likedByMe);
+        setLikeCount(count);
+        setIsWishlisted(liked);
+      } else {
+        setLikeCount(0);
+        setIsWishlisted(false);
+      }
+      if (reviewsResult.status === 'fulfilled' && reviewsResult.value.success) {
+        setReviews(Array.isArray(reviewsResult.value.data?.reviews) ? reviewsResult.value.data.reviews : []);
+        setReviewAverage(Number(reviewsResult.value.data?.summary?.averageRating || 0));
+        setReviewCount(Number(reviewsResult.value.data?.summary?.count || 0));
+      } else {
+        setReviews([]);
+        setReviewAverage(0);
+        setReviewCount(0);
+      }
+      if (discoverResult.status === 'fulfilled' && discoverResult.value.success) {
+        setDiscoverProducts(Array.isArray(discoverResult.value.data) ? discoverResult.value.data : []);
+      } else {
+        setDiscoverProducts([]);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -111,7 +166,15 @@ export default function ReadyToWearDetail() {
     );
   }
 
-  const flag = countryFlags[product.designer?.country] || '🌍';
+  const flagCode = resolveCountryCode(product.designer?.country);
+  const storefrontPath = product.designer?.id
+    ? `/store/designer/${product.designer.id}/${encodeURIComponent(
+        String(product.designer.businessName || 'designer')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '') || 'designer'
+      )}`
+    : null;
   const matchingVariation = (product.sizeVariations || []).find((variation) => variation.size === selectedSize);
   const selectedUnitPrice = Number(matchingVariation?.price || product.price || 0);
   const hasDiscount = product.originalPrice && product.originalPrice > selectedUnitPrice;
@@ -147,6 +210,53 @@ export default function ReadyToWearDetail() {
     );
   };
 
+  const handleToggleLike = async () => {
+    if (!id) return;
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    try {
+      const response = await api.products.toggleProductLike('ready-to-wear', id);
+      if (response.success) {
+        const liked = Boolean(response.data?.likedByMe);
+        setIsWishlisted(liked);
+        setLikeCount(Number(response.data?.count || 0));
+      }
+    } catch (err) {
+      console.error('Failed to toggle like:', err);
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!id) return;
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    if (!reviewComment.trim()) return;
+    try {
+      setReviewSubmitting(true);
+      const response = await api.products.createProductReview('ready-to-wear', id, {
+        rating: reviewRating,
+        comment: reviewComment.trim(),
+      });
+      if (response.success) {
+        setReviewComment('');
+        const nextReviews = await api.products.getProductReviews('ready-to-wear', id, 12);
+        if (nextReviews.success) {
+          setReviews(Array.isArray(nextReviews.data?.reviews) ? nextReviews.data.reviews : []);
+          setReviewAverage(Number(nextReviews.data?.summary?.averageRating || 0));
+          setReviewCount(Number(nextReviews.data?.summary?.count || 0));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to submit review:', err);
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 pb-28 md:pb-8">
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
@@ -171,8 +281,15 @@ export default function ReadyToWearDetail() {
                 alt={product.name}
                 className="w-full h-full object-cover"
               />
-              <div className="absolute bottom-4 right-4 w-12 h-12 flex items-center justify-center bg-white bg-opacity-90">
-                <span className="text-3xl">{flag}</span>
+              <div className="absolute bottom-4 right-4 z-10">
+                {flagCode ? (
+                  <img
+                    src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
+                    alt={`${product.designer?.country || 'Country'} flag`}
+                    className="h-8 w-11 rounded-sm object-cover shadow-lg"
+                    loading="lazy"
+                  />
+                ) : null}
               </div>
               {hasDiscount && (
                 <div className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium">
@@ -210,8 +327,8 @@ export default function ReadyToWearDetail() {
               <div className="flex items-center gap-4 mt-3">
                 <div className="flex items-center gap-1">
                   <Star className="w-5 h-5 text-yellow-400 fill-current" />
-                  <span className="font-medium">{product.designer?.rating || 0}</span>
-                  <span className="text-gray-500">({product.designer?.reviewCount || 0} reviews)</span>
+                  <span className="font-medium">{reviewAverage > 0 ? reviewAverage.toFixed(1) : Number(product.designer?.rating || 0).toFixed(1)}</span>
+                  <span className="text-gray-500">({reviewCount || Number(product.designer?.reviewCount || 0)} reviews)</span>
                 </div>
                 {product.inStock && (
                   <span className="flex items-center gap-1 text-green-600 text-sm">
@@ -318,10 +435,11 @@ export default function ReadyToWearDetail() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => setIsWishlisted(!isWishlisted)}
-                  className={`px-6 ${isWishlisted ? 'text-red-500 border-red-500' : ''}`}
+                  onClick={handleToggleLike}
+                  className={`px-4 ${isWishlisted ? 'text-red-500 border-red-500' : ''}`}
                 >
                   <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-current' : ''}`} />
+                  <span className="ml-2 text-sm">{likeCount}</span>
                 </Button>
               </div>
               {addToCartMessage ? (
@@ -338,13 +456,24 @@ export default function ReadyToWearDetail() {
             <div className="border-t pt-6">
               <h3 className="font-semibold mb-3">Designed by</h3>
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-coral-100 rounded-full flex items-center justify-center">
-                  <span className="text-2xl">{flag}</span>
+                <div className="w-12 h-12 bg-coral-100 rounded-full flex items-center justify-center overflow-hidden">
+                  {flagCode ? (
+                    <img
+                      src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
+                      alt={`${product.designer?.country || 'Country'} flag`}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : null}
                 </div>
                 <div>
                   <p className="font-medium">{product.designer?.businessName || 'Unknown Designer'}</p>
                   <p className="text-sm text-gray-500">{product.designer?.country || 'Unknown'}</p>
                 </div>
+                {storefrontPath ? (
+                  <Link to={storefrontPath} className="ml-auto text-sm font-medium text-coral-600 hover:underline">
+                    Visit Storefront
+                  </Link>
+                ) : null}
               </div>
             </div>
 
@@ -374,6 +503,93 @@ export default function ReadyToWearDetail() {
             </div>
           </div>
         </div>
+
+        <section className="mt-10 rounded-xl border bg-white p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-gray-900">Customer Reviews</h2>
+            <p className="text-sm text-gray-500">
+              {reviewCount} reviews • {reviewAverage > 0 ? reviewAverage.toFixed(1) : '0.0'} avg
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Your Rating</label>
+              <select
+                value={reviewRating}
+                onChange={(event) => setReviewRating(Number(event.target.value))}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+              >
+                {[5, 4, 3, 2, 1].map((value) => (
+                  <option key={value} value={value}>
+                    {value} Star{value > 1 ? 's' : ''}
+                  </option>
+                ))}
+              </select>
+              <textarea
+                value={reviewComment}
+                onChange={(event) => setReviewComment(event.target.value)}
+                className="h-24 w-full rounded-lg border px-3 py-2 text-sm"
+                placeholder="Share your experience with this product..."
+              />
+              <Button onClick={handleSubmitReview} disabled={reviewSubmitting || !reviewComment.trim()} className="w-full">
+                {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {reviews.length === 0 ? (
+                <p className="text-sm text-gray-500">No reviews yet. Be the first to review this product.</p>
+              ) : (
+                reviews.map((review) => (
+                  <div key={review.id} className="rounded-lg border p-3">
+                    <div className="mb-1 flex items-center justify-between">
+                      <p className="text-sm font-semibold text-gray-900">{review.customer?.name || 'Customer'}</p>
+                      <p className="text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <p className="text-xs font-medium text-amber-600">{'★'.repeat(Math.max(1, Math.min(5, Number(review.rating || 0))))}</p>
+                    <p className="mt-1 text-sm text-gray-700">{review.comment}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-8">
+          <h2 className="mb-4 text-xl font-semibold text-gray-900">Discover More by Country</h2>
+          {discoverProducts.length === 0 ? (
+            <p className="text-sm text-gray-500">No recommendations available yet.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+              {discoverProducts.map((entry) => {
+                const href =
+                  entry.productType === 'DESIGN'
+                    ? `/designs/${entry.id}`
+                    : entry.productType === 'FABRIC'
+                      ? `/fabrics/${entry.id}`
+                      : `/ready-to-wear/${entry.id}`;
+                return (
+                  <Link key={`${entry.productType}-${entry.id}`} to={href} className="group overflow-hidden rounded-lg border bg-white">
+                    <div className="relative aspect-[3/4] overflow-hidden bg-gray-100">
+                      <img
+                        src={entry.image || '/images/placeholder.jpg'}
+                        alt={entry.name}
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      <div className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-0.5 text-xs text-white">
+                        {entry.country}
+                      </div>
+                    </div>
+                    <div className="p-3">
+                      <p className="line-clamp-1 text-sm font-semibold text-gray-900">{entry.name}</p>
+                      <p className="line-clamp-1 text-xs text-gray-500">{entry.ownerName}</p>
+                      <p className="mt-1 text-sm font-semibold text-coral-600">{formatFromUsd(Number(entry.priceUsd || 0))}</p>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
       <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 p-3 shadow-lg backdrop-blur md:hidden">
         <div className="mx-auto flex max-w-7xl items-center gap-3">
