@@ -142,6 +142,19 @@ interface FabricMaterialOption {
   name: string;
 }
 
+interface FabricCountryAccessRequest {
+  id: string;
+  designerUserId: string;
+  requestedCountries: string[];
+  reason?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reviewNotes?: string;
+  reviewedByName?: string;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string;
+}
+
 interface DesignFormState {
   name: string;
   description: string;
@@ -274,6 +287,15 @@ export default function DesignerDashboard() {
   const [designSelectedFabricOptionId, setDesignSelectedFabricOptionId] = useState('');
   const [designFabricOptionsLoading, setDesignFabricOptionsLoading] = useState(false);
   const [designFabricCache, setDesignFabricCache] = useState<Record<string, FabricOption>>({});
+  const [fabricAccessHomeCountry, setFabricAccessHomeCountry] = useState('');
+  const [fabricAccessAllowedCountries, setFabricAccessAllowedCountries] = useState<string[]>([]);
+  const [fabricAccessAvailableCountries, setFabricAccessAvailableCountries] = useState<string[]>([]);
+  const [fabricAccessRequests, setFabricAccessRequests] = useState<FabricCountryAccessRequest[]>([]);
+  const [fabricAccessRequestCountries, setFabricAccessRequestCountries] = useState<string[]>([]);
+  const [fabricAccessRequestReason, setFabricAccessRequestReason] = useState('');
+  const [fabricAccessLoading, setFabricAccessLoading] = useState(false);
+  const [fabricAccessSubmitting, setFabricAccessSubmitting] = useState(false);
+  const [fabricAccessMessage, setFabricAccessMessage] = useState<string | null>(null);
   const [designUploadingImage, setDesignUploadingImage] = useState(false);
   const [designImageUrlInput, setDesignImageUrlInput] = useState('');
   const [loading, setLoading] = useState(true);
@@ -1113,6 +1135,84 @@ export default function DesignerDashboard() {
     }
   };
 
+  const loadFabricCountryAccessSummary = async () => {
+    try {
+      setFabricAccessLoading(true);
+      const response = await api.designer.getFabricCountryAccessSummary();
+      if (!response.success) return;
+      const homeCountry = String(response.data?.homeCountry || '').trim();
+      const allowedCountries = Array.isArray(response.data?.allowedCountries)
+        ? response.data.allowedCountries.map((entry: any) => String(entry || '').trim()).filter(Boolean)
+        : [];
+      const availableCountries = Array.isArray(response.data?.availableCountries)
+        ? response.data.availableCountries.map((entry: any) => String(entry || '').trim()).filter(Boolean)
+        : [];
+      const requests = Array.isArray(response.data?.requests)
+        ? response.data.requests
+            .map((entry: any) => ({
+              id: String(entry?.id || ''),
+              designerUserId: String(entry?.designerUserId || ''),
+              requestedCountries: Array.isArray(entry?.requestedCountries)
+                ? entry.requestedCountries.map((country: any) => String(country || '').trim()).filter(Boolean)
+                : [],
+              reason: String(entry?.reason || '').trim() || undefined,
+              status: String(entry?.status || 'PENDING').toUpperCase() as 'PENDING' | 'APPROVED' | 'REJECTED',
+              reviewNotes: String(entry?.reviewNotes || '').trim() || undefined,
+              reviewedByName: String(entry?.reviewedByName || '').trim() || undefined,
+              createdAt: String(entry?.createdAt || ''),
+              updatedAt: String(entry?.updatedAt || ''),
+              resolvedAt: String(entry?.resolvedAt || '').trim() || undefined,
+            }))
+            .filter((entry: any) => entry.id && entry.designerUserId)
+        : [];
+      setFabricAccessHomeCountry(homeCountry);
+      setFabricAccessAllowedCountries(allowedCountries);
+      setFabricAccessAvailableCountries(availableCountries);
+      setFabricAccessRequests(requests);
+      if (!designFabricCountryFilter && allowedCountries.length > 0) {
+        setDesignFabricCountryFilter(allowedCountries[0]);
+      }
+    } catch (error) {
+      console.error('Failed to load fabric country access summary:', error);
+    } finally {
+      setFabricAccessLoading(false);
+    }
+  };
+
+  const submitFabricCountryAccessRequest = async () => {
+    const selectedCountries = (fabricAccessRequestCountries || []).map((entry) => String(entry || '').trim()).filter(Boolean);
+    if (selectedCountries.length === 0) {
+      setFabricAccessMessage('Select at least one country to request.');
+      return;
+    }
+    try {
+      setFabricAccessSubmitting(true);
+      setFabricAccessMessage(null);
+      const response = await api.designer.createFabricCountryAccessRequest({
+        requestedCountries: selectedCountries,
+        reason: fabricAccessRequestReason.trim() || undefined,
+      });
+      if (!response.success) {
+        setFabricAccessMessage(response.message || 'Unable to submit request right now.');
+        return;
+      }
+      setFabricAccessRequestCountries([]);
+      setFabricAccessRequestReason('');
+      setFabricAccessMessage(response.message || 'Country access request submitted.');
+      await loadFabricCountryAccessSummary();
+    } catch (error: any) {
+      const issueText = Array.isArray(error?.response?.data?.issues)
+        ? error.response.data.issues
+            .map((issue: any) => String(issue?.message || '').trim())
+            .filter(Boolean)
+            .join(', ')
+        : '';
+      setFabricAccessMessage(issueText || error?.response?.data?.message || error?.message || 'Failed to submit request.');
+    } finally {
+      setFabricAccessSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     if (!showDesignModal) return;
     const timer = setTimeout(() => {
@@ -1120,6 +1220,11 @@ export default function DesignerDashboard() {
     }, 200);
     return () => clearTimeout(timer);
   }, [showDesignModal, designFabricCountryFilter, designFabricMaterialFilter, designFabricSearch]);
+
+  useEffect(() => {
+    if (!showDesignModal) return;
+    void loadFabricCountryAccessSummary();
+  }, [showDesignModal]);
 
   useEffect(() => {
     if (!showDesignModal) return;
@@ -2445,6 +2550,65 @@ export default function DesignerDashboard() {
                   Suitable Fabrics (country → material → fabric name)
                 </label>
                 <div className="rounded-lg border p-3 space-y-3">
+                  <div className="rounded border border-amber-100 bg-amber-50 p-3">
+                    <p className="text-xs text-amber-900">
+                      Home country: <span className="font-semibold">{fabricAccessHomeCountry || 'Not set'}</span>
+                    </p>
+                    <p className="mt-1 text-xs text-amber-800">
+                      Allowed countries: {fabricAccessAllowedCountries.join(', ') || 'None'}
+                    </p>
+                    {fabricAccessMessage ? (
+                      <p className="mt-1 text-xs text-amber-900">{fabricAccessMessage}</p>
+                    ) : null}
+                    <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto]">
+                      <select
+                        multiple
+                        value={fabricAccessRequestCountries}
+                        onChange={(event) =>
+                          setFabricAccessRequestCountries(
+                            Array.from(event.target.selectedOptions).map((option) => option.value)
+                          )
+                        }
+                        className="h-20 w-full rounded border px-2 py-1 text-xs"
+                        disabled={fabricAccessLoading}
+                      >
+                        {fabricAccessAvailableCountries
+                          .filter((country) => !fabricAccessAllowedCountries.includes(country))
+                          .map((country) => (
+                            <option key={`request-${country}`} value={country}>
+                              {country}
+                            </option>
+                          ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={fabricAccessRequestReason}
+                        onChange={(event) => setFabricAccessRequestReason(event.target.value)}
+                        placeholder="Reason (optional)"
+                        className="rounded border px-2 py-1 text-xs"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={submitFabricCountryAccessRequest}
+                        disabled={fabricAccessSubmitting || fabricAccessLoading}
+                      >
+                        {fabricAccessSubmitting ? 'Submitting...' : 'Request Access'}
+                      </Button>
+                    </div>
+                    {fabricAccessRequests.length > 0 ? (
+                      <div className="mt-2 space-y-1">
+                        {fabricAccessRequests.slice(0, 3).map((request) => (
+                          <p key={request.id} className="text-[11px] text-amber-900">
+                            {request.status}: {request.requestedCountries.join(', ')}
+                            {request.reviewNotes ? ` (${request.reviewNotes})` : ''}
+                          </p>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-gray-600">Fabric Seller Country</label>

@@ -51,6 +51,23 @@ interface DesignerFabricCountryAccessRow {
   allowedCountries: string[];
 }
 
+interface DesignerFabricCountryAccessRequestRow {
+  id: string;
+  designerUserId: string;
+  requestedCountries: string[];
+  reason?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reviewNotes?: string;
+  reviewedByUserId?: string;
+  reviewedByName?: string;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string;
+  businessName?: string;
+  email?: string;
+  homeCountry?: string;
+}
+
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -93,6 +110,9 @@ export default function AdminProducts() {
   const [designerFabricAccessLoading, setDesignerFabricAccessLoading] = useState(false);
   const [designerFabricAccessSavingUserId, setDesignerFabricAccessSavingUserId] = useState<string | null>(null);
   const [designerFabricAccessMessage, setDesignerFabricAccessMessage] = useState('');
+  const [designerFabricAccessRequests, setDesignerFabricAccessRequests] = useState<DesignerFabricCountryAccessRequestRow[]>([]);
+  const [designerFabricAccessRequestsLoading, setDesignerFabricAccessRequestsLoading] = useState(false);
+  const [designerFabricAccessReviewingRequestId, setDesignerFabricAccessReviewingRequestId] = useState<string | null>(null);
   const [form, setForm] = useState({
     type: 'FABRIC' as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR',
     name: '',
@@ -177,6 +197,7 @@ export default function AdminProducts() {
   useEffect(() => {
     void fetchOptions();
     void fetchDesignerFabricAccess();
+    void fetchDesignerFabricAccessRequests();
   }, []);
 
   useEffect(() => {
@@ -456,13 +477,63 @@ export default function AdminProducts() {
     }
   };
 
+  const fetchDesignerFabricAccessRequests = async () => {
+    try {
+      setDesignerFabricAccessRequestsLoading(true);
+      const response = await api.admin.getDesignerFabricCountryAccessRequests({ status: 'ALL' });
+      if (!response.success) return;
+      setDesignerFabricAccessRequests(Array.isArray(response.data) ? response.data : []);
+    } catch (requestError: any) {
+      setDesignerFabricAccessMessage(
+        requestError?.response?.data?.message || requestError?.message || 'Failed to load country access requests.'
+      );
+    } finally {
+      setDesignerFabricAccessRequestsLoading(false);
+    }
+  };
+
+  const reviewDesignerFabricAccessRequest = async (
+    request: DesignerFabricCountryAccessRequestRow,
+    status: 'APPROVED' | 'REJECTED'
+  ) => {
+    try {
+      setDesignerFabricAccessReviewingRequestId(request.id);
+      setDesignerFabricAccessMessage('');
+      const defaultNotes =
+        status === 'APPROVED'
+          ? 'Approved by admin.'
+          : 'Rejected by admin.';
+      const reviewNotes = window.prompt(
+        status === 'APPROVED' ? 'Approval note (optional):' : 'Rejection reason (optional):',
+        defaultNotes
+      ) || undefined;
+      await api.admin.reviewDesignerFabricCountryAccessRequest(request.id, {
+        status,
+        reviewNotes: reviewNotes?.trim() || undefined,
+        grantedCountries: status === 'APPROVED' ? request.requestedCountries : undefined,
+      });
+      await Promise.all([fetchDesignerFabricAccess(), fetchDesignerFabricAccessRequests()]);
+      setDesignerFabricAccessMessage(
+        status === 'APPROVED'
+          ? 'Country access request approved and access granted.'
+          : 'Country access request rejected.'
+      );
+    } catch (reviewError: any) {
+      setDesignerFabricAccessMessage(
+        reviewError?.response?.data?.message || reviewError?.message || 'Failed to review country access request.'
+      );
+    } finally {
+      setDesignerFabricAccessReviewingRequestId(null);
+    }
+  };
+
   const saveDesignerFabricAccess = async (designerUserId: string) => {
     const selected = designerFabricAccessDrafts[designerUserId] || [];
     try {
       setDesignerFabricAccessSavingUserId(designerUserId);
       setDesignerFabricAccessMessage('');
       await api.admin.updateDesignerFabricCountryAccess(designerUserId, selected);
-      await fetchDesignerFabricAccess();
+      await Promise.all([fetchDesignerFabricAccess(), fetchDesignerFabricAccessRequests()]);
       setDesignerFabricAccessMessage('Designer fabric country access updated.');
     } catch (accessError: any) {
       setDesignerFabricAccessMessage(
@@ -1148,6 +1219,70 @@ export default function AdminProducts() {
                 </div>
               ))
             )}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border bg-white p-4">
+        <div className="mb-3">
+          <h2 className="text-sm font-semibold text-gray-900">Designer Country Access Requests</h2>
+          <p className="text-xs text-gray-500">
+            Approve or reject requests submitted by designers to access additional fabric seller countries.
+          </p>
+        </div>
+        {designerFabricAccessRequestsLoading ? (
+          <p className="text-sm text-gray-500">Loading requests...</p>
+        ) : designerFabricAccessRequests.length === 0 ? (
+          <p className="text-sm text-gray-500">No country access requests yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {designerFabricAccessRequests.map((request) => (
+              <div key={request.id} className="rounded-lg border p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {request.businessName || `Designer ${request.designerUserId.slice(0, 8)}`}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {request.email || 'No email'} • Home country: {request.homeCountry || 'N/A'}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-700">
+                      Requested: {(request.requestedCountries || []).join(', ') || 'N/A'}
+                    </p>
+                    {request.reason ? (
+                      <p className="mt-1 text-xs text-gray-600">Reason: {request.reason}</p>
+                    ) : null}
+                    <p className="mt-1 text-xs text-gray-500">
+                      Status: {request.status}
+                      {request.reviewedByName ? ` • Reviewed by: ${request.reviewedByName}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {request.status === 'PENDING' ? (
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={() => reviewDesignerFabricAccessRequest(request, 'APPROVED')}
+                          disabled={designerFabricAccessReviewingRequestId === request.id}
+                        >
+                          {designerFabricAccessReviewingRequestId === request.id ? 'Processing...' : 'Approve'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => reviewDesignerFabricAccessRequest(request, 'REJECTED')}
+                          disabled={designerFabricAccessReviewingRequestId === request.id}
+                        >
+                          Reject
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-gray-500">{request.status}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

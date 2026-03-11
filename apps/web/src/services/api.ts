@@ -583,6 +583,477 @@ async function writeReadyToWearSizeGuideSettingsWithFallback<T>(payload: { title
   throw lastError ?? new Error('Ready-to-wear size guide update route not found.');
 }
 
+type DesignerFabricAccessRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+type DesignerFabricAccessFallbackRequest = {
+  id: string;
+  designerUserId: string;
+  requestedCountries: string[];
+  reason?: string;
+  status: DesignerFabricAccessRequestStatus;
+  reviewNotes?: string;
+  reviewedByUserId?: string;
+  reviewedByName?: string;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string;
+  businessName?: string;
+  email?: string;
+  homeCountry?: string;
+};
+
+const DESIGNER_FABRIC_COUNTRY_ACCESS_FALLBACK_KEY = 'af_designer_fabric_country_access_fallback_v1';
+const DESIGNER_FABRIC_COUNTRY_ACCESS_REQUESTS_FALLBACK_KEY = 'af_designer_fabric_country_access_requests_fallback_v1';
+
+const normalizeCountryToken = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toLowerCase();
+const normalizeCountryName = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+const dedupeCountryList = (input: unknown) => {
+  const rows = Array.isArray(input) ? input : [];
+  const deduped = new Map<string, string>();
+  for (const entry of rows) {
+    const country = normalizeCountryName(entry);
+    const token = normalizeCountryToken(country);
+    if (!country || !token) continue;
+    if (!deduped.has(token)) deduped.set(token, country);
+  }
+  return Array.from(deduped.values());
+};
+const normalizeRequestStatus = (value: unknown): DesignerFabricAccessRequestStatus => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'APPROVED' || normalized === 'REJECTED') return normalized;
+  return 'PENDING';
+};
+
+const readDesignerFabricAccessFallbackMap = (): Record<string, string[]> => {
+  if (typeof window === 'undefined' || !window.localStorage) return {};
+  try {
+    const raw = window.localStorage.getItem(DESIGNER_FABRIC_COUNTRY_ACCESS_FALLBACK_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+    const next: Record<string, string[]> = {};
+    for (const [designerUserId, countries] of Object.entries(parsed as Record<string, unknown>)) {
+      const userId = String(designerUserId || '').trim();
+      if (!userId) continue;
+      next[userId] = dedupeCountryList(countries);
+    }
+    return next;
+  } catch {
+    return {};
+  }
+};
+const writeDesignerFabricAccessFallbackMap = (value: Record<string, string[]>) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const sanitized: Record<string, string[]> = {};
+    for (const [designerUserId, countries] of Object.entries(value || {})) {
+      const userId = String(designerUserId || '').trim();
+      if (!userId) continue;
+      sanitized[userId] = dedupeCountryList(countries);
+    }
+    window.localStorage.setItem(
+      DESIGNER_FABRIC_COUNTRY_ACCESS_FALLBACK_KEY,
+      JSON.stringify(sanitized)
+    );
+  } catch {
+    // ignore localStorage failures
+  }
+};
+
+const readDesignerFabricAccessRequestsFallback = (): DesignerFabricAccessFallbackRequest[] => {
+  if (typeof window === 'undefined' || !window.localStorage) return [];
+  try {
+    const raw = window.localStorage.getItem(DESIGNER_FABRIC_COUNTRY_ACCESS_REQUESTS_FALLBACK_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((entry) => {
+        const row = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+        return {
+          id: String(row.id || '').trim(),
+          designerUserId: String(row.designerUserId || '').trim(),
+          requestedCountries: dedupeCountryList(row.requestedCountries),
+          reason: String(row.reason || '').trim() || undefined,
+          status: normalizeRequestStatus(row.status),
+          reviewNotes: String(row.reviewNotes || '').trim() || undefined,
+          reviewedByUserId: String(row.reviewedByUserId || '').trim() || undefined,
+          reviewedByName: String(row.reviewedByName || '').trim() || undefined,
+          createdAt: String(row.createdAt || new Date().toISOString()),
+          updatedAt: String(row.updatedAt || row.createdAt || new Date().toISOString()),
+          resolvedAt: String(row.resolvedAt || '').trim() || undefined,
+          businessName: String(row.businessName || '').trim() || undefined,
+          email: String(row.email || '').trim() || undefined,
+          homeCountry: String(row.homeCountry || '').trim() || undefined,
+        } as DesignerFabricAccessFallbackRequest;
+      })
+      .filter((row) => row.id && row.designerUserId && row.requestedCountries.length > 0)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  } catch {
+    return [];
+  }
+};
+const writeDesignerFabricAccessRequestsFallback = (value: DesignerFabricAccessFallbackRequest[]) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const sanitized = (Array.isArray(value) ? value : [])
+      .map((entry) => ({
+        ...entry,
+        id: String(entry.id || '').trim(),
+        designerUserId: String(entry.designerUserId || '').trim(),
+        requestedCountries: dedupeCountryList(entry.requestedCountries),
+        status: normalizeRequestStatus(entry.status),
+        createdAt: String(entry.createdAt || new Date().toISOString()),
+        updatedAt: String(entry.updatedAt || entry.createdAt || new Date().toISOString()),
+      }))
+      .filter((entry) => entry.id && entry.designerUserId && entry.requestedCountries.length > 0);
+    window.localStorage.setItem(
+      DESIGNER_FABRIC_COUNTRY_ACCESS_REQUESTS_FALLBACK_KEY,
+      JSON.stringify(sanitized)
+    );
+  } catch {
+    // ignore localStorage failures
+  }
+};
+
+async function readAdminDesignerFabricCountryAccessWithFallback<T>(params?: { search?: string }) {
+  try {
+    const response = await apiService.get<any>('/admin/designer-fabric-country-access', {
+      params: { ...(params || {}), _r: Date.now() },
+    });
+    const designers = Array.isArray(response?.data?.designers) ? response.data.designers : [];
+    const map: Record<string, string[]> = {};
+    for (const row of designers) {
+      const userId = String(row?.designerUserId || '').trim();
+      if (!userId) continue;
+      map[userId] = dedupeCountryList(row?.extraCountries);
+    }
+    writeDesignerFabricAccessFallbackMap(map);
+    return response as T;
+  } catch (error) {
+    if (!isRetryableRouteError(error)) throw error;
+  }
+
+  const fallbackMap = readDesignerFabricAccessFallbackMap();
+  let designerProfiles: any[] = [];
+  let sellerProfiles: any[] = [];
+  try {
+    const response = await apiService.get<any>('/admin/vendor-profiles', {
+      params: { role: 'FASHION_DESIGNER', page: 1, limit: 500, search: params?.search || undefined, _r: Date.now() },
+    });
+    designerProfiles = Array.isArray(response?.data?.profiles) ? response.data.profiles : [];
+  } catch {
+    designerProfiles = [];
+  }
+  try {
+    const response = await apiService.get<any>('/admin/vendor-profiles', {
+      params: { role: 'FABRIC_SELLER', page: 1, limit: 500, _r: Date.now() },
+    });
+    sellerProfiles = Array.isArray(response?.data?.profiles) ? response.data.profiles : [];
+  } catch {
+    sellerProfiles = [];
+  }
+  const availableCountries = dedupeCountryList(
+    sellerProfiles.map((entry) => entry?.profileData?.country || entry?.country).filter(Boolean)
+  );
+  const designers = designerProfiles.map((entry) => {
+    const designerUserId = String(entry?.userId || '').trim();
+    const homeCountry = String(entry?.profileData?.country || entry?.country || '').trim();
+    const extraCountries = dedupeCountryList(fallbackMap[designerUserId] || []).filter(
+      (country) => normalizeCountryToken(country) !== normalizeCountryToken(homeCountry)
+    );
+    const allowedCountries = dedupeCountryList([homeCountry, ...extraCountries]);
+    const fullName = `${String(entry?.user?.firstName || '').trim()} ${String(entry?.user?.lastName || '').trim()}`.trim();
+    return {
+      designerProfileId: String(entry?.profileId || entry?.id || '').trim(),
+      designerUserId,
+      businessName: String(entry?.businessName || '').trim() || fullName || String(entry?.user?.email || '').trim(),
+      email: String(entry?.user?.email || '').trim(),
+      homeCountry,
+      extraCountries,
+      allowedCountries,
+    };
+  });
+  return {
+    success: true,
+    data: {
+      designers,
+      availableCountries,
+    },
+    message: 'Designer country access loaded from local fallback.',
+  } as T;
+}
+
+async function writeAdminDesignerFabricCountryAccessWithFallback<T>(designerUserId: string, extraCountries: string[]) {
+  const normalizedUserId = String(designerUserId || '').trim();
+  const normalizedExtraCountries = dedupeCountryList(extraCountries);
+  let lastError: unknown = null;
+  try {
+    const response = await apiService.put<any>(`/admin/designer-fabric-country-access/${normalizedUserId}`, {
+      extraCountries: normalizedExtraCountries,
+    });
+    const nextMap = {
+      ...readDesignerFabricAccessFallbackMap(),
+      [normalizedUserId]: dedupeCountryList(response?.data?.extraCountries || normalizedExtraCountries),
+    };
+    writeDesignerFabricAccessFallbackMap(nextMap);
+    return response as T;
+  } catch (error) {
+    lastError = error;
+    if (!isRetryableRouteError(error)) throw error;
+  }
+  const current = readDesignerFabricAccessFallbackMap();
+  current[normalizedUserId] = normalizedExtraCountries;
+  writeDesignerFabricAccessFallbackMap(current);
+  return {
+    success: true,
+    message: 'Designer fabric country access saved to local fallback.',
+    data: {
+      designerUserId: normalizedUserId,
+      extraCountries: normalizedExtraCountries,
+      allowedCountries: normalizedExtraCountries,
+    },
+  } as T;
+}
+
+async function readAdminDesignerFabricCountryAccessRequestsWithFallback<T>(params?: {
+  status?: DesignerFabricAccessRequestStatus | 'ALL';
+  search?: string;
+}) {
+  let lastError: unknown = null;
+  try {
+    const response = await apiService.get<any>('/admin/designer-fabric-country-access/requests/list', {
+      params: { ...(params || {}), _r: Date.now() },
+    });
+    const rows = Array.isArray(response?.data) ? response.data : [];
+    writeDesignerFabricAccessRequestsFallback(rows);
+    return response as T;
+  } catch (error) {
+    lastError = error;
+    if (!isRetryableRouteError(error)) throw error;
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError;
+  const status = String(params?.status || '').trim().toUpperCase();
+  const search = String(params?.search || '').trim().toLowerCase();
+  const rows = readDesignerFabricAccessRequestsFallback().filter((entry) => {
+    if (status && status !== 'ALL' && entry.status !== status) return false;
+    if (!search) return true;
+    return (
+      String(entry.businessName || '').toLowerCase().includes(search) ||
+      String(entry.email || '').toLowerCase().includes(search) ||
+      String(entry.homeCountry || '').toLowerCase().includes(search) ||
+      (entry.requestedCountries || []).join(' ').toLowerCase().includes(search)
+    );
+  });
+  return {
+    success: true,
+    data: rows,
+    message: 'Country access requests loaded from local fallback.',
+  } as T;
+}
+
+async function reviewAdminDesignerFabricCountryAccessRequestWithFallback<T>(
+  requestId: string,
+  payload: { status: 'APPROVED' | 'REJECTED'; reviewNotes?: string; grantedCountries?: string[] }
+) {
+  let lastError: unknown = null;
+  try {
+    const response = await apiService.patch<any>(
+      `/admin/designer-fabric-country-access/requests/${encodeURIComponent(requestId)}/review`,
+      payload
+    );
+    return response as T;
+  } catch (error) {
+    lastError = error;
+    if (!isRetryableRouteError(error)) throw error;
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError;
+  const requests = readDesignerFabricAccessRequestsFallback();
+  const index = requests.findIndex((entry) => entry.id === requestId);
+  if (index < 0) {
+    throw lastError ?? new Error('Request not found.');
+  }
+  const nowIso = new Date().toISOString();
+  const current = requests[index];
+  const next = {
+    ...current,
+    status: payload.status,
+    reviewNotes: String(payload.reviewNotes || '').trim() || undefined,
+    updatedAt: nowIso,
+    resolvedAt: nowIso,
+  } as DesignerFabricAccessFallbackRequest;
+  requests[index] = next;
+  writeDesignerFabricAccessRequestsFallback(requests);
+  if (payload.status === 'APPROVED') {
+    const grantList = dedupeCountryList(payload.grantedCountries).length > 0
+      ? dedupeCountryList(payload.grantedCountries)
+      : dedupeCountryList(next.requestedCountries);
+    const accessMap = readDesignerFabricAccessFallbackMap();
+    accessMap[next.designerUserId] = dedupeCountryList([...(accessMap[next.designerUserId] || []), ...grantList]);
+    writeDesignerFabricAccessFallbackMap(accessMap);
+  }
+  return {
+    success: true,
+    message: `Request ${payload.status.toLowerCase()} successfully (local fallback).`,
+    data: next,
+  } as T;
+}
+
+async function readDesignerFabricCountryAccessSummaryWithFallback<T>() {
+  let lastError: unknown = null;
+  try {
+    return await apiService.get<T>('/designer/fabric-country-access', noCacheRequestConfig());
+  } catch (error) {
+    lastError = error;
+    if (!isRetryableRouteError(error)) throw error;
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError;
+  const currentUserId = String(useAuthStore.getState().user?.id || '').trim();
+  const accessMap = readDesignerFabricAccessFallbackMap();
+  const profileCompletion = await readDesignerProfileCompletionWithFallback<any>().catch(() => null);
+  const homeCountry = String(profileCompletion?.data?.profile?.country || '').trim();
+  const extraCountries = dedupeCountryList(accessMap[currentUserId] || []).filter(
+    (country) => normalizeCountryToken(country) !== normalizeCountryToken(homeCountry)
+  );
+  const allowedCountries = dedupeCountryList([homeCountry, ...extraCountries]);
+  const requests = readDesignerFabricAccessRequestsFallback().filter((entry) => entry.designerUserId === currentUserId);
+  return {
+    success: true,
+    data: {
+      homeCountry,
+      allowedCountries,
+      availableCountries: [...allowedCountries],
+      requests,
+    },
+    message: 'Designer country access loaded from local fallback.',
+  } as T;
+}
+
+async function createDesignerFabricCountryAccessRequestWithFallback<T>(payload: {
+  requestedCountries: string[];
+  reason?: string;
+}) {
+  let lastError: unknown = null;
+  try {
+    return await apiService.post<T>('/designer/fabric-country-access/requests', payload);
+  } catch (error) {
+    lastError = error;
+    if (!isRetryableRouteError(error)) throw error;
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError;
+  const currentUserId = String(useAuthStore.getState().user?.id || '').trim();
+  if (!currentUserId) throw lastError ?? new Error('User session not found.');
+  const profileCompletion = await readDesignerProfileCompletionWithFallback<any>().catch(() => null);
+  const nowIso = new Date().toISOString();
+  const request: DesignerFabricAccessFallbackRequest = {
+    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    designerUserId: currentUserId,
+    requestedCountries: dedupeCountryList(payload.requestedCountries),
+    reason: String(payload.reason || '').trim() || undefined,
+    status: 'PENDING',
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    businessName: String(profileCompletion?.data?.profile?.businessName || '').trim() || undefined,
+    email: String(profileCompletion?.data?.profile?.businessEmail || '').trim() || undefined,
+    homeCountry: String(profileCompletion?.data?.profile?.country || '').trim() || undefined,
+  };
+  const requests = [request, ...readDesignerFabricAccessRequestsFallback()];
+  writeDesignerFabricAccessRequestsFallback(requests);
+  return {
+    success: true,
+    message: 'Country access request saved locally while backend route is unavailable.',
+    data: request,
+  } as T;
+}
+
+async function readDesignerFabricOptionsWithFallback<T>(params?: {
+  country?: string;
+  materialTypeId?: string;
+  search?: string;
+  limit?: number;
+}) {
+  let lastError: unknown = null;
+  try {
+    return await apiService.get<T>('/designer/fabric-options', {
+      params: { ...(params || {}), _r: Date.now() },
+    });
+  } catch (error) {
+    lastError = error;
+    if (!isRetryableRouteError(error)) throw error;
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError;
+  const fabricsResponse = await apiService.get<any>('/products/fabrics', {
+    params: { limit: Math.max(50, Number(params?.limit || 300)), _r: Date.now() },
+  });
+  const rows = Array.isArray(fabricsResponse?.data?.fabrics) ? fabricsResponse.data.fabrics : [];
+  const normalizedRows = rows.map((entry: any) => ({
+    id: String(entry?.id || '').trim(),
+    name: String(entry?.name || 'Fabric').trim(),
+    materialTypeId: String(entry?.materialTypeId || entry?.materialType?.id || '').trim(),
+    materialTypeName: String(entry?.materialType?.name || 'Material').trim(),
+    sellerCountry: String(entry?.seller?.country || '').trim(),
+    sellerName: String(entry?.seller?.businessName || 'Fabric Seller').trim(),
+    priceUsd: Number(entry?.finalPrice || entry?.sellerPrice || 0),
+    image: String(entry?.images?.[0]?.url || '').trim(),
+  }));
+  const profileCompletion = await readDesignerProfileCompletionWithFallback<any>().catch(() => null);
+  const currentUserId = String(useAuthStore.getState().user?.id || '').trim();
+  const homeCountry = String(profileCompletion?.data?.profile?.country || '').trim();
+  const map = readDesignerFabricAccessFallbackMap();
+  const allowedCountries = dedupeCountryList([homeCountry, ...(map[currentUserId] || [])]);
+  const allowedTokens = new Set(allowedCountries.map((country) => normalizeCountryToken(country)));
+  const requestedCountryToken = normalizeCountryToken(params?.country);
+  const filteredRows = normalizedRows.filter((entry) => {
+    if (!entry.id) return false;
+    const countryToken = normalizeCountryToken(entry.sellerCountry);
+    if (allowedTokens.size > 0 && countryToken && !allowedTokens.has(countryToken)) return false;
+    if (requestedCountryToken && countryToken !== requestedCountryToken) return false;
+    if (params?.materialTypeId && entry.materialTypeId !== params.materialTypeId) return false;
+    if (params?.search && !entry.name.toLowerCase().includes(String(params.search).toLowerCase())) return false;
+    return true;
+  });
+  const countries = dedupeCountryList([
+    ...allowedCountries,
+    ...filteredRows.map((entry) => entry.sellerCountry).filter(Boolean),
+  ]);
+  const materials = Array.from(
+    new Map(
+      filteredRows
+        .map((entry) => [entry.materialTypeId, { id: entry.materialTypeId, name: entry.materialTypeName }] as const)
+        .filter(([id]) => Boolean(id))
+    ).values()
+  );
+  return {
+    success: true,
+    data: {
+      allowedCountries,
+      countries,
+      materials,
+      fabrics: filteredRows.slice(0, Math.max(1, Number(params?.limit || 300))),
+    },
+    message: 'Fabric options loaded from fallback endpoint.',
+  } as T;
+}
+
+async function readDesignerMeasurementTemplateOptionsWithFallback<T>() {
+  try {
+    return await apiService.get<T>('/designer/measurement-template-options', noCacheRequestConfig());
+  } catch (error) {
+    if (!isRetryableRouteError(error)) throw error;
+  }
+  const templatesResponse = await readMeasurementTemplatesWithFallback<any>();
+  const templates = normalizeMeasurementTemplates(templatesResponse?.data);
+  return {
+    success: true,
+    data: templates,
+  } as T;
+}
+
 const PAYMENT_INTEGRATIONS_FALLBACK_KEY = 'af_payment_integrations_fallback_v1';
 const PAYMENT_INTEGRATIONS_BUILTIN_KEYS = ['STRIPE', 'FLUTTERWAVE', 'PAYPAL'];
 
@@ -3691,7 +4162,7 @@ const adminApi = {
   ) => apiService.patch<{ success: boolean; message?: string }>(`/admin/vendor-profiles/${role}/${userId}/review`, data),
 
   getDesignerFabricCountryAccess: (params?: { search?: string }) =>
-    apiService.get<{
+    readAdminDesignerFabricCountryAccessWithFallback<{
       success: boolean;
       data: {
         designers: Array<{
@@ -3705,10 +4176,11 @@ const adminApi = {
         }>;
         availableCountries: string[];
       };
-    }>('/admin/designer-fabric-country-access', { params }),
+      message?: string;
+    }>(params),
 
   updateDesignerFabricCountryAccess: (designerUserId: string, extraCountries: string[]) =>
-    apiService.put<{
+    writeAdminDesignerFabricCountryAccessWithFallback<{
       success: boolean;
       message?: string;
       data: {
@@ -3719,7 +4191,39 @@ const adminApi = {
         extraCountries: string[];
         allowedCountries: string[];
       };
-    }>(`/admin/designer-fabric-country-access/${designerUserId}`, { extraCountries }),
+    }>(designerUserId, extraCountries),
+
+  getDesignerFabricCountryAccessRequests: (params?: { status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'; search?: string }) =>
+    readAdminDesignerFabricCountryAccessRequestsWithFallback<{
+      success: boolean;
+      data: Array<{
+        id: string;
+        designerUserId: string;
+        requestedCountries: string[];
+        reason?: string;
+        status: 'PENDING' | 'APPROVED' | 'REJECTED';
+        reviewNotes?: string;
+        reviewedByUserId?: string;
+        reviewedByName?: string;
+        createdAt: string;
+        updatedAt: string;
+        resolvedAt?: string;
+        businessName?: string;
+        email?: string;
+        homeCountry?: string;
+      }>;
+      message?: string;
+    }>(params),
+
+  reviewDesignerFabricCountryAccessRequest: (
+    requestId: string,
+    payload: { status: 'APPROVED' | 'REJECTED'; reviewNotes?: string; grantedCountries?: string[] }
+  ) =>
+    reviewAdminDesignerFabricCountryAccessRequestWithFallback<{
+      success: boolean;
+      data?: any;
+      message?: string;
+    }>(requestId, payload),
 
   getPermissionCatalog: () =>
     apiService.get<{
@@ -4219,7 +4723,7 @@ const designerApi = {
     readDesignerProfileFieldsWithFallback<{ success: boolean; data: { role: string; fields: any[] } }>(),
 
   getMeasurementTemplateOptions: () =>
-    apiService.get<{
+    readDesignerMeasurementTemplateOptionsWithFallback<{
       success: boolean;
       data: Array<{
         name: string;
@@ -4227,10 +4731,10 @@ const designerApi = {
         isRequired: boolean;
         instructions?: string;
       }>;
-    }>('/designer/measurement-template-options'),
+    }>(),
 
   getDesignFabricOptions: (params?: { country?: string; materialTypeId?: string; search?: string; limit?: number }) =>
-    apiService.get<{
+    readDesignerFabricOptionsWithFallback<{
       success: boolean;
       data: {
         allowedCountries: string[];
@@ -4247,7 +4751,39 @@ const designerApi = {
           image: string;
         }>;
       };
-    }>('/designer/fabric-options', { params }),
+      message?: string;
+    }>(params),
+
+  getFabricCountryAccessSummary: () =>
+    readDesignerFabricCountryAccessSummaryWithFallback<{
+      success: boolean;
+      data: {
+        homeCountry: string;
+        allowedCountries: string[];
+        availableCountries: string[];
+        requests: Array<{
+          id: string;
+          designerUserId: string;
+          requestedCountries: string[];
+          reason?: string;
+          status: 'PENDING' | 'APPROVED' | 'REJECTED';
+          reviewNotes?: string;
+          reviewedByUserId?: string;
+          reviewedByName?: string;
+          createdAt: string;
+          updatedAt: string;
+          resolvedAt?: string;
+        }>;
+      };
+      message?: string;
+    }>(),
+
+  createFabricCountryAccessRequest: (payload: { requestedCountries: string[]; reason?: string }) =>
+    createDesignerFabricCountryAccessRequestWithFallback<{
+      success: boolean;
+      data?: any;
+      message?: string;
+    }>(payload),
 
   updateProfileCompletion: (data: any) =>
     writeDesignerProfileCompletionWithFallback<{ success: boolean; data: any; message?: string }>(data),

@@ -5,8 +5,10 @@ import { prisma, UserRole, ProductStatus } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import {
+  createDesignerFabricCountryAccessRequest,
   getAllowedFabricCountriesForDesigner,
   isCountryAllowed,
+  listDesignerFabricCountryAccessRequests,
 } from '../utils/designer-fabric-country-access';
 import {
   convertLocalToUsd,
@@ -678,6 +680,108 @@ router.get('/fabric-options', async (req, res, next) => {
           image: row.images?.[0]?.url || '',
         })),
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/fabric-country-access', async (req, res, next) => {
+  try {
+    const profile = await resolveDesignerProfile(req.user!.id);
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Designer profile not found.',
+      });
+    }
+    const [allowedCountries, sellerRows, requests] = await Promise.all([
+      getAllowedFabricCountriesForDesigner({
+        designerUserId: req.user!.id,
+        homeCountry: profile.country,
+      }),
+      prisma.fabricSellerProfile.findMany({
+        select: { country: true },
+      }),
+      listDesignerFabricCountryAccessRequests({ designerUserId: req.user!.id }),
+    ]);
+    const availableCountries = dedupeCountryList([
+      profile.country,
+      ...sellerRows.map((row) => row.country).filter((value) => String(value || '').trim()),
+    ]);
+    res.json({
+      success: true,
+      data: {
+        homeCountry: profile.country,
+        allowedCountries,
+        availableCountries,
+        requests,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/fabric-country-access/requests', async (req, res, next) => {
+  try {
+    const payload = z
+      .object({
+        requestedCountries: z.array(z.string()).min(1),
+        reason: z.string().max(500).optional(),
+      })
+      .parse(req.body);
+    const profile = await resolveDesignerProfile(req.user!.id);
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Designer profile not found.',
+      });
+    }
+    const [allowedCountries, sellerRows, existingRequests] = await Promise.all([
+      getAllowedFabricCountriesForDesigner({
+        designerUserId: req.user!.id,
+        homeCountry: profile.country,
+      }),
+      prisma.fabricSellerProfile.findMany({
+        select: { country: true },
+      }),
+      listDesignerFabricCountryAccessRequests({ designerUserId: req.user!.id }),
+    ]);
+    const availableCountries = dedupeCountryList(
+      sellerRows.map((row) => row.country).filter((value) => String(value || '').trim())
+    );
+    const allowedTokens = new Set(allowedCountries.map((entry) => normalizeCountryToken(entry)));
+    const availableTokens = new Set(availableCountries.map((entry) => normalizeCountryToken(entry)));
+    const pendingTokens = new Set(
+      existingRequests
+        .filter((entry) => entry.status === 'PENDING')
+        .flatMap((entry) => entry.requestedCountries)
+        .map((entry) => normalizeCountryToken(entry))
+    );
+    const requestedCountries = dedupeCountryList(payload.requestedCountries).filter((entry) => {
+      const token = normalizeCountryToken(entry);
+      if (!token) return false;
+      if (allowedTokens.has(token)) return false;
+      if (pendingTokens.has(token)) return false;
+      if (availableTokens.size > 0 && !availableTokens.has(token)) return false;
+      return true;
+    });
+    if (requestedCountries.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No new eligible countries to request. Countries may already be allowed, pending, or unavailable.',
+      });
+    }
+    const created = await createDesignerFabricCountryAccessRequest({
+      designerUserId: req.user!.id,
+      requestedCountries,
+      reason: payload.reason,
+    });
+    res.status(201).json({
+      success: true,
+      message: 'Country access request submitted successfully.',
+      data: created,
     });
   } catch (error) {
     next(error);
