@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma, UserRole, UserStatus, ProductStatus, ProductType } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
+import { autoCloseOverdueDeliveredOrders } from '../utils/order-workflow';
 import {
   getPermissionCatalog,
   hasPermissionFromGrants,
@@ -4188,6 +4189,7 @@ router.delete('/pricing-rules/:id', async (req, res, next) => {
 // Get all orders
 router.get('/orders', async (req, res, next) => {
   try {
+    await autoCloseOverdueDeliveredOrders(req.user?.id);
     const { status, page, limit } = req.query;
 
     const where: any = {};

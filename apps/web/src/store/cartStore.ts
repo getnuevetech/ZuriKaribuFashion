@@ -6,11 +6,13 @@ export interface CustomDesignCartItem {
   designId: string;
   designName: string;
   designImage: string;
-  fabricId: string;
-  fabricName: string;
-  fabricImage: string;
-  fabricMeters: number;
-  fabricPrice: number;
+  fabricId?: string;
+  fabricName?: string;
+  fabricImage?: string;
+  fabricMeters?: number;
+  fabricPrice?: number;
+  fabricSelectionMode?: 'CUSTOMER_SELECTED' | 'DESIGNER_DECIDES';
+  fabricPreferenceNotes?: string;
   designerId: string;
   designerName: string;
   measurements: Record<string, number>;
@@ -79,11 +81,16 @@ function normalizeCartItem(item: CartItem | LegacyCustomItem | any): CartItem {
     designId: String(item.designId || ''),
     designName: String(item.designName || ''),
     designImage: String(item.designImage || ''),
-    fabricId: String(item.fabricId || ''),
-    fabricName: String(item.fabricName || ''),
-    fabricImage: String(item.fabricImage || ''),
-    fabricMeters: Math.max(1, Number(item.fabricMeters || 1)),
-    fabricPrice: Number(item.fabricPrice || 0),
+    fabricId: item.fabricId ? String(item.fabricId || '') : undefined,
+    fabricName: item.fabricName ? String(item.fabricName || '') : undefined,
+    fabricImage: item.fabricImage ? String(item.fabricImage || '') : undefined,
+    fabricMeters: item.fabricMeters === undefined ? undefined : Math.max(1, Number(item.fabricMeters || 1)),
+    fabricPrice: item.fabricPrice === undefined ? undefined : Number(item.fabricPrice || 0),
+    fabricSelectionMode:
+      String(item.fabricSelectionMode || '').toUpperCase() === 'DESIGNER_DECIDES'
+        ? 'DESIGNER_DECIDES'
+        : 'CUSTOMER_SELECTED',
+    fabricPreferenceNotes: item.fabricPreferenceNotes ? String(item.fabricPreferenceNotes) : undefined,
     designerId: String(item.designerId || ''),
     designerName: String(item.designerName || 'Designer'),
     measurements: item.measurements || {},
@@ -99,6 +106,9 @@ function getItemTotal(item: CartItem): number {
   }
   if (item.kind === 'READY_TO_WEAR') {
     return Number(item.unitPrice || 0) * Math.max(1, Number(item.quantity || 1));
+  }
+  if (item.fabricSelectionMode === 'DESIGNER_DECIDES' || !item.fabricId) {
+    return Number(item.basePrice || 0);
   }
   const meters = Math.max(1, Number(item.fabricMeters || 1));
   const computed = Number(item.basePrice || 0) + Number(item.fabricPrice || 0) * meters;

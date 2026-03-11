@@ -345,20 +345,7 @@ export default function SellerDashboard() {
         setMaterialOptions(options);
       }
       if (ordersRes?.success) {
-        const toAddressObject = (value: any) => {
-          if (!value) return null;
-          if (typeof value === 'object') return value;
-          if (typeof value === 'string') {
-            try {
-              return JSON.parse(value);
-            } catch {
-              return null;
-            }
-          }
-          return null;
-        };
         const mappedOrders = (ordersRes.data || []).map((item: any) => {
-          const shippingAddress = toAddressObject(item.order?.shippingAddress);
           return {
             id: String(item.id),
             orderId: String(item.orderId || ''),
@@ -367,9 +354,9 @@ export default function SellerDashboard() {
             meters: Number(item.yards || 0),
             totalAmount: Number(item.totalPrice || 0),
             status: item.status || 'PENDING',
-            designerCountry: shippingAddress?.country || 'N/A',
+            designerCountry: 'Protected',
             createdAt: item.order?.createdAt || item.createdAt,
-            customerName: shippingAddress?.fullName || 'Customer',
+            customerName: 'Customer (Protected)',
           };
         });
         setOrders(mappedOrders);

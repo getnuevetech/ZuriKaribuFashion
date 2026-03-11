@@ -90,6 +90,10 @@ export default function DesignDetail() {
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedFabric, setSelectedFabric] = useState<string | null>(null);
+  const [fabricSelectionMode, setFabricSelectionMode] = useState<'CUSTOMER_SELECTED' | 'DESIGNER_DECIDES'>(
+    'CUSTOMER_SELECTED'
+  );
+  const [fabricPreferenceNotes, setFabricPreferenceNotes] = useState('');
   const [fabricMeters, setFabricMeters] = useState<Record<string, number>>({});
   const [measurements, setMeasurements] = useState<Record<string, number>>({});
   const [showMeasurementModal, setShowMeasurementModal] = useState(false);
@@ -167,23 +171,31 @@ export default function DesignDetail() {
   };
 
   const handleAddToCart = () => {
-    if (!selectedFabric) {
+    if (!areAllRequiredMeasurementsFilled()) {
+      setActiveTab('measurements');
+      return;
+    }
+    if (fabricSelectionMode === 'CUSTOMER_SELECTED' && !selectedFabric) {
       setActiveTab('fabrics');
       return;
     }
 
-    const fabric = design?.suitableFabrics.find(sf => sf.fabric.id === selectedFabric);
-    if (!fabric || !design) return;
+    if (!design) return;
+
+    const fabric = selectedFabric ? design.suitableFabrics.find(sf => sf.fabric.id === selectedFabric) : null;
+    if (fabricSelectionMode === 'CUSTOMER_SELECTED' && !fabric) return;
 
     const cartItem = {
       designId: design.id,
       designName: design.name,
       designImage: design.images[0],
-      fabricId: fabric.fabric.id,
-      fabricName: fabric.fabric.name,
-      fabricImage: fabric.fabric.images[0],
-      fabricMeters: fabricMeters[selectedFabric],
-      fabricPrice: fabric.fabric.pricePerMeter,
+      fabricId: fabricSelectionMode === 'CUSTOMER_SELECTED' ? fabric?.fabric.id : undefined,
+      fabricName: fabricSelectionMode === 'CUSTOMER_SELECTED' ? fabric?.fabric.name : undefined,
+      fabricImage: fabricSelectionMode === 'CUSTOMER_SELECTED' ? fabric?.fabric.images?.[0] : undefined,
+      fabricMeters: fabricSelectionMode === 'CUSTOMER_SELECTED' ? fabricMeters[selectedFabric!] : undefined,
+      fabricPrice: fabricSelectionMode === 'CUSTOMER_SELECTED' ? fabric?.fabric.pricePerMeter : undefined,
+      fabricSelectionMode,
+      fabricPreferenceNotes: fabricSelectionMode === 'DESIGNER_DECIDES' ? fabricPreferenceNotes.trim() || undefined : undefined,
       designerId: design.designer.id,
       designerName: design.designer.businessName,
       measurements,
@@ -197,7 +209,8 @@ export default function DesignDetail() {
   };
 
   const handleTryOn = () => {
-    if (!selectedFabric) {
+    const tryOnFabricId = selectedFabric || design?.suitableFabrics?.[0]?.fabric?.id;
+    if (!tryOnFabricId) {
       setActiveTab('fabrics');
       return;
     }
@@ -205,7 +218,7 @@ export default function DesignDetail() {
       navigate('/login');
       return;
     }
-    navigate(`/try-on/${id}?fabric=${selectedFabric}`);
+    navigate(`/try-on/${id}?fabric=${tryOnFabricId}`);
   };
 
   const handleToggleLike = async () => {
@@ -256,7 +269,8 @@ export default function DesignDetail() {
   };
 
   const calculateTotal = () => {
-    if (!design || !selectedFabric) return 0;
+    if (!design) return 0;
+    if (fabricSelectionMode === 'DESIGNER_DECIDES' || !selectedFabric) return Number(design.basePrice || 0);
     const fabric = design.suitableFabrics.find(sf => sf.fabric.id === selectedFabric);
     if (!fabric) return design.basePrice;
     const meters = fabricMeters[selectedFabric] || fabric.minMeters;
@@ -488,6 +502,41 @@ export default function DesignDetail() {
 
               {activeTab === 'fabrics' && (
                 <div className="space-y-4">
+                  <div className="rounded-xl border bg-gray-50 p-3">
+                    <p className="mb-2 text-sm font-semibold text-gray-900">Fabric selection option</p>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => setFabricSelectionMode('CUSTOMER_SELECTED')}
+                        className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                          fabricSelectionMode === 'CUSTOMER_SELECTED'
+                            ? 'border-amber-600 bg-amber-50 text-amber-800'
+                            : 'border-gray-200 bg-white text-gray-700'
+                        }`}
+                      >
+                        I will choose fabric now
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFabricSelectionMode('DESIGNER_DECIDES')}
+                        className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                          fabricSelectionMode === 'DESIGNER_DECIDES'
+                            ? 'border-amber-600 bg-amber-50 text-amber-800'
+                            : 'border-gray-200 bg-white text-gray-700'
+                        }`}
+                      >
+                        Let designer/tailor choose fabric
+                      </button>
+                    </div>
+                    {fabricSelectionMode === 'DESIGNER_DECIDES' ? (
+                      <textarea
+                        value={fabricPreferenceNotes}
+                        onChange={(event) => setFabricPreferenceNotes(event.target.value)}
+                        placeholder="Optional: Share your preferred fabric style, texture, or color."
+                        className="mt-3 h-20 w-full rounded-lg border px-3 py-2 text-sm"
+                      />
+                    ) : null}
+                  </div>
                   <p className="text-sm text-gray-600">
                     Select a fabric for your design. All fabrics are from sellers in the same country as your designer.
                   </p>
@@ -497,7 +546,7 @@ export default function DesignDetail() {
                         key={fabric.id}
                         onClick={() => setSelectedFabric(fabric.id)}
                         className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                          selectedFabric === fabric.id 
+                          selectedFabric === fabric.id && fabricSelectionMode === 'CUSTOMER_SELECTED'
                             ? 'border-amber-600 bg-amber-50' 
                             : 'border-gray-200 hover:border-amber-300'
                         }`}
@@ -597,7 +646,7 @@ export default function DesignDetail() {
                 variant="outline"
                 className="flex-1"
                 onClick={handleTryOn}
-                disabled={!selectedFabric}
+                disabled={design.suitableFabrics.length === 0}
               >
                 <Eye className="w-4 h-4 mr-2" />
                 Virtual Try-On
@@ -605,18 +654,23 @@ export default function DesignDetail() {
               <Button
                 className="flex-1"
                 onClick={handleAddToCart}
-                disabled={!selectedFabric}
+                disabled={!areAllRequiredMeasurementsFilled() || (fabricSelectionMode === 'CUSTOMER_SELECTED' && !selectedFabric)}
               >
                 <ShoppingBag className="w-4 h-4 mr-2" />
                 Add to Cart
               </Button>
             </div>
 
-            {!selectedFabric && (
+            {fabricSelectionMode === 'CUSTOMER_SELECTED' && !selectedFabric && (
               <p className="text-sm text-amber-600 text-center">
                 Please select a fabric to continue
               </p>
             )}
+            {!areAllRequiredMeasurementsFilled() ? (
+              <p className="text-sm text-amber-600 text-center">
+                Complete required measurements before adding to cart.
+              </p>
+            ) : null}
             {cartMessage ? (
               <p className="text-sm text-emerald-700 text-center">{cartMessage}</p>
             ) : null}

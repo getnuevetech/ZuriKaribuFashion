@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma, UserRole } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
+import { autoCloseOverdueDeliveredOrders } from '../utils/order-workflow';
 
 const router = Router();
 
@@ -243,6 +244,7 @@ router.post('/measurements', async (req, res, next) => {
 // Get customer orders
 router.get('/orders', async (req, res, next) => {
   try {
+    await autoCloseOverdueDeliveredOrders();
     const { page, limit } = req.query;
     const pagination = parsePagination(page, limit, 10);
 

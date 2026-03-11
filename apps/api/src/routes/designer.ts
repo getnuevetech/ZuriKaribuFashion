@@ -1470,27 +1470,67 @@ router.get('/orders', async (req, res, next) => {
       });
     }
 
-    const orders = await prisma.designOrderItem.findMany({
-      where: { designerId: profile.id },
-      include: {
-        design: {
-          select: { name: true, images: { take: 1 } },
-        },
-        order: {
-          select: {
-            orderNumber: true,
-            status: true,
-            createdAt: true,
-            shippingAddress: true,
+    const [designOrders, readyToWearOrders] = await Promise.all([
+      prisma.designOrderItem.findMany({
+        where: { designerId: profile.id },
+        include: {
+          design: {
+            select: { name: true, images: { take: 1 } },
+          },
+          order: {
+            select: {
+              id: true,
+              type: true,
+              orderNumber: true,
+              status: true,
+              createdAt: true,
+            },
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.readyToWearOrderItem.findMany({
+        where: {
+          readyToWear: {
+            designerId: profile.id,
+          },
+        },
+        include: {
+          readyToWear: {
+            select: { name: true, images: { take: 1 } },
+          },
+          order: {
+            select: {
+              id: true,
+              type: true,
+              orderNumber: true,
+              status: true,
+              createdAt: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    const combinedOrders = [
+      ...designOrders.map((item) => ({
+        ...item,
+        kind: 'DESIGN_ORDER',
+      })),
+      ...readyToWearOrders.map((item) => ({
+        ...item,
+        kind: 'READY_TO_WEAR_ORDER',
+      })),
+    ].sort(
+      (a, b) =>
+        new Date(String(b.order?.createdAt || b.createdAt)).getTime() -
+        new Date(String(a.order?.createdAt || a.createdAt)).getTime()
+    );
 
     res.json({
       success: true,
-      data: orders,
+      data: combinedOrders,
     });
   } catch (error) {
     next(error);

@@ -368,37 +368,35 @@ export default function DesignerDashboard() {
         profileFieldsCallStatus = settledCallStatus(profileFieldsResult);
       }
 
-      const toAddressObject = (value: any) => {
-        if (!value) return null;
-        if (typeof value === 'object') return value;
-        if (typeof value === 'string') {
-          try {
-            return JSON.parse(value);
-          } catch {
-            return null;
-          }
-        }
-        return null;
-      };
-
       const mappedOrders: DesignOrder[] = ordersRes?.success
         ? (ordersRes.data || []).map((item: any) => {
-            const shippingAddress = toAddressObject(item.order?.shippingAddress);
+            const kind = String(item.kind || 'DESIGN_ORDER');
             const createdAt = item.order?.createdAt || item.createdAt;
             const dueDate = new Date(new Date(createdAt).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+            const isReadyToWear = kind === 'READY_TO_WEAR_ORDER';
+            const totalAmount = isReadyToWear
+              ? Number(item.price || 0) * Math.max(1, Number(item.quantity || 1))
+              : Number(item.price || 0);
+            const fabricInfo = isReadyToWear
+              ? `${item.size ? `Size ${String(item.size)}` : 'Ready-to-wear'} · Qty ${Math.max(1, Number(item.quantity || 1))}`
+              : 'Included in order details';
+            const status = String(item.order?.status || item.status || 'PENDING');
             return {
               id: String(item.id),
-              orderId: String(item.orderId || ''),
+              orderId: String(item.orderId || item.order?.id || ''),
               orderNumber: item.order?.orderNumber || 'N/A',
-              designName: item.design?.name || 'Design',
-              customerName: shippingAddress?.fullName || 'Customer',
-              measurements: (item.measurements && typeof item.measurements === 'object') ? item.measurements : {},
-              fabricInfo: 'Included in order details',
-              totalAmount: Number(item.price || 0),
-              status: item.status || 'PENDING',
+              designName: isReadyToWear ? item.readyToWear?.name || 'Ready To Wear' : item.design?.name || 'Design',
+              customerName: 'Customer (Protected)',
+              measurements:
+                !isReadyToWear && item.measurements && typeof item.measurements === 'object'
+                  ? item.measurements
+                  : {},
+              fabricInfo,
+              totalAmount,
+              status,
               createdAt,
               dueDate,
-              priority: item.status === 'PENDING' ? 'HIGH' : 'MEDIUM',
+              priority: status === 'PENDING' || status === 'PAYMENT_CONFIRMED' ? 'HIGH' : 'MEDIUM',
             };
           })
         : [];
@@ -2232,9 +2230,9 @@ export default function DesignerDashboard() {
               header: 'Status',
               render: (item) => (
                 <Badge variant={
-                  item.status === 'COMPLETED' ? 'green' :
+                  item.status === 'COMPLETED' || item.status === 'PRODUCTION_COMPLETE' ? 'green' :
                   item.status === 'IN_PRODUCTION' ? 'purple' :
-                  item.status === 'PENDING' ? 'yellow' : 'gray'
+                  item.status === 'PAYMENT_CONFIRMED' || item.status === 'PENDING' ? 'yellow' : 'gray'
                 }>
                   {item.status}
                 </Badge>
@@ -2247,7 +2245,7 @@ export default function DesignerDashboard() {
           searchKeys={['orderNumber', 'designName', 'customerName']}
           actions={(item) => (
             <div className="flex gap-2">
-              {item.status === 'PENDING' && (
+              {['PENDING', 'PAYMENT_CONFIRMED', 'FABRIC_RECEIVED'].includes(item.status) && (
                 <Button 
                   size="sm"
                   onClick={() => handleUpdateOrderStatus(item.orderId, 'IN_PRODUCTION')}

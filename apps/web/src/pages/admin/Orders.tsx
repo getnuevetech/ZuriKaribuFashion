@@ -35,9 +35,13 @@ export default function AdminOrders() {
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [workflowSettings, setWorkflowSettings] = useState<any | null>(null);
+  const [savingWorkflow, setSavingWorkflow] = useState(false);
+  const [workflowMessage, setWorkflowMessage] = useState('');
 
   useEffect(() => {
     fetchOrders();
+    fetchWorkflowSettings();
   }, []);
 
   const fetchOrders = async () => {
@@ -53,6 +57,44 @@ export default function AdminOrders() {
       console.error('Failed to fetch orders:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchWorkflowSettings = async () => {
+    try {
+      const response = await api.admin.getOrderWorkflowSettings();
+      if (response.success) {
+        setWorkflowSettings(response.data || null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch workflow settings:', error);
+    }
+  };
+
+  const handleSaveWorkflowSettings = async () => {
+    if (!workflowSettings) return;
+    try {
+      setSavingWorkflow(true);
+      setWorkflowMessage('');
+      const response = await api.admin.updateOrderWorkflowSettings(workflowSettings);
+      if (response.success) {
+        setWorkflowSettings(response.data || workflowSettings);
+        setWorkflowMessage('Order workflow settings saved.');
+      }
+    } catch (error: any) {
+      setWorkflowMessage(error?.response?.data?.message || 'Failed to save workflow settings.');
+    } finally {
+      setSavingWorkflow(false);
+    }
+  };
+
+  const handleRunAutoClose = async () => {
+    try {
+      const response = await api.admin.autoCloseOverdueOrders();
+      setWorkflowMessage(response.message || 'Auto-close completed.');
+      fetchOrders();
+    } catch (error: any) {
+      setWorkflowMessage(error?.response?.data?.message || 'Auto-close failed.');
     }
   };
 
@@ -110,13 +152,21 @@ export default function AdminOrders() {
           className="px-4 py-2 border rounded-lg"
         >
           <option value="">All Status</option>
-          <option value="PENDING">Pending</option>
-          <option value="CONFIRMED">Confirmed</option>
+          <option value="PENDING_PAYMENT">Pending Payment</option>
+          <option value="PAYMENT_CONFIRMED">Payment Confirmed</option>
+          <option value="FABRIC_PENDING">Fabric Pending</option>
+          <option value="FABRIC_CONFIRMED">Fabric Confirmed</option>
+          <option value="FABRIC_SHIPPED">Fabric Shipped</option>
+          <option value="FABRIC_RECEIVED">Fabric Received</option>
           <option value="IN_PRODUCTION">In Production</option>
-          <option value="QA_REVIEW">QA Review</option>
-          <option value="READY_FOR_SHIPPING">Ready for Shipping</option>
+          <option value="PRODUCTION_COMPLETE">Production Complete</option>
+          <option value="QA_PENDING">QA Pending</option>
+          <option value="QA_INSPECTING">QA Inspecting</option>
+          <option value="QA_APPROVED">QA Approved</option>
+          <option value="QA_REJECTED">QA Rejected</option>
           <option value="SHIPPED">Shipped</option>
           <option value="DELIVERED">Delivered</option>
+          <option value="COMPLETED">Completed</option>
           <option value="CANCELLED">Cancelled</option>
         </select>
         <Button variant="outline" onClick={fetchOrders}>
@@ -124,6 +174,132 @@ export default function AdminOrders() {
           Filter
         </Button>
       </div>
+
+      {workflowSettings ? (
+        <div className="bg-white rounded-xl border p-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-gray-900">Order Processing Workflow</h2>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleRunAutoClose}>
+                Auto-close overdue delivered
+              </Button>
+              <Button onClick={handleSaveWorkflowSettings} disabled={savingWorkflow}>
+                {savingWorkflow ? 'Saving...' : 'Save Workflow'}
+              </Button>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="text-sm text-gray-700">
+              Processing mode
+              <select
+                value={workflowSettings.processingMode || 'MANUAL'}
+                onChange={(event) =>
+                  setWorkflowSettings((prev: any) => ({ ...prev, processingMode: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              >
+                <option value="MANUAL">Manual admin verification</option>
+                <option value="AUTO">Auto processing (criteria required)</option>
+              </select>
+            </label>
+            <label className="text-sm text-gray-700">
+              Auto-close window (days)
+              <input
+                type="number"
+                min={1}
+                max={60}
+                value={workflowSettings.autoCloseDays || 3}
+                onChange={(event) =>
+                  setWorkflowSettings((prev: any) => ({ ...prev, autoCloseDays: Number(event.target.value || 3) }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </label>
+            <label className="text-sm text-gray-700">
+              Reminder lead time (hours)
+              <input
+                type="number"
+                min={1}
+                max={720}
+                value={workflowSettings.reminderLeadHours || 24}
+                onChange={(event) =>
+                  setWorkflowSettings((prev: any) => ({
+                    ...prev,
+                    reminderLeadHours: Number(event.target.value || 24),
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </label>
+          </div>
+          <div className="grid gap-3 md:grid-cols-4">
+            <label className="text-sm text-gray-700">
+              Admin review SLA (hrs)
+              <input
+                type="number"
+                min={1}
+                value={workflowSettings.slaHours?.adminReview || 24}
+                onChange={(event) =>
+                  setWorkflowSettings((prev: any) => ({
+                    ...prev,
+                    slaHours: { ...(prev?.slaHours || {}), adminReview: Number(event.target.value || 24) },
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </label>
+            <label className="text-sm text-gray-700">
+              Vendor fulfillment SLA (hrs)
+              <input
+                type="number"
+                min={1}
+                value={workflowSettings.slaHours?.vendorFulfillment || 72}
+                onChange={(event) =>
+                  setWorkflowSettings((prev: any) => ({
+                    ...prev,
+                    slaHours: { ...(prev?.slaHours || {}), vendorFulfillment: Number(event.target.value || 72) },
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </label>
+            <label className="text-sm text-gray-700">
+              QA review SLA (hrs)
+              <input
+                type="number"
+                min={1}
+                value={workflowSettings.slaHours?.qaReview || 24}
+                onChange={(event) =>
+                  setWorkflowSettings((prev: any) => ({
+                    ...prev,
+                    slaHours: { ...(prev?.slaHours || {}), qaReview: Number(event.target.value || 24) },
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </label>
+            <label className="text-sm text-gray-700">
+              Customer concern window (hrs)
+              <input
+                type="number"
+                min={1}
+                value={workflowSettings.slaHours?.customerConcernWindow || 72}
+                onChange={(event) =>
+                  setWorkflowSettings((prev: any) => ({
+                    ...prev,
+                    slaHours: {
+                      ...(prev?.slaHours || {}),
+                      customerConcernWindow: Number(event.target.value || 72),
+                    },
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </label>
+          </div>
+          {workflowMessage ? <p className="text-xs text-emerald-700">{workflowMessage}</p> : null}
+        </div>
+      ) : null}
 
       {/* Orders Table */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">

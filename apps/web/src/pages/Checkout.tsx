@@ -64,6 +64,14 @@ interface PromoPreviewResult {
   eligibleSubtotalUsd: number;
 }
 
+interface SuggestedCheckoutProduct {
+  id: string;
+  name: string;
+  image: string;
+  subtitle: string;
+  href: string;
+}
+
 export default function Checkout() {
   const navigate = useNavigate();
   const stripe = useStripe();
@@ -77,7 +85,7 @@ export default function Checkout() {
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [orderNumbers, setOrderNumbers] = useState<string[]>([]);
-  const [suggestedProducts, setSuggestedProducts] = useState<any[]>([]);
+  const [suggestedProducts, setSuggestedProducts] = useState<SuggestedCheckoutProduct[]>([]);
   const [paymentProviders, setPaymentProviders] = useState<PaymentProviderOption[]>([]);
   const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<string>('STRIPE');
   const [shippingQuotes, setShippingQuotes] = useState<ShippingQuoteOption[]>([]);
@@ -203,17 +211,86 @@ export default function Checkout() {
   }, [shippingAddress.country, shippingAddress.city, shippingCountryCode, totalPrice]);
 
   useEffect(() => {
+    const kindCount = items.reduce(
+      (acc, item) => {
+        acc[item.kind] = (acc[item.kind] || 0) + 1;
+        return acc;
+      },
+      { CUSTOM_DESIGN: 0, READY_TO_WEAR: 0, FABRIC_ONLY: 0 } as Record<string, number>
+    );
+    const dominantKind =
+      kindCount.FABRIC_ONLY >= kindCount.CUSTOM_DESIGN && kindCount.FABRIC_ONLY >= kindCount.READY_TO_WEAR
+        ? 'FABRIC_ONLY'
+        : kindCount.CUSTOM_DESIGN >= kindCount.READY_TO_WEAR
+          ? 'CUSTOM_DESIGN'
+          : 'READY_TO_WEAR';
+
+    const mapRows = (rows: any[], kind: 'FABRIC_ONLY' | 'CUSTOM_DESIGN' | 'READY_TO_WEAR'): SuggestedCheckoutProduct[] =>
+      rows.slice(0, 4).map((row: any) => {
+        if (kind === 'FABRIC_ONLY') {
+          return {
+            id: String(row.id || ''),
+            name: String(row.name || 'Fabric'),
+            image: String(row.images?.[0]?.url || '/images/placeholder.jpg'),
+            subtitle: String(row.materialType?.name || 'Fabric'),
+            href: `/fabrics/${row.id}`,
+          };
+        }
+        if (kind === 'CUSTOM_DESIGN') {
+          return {
+            id: String(row.id || ''),
+            name: String(row.name || 'Design'),
+            image: String(row.images?.[0]?.url || '/images/placeholder.jpg'),
+            subtitle: String(row.category?.name || 'Design'),
+            href: `/designs/${row.id}`,
+          };
+        }
+        return {
+          id: String(row.id || ''),
+          name: String(row.name || 'Ready To Wear'),
+          image: String(row.images?.[0]?.url || '/images/placeholder.jpg'),
+          subtitle: String(row.category?.name || 'Ready To Wear'),
+          href: `/ready-to-wear/${row.id}`,
+        };
+      });
+
+    if (dominantKind === 'FABRIC_ONLY') {
+      api.products
+        .getFabrics({ limit: 4 })
+        .then((response) => {
+          if (response.success) {
+            setSuggestedProducts(mapRows(Array.isArray(response.data?.fabrics) ? response.data.fabrics : [], 'FABRIC_ONLY'));
+          } else {
+            setSuggestedProducts([]);
+          }
+        })
+        .catch(() => setSuggestedProducts([]));
+      return;
+    }
+    if (dominantKind === 'CUSTOM_DESIGN') {
+      api.products
+        .getDesigns({ limit: 4 })
+        .then((response) => {
+          if (response.success) {
+            setSuggestedProducts(mapRows(Array.isArray(response.data?.designs) ? response.data.designs : [], 'CUSTOM_DESIGN'));
+          } else {
+            setSuggestedProducts([]);
+          }
+        })
+        .catch(() => setSuggestedProducts([]));
+      return;
+    }
     api.products
       .getReadyToWear({ limit: 4 })
       .then((response) => {
         if (response.success) {
-          setSuggestedProducts(Array.isArray(response.data?.products) ? response.data.products : []);
+          setSuggestedProducts(mapRows(Array.isArray(response.data?.products) ? response.data.products : [], 'READY_TO_WEAR'));
+        } else {
+          setSuggestedProducts([]);
         }
       })
-      .catch(() => {
-        setSuggestedProducts([]);
-      });
-  }, []);
+      .catch(() => setSuggestedProducts([]));
+  }, [items]);
 
   const handleShippingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -385,14 +462,17 @@ export default function Checkout() {
 
       for (let index = 0; index < customItems.length; index += 1) {
         const item = customItems[index];
-        if (!item.designId || !item.fabricId) {
+        if (!item.designId) {
           continue;
         }
+        const isDesignerDecidesFabric = item.fabricSelectionMode === 'DESIGNER_DECIDES' || !item.fabricId;
 
         const orderResponse = await api.orders.createCustomDesignOrder({
           designId: item.designId,
-          fabricId: item.fabricId,
-          yards: item.fabricMeters,
+          fabricId: isDesignerDecidesFabric ? undefined : item.fabricId,
+          yards: isDesignerDecidesFabric ? undefined : Number(item.fabricMeters || 1),
+          fabricSelectionMode: isDesignerDecidesFabric ? 'DESIGNER_DECIDES' : 'CUSTOMER_SELECTED',
+          fabricPreferenceNotes: isDesignerDecidesFabric ? item.fabricPreferenceNotes || undefined : undefined,
           measurements: item.measurements || {},
           shippingAddressId,
           paymentMethod,
@@ -978,8 +1058,19 @@ export default function Checkout() {
                       ) : (
                         <>
                           <p className="font-medium text-sm text-gray-900">{item.designName}</p>
-                          <p className="text-xs text-gray-500">{item.fabricName}</p>
-                          <p className="text-xs text-gray-500">{item.fabricMeters} yards fabric</p>
+                          {item.fabricSelectionMode === 'DESIGNER_DECIDES' || !item.fabricId ? (
+                            <>
+                              <p className="text-xs text-gray-500">Designer will select fabric</p>
+                              {item.fabricPreferenceNotes ? (
+                                <p className="text-xs text-gray-500 line-clamp-2">{item.fabricPreferenceNotes}</p>
+                              ) : null}
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-xs text-gray-500">{item.fabricName}</p>
+                              <p className="text-xs text-gray-500">{item.fabricMeters} yards fabric</p>
+                            </>
+                          )}
                         </>
                       )}
                     </div>
@@ -1113,17 +1204,17 @@ export default function Checkout() {
                   {suggestedProducts.map((product) => (
                     <Link
                       key={product.id}
-                      to={`/ready-to-wear/${product.id}`}
+                      to={product.href}
                       className="flex items-center gap-3 rounded-lg border p-2 hover:bg-gray-50"
                     >
                       <img
-                        src={product.images?.[0]?.url || '/images/placeholder.jpg'}
+                        src={product.image || '/images/placeholder.jpg'}
                         alt={product.name}
                         className="h-14 w-12 object-cover rounded"
                       />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{product.name}</p>
-                        <p className="text-xs text-gray-500 truncate">{product.category?.name || 'Ready to Wear'}</p>
+                        <p className="text-xs text-gray-500 truncate">{product.subtitle}</p>
                       </div>
                     </Link>
                   ))}

@@ -108,9 +108,12 @@ export default function MainLayout() {
 
   const leftNavLinks = [
     { label: 'Home', href: '/' },
-    { label: 'Shop', href: '/#shop' },
+    { label: 'Ready To Wear', href: '/ready-to-wear' },
+    { label: 'Fabric To Buy', href: '/fabrics' },
+    { label: 'Custom To Wear', href: '/designs' },
   ];
   const rightNavLinks = [
+    { label: 'Shop', href: '/#shop' },
     { label: 'About Us', href: '/#about' },
     { label: 'Contact Us', href: '/#contact' },
   ];

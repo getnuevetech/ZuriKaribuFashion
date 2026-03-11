@@ -4,6 +4,13 @@ import { prisma, UserRole, OrderType, OrderStatus, PaymentStatus, ProductStatus 
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import nodemailer from 'nodemailer';
+import {
+  appendWorkflowMetadataToShippingAddress,
+  determinePostPaymentStatus,
+  readOrderWorkflowSettings,
+  redactShippingAddressForVendor,
+  shouldNotifyRoleForStatus,
+} from '../utils/order-workflow';
 
 const router = Router();
 
@@ -86,6 +93,199 @@ async function sendOrderConfirmationEmail(params: {
       <p>Your order has been received and is now being processed.</p>
     `,
   });
+}
+
+function toStatusLabel(status: OrderStatus) {
+  return String(status || '')
+    .toLowerCase()
+    .split('_')
+    .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
+    .join(' ');
+}
+
+async function sendLifecycleEmail(params: {
+  to: string;
+  subject: string;
+  title: string;
+  body: string;
+}) {
+  const transporter = getOrderMailer();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  if (!transporter || !from || !params.to) return;
+  await transporter.sendMail({
+    from,
+    to: params.to,
+    subject: params.subject,
+    text: `${params.title}\n\n${params.body}`,
+    html: `<p><strong>${params.title}</strong></p><p>${params.body}</p>`,
+  });
+}
+
+async function notifyOrderLifecycle(params: {
+  orderId: string;
+  status: OrderStatus;
+  notes?: string;
+  actorRole: UserRole;
+}) {
+  try {
+    const [settings, order, adminUsers] = await Promise.all([
+      readOrderWorkflowSettings(),
+      prisma.order.findUnique({
+        where: { id: params.orderId },
+        include: {
+          customer: { select: { id: true, email: true, firstName: true, lastName: true } },
+          fabricOrder: {
+            include: {
+              seller: {
+                include: {
+                  user: { select: { id: true, email: true, firstName: true, lastName: true } },
+                },
+              },
+            },
+          },
+          designOrder: {
+            include: {
+              designer: {
+                include: {
+                  user: { select: { id: true, email: true, firstName: true, lastName: true } },
+                },
+              },
+            },
+          },
+          readyToWearItems: {
+            include: {
+              readyToWear: {
+                include: {
+                  designer: {
+                    include: {
+                      user: { select: { id: true, email: true, firstName: true, lastName: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          qa: {
+            include: {
+              user: { select: { id: true, email: true, firstName: true, lastName: true } },
+            },
+          },
+        },
+      }),
+      prisma.user.findMany({
+        where: {
+          role: UserRole.ADMINISTRATOR,
+          status: 'ACTIVE',
+        },
+        select: { id: true, email: true, firstName: true, lastName: true },
+      }),
+    ]);
+    if (!order) return;
+
+    const statusLabel = toStatusLabel(params.status);
+    const notificationTitle = `Order ${order.orderNumber} updated`;
+    const roleBlurb = (() => {
+      if (params.actorRole === UserRole.ADMINISTRATOR) return 'by Admin';
+      if (params.actorRole === UserRole.QA_TEAM) return 'by QA';
+      if (params.actorRole === UserRole.FABRIC_SELLER) return 'by Seller';
+      if (params.actorRole === UserRole.FASHION_DESIGNER) return 'by Designer';
+      return 'by Customer';
+    })();
+    const notificationBody = `Status is now "${statusLabel}" ${roleBlurb}.${params.notes ? ` Notes: ${params.notes}` : ''}`;
+
+    const recipients: Array<{ role: 'CUSTOMER' | 'SELLER' | 'DESIGNER' | 'QA' | 'ADMIN'; userId: string; email: string }> = [];
+    if (order.customer?.id && order.customer?.email) {
+      recipients.push({ role: 'CUSTOMER', userId: order.customer.id, email: order.customer.email });
+    }
+    const sellerUser = order.fabricOrder?.seller?.user;
+    if (sellerUser?.id && sellerUser?.email) {
+      recipients.push({ role: 'SELLER', userId: sellerUser.id, email: sellerUser.email });
+    }
+    const designerUsers = new Map<string, { id: string; email: string }>();
+    const designOwner = order.designOrder?.designer?.user;
+    if (designOwner?.id && designOwner?.email) {
+      designerUsers.set(designOwner.id, { id: designOwner.id, email: designOwner.email });
+    }
+    for (const item of order.readyToWearItems || []) {
+      const readyDesigner = item.readyToWear?.designer?.user;
+      if (readyDesigner?.id && readyDesigner?.email) {
+        designerUsers.set(readyDesigner.id, { id: readyDesigner.id, email: readyDesigner.email });
+      }
+    }
+    designerUsers.forEach((value) => {
+      recipients.push({ role: 'DESIGNER', userId: value.id, email: value.email });
+    });
+    const qaUser = order.qa?.user;
+    if (qaUser?.id && qaUser?.email) {
+      recipients.push({ role: 'QA', userId: qaUser.id, email: qaUser.email });
+    }
+    for (const admin of adminUsers) {
+      if (admin?.id && admin?.email) {
+        recipients.push({ role: 'ADMIN', userId: admin.id, email: admin.email });
+      }
+    }
+
+    const deduped = new Map<string, { role: 'CUSTOMER' | 'SELLER' | 'DESIGNER' | 'QA' | 'ADMIN'; userId: string; email: string }>();
+    for (const recipient of recipients) {
+      const key = `${recipient.role}:${recipient.userId}`;
+      if (!deduped.has(key)) deduped.set(key, recipient);
+    }
+
+    const notifyTargets = Array.from(deduped.values()).filter((recipient) =>
+      shouldNotifyRoleForStatus(settings, recipient.role, params.status)
+    );
+
+    await Promise.all(
+      notifyTargets.map(async (recipient) => {
+        await prisma.notification
+          .create({
+            data: {
+              userId: recipient.userId,
+              type: 'ORDER_UPDATE' as any,
+              title: notificationTitle,
+              message: notificationBody,
+              relatedId: order.id,
+              relatedType: 'ORDER',
+            },
+          })
+          .catch(() => undefined);
+      })
+    );
+
+    await Promise.all(
+      notifyTargets.map((recipient) =>
+        sendLifecycleEmail({
+          to: recipient.email,
+          subject: `${notificationTitle} · ${statusLabel}`,
+          title: notificationTitle,
+          body: notificationBody,
+        }).catch(() => undefined)
+      )
+    );
+  } catch (error) {
+    console.error('Failed to send lifecycle notifications:', error);
+  }
+}
+
+function canAutoProcessOrder(params: {
+  processingMode: 'MANUAL' | 'AUTO';
+  criteria: {
+    requirePaid: boolean;
+    requireShippingProvider: boolean;
+    requireCustomerAddress: boolean;
+    requireItems: boolean;
+  };
+  isPaymentConfirmed: boolean;
+  hasShippingProvider: boolean;
+  hasShippingAddress: boolean;
+  hasItems: boolean;
+}) {
+  if (params.processingMode !== 'AUTO') return false;
+  if (params.criteria.requirePaid && !params.isPaymentConfirmed) return false;
+  if (params.criteria.requireShippingProvider && !params.hasShippingProvider) return false;
+  if (params.criteria.requireCustomerAddress && !params.hasShippingAddress) return false;
+  if (params.criteria.requireItems && !params.hasItems) return false;
+  return true;
 }
 
 // Get order by ID (with role-based access)
@@ -173,11 +373,18 @@ router.get('/:id', authorizePermissions(Permissions.ORDERS_READ_SELF, Permission
       if (sellerProfile && order.fabricOrder.sellerId === sellerProfile.id) {
         hasAccess = true;
       }
-    } else if (user.role === UserRole.FASHION_DESIGNER && order.designOrder) {
+    } else if (user.role === UserRole.FASHION_DESIGNER) {
       const designerProfile = await prisma.designerProfile.findFirst({
         where: { userId: user.id },
       });
-      if (designerProfile && order.designOrder.designerId === designerProfile.id) {
+      const ownsDesignOrder = Boolean(designerProfile && order.designOrder && order.designOrder.designerId === designerProfile.id);
+      const ownsReadyToWearOrder = Boolean(
+        designerProfile &&
+          (order.readyToWearItems || []).some(
+            (item) => String(item.readyToWear?.designerId || '') === String(designerProfile.id)
+          )
+      );
+      if (ownsDesignOrder || ownsReadyToWearOrder) {
         hasAccess = true;
       }
     } else if (user.role === UserRole.QA_TEAM && order.qaId) {
@@ -196,9 +403,22 @@ router.get('/:id', authorizePermissions(Permissions.ORDERS_READ_SELF, Permission
       });
     }
 
+    const safeOrder =
+      user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER
+        ? {
+            ...order,
+            customer: {
+              firstName: 'Customer',
+              lastName: '',
+              email: '',
+            },
+            shippingAddress: redactShippingAddressForVendor(order.shippingAddress),
+          }
+        : order;
+
     res.json({
       success: true,
-      data: order,
+      data: safeOrder,
     });
   } catch (error) {
     next(error);
@@ -210,8 +430,10 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
   try {
     const schema = z.object({
       designId: z.string().uuid(),
-      fabricId: z.string().uuid(),
-      yards: z.number().min(1),
+      fabricId: z.string().uuid().optional(),
+      yards: z.number().min(1).optional(),
+      fabricSelectionMode: z.enum(['CUSTOMER_SELECTED', 'DESIGNER_DECIDES']).default('CUSTOMER_SELECTED'),
+      fabricPreferenceNotes: z.string().max(2000).optional(),
       measurements: z.record(z.number()),
       shippingAddressId: z.string().uuid(),
       paymentMethod: z.string(),
@@ -242,8 +464,19 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       });
     }
 
-    // Get design and fabric details
-    const [design, fabric, address] = await Promise.all([
+    const wantsDesignerToChooseFabric =
+      data.fabricSelectionMode === 'DESIGNER_DECIDES' || !data.fabricId;
+    const hasCustomerSelectedFabric = !wantsDesignerToChooseFabric;
+    const selectedYards = Number(data.yards || 0);
+    if (hasCustomerSelectedFabric && (!data.fabricId || selectedYards < 1)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Fabric and yards are required when customer selects fabric.',
+      });
+    }
+
+    // Get design, optional fabric, and address details
+    const [design, address, fabric] = await Promise.all([
       prisma.design.findFirst({
         where: {
           id: data.designId,
@@ -252,50 +485,55 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
         },
         include: {
           designer: true,
-          suitableFabrics: { where: { fabricId: data.fabricId } },
+          suitableFabrics: true,
         },
-      }),
-      prisma.fabric.findFirst({
-        where: {
-          id: data.fabricId,
-          status: ProductStatus.APPROVED,
-          isAvailable: true,
-        },
-        include: { seller: true },
       }),
       prisma.address.findFirst({
         where: { id: data.shippingAddressId, customerProfileId: customerProfile.id },
       }),
+      hasCustomerSelectedFabric && data.fabricId
+        ? prisma.fabric.findFirst({
+            where: {
+              id: data.fabricId,
+              status: ProductStatus.APPROVED,
+              isAvailable: true,
+            },
+            include: { seller: true },
+          })
+        : Promise.resolve(null),
     ]);
 
     if (!design) {
       return res.status(404).json({ success: false, message: 'Design not found.' });
     }
-    if (!fabric) {
-      return res.status(404).json({ success: false, message: 'Fabric not found.' });
-    }
     if (!address) {
       return res.status(404).json({ success: false, message: 'Shipping address not found.' });
     }
+    if (hasCustomerSelectedFabric && !fabric) {
+      return res.status(404).json({ success: false, message: 'Fabric not found.' });
+    }
 
-    // Check if fabric is suitable for design
-    if (design.suitableFabrics.length === 0) {
+    // Check if selected fabric is suitable for design
+    if (
+      hasCustomerSelectedFabric &&
+      !design.suitableFabrics.some((row) => String(row.fabricId || '') === String(data.fabricId || ''))
+    ) {
       return res.status(400).json({
         success: false,
         message: 'Selected fabric is not suitable for this design.',
       });
     }
 
-    // Check if fabric and designer are in same country
-    if (fabric.seller.country !== design.designer.country) {
+    // Check if selected fabric and designer are in same country
+    if (hasCustomerSelectedFabric && fabric && fabric.seller.country !== design.designer.country) {
       return res.status(400).json({
         success: false,
         message: 'Fabric seller and designer must be in the same country for standard processing.',
       });
     }
 
-    // Check fabric stock
-    if (fabric.stockYards < data.yards) {
+    // Check selected fabric stock
+    if (hasCustomerSelectedFabric && fabric && fabric.stockYards < selectedYards) {
       return res.status(400).json({
         success: false,
         message: `Not enough fabric in stock. Available: ${fabric.stockYards} yards`,
@@ -303,7 +541,7 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
     }
 
     // Calculate prices
-    const fabricPrice = Number(fabric.finalPrice) * data.yards;
+    const fabricPrice = hasCustomerSelectedFabric && fabric ? Number(fabric.finalPrice) * selectedYards : 0;
     const designPrice = Number(design.finalPrice);
     const subtotalBeforeDiscount = fabricPrice + designPrice;
     const discountUsd = Math.max(0, Math.min(Number(data.discountUsd || 0), subtotalBeforeDiscount));
@@ -312,20 +550,45 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
     const tax = subtotal * 0.08; // 8% tax
     const total = subtotal + shippingCost + tax;
     const isPaymentConfirmed = Boolean(data.paymentIntentId);
-    const initialStatus = isPaymentConfirmed ? OrderStatus.PAYMENT_CONFIRMED : OrderStatus.PENDING_PAYMENT;
+    const workflowSettings = await readOrderWorkflowSettings();
+    const autoProcessingEligible = canAutoProcessOrder({
+      processingMode: workflowSettings.processingMode,
+      criteria: workflowSettings.autoProcessCriteria,
+      isPaymentConfirmed,
+      hasShippingProvider: Boolean(data.shippingProviderKey || data.shippingProviderName),
+      hasShippingAddress: Boolean(address.id),
+      hasItems: true,
+    });
+    const effectiveWorkflowSettings = {
+      ...workflowSettings,
+      processingMode: autoProcessingEligible ? workflowSettings.processingMode : 'MANUAL',
+    } as typeof workflowSettings;
+    const initialStatus = determinePostPaymentStatus({
+      isPaymentConfirmed,
+      orderType: OrderType.CUSTOM_DESIGN,
+      hasFabricOrder: hasCustomerSelectedFabric,
+      settings: effectiveWorkflowSettings,
+    });
 
     // Generate order number
     const orderNumber = `AF-${Date.now().toString(36).toUpperCase()}`;
 
-    const shippingSnapshot = {
-      ...address,
-      shippingQuoteId: data.shippingQuoteId || null,
-      shippingProviderKey: data.shippingProviderKey || null,
-      shippingProviderName: data.shippingProviderName || null,
-      shippingServiceName: data.shippingServiceName || null,
-      shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
-      shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
-    };
+    const shippingSnapshot = appendWorkflowMetadataToShippingAddress({
+      shippingAddress: {
+        ...address,
+        shippingQuoteId: data.shippingQuoteId || null,
+        shippingProviderKey: data.shippingProviderKey || null,
+        shippingProviderName: data.shippingProviderName || null,
+        shippingServiceName: data.shippingServiceName || null,
+        shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
+        shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
+      },
+      settings: effectiveWorkflowSettings,
+      status: initialStatus,
+      note: wantsDesignerToChooseFabric
+        ? 'Customer requested designer-selected fabric.'
+        : 'Customer selected fabric.',
+    });
 
     // Create order with all components
     const order = await prisma.$transaction(async (tx) => {
@@ -335,7 +598,7 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
           orderNumber,
           type: OrderType.CUSTOM_DESIGN,
           customerId,
-          shippingAddress: shippingSnapshot,
+          shippingAddress: shippingSnapshot as any,
           subtotal,
           shippingCost,
           tax,
@@ -352,27 +615,38 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
               designerId: design.designerId,
               measurements: data.measurements,
               price: designPrice,
-              status: 'PENDING',
+              status: initialStatus === OrderStatus.IN_PRODUCTION ? 'IN_PRODUCTION' : 'PENDING',
+              productionNotes: wantsDesignerToChooseFabric
+                ? String(data.fabricPreferenceNotes || '').trim() ||
+                  'Customer requested designer-selected fabric.'
+                : null,
             },
           },
-          // Create fabric order item
-          fabricOrder: {
-            create: {
-              fabricId: data.fabricId,
-              sellerId: fabric.sellerId,
-              yards: data.yards,
-              pricePerYard: fabric.finalPrice,
-              totalPrice: fabricPrice,
-              status: 'PENDING',
-            },
-          },
+          ...(hasCustomerSelectedFabric && fabric
+            ? {
+                fabricOrder: {
+                  create: {
+                    fabricId: data.fabricId!,
+                    sellerId: fabric.sellerId,
+                    yards: selectedYards,
+                    pricePerYard: fabric.finalPrice,
+                    totalPrice: fabricPrice,
+                    status: 'PENDING',
+                  },
+                },
+              }
+            : {}),
           // Create timeline entry
           timeline: {
             create: {
               status: initialStatus,
               notes: isPaymentConfirmed
-                ? `Order created and payment confirmed${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`
-                : `Order created, awaiting payment${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`,
+                ? `Order created and payment confirmed${
+                    wantsDesignerToChooseFabric ? ' (Designer will select fabric)' : ''
+                  }${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`
+                : `Order created, awaiting payment${
+                    wantsDesignerToChooseFabric ? ' (Designer will select fabric)' : ''
+                  }${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`,
               updatedById: customerId,
               updatedByRole: UserRole.CUSTOMER,
             },
@@ -385,10 +659,10 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       });
 
       // Only decrement inventory for paid orders.
-      if (isPaymentConfirmed) {
+      if (isPaymentConfirmed && hasCustomerSelectedFabric && data.fabricId) {
         await tx.fabric.update({
           where: { id: data.fabricId },
-          data: { stockYards: { decrement: data.yards } },
+          data: { stockYards: { decrement: selectedYards } },
         });
       }
 
@@ -408,6 +682,14 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       itemCount: 1,
     }).catch((error) => {
       console.error('Failed to send custom-design order confirmation email:', error);
+    });
+    void notifyOrderLifecycle({
+      orderId: order.id,
+      status: initialStatus,
+      notes: wantsDesignerToChooseFabric
+        ? 'Customer selected designer-decides-fabric mode.'
+        : 'Customer selected fabric and measurements.',
+      actorRole: UserRole.CUSTOMER,
     });
   } catch (error) {
     next(error);
@@ -545,20 +827,43 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
     const tax = subtotal * 0.08;
     const total = subtotal + shippingCost + tax;
     const isPaymentConfirmed = Boolean(data.paymentIntentId);
-    const initialStatus = isPaymentConfirmed ? OrderStatus.PAYMENT_CONFIRMED : OrderStatus.PENDING_PAYMENT;
+    const workflowSettings = await readOrderWorkflowSettings();
+    const autoProcessingEligible = canAutoProcessOrder({
+      processingMode: workflowSettings.processingMode,
+      criteria: workflowSettings.autoProcessCriteria,
+      isPaymentConfirmed,
+      hasShippingProvider: Boolean(data.shippingProviderKey || data.shippingProviderName),
+      hasShippingAddress: Boolean(address.id),
+      hasItems: validatedItems.length > 0,
+    });
+    const effectiveWorkflowSettings = {
+      ...workflowSettings,
+      processingMode: autoProcessingEligible ? workflowSettings.processingMode : 'MANUAL',
+    } as typeof workflowSettings;
+    const initialStatus = determinePostPaymentStatus({
+      isPaymentConfirmed,
+      orderType: OrderType.READY_TO_WEAR,
+      hasFabricOrder: false,
+      settings: effectiveWorkflowSettings,
+    });
 
     // Generate order number
     const orderNumber = `AF-${Date.now().toString(36).toUpperCase()}`;
 
-    const shippingSnapshot = {
-      ...address,
-      shippingQuoteId: data.shippingQuoteId || null,
-      shippingProviderKey: data.shippingProviderKey || null,
-      shippingProviderName: data.shippingProviderName || null,
-      shippingServiceName: data.shippingServiceName || null,
-      shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
-      shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
-    };
+    const shippingSnapshot = appendWorkflowMetadataToShippingAddress({
+      shippingAddress: {
+        ...address,
+        shippingQuoteId: data.shippingQuoteId || null,
+        shippingProviderKey: data.shippingProviderKey || null,
+        shippingProviderName: data.shippingProviderName || null,
+        shippingServiceName: data.shippingServiceName || null,
+        shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
+        shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
+      },
+      settings: effectiveWorkflowSettings,
+      status: initialStatus,
+      note: 'Ready-to-wear order queued for fulfillment.',
+    });
 
     // Create order
     const order = await prisma.$transaction(async (tx) => {
@@ -567,7 +872,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
           orderNumber,
           type: OrderType.READY_TO_WEAR,
           customerId,
-          shippingAddress: shippingSnapshot,
+          shippingAddress: shippingSnapshot as any,
           subtotal,
           shippingCost,
           tax,
@@ -627,6 +932,12 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       itemCount: validatedItems.reduce((count, item) => count + Number(item.quantity || 0), 0),
     }).catch((error) => {
       console.error('Failed to send ready-to-wear order confirmation email:', error);
+    });
+    void notifyOrderLifecycle({
+      orderId: order.id,
+      status: initialStatus,
+      notes: 'Ready-to-wear order submitted.',
+      actorRole: UserRole.CUSTOMER,
     });
   } catch (error) {
     next(error);
@@ -702,18 +1013,41 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
     const tax = subtotal * 0.08;
     const total = subtotal + shippingCost + tax;
     const isPaymentConfirmed = Boolean(data.paymentIntentId);
-    const initialStatus = isPaymentConfirmed ? OrderStatus.PAYMENT_CONFIRMED : OrderStatus.PENDING_PAYMENT;
+    const workflowSettings = await readOrderWorkflowSettings();
+    const autoProcessingEligible = canAutoProcessOrder({
+      processingMode: workflowSettings.processingMode,
+      criteria: workflowSettings.autoProcessCriteria,
+      isPaymentConfirmed,
+      hasShippingProvider: Boolean(data.shippingProviderKey || data.shippingProviderName),
+      hasShippingAddress: Boolean(address.id),
+      hasItems: Number(data.yards || 0) > 0,
+    });
+    const effectiveWorkflowSettings = {
+      ...workflowSettings,
+      processingMode: autoProcessingEligible ? workflowSettings.processingMode : 'MANUAL',
+    } as typeof workflowSettings;
+    const initialStatus = determinePostPaymentStatus({
+      isPaymentConfirmed,
+      orderType: OrderType.FABRIC_ONLY,
+      hasFabricOrder: true,
+      settings: effectiveWorkflowSettings,
+    });
     const orderNumber = `AF-${Date.now().toString(36).toUpperCase()}`;
 
-    const shippingSnapshot = {
-      ...address,
-      shippingQuoteId: data.shippingQuoteId || null,
-      shippingProviderKey: data.shippingProviderKey || null,
-      shippingProviderName: data.shippingProviderName || null,
-      shippingServiceName: data.shippingServiceName || null,
-      shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
-      shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
-    };
+    const shippingSnapshot = appendWorkflowMetadataToShippingAddress({
+      shippingAddress: {
+        ...address,
+        shippingQuoteId: data.shippingQuoteId || null,
+        shippingProviderKey: data.shippingProviderKey || null,
+        shippingProviderName: data.shippingProviderName || null,
+        shippingServiceName: data.shippingServiceName || null,
+        shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
+        shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
+      },
+      settings: effectiveWorkflowSettings,
+      status: initialStatus,
+      note: 'Fabric order queued for seller fulfillment.',
+    });
 
     const order = await prisma.$transaction(async (tx) => {
       const newOrder = await tx.order.create({
@@ -721,7 +1055,7 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
           orderNumber,
           type: OrderType.FABRIC_ONLY,
           customerId,
-          shippingAddress: shippingSnapshot,
+          shippingAddress: shippingSnapshot as any,
           subtotal,
           shippingCost,
           tax,
@@ -781,6 +1115,12 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
     }).catch((error) => {
       console.error('Failed to send fabric-only order confirmation email:', error);
     });
+    void notifyOrderLifecycle({
+      orderId: order.id,
+      status: initialStatus,
+      notes: 'Fabric-only order submitted.',
+      actorRole: UserRole.CUSTOMER,
+    });
   } catch (error) {
     next(error);
   }
@@ -803,6 +1143,13 @@ router.patch('/:id/status', authorizePermissions(Permissions.ORDERS_UPDATE_SELF,
       include: {
         designOrder: true,
         fabricOrder: true,
+        readyToWearItems: {
+          include: {
+            readyToWear: {
+              select: { designerId: true },
+            },
+          },
+        },
       },
     });
 
@@ -852,11 +1199,18 @@ router.patch('/:id/status', authorizePermissions(Permissions.ORDERS_UPDATE_SELF,
           };
         }
       }
-    } else if (user.role === UserRole.FASHION_DESIGNER && order.designOrder) {
+    } else if (user.role === UserRole.FASHION_DESIGNER) {
       const designerProfile = await prisma.designerProfile.findFirst({
         where: { userId: user.id },
       });
-      if (designerProfile && order.designOrder.designerId === designerProfile.id) {
+      const ownsDesignOrder = Boolean(designerProfile && order.designOrder && order.designOrder.designerId === designerProfile.id);
+      const ownsReadyToWearOrder = Boolean(
+        designerProfile &&
+          (order.readyToWearItems || []).some(
+            (item) => String(item.readyToWear?.designerId || '') === String(designerProfile.id)
+          )
+      );
+      if (designerProfile && ownsDesignOrder) {
         // Designer can only update design portion
         const designStatuses = ['PENDING', 'CONFIRMED', 'FABRIC_RECEIVED', 'IN_PRODUCTION', 'COMPLETED'] as const;
         const designToOrderStatus: Record<(typeof designStatuses)[number], OrderStatus> = {
@@ -873,6 +1227,20 @@ router.patch('/:id/status', authorizePermissions(Permissions.ORDERS_UPDATE_SELF,
           updateData.designOrder = {
             update: { status },
           };
+        }
+      }
+      if (designerProfile && ownsReadyToWearOrder) {
+        const readyStatuses = ['CONFIRMED', 'IN_PRODUCTION', 'COMPLETED', 'QA_PENDING'] as const;
+        const readyToOrderStatus: Record<(typeof readyStatuses)[number], OrderStatus> = {
+          CONFIRMED: OrderStatus.PAYMENT_CONFIRMED,
+          IN_PRODUCTION: OrderStatus.IN_PRODUCTION,
+          COMPLETED: OrderStatus.PRODUCTION_COMPLETE,
+          QA_PENDING: OrderStatus.QA_PENDING,
+        };
+        if ((readyStatuses as readonly string[]).includes(status)) {
+          canUpdate = true;
+          timelineStatus = readyToOrderStatus[status as (typeof readyStatuses)[number]];
+          updateData.status = timelineStatus;
         }
       }
     } else if (user.role === UserRole.QA_TEAM) {
@@ -906,6 +1274,17 @@ router.patch('/:id/status', authorizePermissions(Permissions.ORDERS_UPDATE_SELF,
       });
     }
 
+    const workflowSettings = await readOrderWorkflowSettings();
+    updateData.shippingAddress = appendWorkflowMetadataToShippingAddress({
+      shippingAddress: order.shippingAddress,
+      settings: workflowSettings,
+      status: timelineStatus,
+      note: notes || `Status updated to ${status}`,
+    }) as any;
+    if (timelineStatus === OrderStatus.DELIVERED) {
+      updateData.deliveredAt = new Date();
+    }
+
     const [updatedOrder] = await prisma.$transaction([
       prisma.order.update({
         where: { id },
@@ -921,6 +1300,12 @@ router.patch('/:id/status', authorizePermissions(Permissions.ORDERS_UPDATE_SELF,
         },
       }),
     ]);
+    void notifyOrderLifecycle({
+      orderId: id,
+      status: timelineStatus,
+      notes,
+      actorRole: user.role,
+    });
 
     res.json({
       success: true,

@@ -101,11 +101,13 @@ export default function Cart() {
                           alt={item.designName}
                           className="w-24 h-32 object-cover rounded-lg"
                         />
-                        <img
-                          src={item.fabricImage}
-                          alt={item.fabricName}
-                          className="w-12 h-16 object-cover absolute -bottom-2 -right-2 border-2 border-white shadow-md"
-                        />
+                        {item.fabricSelectionMode !== 'DESIGNER_DECIDES' && item.fabricImage ? (
+                          <img
+                            src={item.fabricImage}
+                            alt={item.fabricName || 'Selected fabric'}
+                            className="w-12 h-16 object-cover absolute -bottom-2 -right-2 border-2 border-white shadow-md"
+                          />
+                        ) : null}
                       </>
                     )}
                   </div>
@@ -153,10 +155,20 @@ export default function Cart() {
                       ) : (
                         <>
                           <div className="flex items-center gap-2 text-sm">
-                            <Badge variant="outline" className="text-xs">Fabric</Badge>
-                            <span className="text-gray-600">{item.fabricName}</span>
-                            <span className="text-gray-400">·</span>
-                            <span className="text-gray-600">{item.fabricMeters} meters</span>
+                            <Badge variant="outline" className="text-xs">
+                              {item.fabricSelectionMode === 'DESIGNER_DECIDES' ? 'Designer Chooses Fabric' : 'Fabric'}
+                            </Badge>
+                            {item.fabricSelectionMode === 'DESIGNER_DECIDES' ? (
+                              <span className="text-gray-600">
+                                {item.fabricPreferenceNotes || 'No preference note added'}
+                              </span>
+                            ) : (
+                              <>
+                                <span className="text-gray-600">{item.fabricName}</span>
+                                <span className="text-gray-400">·</span>
+                                <span className="text-gray-600">{item.fabricMeters} meters</span>
+                              </>
+                            )}
                           </div>
 
                           {Object.keys(item.measurements).length > 0 && (
@@ -227,27 +239,33 @@ export default function Cart() {
                           </>
                         ) : (
                           <>
-                            <button
-                              onClick={() =>
-                                updateItem(index, {
-                                  fabricMeters: Math.max(1, item.fabricMeters - 0.5),
-                                } as any)
-                              }
-                              className="w-8 h-8 flex items-center justify-center border rounded-lg hover:bg-gray-50"
-                            >
-                              <Minus className="w-4 h-4" />
-                            </button>
-                            <span className="font-medium w-12 text-center">{item.fabricMeters}m</span>
-                            <button
-                              onClick={() =>
-                                updateItem(index, {
-                                  fabricMeters: item.fabricMeters + 0.5,
-                                } as any)
-                              }
-                              className="w-8 h-8 flex items-center justify-center border rounded-lg hover:bg-gray-50"
-                            >
-                              <Plus className="w-4 h-4" />
-                            </button>
+                            {item.fabricSelectionMode === 'DESIGNER_DECIDES' ? (
+                              <span className="text-xs text-gray-500">Fabric will be chosen by designer</span>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() =>
+                                    updateItem(index, {
+                                      fabricMeters: Math.max(1, Number(item.fabricMeters || 1) - 0.5),
+                                    } as any)
+                                  }
+                                  className="w-8 h-8 flex items-center justify-center border rounded-lg hover:bg-gray-50"
+                                >
+                                  <Minus className="w-4 h-4" />
+                                </button>
+                                <span className="font-medium w-12 text-center">{item.fabricMeters}m</span>
+                                <button
+                                  onClick={() =>
+                                    updateItem(index, {
+                                      fabricMeters: Number(item.fabricMeters || 1) + 0.5,
+                                    } as any)
+                                  }
+                                  className="w-8 h-8 flex items-center justify-center border rounded-lg hover:bg-gray-50"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
                           </>
                         )}
                       </div>
@@ -271,7 +289,9 @@ export default function Cart() {
                           </p>
                         ) : (
                           <p className="text-xs text-gray-500">
-                            {formatFromUsd(item.basePrice)} + {formatFromUsd(item.fabricPrice * item.fabricMeters)}
+                            {item.fabricSelectionMode === 'DESIGNER_DECIDES' || !item.fabricId
+                              ? `${formatFromUsd(item.basePrice)} (designer will finalize fabric)`
+                              : `${formatFromUsd(item.basePrice)} + ${formatFromUsd(Number(item.fabricPrice || 0) * Number(item.fabricMeters || 0))}`}
                           </p>
                         )}
                       </div>

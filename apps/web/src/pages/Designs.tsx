@@ -237,6 +237,7 @@ export default function Designs() {
     search: searchParams.get('search') || '',
     categoryId: searchParams.get('category') || '',
     country: searchParams.get('country') || '',
+    designerId: searchParams.get('designerId') || '',
     minPrice: searchParams.get('minPrice') || '',
     maxPrice: searchParams.get('maxPrice') || '',
     sortBy: searchParams.get('sortBy') || 'newest',
@@ -293,6 +294,7 @@ export default function Designs() {
         search: filters.search || undefined,
         categoryId: filters.categoryId || undefined,
         country: filters.country || undefined,
+        designerId: filters.designerId || undefined,
         page: filters.page,
         limit: 200, // 4 columns x 50 rows
       });
@@ -335,6 +337,7 @@ export default function Designs() {
     if (newFilters.search) params.set('search', newFilters.search);
     if (newFilters.categoryId) params.set('category', newFilters.categoryId);
     if (newFilters.country) params.set('country', newFilters.country);
+    if (newFilters.designerId) params.set('designerId', newFilters.designerId);
     if (newFilters.minPrice) params.set('minPrice', newFilters.minPrice);
     if (newFilters.maxPrice) params.set('maxPrice', newFilters.maxPrice);
     if (newFilters.sortBy !== 'newest') params.set('sortBy', newFilters.sortBy);
@@ -347,6 +350,7 @@ export default function Designs() {
       search: '',
       categoryId: '',
       country: '',
+      designerId: '',
       minPrice: '',
       maxPrice: '',
       sortBy: 'newest',
@@ -366,6 +370,7 @@ export default function Designs() {
   const activeFiltersCount = [
     filters.categoryId,
     filters.country,
+    filters.designerId,
     filters.minPrice,
     filters.maxPrice,
   ].filter(Boolean).length;

@@ -53,6 +53,8 @@ export default function Fabrics() {
   const [filters, setFilters] = useState({
     search: searchParams.get('search') || '',
     material: searchParams.get('material') || '',
+    country: searchParams.get('country') || '',
+    sellerId: searchParams.get('sellerId') || '',
     page: Number.parseInt(searchParams.get('page') || '1', 10) || 1,
   });
 
@@ -82,6 +84,8 @@ export default function Fabrics() {
         const response = await api.products.getFabrics({
           search: filters.search || undefined,
           materialTypeId: selectedMaterialId,
+          country: filters.country || undefined,
+          sellerId: filters.sellerId || undefined,
           page: filters.page,
           limit: 80,
         });
@@ -100,12 +104,14 @@ export default function Fabrics() {
       }
     };
     loadFabrics();
-  }, [filters.page, filters.search, selectedMaterialId]);
+  }, [filters.country, filters.page, filters.search, filters.sellerId, selectedMaterialId]);
 
   const updateUrl = (next: typeof filters) => {
     const params = new URLSearchParams();
     if (next.search.trim()) params.set('search', next.search.trim());
     if (next.material.trim()) params.set('material', next.material.trim());
+    if (next.country.trim()) params.set('country', next.country.trim());
+    if (next.sellerId.trim()) params.set('sellerId', next.sellerId.trim());
     if (next.page > 1) params.set('page', String(next.page));
     setSearchParams(params);
   };
@@ -200,11 +206,11 @@ export default function Fabrics() {
             Showing <span className="font-semibold text-gray-900">{fabrics.length}</span> fabric
             {fabrics.length === 1 ? '' : 's'}
           </p>
-          {(filters.search || filters.material) ? (
+          {(filters.search || filters.material || filters.country || filters.sellerId) ? (
             <button
               type="button"
               onClick={() => {
-                const next = { search: '', material: '', page: 1 };
+                const next = { search: '', material: '', country: '', sellerId: '', page: 1 };
                 setFilters(next);
                 updateUrl(next);
               }}

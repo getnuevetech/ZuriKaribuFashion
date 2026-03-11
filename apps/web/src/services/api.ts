@@ -3924,6 +3924,17 @@ const adminApi = {
   assignQA: (orderId: string, qaId: string) =>
     apiService.patch(`/admin/orders/${orderId}/assign-qa`, { qaId }),
 
+  getOrderWorkflowSettings: () =>
+    apiService.get<{ success: boolean; data: any }>('/admin/order-workflow/settings'),
+
+  updateOrderWorkflowSettings: (data: any) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>('/admin/order-workflow/settings', data),
+
+  autoCloseOverdueOrders: () =>
+    apiService.post<{ success: boolean; data: { closedCount: number }; message?: string }>(
+      '/admin/order-workflow/auto-close-overdue'
+    ),
+
   // Banner Management
   getBanners: () =>
     apiService.get<{ success: boolean; data: any[] }>('/banners/admin/all'),
@@ -4085,6 +4096,14 @@ const qaApi = {
 
   shipOrder: (orderId: string, trackingNumber: string, notes?: string) =>
     apiService.patch(`/qa/orders/${orderId}/ship`, { trackingNumber, notes }),
+
+  getOrderChecklist: (orderId: string) =>
+    apiService.get<{ success: boolean; data: any[] }>(`/qa/orders/${orderId}/checklist`),
+
+  updateOrderChecklist: (
+    orderId: string,
+    data: { items: Array<{ key: string; label: string; required: boolean; checked: boolean; notes?: string }>; notes?: string }
+  ) => apiService.patch<{ success: boolean; data: any; message?: string }>(`/qa/orders/${orderId}/checklist`, data),
 
   getStats: async () => {
     const response = await apiService.get<{ success: boolean; data: any }>('/qa/dashboard');

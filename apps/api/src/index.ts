@@ -32,6 +32,7 @@ import paymentRoutes from './routes/payments';
 import shippingRoutes from './routes/shipping';
 import currencyRoutes from './routes/currency';
 import promotionRoutes from './routes/promotions';
+import orderWorkflowRoutes from './routes/order-workflow';
 import { runStartupRepairs } from './bootstrap';
 
 const app = express();
@@ -112,6 +113,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/shipping', shippingRoutes);
 app.use('/api/currency', currencyRoutes);
 app.use('/api/promotions', promotionRoutes);
+app.use('/api/admin/order-workflow', orderWorkflowRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
