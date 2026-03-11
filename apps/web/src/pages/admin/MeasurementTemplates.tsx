@@ -32,26 +32,37 @@ export default function AdminMeasurementTemplates() {
   ]);
   const [sizeGuideTitle, setSizeGuideTitle] = useState('Ready-To-Wear Size Guide');
   const [sizeGuideContent, setSizeGuideContent] = useState('');
+  const isRouteMissingError = (error: any) =>
+    Number(error?.response?.status) === 404 ||
+    /route not found/i.test(String(error?.response?.data?.message || error?.message || ''));
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
-        const [templatesRes, sizesRes, sizeGuideRes] = await Promise.all([
+        const [templatesResult, sizesResult, sizeGuideResult] = await Promise.allSettled([
           api.admin.getMeasurementTemplates(),
           api.admin.getReadyToWearSizesSettings(),
           api.admin.getReadyToWearSizeGuideSettings(),
         ]);
-        if (templatesRes.success) {
-          setRows(templatesRes.data || []);
+        if (templatesResult.status === 'fulfilled' && templatesResult.value.success) {
+          setRows(templatesResult.value.data || []);
+        } else if (templatesResult.status === 'rejected') {
+          throw templatesResult.reason;
         }
-        if (sizesRes.success && Array.isArray(sizesRes.data?.sizes)) {
-          const normalized = READY_TO_WEAR_SIZE_OPTIONS.filter((size) => sizesRes.data.sizes.includes(size));
+        if (sizesResult.status === 'fulfilled' && sizesResult.value.success && Array.isArray(sizesResult.value.data?.sizes)) {
+          const normalized = READY_TO_WEAR_SIZE_OPTIONS.filter((size) => sizesResult.value.data.sizes.includes(size));
           setReadyToWearSizes(normalized.length >= 3 ? normalized : ['S', 'M', 'L', 'XL']);
         }
-        if (sizeGuideRes.success) {
-          setSizeGuideTitle((sizeGuideRes.data?.title || 'Ready-To-Wear Size Guide').trim());
-          setSizeGuideContent((sizeGuideRes.data?.content || '').trim());
+        if (sizeGuideResult.status === 'fulfilled' && sizeGuideResult.value.success) {
+          setSizeGuideTitle((sizeGuideResult.value.data?.title || 'Ready-To-Wear Size Guide').trim());
+          setSizeGuideContent((sizeGuideResult.value.data?.content || '').trim());
+        } else if (
+          sizeGuideResult.status === 'rejected' &&
+          !isRouteMissingError(sizeGuideResult.reason)
+        ) {
+          // Keep page usable but surface non-routing failures from this optional endpoint.
+          console.warn('Unable to load size guide settings:', sizeGuideResult.reason);
         }
       } catch (err: any) {
         setError(err?.response?.data?.message || 'Failed to load measurement templates.');
@@ -88,14 +99,27 @@ export default function AdminMeasurementTemplates() {
       if (payload.length > 0) {
         await api.admin.updateMeasurementTemplates(payload);
       }
-      await Promise.all([
+      const [sizesSaveResult, guideSaveResult] = await Promise.allSettled([
         api.admin.updateReadyToWearSizesSettings(readyToWearSizes),
         api.admin.updateReadyToWearSizeGuideSettings({
           title: cleanSizeGuideTitle,
           content: cleanSizeGuideContent,
         }),
       ]);
-      setSuccess('Measurement templates, ready-to-wear sizes, and size guide saved successfully.');
+      if (sizesSaveResult.status === 'rejected' && !isRouteMissingError(sizesSaveResult.reason)) {
+        throw sizesSaveResult.reason;
+      }
+      if (guideSaveResult.status === 'rejected' && !isRouteMissingError(guideSaveResult.reason)) {
+        throw guideSaveResult.reason;
+      }
+      const hasLegacyGap =
+        (sizesSaveResult.status === 'rejected' && isRouteMissingError(sizesSaveResult.reason)) ||
+        (guideSaveResult.status === 'rejected' && isRouteMissingError(guideSaveResult.reason));
+      setSuccess(
+        hasLegacyGap
+          ? 'Measurement templates saved. Some Ready-To-Wear settings require backend deployment update.'
+          : 'Measurement templates, ready-to-wear sizes, and size guide saved successfully.'
+      );
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to save templates.');
     } finally {
