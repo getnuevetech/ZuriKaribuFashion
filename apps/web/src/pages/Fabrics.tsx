@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Search, Loader2, Heart } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Search } from 'lucide-react';
 import { api } from '../services/api';
 import { useCurrencyStore } from '../store/currencyStore';
 import { resolveCountryCode } from '../data/locationOptions';
@@ -8,7 +8,6 @@ import { resolveCountryCode } from '../data/locationOptions';
 interface Fabric {
   id: string;
   name: string;
-  description: string;
   pricePerMeter: number;
   images: { url: string }[];
   seller: {
@@ -21,12 +20,6 @@ interface Fabric {
     name: string;
   };
   materialTypeId?: string;
-  productLabels?: Array<{
-    id: string;
-    name: string;
-    textColor: string;
-    backgroundColor: string;
-  }>;
 }
 
 interface Material {
@@ -34,12 +27,63 @@ interface Material {
   name: string;
 }
 
+interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
+type CategoryPageSettings = {
+  bannerTitle: string;
+  bannerSubtitle: string;
+  bannerImage: string;
+  pageSize: number;
+  columns: number;
+  showPagination: boolean;
+  featuredProductIds: string[];
+};
+
+type FeaturedProduct = {
+  id: string;
+  name: string;
+  image: string;
+  priceUsd: number;
+  country: string;
+  ownerName: string;
+  href: string;
+};
+
+const DEFAULT_SETTINGS: CategoryPageSettings = {
+  bannerTitle: 'Fabrics To Buy',
+  bannerSubtitle: 'Choose quality fabrics by material and country.',
+  bannerImage: '/images/hero-fabrics.jpg',
+  pageSize: 24,
+  columns: 4,
+  showPagination: true,
+  featuredProductIds: [],
+};
+
+const lgGridByColumns: Record<number, string> = {
+  2: 'lg:grid-cols-2',
+  3: 'lg:grid-cols-3',
+  4: 'lg:grid-cols-4',
+  5: 'lg:grid-cols-5',
+  6: 'lg:grid-cols-6',
+};
+
+const mdGridByColumns: Record<number, string> = {
+  2: 'md:grid-cols-2',
+  3: 'md:grid-cols-3',
+  4: 'md:grid-cols-3',
+  5: 'md:grid-cols-3',
+  6: 'md:grid-cols-3',
+};
+
 function resolveMaterialId(queryValue: string, materials: Material[]) {
   const normalized = queryValue.trim().toLowerCase();
   if (!normalized) return undefined;
-  const matched = materials.find(
-    (entry) => entry.id.toLowerCase() === normalized || entry.name.toLowerCase() === normalized
-  );
+  const matched = materials.find((entry) => entry.id.toLowerCase() === normalized || entry.name.toLowerCase() === normalized);
   return matched?.id;
 }
 
@@ -47,8 +91,11 @@ export default function Fabrics() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [fabrics, setFabrics] = useState<Fabric[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settings, setSettings] = useState<CategoryPageSettings>(DEFAULT_SETTINGS);
   const { formatFromUsd } = useCurrencyStore();
   const [filters, setFilters] = useState({
     search: searchParams.get('search') || '',
@@ -58,10 +105,34 @@ export default function Fabrics() {
     page: Number.parseInt(searchParams.get('page') || '1', 10) || 1,
   });
 
-  const selectedMaterialId = useMemo(
-    () => resolveMaterialId(filters.material, materials),
-    [filters.material, materials]
-  );
+  const selectedMaterialId = useMemo(() => resolveMaterialId(filters.material, materials), [filters.material, materials]);
+
+  const productGridClass = useMemo(() => {
+    const columns = Math.max(2, Math.min(6, Math.round(Number(settings.columns || 4))));
+    return `grid grid-cols-2 ${mdGridByColumns[columns]} ${lgGridByColumns[columns]} gap-4 md:gap-6`;
+  }, [settings.columns]);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const response = await api.products.getCategoryPageSettings('FABRIC_TO_BUY');
+        if (!response.success || !response.data?.settings) return;
+        setSettings({
+          bannerTitle: String(response.data.settings.bannerTitle || DEFAULT_SETTINGS.bannerTitle),
+          bannerSubtitle: String(response.data.settings.bannerSubtitle || DEFAULT_SETTINGS.bannerSubtitle),
+          bannerImage: String(response.data.settings.bannerImage || DEFAULT_SETTINGS.bannerImage),
+          pageSize: Number(response.data.settings.pageSize || DEFAULT_SETTINGS.pageSize),
+          columns: Number(response.data.settings.columns || DEFAULT_SETTINGS.columns),
+          showPagination: Boolean(response.data.settings.showPagination),
+          featuredProductIds: Array.isArray(response.data.settings.featuredProductIds) ? response.data.settings.featuredProductIds : [],
+        });
+        setFeaturedProducts(Array.isArray(response.data.featuredProducts) ? response.data.featuredProducts : []);
+      } catch (settingsError) {
+        console.error('Failed to load fabrics page settings:', settingsError);
+      }
+    };
+    void loadSettings();
+  }, []);
 
   useEffect(() => {
     const loadMaterials = async () => {
@@ -73,7 +144,7 @@ export default function Fabrics() {
         setMaterials([]);
       }
     };
-    loadMaterials();
+    void loadMaterials();
   }, []);
 
   useEffect(() => {
@@ -87,24 +158,27 @@ export default function Fabrics() {
           country: filters.country || undefined,
           sellerId: filters.sellerId || undefined,
           page: filters.page,
-          limit: 80,
+          limit: settings.pageSize,
         });
         if (!response.success) {
           setFabrics([]);
+          setPagination(null);
           setError('Unable to load fabrics.');
           return;
         }
         const rows = Array.isArray(response.data?.fabrics) ? response.data.fabrics : [];
         setFabrics(rows);
+        setPagination(response.data?.pagination || null);
       } catch {
         setFabrics([]);
+        setPagination(null);
         setError('Unable to load fabrics.');
       } finally {
         setIsLoading(false);
       }
     };
-    loadFabrics();
-  }, [filters.country, filters.page, filters.search, filters.sellerId, selectedMaterialId]);
+    void loadFabrics();
+  }, [filters.country, filters.page, filters.search, filters.sellerId, selectedMaterialId, settings.pageSize]);
 
   const updateUrl = (next: typeof filters) => {
     const params = new URLSearchParams();
@@ -127,85 +201,67 @@ export default function Fabrics() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Hero Banner */}
-      <section className="relative h-64 md:h-80 overflow-hidden">
-        <img
-          src="/images/hero-fabrics.jpg"
-          alt="African Fabrics"
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0" style={{ background: 'linear-gradient(to right, rgba(15, 23, 42, 0.8), rgba(15, 23, 42, 0.5), transparent)' }} />
+    <div className="min-h-screen bg-[#f5f5f5]">
+      <section className="relative h-52 md:h-64 overflow-hidden">
+        <img src={settings.bannerImage || DEFAULT_SETTINGS.bannerImage} alt={settings.bannerTitle} className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-black/45" />
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
-            <div className="max-w-2xl">
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-3">
-                African Fabrics
-              </h1>
-              <p className="text-lg text-white text-opacity-80">
-                Browse by material category, choose your yardage, and checkout.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-white/20 px-3 py-1 text-white">1. Choose fabric</span>
-                <span className="rounded-full bg-white/20 px-3 py-1 text-white">2. Select yards</span>
-                <span className="rounded-full bg-white/20 px-3 py-1 text-white">3. Add to cart & checkout</span>
-              </div>
-            </div>
+          <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 text-white">
+            <h1 className="text-3xl md:text-4xl font-bold">{settings.bannerTitle || DEFAULT_SETTINGS.bannerTitle}</h1>
+            <p className="mt-2 max-w-2xl text-sm md:text-base text-white/90">{settings.bannerSubtitle || DEFAULT_SETTINGS.bannerSubtitle}</p>
           </div>
         </div>
       </section>
 
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
-        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 py-4 space-y-4">
-          <div className="relative w-full max-w-md">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                value={filters.search}
-                onChange={(e) => updateFilter('search', e.target.value)}
-                placeholder="Search fabrics..."
-                className="w-full pl-12 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-coral-500"
-              />
-          </div>
-
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            <button
-              type="button"
-              onClick={() => updateFilter('material', '')}
-              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
-                !filters.material ? 'border-black bg-black text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-500'
-              }`}
-            >
-              All Materials
-            </button>
-            {materials.map((material) => {
-              const isActive =
-                Boolean(filters.material) &&
-                (filters.material.toLowerCase() === material.id.toLowerCase() ||
-                  filters.material.toLowerCase() === material.name.toLowerCase());
-              return (
-                <button
-                  key={material.id}
-                  type="button"
-                  onClick={() => updateFilter('material', material.id)}
-                  className={`shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
-                    isActive ? 'border-black bg-black text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-500'
-                  }`}
-                >
-                  {material.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 py-8">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm">
-          <p className="text-gray-600">
-            Showing <span className="font-semibold text-gray-900">{fabrics.length}</span> fabric
-            {fabrics.length === 1 ? '' : 's'}
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-gray-600">
+            Home &gt; Shop &gt; Fabrics <span className="mx-2">|</span>{' '}
+            <span className="font-semibold text-gray-900">{pagination?.total ?? fabrics.length}</span> products
           </p>
+          <p className="text-sm text-gray-600">Material: {filters.material || 'All'}</p>
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => updateFilter('material', '')}
+            className={`shrink-0 border px-4 py-2 text-sm font-medium ${
+              !filters.material ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
+            }`}
+          >
+            All
+          </button>
+          {materials.map((material) => {
+            const isActive =
+              Boolean(filters.material) &&
+              (filters.material.toLowerCase() === material.id.toLowerCase() || filters.material.toLowerCase() === material.name.toLowerCase());
+            return (
+              <button
+                key={material.id}
+                type="button"
+                onClick={() => updateFilter('material', material.id)}
+                className={`shrink-0 border px-4 py-2 text-sm font-medium ${
+                  isActive ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
+                }`}
+              >
+                {material.name}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="bg-white border border-gray-200 p-3 flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={filters.search}
+              onChange={(event) => updateFilter('search', event.target.value)}
+              placeholder="Search fabrics..."
+              className="w-full pl-9 pr-3 py-2 border rounded-md"
+            />
+          </div>
           {(filters.search || filters.material || filters.country || filters.sellerId) ? (
             <button
               type="button"
@@ -214,12 +270,45 @@ export default function Fabrics() {
                 setFilters(next);
                 updateUrl(next);
               }}
-              className="text-coral-600 hover:underline"
+              className="border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
             >
-              Clear filters
+              Clear
             </button>
           ) : null}
         </div>
+
+        {featuredProducts.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {featuredProducts.slice(0, 2).map((product) => {
+              const flagCode = resolveCountryCode(product.country || '');
+              return (
+                <Link key={product.id} to={product.href} className="group bg-white border border-gray-200 overflow-hidden">
+                  <div className="relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
+                    <img
+                      src={product.image || '/placeholder.jpg'}
+                      alt={product.name}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    {flagCode ? (
+                      <img
+                        src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
+                        alt={`${product.country || 'Country'} flag`}
+                        className="absolute left-3 top-3 h-6 w-9 rounded-sm object-cover shadow"
+                      />
+                    ) : null}
+                  </div>
+                  <div className="p-4">
+                    <h2 className="text-2xl font-semibold text-gray-900">{product.name}</h2>
+                    <p className="text-gray-500 text-sm">{product.ownerName}</p>
+                    <p className="mt-2 text-xl font-semibold text-gray-900">{formatFromUsd(Number(product.priceUsd || 0))}/yard</p>
+                    <span className="inline-flex mt-3 bg-black text-white text-xs px-3 py-2">VIEW PRODUCT</span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        ) : null}
+
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-10 h-10 animate-spin text-coral-500" />
@@ -233,72 +322,78 @@ export default function Fabrics() {
             <p className="text-gray-600 mb-4">No fabrics found for this filter.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-            {fabrics.map((fabric) => {
-              const flagCode = resolveCountryCode(fabric.seller?.country || '');
-              return (
-              <Link key={fabric.id} to={`/fabrics/${fabric.id}`} className="group">
-                <div className="bg-white shadow-sm border border-gray-100 overflow-hidden transition-all duration-200 hover:shadow-md hover:-translate-y-1">
-                  <div className="overflow-hidden relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
-                    <img
-                      src={fabric.images?.[0]?.url || '/placeholder.jpg'}
-                      alt={fabric.name}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                    {(fabric.productLabels || []).length > 0 ? (
-                      <div className="absolute left-3 top-3 z-10 flex flex-col gap-1">
-                        {(fabric.productLabels || []).slice(0, 2).map((label) => (
-                          <span
-                            key={label.id}
-                            className="rounded px-2 py-0.5 text-[10px] font-semibold shadow"
-                            style={{ color: label.textColor, backgroundColor: label.backgroundColor }}
-                          >
-                            {label.name}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className="absolute bottom-3 right-3 w-10 h-10 flex items-center justify-center z-10">
+          <>
+            <div className={productGridClass}>
+              {fabrics.map((fabric) => {
+                const flagCode = resolveCountryCode(fabric.seller?.country || '');
+                return (
+                  <Link key={fabric.id} to={`/fabrics/${fabric.id}`} className="group bg-white border border-gray-200 overflow-hidden">
+                    <div className="relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
+                      <img
+                        src={fabric.images?.[0]?.url || '/placeholder.jpg'}
+                        alt={fabric.name}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
                       {flagCode ? (
                         <img
                           src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
                           alt={`${fabric.seller?.country || 'Country'} flag`}
-                          className="h-7 w-10 rounded-sm object-cover shadow-lg"
-                          loading="lazy"
+                          className="absolute left-2 top-2 h-5 w-8 rounded-sm object-cover shadow"
                         />
                       ) : null}
                     </div>
-                    <button 
-                      className="absolute top-3 right-3 w-8 h-8 bg-white bg-opacity-90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-coral-500 hover:text-white"
-                      onClick={(e) => e.preventDefault()}
+                    <div className="p-3">
+                      <h3 className="font-semibold text-gray-900 leading-tight">{fabric.name}</h3>
+                      <p className="text-xs text-gray-500 mt-1">{fabric.seller?.businessName}</p>
+                      <p className="text-base font-semibold mt-2">{formatFromUsd(Number(fabric.pricePerMeter || 0))}/yard</p>
+                      <span className="inline-flex mt-2 bg-black text-white text-[11px] px-3 py-1.5">VIEW DETAILS</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+
+            {settings.showPagination && pagination && pagination.pages > 1 ? (
+              <div className="flex justify-center items-center mt-6 gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateFilter('page', Math.max(1, filters.page - 1))}
+                  disabled={filters.page <= 1}
+                  className="p-2 border bg-white disabled:opacity-50"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                {Array.from({ length: Math.min(7, pagination.pages) }, (_, index) => {
+                  let pageNumber = index + 1;
+                  if (pagination.pages > 7) {
+                    if (filters.page <= 4) pageNumber = index + 1;
+                    else if (filters.page >= pagination.pages - 3) pageNumber = pagination.pages - 6 + index;
+                    else pageNumber = filters.page - 3 + index;
+                  }
+                  return (
+                    <button
+                      key={pageNumber}
+                      type="button"
+                      onClick={() => updateFilter('page', pageNumber)}
+                      className={`h-9 min-w-9 px-2 border text-sm ${
+                        filters.page === pageNumber ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-300'
+                      }`}
                     >
-                      <Heart className="w-4 h-4" />
+                      {pageNumber}
                     </button>
-                  </div>
-                  <div className="p-4">
-                    {fabric.materialType?.name ? (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          updateFilter('material', fabric.materialType?.id || fabric.materialType?.name || '');
-                        }}
-                        className="inline-flex text-xs font-medium text-coral-600 hover:underline"
-                      >
-                        {fabric.materialType.name}
-                      </button>
-                    ) : null}
-                    <h3 className="font-semibold text-gray-900 group-hover:text-coral-500 transition-colors">
-                      {fabric.name}
-                    </h3>
-                    <p className="text-sm text-gray-500 mt-1">{fabric.seller?.businessName}</p>
-                    <p className="text-coral-500 font-semibold mt-2">{formatFromUsd(Number(fabric.pricePerMeter || 0))}/yard</p>
-                  </div>
-                </div>
-              </Link>
-            )})}
-          </div>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => updateFilter('page', Math.min(pagination.pages, filters.page + 1))}
+                  disabled={filters.page >= pagination.pages}
+                  className="p-2 border bg-white disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
     </div>

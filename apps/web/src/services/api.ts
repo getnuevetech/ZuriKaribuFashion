@@ -2798,6 +2798,35 @@ const productsApi = {
   getFeatured: () =>
     apiService.get<{ success: boolean; data: any }>('/products/featured'),
 
+  getCategoryPageSettings: (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR') =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
+        rowId?: string | null;
+        source?: 'DEFAULT' | 'DATABASE';
+        updatedAt?: string | null;
+        settings: {
+          bannerTitle: string;
+          bannerSubtitle: string;
+          bannerImage: string;
+          pageSize: number;
+          columns: number;
+          showPagination: boolean;
+          featuredProductIds: string[];
+        };
+        featuredProducts: Array<{
+          id: string;
+          name: string;
+          image: string;
+          priceUsd: number;
+          country: string;
+          ownerName: string;
+          href: string;
+        }>;
+      };
+    }>(`/category-page-settings/${pageType}`),
+
   getProductLikes: (productType: 'design' | 'fabric' | 'ready-to-wear', id: string) =>
     apiService.get<{ success: boolean; data: { count: number; likedByMe: boolean } }>(
       `/products/${productType}/${id}/likes`
@@ -3983,6 +4012,88 @@ const adminApi = {
     apiService.post<{ success: boolean; data: { closedCount: number }; message?: string }>(
       '/admin/order-workflow/auto-close-overdue'
     ),
+
+  getCategoryPageSettings: (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR') =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
+        source?: 'DEFAULT' | 'DATABASE';
+        updatedAt?: string | null;
+        settings: {
+          bannerTitle: string;
+          bannerSubtitle: string;
+          bannerImage: string;
+          pageSize: number;
+          columns: number;
+          showPagination: boolean;
+          featuredProductIds: string[];
+        };
+        featuredProducts: Array<{
+          id: string;
+          name: string;
+          image: string;
+          priceUsd: number;
+          country: string;
+          ownerName: string;
+          href: string;
+        }>;
+      };
+    }>(`/category-page-settings/admin/${pageType}`),
+
+  updateCategoryPageSettings: (
+    pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
+    data: Partial<{
+      bannerTitle: string;
+      bannerSubtitle: string;
+      bannerImage: string;
+      pageSize: number;
+      columns: number;
+      showPagination: boolean;
+      featuredProductIds: string[];
+    }>
+  ) =>
+    apiService.patch<{
+      success: boolean;
+      data: {
+        pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
+        settings: {
+          bannerTitle: string;
+          bannerSubtitle: string;
+          bannerImage: string;
+          pageSize: number;
+          columns: number;
+          showPagination: boolean;
+          featuredProductIds: string[];
+        };
+        featuredProducts: Array<{
+          id: string;
+          name: string;
+          image: string;
+          priceUsd: number;
+          country: string;
+          ownerName: string;
+          href: string;
+        }>;
+      };
+      message?: string;
+    }>(`/category-page-settings/admin/${pageType}`, data),
+
+  getCategoryPageProductOptions: (
+    pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
+    params?: { search?: string; limit?: number }
+  ) =>
+    apiService.get<{
+      success: boolean;
+      data: Array<{
+        id: string;
+        name: string;
+        ownerName: string;
+        country: string;
+        priceUsd: number;
+        image: string;
+      }>;
+    }>(`/category-page-settings/admin/${pageType}/options`, { params }),
 
   // Banner Management
   getBanners: () =>

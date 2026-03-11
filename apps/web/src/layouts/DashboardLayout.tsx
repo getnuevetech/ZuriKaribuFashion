@@ -63,6 +63,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
     { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: Eye },
     { label: 'Homepage Sections', href: '/admin/homepage-sections', icon: LayoutGrid },
+    { label: 'Category Pages', href: '/admin/category-pages', icon: LayoutGrid },
     { label: 'Blogs', href: '/admin/blogs', icon: FileText },
   ],
   seller: [
@@ -130,6 +131,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/homepage': ['homepage:manage'],
       '/admin/homepage-visibility': ['homepage:manage'],
       '/admin/homepage-sections': ['homepage:manage'],
+      '/admin/category-pages': ['homepage:manage'],
       '/admin/blogs': ['homepage:manage'],
     };
     const required = permissionByHref[href] || [];

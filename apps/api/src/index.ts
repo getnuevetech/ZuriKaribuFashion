@@ -35,6 +35,7 @@ import promotionRoutes from './routes/promotions';
 import orderWorkflowRoutes from './routes/order-workflow';
 import adminPartnerRoutes from './routes/admin-partners';
 import partnerRoutes from './routes/partner';
+import categoryPageSettingsRoutes from './routes/category-page-settings';
 import { runStartupRepairs } from './bootstrap';
 
 const app = express();
@@ -118,6 +119,7 @@ app.use('/api/promotions', promotionRoutes);
 app.use('/api/admin/order-workflow', orderWorkflowRoutes);
 app.use('/api/admin/partners', adminPartnerRoutes);
 app.use('/api/partner', partnerRoutes);
+app.use('/api/category-page-settings', categoryPageSettingsRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

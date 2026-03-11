@@ -43,6 +43,7 @@ import AdminBanners from './pages/admin/Banners';
 import AdminHomepage from './pages/admin/Homepage';
 import AdminHomepageSections from './pages/admin/HomepageSections';
 import AdminHomepageVisibility from './pages/admin/HomepageVisibility';
+import AdminCategoryPages from './pages/admin/CategoryPages';
 import AdminBlogs from './pages/admin/Blogs';
 import AdminRoleManagement from './pages/admin/RoleManagement';
 import AdminVendorProfiles from './pages/admin/VendorProfiles';
@@ -286,6 +287,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['homepage:manage']}>
                       <AdminHomepageSections />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/category-pages"
+                  element={
+                    <AdminPermissionGuard required={['homepage:manage']}>
+                      <AdminCategoryPages />
                     </AdminPermissionGuard>
                   }
                 />
