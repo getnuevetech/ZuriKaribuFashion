@@ -1079,7 +1079,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
       images: z.array(z.object({
         url: z.string().url(),
         alt: z.string().optional(),
-      })).min(3).max(4),
+      })).min(3).max(5),
     });
 
     const data = schema.parse(req.body);
@@ -1206,7 +1206,7 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
           })
         )
         .min(3)
-        .max(4)
+        .max(5)
         .optional(),
     });
     const data = schema.parse(req.body);

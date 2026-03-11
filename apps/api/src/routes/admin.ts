@@ -12,6 +12,16 @@ import {
 } from '../rbac';
 
 const router = Router();
+const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
+const DEFAULT_READY_TO_WEAR_COLOR = 'DEFAULT';
+const normalizeReadyToWearSize = (value: unknown) => String(value || '').trim().toUpperCase();
+const normalizeReadyToWearColor = (value: unknown) =>
+  String(value || DEFAULT_READY_TO_WEAR_COLOR)
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ') || DEFAULT_READY_TO_WEAR_COLOR;
+const encodeReadyToWearVariantKey = (size: unknown, color?: unknown) =>
+  `${normalizeReadyToWearSize(size)}${READY_TO_WEAR_VARIANT_SEPARATOR}${normalizeReadyToWearColor(color)}`;
 
 function parsePagination(pageValue: unknown, limitValue: unknown, defaultLimit = 20) {
   const page = Math.max(1, Number.parseInt(String(pageValue ?? '1'), 10) || 1);
@@ -1068,6 +1078,17 @@ const adminProductCreateSchema = z.object({
   stockYards: z.coerce.number().int().min(0).optional(),
   stock: z.coerce.number().int().min(0).optional(),
   size: z.string().optional(),
+  variants: z
+    .array(
+      z.object({
+        size: z.string().min(1),
+        color: z.string().max(30).optional(),
+        price: z.coerce.number().positive(),
+        stock: z.coerce.number().int().min(0),
+      })
+    )
+    .max(50)
+    .optional(),
   images: z.array(z.string().url()).optional(),
   image: z.string().optional(),
   status: z.nativeEnum(ProductStatus).optional(),
@@ -1085,6 +1106,17 @@ const adminProductUpdateSchema = z.object({
   minYards: z.coerce.number().int().min(1).optional(),
   stockYards: z.coerce.number().int().min(0).optional(),
   stock: z.coerce.number().int().min(0).optional(),
+  variants: z
+    .array(
+      z.object({
+        size: z.string().min(1),
+        color: z.string().max(30).optional(),
+        price: z.coerce.number().positive(),
+        stock: z.coerce.number().int().min(0),
+      })
+    )
+    .max(50)
+    .optional(),
   images: z.array(z.string().url()).optional(),
   image: z.string().optional(),
   status: z.nativeEnum(ProductStatus).optional(),
@@ -1140,7 +1172,7 @@ const getImagePolicyForProductType = (productType: ProductType) => {
     return { min: 3, max: 4, label: 'Fabrics To Buy' };
   }
   if (productType === ProductType.READY_TO_WEAR) {
-    return { min: 4, max: 5, label: 'Ready To Wear' };
+    return { min: 3, max: 5, label: 'Ready To Wear' };
   }
   if (productType === ProductType.DESIGN) {
     return { min: 4, max: 6, label: 'Custom To Wear' };
@@ -3426,6 +3458,30 @@ router.post('/products', async (req, res, next) => {
     if (!payload.designerId || !payload.categoryId) {
       return res.status(400).json({ success: false, message: 'designerId and categoryId are required for ready-to-wear.' });
     }
+    const normalizedVariants =
+      Array.isArray(payload.variants) && payload.variants.length > 0
+        ? payload.variants.map((entry) => ({
+            size: normalizeReadyToWearSize(entry.size),
+            color: normalizeReadyToWearColor(entry.color),
+            price: Number(entry.price || 0),
+            stock: Number(entry.stock || 0),
+            variantKey: encodeReadyToWearVariantKey(entry.size, entry.color),
+          }))
+        : [
+            {
+              size: normalizeReadyToWearSize(payload.size || 'M'),
+              color: DEFAULT_READY_TO_WEAR_COLOR,
+              price: resolvedPrice,
+              stock: Number(payload.stock ?? 0),
+              variantKey: encodeReadyToWearVariantKey(payload.size || 'M', DEFAULT_READY_TO_WEAR_COLOR),
+            },
+          ];
+    if (new Set(normalizedVariants.map((entry) => entry.variantKey)).size !== normalizedVariants.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Duplicate ready-to-wear size + color variants are not allowed.',
+      });
+    }
     const created = await prisma.readyToWear.create({
       data: {
         designerId: payload.designerId,
@@ -3441,13 +3497,11 @@ router.post('/products', async (req, res, next) => {
             }
           : undefined,
         sizeVariations: {
-          create: [
-            {
-              size: payload.size || 'M',
-              price: resolvedPrice,
-              stock: payload.stock ?? 0,
-            },
-          ],
+          create: normalizedVariants.map((entry) => ({
+            size: entry.variantKey,
+            price: entry.price > 0 ? entry.price : resolvedPrice,
+            stock: entry.stock,
+          })),
         },
       },
     });
@@ -3565,7 +3619,32 @@ router.patch('/products/:type/:id', async (req, res, next) => {
         });
       }
     }
-    if (resolvedPrice !== undefined || payload.stock !== undefined) {
+    if (Array.isArray(payload.variants)) {
+      const normalizedVariants = payload.variants.map((entry) => ({
+        size: normalizeReadyToWearSize(entry.size),
+        color: normalizeReadyToWearColor(entry.color),
+        price: Number(entry.price || 0),
+        stock: Number(entry.stock || 0),
+        variantKey: encodeReadyToWearVariantKey(entry.size, entry.color),
+      }));
+      if (new Set(normalizedVariants.map((entry) => entry.variantKey)).size !== normalizedVariants.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'Duplicate ready-to-wear size + color variants are not allowed.',
+        });
+      }
+      await prisma.readyToWearSize.deleteMany({ where: { readyToWearId: updated.id } });
+      if (normalizedVariants.length > 0) {
+        await prisma.readyToWearSize.createMany({
+          data: normalizedVariants.map((entry) => ({
+            readyToWearId: updated.id,
+            size: entry.variantKey,
+            price: entry.price > 0 ? entry.price : Number(resolvedPrice || 0),
+            stock: entry.stock,
+          })),
+        });
+      }
+    } else if (resolvedPrice !== undefined || payload.stock !== undefined) {
       const existingSize = await prisma.readyToWearSize.findFirst({
         where: { readyToWearId: updated.id },
         orderBy: { size: 'asc' },

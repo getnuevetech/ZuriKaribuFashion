@@ -79,10 +79,6 @@ export default function ReadyToWearTryOn() {
               }
             }
             setMeasurements(nextMeasurements);
-            const draftColor = String((draft as any)?.selectedColor || '').trim().toUpperCase();
-            if (draftColor) {
-              setSelectedColor(draftColor);
-            }
           }
           const firstAvailableSize = (response.data.sizeVariations || [])
             .find((variation: any) => Number(variation?.stock || 0) > 0)?.size;
@@ -249,10 +245,6 @@ export default function ReadyToWearTryOn() {
               </div>
               <div className="col-span-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
                 Selected size from product page: <span className="font-semibold">{selectedSize || 'Not selected'}</span>
-              </div>
-              <div className="col-span-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
-                Selected color from product page:{' '}
-                <span className="font-semibold">{selectedColor === 'DEFAULT' ? 'Default' : selectedColor}</span>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>

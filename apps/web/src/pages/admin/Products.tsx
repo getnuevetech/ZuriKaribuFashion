@@ -34,6 +34,13 @@ interface CurrencyMatrixRow {
   usdPerUnit: number;
 }
 
+interface ReadyVariantRow {
+  size: string;
+  color: string;
+  price: number;
+  stock: number;
+}
+
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -89,6 +96,7 @@ export default function AdminProducts() {
     stockYards: 0,
     stock: 0,
     size: 'M',
+    readyVariants: [{ size: 'M', color: 'DEFAULT', price: 0, stock: 0 }] as ReadyVariantRow[],
   });
 
   const getDefaultFeaturedSection = (type: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR') => {
@@ -99,7 +107,7 @@ export default function AdminProducts() {
 
   const getImagePolicy = (type: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR') => {
     if (type === 'FABRIC') return { min: 3, max: 4, label: 'Fabrics To Buy' };
-    if (type === 'READY_TO_WEAR') return { min: 4, max: 5, label: 'Ready To Wear' };
+    if (type === 'READY_TO_WEAR') return { min: 3, max: 5, label: 'Ready To Wear' };
     return { min: 4, max: 6, label: 'Custom To Wear' };
   };
 
@@ -565,6 +573,7 @@ export default function AdminProducts() {
       stockYards: 0,
       stock: 0,
       size: 'M',
+      readyVariants: [{ size: 'M', color: 'DEFAULT', price: 0, stock: 0 }],
     });
     setImagesDirty(false);
     setImageUrlInput('');
@@ -595,6 +604,7 @@ export default function AdminProducts() {
       stockYards: 0,
       stock: 0,
       size: 'M',
+      readyVariants: [{ size: 'M', color: 'DEFAULT', price: Number(product.finalPrice || 0), stock: 0 }],
     });
     setImagesDirty(false);
     setImageUrlInput('');
@@ -656,6 +666,35 @@ export default function AdminProducts() {
         setSaving(false);
         return;
       }
+      if (currentType === 'READY_TO_WEAR') {
+        if (!Array.isArray(form.readyVariants) || form.readyVariants.length === 0) {
+          setModalError('Ready-to-wear products require at least one variant row.');
+          setSaving(false);
+          return;
+        }
+        const normalizedVariantKeys = form.readyVariants.map((variant) =>
+          `${String(variant.size || '').trim().toUpperCase()}::${String(variant.color || 'DEFAULT').trim().toUpperCase() || 'DEFAULT'}`
+        );
+        if (new Set(normalizedVariantKeys).size !== normalizedVariantKeys.length) {
+          setModalError('Duplicate size/color variants are not allowed.');
+          setSaving(false);
+          return;
+        }
+        if (
+          form.readyVariants.some(
+            (variant) =>
+              !String(variant.size || '').trim() ||
+              !Number.isFinite(Number(variant.price || 0)) ||
+              Number(variant.price || 0) <= 0 ||
+              !Number.isFinite(Number(variant.stock || 0)) ||
+              Number(variant.stock || 0) < 0
+          )
+        ) {
+          setModalError('Each ready-to-wear variant needs size, price > 0, and stock >= 0.');
+          setSaving(false);
+          return;
+        }
+      }
       const resolvedStatus = form.publishNow ? 'APPROVED' : form.status;
       const resolvedIsAvailable = form.publishNow ? true : false;
       let savedType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR' = editing ? editing.type : form.type;
@@ -697,6 +736,15 @@ export default function AdminProducts() {
           stockYards: form.stockYards,
           stock: form.stock,
           size: form.size || undefined,
+          variants:
+            form.type === 'READY_TO_WEAR'
+              ? form.readyVariants.map((variant) => ({
+                  size: String(variant.size || '').trim().toUpperCase(),
+                  color: String(variant.color || 'DEFAULT').trim().toUpperCase() || 'DEFAULT',
+                  price: Number(variant.price || 0),
+                  stock: Math.max(0, Math.floor(Number(variant.stock || 0))),
+                }))
+              : undefined,
         });
         savedId = created.data?.id || null;
         savedType = (created.data?.type as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR') || form.type;
@@ -1285,6 +1333,12 @@ export default function AdminProducts() {
                         ...prev,
                         type: nextType,
                         featuredSection: getDefaultFeaturedSection(nextType),
+                        readyVariants:
+                          nextType === 'READY_TO_WEAR'
+                            ? prev.readyVariants.length > 0
+                              ? prev.readyVariants
+                              : [{ size: 'M', color: 'DEFAULT', price: Number(prev.price || 0), stock: 0 }]
+                            : prev.readyVariants,
                       };
                     })
                   }
@@ -1394,6 +1448,109 @@ export default function AdminProducts() {
                   </>
                 )}
               </div>
+              {(editing?.type || form.type) === 'READY_TO_WEAR' ? (
+                <div className="space-y-2 rounded-lg border p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-gray-800">Ready-To-Wear Variants (Size + Color + Quantity)</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          readyVariants: [
+                            ...prev.readyVariants,
+                            { size: 'M', color: 'DEFAULT', price: Number(prev.price || 0), stock: 0 },
+                          ],
+                        }))
+                      }
+                    >
+                      Add Variant
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    {form.readyVariants.map((variant, index) => (
+                      <div key={`${index}-${variant.size}-${variant.color}`} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
+                        <input
+                          value={variant.size}
+                          onChange={(event) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              readyVariants: prev.readyVariants.map((entry, rowIndex) =>
+                                rowIndex === index ? { ...entry, size: event.target.value } : entry
+                              ),
+                            }))
+                          }
+                          placeholder="Size (e.g. M)"
+                          className="rounded border px-2 py-1 text-sm md:col-span-2"
+                        />
+                        <input
+                          value={variant.color}
+                          onChange={(event) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              readyVariants: prev.readyVariants.map((entry, rowIndex) =>
+                                rowIndex === index ? { ...entry, color: event.target.value } : entry
+                              ),
+                            }))
+                          }
+                          placeholder="Color (e.g. Black)"
+                          className="rounded border px-2 py-1 text-sm md:col-span-3"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={variant.price}
+                          onChange={(event) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              readyVariants: prev.readyVariants.map((entry, rowIndex) =>
+                                rowIndex === index ? { ...entry, price: Number(event.target.value || 0) } : entry
+                              ),
+                            }))
+                          }
+                          placeholder="Price"
+                          className="rounded border px-2 py-1 text-sm md:col-span-2"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          step="1"
+                          value={variant.stock}
+                          onChange={(event) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              readyVariants: prev.readyVariants.map((entry, rowIndex) =>
+                                rowIndex === index ? { ...entry, stock: Number(event.target.value || 0) } : entry
+                              ),
+                            }))
+                          }
+                          placeholder="Qty"
+                          className="rounded border px-2 py-1 text-sm md:col-span-2"
+                        />
+                        <div className="md:col-span-3 flex justify-end">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setForm((prev) => ({
+                                ...prev,
+                                readyVariants: prev.readyVariants.filter((_, rowIndex) => rowIndex !== index),
+                              }))
+                            }
+                            disabled={form.readyVariants.length <= 1}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label className="flex items-center gap-2 text-sm text-gray-700">
                   <input

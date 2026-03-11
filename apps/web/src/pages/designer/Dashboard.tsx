@@ -18,7 +18,9 @@ import {
   TrendingDown,
   Palette,
   Search,
-  Filter
+  Filter,
+  Upload,
+  X
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
@@ -259,6 +261,8 @@ export default function DesignerDashboard() {
   const [showReadyModal, setShowReadyModal] = useState(false);
   const [isSavingReady, setIsSavingReady] = useState(false);
   const [readyError, setReadyError] = useState<string | null>(null);
+  const [readyUploadingImage, setReadyUploadingImage] = useState(false);
+  const [readyImageUrlInput, setReadyImageUrlInput] = useState('');
   const [readySizeOptions, setReadySizeOptions] = useState<string[]>(['S', 'M', 'L', 'XL']);
   const [readyForm, setReadyForm] = useState<ReadyToWearFormState>({
     name: '',
@@ -746,6 +750,7 @@ export default function DesignerDashboard() {
       variants: [{ size: defaultSize, color: 'DEFAULT', price: '', stock: '0' }],
     });
     setReadyError(null);
+    setReadyImageUrlInput('');
   };
 
   const openCreateReadyModal = () => {
@@ -790,6 +795,14 @@ export default function DesignerDashboard() {
       .filter(Boolean)
       .map((url) => ({ url }));
 
+  const normalizeReadyImageList = (urls: string[]) =>
+    Array.from(new Set(urls.map((url) => String(url || '').trim()).filter(Boolean))).slice(0, 5);
+
+  const writeReadyImageList = (urls: string[]) => {
+    const next = normalizeReadyImageList(urls);
+    setReadyForm((prev) => ({ ...prev, imageUrls: next.join('\n') }));
+  };
+
   const parseMeasurementLines = (value: string) =>
     value
       .split('\n')
@@ -805,6 +818,48 @@ export default function DesignerDashboard() {
         };
       })
       .filter((row) => row.name);
+
+  const handleReadyImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+    try {
+      setReadyUploadingImage(true);
+      setReadyError(null);
+      const uploadResults = await Promise.all(
+        files.map(async (file) => {
+          const data = new FormData();
+          data.append('image', file);
+          const response = await api.upload.image(data);
+          return response.success && response.data?.url ? response.data.url : null;
+        })
+      );
+      const uploadedUrls = uploadResults.filter((url): url is string => Boolean(url));
+      if (uploadedUrls.length === 0) {
+        setReadyError('Image upload failed.');
+        return;
+      }
+      const current = parseImageInputs(readyForm.imageUrls).map((entry) => entry.url);
+      writeReadyImageList([...current, ...uploadedUrls]);
+    } catch (error: any) {
+      setReadyError(error?.response?.data?.message || error?.message || 'Failed to upload image.');
+    } finally {
+      setReadyUploadingImage(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleAddReadyImageUrl = () => {
+    const value = String(readyImageUrlInput || '').trim();
+    if (!value) return;
+    const current = parseImageInputs(readyForm.imageUrls).map((entry) => entry.url);
+    writeReadyImageList([...current, value]);
+    setReadyImageUrlInput('');
+  };
+
+  const handleRemoveReadyImage = (url: string) => {
+    const current = parseImageInputs(readyForm.imageUrls).map((entry) => entry.url);
+    writeReadyImageList(current.filter((entry) => entry !== url));
+  };
 
   const addReadyVariantRow = () => {
     const defaultSize = readySizeOptions[0] || 'M';
@@ -936,8 +991,8 @@ export default function DesignerDashboard() {
       setReadyError('Base price must be greater than zero.');
       return;
     }
-    if (images.length < 3 || images.length > 4) {
-      setReadyError('Ready-to-wear products require 3 to 4 images.');
+    if (images.length < 3 || images.length > 5) {
+      setReadyError('Ready-to-wear products require 3 to 5 images.');
       return;
     }
     if (normalizedVariants.length === 0) {
@@ -1818,13 +1873,50 @@ export default function DesignerDashboard() {
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Image URLs (one per line)</label>
-                <textarea
-                  value={readyForm.imageUrls}
-                  onChange={(e) => setReadyForm((prev) => ({ ...prev, imageUrls: e.target.value }))}
-                  className="w-full px-4 py-2 border rounded-lg min-h-[90px]"
-                  placeholder={'https://.../image1.jpg\nhttps://.../image2.jpg\nhttps://.../image3.jpg'}
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product Images (minimum 3, maximum 5)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={readyImageUrlInput}
+                    onChange={(event) => setReadyImageUrlInput(event.target.value)}
+                    placeholder="Paste image URL and add"
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                  />
+                  <Button type="button" variant="outline" onClick={handleAddReadyImageUrl}>
+                    Add URL
+                  </Button>
+                  <label className="inline-flex cursor-pointer items-center rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
+                    <Upload className="mr-2 h-4 w-4" />
+                    {readyUploadingImage ? 'Uploading...' : 'Upload'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleReadyImageUpload}
+                      disabled={readyUploadingImage}
+                      multiple
+                    />
+                  </label>
+                </div>
+                <div className="mt-2 text-xs text-gray-500">
+                  {parseImageInputs(readyForm.imageUrls).length} image(s) selected
+                </div>
+                {parseImageInputs(readyForm.imageUrls).length > 0 ? (
+                  <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-3">
+                    {parseImageInputs(readyForm.imageUrls).map((entry) => (
+                      <div key={entry.url} className="relative overflow-hidden rounded border">
+                        <img src={entry.url} alt="Ready-to-wear" className="h-20 w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveReadyImage(entry.url)}
+                          className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <div className="md:col-span-2">
@@ -1935,7 +2027,14 @@ export default function DesignerDashboard() {
             ) : null}
 
             <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowReadyModal(false)} disabled={isSavingReady}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowReadyModal(false);
+                  resetReadyForm();
+                }}
+                disabled={isSavingReady}
+              >
                 Cancel
               </Button>
               <Button onClick={handleSaveReadyToWear} disabled={isSavingReady}>

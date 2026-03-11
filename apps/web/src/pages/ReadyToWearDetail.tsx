@@ -345,7 +345,6 @@ export default function ReadyToWearDetail() {
         `rtwTryOnDraft:${id}`,
         JSON.stringify({
           selectedSize: effectiveSelectedSize || '',
-          selectedColor: effectiveSelectedColor || DEFAULT_VARIANT_COLOR,
           quantity,
           measurements: tryOnMeasurements,
           generatedAt: new Date().toISOString(),
