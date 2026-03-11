@@ -24,6 +24,7 @@ interface ReadyToWearProduct {
   };
   category?: { id: string; name: string };
   sizeVariations?: Array<{ id?: string; size: string; price: number; stock?: number }>;
+  productLabels?: Array<{ id: string; name: string; textColor: string; backgroundColor: string }>;
   colors?: string[];
   material?: string;
   careInstructions?: string;
@@ -313,11 +314,40 @@ export default function ReadyToWearDetail() {
     setTryOnPreviewReady(true);
   };
 
+  const handleContinueToTryOnPage = () => {
+    if (!id) return;
+    try {
+      sessionStorage.setItem(
+        `rtwTryOnDraft:${id}`,
+        JSON.stringify({
+          selectedSize: effectiveSelectedSize || '',
+          quantity,
+          measurements: tryOnMeasurements,
+          generatedAt: new Date().toISOString(),
+        })
+      );
+    } catch {
+      // Ignore storage errors; page navigation should still continue.
+    }
+    setShowTryOnModal(false);
+    navigate(`/ready-to-wear/${id}/try-on`);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 py-8 pb-28 md:pb-8">
+    <div className="min-h-screen bg-gray-50 pb-28 pt-32 md:pb-8 md:pt-36">
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
-        {/* Breadcrumb */}
-        <Link to="/ready-to-wear" className="inline-flex items-center text-gray-500 hover:text-coral-500 mb-6">
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+          <Link to="/" className="hover:text-coral-600">
+            Home
+          </Link>
+          <span>/</span>
+          <Link to="/ready-to-wear" className="hover:text-coral-600">
+            Ready To Wear
+          </Link>
+          <span>/</span>
+          <span className="font-medium text-gray-700">{product.name}</span>
+        </div>
+        <Link to="/ready-to-wear" className="mb-6 inline-flex items-center text-gray-500 hover:text-coral-500">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Ready to Wear
         </Link>
@@ -337,6 +367,19 @@ export default function ReadyToWearDetail() {
                 alt={product.name}
                 className="w-full h-full object-cover"
               />
+              {(product.productLabels || []).length > 0 ? (
+                <div className="absolute left-4 top-4 z-10 flex flex-col gap-1">
+                  {(product.productLabels || []).slice(0, 3).map((label) => (
+                    <span
+                      key={label.id}
+                      className="rounded px-2 py-0.5 text-xs font-semibold shadow"
+                      style={{ color: label.textColor, backgroundColor: label.backgroundColor }}
+                    >
+                      {label.name}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <div className="absolute bottom-4 right-4 z-10">
                 {flagCode ? (
                   <img
@@ -347,7 +390,7 @@ export default function ReadyToWearDetail() {
                   />
                 ) : null}
               </div>
-              {hasDiscount && (
+              {hasDiscount && !((product.productLabels || []).some((label) => String(label.name || '').toUpperCase() === 'SALE')) && (
                 <div className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium">
                   Sale
                 </div>
@@ -723,7 +766,12 @@ export default function ReadyToWearDetail() {
               <Button variant="outline" onClick={handleGenerateTryOnPreview}>
                 Generate Preview
               </Button>
-              <Button onClick={() => setShowTryOnModal(false)}>Done</Button>
+              <Button onClick={handleContinueToTryOnPage} disabled={!tryOnPreviewReady}>
+                Continue to Full Try-On
+              </Button>
+              <Button variant="outline" onClick={() => setShowTryOnModal(false)}>
+                Close
+              </Button>
             </div>
           </div>
         </div>

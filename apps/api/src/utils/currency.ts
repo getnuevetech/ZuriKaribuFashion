@@ -516,16 +516,61 @@ export async function refreshMatrixFromThirdParty(matrix: AfricanCurrencyRow[]) 
     throw new Error('Invalid exchange-rate provider response.');
   }
 
+  const baselineByCountryCode = new Map(
+    AFRICAN_CURRENCY_BASELINE.map((row) => [
+      row.countryCode.toUpperCase(),
+      {
+        countryCode: row.countryCode.toUpperCase(),
+        country: row.country,
+        currencyCode: normalizeCurrency(row.currencyCode),
+        currencyName: row.currencyName,
+        usdPerUnit: Number(row.usdPerUnit || 0),
+      } satisfies AfricanCurrencyRow,
+    ])
+  );
+
   return matrix.map((row) => {
-    const unitsPerUsd = Number(rates[row.currencyCode]);
-    if (!Number.isFinite(unitsPerUsd) || unitsPerUsd <= 0) {
-      return row;
+    const countryCode = String(row.countryCode || '').toUpperCase();
+    const baselineRow = baselineByCountryCode.get(countryCode) || null;
+    const candidateCodes = Array.from(
+      new Set(
+        [normalizeCurrency(row.currencyCode), baselineRow?.currencyCode].filter(
+          (value): value is string => Boolean(value)
+        )
+      )
+    );
+
+    for (const code of candidateCodes) {
+      const unitsPerUsd = Number((rates as Record<string, unknown>)[code]);
+      if (!Number.isFinite(unitsPerUsd) || unitsPerUsd <= 0) {
+        continue;
+      }
+
+      const usdPerUnit = Number((1 / unitsPerUsd).toFixed(8));
+      const usesBaselineCurrency = Boolean(baselineRow && baselineRow.currencyCode === code);
+
+      return {
+        ...row,
+        ...(baselineRow
+          ? {
+              countryCode: baselineRow.countryCode,
+              country: baselineRow.country,
+            }
+          : {}),
+        currencyCode: code,
+        currencyName: usesBaselineCurrency ? baselineRow!.currencyName : row.currencyName,
+        usdPerUnit,
+      };
     }
-    const usdPerUnit = Number((1 / unitsPerUsd).toFixed(8));
-    return {
-      ...row,
-      usdPerUnit,
-    };
+
+    // If provider does not return this currency (e.g. newly introduced ISO code),
+    // revert to the known baseline entry for the country so "use provider" reliably
+    // clears stale admin-entered values.
+    if (baselineRow) {
+      return { ...baselineRow };
+    }
+
+    return row;
   });
 }
 

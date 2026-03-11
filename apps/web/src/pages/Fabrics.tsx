@@ -21,6 +21,12 @@ interface Fabric {
     name: string;
   };
   materialTypeId?: string;
+  productLabels?: Array<{
+    id: string;
+    name: string;
+    textColor: string;
+    backgroundColor: string;
+  }>;
 }
 
 interface Material {
@@ -233,6 +239,19 @@ export default function Fabrics() {
                       alt={fabric.name}
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
+                    {(fabric.productLabels || []).length > 0 ? (
+                      <div className="absolute left-3 top-3 z-10 flex flex-col gap-1">
+                        {(fabric.productLabels || []).slice(0, 2).map((label) => (
+                          <span
+                            key={label.id}
+                            className="rounded px-2 py-0.5 text-[10px] font-semibold shadow"
+                            style={{ color: label.textColor, backgroundColor: label.backgroundColor }}
+                          >
+                            {label.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                     <div className="absolute bottom-3 right-3 w-10 h-10 flex items-center justify-center z-10">
                       {flagCode ? (
                         <img

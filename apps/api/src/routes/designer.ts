@@ -147,7 +147,7 @@ const slugify = (value: string) =>
     .slice(0, 120);
 
 const normalizeCurrencyCode = (value: unknown) => String(value || '').trim().toUpperCase();
-const READY_TO_WEAR_STANDARD_SIZES = ['S', 'M', 'L', 'XL'] as const;
+const DEFAULT_READY_TO_WEAR_STANDARD_SIZES = ['S', 'M', 'L', 'XL'];
 const HOMEPAGE_READY_TO_WEAR_SIZES_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZES';
 const normalizeReadyToWearSize = (value: unknown) => String(value || '').trim().toUpperCase();
 
@@ -170,20 +170,21 @@ async function readAllowedReadyToWearSizes() {
     HOMEPAGE_READY_TO_WEAR_SIZES_SETTINGS_KEY
   );
   const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-  if (!row) return [...READY_TO_WEAR_STANDARD_SIZES];
+  if (!row) return [...DEFAULT_READY_TO_WEAR_STANDARD_SIZES];
   try {
     const parsed = JSON.parse(String(row.value || '{}')) as any;
     const list = Array.isArray(parsed?.sizes) ? parsed.sizes : [];
-    const normalizedSet = new Set(
-      list
-        .map((entry: any) => normalizeReadyToWearSize(entry))
-        .filter((entry: string) => (READY_TO_WEAR_STANDARD_SIZES as readonly string[]).includes(entry))
+    const normalized = Array.from(
+      new Set(
+        list
+          .map((entry: any) => normalizeReadyToWearSize(entry))
+          .filter((entry: string) => entry.length > 0 && entry.length <= 20)
+      )
     );
-    const ordered = READY_TO_WEAR_STANDARD_SIZES.filter((size) => normalizedSet.has(size));
-    if (ordered.length < 3 || ordered.length > 4) return [...READY_TO_WEAR_STANDARD_SIZES];
-    return ordered;
+    if (normalized.length < 3 || normalized.length > 20) return [...DEFAULT_READY_TO_WEAR_STANDARD_SIZES];
+    return normalized;
   } catch {
-    return [...READY_TO_WEAR_STANDARD_SIZES];
+    return [...DEFAULT_READY_TO_WEAR_STANDARD_SIZES];
   }
 }
 
@@ -1008,7 +1009,7 @@ router.get('/ready-to-wear-size-options', async (_req, res, next) => {
       success: true,
       data: {
         sizes: allowedSizes,
-        standardSizes: [...READY_TO_WEAR_STANDARD_SIZES],
+        standardSizes: [...DEFAULT_READY_TO_WEAR_STANDARD_SIZES],
       },
     });
   } catch (error) {
@@ -1029,7 +1030,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
         size: z.string(),
         price: z.number().positive(),
         stock: z.number().min(0),
-      })).min(3).max(4),
+      })).min(1).max(20),
       images: z.array(z.object({
         url: z.string().url(),
         alt: z.string().optional(),
@@ -1132,8 +1133,8 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
             stock: z.number().min(0),
           })
         )
-        .min(3)
-        .max(4)
+        .min(1)
+        .max(20)
         .optional(),
       images: z
         .array(
@@ -1268,6 +1269,94 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
     res.json({
       success: true,
       message: 'Ready-to-wear product updated successfully.',
+      data: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/ready-to-wear/:id/size-stock', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const schema = z.object({
+      sizes: z
+        .array(
+          z.object({
+            size: z.string().min(1),
+            stock: z.number().min(0),
+          })
+        )
+        .min(1)
+        .max(20),
+    });
+    const payload = schema.parse(req.body);
+    const normalizedSizes = payload.sizes.map((entry) => ({
+      size: normalizeReadyToWearSize(entry.size),
+      stock: Number(entry.stock || 0),
+    }));
+    if (new Set(normalizedSizes.map((entry) => entry.size)).size !== normalizedSizes.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Duplicate ready-to-wear sizes are not allowed.',
+      });
+    }
+
+    const profile = await resolveDesignerProfile(req.user!.id);
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Designer profile not found.',
+      });
+    }
+
+    const existing = await prisma.readyToWear.findFirst({
+      where: { id, designerId: profile.id },
+      select: { id: true },
+    });
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ready-to-wear product not found.',
+      });
+    }
+
+    const sizeRows = await prisma.readyToWearSize.findMany({
+      where: { readyToWearId: id },
+      select: { id: true, size: true },
+    });
+    const sizeIdByName = new Map(
+      sizeRows.map((row) => [normalizeReadyToWearSize(row.size), String(row.id)] as const)
+    );
+
+    for (const entry of normalizedSizes) {
+      if (!sizeIdByName.has(entry.size)) {
+        return res.status(400).json({
+          success: false,
+          message: `Size "${entry.size}" does not exist on this product.`,
+        });
+      }
+    }
+
+    await prisma.$transaction(
+      normalizedSizes.map((entry) =>
+        prisma.readyToWearSize.update({
+          where: { id: sizeIdByName.get(entry.size)! },
+          data: { stock: entry.stock },
+        })
+      )
+    );
+
+    const updated = await prisma.readyToWear.findFirst({
+      where: { id, designerId: profile.id },
+      include: {
+        sizeVariations: true,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Ready-to-wear size stock updated.',
       data: updated,
     });
   } catch (error) {

@@ -35,8 +35,10 @@ import CustomerMeasurements from './pages/customer/Measurements';
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminUsers from './pages/admin/Users';
 import AdminProducts from './pages/admin/Products';
+import AdminProductLabels from './pages/admin/ProductLabels';
 import AdminOrders from './pages/admin/Orders';
 import AdminPricingRules from './pages/admin/PricingRules';
+import AdminPromoCodes from './pages/admin/PromoCodes';
 import AdminBanners from './pages/admin/Banners';
 import AdminHomepage from './pages/admin/Homepage';
 import AdminHomepageSections from './pages/admin/HomepageSections';
@@ -199,6 +201,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/admin/product-labels"
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminProductLabels />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
                   path="/admin/orders"
                   element={
                     <AdminPermissionGuard required={['orders:manage']}>
@@ -211,6 +221,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['pricing:manage']}>
                       <AdminPricingRules />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/promo-codes"
+                  element={
+                    <AdminPermissionGuard required={['pricing:manage']}>
+                      <AdminPromoCodes />
                     </AdminPermissionGuard>
                   }
                 />

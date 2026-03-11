@@ -93,7 +93,8 @@ const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
 const HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY = 'HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION';
 const HOMEPAGE_READY_TO_WEAR_SIZES_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZES';
 const HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE';
-const READY_TO_WEAR_STANDARD_SIZES = ['S', 'M', 'L', 'XL'] as const;
+const HOMEPAGE_PRODUCT_LABEL_SETTINGS_KEY = 'HOMEPAGE_PRODUCT_LABELS';
+const DEFAULT_READY_TO_WEAR_SIZES = ['S', 'M', 'L', 'XL'];
 const ADMIN_TOP_STRIP_DEFAULTS = {
   messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
   separator: '•',
@@ -149,12 +150,38 @@ const ADMIN_FEATURED_PRODUCT_DESCRIPTION_DEFAULTS = {
   wordLimit: 12,
 };
 const ADMIN_READY_TO_WEAR_SIZES_DEFAULTS = {
-  sizes: [...READY_TO_WEAR_STANDARD_SIZES],
+  sizes: [...DEFAULT_READY_TO_WEAR_SIZES],
 };
 const ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS = {
   title: 'Ready-To-Wear Size Guide',
   content:
     'Use your body measurements to select your best standard size.\n\nS: Bust 84-90cm, Waist 66-72cm, Hips 90-96cm\nM: Bust 91-98cm, Waist 73-80cm, Hips 97-104cm\nL: Bust 99-106cm, Waist 81-88cm, Hips 105-112cm\nXL: Bust 107-115cm, Waist 89-98cm, Hips 113-122cm',
+};
+const ADMIN_PRODUCT_LABEL_DEFAULTS = {
+  newTagDays: 14,
+  labels: [
+    {
+      id: 'new',
+      name: 'NEW',
+      mode: 'AUTO_NEW' as const,
+      textColor: '#ffffff',
+      backgroundColor: '#111827',
+      isActive: true,
+    },
+    {
+      id: 'sale',
+      name: 'SALE',
+      mode: 'AUTO_SALE' as const,
+      textColor: '#ffffff',
+      backgroundColor: '#dc2626',
+      isActive: true,
+    },
+  ],
+  assignments: [] as Array<{
+    labelId: string;
+    productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+    productIds: string[];
+  }>,
 };
 const BLOG_AUDIENCE_TYPES = ['SELLER', 'DESIGNER', 'COUNTRY', 'OTHER'] as const;
 type BlogAudienceType = (typeof BLOG_AUDIENCE_TYPES)[number];
@@ -194,13 +221,39 @@ const adminFeaturedProductDescriptionUpdateSchema = z.object({
 });
 const adminReadyToWearSizesUpdateSchema = z.object({
   sizes: z
-    .array(z.enum(READY_TO_WEAR_STANDARD_SIZES))
+    .array(z.string().trim().min(1).max(20))
     .min(3)
-    .max(4),
+    .max(20),
 });
 const adminReadyToWearSizeGuideUpdateSchema = z.object({
   title: z.string().trim().min(3).max(120),
   content: z.string().trim().min(20).max(6000),
+});
+const adminProductLabelUpdateSchema = z.object({
+  newTagDays: z.coerce.number().int().min(1).max(120),
+  labels: z
+    .array(
+      z.object({
+        id: z.string().trim().min(1).max(64),
+        name: z.string().trim().min(1).max(24),
+        mode: z.enum(['AUTO_NEW', 'AUTO_SALE', 'MANUAL']),
+        textColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/),
+        backgroundColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/),
+        isActive: z.boolean().optional(),
+      })
+    )
+    .min(1)
+    .max(24),
+  assignments: z
+    .array(
+      z.object({
+        labelId: z.string().trim().min(1).max(64),
+        productType: z.enum(['FABRIC', 'DESIGN', 'READY_TO_WEAR']),
+        productIds: z.array(z.string().trim().min(1)).max(1000),
+      })
+    )
+    .max(2000)
+    .optional(),
 });
 const adminBlogCreateSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -333,7 +386,6 @@ const normalizeAdminFeaturedProductDescriptionSettings = (raw: unknown) => {
   };
 };
 const normalizeAdminReadyToWearSizesSettings = (raw: unknown) => {
-  const baseOrder = [...READY_TO_WEAR_STANDARD_SIZES];
   if (!raw || typeof raw !== 'object') return { ...ADMIN_READY_TO_WEAR_SIZES_DEFAULTS };
   const row = raw as Record<string, unknown>;
   const parsed = Array.isArray(row.sizes)
@@ -341,18 +393,17 @@ const normalizeAdminReadyToWearSizesSettings = (raw: unknown) => {
     : Array.isArray(raw)
       ? (raw as unknown[])
       : [];
-  const normalizedSet = new Set(
-    parsed
-      .map((entry) => String(entry || '').trim().toUpperCase())
-      .filter((entry): entry is (typeof READY_TO_WEAR_STANDARD_SIZES)[number] =>
-        (READY_TO_WEAR_STANDARD_SIZES as readonly string[]).includes(entry)
-      )
+  const normalized = Array.from(
+    new Set(
+      parsed
+        .map((entry) => String(entry || '').trim().toUpperCase())
+        .filter((entry) => entry.length > 0 && entry.length <= 20)
+    )
   );
-  const ordered = baseOrder.filter((size) => normalizedSet.has(size));
-  if (ordered.length < 3 || ordered.length > 4) {
+  if (normalized.length < 3 || normalized.length > 20) {
     return { ...ADMIN_READY_TO_WEAR_SIZES_DEFAULTS };
   }
-  return { sizes: ordered };
+  return { sizes: normalized };
 };
 const normalizeAdminReadyToWearSizeGuideSettings = (raw: unknown) => {
   if (!raw || typeof raw !== 'object') return { ...ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS };
@@ -362,6 +413,114 @@ const normalizeAdminReadyToWearSizeGuideSettings = (raw: unknown) => {
   return {
     title: title.length >= 3 ? title.slice(0, 120) : ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS.title,
     content: content.length >= 20 ? content.slice(0, 6000) : ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS.content,
+  };
+};
+const normalizeAdminProductLabelSettings = (raw: unknown) => {
+  const fallback = {
+    ...ADMIN_PRODUCT_LABEL_DEFAULTS,
+    labels: ADMIN_PRODUCT_LABEL_DEFAULTS.labels.map((entry) => ({ ...entry })),
+    assignments: [] as Array<{ labelId: string; productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; productIds: string[] }>,
+  };
+  if (!raw || typeof raw !== 'object') return fallback;
+  const row = raw as Record<string, unknown>;
+  const newTagDaysRaw = Number(row.newTagDays);
+  const parsedLabels = Array.isArray(row.labels) ? row.labels : [];
+  const labels = Array.from(
+    new Map(
+      parsedLabels
+        .map((entry) => {
+          const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+          const id = String(item.id || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 64);
+          const name = String(item.name || '').trim().slice(0, 24);
+          const modeRaw = String(item.mode || '').trim().toUpperCase();
+          const mode = modeRaw === 'AUTO_NEW' || modeRaw === 'AUTO_SALE' ? modeRaw : 'MANUAL';
+          if (!id || !name) return null;
+          return [
+            id,
+            {
+              id,
+              name,
+              mode: mode as 'AUTO_NEW' | 'AUTO_SALE' | 'MANUAL',
+              textColor: normalizeHexColor(item.textColor, '#ffffff'),
+              backgroundColor:
+                mode === 'AUTO_NEW'
+                  ? normalizeHexColor(item.backgroundColor, '#111827')
+                  : mode === 'AUTO_SALE'
+                    ? normalizeHexColor(item.backgroundColor, '#dc2626')
+                    : normalizeHexColor(item.backgroundColor, '#1f2937'),
+              isActive: item.isActive !== false,
+            },
+          ] as const;
+        })
+        .filter(Boolean) as Array<
+        readonly [
+          string,
+          {
+            id: string;
+            name: string;
+            mode: 'AUTO_NEW' | 'AUTO_SALE' | 'MANUAL';
+            textColor: string;
+            backgroundColor: string;
+            isActive: boolean;
+          },
+        ]
+      >
+    ).values()
+  );
+  const withSystemLabels = [...labels];
+  const hasNew = withSystemLabels.some((entry) => entry.mode === 'AUTO_NEW');
+  if (!hasNew) {
+    withSystemLabels.unshift({
+      id: 'new',
+      name: 'NEW',
+      mode: 'AUTO_NEW',
+      textColor: '#ffffff',
+      backgroundColor: '#111827',
+      isActive: true,
+    });
+  }
+  const hasSale = withSystemLabels.some((entry) => entry.mode === 'AUTO_SALE');
+  if (!hasSale) {
+    withSystemLabels.push({
+      id: 'sale',
+      name: 'SALE',
+      mode: 'AUTO_SALE',
+      textColor: '#ffffff',
+      backgroundColor: '#dc2626',
+      isActive: true,
+    });
+  }
+  const validLabelIds = new Set(withSystemLabels.map((entry) => entry.id));
+  const parsedAssignments = Array.isArray(row.assignments) ? row.assignments : [];
+  const assignments = parsedAssignments
+    .map((entry) => {
+      const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+      const labelId = String(item.labelId || '').trim().toLowerCase();
+      const productTypeRaw = String(item.productType || '').trim().toUpperCase();
+      if (!validLabelIds.has(labelId)) return null;
+      if (productTypeRaw !== 'FABRIC' && productTypeRaw !== 'DESIGN' && productTypeRaw !== 'READY_TO_WEAR') {
+        return null;
+      }
+      const productIds = Array.from(
+        new Set(
+          (Array.isArray(item.productIds) ? item.productIds : [])
+            .map((value) => String(value || '').trim())
+            .filter(Boolean)
+        )
+      );
+      if (productIds.length === 0) return null;
+      return {
+        labelId,
+        productType: productTypeRaw as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR',
+        productIds,
+      };
+    })
+    .filter(Boolean) as Array<{ labelId: string; productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; productIds: string[] }>;
+
+  return {
+    newTagDays: Number.isFinite(newTagDaysRaw) ? Math.max(1, Math.min(120, Math.round(newTagDaysRaw))) : fallback.newTagDays,
+    labels: withSystemLabels.slice(0, 24),
+    assignments,
   };
 };
 
@@ -763,6 +922,58 @@ const saveAdminReadyToWearSizeGuideSettings = async (input: unknown) => {
   );
   return merged;
 };
+const readAdminProductLabelSettings = async () => {
+  await ensureHomepageSectionSettingTable();
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_PRODUCT_LABEL_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: normalizeAdminProductLabelSettings(ADMIN_PRODUCT_LABEL_DEFAULTS),
+    };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizeAdminProductLabelSettings(JSON.parse(String(row.value || '{}'))),
+    };
+  } catch {
+    return {
+      rowId: String(row.id),
+      settings: normalizeAdminProductLabelSettings(ADMIN_PRODUCT_LABEL_DEFAULTS),
+    };
+  }
+};
+const saveAdminProductLabelSettings = async (input: unknown) => {
+  const parsed = adminProductLabelUpdateSchema.parse(input);
+  const merged = normalizeAdminProductLabelSettings(parsed);
+  const existing = await readAdminProductLabelSettings();
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_PRODUCT_LABEL_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
 
 const adminPermissionListSchema = z.array(z.string()).default([]);
 const adminRoleCreateSchema = z.object({
@@ -1143,6 +1354,7 @@ const resolveAdminRoutePermissions = (method: string, path: string) => {
   if (path.startsWith('/products') || path.startsWith('/categories') || path.startsWith('/materials')) {
     return [Permissions.PRODUCTS_MANAGE];
   }
+  if (path.startsWith('/product-labels')) return [Permissions.PRODUCTS_MANAGE];
   if (path.startsWith('/measurement-templates')) return [Permissions.MEASUREMENT_TEMPLATES_MANAGE];
   if (path.startsWith('/pricing-rules')) return [Permissions.PRICING_MANAGE];
   if (path.startsWith('/orders')) return [Permissions.ORDERS_MANAGE];
@@ -2450,6 +2662,45 @@ router.patch('/ready-to-wear-size-guide', authorizePermissions(Permissions.MEASU
     }
     console.error('Error updating ready-to-wear size guide settings:', error);
     res.status(500).json({ success: false, message: 'Failed to update ready-to-wear size guide settings.' });
+  }
+});
+
+router.get('/product-labels', authorizePermissions(Permissions.PRODUCTS_MANAGE), async (_req, res) => {
+  try {
+    const { settings } = await readAdminProductLabelSettings();
+    res.json({
+      success: true,
+      data: settings,
+    });
+  } catch (error) {
+    console.error('Error fetching product label settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch product label settings.' });
+  }
+});
+
+router.put('/product-labels', authorizePermissions(Permissions.PRODUCTS_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveAdminProductLabelSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating product label settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update product label settings.' });
+  }
+});
+
+router.patch('/product-labels', authorizePermissions(Permissions.PRODUCTS_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveAdminProductLabelSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating product label settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update product label settings.' });
   }
 });
 

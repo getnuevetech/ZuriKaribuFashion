@@ -289,7 +289,7 @@ type MeasurementTemplateRow = {
   isRequired: boolean;
   instructions?: string;
 };
-type ReadyToWearStandardSize = 'S' | 'M' | 'L' | 'XL';
+type ReadyToWearStandardSize = string;
 
 const MEASUREMENT_TEMPLATES_FALLBACK_KEY = 'af_measurement_templates_fallback_v1';
 const READY_TO_WEAR_SIZES_FALLBACK_KEY = 'af_ready_to_wear_sizes_fallback_v1';
@@ -319,15 +319,15 @@ const normalizeMeasurementTemplates = (input: unknown): MeasurementTemplateRow[]
 
 const normalizeReadyToWearSizes = (input: unknown): Array<ReadyToWearStandardSize> => {
   const raw = Array.isArray(input) ? input : [];
-  const allowed = READY_TO_WEAR_SIZES_DEFAULT;
   const normalized = Array.from(
     new Set(
       raw
         .map((entry) => String(entry || '').trim().toUpperCase())
-        .filter((entry): entry is ReadyToWearStandardSize => allowed.includes(entry as ReadyToWearStandardSize))
+        .filter((entry) => entry.length > 0 && entry.length <= 20)
+        .slice(0, 20)
     )
-  ) as Array<ReadyToWearStandardSize>;
-  return normalized.length > 0 ? normalized : [...READY_TO_WEAR_SIZES_DEFAULT];
+  );
+  return normalized.length >= 3 ? normalized : [...READY_TO_WEAR_SIZES_DEFAULT];
 };
 
 const normalizeReadyToWearSizeGuide = (input: unknown) => {
@@ -3183,14 +3183,14 @@ const adminApi = {
   getReadyToWearSizesSettings: () =>
     readReadyToWearSizesSettingsWithFallback<{
       success: boolean;
-      data: { sizes: Array<'S' | 'M' | 'L' | 'XL'> };
+      data: { sizes: string[] };
       message?: string;
     }>(),
 
-  updateReadyToWearSizesSettings: (sizes: Array<'S' | 'M' | 'L' | 'XL'>) =>
+  updateReadyToWearSizesSettings: (sizes: string[]) =>
     writeReadyToWearSizesSettingsWithFallback<{
       success: boolean;
-      data: { sizes: Array<'S' | 'M' | 'L' | 'XL'> };
+      data: { sizes: string[] };
       message?: string;
     }>(sizes),
 
@@ -3207,6 +3207,56 @@ const adminApi = {
       data: { title: string; content: string };
       message?: string;
     }>(payload),
+
+  getProductLabelsSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        newTagDays: number;
+        labels: Array<{
+          id: string;
+          name: string;
+          mode: 'AUTO_NEW' | 'AUTO_SALE' | 'MANUAL';
+          textColor: string;
+          backgroundColor: string;
+          isActive: boolean;
+        }>;
+        assignments: Array<{
+          labelId: string;
+          productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+          productIds: string[];
+        }>;
+      };
+    }>('/admin/product-labels'),
+
+  updateProductLabelsSettings: (payload: {
+    newTagDays: number;
+    labels: Array<{
+      id: string;
+      name: string;
+      mode: 'AUTO_NEW' | 'AUTO_SALE' | 'MANUAL';
+      textColor: string;
+      backgroundColor: string;
+      isActive?: boolean;
+    }>;
+    assignments?: Array<{
+      labelId: string;
+      productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+      productIds: string[];
+    }>;
+  }) => apiService.put<{ success: boolean; data: any; message?: string }>('/admin/product-labels', payload),
+
+  getPromoCodes: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/promotions/admin'),
+
+  createPromoCode: (payload: any) =>
+    apiService.post<{ success: boolean; data: any; message?: string }>('/promotions/admin', payload),
+
+  updatePromoCode: (id: string, payload: any) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>(`/promotions/admin/${id}`, payload),
+
+  deletePromoCode: (id: string) =>
+    apiService.delete<{ success: boolean; message?: string }>(`/promotions/admin/${id}`),
 
   getVendorProfileFields: (role: 'FABRIC_SELLER' | 'FASHION_DESIGNER') =>
     apiService.get<{ success: boolean; data: { role: string; fields: any[] } }>('/admin/vendor-profile/fields', {
@@ -3610,6 +3660,11 @@ const designerApi = {
 
   updateReadyToWear: (productId: string, data: any) =>
     apiService.patch<{ success: boolean; data: any }>(`/designer/ready-to-wear/${productId}`, data),
+
+  updateReadyToWearSizeStock: (productId: string, sizes: Array<{ size: string; stock: number }>) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>(`/designer/ready-to-wear/${productId}/size-stock`, {
+      sizes,
+    }),
 
   getOrders: () =>
     readDesignerOrdersWithFallback<{ success: boolean; data: any[] }>(),
@@ -4709,6 +4764,24 @@ const blogsApi = {
     adminBlogsApi.deleteAdminBlog(id),
 };
 
+const promotionsApi = {
+  preview: (payload: {
+    code: string;
+    items: Array<{
+      productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+      productId: string;
+      unitPrice: number;
+      quantity: number;
+    }>;
+    paymentProvider?: string;
+    shippingProvider?: string;
+    shippingQuoteId?: string;
+    cardFingerprint?: string;
+    country?: string;
+    city?: string;
+  }) => apiService.post<{ success: boolean; data?: any; message?: string }>('/promotions/preview', payload),
+};
+
 // Export combined API
 export const api = {
   auth: authApi,
@@ -4727,6 +4800,7 @@ export const api = {
   homepage: homepageApi,
   homepageSections: homepageSectionsApi,
   blogs: blogsApi,
+  promotions: promotionsApi,
 };
 
 // Named exports for direct import
@@ -4747,6 +4821,7 @@ export {
   homepageApi,
   homepageSectionsApi,
   blogsApi,
+  promotionsApi,
   apiService,
   httpClient,
 };

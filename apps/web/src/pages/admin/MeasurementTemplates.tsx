@@ -16,7 +16,19 @@ const EMPTY_ROW: MeasurementTemplate = {
   isRequired: true,
   instructions: '',
 };
-const READY_TO_WEAR_SIZE_OPTIONS: Array<'S' | 'M' | 'L' | 'XL'> = ['S', 'M', 'L', 'XL'];
+const DEFAULT_READY_TO_WEAR_SIZE_OPTIONS = ['S', 'M', 'L', 'XL'];
+const normalizeReadyToWearSizes = (input: unknown): string[] => {
+  const raw = Array.isArray(input) ? input : [];
+  const normalized = Array.from(
+    new Set(
+      raw
+        .map((entry) => String(entry || '').trim().toUpperCase())
+        .filter((entry) => entry.length > 0 && entry.length <= 20)
+        .slice(0, 20)
+    )
+  );
+  return normalized.length >= 3 ? normalized : [...DEFAULT_READY_TO_WEAR_SIZE_OPTIONS];
+};
 
 export default function AdminMeasurementTemplates() {
   const [rows, setRows] = useState<MeasurementTemplate[]>([]);
@@ -24,12 +36,8 @@ export default function AdminMeasurementTemplates() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [readyToWearSizes, setReadyToWearSizes] = useState<Array<'S' | 'M' | 'L' | 'XL'>>([
-    'S',
-    'M',
-    'L',
-    'XL',
-  ]);
+  const [readyToWearSizes, setReadyToWearSizes] = useState<string[]>([...DEFAULT_READY_TO_WEAR_SIZE_OPTIONS]);
+  const [newReadyToWearSize, setNewReadyToWearSize] = useState('');
   const [sizeGuideTitle, setSizeGuideTitle] = useState('Ready-To-Wear Size Guide');
   const [sizeGuideContent, setSizeGuideContent] = useState('');
   const isRouteMissingError = (error: any) =>
@@ -51,8 +59,7 @@ export default function AdminMeasurementTemplates() {
           throw templatesResult.reason;
         }
         if (sizesResult.status === 'fulfilled' && sizesResult.value.success && Array.isArray(sizesResult.value.data?.sizes)) {
-          const normalized = READY_TO_WEAR_SIZE_OPTIONS.filter((size) => sizesResult.value.data.sizes.includes(size));
-          setReadyToWearSizes(normalized.length >= 3 ? normalized : ['S', 'M', 'L', 'XL']);
+          setReadyToWearSizes(normalizeReadyToWearSizes(sizesResult.value.data.sizes));
         }
         if (sizeGuideResult.status === 'fulfilled' && sizeGuideResult.value.success) {
           setSizeGuideTitle((sizeGuideResult.value.data?.title || 'Ready-To-Wear Size Guide').trim());
@@ -86,8 +93,8 @@ export default function AdminMeasurementTemplates() {
           instructions: row.instructions?.trim() || '',
         }))
         .filter((row) => row.name.length > 0);
-      if (readyToWearSizes.length < 3 || readyToWearSizes.length > 4) {
-        setError('Ready-to-wear sizes must include at least 3 and at most 4 options from S, M, L, XL.');
+      if (readyToWearSizes.length < 3 || readyToWearSizes.length > 20) {
+        setError('Ready-to-wear sizes must include at least 3 and at most 20 options.');
         return;
       }
       const cleanSizeGuideTitle = sizeGuideTitle.trim();
@@ -100,7 +107,7 @@ export default function AdminMeasurementTemplates() {
         await api.admin.updateMeasurementTemplates(payload);
       }
       const [sizesSaveResult, guideSaveResult] = await Promise.allSettled([
-        api.admin.updateReadyToWearSizesSettings(readyToWearSizes),
+        api.admin.updateReadyToWearSizesSettings(normalizeReadyToWearSizes(readyToWearSizes)),
         api.admin.updateReadyToWearSizeGuideSettings({
           title: cleanSizeGuideTitle,
           content: cleanSizeGuideContent,
@@ -164,33 +171,71 @@ export default function AdminMeasurementTemplates() {
         <div className="rounded-lg border border-amber-100 bg-amber-50 p-4">
           <h3 className="text-sm font-semibold text-gray-900">Ready-To-Wear Standard Sizes</h3>
           <p className="mt-1 text-xs text-gray-600">
-            Designers can only upload ready-to-wear sizes from the options you enable below.
+            Designers can only upload ready-to-wear sizes from the options you define below.
           </p>
-          <div className="mt-3 flex flex-wrap gap-3">
-            {READY_TO_WEAR_SIZE_OPTIONS.map((size) => {
-              const checked = readyToWearSizes.includes(size);
-              return (
-                <label key={size} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={(event) => {
-                      setReadyToWearSizes((prev) => {
-                        if (event.target.checked) {
-                          const next = Array.from(new Set([...prev, size])) as Array<'S' | 'M' | 'L' | 'XL'>;
-                          return READY_TO_WEAR_SIZE_OPTIONS.filter((entry) => next.includes(entry));
-                        }
-                        return prev.filter((entry) => entry !== size);
-                      });
-                    }}
-                  />
-                  <span>{size}</span>
-                </label>
-              );
-            })}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {readyToWearSizes.map((size) => (
+              <span key={size} className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs">
+                {size}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setReadyToWearSizes((prev) => {
+                      if (prev.length <= 3) return prev;
+                      return prev.filter((entry) => entry !== size);
+                    })
+                  }
+                  className="text-red-600"
+                  aria-label={`Remove size ${size}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <input
+              value={newReadyToWearSize}
+              onChange={(event) => setNewReadyToWearSize(event.target.value)}
+              maxLength={20}
+              placeholder="Add size (e.g. XXL, 38, FREE)"
+              className="w-full rounded-lg border bg-white px-3 py-2 text-sm"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                const normalized = String(newReadyToWearSize || '').trim().toUpperCase();
+                if (!normalized) return;
+                setReadyToWearSizes((prev) => {
+                  const next = Array.from(new Set([...prev, normalized])).slice(0, 20);
+                  return next;
+                });
+                setNewReadyToWearSize('');
+              }}
+            >
+              Add
+            </Button>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {DEFAULT_READY_TO_WEAR_SIZE_OPTIONS.map((size) => (
+              <button
+                key={size}
+                type="button"
+                className="rounded border bg-white px-2 py-1 text-xs hover:bg-gray-50"
+                onClick={() =>
+                  setReadyToWearSizes((prev) => {
+                    const next = Array.from(new Set([...prev, size])).slice(0, 20);
+                    return next;
+                  })
+                }
+              >
+                Add {size}
+              </button>
+            ))}
           </div>
           <p className="mt-2 text-xs text-gray-600">
-            Selected: {readyToWearSizes.join(', ') || 'None'} ({readyToWearSizes.length}/4)
+            Selected: {readyToWearSizes.join(', ') || 'None'} ({readyToWearSizes.length}/20)
           </p>
         </div>
 

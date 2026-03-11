@@ -36,6 +36,10 @@ interface CurrencyMatrixRow {
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(40);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -142,12 +146,13 @@ export default function AdminProducts() {
   };
 
   useEffect(() => {
-    void Promise.all([fetchProducts(), fetchOptions()]);
+    void fetchOptions();
   }, []);
 
   useEffect(() => {
-    void fetchProducts();
-  }, [typeFilter, statusFilter, activeTab]);
+    setCurrentPage(1);
+    void fetchProducts(1);
+  }, [typeFilter, statusFilter, activeTab, pageSize]);
 
   const effectiveType = useMemo(() => {
     if (activeTab === 'fabrics') return 'FABRIC';
@@ -510,18 +515,23 @@ export default function AdminProducts() {
     }
   };
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (pageOverride?: number) => {
     try {
       setLoading(true);
+      const requestedPage = pageOverride ?? currentPage;
       const response = await api.admin.getProducts({
         search: search || undefined,
         status: statusFilter || undefined,
         type: (effectiveType as any) || undefined,
-        page: 1,
-        limit: 200,
+        page: requestedPage,
+        limit: pageSize,
       });
       if (response.success) {
         setProducts(response.data.products || []);
+        const pagination = response.data?.pagination || {};
+        setCurrentPage(Number(pagination.page || requestedPage));
+        setTotalPages(Math.max(1, Number(pagination.pages || 1)));
+        setTotalProducts(Number(pagination.total || 0));
         setSelectedIds([]);
       }
     } catch (error) {
@@ -1057,10 +1067,38 @@ export default function AdminProducts() {
             </option>
           ))}
         </select>
-        <Button variant="outline" onClick={fetchProducts}>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setCurrentPage(1);
+            void fetchProducts(1);
+          }}
+        >
           <Filter className="w-4 h-4 mr-2" />
           Filter
         </Button>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+        <p>
+          Showing page <span className="font-semibold">{currentPage}</span> of{' '}
+          <span className="font-semibold">{totalPages}</span> • Total products:{' '}
+          <span className="font-semibold">{totalProducts}</span>
+        </p>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-500">Rows per page</label>
+          <select
+            value={pageSize}
+            onChange={(event) => setPageSize(Math.max(10, Number(event.target.value || 40)))}
+            className="rounded-lg border px-2 py-1 text-sm"
+          >
+            {[20, 40, 80, 100].map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
         <span className="text-sm font-medium text-amber-900">{selectedVisibleIds.length} selected</span>
@@ -1204,6 +1242,27 @@ export default function AdminProducts() {
             </tbody>
           </table>
         </div>
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void fetchProducts(Math.max(1, currentPage - 1))}
+          disabled={loading || currentPage <= 1}
+        >
+          Previous
+        </Button>
+        <span className="px-2 text-sm text-gray-600">
+          Page {currentPage} / {totalPages}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void fetchProducts(Math.min(totalPages, currentPage + 1))}
+          disabled={loading || currentPage >= totalPages}
+        >
+          Next
+        </Button>
       </div>
       {showModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">

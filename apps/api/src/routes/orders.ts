@@ -196,6 +196,8 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       shippingServiceName: z.string().min(1).optional(),
       shippingEtaMinDays: z.number().min(0).optional(),
       shippingEtaMaxDays: z.number().min(0).optional(),
+      promoCode: z.string().trim().max(30).optional(),
+      discountUsd: z.number().min(0).optional(),
     });
 
     const data = schema.parse(req.body);
@@ -276,7 +278,9 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
     // Calculate prices
     const fabricPrice = Number(fabric.finalPrice) * data.yards;
     const designPrice = Number(design.finalPrice);
-    const subtotal = fabricPrice + designPrice;
+    const subtotalBeforeDiscount = fabricPrice + designPrice;
+    const discountUsd = Math.max(0, Math.min(Number(data.discountUsd || 0), subtotalBeforeDiscount));
+    const subtotal = subtotalBeforeDiscount - discountUsd;
     const shippingCost = Number.isFinite(Number(data.shippingCostUsd)) ? Number(data.shippingCostUsd) : 25;
     const tax = subtotal * 0.08; // 8% tax
     const total = subtotal + shippingCost + tax;
@@ -340,8 +344,8 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
             create: {
               status: initialStatus,
               notes: isPaymentConfirmed
-                ? 'Order created and payment confirmed'
-                : 'Order created, awaiting payment',
+                ? `Order created and payment confirmed${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`
+                : `Order created, awaiting payment${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`,
               updatedById: customerId,
               updatedByRole: UserRole.CUSTOMER,
             },
@@ -410,6 +414,8 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       shippingServiceName: z.string().min(1).optional(),
       shippingEtaMinDays: z.number().min(0).optional(),
       shippingEtaMaxDays: z.number().min(0).optional(),
+      promoCode: z.string().trim().max(30).optional(),
+      discountUsd: z.number().min(0).optional(),
     });
 
     const data = schema.parse(req.body);
@@ -490,6 +496,8 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
     }
 
     // Calculate totals
+    const discountUsd = Math.max(0, Math.min(Number(data.discountUsd || 0), subtotal));
+    subtotal = subtotal - discountUsd;
     const shippingCost = Number.isFinite(Number(data.shippingCostUsd)) ? Number(data.shippingCostUsd) : 15;
     const tax = subtotal * 0.08;
     const total = subtotal + shippingCost + tax;
@@ -538,8 +546,8 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
             create: {
               status: initialStatus,
               notes: isPaymentConfirmed
-                ? 'Ready-to-wear order created and payment confirmed'
-                : 'Ready-to-wear order created, awaiting payment',
+                ? `Ready-to-wear order created and payment confirmed${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`
+                : `Ready-to-wear order created, awaiting payment${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`,
               updatedById: customerId,
               updatedByRole: UserRole.CUSTOMER,
             },
@@ -598,6 +606,8 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
       shippingServiceName: z.string().min(1).optional(),
       shippingEtaMinDays: z.number().min(0).optional(),
       shippingEtaMaxDays: z.number().min(0).optional(),
+      promoCode: z.string().trim().max(30).optional(),
+      discountUsd: z.number().min(0).optional(),
     });
 
     const data = schema.parse(req.body);
@@ -642,7 +652,9 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
       });
     }
 
-    const subtotal = Number(fabric.finalPrice) * data.yards;
+    const subtotalBeforeDiscount = Number(fabric.finalPrice) * data.yards;
+    const discountUsd = Math.max(0, Math.min(Number(data.discountUsd || 0), subtotalBeforeDiscount));
+    const subtotal = subtotalBeforeDiscount - discountUsd;
     const shippingCost = Number.isFinite(Number(data.shippingCostUsd)) ? Number(data.shippingCostUsd) : 15;
     const tax = subtotal * 0.08;
     const total = subtotal + shippingCost + tax;
@@ -690,8 +702,8 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
             create: {
               status: initialStatus,
               notes: isPaymentConfirmed
-                ? 'Fabric-only order created and payment confirmed'
-                : 'Fabric-only order created, awaiting payment',
+                ? `Fabric-only order created and payment confirmed${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`
+                : `Fabric-only order created, awaiting payment${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`,
               updatedById: customerId,
               updatedByRole: UserRole.CUSTOMER,
             },

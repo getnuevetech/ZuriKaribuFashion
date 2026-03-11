@@ -74,6 +74,7 @@ interface ReadyProduct {
   status: string;
   images: string[];
   orderCount: number;
+  sizeVariations: Array<{ id?: string; size: string; price: number; stock: number }>;
   isFeatured?: boolean;
   featuredSections?: string[];
   listingCurrencyCode?: string;
@@ -257,6 +258,11 @@ export default function DesignerDashboard() {
   const [productTypeFilter, setProductTypeFilter] = useState('');
   const [productStatusFilter, setProductStatusFilter] = useState('');
   const [productCategoryFilter, setProductCategoryFilter] = useState('');
+  const [showReadyStockModal, setShowReadyStockModal] = useState(false);
+  const [selectedReadyProduct, setSelectedReadyProduct] = useState<ReadyProduct | null>(null);
+  const [readyStockDraft, setReadyStockDraft] = useState<Array<{ size: string; stock: string }>>([]);
+  const [readyStockSaving, setReadyStockSaving] = useState(false);
+  const [readyStockError, setReadyStockError] = useState<string | null>(null);
 
   const syncTabWithUrl = (tab: 'overview' | 'designs' | 'featured' | 'orders') => {
     setActiveTab(tab);
@@ -422,6 +428,14 @@ export default function DesignerDashboard() {
           status: item.status || 'DRAFT',
           images: Array.isArray(item.images) ? item.images.map((img: any) => img?.url).filter(Boolean) : [],
           orderCount: Number(item?._count?.orderItems || 0),
+          sizeVariations: Array.isArray(item.sizeVariations)
+            ? item.sizeVariations.map((variation: any) => ({
+                id: String(variation?.id || ''),
+                size: String(variation?.size || ''),
+                price: Number(variation?.price || 0),
+                stock: Number(variation?.stock || 0),
+              }))
+            : [],
           isFeatured: Boolean(item.isFeatured),
           featuredSections: Array.isArray(item.featuredSections) ? item.featuredSections : [],
           listingCurrencyCode: String(item.listingCurrencyCode || 'USD'),
@@ -867,6 +881,48 @@ export default function DesignerDashboard() {
     }
   };
 
+  const openReadyStockModal = (product: ReadyProduct) => {
+    const rows = (product.sizeVariations || []).map((entry) => ({
+      size: String(entry.size || ''),
+      stock: String(Math.max(0, Number(entry.stock || 0))),
+    }));
+    setSelectedReadyProduct(product);
+    setReadyStockDraft(rows);
+    setReadyStockError(null);
+    setShowReadyStockModal(true);
+  };
+
+  const handleSaveReadyStock = async () => {
+    if (!selectedReadyProduct) return;
+    const normalized = readyStockDraft.map((entry) => ({
+      size: String(entry.size || '').trim(),
+      stock: Number(entry.stock || 0),
+    }));
+    if (normalized.length === 0) {
+      setReadyStockError('No size rows found for this product.');
+      return;
+    }
+    if (normalized.some((entry) => !entry.size || !Number.isFinite(entry.stock) || entry.stock < 0)) {
+      setReadyStockError('Each size must have a valid stock value (0 or greater).');
+      return;
+    }
+
+    try {
+      setReadyStockSaving(true);
+      setReadyStockError(null);
+      await api.designer.updateReadyToWearSizeStock(selectedReadyProduct.id, normalized);
+      await fetchDashboardData();
+      setShowReadyStockModal(false);
+      setSelectedReadyProduct(null);
+    } catch (error: any) {
+      setReadyStockError(
+        error?.response?.data?.message || error?.message || 'Failed to save size stock values.'
+      );
+    } finally {
+      setReadyStockSaving(false);
+    }
+  };
+
   const productRows = [
     ...designs.map((item) => ({ ...item, productType: 'CUSTOM_TO_WEAR' as const })),
     ...readyProducts.map((item) => ({ ...item, productType: 'READY_TO_WEAR' as const })),
@@ -1307,6 +1363,12 @@ export default function DesignerDashboard() {
                     const local = Number(item.listingLocalPrice || item.basePrice || 0);
                     const usd = Number(item.listingUsdPrice || item.basePrice || 0);
                     const priceText = code === 'USD' ? `$${usd.toFixed(2)}` : `${code} ${local.toFixed(2)} · USD ${usd.toFixed(2)}`;
+                    const readySizeSummary =
+                      item.productType === 'READY_TO_WEAR'
+                        ? (((item as ReadyProduct).sizeVariations || [])
+                            .map((entry) => `${entry.size}: ${Number(entry.stock || 0)}`)
+                            .join(' • ') || 'No sizes')
+                        : '';
                     return (
                       <tr key={`${item.productType}-${item.id}`} className="border-b last:border-0 hover:bg-gray-50">
                         <td className="px-4 py-3">
@@ -1322,7 +1384,12 @@ export default function DesignerDashboard() {
                           <Badge variant="secondary">{item.productType}</Badge>
                         </td>
                         <td className="px-4 py-3 font-medium">{priceText}</td>
-                        <td className="px-4 py-3 text-gray-600">{item.category?.name || 'Category'}</td>
+                        <td className="px-4 py-3 text-gray-600">
+                          <p>{item.category?.name || 'Category'}</p>
+                          {item.productType === 'READY_TO_WEAR' ? (
+                            <p className="mt-1 text-xs text-gray-500">Size stock: {readySizeSummary}</p>
+                          ) : null}
+                        </td>
                         <td className="px-4 py-3">
                           <Badge variant={item.isFeatured ? 'green' : 'gray'}>{item.isFeatured ? 'YES' : 'NO'}</Badge>
                         </td>
@@ -1351,6 +1418,15 @@ export default function DesignerDashboard() {
                                 title="Edit product"
                               >
                                 <Edit className="h-4 w-4" />
+                              </button>
+                            ) : null}
+                            {item.productType === 'READY_TO_WEAR' ? (
+                              <button
+                                onClick={() => openReadyStockModal(item as ReadyProduct)}
+                                className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-700"
+                                title="Manage size stock"
+                              >
+                                <Scissors className="h-4 w-4" />
                               </button>
                             ) : null}
                             <Link
@@ -1436,6 +1512,62 @@ export default function DesignerDashboard() {
           )}
         />
       )}
+
+      {showReadyStockModal && selectedReadyProduct ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Manage Ready-To-Wear Size Stock</h3>
+            <p className="mt-1 text-sm text-gray-500">{selectedReadyProduct.name}</p>
+
+            <div className="mt-4 space-y-3">
+              {readyStockDraft.map((row, index) => (
+                <div key={`${row.size}-${index}`} className="grid grid-cols-[1fr_140px] items-center gap-3">
+                  <div className="rounded-lg border bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700">
+                    {row.size}
+                  </div>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={row.stock}
+                    onChange={(event) =>
+                      setReadyStockDraft((previous) =>
+                        previous.map((entry, draftIndex) =>
+                          draftIndex === index ? { ...entry, stock: event.target.value } : entry
+                        )
+                      )
+                    }
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {readyStockError ? (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {readyStockError}
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowReadyStockModal(false);
+                  setSelectedReadyProduct(null);
+                  setReadyStockError(null);
+                }}
+                disabled={readyStockSaving}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleSaveReadyStock} disabled={readyStockSaving}>
+                {readyStockSaving ? 'Saving...' : 'Save Stock'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showDesignModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">

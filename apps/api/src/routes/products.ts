@@ -6,10 +6,43 @@ import { z } from 'zod';
 
 const router = Router();
 const HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE';
+const HOMEPAGE_PRODUCT_LABEL_SETTINGS_KEY = 'HOMEPAGE_PRODUCT_LABELS';
 const DEFAULT_READY_TO_WEAR_SIZE_GUIDE = {
   title: 'Ready-To-Wear Size Guide',
   content:
     'Use your body measurements to select your best standard size.\n\nS: Bust 84-90cm, Waist 66-72cm, Hips 90-96cm\nM: Bust 91-98cm, Waist 73-80cm, Hips 97-104cm\nL: Bust 99-106cm, Waist 81-88cm, Hips 105-112cm\nXL: Bust 107-115cm, Waist 89-98cm, Hips 113-122cm',
+};
+const DEFAULT_PRODUCT_LABEL_SETTINGS = {
+  newTagDays: 14,
+  labels: [
+    {
+      id: 'new',
+      name: 'NEW',
+      mode: 'AUTO_NEW' as const,
+      textColor: '#ffffff',
+      backgroundColor: '#111827',
+      isActive: true,
+    },
+    {
+      id: 'sale',
+      name: 'SALE',
+      mode: 'AUTO_SALE' as const,
+      textColor: '#ffffff',
+      backgroundColor: '#dc2626',
+      isActive: true,
+    },
+  ],
+  assignments: [] as Array<{
+    labelId: string;
+    productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+    productIds: string[];
+  }>,
+};
+type ProductLabelDisplay = {
+  id: string;
+  name: string;
+  textColor: string;
+  backgroundColor: string;
 };
 
 type CanonicalProductType = 'DESIGN' | 'FABRIC' | 'READY_TO_WEAR';
@@ -119,6 +152,147 @@ async function readReadyToWearSizeGuide() {
   }
 }
 
+function normalizeProductLabelSettings(raw: unknown) {
+  const fallback = {
+    ...DEFAULT_PRODUCT_LABEL_SETTINGS,
+    labels: DEFAULT_PRODUCT_LABEL_SETTINGS.labels.map((entry) => ({ ...entry })),
+    assignments: [] as Array<{ labelId: string; productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; productIds: string[] }>,
+  };
+  if (!raw || typeof raw !== 'object') return fallback;
+  const row = raw as Record<string, unknown>;
+  const labelsRaw = Array.isArray(row.labels) ? row.labels : [];
+  const labels = Array.from(
+    new Map(
+      labelsRaw
+        .map((entry) => {
+          const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+          const id = String(item.id || '').trim().toLowerCase();
+          const name = String(item.name || '').trim();
+          const mode = String(item.mode || '').trim().toUpperCase();
+          if (!id || !name) return null;
+          if (mode !== 'AUTO_NEW' && mode !== 'AUTO_SALE' && mode !== 'MANUAL') return null;
+          return [
+            id,
+            {
+              id,
+              name,
+              mode: mode as 'AUTO_NEW' | 'AUTO_SALE' | 'MANUAL',
+              textColor: String(item.textColor || '#ffffff').trim() || '#ffffff',
+              backgroundColor: String(item.backgroundColor || '#111827').trim() || '#111827',
+              isActive: item.isActive !== false,
+            },
+          ] as const;
+        })
+        .filter(Boolean) as Array<
+        readonly [
+          string,
+          {
+            id: string;
+            name: string;
+            mode: 'AUTO_NEW' | 'AUTO_SALE' | 'MANUAL';
+            textColor: string;
+            backgroundColor: string;
+            isActive: boolean;
+          },
+        ]
+      >
+    ).values()
+  );
+  const labelsWithDefaults = [...labels];
+  if (!labelsWithDefaults.some((entry) => entry.mode === 'AUTO_NEW')) {
+    labelsWithDefaults.unshift({ ...DEFAULT_PRODUCT_LABEL_SETTINGS.labels[0] });
+  }
+  if (!labelsWithDefaults.some((entry) => entry.mode === 'AUTO_SALE')) {
+    labelsWithDefaults.push({ ...DEFAULT_PRODUCT_LABEL_SETTINGS.labels[1] });
+  }
+  const validLabelIds = new Set(labelsWithDefaults.map((entry) => entry.id));
+  const assignmentsRaw = Array.isArray(row.assignments) ? row.assignments : [];
+  const assignments = assignmentsRaw
+    .map((entry) => {
+      const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+      const labelId = String(item.labelId || '').trim().toLowerCase();
+      const productType = String(item.productType || '').trim().toUpperCase();
+      if (!validLabelIds.has(labelId)) return null;
+      if (productType !== 'FABRIC' && productType !== 'DESIGN' && productType !== 'READY_TO_WEAR') return null;
+      const productIds = Array.from(
+        new Set(
+          (Array.isArray(item.productIds) ? item.productIds : [])
+            .map((value) => String(value || '').trim())
+            .filter(Boolean)
+        )
+      );
+      if (productIds.length === 0) return null;
+      return { labelId, productType: productType as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR', productIds };
+    })
+    .filter(Boolean) as Array<{ labelId: string; productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; productIds: string[] }>;
+  const newTagDaysRaw = Number(row.newTagDays);
+  return {
+    newTagDays: Number.isFinite(newTagDaysRaw)
+      ? Math.max(1, Math.min(120, Math.round(newTagDaysRaw)))
+      : fallback.newTagDays,
+    labels: labelsWithDefaults,
+    assignments,
+  };
+}
+
+async function readProductLabelSettings() {
+  try {
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT "value" FROM "HomepageSectionSetting" WHERE "key" = $1 LIMIT 1`,
+      HOMEPAGE_PRODUCT_LABEL_SETTINGS_KEY
+    );
+    const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+    if (!row) return normalizeProductLabelSettings(DEFAULT_PRODUCT_LABEL_SETTINGS);
+    return normalizeProductLabelSettings(JSON.parse(String(row.value || '{}')));
+  } catch {
+    return normalizeProductLabelSettings(DEFAULT_PRODUCT_LABEL_SETTINGS);
+  }
+}
+
+function buildProductLabels(params: {
+  productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+  productId: string;
+  createdAt?: string | Date | null;
+  isOnSale: boolean;
+  settings: ReturnType<typeof normalizeProductLabelSettings>;
+}): ProductLabelDisplay[] {
+  const labels = params.settings.labels.filter((entry) => entry.isActive !== false);
+  const labelMap = new Map(labels.map((entry) => [entry.id, entry]));
+  const output: ProductLabelDisplay[] = [];
+  const add = (labelId: string) => {
+    const row = labelMap.get(labelId);
+    if (!row) return;
+    if (output.some((item) => item.id === row.id)) return;
+    output.push({
+      id: row.id,
+      name: row.name,
+      textColor: row.textColor,
+      backgroundColor: row.backgroundColor,
+    });
+  };
+  const now = Date.now();
+  const createdAt = params.createdAt ? new Date(params.createdAt).getTime() : 0;
+  const isNew = createdAt > 0 && now - createdAt <= params.settings.newTagDays * 24 * 60 * 60 * 1000;
+  if (isNew) {
+    const autoNew = labels.find((entry) => entry.mode === 'AUTO_NEW');
+    if (autoNew) add(autoNew.id);
+  }
+  if (params.isOnSale) {
+    const autoSale = labels.find((entry) => entry.mode === 'AUTO_SALE');
+    if (autoSale) add(autoSale.id);
+  }
+  const manualLabelIds = params.settings.assignments
+    .filter(
+      (entry) =>
+        entry.productType === params.productType &&
+        Array.isArray(entry.productIds) &&
+        entry.productIds.includes(params.productId)
+    )
+    .map((entry) => entry.labelId);
+  for (const labelId of manualLabelIds) add(labelId);
+  return output;
+}
+
 // Public routes (no auth required)
 
 // Get all categories
@@ -206,11 +380,22 @@ router.get('/fabrics', async (req, res, next) => {
       }),
       prisma.fabric.count({ where }),
     ]);
+    const labelSettings = await readProductLabelSettings();
+    const withLabels = fabrics.map((item) => ({
+      ...item,
+      productLabels: buildProductLabels({
+        productType: 'FABRIC',
+        productId: item.id,
+        createdAt: item.createdAt,
+        isOnSale: Number(item.finalPrice || 0) < Number(item.sellerPrice || 0),
+        settings: labelSettings,
+      }),
+    }));
 
     res.json({
       success: true,
       data: {
-        fabrics,
+        fabrics: withLabels,
         pagination: {
           page: pagination.page,
           limit: pagination.limit,
@@ -263,10 +448,20 @@ router.get('/fabrics/:id', async (req, res, next) => {
         message: 'Fabric not found.',
       });
     }
+    const labelSettings = await readProductLabelSettings();
 
     res.json({
       success: true,
-      data: fabric,
+      data: {
+        ...fabric,
+        productLabels: buildProductLabels({
+          productType: 'FABRIC',
+          productId: fabric.id,
+          createdAt: fabric.createdAt,
+          isOnSale: Number(fabric.finalPrice || 0) < Number(fabric.sellerPrice || 0),
+          settings: labelSettings,
+        }),
+      },
     });
   } catch (error) {
     next(error);
@@ -334,11 +529,22 @@ router.get('/designs', async (req, res, next) => {
       }),
       prisma.design.count({ where }),
     ]);
+    const labelSettings = await readProductLabelSettings();
+    const withLabels = designs.map((item) => ({
+      ...item,
+      productLabels: buildProductLabels({
+        productType: 'DESIGN',
+        productId: item.id,
+        createdAt: item.createdAt,
+        isOnSale: Number(item.finalPrice || 0) < Number(item.basePrice || 0),
+        settings: labelSettings,
+      }),
+    }));
 
     res.json({
       success: true,
       data: {
-        designs,
+        designs: withLabels,
         pagination: {
           page: pagination.page,
           limit: pagination.limit,
@@ -401,10 +607,20 @@ router.get('/designs/:id', async (req, res, next) => {
         message: 'Design not found.',
       });
     }
+    const labelSettings = await readProductLabelSettings();
 
     res.json({
       success: true,
-      data: design,
+      data: {
+        ...design,
+        productLabels: buildProductLabels({
+          productType: 'DESIGN',
+          productId: design.id,
+          createdAt: design.createdAt,
+          isOnSale: Number(design.finalPrice || 0) < Number(design.basePrice || 0),
+          settings: labelSettings,
+        }),
+      },
     });
   } catch (error) {
     next(error);
@@ -459,11 +675,22 @@ router.get('/ready-to-wear', async (req, res, next) => {
       }),
       prisma.readyToWear.count({ where }),
     ]);
+    const labelSettings = await readProductLabelSettings();
+    const withLabels = products.map((item) => ({
+      ...item,
+      productLabels: buildProductLabels({
+        productType: 'READY_TO_WEAR',
+        productId: item.id,
+        createdAt: item.createdAt,
+        isOnSale: (item.sizeVariations || []).some((row: any) => Number(row.price || 0) < Number(item.basePrice || 0)),
+        settings: labelSettings,
+      }),
+    }));
 
     res.json({
       success: true,
       data: {
-        products,
+        products: withLabels,
         pagination: {
           page: pagination.page,
           limit: pagination.limit,
@@ -507,10 +734,20 @@ router.get('/ready-to-wear/:id', async (req, res, next) => {
         message: 'Product not found.',
       });
     }
+    const labelSettings = await readProductLabelSettings();
 
     res.json({
       success: true,
-      data: product,
+      data: {
+        ...product,
+        productLabels: buildProductLabels({
+          productType: 'READY_TO_WEAR',
+          productId: product.id,
+          createdAt: product.createdAt,
+          isOnSale: (product.sizeVariations || []).some((row: any) => Number(row.price || 0) < Number(product.basePrice || 0)),
+          settings: labelSettings,
+        }),
+      },
     });
   } catch (error) {
     next(error);

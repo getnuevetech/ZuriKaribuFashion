@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, ShoppingBag, Sparkles } from 'lucide-react';
 import { api } from '../services/api';
 import { useCartStore } from '../store/cartStore';
@@ -21,6 +21,7 @@ interface TryOnMeasurements {
   bust: number;
   waist: number;
   hips: number;
+  shoulder: number;
 }
 
 const DEFAULT_MEASUREMENTS: TryOnMeasurements = {
@@ -28,10 +29,12 @@ const DEFAULT_MEASUREMENTS: TryOnMeasurements = {
   bust: 90,
   waist: 72,
   hips: 98,
+  shoulder: 40,
 };
 
 export default function ReadyToWearTryOn() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const { addReadyToWearItem } = useCartStore();
   const { formatFromUsd } = useCurrencyStore();
@@ -52,10 +55,40 @@ export default function ReadyToWearTryOn() {
         const response = await api.products.getReadyToWearProduct(id);
         if (response.success) {
           setProduct(response.data);
+          const draftFromRouteState = (location.state as any)?.tryOnDraft;
+          const draftFromStorage = (() => {
+            try {
+              const raw = sessionStorage.getItem(`rtwTryOnDraft:${id}`);
+              return raw ? JSON.parse(raw) : null;
+            } catch {
+              return null;
+            }
+          })();
+          const draft = draftFromRouteState || draftFromStorage;
+
+          if (draft && typeof draft === 'object') {
+            if (Number(draft.quantity || 0) > 0) {
+              setQuantity(Math.max(1, Number(draft.quantity)));
+            }
+            const nextMeasurements: TryOnMeasurements = { ...DEFAULT_MEASUREMENTS };
+            for (const key of Object.keys(nextMeasurements) as Array<keyof TryOnMeasurements>) {
+              const raw = Number((draft as any)?.measurements?.[key]);
+              if (Number.isFinite(raw) && raw > 0) {
+                nextMeasurements[key] = raw;
+              }
+            }
+            setMeasurements(nextMeasurements);
+          }
           const firstAvailableSize = (response.data.sizeVariations || [])
             .find((variation: any) => Number(variation?.stock || 0) > 0)?.size;
-          if (firstAvailableSize) {
-            setSelectedSize(firstAvailableSize);
+          const draftSize = String(draft?.selectedSize || '').trim();
+          const availableSizes = (response.data.sizeVariations || [])
+            .filter((variation: any) => Number(variation?.stock || 0) > 0)
+            .map((variation: any) => String(variation?.size || '').trim())
+            .filter(Boolean);
+          const resolvedSize = draftSize && availableSizes.includes(draftSize) ? draftSize : firstAvailableSize;
+          if (resolvedSize) {
+            setSelectedSize(resolvedSize);
           }
         }
       } finally {
@@ -63,7 +96,7 @@ export default function ReadyToWearTryOn() {
       }
     };
     loadProduct();
-  }, [id]);
+  }, [id, location.state]);
 
   if (loading) {
     return (
@@ -118,15 +151,37 @@ export default function ReadyToWearTryOn() {
       tryOnMeasurements: { ...measurements },
     });
     setMessage('Try-on completed and item added to your cart.');
+    if (id) {
+      try {
+        sessionStorage.removeItem(`rtwTryOnDraft:${id}`);
+      } catch {
+        // Ignore storage cleanup errors.
+      }
+    }
     setAdding(false);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 pb-24 md:pb-8">
+    <div className="min-h-screen bg-gray-50 pb-24 pt-32 md:pb-8 md:pt-36">
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
-        <button onClick={() => navigate(-1)} className="inline-flex items-center text-gray-500 hover:text-coral-500 mb-6">
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+          <Link to="/" className="hover:text-coral-600">
+            Home
+          </Link>
+          <span>/</span>
+          <Link to="/ready-to-wear" className="hover:text-coral-600">
+            Ready To Wear
+          </Link>
+          <span>/</span>
+          <Link to={`/ready-to-wear/${id || ''}`} className="hover:text-coral-600">
+            Product
+          </Link>
+          <span>/</span>
+          <span className="font-medium text-gray-700">Try-On</span>
+        </div>
+        <button onClick={() => navigate(`/ready-to-wear/${id || ''}`)} className="mb-6 inline-flex items-center text-gray-500 hover:text-coral-500">
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back
+          Back to product
         </button>
 
         <div className="mb-6 flex flex-wrap gap-2 text-xs">
@@ -171,6 +226,12 @@ export default function ReadyToWearTryOn() {
             <div className="mt-6 grid grid-cols-2 gap-3">
               <div className="col-span-2 rounded-lg border border-coral-100 bg-coral-50 px-3 py-2 text-xs text-coral-700">
                 Size selection is handled on the product page. Try-On here only collects measurement profile details.
+              </div>
+              <div className="col-span-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                This full page is the handoff point where 3D Try-On technology integration will run.
+              </div>
+              <div className="col-span-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
+                Selected size from product page: <span className="font-semibold">{selectedSize || 'Not selected'}</span>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
