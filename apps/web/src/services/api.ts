@@ -283,6 +283,306 @@ async function readDesignerProfileFieldsWithFallback<T>() {
   throw lastError ?? new Error('Designer profile-fields route not found.');
 }
 
+type MeasurementTemplateRow = {
+  name: string;
+  unit: string;
+  isRequired: boolean;
+  instructions?: string;
+};
+type ReadyToWearStandardSize = 'S' | 'M' | 'L' | 'XL';
+
+const MEASUREMENT_TEMPLATES_FALLBACK_KEY = 'af_measurement_templates_fallback_v1';
+const READY_TO_WEAR_SIZES_FALLBACK_KEY = 'af_ready_to_wear_sizes_fallback_v1';
+const READY_TO_WEAR_SIZE_GUIDE_FALLBACK_KEY = 'af_ready_to_wear_size_guide_fallback_v1';
+
+const READY_TO_WEAR_SIZES_DEFAULT: Array<ReadyToWearStandardSize> = ['S', 'M', 'L', 'XL'];
+const READY_TO_WEAR_SIZE_GUIDE_DEFAULT = {
+  title: 'Ready-To-Wear Size Guide',
+  content:
+    'Use your body measurements to select your best standard size.\n\nS: Bust 84-90cm, Waist 66-72cm, Hips 90-96cm\nM: Bust 91-98cm, Waist 73-80cm, Hips 97-104cm\nL: Bust 99-106cm, Waist 81-88cm, Hips 105-112cm\nXL: Bust 107-115cm, Waist 89-98cm, Hips 113-122cm',
+};
+
+const normalizeMeasurementTemplates = (input: unknown): MeasurementTemplateRow[] =>
+  Array.isArray(input)
+    ? input
+        .map((entry) => {
+          const row = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+          return {
+            name: String(row.name || '').trim(),
+            unit: String(row.unit || 'cm').trim() || 'cm',
+            isRequired: Boolean(row.isRequired),
+            instructions: String(row.instructions || '').trim(),
+          } as MeasurementTemplateRow;
+        })
+        .filter((row) => row.name.length > 0)
+    : [];
+
+const normalizeReadyToWearSizes = (input: unknown): Array<ReadyToWearStandardSize> => {
+  const raw = Array.isArray(input) ? input : [];
+  const allowed = READY_TO_WEAR_SIZES_DEFAULT;
+  const normalized = Array.from(
+    new Set(
+      raw
+        .map((entry) => String(entry || '').trim().toUpperCase())
+        .filter((entry): entry is ReadyToWearStandardSize => allowed.includes(entry as ReadyToWearStandardSize))
+    )
+  ) as Array<ReadyToWearStandardSize>;
+  return normalized.length > 0 ? normalized : [...READY_TO_WEAR_SIZES_DEFAULT];
+};
+
+const normalizeReadyToWearSizeGuide = (input: unknown) => {
+  const row = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  const title = String(row.title || '').trim();
+  const content = String(row.content || '').trim();
+  return {
+    title: title.length > 0 ? title : READY_TO_WEAR_SIZE_GUIDE_DEFAULT.title,
+    content: content.length > 0 ? content : READY_TO_WEAR_SIZE_GUIDE_DEFAULT.content,
+  };
+};
+
+const readMeasurementTemplatesFallback = (): MeasurementTemplateRow[] => {
+  if (typeof window === 'undefined' || !window.localStorage) return [];
+  try {
+    const raw = window.localStorage.getItem(MEASUREMENT_TEMPLATES_FALLBACK_KEY);
+    if (!raw) return [];
+    return normalizeMeasurementTemplates(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+};
+const writeMeasurementTemplatesFallback = (templates: MeasurementTemplateRow[]) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(
+      MEASUREMENT_TEMPLATES_FALLBACK_KEY,
+      JSON.stringify(normalizeMeasurementTemplates(templates))
+    );
+  } catch {
+    // ignore localStorage write failures
+  }
+};
+
+const readReadyToWearSizesFallback = (): { sizes: Array<ReadyToWearStandardSize> } => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return { sizes: [...READY_TO_WEAR_SIZES_DEFAULT] };
+  }
+  try {
+    const raw = window.localStorage.getItem(READY_TO_WEAR_SIZES_FALLBACK_KEY);
+    if (!raw) return { sizes: [...READY_TO_WEAR_SIZES_DEFAULT] };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      sizes: normalizeReadyToWearSizes(parsed?.sizes),
+    };
+  } catch {
+    return { sizes: [...READY_TO_WEAR_SIZES_DEFAULT] };
+  }
+};
+const writeReadyToWearSizesFallback = (sizes: Array<ReadyToWearStandardSize>) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(
+      READY_TO_WEAR_SIZES_FALLBACK_KEY,
+      JSON.stringify({ sizes: normalizeReadyToWearSizes(sizes) })
+    );
+  } catch {
+    // ignore localStorage write failures
+  }
+};
+
+const readReadyToWearSizeGuideFallback = (): { title: string; content: string } => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return { ...READY_TO_WEAR_SIZE_GUIDE_DEFAULT };
+  }
+  try {
+    const raw = window.localStorage.getItem(READY_TO_WEAR_SIZE_GUIDE_FALLBACK_KEY);
+    if (!raw) return { ...READY_TO_WEAR_SIZE_GUIDE_DEFAULT };
+    return normalizeReadyToWearSizeGuide(JSON.parse(raw));
+  } catch {
+    return { ...READY_TO_WEAR_SIZE_GUIDE_DEFAULT };
+  }
+};
+const writeReadyToWearSizeGuideFallback = (payload: { title: string; content: string }) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(
+      READY_TO_WEAR_SIZE_GUIDE_FALLBACK_KEY,
+      JSON.stringify(normalizeReadyToWearSizeGuide(payload))
+    );
+  } catch {
+    // ignore localStorage write failures
+  }
+};
+
+async function readMeasurementTemplatesWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/admin/measurement-templates', '/admin/measurement_templates']) {
+    try {
+      const response = await apiService.get<any>(path, noCacheRequestConfig());
+      const rows = normalizeMeasurementTemplates(response?.data);
+      writeMeasurementTemplatesFallback(rows);
+      return { success: true, data: rows } as T;
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    return {
+      success: true,
+      data: readMeasurementTemplatesFallback(),
+    } as T;
+  }
+  throw lastError ?? new Error('Measurement templates route not found.');
+}
+
+async function writeMeasurementTemplatesWithFallback<T>(templates: MeasurementTemplateRow[]) {
+  let lastError: unknown = null;
+  for (const path of ['/admin/measurement-templates', '/admin/measurement_templates']) {
+    try {
+      const response = await apiService.put<any>(path, { templates });
+      writeMeasurementTemplatesFallback(templates);
+      return (response || { success: true, data: templates }) as T;
+    } catch (putError) {
+      lastError = putError;
+      if (!isRetryableRouteError(putError)) throw putError;
+    }
+    try {
+      const response = await apiService.patch<any>(path, { templates });
+      writeMeasurementTemplatesFallback(templates);
+      return (response || { success: true, data: templates }) as T;
+    } catch (patchError) {
+      lastError = patchError;
+      if (!isRetryableRouteError(patchError)) throw patchError;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    writeMeasurementTemplatesFallback(templates);
+    return {
+      success: true,
+      data: templates,
+      message: 'Measurement templates saved to local fallback.',
+    } as T;
+  }
+  throw lastError ?? new Error('Measurement templates update route not found.');
+}
+
+async function readReadyToWearSizesSettingsWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/admin/ready-to-wear-sizes', '/admin/readytowear-sizes']) {
+    try {
+      const response = await apiService.get<any>(path, noCacheRequestConfig());
+      const normalized = normalizeReadyToWearSizes(response?.data?.sizes);
+      writeReadyToWearSizesFallback(normalized);
+      return {
+        success: true,
+        data: { sizes: normalized },
+      } as T;
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    return {
+      success: true,
+      data: readReadyToWearSizesFallback(),
+    } as T;
+  }
+  throw lastError ?? new Error('Ready-to-wear sizes route not found.');
+}
+
+async function writeReadyToWearSizesSettingsWithFallback<T>(sizes: Array<ReadyToWearStandardSize>) {
+  const normalized = normalizeReadyToWearSizes(sizes);
+  let lastError: unknown = null;
+  for (const path of ['/admin/ready-to-wear-sizes', '/admin/readytowear-sizes']) {
+    try {
+      const response = await apiService.put<any>(path, { sizes: normalized });
+      writeReadyToWearSizesFallback(normalized);
+      return (response || { success: true, data: { sizes: normalized } }) as T;
+    } catch (putError) {
+      lastError = putError;
+      if (!isRetryableRouteError(putError)) throw putError;
+    }
+    try {
+      const response = await apiService.patch<any>(path, { sizes: normalized });
+      writeReadyToWearSizesFallback(normalized);
+      return (response || { success: true, data: { sizes: normalized } }) as T;
+    } catch (patchError) {
+      lastError = patchError;
+      if (!isRetryableRouteError(patchError)) throw patchError;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    writeReadyToWearSizesFallback(normalized);
+    return {
+      success: true,
+      data: { sizes: normalized },
+      message: 'Ready-to-wear sizes saved to local fallback.',
+    } as T;
+  }
+  throw lastError ?? new Error('Ready-to-wear sizes update route not found.');
+}
+
+async function readReadyToWearSizeGuideSettingsWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/admin/ready-to-wear-size-guide', '/admin/readytowear-size-guide']) {
+    try {
+      const response = await apiService.get<any>(path, noCacheRequestConfig());
+      const normalized = normalizeReadyToWearSizeGuide(response?.data);
+      writeReadyToWearSizeGuideFallback(normalized);
+      return {
+        success: true,
+        data: normalized,
+      } as T;
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    return {
+      success: true,
+      data: readReadyToWearSizeGuideFallback(),
+    } as T;
+  }
+  throw lastError ?? new Error('Ready-to-wear size guide route not found.');
+}
+
+async function writeReadyToWearSizeGuideSettingsWithFallback<T>(payload: { title: string; content: string }) {
+  const normalized = normalizeReadyToWearSizeGuide(payload);
+  let lastError: unknown = null;
+  for (const path of ['/admin/ready-to-wear-size-guide', '/admin/readytowear-size-guide']) {
+    try {
+      const response = await apiService.put<any>(path, normalized);
+      writeReadyToWearSizeGuideFallback(normalized);
+      return (response || { success: true, data: normalized }) as T;
+    } catch (putError) {
+      lastError = putError;
+      if (!isRetryableRouteError(putError)) throw putError;
+    }
+    try {
+      const response = await apiService.patch<any>(path, normalized);
+      writeReadyToWearSizeGuideFallback(normalized);
+      return (response || { success: true, data: normalized }) as T;
+    } catch (patchError) {
+      lastError = patchError;
+      if (!isRetryableRouteError(patchError)) throw patchError;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    writeReadyToWearSizeGuideFallback(normalized);
+    return {
+      success: true,
+      data: normalized,
+      message: 'Ready-to-wear size guide saved to local fallback.',
+    } as T;
+  }
+  throw lastError ?? new Error('Ready-to-wear size guide update route not found.');
+}
+
 const PAYMENT_INTEGRATIONS_FALLBACK_KEY = 'af_payment_integrations_fallback_v1';
 const PAYMENT_INTEGRATIONS_BUILTIN_KEYS = ['STRIPE', 'FLUTTERWAVE', 'PAYPAL'];
 
@@ -2871,34 +3171,42 @@ const adminApi = {
   }) => apiService.get<{ success: boolean; data: any }>('/admin/security/session-audit', { params }),
 
   getMeasurementTemplates: () =>
-    apiService.get<{ success: boolean; data: Array<{ name: string; unit: string; isRequired: boolean; instructions?: string }> }>(
-      '/admin/measurement-templates'
-    ),
+    readMeasurementTemplatesWithFallback<{
+      success: boolean;
+      data: Array<{ name: string; unit: string; isRequired: boolean; instructions?: string }>;
+      message?: string;
+    }>(),
 
   updateMeasurementTemplates: (templates: Array<{ name: string; unit: string; isRequired: boolean; instructions?: string }>) =>
-    apiService.put('/admin/measurement-templates', { templates }),
+    writeMeasurementTemplatesWithFallback<{ success: boolean; data?: any; message?: string }>(templates),
 
   getReadyToWearSizesSettings: () =>
-    apiService.get<{ success: boolean; data: { sizes: Array<'S' | 'M' | 'L' | 'XL'> } }>(
-      '/admin/ready-to-wear-sizes'
-    ),
+    readReadyToWearSizesSettingsWithFallback<{
+      success: boolean;
+      data: { sizes: Array<'S' | 'M' | 'L' | 'XL'> };
+      message?: string;
+    }>(),
 
   updateReadyToWearSizesSettings: (sizes: Array<'S' | 'M' | 'L' | 'XL'>) =>
-    apiService.put<{ success: boolean; data: { sizes: Array<'S' | 'M' | 'L' | 'XL'> } }>(
-      '/admin/ready-to-wear-sizes',
-      { sizes }
-    ),
+    writeReadyToWearSizesSettingsWithFallback<{
+      success: boolean;
+      data: { sizes: Array<'S' | 'M' | 'L' | 'XL'> };
+      message?: string;
+    }>(sizes),
 
   getReadyToWearSizeGuideSettings: () =>
-    apiService.get<{ success: boolean; data: { title: string; content: string } }>(
-      '/admin/ready-to-wear-size-guide'
-    ),
+    readReadyToWearSizeGuideSettingsWithFallback<{
+      success: boolean;
+      data: { title: string; content: string };
+      message?: string;
+    }>(),
 
   updateReadyToWearSizeGuideSettings: (payload: { title: string; content: string }) =>
-    apiService.put<{ success: boolean; data: { title: string; content: string } }>(
-      '/admin/ready-to-wear-size-guide',
-      payload
-    ),
+    writeReadyToWearSizeGuideSettingsWithFallback<{
+      success: boolean;
+      data: { title: string; content: string };
+      message?: string;
+    }>(payload),
 
   getVendorProfileFields: (role: 'FABRIC_SELLER' | 'FASHION_DESIGNER') =>
     apiService.get<{ success: boolean; data: { role: string; fields: any[] } }>('/admin/vendor-profile/fields', {
