@@ -497,21 +497,21 @@ export default function ReadyToWearDetail() {
               </div>
             )}
 
-            {/* Size Selection */}
-            {availableSizes.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Size</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowSizeGuideModal(true)}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-coral-600 hover:underline"
-                  >
-                    <Ruler className="h-3.5 w-3.5" />
-                    Size Guide
-                  </button>
-                </div>
-                <div className="flex flex-wrap items-end gap-2">
+            {/* Size Selection + Try On */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">Size</span>
+                <button
+                  type="button"
+                  onClick={() => setShowSizeGuideModal(true)}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-coral-600 hover:underline"
+                >
+                  <Ruler className="h-3.5 w-3.5" />
+                  Size Guide
+                </button>
+              </div>
+              <div className="flex flex-wrap items-end gap-2">
+                {availableSizes.length > 0 ? (
                   <select
                     value={effectiveSelectedSize}
                     onChange={(event) => setSelectedSize(event.target.value)}
@@ -524,18 +524,17 @@ export default function ReadyToWearDetail() {
                       </option>
                     ))}
                   </select>
-                  <Button variant="outline" className="px-3 py-2 text-xs" onClick={openTryOnModal}>
-                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                    Try On
-                  </Button>
-                </div>
+                ) : (
+                  <div className="min-w-[150px] flex-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    No standard sizes are currently available for this product.
+                  </div>
+                )}
+                <Button variant="outline" className="px-3 py-2 text-xs" onClick={openTryOnModal}>
+                  <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                  Try On
+                </Button>
               </div>
-            )}
-            {availableSizes.length === 0 ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                No standard sizes are currently available for this product.
-              </div>
-            ) : null}
+            </div>
 
             {/* Quantity */}
             <div className="flex items-center gap-4">
