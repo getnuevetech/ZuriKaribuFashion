@@ -42,6 +42,7 @@ type FeaturedProduct = {
 type CountryCard = {
   name: string;
   flag: string;
+  flagCode?: string;
   fabrics: string;
 };
 
@@ -186,18 +187,27 @@ const countryCodeToFlag = (countryCode: string) =>
     .slice(0, 2)
     .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
 
+const resolveCountryCode = (country?: string | null, explicitFlag?: string | null) => {
+  const explicit = String(explicitFlag || '').trim();
+  if (/^[a-z]{2}$/i.test(explicit)) return explicit.toUpperCase();
+  const raw = String(country || '').trim();
+  if (!raw) return '';
+  if (/^[a-z]{2}$/i.test(raw)) return raw.toUpperCase();
+  const normalized = raw.toLowerCase();
+  return (
+    countryNameToCode[normalized] ||
+    countryNameToCode[normalized.split(',')[0]?.trim() || ''] ||
+    ''
+  );
+};
+
 const resolveCountryFlag = (country?: string | null, explicitFlag?: string | null) => {
   const explicit = String(explicitFlag || '').trim();
+  if (/^[a-z]{2}$/i.test(explicit)) return countryCodeToFlag(explicit);
   if (explicit) return explicit;
   const raw = String(country || '').trim();
   if (!raw) return '🌍';
-  const normalized = raw.toLowerCase();
-  const directCode = /^[a-z]{2}$/i.test(raw) ? raw.toUpperCase() : '';
-  if (directCode) return countryCodeToFlag(directCode);
-  const mappedCode =
-    countryNameToCode[normalized] ||
-    countryNameToCode[normalized.split(',')[0]?.trim() || ''] ||
-    '';
+  const mappedCode = resolveCountryCode(raw, explicit);
   return mappedCode ? countryCodeToFlag(mappedCode) : '🌍';
 };
 
@@ -399,6 +409,7 @@ const productBasePath = (productType: string) => {
 function ProductCard({ product, descriptionWordLimit }: { product: FeaturedProduct; descriptionWordLimit: number }) {
   const description = trimToWordLimit(asText(product.description, ''), Math.max(5, Math.min(60, descriptionWordLimit)));
   const { formatFromUsd } = useCurrencyStore();
+  const productFlagCode = resolveCountryCode(product.country, product.flag);
   return (
     <Link to={`${productBasePath(product.productType)}/${product.id}`} className="group block">
       <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-gray-100 mb-4 img-zoom">
@@ -407,7 +418,16 @@ function ProductCard({ product, descriptionWordLimit }: { product: FeaturedProdu
           <Heart className="w-4 h-4" />
         </button>
         <div className="absolute top-3 left-3 bg-white/90 px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
-          <span>{resolveCountryFlag(product.country, product.flag)}</span>
+          {productFlagCode ? (
+            <img
+              src={`https://flagcdn.com/w40/${productFlagCode.toLowerCase()}.png`}
+              alt={`${product.country} flag`}
+              className="h-4 w-6 rounded-sm border border-black/10 object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <span>{resolveCountryFlag(product.country, product.flag)}</span>
+          )}
         </div>
       </div>
       <div>
@@ -712,11 +732,17 @@ export default function Home() {
   const countries = useMemo<CountryCard[]>(
     () =>
       (Array.isArray(countriesData) && countriesData.length > 0 ? countriesData : kimiCountries)
-        .map((country: any) => ({
-          name: asText(country.name, 'Country'),
-          flag: resolveCountryFlag(asText(country.name, ''), asText(country.flag, '')),
+        .map((country: any) => {
+          const countryName = asText(country.name, 'Country');
+          const explicitFlag = asText(country.flag, '');
+          const flagCode = resolveCountryCode(countryName, explicitFlag);
+          return {
+          name: countryName,
+          flag: resolveCountryFlag(countryName, explicitFlag),
+          flagCode,
           fabrics: asText(country.fabrics, 'African textiles'),
-        })),
+        };
+        }),
     [countriesData],
   );
 
@@ -911,7 +937,16 @@ export default function Home() {
                   to={`/designs?country=${encodeURIComponent(country.name)}`}
                   className="bg-white/95 backdrop-blur-sm px-4 py-3 rounded-lg flex items-center gap-3 card-hover cursor-pointer flex-shrink-0"
                 >
-                  <span className="text-2xl">{country.flag}</span>
+                  {country.flagCode ? (
+                    <img
+                      src={`https://flagcdn.com/w80/${country.flagCode.toLowerCase()}.png`}
+                      alt={`${country.name} flag`}
+                      className="h-8 w-10 rounded-sm border border-black/10 object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span className="text-2xl">{country.flag}</span>
+                  )}
                   <div>
                     <p className="font-semibold text-sm">{country.name}</p>
                     <p className="text-xs text-gray-500">{country.fabrics}</p>
