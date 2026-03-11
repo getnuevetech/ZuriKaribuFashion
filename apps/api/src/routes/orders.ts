@@ -11,6 +11,7 @@ import {
   redactShippingAddressForVendor,
   shouldNotifyRoleForStatus,
 } from '../utils/order-workflow';
+import { emitPartnerOrderEvent } from '../utils/partner-api';
 
 const router = Router();
 
@@ -262,6 +263,16 @@ async function notifyOrderLifecycle(params: {
         }).catch(() => undefined)
       )
     );
+    await emitPartnerOrderEvent('order.status.changed', {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      type: order.type,
+      status: params.status,
+      actorRole: params.actorRole,
+      notes: params.notes || null,
+      updatedAt: new Date().toISOString(),
+      source: 'platform',
+    }).catch(() => undefined);
   } catch (error) {
     console.error('Failed to send lifecycle notifications:', error);
   }

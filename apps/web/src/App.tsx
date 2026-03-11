@@ -52,6 +52,7 @@ import AdminMeasurementTemplates from './pages/admin/MeasurementTemplates';
 import AdminCurrencyMatrix from './pages/admin/CurrencyMatrix';
 import AdminPayments from './pages/admin/Payments';
 import AdminShipping from './pages/admin/Shipping';
+import AdminPartnerIntegrations from './pages/admin/PartnerIntegrations';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -245,6 +246,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['shipping:manage']}>
                       <AdminShipping />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/partners"
+                  element={
+                    <AdminPermissionGuard required={['users:manage']}>
+                      <AdminPartnerIntegrations />
                     </AdminPermissionGuard>
                   }
                 />

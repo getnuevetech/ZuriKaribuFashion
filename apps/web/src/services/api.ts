@@ -3924,6 +3924,55 @@ const adminApi = {
   assignQA: (orderId: string, qaId: string) =>
     apiService.patch(`/admin/orders/${orderId}/assign-qa`, { qaId }),
 
+  getPartnerApps: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/admin/partners/apps'),
+
+  createPartnerApp: (data: {
+    name: string;
+    description?: string;
+    scopes?: string[];
+    rateLimitPerMinute?: number;
+    allowedIps?: string[];
+    webhookUrl?: string;
+  }) => apiService.post<{ success: boolean; data: any; message?: string }>('/admin/partners/apps', data),
+
+  updatePartnerApp: (
+    appId: string,
+    data: {
+      name?: string;
+      description?: string | null;
+      status?: 'ACTIVE' | 'INACTIVE';
+      scopes?: string[];
+      rateLimitPerMinute?: number;
+      allowedIps?: string[];
+      webhookUrl?: string | null;
+    }
+  ) => apiService.patch<{ success: boolean; data: any; message?: string }>(`/admin/partners/apps/${appId}`, data),
+
+  rotatePartnerAppKey: (appId: string, expiresAt?: string) =>
+    apiService.post<{ success: boolean; data: any; message?: string }>(`/admin/partners/apps/${appId}/rotate-key`, {
+      expiresAt,
+    }),
+
+  rotatePartnerWebhookSecret: (appId: string) =>
+    apiService.post<{ success: boolean; data: any; message?: string }>(
+      `/admin/partners/apps/${appId}/rotate-webhook-secret`
+    ),
+
+  sendPartnerTestWebhook: (appId: string) =>
+    apiService.post<{ success: boolean; data: any; message?: string }>(`/admin/partners/apps/${appId}/test-webhook`),
+
+  getPartnerAudit: (appId: string, params?: { page?: number; limit?: number }) =>
+    apiService.get<{ success: boolean; data: any[]; pagination?: any }>(`/admin/partners/apps/${appId}/audit`, {
+      params,
+    }),
+
+  getPartnerWebhookDeliveries: (appId: string, params?: { page?: number; limit?: number }) =>
+    apiService.get<{ success: boolean; data: any[]; pagination?: any }>(
+      `/admin/partners/apps/${appId}/webhook-deliveries`,
+      { params }
+    ),
+
   getOrderWorkflowSettings: () =>
     apiService.get<{ success: boolean; data: any }>('/admin/order-workflow/settings'),
 
