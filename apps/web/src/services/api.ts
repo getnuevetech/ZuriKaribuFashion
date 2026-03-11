@@ -283,6 +283,363 @@ async function readDesignerProfileFieldsWithFallback<T>() {
   throw lastError ?? new Error('Designer profile-fields route not found.');
 }
 
+const PAYMENT_INTEGRATIONS_FALLBACK_KEY = 'af_payment_integrations_fallback_v1';
+const PAYMENT_INTEGRATIONS_BUILTIN_KEYS = ['STRIPE', 'FLUTTERWAVE', 'PAYPAL'];
+
+const PAYMENT_INTEGRATIONS_FALLBACK_DEFAULTS = {
+  providers: [
+    {
+      id: 'fallback-stripe',
+      providerKey: 'STRIPE',
+      displayName: 'Stripe',
+      checkoutType: 'INLINE' as const,
+      mode: 'TEST' as const,
+      isActive: true,
+      configSchema: [
+        { key: 'publishableKey', label: 'Publishable Key', type: 'TEXT', required: false, exposePublic: true },
+        { key: 'secretKey', label: 'Secret Key', type: 'PASSWORD', required: false, isSecret: true },
+      ],
+      configValues: {
+        publishableKey: String(import.meta.env.VITE_STRIPE_PUBLIC_KEY || ''),
+      },
+      notes: 'Local fallback config',
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'fallback-flutterwave',
+      providerKey: 'FLUTTERWAVE',
+      displayName: 'Flutterwave',
+      checkoutType: 'REDIRECT' as const,
+      mode: 'TEST' as const,
+      isActive: false,
+      configSchema: [
+        { key: 'publicKey', label: 'Public Key', type: 'TEXT', required: false, exposePublic: true },
+        { key: 'secretKey', label: 'Secret Key', type: 'PASSWORD', required: false, isSecret: true },
+      ],
+      configValues: {},
+      notes: 'Local fallback config',
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'fallback-paypal',
+      providerKey: 'PAYPAL',
+      displayName: 'PayPal',
+      checkoutType: 'REDIRECT' as const,
+      mode: 'TEST' as const,
+      isActive: false,
+      configSchema: [
+        { key: 'clientId', label: 'Client ID', type: 'TEXT', required: false, exposePublic: true },
+        { key: 'clientSecret', label: 'Client Secret', type: 'PASSWORD', required: false, isSecret: true },
+      ],
+      configValues: {},
+      notes: 'Local fallback config',
+      updatedAt: new Date().toISOString(),
+    },
+  ],
+  builtinProviderKeys: PAYMENT_INTEGRATIONS_BUILTIN_KEYS,
+};
+
+const normalizePaymentProviderKey = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_]/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64);
+
+const clonePaymentFallbackState = (state: typeof PAYMENT_INTEGRATIONS_FALLBACK_DEFAULTS) => ({
+  providers: (state.providers || []).map((provider: any) => ({
+    ...provider,
+    configSchema: Array.isArray(provider.configSchema) ? provider.configSchema.map((field: any) => ({ ...field })) : [],
+    configValues: provider.configValues && typeof provider.configValues === 'object' ? { ...provider.configValues } : {},
+  })),
+  builtinProviderKeys: Array.isArray(state.builtinProviderKeys)
+    ? [...state.builtinProviderKeys]
+    : [...PAYMENT_INTEGRATIONS_BUILTIN_KEYS],
+});
+
+const readPaymentFallbackState = () => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return clonePaymentFallbackState(PAYMENT_INTEGRATIONS_FALLBACK_DEFAULTS);
+  }
+  try {
+    const raw = window.localStorage.getItem(PAYMENT_INTEGRATIONS_FALLBACK_KEY);
+    if (!raw) return clonePaymentFallbackState(PAYMENT_INTEGRATIONS_FALLBACK_DEFAULTS);
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      return clonePaymentFallbackState(PAYMENT_INTEGRATIONS_FALLBACK_DEFAULTS);
+    }
+    return clonePaymentFallbackState({
+      providers: Array.isArray((parsed as any).providers) ? (parsed as any).providers : PAYMENT_INTEGRATIONS_FALLBACK_DEFAULTS.providers,
+      builtinProviderKeys: Array.isArray((parsed as any).builtinProviderKeys)
+        ? (parsed as any).builtinProviderKeys
+        : PAYMENT_INTEGRATIONS_FALLBACK_DEFAULTS.builtinProviderKeys,
+    });
+  } catch {
+    return clonePaymentFallbackState(PAYMENT_INTEGRATIONS_FALLBACK_DEFAULTS);
+  }
+};
+
+const writePaymentFallbackState = (state: { providers: any[]; builtinProviderKeys: string[] }) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(PAYMENT_INTEGRATIONS_FALLBACK_KEY, JSON.stringify(state));
+  } catch {
+    // ignore localStorage write failures
+  }
+};
+
+async function readAdminPaymentIntegrationsWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/payments/admin/integrations', '/admin/payments/integrations']) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    const fallback = readPaymentFallbackState();
+    return {
+      success: true,
+      data: fallback,
+    } as T;
+  }
+  throw lastError ?? new Error('Payment integrations route not found.');
+}
+
+async function createAdminPaymentIntegrationWithFallback<T>(data: {
+  providerKey: string;
+  displayName?: string;
+  checkoutType?: 'INLINE' | 'REDIRECT';
+  mode?: 'TEST' | 'LIVE';
+  isActive?: boolean;
+  configSchema?: any[];
+  configValues?: Record<string, any>;
+  notes?: string | null;
+}) {
+  let lastError: unknown = null;
+  for (const path of ['/payments/admin/integrations', '/admin/payments/integrations']) {
+    try {
+      return await apiService.post<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError ?? new Error('Payment integration create route not found.');
+
+  const state = readPaymentFallbackState();
+  const providerKey = normalizePaymentProviderKey(data.providerKey);
+  if (!providerKey) {
+    throw new Error('Provider key is required.');
+  }
+  const existing = state.providers.find((entry: any) => String(entry.providerKey).toUpperCase() === providerKey);
+  if (existing) {
+    throw new Error(`${providerKey} already exists.`);
+  }
+  const row = {
+    id: `fallback-${providerKey.toLowerCase()}-${Date.now()}`,
+    providerKey,
+    displayName: String(data.displayName || providerKey),
+    checkoutType: data.checkoutType === 'REDIRECT' ? 'REDIRECT' : 'INLINE',
+    mode: data.mode === 'LIVE' ? 'LIVE' : 'TEST',
+    isActive: Boolean(data.isActive),
+    configSchema: Array.isArray(data.configSchema) ? data.configSchema : [],
+    configValues: data.configValues && typeof data.configValues === 'object' ? data.configValues : {},
+    notes: data.notes || '',
+    updatedAt: new Date().toISOString(),
+  };
+  state.providers.push(row);
+  writePaymentFallbackState(state);
+  return {
+    success: true,
+    data: row,
+  } as T;
+}
+
+async function updateAdminPaymentIntegrationWithFallback<T>(
+  providerKey: string,
+  data: {
+    displayName?: string;
+    checkoutType?: 'INLINE' | 'REDIRECT';
+    mode?: 'TEST' | 'LIVE';
+    isActive?: boolean;
+    configSchema?: any[];
+    configValues?: Record<string, any>;
+    notes?: string | null;
+  }
+) {
+  let lastError: unknown = null;
+  for (const path of [`/payments/admin/integrations/${providerKey}`, `/admin/payments/integrations/${providerKey}`]) {
+    try {
+      return await apiService.put<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError ?? new Error('Payment integration update route not found.');
+
+  const normalizedKey = normalizePaymentProviderKey(providerKey);
+  const state = readPaymentFallbackState();
+  const existingIndex = state.providers.findIndex((entry: any) => String(entry.providerKey).toUpperCase() === normalizedKey);
+  if (existingIndex < 0) {
+    throw new Error(`${normalizedKey} was not found in local fallback storage.`);
+  }
+  const existing = state.providers[existingIndex];
+  const updated = {
+    ...existing,
+    ...(data.displayName !== undefined ? { displayName: data.displayName } : {}),
+    ...(data.checkoutType !== undefined ? { checkoutType: data.checkoutType } : {}),
+    ...(data.mode !== undefined ? { mode: data.mode } : {}),
+    ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+    ...(data.configSchema !== undefined ? { configSchema: data.configSchema } : {}),
+    ...(data.configValues !== undefined ? { configValues: data.configValues } : {}),
+    ...(data.notes !== undefined ? { notes: data.notes } : {}),
+    updatedAt: new Date().toISOString(),
+  };
+  state.providers[existingIndex] = updated;
+  writePaymentFallbackState(state);
+  return {
+    success: true,
+    data: updated,
+  } as T;
+}
+
+async function deleteAdminPaymentIntegrationWithFallback<T>(providerKey: string) {
+  let lastError: unknown = null;
+  for (const path of [`/payments/admin/integrations/${providerKey}`, `/admin/payments/integrations/${providerKey}`]) {
+    try {
+      return await apiService.delete<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError ?? new Error('Payment integration delete route not found.');
+
+  const normalizedKey = normalizePaymentProviderKey(providerKey);
+  const state = readPaymentFallbackState();
+  const isBuiltin = state.builtinProviderKeys.includes(normalizedKey);
+  if (isBuiltin) {
+    state.providers = state.providers.map((entry: any) =>
+      String(entry.providerKey).toUpperCase() === normalizedKey ? { ...entry, isActive: false, updatedAt: new Date().toISOString() } : entry
+    );
+  } else {
+    state.providers = state.providers.filter((entry: any) => String(entry.providerKey).toUpperCase() !== normalizedKey);
+  }
+  writePaymentFallbackState(state);
+  return {
+    success: true,
+    message: 'Payment integration removed.',
+  } as T;
+}
+
+async function readPaymentOptionsWithFallback<T>() {
+  try {
+    return await apiService.get<T>('/payments/options', noCacheRequestConfig());
+  } catch (error) {
+    if (!isRetryableRouteError(error)) throw error;
+    const state = readPaymentFallbackState();
+    const providers = (state.providers || [])
+      .filter((provider: any) => Boolean(provider.isActive))
+      .map((provider: any) => {
+        const schema = Array.isArray(provider.configSchema) ? provider.configSchema : [];
+        const values = provider.configValues && typeof provider.configValues === 'object' ? provider.configValues : {};
+        const publicConfig: Record<string, any> = {};
+        for (const field of schema) {
+          if (!field?.exposePublic) continue;
+          const key = String(field.key || '');
+          if (!key) continue;
+          publicConfig[key] = (values as any)[key];
+        }
+        return {
+          providerKey: String(provider.providerKey || '').toUpperCase(),
+          displayName: String(provider.displayName || provider.providerKey || 'Payment Provider'),
+          checkoutType: provider.checkoutType === 'REDIRECT' ? 'REDIRECT' : 'INLINE',
+          mode: provider.mode === 'LIVE' ? 'LIVE' : 'TEST',
+          publicConfig,
+        };
+      });
+    return {
+      success: true,
+      data: {
+        providers: providers.length > 0 ? providers : [{ providerKey: 'STRIPE', displayName: 'Stripe', checkoutType: 'INLINE', mode: 'TEST', publicConfig: {} }],
+      },
+    } as T;
+  }
+}
+
+async function createPaymentSessionWithFallback<T>(data: {
+  providerKey: string;
+  amount: number;
+  currency: string;
+  reference?: string;
+  returnUrl?: string;
+  cancelUrl?: string;
+  customer?: { email?: string; name?: string; phone?: string };
+}) {
+  try {
+    return await apiService.post<T>('/payments/create-session', data);
+  } catch (error) {
+    if (!isRetryableRouteError(error)) throw error;
+    const providerKey = normalizePaymentProviderKey(data.providerKey);
+    if (providerKey === 'STRIPE') {
+      const legacy = await apiService.post<{ success: boolean; data: { clientSecret: string; paymentIntentId: string } }>(
+        '/payments/create-intent',
+        { amount: data.amount, currency: data.currency }
+      );
+      if (!legacy.success) throw new Error('Failed to initialize Stripe payment.');
+      return {
+        success: true,
+        data: {
+          providerKey: 'STRIPE',
+          flow: 'INLINE',
+          reference: String(legacy.data.paymentIntentId || ''),
+          clientSecret: legacy.data.clientSecret,
+          paymentIntentId: legacy.data.paymentIntentId,
+        },
+      } as T;
+    }
+    throw new Error(
+      `${providerKey} payment session endpoint is not available on the current backend deployment yet.`
+    );
+  }
+}
+
+async function verifyPaymentWithFallback<T>(data: { providerKey: string; reference: string; payerId?: string }) {
+  try {
+    return await apiService.post<T>('/payments/verify', data);
+  } catch (error) {
+    if (!isRetryableRouteError(error)) throw error;
+    const providerKey = normalizePaymentProviderKey(data.providerKey);
+    if (providerKey === 'STRIPE') {
+      const legacy = await apiService.post<{ success: boolean; data: any }>('/payments/confirm', {
+        paymentIntentId: data.reference,
+      });
+      if (!legacy.success) throw new Error('Failed to verify Stripe payment.');
+      return {
+        success: true,
+        data: {
+          providerKey: 'STRIPE',
+          isPaid: true,
+          paymentReference: data.reference,
+          status: 'CONFIRMED',
+        },
+      } as T;
+    }
+    throw new Error(
+      `${providerKey} payment verification endpoint is not available on the current backend deployment yet.`
+    );
+  }
+}
+
 type TopStripPayload = {
   messages: string[];
   separator: string;
@@ -1889,13 +2246,13 @@ const adminApi = {
     apiService.delete(`/admin/pricing-rules/${id}`),
 
   getPaymentIntegrations: () =>
-    apiService.get<{
+    readAdminPaymentIntegrationsWithFallback<{
       success: boolean;
       data: {
         providers: any[];
         builtinProviderKeys: string[];
       };
-    }>('/payments/admin/integrations'),
+    }>(),
 
   createPaymentIntegration: (data: {
     providerKey: string;
@@ -1907,7 +2264,7 @@ const adminApi = {
     configValues?: Record<string, any>;
     notes?: string | null;
   }) =>
-    apiService.post<{ success: boolean; data: any }>('/payments/admin/integrations', data),
+    createAdminPaymentIntegrationWithFallback<{ success: boolean; data: any }>(data),
 
   updatePaymentIntegration: (
     providerKey: string,
@@ -1920,10 +2277,10 @@ const adminApi = {
       configValues?: Record<string, any>;
       notes?: string | null;
     }
-  ) => apiService.put<{ success: boolean; data: any }>(`/payments/admin/integrations/${providerKey}`, data),
+  ) => updateAdminPaymentIntegrationWithFallback<{ success: boolean; data: any }>(providerKey, data),
 
   deletePaymentIntegration: (providerKey: string) =>
-    apiService.delete<{ success: boolean; message?: string }>(`/payments/admin/integrations/${providerKey}`),
+    deleteAdminPaymentIntegrationWithFallback<{ success: boolean; message?: string }>(providerKey),
 
   getOrders: (params?: { status?: string; page?: number; limit?: number }) =>
     apiService.get<{ success: boolean; data: { orders: any[]; pagination: any } }>('/admin/orders', { params }),
@@ -2185,7 +2542,7 @@ const qaApi = {
 // Payments API
 const paymentsApi = {
   getOptions: () =>
-    apiService.get<{
+    readPaymentOptionsWithFallback<{
       success: boolean;
       data: {
         providers: Array<{
@@ -2196,7 +2553,7 @@ const paymentsApi = {
           publicConfig?: Record<string, any>;
         }>;
       };
-    }>('/payments/options'),
+    }>(),
 
   createPaymentSession: (data: {
     providerKey: string;
@@ -2207,7 +2564,7 @@ const paymentsApi = {
     cancelUrl?: string;
     customer?: { email?: string; name?: string; phone?: string };
   }) =>
-    apiService.post<{
+    createPaymentSessionWithFallback<{
       success: boolean;
       data: {
         providerKey: string;
@@ -2217,10 +2574,10 @@ const paymentsApi = {
         paymentIntentId?: string;
         checkoutUrl?: string;
       };
-    }>('/payments/create-session', data),
+    }>(data),
 
   verifyPayment: (data: { providerKey: string; reference: string; payerId?: string }) =>
-    apiService.post<{
+    verifyPaymentWithFallback<{
       success: boolean;
       data: {
         providerKey: string;
@@ -2228,7 +2585,7 @@ const paymentsApi = {
         paymentReference: string;
         status: string;
       };
-    }>('/payments/verify', data),
+    }>(data),
 
   createPaymentIntent: (data: { amount: number; currency: string }) =>
     apiService.post<{ success: boolean; data: { clientSecret: string; paymentIntentId: string } }>('/payments/create-intent', data),
