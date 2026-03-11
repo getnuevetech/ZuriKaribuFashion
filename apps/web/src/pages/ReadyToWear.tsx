@@ -43,7 +43,10 @@ type CategoryPageSettings = {
   columns: number;
   showPagination: boolean;
   featuredProductIds: string[];
+  featuredSlots?: Array<{ productId: string; isActive: boolean }>;
   rotatingProductIds: string[];
+  rotatingColumns: number;
+  rotatingRows: number;
 };
 
 type FeaturedProduct = {
@@ -66,6 +69,8 @@ const DEFAULT_SETTINGS: CategoryPageSettings = {
   showPagination: true,
   featuredProductIds: [],
   rotatingProductIds: [],
+  rotatingColumns: 2,
+  rotatingRows: 1,
 };
 
 const COMMON_SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
@@ -98,6 +103,24 @@ const mdGridByColumns: Record<number, string> = {
   4: 'md:grid-cols-3',
   5: 'md:grid-cols-3',
   6: 'md:grid-cols-3',
+};
+
+const dynamicMdGridByColumns: Record<number, string> = {
+  1: 'md:grid-cols-1',
+  2: 'md:grid-cols-2',
+  3: 'md:grid-cols-3',
+  4: 'md:grid-cols-4',
+  5: 'md:grid-cols-5',
+  6: 'md:grid-cols-6',
+};
+
+const dynamicLgGridByColumns: Record<number, string> = {
+  1: 'lg:grid-cols-1',
+  2: 'lg:grid-cols-2',
+  3: 'lg:grid-cols-3',
+  4: 'lg:grid-cols-4',
+  5: 'lg:grid-cols-5',
+  6: 'lg:grid-cols-6',
 };
 
 function getCategoryToken(category: Category | ReadyToWearProduct['category'] | undefined) {
@@ -254,12 +277,18 @@ export default function ReadyToWear() {
           columns: Number(nextSettings.columns || DEFAULT_SETTINGS.columns),
           showPagination: Boolean(nextSettings.showPagination),
           featuredProductIds: Array.isArray(nextSettings.featuredProductIds) ? nextSettings.featuredProductIds : [],
+          featuredSlots: Array.isArray(nextSettings.featuredSlots) ? nextSettings.featuredSlots : undefined,
           rotatingProductIds: Array.isArray(nextSettings.rotatingProductIds) ? nextSettings.rotatingProductIds : [],
+          rotatingColumns: Number(nextSettings.rotatingColumns || DEFAULT_SETTINGS.rotatingColumns),
+          rotatingRows: Number(nextSettings.rotatingRows || DEFAULT_SETTINGS.rotatingRows),
         });
         const nextFeaturedProducts = Array.isArray(response.data.featuredProducts) ? response.data.featuredProducts : [];
         const nextRotatingPool = Array.isArray(response.data.rotatingProducts) ? response.data.rotatingProducts : [];
         setFeaturedProducts(nextFeaturedProducts);
-        setRotatingProducts(pickRandomProducts(nextRotatingPool, 2));
+        const rotatingCount =
+          Math.max(1, Math.min(6, Math.round(Number(nextSettings.rotatingColumns || DEFAULT_SETTINGS.rotatingColumns)))) *
+          Math.max(1, Math.min(6, Math.round(Number(nextSettings.rotatingRows || DEFAULT_SETTINGS.rotatingRows))));
+        setRotatingProducts(pickRandomProducts(nextRotatingPool, rotatingCount));
       } catch (loadError) {
         console.error('Failed to load ready-to-wear category page settings:', loadError);
       }
@@ -323,6 +352,18 @@ export default function ReadyToWear() {
     setFilters(next);
     updateUrl(next);
   };
+
+  const featuredGridClass = useMemo(() => {
+    const count = Math.max(1, Math.min(3, featuredProducts.length));
+    if (count === 1) return 'grid grid-cols-1 gap-6';
+    if (count === 2) return 'grid grid-cols-1 md:grid-cols-2 gap-6';
+    return 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6';
+  }, [featuredProducts.length]);
+
+  const rotatingGridClass = useMemo(() => {
+    const columns = Math.max(1, Math.min(6, Math.round(Number(settings.rotatingColumns || 2))));
+    return `grid grid-cols-1 ${dynamicMdGridByColumns[columns]} ${dynamicLgGridByColumns[columns]} gap-6`;
+  }, [settings.rotatingColumns]);
 
   return (
     <div className="min-h-screen bg-[#f5f5f5]">
@@ -449,9 +490,12 @@ export default function ReadyToWear() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Ready-To-Wear Picks For You</h2>
-              <span className="text-xs text-gray-500">Randomized on each refresh</span>
+              <span className="text-xs text-gray-500">
+                {settings.rotatingColumns} column{settings.rotatingColumns > 1 ? 's' : ''} × {settings.rotatingRows} row
+                {settings.rotatingRows > 1 ? 's' : ''} (randomized on refresh)
+              </span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className={rotatingGridClass}>
               {rotatingProducts.map((product) => {
                 const flagCode = resolveCountryCode(product.country || '');
                 return (
@@ -484,8 +528,8 @@ export default function ReadyToWear() {
         ) : null}
 
         {featuredProducts.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {featuredProducts.slice(0, 2).map((product) => {
+          <div className={featuredGridClass}>
+            {featuredProducts.slice(0, 3).map((product) => {
               const flagCode = resolveCountryCode(product.country || '');
               return (
                 <Link key={product.id} to={product.href} className="group bg-white border border-gray-200 overflow-hidden">

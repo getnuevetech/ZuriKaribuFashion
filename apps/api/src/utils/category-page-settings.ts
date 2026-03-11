@@ -26,6 +26,11 @@ export type CategoryPageProductOption = {
 
 const CATEGORY_PAGE_SETTINGS_KEY_PREFIX = 'CATEGORY_PAGE_SETTINGS_V1_';
 
+const featuredSlotSchema = z.object({
+  productId: z.string().trim().max(120).default(''),
+  isActive: z.boolean().default(true),
+});
+
 const categoryPageSettingsSchema = z.object({
   bannerTitle: z.string().trim().max(120),
   bannerSubtitle: z.string().trim().max(320),
@@ -34,8 +39,11 @@ const categoryPageSettingsSchema = z.object({
   pageSize: z.number().int().min(8).max(120),
   columns: z.number().int().min(2).max(6),
   showPagination: z.boolean(),
-  featuredProductIds: z.array(z.string().trim().min(1)).max(2),
+  featuredProductIds: z.array(z.string().trim().min(1)).max(3),
+  featuredSlots: z.array(featuredSlotSchema).max(3),
   rotatingProductIds: z.array(z.string().trim().min(1)).max(24),
+  rotatingColumns: z.number().int().min(1).max(6),
+  rotatingRows: z.number().int().min(1).max(6),
 });
 
 const categoryPageSettingsPatchSchema = categoryPageSettingsSchema.partial();
@@ -52,7 +60,14 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     columns: 4,
     showPagination: true,
     featuredProductIds: [],
+    featuredSlots: [
+      { productId: '', isActive: false },
+      { productId: '', isActive: false },
+      { productId: '', isActive: false },
+    ],
     rotatingProductIds: [],
+    rotatingColumns: 2,
+    rotatingRows: 1,
   },
   FABRIC_TO_BUY: {
     bannerTitle: 'Fabrics To Buy',
@@ -63,7 +78,14 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     columns: 4,
     showPagination: true,
     featuredProductIds: [],
+    featuredSlots: [
+      { productId: '', isActive: false },
+      { productId: '', isActive: false },
+      { productId: '', isActive: false },
+    ],
     rotatingProductIds: [],
+    rotatingColumns: 2,
+    rotatingRows: 1,
   },
   CUSTOM_TO_WEAR: {
     bannerTitle: 'Custom To Wear',
@@ -74,7 +96,14 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     columns: 4,
     showPagination: true,
     featuredProductIds: [],
+    featuredSlots: [
+      { productId: '', isActive: false },
+      { productId: '', isActive: false },
+      { productId: '', isActive: false },
+    ],
     rotatingProductIds: [],
+    rotatingColumns: 2,
+    rotatingRows: 1,
   },
 };
 
@@ -97,16 +126,42 @@ const asObject = (value: unknown): Record<string, unknown> =>
 const normalizeCategoryPageSettings = (pageType: CategoryPageType, raw: unknown): CategoryPageSettings => {
   const fallback = DEFAULT_SETTINGS_BY_PAGE[pageType];
   const row = asObject(raw);
-  const featuredProductIds = Array.isArray(row.featuredProductIds)
+  const featuredProductIdsFromLegacy = Array.isArray(row.featuredProductIds)
     ? Array.from(
         new Set(
           row.featuredProductIds
             .map((entry) => String(entry || '').trim())
             .filter(Boolean)
-            .slice(0, 2)
+            .slice(0, 3)
         )
       )
     : fallback.featuredProductIds;
+  const rawFeaturedSlots = Array.isArray(row.featuredSlots)
+    ? row.featuredSlots
+    : featuredProductIdsFromLegacy.map((productId) => ({ productId, isActive: true }));
+  const seenFeaturedProductIds = new Set<string>();
+  const featuredSlots = rawFeaturedSlots
+    .map((entry) => {
+      const slot = asObject(entry);
+      const productId = String(slot.productId || '').trim();
+      const token = productId.toLowerCase();
+      if (productId && seenFeaturedProductIds.has(token)) {
+        return { productId: '', isActive: false };
+      }
+      if (productId) seenFeaturedProductIds.add(token);
+      return {
+        productId,
+        isActive: productId ? slot.isActive !== false : false,
+      };
+    })
+    .slice(0, 3);
+  while (featuredSlots.length < 3) {
+    featuredSlots.push({ productId: '', isActive: false });
+  }
+  const featuredProductIds = featuredSlots
+    .filter((slot) => slot.isActive && slot.productId)
+    .map((slot) => slot.productId)
+    .slice(0, 3);
   const rotatingProductIds = Array.isArray(row.rotatingProductIds)
     ? Array.from(
         new Set(
@@ -132,7 +187,14 @@ const normalizeCategoryPageSettings = (pageType: CategoryPageType, raw: unknown)
       : fallback.columns,
     showPagination: typeof row.showPagination === 'boolean' ? row.showPagination : fallback.showPagination,
     featuredProductIds,
+    featuredSlots,
     rotatingProductIds,
+    rotatingColumns: Number.isFinite(Number(row.rotatingColumns))
+      ? Math.max(1, Math.min(6, Math.round(Number(row.rotatingColumns))))
+      : fallback.rotatingColumns,
+    rotatingRows: Number.isFinite(Number(row.rotatingRows))
+      ? Math.max(1, Math.min(6, Math.round(Number(row.rotatingRows))))
+      : fallback.rotatingRows,
   });
   return parsed.success ? parsed.data : { ...fallback };
 };
@@ -197,6 +259,13 @@ export async function writeCategoryPageSettings(
   const parsedPatch = categoryPageSettingsPatchSchema.parse(patch || {});
   const existing = await readCategoryPageSettings(pageType);
   const nextPayload = merge ? { ...existing.settings, ...parsedPatch } : { ...DEFAULT_SETTINGS_BY_PAGE[pageType], ...parsedPatch };
+  if (Array.isArray((parsedPatch as any).featuredProductIds) && !Array.isArray((parsedPatch as any).featuredSlots)) {
+    (nextPayload as any).featuredSlots = (parsedPatch as any).featuredProductIds
+      .map((entry: unknown) => String(entry || '').trim())
+      .filter(Boolean)
+      .slice(0, 3)
+      .map((productId: string) => ({ productId, isActive: true }));
+  }
   const normalized = normalizeCategoryPageSettings(pageType, nextPayload);
   const payload = JSON.stringify(normalized);
   if (existing.rowId) {
@@ -226,7 +295,7 @@ export async function readCategoryFeaturedProducts(
   pageType: CategoryPageType,
   featuredProductIds: string[]
 ): Promise<CategoryPageProductPreview[]> {
-  const ids = Array.from(new Set((featuredProductIds || []).map((entry) => String(entry || '').trim()).filter(Boolean))).slice(0, 2);
+  const ids = Array.from(new Set((featuredProductIds || []).map((entry) => String(entry || '').trim()).filter(Boolean))).slice(0, 24);
   if (ids.length === 0) return [];
 
   if (pageType === 'READY_TO_WEAR') {

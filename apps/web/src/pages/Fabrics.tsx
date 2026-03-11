@@ -142,6 +142,12 @@ export default function Fabrics() {
     const columns = Math.max(2, Math.min(6, Math.round(Number(settings.columns || 4))));
     return `grid grid-cols-2 ${mdGridByColumns[columns]} ${lgGridByColumns[columns]} gap-4 md:gap-6`;
   }, [settings.columns]);
+  const featuredGridClass = useMemo(() => {
+    const count = Math.max(1, Math.min(3, featuredProducts.length));
+    if (count === 1) return 'grid grid-cols-1 gap-6';
+    if (count === 2) return 'grid grid-cols-1 md:grid-cols-2 gap-6';
+    return 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6';
+  }, [featuredProducts.length]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -321,8 +327,8 @@ export default function Fabrics() {
         </div>
 
         {featuredProducts.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {featuredProducts.slice(0, 2).map((product) => {
+          <div className={featuredGridClass}>
+            {featuredProducts.slice(0, 3).map((product) => {
               const flagCode = resolveCountryCode(product.country || '');
               return (
                 <Link key={product.id} to={product.href} className="group bg-white border border-gray-200 overflow-hidden">

@@ -13,8 +13,10 @@ type CategoryPageSettingsForm = {
   pageSize: number;
   columns: number;
   showPagination: boolean;
-  featuredProductIds: string[];
+  featuredSlots: Array<{ productId: string; isActive: boolean }>;
   rotatingProductIds: string[];
+  rotatingColumns: number;
+  rotatingRows: number;
 };
 
 type ProductOption = {
@@ -40,12 +42,37 @@ const emptySettings: CategoryPageSettingsForm = {
   pageSize: 24,
   columns: 4,
   showPagination: true,
-  featuredProductIds: [],
+  featuredSlots: [
+    { productId: '', isActive: false },
+    { productId: '', isActive: false },
+    { productId: '', isActive: false },
+  ],
   rotatingProductIds: [],
+  rotatingColumns: 2,
+  rotatingRows: 1,
 };
-
-const normalizeFeaturedIds = (input: string[]) =>
-  Array.from(new Set((input || []).map((entry) => String(entry || '').trim()).filter(Boolean))).slice(0, 2);
+const normalizeFeaturedSlots = (input: unknown) => {
+  const rows = Array.isArray(input) ? input : [];
+  const slots = rows
+    .map((entry) => {
+      const row = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+      return {
+        productId: String(row.productId || '').trim(),
+        isActive: row.isActive !== false,
+      };
+    })
+    .slice(0, 3);
+  while (slots.length < 3) {
+    slots.push({ productId: '', isActive: false });
+  }
+  return slots;
+};
+const activeFeaturedIdsFromSlots = (slots: Array<{ productId: string; isActive: boolean }>) =>
+  slots
+    .map((slot) => ({ productId: String(slot.productId || '').trim(), isActive: Boolean(slot.isActive) }))
+    .filter((slot) => slot.isActive && slot.productId)
+    .map((slot) => slot.productId)
+    .slice(0, 3);
 
 export default function AdminCategoryPages() {
   const [activePage, setActivePage] = useState<CategoryPageType>('READY_TO_WEAR');
@@ -58,9 +85,6 @@ export default function AdminCategoryPages() {
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [selectedRotatingProductId, setSelectedRotatingProductId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-
-  const featuredOne = settings.featuredProductIds[0] || '';
-  const featuredTwo = settings.featuredProductIds[1] || '';
 
   const selectedPageMeta = useMemo(
     () => PAGE_TABS.find((tab) => tab.key === activePage) || PAGE_TABS[0],
@@ -104,10 +128,18 @@ export default function AdminCategoryPages() {
           pageSize: Number(nextSettings.pageSize || 24),
           columns: Number(nextSettings.columns || 4),
           showPagination: Boolean(nextSettings.showPagination),
-          featuredProductIds: normalizeFeaturedIds(Array.isArray(nextSettings.featuredProductIds) ? nextSettings.featuredProductIds : []),
+          featuredSlots: normalizeFeaturedSlots(
+            Array.isArray(nextSettings.featuredSlots)
+              ? nextSettings.featuredSlots
+              : Array.isArray(nextSettings.featuredProductIds)
+                ? nextSettings.featuredProductIds.map((id: string) => ({ productId: String(id || '').trim(), isActive: true }))
+                : []
+          ),
           rotatingProductIds: Array.isArray(nextSettings.rotatingProductIds)
             ? Array.from(new Set(nextSettings.rotatingProductIds.map((entry: any) => String(entry || '').trim()).filter(Boolean))).slice(0, 24)
             : [],
+          rotatingColumns: Number(nextSettings.rotatingColumns || 2),
+          rotatingRows: Number(nextSettings.rotatingRows || 1),
         });
       }
       await loadOptions(optionSearch);
@@ -136,10 +168,13 @@ export default function AdminCategoryPages() {
         pageSize: Math.max(8, Math.min(120, Math.round(Number(settings.pageSize || 24)))),
         columns: Math.max(2, Math.min(6, Math.round(Number(settings.columns || 4)))),
         showPagination: Boolean(settings.showPagination),
-        featuredProductIds: normalizeFeaturedIds(settings.featuredProductIds),
+        featuredSlots: normalizeFeaturedSlots(settings.featuredSlots),
+        featuredProductIds: activeFeaturedIdsFromSlots(settings.featuredSlots),
         rotatingProductIds: Array.from(
           new Set((settings.rotatingProductIds || []).map((entry) => String(entry || '').trim()).filter(Boolean))
         ).slice(0, 24),
+        rotatingColumns: Math.max(1, Math.min(6, Math.round(Number(settings.rotatingColumns || 2)))),
+        rotatingRows: Math.max(1, Math.min(6, Math.round(Number(settings.rotatingRows || 1)))),
       });
       if (response.success && response.data?.settings) {
         setSettings({
@@ -150,12 +185,20 @@ export default function AdminCategoryPages() {
           pageSize: Number(response.data.settings.pageSize || 24),
           columns: Number(response.data.settings.columns || 4),
           showPagination: Boolean(response.data.settings.showPagination),
-          featuredProductIds: normalizeFeaturedIds(response.data.settings.featuredProductIds || []),
+          featuredSlots: normalizeFeaturedSlots(
+            Array.isArray(response.data.settings.featuredSlots)
+              ? response.data.settings.featuredSlots
+              : Array.isArray(response.data.settings.featuredProductIds)
+                ? response.data.settings.featuredProductIds.map((id: string) => ({ productId: String(id || '').trim(), isActive: true }))
+                : []
+          ),
           rotatingProductIds: Array.isArray(response.data.settings.rotatingProductIds)
             ? Array.from(
                 new Set(response.data.settings.rotatingProductIds.map((entry: any) => String(entry || '').trim()).filter(Boolean))
               ).slice(0, 24)
             : [],
+          rotatingColumns: Number(response.data.settings.rotatingColumns || 2),
+          rotatingRows: Number(response.data.settings.rotatingRows || 1),
         });
       }
       setMessage('Category page settings saved.');
@@ -189,11 +232,15 @@ export default function AdminCategoryPages() {
     [productOptions]
   );
 
-  const updateFeaturedAt = (index: 0 | 1, value: string) => {
-    const next = [...settings.featuredProductIds];
-    next[index] = value;
-    const normalized = normalizeFeaturedIds(next);
-    setSettings((prev) => ({ ...prev, featuredProductIds: normalized }));
+  const updateFeaturedSlot = (index: number, patch: Partial<{ productId: string; isActive: boolean }>) => {
+    setSettings((prev) => {
+      const slots = normalizeFeaturedSlots(prev.featuredSlots);
+      slots[index] = {
+        productId: patch.productId !== undefined ? String(patch.productId || '').trim() : slots[index].productId,
+        isActive: patch.isActive !== undefined ? Boolean(patch.isActive) : slots[index].isActive,
+      };
+      return { ...prev, featuredSlots: slots };
+    });
   };
 
   const handleBannerImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -356,7 +403,7 @@ export default function AdminCategoryPages() {
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <h3 className="text-sm font-semibold text-gray-800">Two main products on top of category page</h3>
+                <h3 className="text-sm font-semibold text-gray-800">Main products on top of category page (up to 3)</h3>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
@@ -375,37 +422,35 @@ export default function AdminCategoryPages() {
                   </Button>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className="text-sm space-y-1">
-                  <span className="text-gray-700">Main product #1</span>
-                  <select
-                    value={featuredOne}
-                    onChange={(event) => updateFeaturedAt(0, event.target.value)}
-                    className="w-full rounded-md border px-3 py-2"
-                  >
-                    <option value="">None selected</option>
-                    {productOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.name} · {option.ownerName} · ${Number(option.priceUsd || 0).toFixed(2)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm space-y-1">
-                  <span className="text-gray-700">Main product #2</span>
-                  <select
-                    value={featuredTwo}
-                    onChange={(event) => updateFeaturedAt(1, event.target.value)}
-                    className="w-full rounded-md border px-3 py-2"
-                  >
-                    <option value="">None selected</option>
-                    {productOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.name} · {option.ownerName} · ${Number(option.priceUsd || 0).toFixed(2)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {normalizeFeaturedSlots(settings.featuredSlots).map((slot, index) => (
+                  <div key={`featured-slot-${index}`} className="rounded-md border p-3 space-y-2">
+                    <label className="text-sm space-y-1 block">
+                      <span className="text-gray-700">Main product #{index + 1}</span>
+                      <select
+                        value={slot.productId}
+                        onChange={(event) => updateFeaturedSlot(index, { productId: event.target.value })}
+                        className="w-full rounded-md border px-3 py-2"
+                      >
+                        <option value="">None selected</option>
+                        {productOptions.map((option) => (
+                          <option key={`${option.id}-${index}`} value={option.id}>
+                            {option.name} · {option.ownerName} · ${Number(option.priceUsd || 0).toFixed(2)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={slot.isActive}
+                        onChange={(event) => updateFeaturedSlot(index, { isActive: event.target.checked })}
+                        disabled={!slot.productId}
+                      />
+                      Active
+                    </label>
+                  </div>
+                ))}
               </div>
               {productOptions.length === 0 && !isRefreshingOptions ? (
                 <p className="text-xs text-amber-700">
@@ -420,7 +465,44 @@ export default function AdminCategoryPages() {
                   Rotating Ready-To-Wear section (after filters)
                 </h3>
                 <p className="text-xs text-gray-600">
-                  Add up to 24 products. On each customer refresh, two products are randomly shown.
+                  Set products-per-row (columns) and rows. Products shown on refresh = columns × rows.
+                </p>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <label className="text-sm space-y-1">
+                    <span className="text-gray-700">Products per row (columns)</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={6}
+                      value={settings.rotatingColumns}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          rotatingColumns: Number.parseInt(event.target.value || '2', 10) || 2,
+                        }))
+                      }
+                      className="w-full rounded-md border px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm space-y-1">
+                    <span className="text-gray-700">Rows</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={6}
+                      value={settings.rotatingRows}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          rotatingRows: Number.parseInt(event.target.value || '1', 10) || 1,
+                        }))
+                      }
+                      className="w-full rounded-md border px-3 py-2"
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Current target display count: {Math.max(1, Number(settings.rotatingColumns || 1)) * Math.max(1, Number(settings.rotatingRows || 1))}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <select

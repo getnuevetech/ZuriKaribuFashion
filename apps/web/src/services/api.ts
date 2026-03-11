@@ -986,8 +986,31 @@ const defaultCategoryPageSettings = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY'
   columns: 4,
   showPagination: true,
   featuredProductIds: [] as string[],
+  featuredSlots: [
+    { productId: '', isActive: false },
+    { productId: '', isActive: false },
+    { productId: '', isActive: false },
+  ] as Array<{ productId: string; isActive: boolean }>,
   rotatingProductIds: [] as string[],
+  rotatingColumns: 2,
+  rotatingRows: 1,
 });
+
+const resolveActiveFeaturedIdsFromSettings = (settings: any) => {
+  if (Array.isArray(settings?.featuredSlots)) {
+    return settings.featuredSlots
+      .map((slot: any) => ({
+        productId: String(slot?.productId || '').trim(),
+        isActive: slot?.isActive !== false,
+      }))
+      .filter((slot: any) => slot.isActive && slot.productId)
+      .map((slot: any) => slot.productId)
+      .slice(0, 3);
+  }
+  return Array.isArray(settings?.featuredProductIds)
+    ? settings.featuredProductIds.map((id: any) => String(id || '').trim()).filter(Boolean).slice(0, 3)
+    : [];
+};
 
 const toCategoryPageHref = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR', id: string) =>
   pageType === 'FABRIC_TO_BUY' ? `/fabrics/${id}` : pageType === 'CUSTOM_TO_WEAR' ? `/designs/${id}` : `/ready-to-wear/${id}`;
@@ -1142,17 +1165,7 @@ async function readAdminCategoryPageSettingsWithFallback<T>(pageType: 'READY_TO_
     success: true,
     data: {
       pageType,
-      settings: readCategoryPageSettingsFallback(pageType) || {
-        bannerTitle: pageType === 'FABRIC_TO_BUY' ? 'Fabrics To Buy' : pageType === 'CUSTOM_TO_WEAR' ? 'Custom To Wear' : 'Ready To Wear',
-        bannerSubtitle: '',
-        bannerImage: '',
-        bannerHeight: 320,
-        pageSize: 24,
-        columns: 4,
-        showPagination: true,
-        featuredProductIds: [],
-        rotatingProductIds: [],
-      },
+      settings: readCategoryPageSettingsFallback(pageType) || defaultCategoryPageSettings(pageType),
       featuredProducts: [],
       rotatingProducts: [],
     },
@@ -1275,12 +1288,13 @@ async function readPublicCategoryPageSettingsWithFallback<T>(
   for (const path of [`/category-page-settings/${pageType}`, `/category-page-settings/admin/${pageType}`]) {
     try {
       const response = await apiService.get<any>(path, noCacheRequestConfig());
-      const settings = response?.data?.settings || defaultCategoryPageSettings(pageType);
+      const settings = { ...defaultCategoryPageSettings(pageType), ...(response?.data?.settings || {}) };
       writeCategoryPageSettingsFallback(pageType, settings);
 
       let featuredProducts = Array.isArray(response?.data?.featuredProducts) ? response.data.featuredProducts : [];
       let rotatingProducts = Array.isArray(response?.data?.rotatingProducts) ? response.data.rotatingProducts : [];
-      const needsFeaturedHydration = featuredProducts.length === 0 && Array.isArray(settings?.featuredProductIds) && settings.featuredProductIds.length > 0;
+      const activeFeaturedIds = resolveActiveFeaturedIdsFromSettings(settings);
+      const needsFeaturedHydration = featuredProducts.length === 0 && activeFeaturedIds.length > 0;
       const needsRotatingHydration =
         pageType === 'READY_TO_WEAR' &&
         rotatingProducts.length === 0 &&
@@ -1291,7 +1305,7 @@ async function readPublicCategoryPageSettingsWithFallback<T>(
         const optionsRows = Array.isArray(optionsResponse?.data) ? optionsResponse.data : [];
         const optionMap = new Map(optionsRows.map((row: any) => [String(row?.id || ''), row]));
         if (needsFeaturedHydration) {
-          featuredProducts = (settings.featuredProductIds || [])
+          featuredProducts = activeFeaturedIds
             .map((id: any) => optionMap.get(String(id || '').trim()))
             .filter(Boolean)
             .map((row: any) => optionToPreview(pageType, row));
@@ -1322,14 +1336,17 @@ async function readPublicCategoryPageSettingsWithFallback<T>(
     }
   }
   if (!isRetryableRouteError(lastError)) throw lastError;
-  const settings = readCategoryPageSettingsFallback(pageType) || defaultCategoryPageSettings(pageType);
+  const settings = {
+    ...defaultCategoryPageSettings(pageType),
+    ...(readCategoryPageSettingsFallback(pageType) || {}),
+  };
   let featuredProducts: any[] = [];
   let rotatingProducts: any[] = [];
   try {
     const optionsResponse = await readCategoryPageProductOptionsWithFallback<any>(pageType, { limit: 220 });
     const optionsRows = Array.isArray(optionsResponse?.data) ? optionsResponse.data : [];
     const optionMap = new Map(optionsRows.map((row: any) => [String(row?.id || ''), row]));
-    featuredProducts = (settings.featuredProductIds || [])
+    featuredProducts = resolveActiveFeaturedIdsFromSettings(settings)
       .map((id: any) => optionMap.get(String(id || '').trim()))
       .filter(Boolean)
       .map((row: any) => optionToPreview(pageType, row));
@@ -3677,7 +3694,10 @@ const productsApi = {
           columns: number;
           showPagination: boolean;
           featuredProductIds: string[];
+          featuredSlots: Array<{ productId: string; isActive: boolean }>;
           rotatingProductIds: string[];
+          rotatingColumns: number;
+          rotatingRows: number;
         };
         featuredProducts: Array<{
           id: string;
@@ -4974,7 +4994,10 @@ const adminApi = {
           columns: number;
           showPagination: boolean;
           featuredProductIds: string[];
+          featuredSlots: Array<{ productId: string; isActive: boolean }>;
           rotatingProductIds: string[];
+          rotatingColumns: number;
+          rotatingRows: number;
         };
         featuredProducts: Array<{
           id: string;
@@ -5009,7 +5032,10 @@ const adminApi = {
       columns: number;
       showPagination: boolean;
       featuredProductIds: string[];
+      featuredSlots: Array<{ productId: string; isActive: boolean }>;
       rotatingProductIds: string[];
+      rotatingColumns: number;
+      rotatingRows: number;
     }>
   ) =>
     writeAdminCategoryPageSettingsWithFallback<{
@@ -5025,7 +5051,10 @@ const adminApi = {
           columns: number;
           showPagination: boolean;
           featuredProductIds: string[];
+          featuredSlots: Array<{ productId: string; isActive: boolean }>;
           rotatingProductIds: string[];
+          rotatingColumns: number;
+          rotatingRows: number;
         };
         featuredProducts: Array<{
           id: string;
