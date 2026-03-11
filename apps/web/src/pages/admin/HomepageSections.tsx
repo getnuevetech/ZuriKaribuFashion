@@ -64,6 +64,7 @@ interface ShopCategory {
   title: string;
   description: string;
   image: string;
+  images?: string[] | string;
   ctaText: string;
   ctaLink: string;
   displayOrder: number;
@@ -238,6 +239,56 @@ const trimPreviewToWordLimit = (text: string, limit: number) => {
   if (words.length <= limit) return words.join(' ');
   return `${words.slice(0, limit).join(' ')}…`;
 };
+const parseCategoryImageList = (raw: unknown): string[] => {
+  if (Array.isArray(raw)) {
+    return Array.from(
+      new Set(
+        raw
+          .map((item) => String(item || '').trim())
+          .filter(Boolean)
+      )
+    ).slice(0, 5);
+  }
+  const text = String(raw || '').trim();
+  if (!text) return [];
+  if (text.startsWith('[') && text.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        return Array.from(
+          new Set(
+            parsed
+              .map((item) => String(item || '').trim())
+              .filter(Boolean)
+          )
+        ).slice(0, 5);
+      }
+    } catch {
+      // Fall through to delimiter parsing.
+    }
+  }
+  return Array.from(
+    new Set(
+      text
+        .split(/\r?\n|,|\|/g)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  ).slice(0, 5);
+};
+const encodeCategoryImageList = (images: string[]): string => {
+  const normalized = Array.from(
+    new Set(
+      (Array.isArray(images) ? images : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+    )
+  ).slice(0, 5);
+  if (normalized.length <= 1) {
+    return normalized[0] || '';
+  }
+  return JSON.stringify(normalized);
+};
 const toFooterMenuTextarea = (links: FooterMenuLink[]) => links.map((item) => `${item.label}|${item.href}`).join('\n');
 const parseFooterMenuTextarea = (value: string): FooterMenuLink[] =>
   String(value || '')
@@ -383,7 +434,7 @@ const TABS = [
   { id: 'designerSpotlight' as SectionType, label: 'Designer Spotlight', icon: User },
   { id: 'heritage' as SectionType, label: 'Heritage', icon: BookOpen },
   { id: 'testimonials' as SectionType, label: 'Testimonials', icon: MessageSquare },
-  { id: 'footer' as SectionType, label: 'Footer', icon: Layout },
+  { id: 'footer' as SectionType, label: 'Footer & Policies', icon: Layout },
 ];
 
 export default function HomepageSections() {
@@ -471,7 +522,17 @@ export default function HomepageSections() {
           break;
         case 'categories':
           const categoriesRes = await api.homepageSections.getAdminCategories();
-          if (categoriesRes.success) setCategories(categoriesRes.data);
+          if (categoriesRes.success) {
+            const normalized = (Array.isArray(categoriesRes.data) ? categoriesRes.data : []).map((row: any) => {
+              const imageList = parseCategoryImageList(row?.images ?? row?.image);
+              return {
+                ...row,
+                image: imageList[0] || String(row?.image || ''),
+                images: imageList,
+              };
+            });
+            setCategories(normalized);
+          }
           break;
         case 'designerSpotlight':
           const spotlightRes = await api.homepageSections.getAdminDesignerSpotlights();
@@ -664,7 +725,11 @@ export default function HomepageSections() {
         case 'categories':
           const cat = categories.find(c => c.id === id);
           if (cat) {
-            response = await api.homepageSections.updateCategory(id, { ...cat, isActive: !currentStatus });
+            response = await api.homepageSections.updateCategory(id, {
+              ...cat,
+              image: encodeCategoryImageList(parseCategoryImageList((cat as any).images ?? (cat as any).image)),
+              isActive: !currentStatus,
+            });
             if (response.success) fetchData();
           }
           break;
@@ -1621,6 +1686,14 @@ function SectionModal({
         privacyExternalUrl: config.policies.privacy.externalUrl || config.policies.privacy.href || '#',
       };
     }
+    if (type === 'categories' && item) {
+      const imageList = parseCategoryImageList((item as any).images ?? (item as any).image);
+      return {
+        ...item,
+        image: imageList[0] || String((item as any).image || ''),
+        categoryImagesText: imageList.join('\n'),
+      };
+    }
     return item || getDefaultFormData(type);
   });
   const [saving, setSaving] = useState(false);
@@ -1670,7 +1743,17 @@ function SectionModal({
       case 'howItWorks':
         return { stepNumber: 1, title: '', subtitle: '', icon: 'Sparkles', displayOrder: 0, isActive: true };
       case 'categories':
-        return { key: '', title: '', description: '', image: '', ctaText: 'Shop Now', ctaLink: '', displayOrder: 0, isActive: true };
+        return {
+          key: '',
+          title: '',
+          description: '',
+          image: '',
+          categoryImagesText: '',
+          ctaText: 'Shop Now',
+          ctaLink: '',
+          displayOrder: 0,
+          isActive: true,
+        };
       case 'designerSpotlight':
         return {
           designerId: '',
@@ -1805,7 +1888,18 @@ function SectionModal({
       formData.append('image', file);
       const response = await api.upload.image(formData);
       if (response.success) {
-        setFormData((prev: any) => ({ ...prev, [field]: response.data.url }));
+        setFormData((prev: any) => {
+          if (type === 'categories' && field === 'image') {
+            const current = parseCategoryImageList(prev?.categoryImagesText || prev?.image || '');
+            const nextImages = Array.from(new Set([response.data.url, ...current])).slice(0, 5);
+            return {
+              ...prev,
+              image: nextImages[0] || response.data.url,
+              categoryImagesText: nextImages.join('\n'),
+            };
+          }
+          return { ...prev, [field]: response.data.url };
+        });
       }
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -1947,7 +2041,14 @@ function SectionModal({
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-+|-+$/g, '') || title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-          return { ...formData, key };
+          const manualList = parseCategoryImageList(formData.categoryImagesText);
+          const uploadImage = String(formData.image || '').trim();
+          const images = manualList.length > 0 ? manualList : uploadImage ? [uploadImage] : [];
+          return {
+            ...formData,
+            key,
+            image: encodeCategoryImageList(images),
+          };
         }
         if (type === 'heritage') {
           const linkMode = String(formData.linkMode || 'CUSTOM_URL').toUpperCase();
@@ -2558,6 +2659,29 @@ function SectionModal({
                 rows={3}
                 required
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Category Images (up to 5 URLs, one per line)
+              </label>
+              <textarea
+                value={formData.categoryImagesText || ''}
+                onChange={(e) => {
+                  const nextText = e.target.value;
+                  const parsed = parseCategoryImageList(nextText);
+                  setFormData({
+                    ...formData,
+                    categoryImagesText: nextText,
+                    image: parsed[0] || formData.image || '',
+                  });
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                rows={4}
+                placeholder="https://.../image-1.jpg&#10;https://.../image-2.jpg"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Homepage rotates these images automatically for a dynamic look.
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">CTA Text</label>

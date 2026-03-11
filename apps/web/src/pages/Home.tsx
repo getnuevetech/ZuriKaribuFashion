@@ -394,6 +394,50 @@ const trimToWordLimit = (text: string, limit: number) => {
 };
 
 const normalizeCategoryCtaText = (_value: unknown) => 'SHOP NOW';
+const parseCategoryImages = (...values: unknown[]) => {
+  const output: string[] = [];
+  const pushValue = (value: unknown) => {
+    const text = String(value || '').trim();
+    if (!text) return;
+    output.push(text);
+  };
+  for (const value of values) {
+    if (!value) continue;
+    if (Array.isArray(value)) {
+      value.forEach((entry) => pushValue(entry));
+      continue;
+    }
+    if (typeof value === 'string') {
+      const raw = value.trim();
+      if (!raw) continue;
+      if (raw.startsWith('[') && raw.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((entry) => pushValue(entry));
+            continue;
+          }
+        } catch {
+          // Continue to plain text parsing below.
+        }
+      }
+      raw
+        .split(/\r?\n|,|\|/g)
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .forEach((entry) => pushValue(entry));
+      continue;
+    }
+    if (typeof value === 'object') {
+      const row = value as Record<string, unknown>;
+      if (Array.isArray(row.images)) {
+        row.images.forEach((entry) => pushValue(entry));
+      }
+      pushValue(row.image);
+    }
+  }
+  return Array.from(new Set(output)).slice(0, 5);
+};
 const CTA_BUTTON_BASE_CLASS =
   'inline-flex items-center justify-center gap-2 rounded-none border px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200';
 const CTA_BUTTON_DARK_CLASS = `${CTA_BUTTON_BASE_CLASS} border-black bg-black text-white hover:bg-white hover:text-black`;
@@ -417,16 +461,18 @@ function ProductCard({ product, descriptionWordLimit }: { product: FeaturedProdu
         <button className="absolute top-3 right-3 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white">
           <Heart className="w-4 h-4" />
         </button>
-        <div className="absolute top-3 left-3 bg-white/90 px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
+        <div className="absolute bottom-3 right-3 text-xs font-medium flex items-center gap-1">
           {productFlagCode ? (
             <img
               src={`https://flagcdn.com/w40/${productFlagCode.toLowerCase()}.png`}
               alt={`${product.country} flag`}
-              className="h-4 w-6 rounded-sm border border-black/10 object-cover"
+              className="h-4 w-6 rounded-sm object-cover shadow-lg"
               loading="lazy"
             />
           ) : (
-            <span>{resolveCountryFlag(product.country, product.flag)}</span>
+            <span className="text-sm drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+              {resolveCountryFlag(product.country, product.flag)}
+            </span>
           )}
         </div>
       </div>
@@ -513,6 +559,7 @@ export default function Home() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
   const [hoveredHowItWorksId, setHoveredHowItWorksId] = useState<number | null>(null);
+  const [categoryImageById, setCategoryImageById] = useState<Record<string, string>>({});
   const customStripRef = useRef<HTMLDivElement>(null);
   const rtwStripRef = useRef<HTMLDivElement>(null);
   const fabricsStripRef = useRef<HTMLDivElement>(null);
@@ -748,14 +795,21 @@ export default function Home() {
 
   const categories = useMemo(
     () =>
-      (Array.isArray(categoriesData) && categoriesData.length > 0 ? categoriesData : kimiCategories).slice(0, 3).map((item: any, index: number) => ({
-        id: String(item.id ?? index),
-        title: asText(item.title, kimiCategories[index % kimiCategories.length].title),
-        description: asText(item.description, kimiCategories[index % kimiCategories.length].description),
-        image: asText(item.image, kimiCategories[index % kimiCategories.length].image),
-        link: asText(item.ctaLink, item.link, kimiCategories[index % kimiCategories.length].link),
-        ctaText: normalizeCategoryCtaText(item.ctaText),
-      })),
+      (Array.isArray(categoriesData) && categoriesData.length > 0 ? categoriesData : kimiCategories)
+        .slice(0, 3)
+        .map((item: any, index: number) => {
+          const fallback = kimiCategories[index % kimiCategories.length];
+          const images = parseCategoryImages(item?.images, item?.image, fallback.image);
+          return {
+            id: String(item.id ?? index),
+            title: asText(item.title, fallback.title),
+            description: asText(item.description, fallback.description),
+            image: images[0] || fallback.image,
+            images,
+            link: asText(item.ctaLink, item.link, fallback.link),
+            ctaText: normalizeCategoryCtaText(item.ctaText),
+          };
+        }),
     [categoriesData],
   );
 
@@ -783,6 +837,7 @@ export default function Home() {
         vendorType: String(item.vendorType || 'DESIGNER').toUpperCase(),
         name: asText(item.name, item.designer?.businessName, kimiDesigners[index % kimiDesigners.length].name),
         country: asText(item.country, item.designer?.country, kimiDesigners[index % kimiDesigners.length].country),
+        flagCode: resolveCountryCode(asText(item.country, item.designer?.country, ''), asText(item.flag, '')),
         flag: resolveCountryFlag(asText(item.country, item.designer?.country, ''), asText(item.flag, '')),
         quote: asText(item.quote, kimiDesigners[index % kimiDesigners.length].quote),
         image: asText(item.image, kimiDesigners[index % kimiDesigners.length].image),
@@ -791,8 +846,47 @@ export default function Home() {
         blog: item.blog || null,
       }));
     }
-    return kimiDesigners;
+    return kimiDesigners.map((item) => ({
+      ...item,
+      flagCode: resolveCountryCode(item.country, item.flag),
+      profileId: '',
+      vendorType: 'DESIGNER',
+      linkMode: 'DEFAULT_STORE',
+      externalUrl: '',
+      blog: null,
+    }));
   }, [designerSpotlightsData]);
+
+  useEffect(() => {
+    if (categories.length === 0) return;
+    setCategoryImageById((prev) => {
+      const next = { ...prev };
+      for (const category of categories) {
+        if (!next[category.id]) {
+          next[category.id] = category.images?.[0] || category.image;
+        }
+      }
+      return next;
+    });
+  }, [categories]);
+
+  useEffect(() => {
+    if (categories.length === 0) return;
+    const interval = window.setInterval(() => {
+      setCategoryImageById((prev) => {
+        const next = { ...prev };
+        for (const category of categories) {
+          const imagePool = Array.isArray(category.images) ? category.images.filter(Boolean) : [];
+          if (imagePool.length <= 1) continue;
+          const current = prev[category.id] || imagePool[0];
+          const candidates = imagePool.filter((image) => image !== current);
+          next[category.id] = candidates[Math.floor(Math.random() * candidates.length)] || imagePool[0];
+        }
+        return next;
+      });
+    }, 6000);
+    return () => window.clearInterval(interval);
+  }, [categories]);
 
   const testimonials = useMemo(
     () =>
@@ -1029,7 +1123,11 @@ export default function Home() {
             {categories.map((category) => (
               <Link key={category.id} to={category.link} className="group relative overflow-hidden rounded-xl cursor-pointer card-hover">
                 <div className="aspect-[3/4] overflow-hidden">
-                  <img src={category.image} alt={category.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                  <img
+                    src={categoryImageById[category.id] || category.image}
+                    alt={category.title}
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  />
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
@@ -1244,7 +1342,16 @@ export default function Home() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-80 group-hover:opacity-90 transition-opacity" />
                   <div className="absolute bottom-0 left-0 right-0 p-6">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-2xl">{designer.flag}</span>
+                      {designer.flagCode ? (
+                        <img
+                          src={`https://flagcdn.com/w40/${String(designer.flagCode || '').toLowerCase()}.png`}
+                          alt={`${designer.country} flag`}
+                          className="h-5 w-7 rounded-sm object-cover shadow-md"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span className="text-2xl">{designer.flag}</span>
+                      )}
                       <span className="text-white/70 text-sm">{designer.country}</span>
                     </div>
                     <h3 className="font-['Oswald'] text-2xl font-bold text-white mb-2">{designer.name}</h3>

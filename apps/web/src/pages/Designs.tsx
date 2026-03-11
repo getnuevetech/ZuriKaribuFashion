@@ -6,6 +6,7 @@ import { api } from '../services/api';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import { useCurrencyStore } from '../store/currencyStore';
+import { resolveCountryCode } from '../data/locationOptions';
 
 interface Design {
   id: string;
@@ -568,7 +569,9 @@ export default function Designs() {
               <>
                 {/* 4 Column Grid - 50 rows per page (200 items) */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-                  {designs.map((design) => (
+                  {designs.map((design) => {
+                    const flagCode = resolveCountryCode(design.designer?.country || '');
+                    return (
                     <Link 
                       key={design.id} 
                       to={`/designs/${design.id}`} 
@@ -584,8 +587,17 @@ export default function Designs() {
                             loading="lazy"
                           />
                           {/* Country flag - bottom right */}
-                          <div className="absolute bottom-3 right-3 w-10 h-10 flex items-center justify-center z-10">
-                            <span className="text-2xl shadow-lg">{design.flag}</span>
+                          <div className="absolute bottom-3 right-3 z-10">
+                            {flagCode ? (
+                              <img
+                                src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
+                                alt={`${design.designer?.country || 'Country'} flag`}
+                                className="h-7 w-10 rounded-sm object-cover shadow-lg"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <span className="text-2xl shadow-lg">{design.flag}</span>
+                            )}
                           </div>
                           {/* Heart button - top right */}
                           <button 
@@ -608,7 +620,7 @@ export default function Designs() {
                         </div>
                       </div>
                     </Link>
-                  ))}
+                  )})}
                 </div>
 
                 {/* Pagination */}

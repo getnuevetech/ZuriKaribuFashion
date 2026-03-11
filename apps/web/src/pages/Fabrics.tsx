@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Search, Loader2, Heart } from 'lucide-react';
 import { api } from '../services/api';
 import { useCurrencyStore } from '../store/currencyStore';
+import { resolveCountryCode } from '../data/locationOptions';
 
 interface Fabric {
   id: string;
@@ -26,18 +27,6 @@ interface Material {
   id: string;
   name: string;
 }
-
-const countryFlags: Record<string, string> = {
-  Ghana: '🇬🇭',
-  Nigeria: '🇳🇬',
-  Kenya: '🇰🇪',
-  Senegal: '🇸🇳',
-  Ethiopia: '🇪🇹',
-  Morocco: '🇲🇦',
-  Mali: '🇲🇱',
-  'South Africa': '🇿🇦',
-  Tanzania: '🇹🇿',
-};
 
 function resolveMaterialId(queryValue: string, materials: Material[]) {
   const normalized = queryValue.trim().toLowerCase();
@@ -233,7 +222,9 @@ export default function Fabrics() {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-            {fabrics.map((fabric) => (
+            {fabrics.map((fabric) => {
+              const flagCode = resolveCountryCode(fabric.seller?.country || '');
+              return (
               <Link key={fabric.id} to={`/fabrics/${fabric.id}`} className="group">
                 <div className="bg-white shadow-sm border border-gray-100 overflow-hidden transition-all duration-200 hover:shadow-md hover:-translate-y-1">
                   <div className="overflow-hidden relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
@@ -243,7 +234,14 @@ export default function Fabrics() {
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                     <div className="absolute bottom-3 right-3 w-10 h-10 flex items-center justify-center z-10">
-                      <span className="text-2xl shadow-lg">{countryFlags[fabric.seller?.country || ''] || '🌍'}</span>
+                      {flagCode ? (
+                        <img
+                          src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
+                          alt={`${fabric.seller?.country || 'Country'} flag`}
+                          className="h-7 w-10 rounded-sm object-cover shadow-lg"
+                          loading="lazy"
+                        />
+                      ) : null}
                     </div>
                     <button 
                       className="absolute top-3 right-3 w-8 h-8 bg-white bg-opacity-90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-coral-500 hover:text-white"
@@ -274,7 +272,7 @@ export default function Fabrics() {
                   </div>
                 </div>
               </Link>
-            ))}
+            )})}
           </div>
         )}
       </div>
