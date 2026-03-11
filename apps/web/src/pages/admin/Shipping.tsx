@@ -47,6 +47,29 @@ interface LocalShippingOption {
   isActive: boolean;
 }
 
+interface ShippingStageTemplate {
+  id: string;
+  providerKey: string;
+  stageKey: string;
+  stageLabel: string;
+  description?: string | null;
+  sortOrder: number;
+  isFinal: boolean;
+  isActive: boolean;
+}
+
+interface LocalStageEvent {
+  id: string;
+  orderId: string;
+  providerKey: string;
+  stageKey: string;
+  stageLabel: string;
+  notes?: string | null;
+  trackingNumber?: string | null;
+  currentLocation?: string | null;
+  createdAt: string;
+}
+
 const FIELD_TYPE_OPTIONS: FieldType[] = ['TEXT', 'PASSWORD', 'URL', 'NUMBER', 'BOOLEAN', 'SELECT', 'TEXTAREA'];
 
 const cloneProvider = (row: ShippingProviderRow): ShippingProviderRow => ({
@@ -77,6 +100,16 @@ const makeLocalDraft = (): Omit<LocalShippingOption, 'id'> => ({
   isActive: true,
 });
 
+const makeStageDraft = (): Omit<ShippingStageTemplate, 'id'> => ({
+  providerKey: 'LOCAL_DEFAULT',
+  stageKey: 'ORDER_RECEIVED',
+  stageLabel: 'Order Received',
+  description: '',
+  sortOrder: 0,
+  isFinal: false,
+  isActive: true,
+});
+
 export default function AdminShipping() {
   const [providers, setProviders] = useState<ShippingProviderRow[]>([]);
   const [builtinProviderKeys, setBuiltinProviderKeys] = useState<string[]>([]);
@@ -85,6 +118,17 @@ export default function AdminShipping() {
   const [localOptions, setLocalOptions] = useState<LocalShippingOption[]>([]);
   const [localDraft, setLocalDraft] = useState<Omit<LocalShippingOption, 'id'>>(makeLocalDraft());
   const [editingLocalId, setEditingLocalId] = useState<string | null>(null);
+  const [stageTemplates, setStageTemplates] = useState<ShippingStageTemplate[]>([]);
+  const [stageDraft, setStageDraft] = useState<Omit<ShippingStageTemplate, 'id'>>(makeStageDraft());
+  const [editingStageId, setEditingStageId] = useState<string | null>(null);
+  const [stageProviderFilter, setStageProviderFilter] = useState('LOCAL_DEFAULT');
+  const [stageUpdateOrderId, setStageUpdateOrderId] = useState('');
+  const [stageUpdateProviderKey, setStageUpdateProviderKey] = useState('LOCAL_DEFAULT');
+  const [stageUpdateStageKey, setStageUpdateStageKey] = useState('ORDER_RECEIVED');
+  const [stageUpdateNotes, setStageUpdateNotes] = useState('');
+  const [stageUpdateTrackingNumber, setStageUpdateTrackingNumber] = useState('');
+  const [stageUpdateCurrentLocation, setStageUpdateCurrentLocation] = useState('');
+  const [orderStageHistory, setOrderStageHistory] = useState<LocalStageEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -96,14 +140,44 @@ export default function AdminShipping() {
     () => providers.find((entry) => entry.providerKey === selectedProviderKey) || null,
     [providers, selectedProviderKey]
   );
+  const stageProviderKeys = useMemo(() => {
+    const keys = new Set<string>(['LOCAL_DEFAULT']);
+    localOptions.forEach((row) => {
+      if (row.providerKey) keys.add(String(row.providerKey).toUpperCase());
+    });
+    providers.forEach((row) => {
+      if (row.providerKey) keys.add(String(row.providerKey).toUpperCase());
+    });
+    stageTemplates.forEach((row) => {
+      if (row.providerKey) keys.add(String(row.providerKey).toUpperCase());
+    });
+    return Array.from(keys.values()).sort((a, b) => a.localeCompare(b));
+  }, [localOptions, providers, stageTemplates]);
+  const filteredStageTemplates = useMemo(
+    () =>
+      stageTemplates
+        .filter((row) => !stageProviderFilter || row.providerKey === stageProviderFilter)
+        .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0)),
+    [stageTemplates, stageProviderFilter]
+  );
+  const stageOptionsForUpdate = useMemo(() => {
+    const byProvider = stageTemplates.filter((row) => row.providerKey === stageUpdateProviderKey && row.isActive);
+    if (byProvider.length > 0) {
+      return byProvider.sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+    }
+    return stageTemplates
+      .filter((row) => row.providerKey === 'LOCAL_DEFAULT' && row.isActive)
+      .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+  }, [stageTemplates, stageUpdateProviderKey]);
 
   const loadAll = async () => {
     try {
       setLoading(true);
       setError('');
-      const [providersResponse, localResponse] = await Promise.all([
+      const [providersResponse, localResponse, stageResponse] = await Promise.all([
         api.admin.getShippingIntegrations(),
         api.admin.getShippingLocalOptions(),
+        api.admin.getShippingStageTemplates(),
       ]);
       const providerRows = Array.isArray(providersResponse.data?.providers) ? providersResponse.data.providers : [];
       const normalizedProviders = providerRows.map((entry: any) =>
@@ -140,6 +214,18 @@ export default function AdminShipping() {
           isActive: Boolean(entry.isActive),
         }))
       );
+      const stageRows = Array.isArray(stageResponse.data) ? stageResponse.data : [];
+      const normalizedStages = stageRows.map((entry: any) => ({
+        id: String(entry.id || ''),
+        providerKey: String(entry.providerKey || '').toUpperCase(),
+        stageKey: String(entry.stageKey || '').toUpperCase(),
+        stageLabel: String(entry.stageLabel || entry.stageKey || ''),
+        description: entry.description ? String(entry.description) : '',
+        sortOrder: Number(entry.sortOrder || 0),
+        isFinal: Boolean(entry.isFinal),
+        isActive: Boolean(entry.isActive),
+      }));
+      setStageTemplates(normalizedStages);
 
       const nextSelected =
         normalizedProviders.find((entry) => entry.providerKey === selectedProviderKey)?.providerKey ||
@@ -147,6 +233,19 @@ export default function AdminShipping() {
         '';
       setSelectedProviderKey(nextSelected);
       setDraft(nextSelected ? cloneProvider(normalizedProviders.find((entry) => entry.providerKey === nextSelected) as ShippingProviderRow) : null);
+      const availableKeys = new Set(normalizedStages.map((entry: any) => String(entry.providerKey || '').toUpperCase()));
+      if (!availableKeys.has(stageProviderFilter)) {
+        setStageProviderFilter(availableKeys.has('LOCAL_DEFAULT') ? 'LOCAL_DEFAULT' : normalizedStages[0]?.providerKey || 'LOCAL_DEFAULT');
+      }
+      const stageCandidates = normalizedStages.filter(
+        (entry: any) => entry.providerKey === stageUpdateProviderKey || entry.providerKey === 'LOCAL_DEFAULT'
+      );
+      if (stageCandidates.length > 0) {
+        const selected = stageCandidates.find((entry: any) => entry.stageKey === stageUpdateStageKey);
+        if (!selected) {
+          setStageUpdateStageKey(stageCandidates[0].stageKey);
+        }
+      }
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || 'Failed to load shipping configuration.');
     } finally {
@@ -166,6 +265,14 @@ export default function AdminShipping() {
     }
     setDraft(cloneProvider(selectedProvider));
   }, [selectedProvider]);
+
+  useEffect(() => {
+    if (stageOptionsForUpdate.length === 0) return;
+    const exists = stageOptionsForUpdate.some((row) => row.stageKey === stageUpdateStageKey);
+    if (!exists) {
+      setStageUpdateStageKey(stageOptionsForUpdate[0].stageKey);
+    }
+  }, [stageOptionsForUpdate, stageUpdateStageKey]);
 
   const saveProvider = async () => {
     if (!draft) return;
@@ -320,6 +427,132 @@ export default function AdminShipping() {
       await loadAll();
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || 'Failed to remove local shipping option.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startEditStageTemplate = (row: ShippingStageTemplate) => {
+    setEditingStageId(row.id);
+    setStageDraft({
+      providerKey: row.providerKey,
+      stageKey: row.stageKey,
+      stageLabel: row.stageLabel,
+      description: row.description || '',
+      sortOrder: Number(row.sortOrder || 0),
+      isFinal: Boolean(row.isFinal),
+      isActive: Boolean(row.isActive),
+    });
+  };
+
+  const clearStageDraft = () => {
+    setEditingStageId(null);
+    setStageDraft(makeStageDraft());
+  };
+
+  const saveStageTemplate = async () => {
+    try {
+      setSaving(true);
+      setError('');
+      setMessage('');
+      const payload = {
+        providerKey: String(stageDraft.providerKey || 'LOCAL_DEFAULT').toUpperCase(),
+        stageKey: String(stageDraft.stageKey || '').toUpperCase().replace(/[^A-Z0-9_]/g, '_'),
+        stageLabel: String(stageDraft.stageLabel || '').trim(),
+        description: stageDraft.description || '',
+        sortOrder: Number(stageDraft.sortOrder || 0),
+        isFinal: Boolean(stageDraft.isFinal),
+        isActive: Boolean(stageDraft.isActive),
+      };
+      if (!payload.stageKey) throw new Error('Stage key is required.');
+      if (!payload.stageLabel) throw new Error('Stage label is required.');
+      if (editingStageId) {
+        await api.admin.updateShippingStageTemplate(editingStageId, payload);
+        setMessage('Shipping stage template updated.');
+      } else {
+        await api.admin.createShippingStageTemplate(payload);
+        setMessage('Shipping stage template created.');
+      }
+      clearStageDraft();
+      await loadAll();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Failed to save shipping stage template.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteStageTemplate = async (id: string) => {
+    if (!window.confirm('Delete this shipping stage template?')) return;
+    try {
+      setSaving(true);
+      setError('');
+      setMessage('');
+      await api.admin.deleteShippingStageTemplate(id);
+      setMessage('Shipping stage template removed.');
+      await loadAll();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Failed to remove shipping stage template.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const loadOrderStageHistory = async () => {
+    if (!stageUpdateOrderId.trim()) {
+      setError('Order ID is required to load shipping stage history.');
+      return;
+    }
+    try {
+      setSaving(true);
+      setError('');
+      const response = await api.admin.getOrderLocalShippingStages(stageUpdateOrderId.trim());
+      const rows = Array.isArray(response.data) ? response.data : [];
+      setOrderStageHistory(
+        rows.map((entry: any) => ({
+          id: String(entry.id || ''),
+          orderId: String(entry.orderId || stageUpdateOrderId.trim()),
+          providerKey: String(entry.providerKey || ''),
+          stageKey: String(entry.stageKey || ''),
+          stageLabel: String(entry.stageLabel || entry.stageKey || ''),
+          notes: entry.notes ? String(entry.notes) : '',
+          trackingNumber: entry.trackingNumber ? String(entry.trackingNumber) : '',
+          currentLocation: entry.currentLocation ? String(entry.currentLocation) : '',
+          createdAt: String(entry.createdAt || new Date().toISOString()),
+        }))
+      );
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Failed to load order shipping stage history.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateOrderStage = async () => {
+    if (!stageUpdateOrderId.trim()) {
+      setError('Order ID is required to update local shipping stage.');
+      return;
+    }
+    if (!stageUpdateStageKey.trim()) {
+      setError('Select a stage key for update.');
+      return;
+    }
+    try {
+      setSaving(true);
+      setError('');
+      setMessage('');
+      await api.admin.updateOrderLocalShippingStage(stageUpdateOrderId.trim(), {
+        providerKey: stageUpdateProviderKey || undefined,
+        stageKey: stageUpdateStageKey.trim(),
+        notes: stageUpdateNotes || undefined,
+        trackingNumber: stageUpdateTrackingNumber || undefined,
+        currentLocation: stageUpdateCurrentLocation || undefined,
+      });
+      setMessage('Order shipping stage updated.');
+      setStageUpdateNotes('');
+      await loadOrderStageHistory();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Failed to update order shipping stage.');
     } finally {
       setSaving(false);
     }
@@ -823,6 +1056,275 @@ export default function AdminShipping() {
                 <tr>
                   <td className="px-3 py-6 text-center text-sm text-gray-500" colSpan={8}>
                     No local shipping options configured yet.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-white p-4">
+        <h2 className="mb-3 text-lg font-semibold text-gray-900">Local Carrier Shipping Stages</h2>
+        <p className="mb-4 text-sm text-gray-500">
+          Define stage flow for each local carrier/provider key and use it for manual stage updates.
+        </p>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Provider Key</label>
+            <select
+              value={stageDraft.providerKey}
+              onChange={(event) => setStageDraft((prev) => ({ ...prev, providerKey: event.target.value }))}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+            >
+              {stageProviderKeys.map((key) => (
+                <option key={key} value={key}>
+                  {key}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Stage Key</label>
+            <input
+              value={stageDraft.stageKey}
+              onChange={(event) =>
+                setStageDraft((prev) => ({
+                  ...prev,
+                  stageKey: event.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_'),
+                }))
+              }
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              placeholder="IN_TRANSIT"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Stage Label</label>
+            <input
+              value={stageDraft.stageLabel}
+              onChange={(event) => setStageDraft((prev) => ({ ...prev, stageLabel: event.target.value }))}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              placeholder="In Transit"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Sort Order</label>
+            <input
+              type="number"
+              min={0}
+              value={stageDraft.sortOrder}
+              onChange={(event) => setStageDraft((prev) => ({ ...prev, sortOrder: Number(event.target.value || 0) }))}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Description</label>
+            <input
+              value={stageDraft.description || ''}
+              onChange={(event) => setStageDraft((prev) => ({ ...prev, description: event.target.value }))}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              placeholder="Shipment is currently moving to destination."
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={Boolean(stageDraft.isFinal)}
+                onChange={(event) => setStageDraft((prev) => ({ ...prev, isFinal: event.target.checked }))}
+              />
+              Final stage
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={Boolean(stageDraft.isActive)}
+                onChange={(event) => setStageDraft((prev) => ({ ...prev, isActive: event.target.checked }))}
+              />
+              Active
+            </label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button onClick={saveStageTemplate} disabled={saving}>
+              {editingStageId ? 'Update Stage' : 'Add Stage'}
+            </Button>
+            <Button variant="outline" onClick={clearStageDraft} disabled={saving}>
+              Reset
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Filter by Provider</label>
+          <select
+            value={stageProviderFilter}
+            onChange={(event) => setStageProviderFilter(event.target.value)}
+            className="max-w-xs rounded-lg border px-3 py-2 text-sm"
+          >
+            {stageProviderKeys.map((key) => (
+              <option key={key} value={key}>
+                {key}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Provider</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Stage Key</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Stage Label</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Order</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Final</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Status</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {filteredStageTemplates.map((row) => (
+                <tr key={row.id}>
+                  <td className="px-3 py-2">{row.providerKey}</td>
+                  <td className="px-3 py-2">{row.stageKey}</td>
+                  <td className="px-3 py-2">{row.stageLabel}</td>
+                  <td className="px-3 py-2">{row.sortOrder}</td>
+                  <td className="px-3 py-2">{row.isFinal ? 'Yes' : 'No'}</td>
+                  <td className="px-3 py-2">{row.isActive ? 'Active' : 'Disabled'}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" onClick={() => startEditStageTemplate(row)}>
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => deleteStageTemplate(row.id)}>
+                        Delete
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredStageTemplates.length === 0 ? (
+                <tr>
+                  <td className="px-3 py-6 text-center text-sm text-gray-500" colSpan={7}>
+                    No stage templates configured for this provider.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-white p-4">
+        <h2 className="mb-3 text-lg font-semibold text-gray-900">Update Local Carrier Stage on Order</h2>
+        <p className="mb-4 text-sm text-gray-500">
+          Use this to push live stage updates for admin-created local shipping orders.
+        </p>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Order ID</label>
+            <input
+              value={stageUpdateOrderId}
+              onChange={(event) => setStageUpdateOrderId(event.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              placeholder="Order UUID"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Provider Key</label>
+            <select
+              value={stageUpdateProviderKey}
+              onChange={(event) => setStageUpdateProviderKey(event.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+            >
+              {stageProviderKeys.map((key) => (
+                <option key={key} value={key}>
+                  {key}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Stage</label>
+            <select
+              value={stageUpdateStageKey}
+              onChange={(event) => setStageUpdateStageKey(event.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+            >
+              {stageOptionsForUpdate.map((row) => (
+                <option key={`${row.providerKey}-${row.stageKey}`} value={row.stageKey}>
+                  {row.stageLabel} ({row.stageKey})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Tracking Number</label>
+            <input
+              value={stageUpdateTrackingNumber}
+              onChange={(event) => setStageUpdateTrackingNumber(event.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              placeholder="AWB/Reference"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Current Location</label>
+            <input
+              value={stageUpdateCurrentLocation}
+              onChange={(event) => setStageUpdateCurrentLocation(event.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              placeholder="Accra Sorting Hub"
+            />
+          </div>
+          <div className="md:col-span-3">
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Notes</label>
+            <textarea
+              value={stageUpdateNotes}
+              onChange={(event) => setStageUpdateNotes(event.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              rows={2}
+              placeholder="Additional stage notes for audit trail."
+            />
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button onClick={updateOrderStage} disabled={saving}>
+            Update Order Stage
+          </Button>
+          <Button variant="outline" onClick={loadOrderStageHistory} disabled={saving}>
+            Load Stage History
+          </Button>
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Time</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Provider</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Stage</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Tracking</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Location</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Notes</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {orderStageHistory.map((row) => (
+                <tr key={row.id}>
+                  <td className="px-3 py-2">{new Date(row.createdAt).toLocaleString()}</td>
+                  <td className="px-3 py-2">{row.providerKey}</td>
+                  <td className="px-3 py-2">
+                    {row.stageLabel} ({row.stageKey})
+                  </td>
+                  <td className="px-3 py-2">{row.trackingNumber || '-'}</td>
+                  <td className="px-3 py-2">{row.currentLocation || '-'}</td>
+                  <td className="px-3 py-2">{row.notes || '-'}</td>
+                </tr>
+              ))}
+              {orderStageHistory.length === 0 ? (
+                <tr>
+                  <td className="px-3 py-6 text-center text-sm text-gray-500" colSpan={6}>
+                    No stage history loaded yet. Enter order ID and click "Load Stage History".
                   </td>
                 </tr>
               ) : null}

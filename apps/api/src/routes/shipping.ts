@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../db';
+import { OrderStatus, prisma } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 
@@ -54,6 +54,156 @@ type ShippingLocalOptionRow = {
   updatedAt: string;
 };
 
+type ShippingStageTemplateRow = {
+  id: string;
+  providerKey: string;
+  stageKey: string;
+  stageLabel: string;
+  description: string | null;
+  sortOrder: number;
+  isFinal: boolean;
+  isActive: boolean;
+  updatedAt: string;
+};
+
+type OrderShippingStageEventRow = {
+  id: string;
+  orderId: string;
+  providerKey: string;
+  stageKey: string;
+  stageLabel: string;
+  notes: string | null;
+  trackingNumber: string | null;
+  currentLocation: string | null;
+  updatedById: string | null;
+  createdAt: string;
+};
+
+const REALTIME_CONFIG_FIELDS: ShippingIntegrationField[] = [
+  {
+    key: 'enableRealtimeRates',
+    label: 'Enable Realtime Rates',
+    type: 'BOOLEAN',
+    required: false,
+    helpText: 'Turn on live carrier API quote calls.',
+    sortOrder: 100,
+  },
+  {
+    key: 'enableRealtimeTracking',
+    label: 'Enable Realtime Tracking',
+    type: 'BOOLEAN',
+    required: false,
+    helpText: 'Turn on live carrier API tracking calls.',
+    sortOrder: 101,
+  },
+  {
+    key: 'tokenUrl',
+    label: 'OAuth Token URL',
+    type: 'URL',
+    required: false,
+    sortOrder: 102,
+  },
+  {
+    key: 'tokenAuthType',
+    label: 'Token Auth Type',
+    type: 'SELECT',
+    required: false,
+    options: ['BASIC', 'BODY'],
+    sortOrder: 103,
+  },
+  {
+    key: 'clientId',
+    label: 'Client ID',
+    type: 'TEXT',
+    required: false,
+    sortOrder: 104,
+  },
+  {
+    key: 'clientSecret',
+    label: 'Client Secret',
+    type: 'PASSWORD',
+    required: false,
+    isSecret: true,
+    sortOrder: 105,
+  },
+  {
+    key: 'rateApiUrl',
+    label: 'Rate API URL',
+    type: 'URL',
+    required: false,
+    sortOrder: 106,
+  },
+  {
+    key: 'rateMethod',
+    label: 'Rate API Method',
+    type: 'SELECT',
+    required: false,
+    options: ['POST', 'GET'],
+    sortOrder: 107,
+  },
+  {
+    key: 'trackingApiUrl',
+    label: 'Tracking API URL',
+    type: 'URL',
+    required: false,
+    sortOrder: 108,
+  },
+  {
+    key: 'trackingMethod',
+    label: 'Tracking API Method',
+    type: 'SELECT',
+    required: false,
+    options: ['GET', 'POST'],
+    sortOrder: 109,
+  },
+  {
+    key: 'headersJson',
+    label: 'Custom Headers (JSON)',
+    type: 'TEXTAREA',
+    required: false,
+    helpText: '{"x-account-id":"...","x-region":"..."}',
+    sortOrder: 110,
+  },
+];
+
+const DEFAULT_LOCAL_STAGE_TEMPLATES = [
+  {
+    stageKey: 'ORDER_RECEIVED',
+    stageLabel: 'Order Received',
+    description: 'Local carrier has received shipment request.',
+    sortOrder: 0,
+    isFinal: false,
+  },
+  {
+    stageKey: 'PICKED_UP',
+    stageLabel: 'Picked Up',
+    description: 'Shipment has been picked up from origin.',
+    sortOrder: 1,
+    isFinal: false,
+  },
+  {
+    stageKey: 'IN_TRANSIT',
+    stageLabel: 'In Transit',
+    description: 'Shipment is currently moving to destination.',
+    sortOrder: 2,
+    isFinal: false,
+  },
+  {
+    stageKey: 'OUT_FOR_DELIVERY',
+    stageLabel: 'Out For Delivery',
+    description: 'Shipment is out for final delivery.',
+    sortOrder: 3,
+    isFinal: false,
+  },
+  {
+    stageKey: 'DELIVERED',
+    stageLabel: 'Delivered',
+    description: 'Shipment has been delivered.',
+    sortOrder: 4,
+    isFinal: true,
+  },
+];
+
 const BUILTIN_SHIPPING_TEMPLATES = [
   {
     providerKey: 'UPS',
@@ -69,6 +219,7 @@ const BUILTIN_SHIPPING_TEMPLATES = [
       { key: 'markupUsd', label: 'Extra Markup (USD)', type: 'NUMBER', required: false, sortOrder: 6 },
       { key: 'etaMinDays', label: 'ETA Min Days', type: 'NUMBER', required: false, sortOrder: 7 },
       { key: 'etaMaxDays', label: 'ETA Max Days', type: 'NUMBER', required: false, sortOrder: 8 },
+      ...REALTIME_CONFIG_FIELDS,
     ],
     configValues: {
       baseRateUsd: 30,
@@ -76,6 +227,10 @@ const BUILTIN_SHIPPING_TEMPLATES = [
       markupUsd: 0,
       etaMinDays: 4,
       etaMaxDays: 10,
+      enableRealtimeRates: false,
+      enableRealtimeTracking: false,
+      rateMethod: 'POST',
+      trackingMethod: 'GET',
     },
   },
   {
@@ -92,6 +247,7 @@ const BUILTIN_SHIPPING_TEMPLATES = [
       { key: 'markupUsd', label: 'Extra Markup (USD)', type: 'NUMBER', required: false, sortOrder: 6 },
       { key: 'etaMinDays', label: 'ETA Min Days', type: 'NUMBER', required: false, sortOrder: 7 },
       { key: 'etaMaxDays', label: 'ETA Max Days', type: 'NUMBER', required: false, sortOrder: 8 },
+      ...REALTIME_CONFIG_FIELDS,
     ],
     configValues: {
       baseRateUsd: 25,
@@ -99,6 +255,10 @@ const BUILTIN_SHIPPING_TEMPLATES = [
       markupUsd: 0,
       etaMinDays: 5,
       etaMaxDays: 11,
+      enableRealtimeRates: false,
+      enableRealtimeTracking: false,
+      rateMethod: 'POST',
+      trackingMethod: 'GET',
     },
   },
   {
@@ -115,6 +275,7 @@ const BUILTIN_SHIPPING_TEMPLATES = [
       { key: 'markupUsd', label: 'Extra Markup (USD)', type: 'NUMBER', required: false, sortOrder: 6 },
       { key: 'etaMinDays', label: 'ETA Min Days', type: 'NUMBER', required: false, sortOrder: 7 },
       { key: 'etaMaxDays', label: 'ETA Max Days', type: 'NUMBER', required: false, sortOrder: 8 },
+      ...REALTIME_CONFIG_FIELDS,
     ],
     configValues: {
       baseRateUsd: 32,
@@ -122,6 +283,10 @@ const BUILTIN_SHIPPING_TEMPLATES = [
       markupUsd: 0,
       etaMinDays: 3,
       etaMaxDays: 8,
+      enableRealtimeRates: false,
+      enableRealtimeTracking: false,
+      rateMethod: 'POST',
+      trackingMethod: 'GET',
     },
   },
   {
@@ -138,6 +303,7 @@ const BUILTIN_SHIPPING_TEMPLATES = [
       { key: 'markupUsd', label: 'Extra Markup (USD)', type: 'NUMBER', required: false, sortOrder: 6 },
       { key: 'etaMinDays', label: 'ETA Min Days', type: 'NUMBER', required: false, sortOrder: 7 },
       { key: 'etaMaxDays', label: 'ETA Max Days', type: 'NUMBER', required: false, sortOrder: 8 },
+      ...REALTIME_CONFIG_FIELDS,
     ],
     configValues: {
       baseRateUsd: 35,
@@ -145,6 +311,10 @@ const BUILTIN_SHIPPING_TEMPLATES = [
       markupUsd: 0,
       etaMinDays: 3,
       etaMaxDays: 7,
+      enableRealtimeRates: false,
+      enableRealtimeTracking: false,
+      rateMethod: 'POST',
+      trackingMethod: 'GET',
     },
   },
 ];
@@ -240,6 +410,263 @@ const toFiniteNumber = (value: unknown, fallback: number) => {
   return Number.isFinite(numeric) ? numeric : fallback;
 };
 
+const normalizeStageKey = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_]/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64);
+
+function readConfigText(values: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = values[key];
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text.length > 0) return text;
+  }
+  return '';
+}
+
+function readConfigBool(values: Record<string, unknown>, key: string, fallback = false) {
+  const raw = values[key];
+  if (typeof raw === 'boolean') return raw;
+  if (typeof raw === 'string') {
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+  }
+  if (typeof raw === 'number') return raw > 0;
+  return fallback;
+}
+
+function parseHeadersJson(values: Record<string, unknown>) {
+  const raw = readConfigText(values, 'headersJson');
+  if (!raw) return {} as Record<string, string>;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (!key) continue;
+      headers[key] = String(value ?? '').trim();
+    }
+    return headers;
+  } catch {
+    return {};
+  }
+}
+
+async function parseJsonResponse(response: Response) {
+  const text = await response.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return { raw: text };
+  }
+}
+
+function normalizeRealtimeQuotes(raw: unknown, provider: ShippingIntegrationRow) {
+  const root = parseObject(raw);
+  const candidates: unknown[] = [];
+  if (Array.isArray((root as any).quotes)) candidates.push(...(root as any).quotes);
+  if (Array.isArray((root as any).rates)) candidates.push(...(root as any).rates);
+  if (Array.isArray((root as any).services)) candidates.push(...(root as any).services);
+  if (Array.isArray((root as any).data?.quotes)) candidates.push(...(root as any).data.quotes);
+  if (Array.isArray((root as any).data?.rates)) candidates.push(...(root as any).data.rates);
+  const rows = candidates
+    .map((entry) => parseObject(entry))
+    .map((entry, index) => {
+      const amount = toFiniteNumber(
+        entry.amount ?? entry.total ?? entry.price ?? entry.rate ?? entry.cost ?? entry.value,
+        Number.NaN
+      );
+      if (!Number.isFinite(amount)) return null;
+      const serviceName = readConfigText(
+        entry,
+        'serviceName',
+        'service',
+        'name',
+        'label',
+        'productName'
+      ) || `${provider.displayName} Service ${index + 1}`;
+      const etaMinDays = Math.max(
+        0,
+        Math.floor(
+          toFiniteNumber(entry.etaMinDays ?? entry.minDays ?? entry.deliveryDaysMin ?? entry.transitDays, 3)
+        )
+      );
+      const etaMaxDays = Math.max(
+        etaMinDays,
+        Math.floor(
+          toFiniteNumber(entry.etaMaxDays ?? entry.maxDays ?? entry.deliveryDaysMax ?? entry.transitDays, etaMinDays + 3)
+        )
+      );
+      return {
+        id: `global-${provider.providerKey.toLowerCase()}-${index + 1}`,
+        source: 'GLOBAL' as const,
+        providerKey: provider.providerKey,
+        providerName: provider.displayName,
+        serviceName,
+        etaMinDays,
+        etaMaxDays,
+        priceUsd: Number(amount.toFixed(2)),
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  return rows;
+}
+
+function normalizeTrackingResult(raw: unknown) {
+  const root = parseObject(raw);
+  const status =
+    readConfigText(root, 'status', 'shipmentStatus', 'state') ||
+    readConfigText(parseObject((root as any).data), 'status', 'shipmentStatus', 'state') ||
+    'UNKNOWN';
+  const trackingNumber =
+    readConfigText(root, 'trackingNumber', 'tracking', 'awb') ||
+    readConfigText(parseObject((root as any).data), 'trackingNumber', 'tracking', 'awb') ||
+    '';
+  const eventsSource =
+    (Array.isArray((root as any).events) && (root as any).events) ||
+    (Array.isArray((root as any).history) && (root as any).history) ||
+    (Array.isArray((root as any).trackingEvents) && (root as any).trackingEvents) ||
+    (Array.isArray((root as any).data?.events) && (root as any).data.events) ||
+    [];
+  const events = eventsSource
+    .map((entry: unknown) => parseObject(entry))
+    .map((entry: Record<string, unknown>) => ({
+      status: readConfigText(entry, 'status', 'state', 'description') || 'UPDATE',
+      location: readConfigText(entry, 'location', 'city', 'hub') || '',
+      timestamp: readConfigText(entry, 'timestamp', 'date', 'createdAt') || new Date().toISOString(),
+      notes: readConfigText(entry, 'notes', 'description', 'message') || '',
+    }));
+  return {
+    status,
+    trackingNumber,
+    events,
+    raw: root,
+  };
+}
+
+function buildFormulaQuote(provider: ShippingIntegrationRow, subtotalUsd: number, weightKg: number) {
+  const values = provider.configValues || {};
+  const baseRate = toFiniteNumber(values.baseRateUsd, 25);
+  const percentRate = toFiniteNumber(values.percentRate, 2.5);
+  const markupUsd = toFiniteNumber(values.markupUsd, 0);
+  const etaMinDays = Math.max(0, Math.floor(toFiniteNumber(values.etaMinDays, 4)));
+  const etaMaxDays = Math.max(etaMinDays, Math.floor(toFiniteNumber(values.etaMaxDays, 10)));
+  const weightRate = toFiniteNumber(values.weightRateUsdPerKg, 0);
+  const priceUsd = Number((baseRate + subtotalUsd * (percentRate / 100) + markupUsd + weightKg * weightRate).toFixed(2));
+  return {
+    id: `global-${provider.providerKey.toLowerCase()}`,
+    source: 'GLOBAL' as const,
+    providerKey: provider.providerKey,
+    providerName: provider.displayName,
+    serviceName: readConfigText(values, 'serviceName') || `${provider.displayName} Standard`,
+    etaMinDays,
+    etaMaxDays,
+    priceUsd,
+  };
+}
+
+async function requestProviderToken(values: Record<string, unknown>) {
+  const tokenUrl = readConfigText(values, 'tokenUrl');
+  if (!tokenUrl) return '';
+  const clientId = readConfigText(values, 'clientId');
+  const clientSecret = readConfigText(values, 'clientSecret');
+  if (!clientId || !clientSecret) return '';
+  const authType = readConfigText(values, 'tokenAuthType').toUpperCase() || 'BASIC';
+  const grantType = readConfigText(values, 'tokenGrantType') || 'client_credentials';
+  const scope = readConfigText(values, 'tokenScope');
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'Content-Type': 'application/x-www-form-urlencoded',
+  };
+  const params = new URLSearchParams();
+  params.set('grant_type', grantType);
+  if (scope) params.set('scope', scope);
+  if (authType === 'BODY') {
+    params.set('client_id', clientId);
+    params.set('client_secret', clientSecret);
+  } else {
+    headers.Authorization = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
+  }
+  const response = await fetch(tokenUrl, {
+    method: 'POST',
+    headers,
+    body: params.toString(),
+  });
+  const body = await parseJsonResponse(response);
+  if (!response.ok) {
+    throw new Error(
+      readConfigText(parseObject(body), 'error_description', 'message', 'error') || 'Failed to acquire shipping token.'
+    );
+  }
+  return readConfigText(parseObject(body), 'access_token', 'token', 'bearerToken');
+}
+
+async function fetchRealtimeQuotes(params: {
+  provider: ShippingIntegrationRow;
+  countryCode: string;
+  city: string;
+  subtotalUsd: number;
+  weightKg: number;
+}) {
+  const values = params.provider.configValues || {};
+  const enabled = readConfigBool(values, 'enableRealtimeRates', false);
+  const rateApiUrl = readConfigText(values, 'rateApiUrl');
+  if (!enabled || !rateApiUrl) return [];
+  const method = readConfigText(values, 'rateMethod').toUpperCase() === 'GET' ? 'GET' : 'POST';
+  const token = await requestProviderToken(values).catch(() => '');
+  const apiKey = readConfigText(values, 'apiKey');
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    ...parseHeadersJson(values),
+  };
+  if (apiKey && !headers.Authorization) headers.Authorization = `Bearer ${apiKey}`;
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (method !== 'GET') headers['Content-Type'] = 'application/json';
+
+  const payload = {
+    providerKey: params.provider.providerKey,
+    destination: {
+      countryCode: params.countryCode,
+      city: params.city,
+    },
+    parcel: {
+      weightKg: params.weightKg,
+      declaredValueUsd: params.subtotalUsd,
+      currency: 'USD',
+    },
+    order: {
+      subtotalUsd: params.subtotalUsd,
+    },
+  };
+
+  const requestUrl =
+    method === 'GET'
+      ? `${rateApiUrl}${rateApiUrl.includes('?') ? '&' : '?'}countryCode=${encodeURIComponent(
+          params.countryCode
+        )}&city=${encodeURIComponent(params.city)}&weightKg=${encodeURIComponent(
+          String(params.weightKg)
+        )}&subtotalUsd=${encodeURIComponent(String(params.subtotalUsd))}`
+      : rateApiUrl;
+  const response = await fetch(requestUrl, {
+    method,
+    headers,
+    body: method === 'GET' ? undefined : JSON.stringify(payload),
+  });
+  const body = await parseJsonResponse(response);
+  if (!response.ok) {
+    throw new Error(
+      readConfigText(parseObject(body), 'message', 'error_description', 'error') ||
+        `Realtime quote failed for ${params.provider.providerKey}.`
+    );
+  }
+  return normalizeRealtimeQuotes(body, params.provider);
+}
+
 async function ensureShippingSchema() {
   if (shippingSchemaEnsured) return;
   await prisma.$executeRawUnsafe(
@@ -317,6 +744,50 @@ async function ensureShippingSchema() {
     `UPDATE "ShippingLocalOption" SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL`
   );
 
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "ShippingStageTemplate" (
+      "id" TEXT NOT NULL,
+      "providerKey" TEXT NOT NULL,
+      "stageKey" TEXT NOT NULL,
+      "stageLabel" TEXT NOT NULL,
+      "description" TEXT,
+      "sortOrder" INTEGER NOT NULL DEFAULT 0,
+      "isFinal" BOOLEAN NOT NULL DEFAULT false,
+      "isActive" BOOLEAN NOT NULL DEFAULT true,
+      "createdById" TEXT,
+      "updatedById" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "ShippingStageTemplate_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "ShippingStageTemplate_provider_stage_key"
+     ON "ShippingStageTemplate"("providerKey","stageKey")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "ShippingStageTemplate_provider_idx" ON "ShippingStageTemplate"("providerKey")`
+  );
+
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "OrderShippingStageEvent" (
+      "id" TEXT NOT NULL,
+      "orderId" TEXT NOT NULL,
+      "providerKey" TEXT NOT NULL,
+      "stageKey" TEXT NOT NULL,
+      "stageLabel" TEXT NOT NULL,
+      "notes" TEXT,
+      "trackingNumber" TEXT,
+      "currentLocation" TEXT,
+      "updatedById" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "OrderShippingStageEvent_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "OrderShippingStageEvent_order_idx" ON "OrderShippingStageEvent"("orderId","createdAt")`
+  );
+
   for (const template of BUILTIN_SHIPPING_TEMPLATES) {
     await prisma.$executeRawUnsafe(
       `INSERT INTO "ShippingIntegration"
@@ -330,6 +801,21 @@ async function ensureShippingSchema() {
       template.mode,
       JSON.stringify(template.configSchema),
       JSON.stringify(template.configValues)
+    );
+  }
+
+  for (const stage of DEFAULT_LOCAL_STAGE_TEMPLATES) {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "ShippingStageTemplate"
+        ("id","providerKey","stageKey","stageLabel","description","sortOrder","isFinal","isActive","createdAt","updatedAt")
+       VALUES ($1,'LOCAL_DEFAULT',$2,$3,$4,$5,$6,true,NOW(),NOW())
+       ON CONFLICT ("providerKey","stageKey") DO NOTHING`,
+      randomUUID(),
+      stage.stageKey,
+      stage.stageLabel,
+      stage.description,
+      stage.sortOrder,
+      stage.isFinal
     );
   }
   shippingSchemaEnsured = true;
@@ -355,19 +841,35 @@ async function readShippingIntegrations(params?: { activeOnly?: boolean; provide
      ORDER BY "displayName" ASC, "providerKey" ASC`,
     ...values
   );
-  return rows.map((row) => ({
-    id: String(row.id),
-    providerKey: normalizeProviderKey(row.providerKey),
-    displayName: String(row.displayName || row.providerKey || 'Shipping Provider'),
-    providerType: normalizeProviderType(row.providerType),
-    mode: normalizeMode(row.mode),
-    isActive: Boolean(row.isActive),
-    supportsCountries: parseArray(row.supportsCountries).map((entry) => normalizeCountryCode(entry)).filter(Boolean),
-    configSchema: normalizeConfigSchema(row.configSchema),
-    configValues: parseObject(row.configValues),
-    notes: row.notes ? String(row.notes) : null,
-    updatedAt: new Date(row.updatedAt || Date.now()).toISOString(),
-  })) as ShippingIntegrationRow[];
+  return rows.map((row) => {
+    const providerKey = normalizeProviderKey(row.providerKey);
+    const template = BUILTIN_SHIPPING_TEMPLATES.find((entry) => entry.providerKey === providerKey) || null;
+    const templateSchema = normalizeConfigSchema(template?.configSchema || []);
+    const rowSchema = normalizeConfigSchema(row.configSchema);
+    const mergedSchema = [
+      ...templateSchema,
+      ...rowSchema.filter(
+        (entry) => !templateSchema.some((templateField) => String(templateField.key) === String(entry.key))
+      ),
+    ].sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+    const mergedConfigValues = {
+      ...(template?.configValues || {}),
+      ...parseObject(row.configValues),
+    };
+    return {
+      id: String(row.id),
+      providerKey,
+      displayName: String(row.displayName || row.providerKey || 'Shipping Provider'),
+      providerType: normalizeProviderType(row.providerType),
+      mode: normalizeMode(row.mode),
+      isActive: Boolean(row.isActive),
+      supportsCountries: parseArray(row.supportsCountries).map((entry) => normalizeCountryCode(entry)).filter(Boolean),
+      configSchema: mergedSchema,
+      configValues: mergedConfigValues,
+      notes: row.notes ? String(row.notes) : null,
+      updatedAt: new Date(row.updatedAt || Date.now()).toISOString(),
+    } as ShippingIntegrationRow;
+  });
 }
 
 async function upsertShippingIntegration(params: {
@@ -478,6 +980,65 @@ async function readShippingLocalOptions(params?: {
     metadata: parseObject(row.metadata),
     updatedAt: new Date(row.updatedAt || Date.now()).toISOString(),
   })) as ShippingLocalOptionRow[];
+}
+
+async function readShippingStageTemplates(params?: {
+  providerKey?: string;
+  activeOnly?: boolean;
+}) {
+  await ensureShippingSchema();
+  const filters: string[] = [];
+  const values: unknown[] = [];
+  if (params?.providerKey) {
+    values.push(normalizeProviderKey(params.providerKey));
+    filters.push(`UPPER("providerKey") = $${values.length}`);
+  }
+  if (params?.activeOnly) {
+    values.push(true);
+    filters.push(`"isActive" = $${values.length}`);
+  }
+  const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
+  const rows = await prisma.$queryRawUnsafe<Array<any>>(
+    `SELECT "id","providerKey","stageKey","stageLabel","description","sortOrder","isFinal","isActive","updatedAt"
+     FROM "ShippingStageTemplate"
+     ${whereClause}
+     ORDER BY "providerKey" ASC, "sortOrder" ASC, "stageLabel" ASC`,
+    ...values
+  );
+  return rows.map((row) => ({
+    id: String(row.id),
+    providerKey: normalizeProviderKey(row.providerKey),
+    stageKey: normalizeStageKey(row.stageKey),
+    stageLabel: String(row.stageLabel || '').trim(),
+    description: row.description ? String(row.description).trim() : null,
+    sortOrder: Math.max(0, Math.floor(toFiniteNumber(row.sortOrder, 0))),
+    isFinal: Boolean(row.isFinal),
+    isActive: Boolean(row.isActive),
+    updatedAt: new Date(row.updatedAt || Date.now()).toISOString(),
+  })) as ShippingStageTemplateRow[];
+}
+
+async function readOrderShippingStageEvents(orderId: string) {
+  await ensureShippingSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<any>>(
+    `SELECT "id","orderId","providerKey","stageKey","stageLabel","notes","trackingNumber","currentLocation","updatedById","createdAt"
+     FROM "OrderShippingStageEvent"
+     WHERE "orderId" = $1
+     ORDER BY "createdAt" ASC`,
+    orderId
+  );
+  return rows.map((row) => ({
+    id: String(row.id),
+    orderId: String(row.orderId),
+    providerKey: normalizeProviderKey(row.providerKey),
+    stageKey: normalizeStageKey(row.stageKey),
+    stageLabel: String(row.stageLabel || ''),
+    notes: row.notes ? String(row.notes) : null,
+    trackingNumber: row.trackingNumber ? String(row.trackingNumber) : null,
+    currentLocation: row.currentLocation ? String(row.currentLocation) : null,
+    updatedById: row.updatedById ? String(row.updatedById) : null,
+    createdAt: new Date(row.createdAt || Date.now()).toISOString(),
+  })) as OrderShippingStageEventRow[];
 }
 
 router.get(
@@ -767,7 +1328,291 @@ router.delete(
   }
 );
 
-router.post('/options', authenticate, authorizePermissions(Permissions.ORDERS_CREATE), async (req, res, next) => {
+router.get(
+  '/admin/stage-templates',
+  authenticate,
+  authorizePermissions(Permissions.SHIPPING_MANAGE),
+  async (req, res, next) => {
+    try {
+      const providerKey = String(req.query.providerKey || '').trim();
+      const templates = await readShippingStageTemplates({ providerKey: providerKey || undefined });
+      res.json({ success: true, data: templates });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.post(
+  '/admin/stage-templates',
+  authenticate,
+  authorizePermissions(Permissions.SHIPPING_MANAGE),
+  async (req, res, next) => {
+    try {
+      await ensureShippingSchema();
+      const payload = z
+        .object({
+          providerKey: z.string().min(2),
+          stageKey: z.string().min(2),
+          stageLabel: z.string().min(2),
+          description: z.string().nullable().optional(),
+          sortOrder: z.number().min(0).optional(),
+          isFinal: z.boolean().optional(),
+          isActive: z.boolean().optional(),
+        })
+        .parse(req.body);
+      const providerKey = normalizeProviderKey(payload.providerKey);
+      const stageKey = normalizeStageKey(payload.stageKey);
+      const id = randomUUID();
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "ShippingStageTemplate"
+          ("id","providerKey","stageKey","stageLabel","description","sortOrder","isFinal","isActive","createdById","updatedById","createdAt","updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())
+         ON CONFLICT ("providerKey","stageKey")
+         DO UPDATE SET
+           "stageLabel" = EXCLUDED."stageLabel",
+           "description" = EXCLUDED."description",
+           "sortOrder" = EXCLUDED."sortOrder",
+           "isFinal" = EXCLUDED."isFinal",
+           "isActive" = EXCLUDED."isActive",
+           "updatedById" = EXCLUDED."updatedById",
+           "updatedAt" = NOW()`,
+        id,
+        providerKey,
+        stageKey,
+        String(payload.stageLabel || '').trim(),
+        payload.description ? String(payload.description).trim() : null,
+        Math.max(0, Math.floor(Number(payload.sortOrder || 0))),
+        payload.isFinal === true,
+        payload.isActive !== false,
+        req.user!.id,
+        req.user!.id
+      );
+      const row = (await readShippingStageTemplates({ providerKey })).find((entry) => entry.stageKey === stageKey) || null;
+      res.status(201).json({ success: true, data: row });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.put(
+  '/admin/stage-templates/:id',
+  authenticate,
+  authorizePermissions(Permissions.SHIPPING_MANAGE),
+  async (req, res, next) => {
+    try {
+      await ensureShippingSchema();
+      const payload = z
+        .object({
+          providerKey: z.string().min(2).optional(),
+          stageKey: z.string().min(2).optional(),
+          stageLabel: z.string().min(2).optional(),
+          description: z.string().nullable().optional(),
+          sortOrder: z.number().min(0).optional(),
+          isFinal: z.boolean().optional(),
+          isActive: z.boolean().optional(),
+        })
+        .parse(req.body);
+      const rows = await prisma.$queryRawUnsafe<Array<any>>(
+        `SELECT "id","providerKey","stageKey","stageLabel","description","sortOrder","isFinal","isActive"
+         FROM "ShippingStageTemplate"
+         WHERE "id" = $1
+         LIMIT 1`,
+        req.params.id
+      );
+      const existing = rows[0];
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Shipping stage template not found.' });
+      }
+      const providerKey = normalizeProviderKey(payload.providerKey ?? existing.providerKey);
+      const stageKey = normalizeStageKey(payload.stageKey ?? existing.stageKey);
+      await prisma.$executeRawUnsafe(
+        `UPDATE "ShippingStageTemplate"
+         SET
+           "providerKey" = $2,
+           "stageKey" = $3,
+           "stageLabel" = $4,
+           "description" = $5,
+           "sortOrder" = $6,
+           "isFinal" = $7,
+           "isActive" = $8,
+           "updatedById" = $9,
+           "updatedAt" = NOW()
+         WHERE "id" = $1`,
+        req.params.id,
+        providerKey,
+        stageKey,
+        String(payload.stageLabel ?? existing.stageLabel).trim(),
+        payload.description !== undefined
+          ? payload.description
+            ? String(payload.description).trim()
+            : null
+          : existing.description
+            ? String(existing.description).trim()
+            : null,
+        Math.max(0, Math.floor(Number(payload.sortOrder ?? existing.sortOrder ?? 0))),
+        payload.isFinal ?? Boolean(existing.isFinal),
+        payload.isActive ?? Boolean(existing.isActive),
+        req.user!.id
+      );
+      const row = (await readShippingStageTemplates({ providerKey })).find((entry) => entry.id === req.params.id) || null;
+      res.json({ success: true, data: row });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.delete(
+  '/admin/stage-templates/:id',
+  authenticate,
+  authorizePermissions(Permissions.SHIPPING_MANAGE),
+  async (req, res, next) => {
+    try {
+      await ensureShippingSchema();
+      await prisma.$executeRawUnsafe(`DELETE FROM "ShippingStageTemplate" WHERE "id" = $1`, req.params.id);
+      res.json({ success: true, message: 'Shipping stage template removed.' });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.get(
+  '/admin/orders/:orderId/local-stages',
+  authenticate,
+  authorizePermissions(Permissions.SHIPPING_MANAGE),
+  async (req, res, next) => {
+    try {
+      const stages = await readOrderShippingStageEvents(req.params.orderId);
+      res.json({ success: true, data: stages });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.post(
+  '/admin/orders/:orderId/local-stage',
+  authenticate,
+  authorizePermissions(Permissions.SHIPPING_MANAGE),
+  async (req, res, next) => {
+    try {
+      await ensureShippingSchema();
+      const payload = z
+        .object({
+          providerKey: z.string().min(2).optional(),
+          stageKey: z.string().min(2),
+          notes: z.string().optional(),
+          trackingNumber: z.string().optional(),
+          currentLocation: z.string().optional(),
+        })
+        .parse(req.body);
+
+      const order = await prisma.order.findUnique({
+        where: { id: req.params.orderId },
+        select: { id: true, status: true, shippingAddress: true },
+      });
+      if (!order) {
+        return res.status(404).json({ success: false, message: 'Order not found.' });
+      }
+      const shippingMeta = parseObject(order.shippingAddress);
+      const providerKey = normalizeProviderKey(payload.providerKey || shippingMeta.shippingProviderKey || 'LOCAL_DEFAULT');
+      const templates = await readShippingStageTemplates({
+        providerKey,
+        activeOnly: true,
+      });
+      const fallbackTemplates =
+        templates.length > 0
+          ? templates
+          : await readShippingStageTemplates({
+              providerKey: 'LOCAL_DEFAULT',
+              activeOnly: true,
+            });
+      const stageKey = normalizeStageKey(payload.stageKey);
+      const template = fallbackTemplates.find((entry) => entry.stageKey === stageKey);
+      if (!template) {
+        return res.status(400).json({
+          success: false,
+          message: `Stage ${stageKey} is not configured for provider ${providerKey}.`,
+        });
+      }
+
+      const eventId = randomUUID();
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "OrderShippingStageEvent"
+          ("id","orderId","providerKey","stageKey","stageLabel","notes","trackingNumber","currentLocation","updatedById","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())`,
+        eventId,
+        order.id,
+        providerKey,
+        template.stageKey,
+        template.stageLabel,
+        payload.notes ? String(payload.notes).trim() : null,
+        payload.trackingNumber ? String(payload.trackingNumber).trim() : null,
+        payload.currentLocation ? String(payload.currentLocation).trim() : null,
+        req.user!.id
+      );
+
+      const previousTracking = parseObject((shippingMeta as any).shippingTracking);
+      const shippingTracking = {
+        providerKey,
+        stageKey: template.stageKey,
+        stageLabel: template.stageLabel,
+        notes: payload.notes ? String(payload.notes).trim() : '',
+        trackingNumber:
+          payload.trackingNumber !== undefined
+            ? String(payload.trackingNumber || '').trim()
+            : String(previousTracking.trackingNumber || ''),
+        currentLocation:
+          payload.currentLocation !== undefined
+            ? String(payload.currentLocation || '').trim()
+            : String(previousTracking.currentLocation || ''),
+        updatedAt: new Date().toISOString(),
+      };
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          ...(template.isFinal ? { status: OrderStatus.DELIVERED } : {}),
+          shippingAddress: {
+            ...(shippingMeta || {}),
+            shippingTracking,
+          } as any,
+          timeline: {
+            create: {
+              status: template.isFinal ? OrderStatus.DELIVERED : order.status,
+              notes: `Shipping stage updated (${providerKey}): ${template.stageLabel}${
+                payload.notes ? ` - ${String(payload.notes).trim()}` : ''
+              }`,
+              updatedById: req.user!.id,
+              updatedByRole: req.user!.role as any,
+            },
+          },
+        },
+      });
+
+      const updatedStages = await readOrderShippingStageEvents(order.id);
+      res.json({
+        success: true,
+        data: {
+          orderId: order.id,
+          shippingTracking,
+          stages: updatedStages,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.post(
+  '/options',
+  authenticate,
+  authorizePermissions(Permissions.ORDERS_CREATE, Permissions.SHIPPING_MANAGE),
+  async (req, res, next) => {
   try {
     const payload = z
       .object({
@@ -788,32 +1633,30 @@ router.post('/options', authenticate, authorizePermissions(Permissions.ORDERS_CR
       readShippingLocalOptions({ activeOnly: true, countryCode, city: normalizedCity || undefined }),
     ]);
 
-    const globalQuotes = globalIntegrations
-      .filter((provider) => {
-        if (provider.providerType !== 'GLOBAL') return false;
-        if (!Array.isArray(provider.supportsCountries) || provider.supportsCountries.length === 0) return true;
-        return provider.supportsCountries.includes(countryCode);
+    const eligibleGlobalProviders = globalIntegrations.filter((provider) => {
+      if (provider.providerType !== 'GLOBAL') return false;
+      if (!Array.isArray(provider.supportsCountries) || provider.supportsCountries.length === 0) return true;
+      return provider.supportsCountries.includes(countryCode);
+    });
+
+    const globalQuoteRows = await Promise.all(
+      eligibleGlobalProviders.map(async (provider) => {
+        try {
+          const realtime = await fetchRealtimeQuotes({
+            provider,
+            countryCode,
+            city: payload.city || '',
+            subtotalUsd,
+            weightKg,
+          });
+          if (realtime.length > 0) return realtime;
+          return [buildFormulaQuote(provider, subtotalUsd, weightKg)];
+        } catch {
+          return [buildFormulaQuote(provider, subtotalUsd, weightKg)];
+        }
       })
-      .map((provider) => {
-        const values = provider.configValues || {};
-        const baseRate = toFiniteNumber(values.baseRateUsd, 25);
-        const percentRate = toFiniteNumber(values.percentRate, 2.5);
-        const markupUsd = toFiniteNumber(values.markupUsd, 0);
-        const etaMinDays = Math.max(0, Math.floor(toFiniteNumber(values.etaMinDays, 4)));
-        const etaMaxDays = Math.max(etaMinDays, Math.floor(toFiniteNumber(values.etaMaxDays, 10)));
-        const weightRate = toFiniteNumber(values.weightRateUsdPerKg, 0);
-        const priceUsd = Number((baseRate + subtotalUsd * (percentRate / 100) + markupUsd + weightKg * weightRate).toFixed(2));
-        return {
-          id: `global-${provider.providerKey.toLowerCase()}`,
-          source: 'GLOBAL',
-          providerKey: provider.providerKey,
-          providerName: provider.displayName,
-          serviceName: String(values.serviceName || `${provider.displayName} Standard`),
-          etaMinDays,
-          etaMaxDays,
-          priceUsd,
-        };
-      });
+    );
+    const globalQuotes = globalQuoteRows.flat();
 
     const localQuotes = localOptions.map((option) => ({
       id: option.id,
@@ -843,6 +1686,89 @@ router.post('/options', authenticate, authorizePermissions(Permissions.ORDERS_CR
   } catch (error) {
     next(error);
   }
-});
+  }
+);
+
+router.post(
+  '/track',
+  authenticate,
+  authorizePermissions(Permissions.ORDERS_CREATE, Permissions.SHIPPING_MANAGE),
+  async (req, res, next) => {
+  try {
+    const payload = z
+      .object({
+        providerKey: z.string().min(2),
+        trackingNumber: z.string().min(2),
+      })
+      .parse(req.body);
+    const providerKey = normalizeProviderKey(payload.providerKey);
+    const provider = (await readShippingIntegrations({ activeOnly: true, providerKey }))[0];
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: `Shipping provider ${providerKey} is not active.`,
+      });
+    }
+    const values = provider.configValues || {};
+    const enabled = readConfigBool(values, 'enableRealtimeTracking', false);
+    const trackingApiUrl = readConfigText(values, 'trackingApiUrl');
+    if (!enabled || !trackingApiUrl) {
+      return res.status(400).json({
+        success: false,
+        message: `${provider.displayName} tracking endpoint is not configured yet.`,
+      });
+    }
+    const token = await requestProviderToken(values).catch(() => '');
+    const apiKey = readConfigText(values, 'apiKey');
+    const method = readConfigText(values, 'trackingMethod').toUpperCase() === 'POST' ? 'POST' : 'GET';
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      ...parseHeadersJson(values),
+    };
+    if (apiKey && !headers.Authorization) headers.Authorization = `Bearer ${apiKey}`;
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (method === 'POST') headers['Content-Type'] = 'application/json';
+    const requestUrl =
+      method === 'GET'
+        ? `${trackingApiUrl}${trackingApiUrl.includes('?') ? '&' : '?'}trackingNumber=${encodeURIComponent(
+            payload.trackingNumber
+          )}`
+        : trackingApiUrl;
+    const response = await fetch(requestUrl, {
+      method,
+      headers,
+      body:
+        method === 'POST'
+          ? JSON.stringify({
+              trackingNumber: payload.trackingNumber,
+              providerKey: provider.providerKey,
+            })
+          : undefined,
+    });
+    const data = await parseJsonResponse(response);
+    if (!response.ok) {
+      return res.status(502).json({
+        success: false,
+        message:
+          readConfigText(parseObject(data), 'message', 'error_description', 'error') ||
+          'Failed to query carrier tracking endpoint.',
+      });
+    }
+    const normalized = normalizeTrackingResult(data);
+    res.json({
+      success: true,
+      data: {
+        providerKey: provider.providerKey,
+        providerName: provider.displayName,
+        trackingNumber: normalized.trackingNumber || payload.trackingNumber,
+        status: normalized.status,
+        events: normalized.events,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+  }
+);
 
 export default router;

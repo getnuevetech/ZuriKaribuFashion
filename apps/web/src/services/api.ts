@@ -642,6 +642,8 @@ async function verifyPaymentWithFallback<T>(data: { providerKey: string; referen
 
 const SHIPPING_FALLBACK_KEY = 'af_shipping_integrations_fallback_v1';
 const SHIPPING_LOCAL_OPTIONS_FALLBACK_KEY = 'af_shipping_local_options_fallback_v1';
+const SHIPPING_STAGE_TEMPLATES_FALLBACK_KEY = 'af_shipping_stage_templates_fallback_v1';
+const SHIPPING_ORDER_STAGE_EVENTS_FALLBACK_KEY = 'af_shipping_order_stage_events_fallback_v1';
 const SHIPPING_BUILTIN_PROVIDER_KEYS = ['UPS', 'USPS', 'FEDEX', 'DHL'];
 
 const SHIPPING_INTEGRATIONS_FALLBACK_DEFAULTS = {
@@ -773,6 +775,110 @@ const writeShippingFallbackLocalOptions = (rows: any[]) => {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
     window.localStorage.setItem(SHIPPING_LOCAL_OPTIONS_FALLBACK_KEY, JSON.stringify(Array.isArray(rows) ? rows : []));
+  } catch {
+    // ignore write failures
+  }
+};
+
+const readShippingFallbackStageTemplates = () => {
+  const defaults = [
+    {
+      id: 'stage-local-default-order-received',
+      providerKey: 'LOCAL_DEFAULT',
+      stageKey: 'ORDER_RECEIVED',
+      stageLabel: 'Order Received',
+      description: 'Local carrier has received shipment request.',
+      sortOrder: 0,
+      isFinal: false,
+      isActive: true,
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'stage-local-default-picked-up',
+      providerKey: 'LOCAL_DEFAULT',
+      stageKey: 'PICKED_UP',
+      stageLabel: 'Picked Up',
+      description: 'Shipment has been picked up from origin.',
+      sortOrder: 1,
+      isFinal: false,
+      isActive: true,
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'stage-local-default-in-transit',
+      providerKey: 'LOCAL_DEFAULT',
+      stageKey: 'IN_TRANSIT',
+      stageLabel: 'In Transit',
+      description: 'Shipment is currently moving to destination.',
+      sortOrder: 2,
+      isFinal: false,
+      isActive: true,
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'stage-local-default-out-for-delivery',
+      providerKey: 'LOCAL_DEFAULT',
+      stageKey: 'OUT_FOR_DELIVERY',
+      stageLabel: 'Out For Delivery',
+      description: 'Shipment is out for final delivery.',
+      sortOrder: 3,
+      isFinal: false,
+      isActive: true,
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'stage-local-default-delivered',
+      providerKey: 'LOCAL_DEFAULT',
+      stageKey: 'DELIVERED',
+      stageLabel: 'Delivered',
+      description: 'Shipment has been delivered.',
+      sortOrder: 4,
+      isFinal: true,
+      isActive: true,
+      updatedAt: new Date().toISOString(),
+    },
+  ] as any[];
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return defaults;
+  }
+  try {
+    const raw = window.localStorage.getItem(SHIPPING_STAGE_TEMPLATES_FALLBACK_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : defaults;
+  } catch {
+    return defaults;
+  }
+};
+
+const writeShippingFallbackStageTemplates = (rows: any[]) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(
+      SHIPPING_STAGE_TEMPLATES_FALLBACK_KEY,
+      JSON.stringify(Array.isArray(rows) ? rows : [])
+    );
+  } catch {
+    // ignore write failures
+  }
+};
+
+const readShippingFallbackOrderStageEvents = () => {
+  if (typeof window === 'undefined' || !window.localStorage) return {} as Record<string, any[]>;
+  try {
+    const raw = window.localStorage.getItem(SHIPPING_ORDER_STAGE_EVENTS_FALLBACK_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const writeShippingFallbackOrderStageEvents = (value: Record<string, any[]>) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(SHIPPING_ORDER_STAGE_EVENTS_FALLBACK_KEY, JSON.stringify(value || {}));
   } catch {
     // ignore write failures
   }
@@ -980,6 +1086,175 @@ async function deleteAdminShippingLocalOptionWithFallback<T>(id: string) {
   return { success: true, message: 'Shipping local option removed.' } as T;
 }
 
+async function readAdminShippingStageTemplatesWithFallback<T>(params?: { providerKey?: string }) {
+  let lastError: unknown = null;
+  for (const path of ['/shipping/admin/stage-templates', '/admin/shipping/stage-templates']) {
+    try {
+      return await apiService.get<T>(path, { params: { ...(params || {}), _r: Date.now() } });
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    const rows = readShippingFallbackStageTemplates().filter((row: any) => {
+      if (!params?.providerKey) return true;
+      return normalizeShippingProviderKey(row.providerKey) === normalizeShippingProviderKey(params.providerKey);
+    });
+    return { success: true, data: rows } as T;
+  }
+  throw lastError ?? new Error('Shipping stage templates route not found.');
+}
+
+async function createAdminShippingStageTemplateWithFallback<T>(data: any) {
+  let lastError: unknown = null;
+  for (const path of ['/shipping/admin/stage-templates', '/admin/shipping/stage-templates']) {
+    try {
+      return await apiService.post<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError ?? new Error('Shipping stage template create route not found.');
+  const rows = readShippingFallbackStageTemplates();
+  const providerKey = normalizeShippingProviderKey(data?.providerKey || 'LOCAL_DEFAULT');
+  const stageKey = normalizeShippingProviderKey(data?.stageKey || '');
+  if (!stageKey) throw new Error('Stage key is required.');
+  const existingIndex = rows.findIndex(
+    (row: any) =>
+      normalizeShippingProviderKey(row.providerKey) === providerKey &&
+      normalizeShippingProviderKey(row.stageKey) === stageKey
+  );
+  const row = {
+    id: `stage-${providerKey.toLowerCase()}-${stageKey.toLowerCase()}-${Date.now()}`,
+    providerKey,
+    stageKey,
+    stageLabel: String(data?.stageLabel || stageKey),
+    description: data?.description ? String(data.description) : '',
+    sortOrder: Number(data?.sortOrder || 0),
+    isFinal: Boolean(data?.isFinal),
+    isActive: data?.isActive !== false,
+    updatedAt: new Date().toISOString(),
+  };
+  if (existingIndex >= 0) {
+    rows[existingIndex] = { ...rows[existingIndex], ...row };
+  } else {
+    rows.push(row);
+  }
+  writeShippingFallbackStageTemplates(rows);
+  return { success: true, data: row } as T;
+}
+
+async function updateAdminShippingStageTemplateWithFallback<T>(id: string, data: any) {
+  let lastError: unknown = null;
+  for (const path of [`/shipping/admin/stage-templates/${id}`, `/admin/shipping/stage-templates/${id}`]) {
+    try {
+      return await apiService.put<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError ?? new Error('Shipping stage template update route not found.');
+  const rows = readShippingFallbackStageTemplates();
+  const index = rows.findIndex((row: any) => String(row.id) === String(id));
+  if (index < 0) throw new Error('Shipping stage template was not found in local fallback storage.');
+  rows[index] = { ...rows[index], ...data, id, updatedAt: new Date().toISOString() };
+  writeShippingFallbackStageTemplates(rows);
+  return { success: true, data: rows[index] } as T;
+}
+
+async function deleteAdminShippingStageTemplateWithFallback<T>(id: string) {
+  let lastError: unknown = null;
+  for (const path of [`/shipping/admin/stage-templates/${id}`, `/admin/shipping/stage-templates/${id}`]) {
+    try {
+      return await apiService.delete<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError ?? new Error('Shipping stage template delete route not found.');
+  const rows = readShippingFallbackStageTemplates().filter((row: any) => String(row.id) !== String(id));
+  writeShippingFallbackStageTemplates(rows);
+  return { success: true, message: 'Shipping stage template removed.' } as T;
+}
+
+async function readAdminOrderShippingStagesWithFallback<T>(orderId: string) {
+  let lastError: unknown = null;
+  for (const path of [`/shipping/admin/orders/${orderId}/local-stages`, `/admin/shipping/orders/${orderId}/local-stages`]) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    const all = readShippingFallbackOrderStageEvents();
+    return {
+      success: true,
+      data: Array.isArray(all[orderId]) ? all[orderId] : [],
+    } as T;
+  }
+  throw lastError ?? new Error('Order local shipping stages route not found.');
+}
+
+async function updateAdminOrderShippingStageWithFallback<T>(
+  orderId: string,
+  data: { providerKey?: string; stageKey: string; notes?: string; trackingNumber?: string; currentLocation?: string }
+) {
+  let lastError: unknown = null;
+  for (const path of [`/shipping/admin/orders/${orderId}/local-stage`, `/admin/shipping/orders/${orderId}/local-stage`]) {
+    try {
+      return await apiService.post<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (!isRetryableRouteError(lastError)) throw lastError ?? new Error('Order local shipping stage update route not found.');
+  const allEvents = readShippingFallbackOrderStageEvents();
+  const list = Array.isArray(allEvents[orderId]) ? allEvents[orderId] : [];
+  const event = {
+    id: `event-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    orderId,
+    providerKey: normalizeShippingProviderKey(data.providerKey || 'LOCAL_DEFAULT'),
+    stageKey: normalizeShippingProviderKey(data.stageKey),
+    stageLabel: String(data.stageKey || '').replace(/_/g, ' '),
+    notes: data.notes || '',
+    trackingNumber: data.trackingNumber || '',
+    currentLocation: data.currentLocation || '',
+    createdAt: new Date().toISOString(),
+  };
+  list.push(event);
+  allEvents[orderId] = list;
+  writeShippingFallbackOrderStageEvents(allEvents);
+  return {
+    success: true,
+    data: {
+      orderId,
+      shippingTracking: {
+        providerKey: event.providerKey,
+        stageKey: event.stageKey,
+        stageLabel: event.stageLabel,
+        notes: event.notes,
+        trackingNumber: event.trackingNumber,
+        currentLocation: event.currentLocation,
+        updatedAt: event.createdAt,
+      },
+      stages: list,
+    },
+  } as T;
+}
+
 async function readShippingOptionsWithFallback<T>(data: {
   countryCode: string;
   city?: string;
@@ -1050,6 +1325,17 @@ async function readShippingOptionsWithFallback<T>(data: {
         recommendedQuoteId: quotes[0]?.id || null,
       },
     } as T;
+  }
+}
+
+async function readShippingTrackingWithFallback<T>(data: { providerKey: string; trackingNumber: string }) {
+  try {
+    return await apiService.post<T>('/shipping/track', data);
+  } catch (error) {
+    if (!isRetryableRouteError(error)) throw error;
+    throw new Error(
+      `${normalizeShippingProviderKey(data.providerKey)} tracking endpoint is not available on the current backend deployment yet.`
+    );
   }
 }
 
@@ -2770,6 +3056,57 @@ const adminApi = {
   deleteShippingLocalOption: (id: string) =>
     deleteAdminShippingLocalOptionWithFallback<{ success: boolean; message?: string }>(id),
 
+  getShippingStageTemplates: (params?: { providerKey?: string }) =>
+    readAdminShippingStageTemplatesWithFallback<{ success: boolean; data: any[] }>(params),
+
+  createShippingStageTemplate: (data: {
+    providerKey: string;
+    stageKey: string;
+    stageLabel: string;
+    description?: string | null;
+    sortOrder?: number;
+    isFinal?: boolean;
+    isActive?: boolean;
+  }) => createAdminShippingStageTemplateWithFallback<{ success: boolean; data: any }>(data),
+
+  updateShippingStageTemplate: (
+    id: string,
+    data: {
+      providerKey?: string;
+      stageKey?: string;
+      stageLabel?: string;
+      description?: string | null;
+      sortOrder?: number;
+      isFinal?: boolean;
+      isActive?: boolean;
+    }
+  ) => updateAdminShippingStageTemplateWithFallback<{ success: boolean; data: any }>(id, data),
+
+  deleteShippingStageTemplate: (id: string) =>
+    deleteAdminShippingStageTemplateWithFallback<{ success: boolean; message?: string }>(id),
+
+  getOrderLocalShippingStages: (orderId: string) =>
+    readAdminOrderShippingStagesWithFallback<{ success: boolean; data: any[] }>(orderId),
+
+  updateOrderLocalShippingStage: (
+    orderId: string,
+    data: {
+      providerKey?: string;
+      stageKey: string;
+      notes?: string;
+      trackingNumber?: string;
+      currentLocation?: string;
+    }
+  ) =>
+    updateAdminOrderShippingStageWithFallback<{
+      success: boolean;
+      data: {
+        orderId: string;
+        shippingTracking: any;
+        stages: any[];
+      };
+    }>(orderId, data),
+
   getOrders: (params?: { status?: string; page?: number; limit?: number }) =>
     apiService.get<{ success: boolean; data: { orders: any[]; pagination: any } }>('/admin/orders', { params }),
 
@@ -3103,6 +3440,18 @@ const shippingApi = {
           city?: string | null;
         }>;
         recommendedQuoteId: string | null;
+      };
+    }>(data),
+
+  trackShipment: (data: { providerKey: string; trackingNumber: string }) =>
+    readShippingTrackingWithFallback<{
+      success: boolean;
+      data: {
+        providerKey: string;
+        providerName: string;
+        trackingNumber: string;
+        status: string;
+        events: Array<{ status: string; location?: string; timestamp: string; notes?: string }>;
       };
     }>(data),
 };
