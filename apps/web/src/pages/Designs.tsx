@@ -214,7 +214,7 @@ export default function Designs() {
             Home &gt; Shop &gt; Custom To Wear <span className="mx-2">|</span>{' '}
             <span className="font-semibold text-gray-900">{pagination?.total ?? designs.length}</span> products
           </p>
-          <p className="text-sm text-gray-600">Category: {selectedCategoryLabel}</p>
+          <p className="text-sm text-gray-600">Style: {selectedCategoryLabel}</p>
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto pb-1">

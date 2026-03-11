@@ -414,7 +414,7 @@ export default function AdminProducts() {
     const name = newCategoryName.trim();
     if (!name) return;
     if (name.length < 2) {
-      setError('Category name must be at least 2 characters.');
+      setError('Style name must be at least 2 characters.');
       return;
     }
     try {
@@ -428,9 +428,9 @@ export default function AdminProducts() {
       });
       setNewCategoryName('');
       await fetchOptions();
-      setSuccess('Category saved.');
+      setSuccess('Style saved.');
     } catch (createError: any) {
-      setError(createError?.response?.data?.message || 'Failed to create category.');
+      setError(createError?.response?.data?.message || 'Failed to create style.');
     } finally {
       setTaxonomySaving(false);
     }
@@ -462,16 +462,16 @@ export default function AdminProducts() {
   };
 
   const renameCategory = async (id: string, currentName: string) => {
-    const nextName = window.prompt('Update category name', currentName)?.trim();
+    const nextName = window.prompt('Update style name', currentName)?.trim();
     if (!nextName || nextName === currentName) return;
     try {
       setTaxonomySaving(true);
       setError('');
       await api.admin.updateCategory(id, { name: nextName });
       await fetchOptions();
-      setSuccess('Category updated.');
+      setSuccess('Style updated.');
     } catch (updateError: any) {
-      setError(updateError?.response?.data?.message || 'Failed to update category.');
+      setError(updateError?.response?.data?.message || 'Failed to update style.');
     } finally {
       setTaxonomySaving(false);
     }
@@ -494,15 +494,15 @@ export default function AdminProducts() {
   };
 
   const removeCategory = async (id: string) => {
-    if (!window.confirm('Delete this category?')) return;
+    if (!window.confirm('Delete this style?')) return;
     try {
       setTaxonomySaving(true);
       setError('');
       await api.admin.deleteCategory(id);
       await fetchOptions();
-      setSuccess('Category deleted.');
+      setSuccess('Style deleted.');
     } catch (deleteError: any) {
-      setError(deleteError?.response?.data?.message || 'Failed to delete category.');
+      setError(deleteError?.response?.data?.message || 'Failed to delete style.');
     } finally {
       setTaxonomySaving(false);
     }
@@ -652,7 +652,7 @@ export default function AdminProducts() {
           return;
         }
         if (!form.categoryId) {
-          setModalError('Please select a category for this product.');
+          setModalError('Please select a style for this product.');
           setSaving(false);
           return;
         }
@@ -958,17 +958,17 @@ export default function AdminProducts() {
         <div className="mb-3">
           <h2 className="text-sm font-semibold text-gray-900">Product Taxonomy Management</h2>
           <p className="text-xs text-gray-500">
-            Manage material types used for Fabrics and categories used for Custom/Ready-to-Wear uploads.
+            Manage material types used for Fabrics and styles used for Custom/Ready-to-Wear uploads.
           </p>
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className="rounded-lg border p-3">
-            <p className="mb-2 text-sm font-medium text-gray-800">Categories (Custom/Ready-to-Wear)</p>
+            <p className="mb-2 text-sm font-medium text-gray-800">Styles (Custom/Ready-to-Wear)</p>
             <div className="mb-2 flex gap-2">
               <input
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
-                placeholder="Add category name"
+                placeholder="Add style name"
                 className="w-full rounded border px-3 py-2 text-sm"
               />
               <Button type="button" size="sm" onClick={createCategory} disabled={taxonomySaving || !newCategoryName.trim()}>
@@ -1440,7 +1440,7 @@ export default function AdminProducts() {
                       ))}
                     </select>
                     <select required={!editing} value={form.categoryId} onChange={(e) => setForm((prev) => ({ ...prev, categoryId: e.target.value }))} className="rounded border px-3 py-2">
-                      <option value="">Select category</option>
+                      <option value="">Select style</option>
                       {options.categories.map((item) => (
                         <option key={item.id} value={item.id}>{item.name}</option>
                       ))}

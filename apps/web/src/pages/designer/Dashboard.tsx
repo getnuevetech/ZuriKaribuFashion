@@ -425,7 +425,7 @@ export default function DesignerDashboard() {
           categoryId: design.categoryId || design.category?.id || '',
           basePrice: Number(design.basePrice || 0),
           images: Array.isArray(design.images) ? design.images.map((img: any) => img?.url).filter(Boolean) : [],
-          category: design.category || { name: 'Category' },
+          category: design.category || { name: 'Style' },
           suitableFabrics: Array.isArray(design.suitableFabrics)
             ? design.suitableFabrics.map((item: any) => ({
                 fabricId: String(item.fabricId || item.fabric?.id || ''),
@@ -457,7 +457,7 @@ export default function DesignerDashboard() {
           id: String(item.id),
           name: item.name || 'Ready To Wear',
           description: item.description || '',
-          category: item.category || { name: 'Category' },
+          category: item.category || { name: 'Style' },
           basePrice: Number(item.basePrice || 0),
           status: item.status || 'DRAFT',
           images: Array.isArray(item.images) ? item.images.map((img: any) => img?.url).filter(Boolean) : [],
@@ -484,7 +484,7 @@ export default function DesignerDashboard() {
       if (categoriesRes?.success) {
         setCategories(
           Array.isArray(categoriesRes.data)
-            ? categoriesRes.data.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Category') }))
+            ? categoriesRes.data.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Style') }))
             : []
         );
       }
@@ -909,7 +909,7 @@ export default function DesignerDashboard() {
       return;
     }
     if (!designForm.categoryId) {
-      setDesignError('Please select a category.');
+      setDesignError('Please select a style.');
       return;
     }
     if (Number(designForm.basePrice || 0) <= 0) {
@@ -982,7 +982,7 @@ export default function DesignerDashboard() {
       return;
     }
     if (!readyForm.categoryId) {
-      setReadyError('Please select a category.');
+      setReadyError('Please select a style.');
       return;
     }
     if (basePrice <= 0) {
@@ -1556,7 +1556,7 @@ export default function DesignerDashboard() {
               onChange={(event) => setProductCategoryFilter(event.target.value)}
               className="rounded-lg border px-4 py-2"
             >
-              <option value="">All Categories</option>
+              <option value="">All Styles</option>
               {categories.map((category) => (
                 <option key={category.id} value={category.name}>
                   {category.name}
@@ -1577,7 +1577,7 @@ export default function DesignerDashboard() {
                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Product</th>
                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Type</th>
                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Price</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Category</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Style</th>
                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Featured</th>
                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Status</th>
                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Orders</th>
@@ -1612,7 +1612,7 @@ export default function DesignerDashboard() {
                         </td>
                         <td className="px-4 py-3 font-medium">{priceText}</td>
                         <td className="px-4 py-3 text-gray-600">
-                          <p>{item.category?.name || 'Category'}</p>
+                          <p>{item.category?.name || 'Style'}</p>
                           {item.productType === 'READY_TO_WEAR' ? (
                             <p className="mt-1 text-xs text-gray-500">Size stock: {readySizeSummary}</p>
                           ) : null}
@@ -1827,13 +1827,13 @@ export default function DesignerDashboard() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Style</label>
                 <select
                   value={readyForm.categoryId}
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, categoryId: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                 >
-                  {categories.length === 0 ? <option value="">No categories found</option> : null}
+                  {categories.length === 0 ? <option value="">No styles found</option> : null}
                   {categories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
@@ -2076,13 +2076,13 @@ export default function DesignerDashboard() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Style</label>
                 <select
                   value={designForm.categoryId}
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, categoryId: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                 >
-                  {categories.length === 0 ? <option value="">No categories found</option> : null}
+                  {categories.length === 0 ? <option value="">No styles found</option> : null}
                   {categories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
