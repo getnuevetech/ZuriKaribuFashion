@@ -12,6 +12,30 @@ const DEFAULT_READY_TO_WEAR_SIZE_GUIDE = {
   content:
     'Use your body measurements to select your best standard size.\n\nS: Bust 84-90cm, Waist 66-72cm, Hips 90-96cm\nM: Bust 91-98cm, Waist 73-80cm, Hips 97-104cm\nL: Bust 99-106cm, Waist 81-88cm, Hips 105-112cm\nXL: Bust 107-115cm, Waist 89-98cm, Hips 113-122cm',
 };
+const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
+const DEFAULT_READY_TO_WEAR_COLOR = 'DEFAULT';
+const normalizeReadyToWearColor = (value: unknown) =>
+  String(value || DEFAULT_READY_TO_WEAR_COLOR)
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ') || DEFAULT_READY_TO_WEAR_COLOR;
+const normalizeReadyToWearSize = (value: unknown) => String(value || '').trim().toUpperCase();
+const decodeReadyToWearVariantKey = (variantKey: unknown) => {
+  const raw = String(variantKey || '').trim().toUpperCase();
+  if (!raw.includes(READY_TO_WEAR_VARIANT_SEPARATOR)) {
+    return {
+      size: normalizeReadyToWearSize(raw),
+      color: DEFAULT_READY_TO_WEAR_COLOR,
+      variantKey: raw,
+    };
+  }
+  const [sizePart, colorPart] = raw.split(READY_TO_WEAR_VARIANT_SEPARATOR);
+  return {
+    size: normalizeReadyToWearSize(sizePart),
+    color: normalizeReadyToWearColor(colorPart),
+    variantKey: raw,
+  };
+};
 const DEFAULT_PRODUCT_LABEL_SETTINGS = {
   newTagDays: 14,
   labels: [
@@ -678,6 +702,25 @@ router.get('/ready-to-wear', async (req, res, next) => {
     const labelSettings = await readProductLabelSettings();
     const withLabels = products.map((item) => ({
       ...item,
+      sizeVariations: Array.isArray(item.sizeVariations)
+        ? item.sizeVariations.map((variation: any) => {
+            const decoded = decodeReadyToWearVariantKey(variation?.size);
+            return {
+              ...variation,
+              size: decoded.size,
+              color: decoded.color,
+              variantKey: decoded.variantKey,
+            };
+          })
+        : [],
+      colors: Array.from(
+        new Set(
+          (Array.isArray(item.sizeVariations) ? item.sizeVariations : [])
+            .filter((variation: any) => Number(variation?.stock || 0) > 0)
+            .map((variation: any) => decodeReadyToWearVariantKey(variation?.size).color)
+            .filter(Boolean)
+        )
+      ),
       productLabels: buildProductLabels({
         productType: 'READY_TO_WEAR',
         productId: item.id,
@@ -740,6 +783,25 @@ router.get('/ready-to-wear/:id', async (req, res, next) => {
       success: true,
       data: {
         ...product,
+        sizeVariations: Array.isArray(product.sizeVariations)
+          ? product.sizeVariations.map((variation: any) => {
+              const decoded = decodeReadyToWearVariantKey(variation?.size);
+              return {
+                ...variation,
+                size: decoded.size,
+                color: decoded.color,
+                variantKey: decoded.variantKey,
+              };
+            })
+          : [],
+        colors: Array.from(
+          new Set(
+            (Array.isArray(product.sizeVariations) ? product.sizeVariations : [])
+              .filter((variation: any) => Number(variation?.stock || 0) > 0)
+              .map((variation: any) => decodeReadyToWearVariantKey(variation?.size).color)
+              .filter(Boolean)
+          )
+        ),
         productLabels: buildProductLabels({
           productType: 'READY_TO_WEAR',
           productId: product.id,

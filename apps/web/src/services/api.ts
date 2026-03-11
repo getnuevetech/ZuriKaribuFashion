@@ -3661,7 +3661,7 @@ const designerApi = {
   updateReadyToWear: (productId: string, data: any) =>
     apiService.patch<{ success: boolean; data: any }>(`/designer/ready-to-wear/${productId}`, data),
 
-  updateReadyToWearSizeStock: (productId: string, sizes: Array<{ size: string; stock: number }>) =>
+  updateReadyToWearSizeStock: (productId: string, sizes: Array<{ size: string; color?: string; stock: number }>) =>
     apiService.patch<{ success: boolean; data: any; message?: string }>(`/designer/ready-to-wear/${productId}/size-stock`, {
       sizes,
     }),

@@ -23,7 +23,7 @@ interface ReadyToWearProduct {
     reviewCount: number;
   };
   category?: { id: string; name: string };
-  sizeVariations?: Array<{ id?: string; size: string; price: number; stock?: number }>;
+  sizeVariations?: Array<{ id?: string; size: string; color?: string; variantKey?: string; price: number; stock?: number }>;
   productLabels?: Array<{ id: string; name: string; textColor: string; backgroundColor: string }>;
   colors?: string[];
   material?: string;
@@ -66,6 +66,7 @@ const DEFAULT_TRY_ON_MEASUREMENTS: TryOnMeasurements = {
   hips: 98,
   shoulder: 40,
 };
+const DEFAULT_VARIANT_COLOR = 'DEFAULT';
 
 export default function ReadyToWearDetail() {
   const { id } = useParams();
@@ -108,12 +109,17 @@ export default function ReadyToWearDetail() {
         const response = await api.products.getReadyToWearProduct(id);
         if (response.success) {
           setProduct(response.data);
-          const firstAvailableSize = (response.data.sizeVariations || [])
-            .find((variation: any) => Number(variation?.stock || 0) > 0)?.size;
+          const firstAvailableVariant = (response.data.sizeVariations || []).find(
+            (variation: any) => Number(variation?.stock || 0) > 0
+          );
+          const firstAvailableSize = firstAvailableVariant?.size;
           if (firstAvailableSize) {
             setSelectedSize(firstAvailableSize);
           }
-          if (response.data.colors && response.data.colors.length > 0) {
+          const firstAvailableColor = String(firstAvailableVariant?.color || DEFAULT_VARIANT_COLOR);
+          if (firstAvailableColor) {
+            setSelectedColor(firstAvailableColor);
+          } else if (response.data.colors && response.data.colors.length > 0) {
             setSelectedColor(response.data.colors[0]);
           }
         } else {
@@ -216,16 +222,34 @@ export default function ReadyToWearDetail() {
           .replace(/^-+|-+$/g, '') || 'designer'
       )}`
     : null;
+  const inStockVariations = (product.sizeVariations || []).filter((variation) => Number(variation.stock || 0) > 0);
+  const availableColors = Array.from(
+    new Set(
+      [
+        ...inStockVariations.map((variation) => String(variation.color || DEFAULT_VARIANT_COLOR).trim().toUpperCase()),
+        ...((product.colors || []).map((color) => String(color || '').trim().toUpperCase()).filter(Boolean) as string[]),
+      ].filter(Boolean)
+    )
+  );
+  const effectiveSelectedColor = availableColors.includes(String(selectedColor || '').toUpperCase())
+    ? String(selectedColor || '').toUpperCase()
+    : availableColors[0] || DEFAULT_VARIANT_COLOR;
   const availableSizes = Array.from(
     new Set(
-      (product.sizeVariations || [])
-        .filter((variation) => Number(variation.stock || 0) > 0)
+      inStockVariations
+        .filter((variation) => String(variation.color || DEFAULT_VARIANT_COLOR).trim().toUpperCase() === effectiveSelectedColor)
         .map((variation) => String(variation.size || '').trim())
         .filter(Boolean)
     )
   );
   const effectiveSelectedSize = availableSizes.includes(selectedSize) ? selectedSize : availableSizes[0] || '';
-  const matchingVariation = (product.sizeVariations || []).find((variation) => variation.size === effectiveSelectedSize);
+  const matchingVariation =
+    (product.sizeVariations || []).find(
+      (variation) =>
+        variation.size === effectiveSelectedSize &&
+        String(variation.color || DEFAULT_VARIANT_COLOR).trim().toUpperCase() === effectiveSelectedColor
+    ) ||
+    (product.sizeVariations || []).find((variation) => variation.size === effectiveSelectedSize);
   const selectedUnitPrice = Number(matchingVariation?.price || product.price || 0);
   const hasDiscount = product.originalPrice && product.originalPrice > selectedUnitPrice;
 
@@ -241,7 +265,7 @@ export default function ReadyToWearDetail() {
       productName: product.name,
       productImage: product.images?.[0]?.url || '/images/placeholder.jpg',
       selectedSize: effectiveSelectedSize,
-      selectedColor: selectedColor || undefined,
+      selectedColor: effectiveSelectedColor === DEFAULT_VARIANT_COLOR ? undefined : effectiveSelectedColor,
       quantity,
       unitPrice: selectedUnitPrice,
       designerName: product.designer?.businessName || 'Designer',
@@ -321,6 +345,7 @@ export default function ReadyToWearDetail() {
         `rtwTryOnDraft:${id}`,
         JSON.stringify({
           selectedSize: effectiveSelectedSize || '',
+          selectedColor: effectiveSelectedColor || DEFAULT_VARIANT_COLOR,
           quantity,
           measurements: tryOnMeasurements,
           generatedAt: new Date().toISOString(),
@@ -449,21 +474,23 @@ export default function ReadyToWearDetail() {
             <p className="text-gray-600 leading-relaxed">{product.description}</p>
 
             {/* Color Selection */}
-            {product.colors && product.colors.length > 0 && (
+            {availableColors.length > 0 && (
               <div>
-                <span className="font-medium">Color: {selectedColor}</span>
+                <span className="font-medium">
+                  Color: {effectiveSelectedColor === DEFAULT_VARIANT_COLOR ? 'Default' : effectiveSelectedColor}
+                </span>
                 <div className="flex gap-2 mt-2">
-                  {product.colors.map((color) => (
+                  {availableColors.map((color) => (
                     <button
                       key={color}
                       onClick={() => setSelectedColor(color)}
                       className={`px-4 py-2 border rounded-lg text-sm ${
-                        selectedColor === color
+                        effectiveSelectedColor === color
                           ? 'border-coral-500 bg-coral-50 text-coral-600'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
-                      {color}
+                      {color === DEFAULT_VARIANT_COLOR ? 'Default' : color}
                     </button>
                   ))}
                 </div>

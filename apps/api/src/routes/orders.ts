@@ -7,6 +7,33 @@ import nodemailer from 'nodemailer';
 
 const router = Router();
 
+const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
+const DEFAULT_READY_TO_WEAR_COLOR = 'DEFAULT';
+const normalizeReadyToWearSize = (value: unknown) => String(value || '').trim().toUpperCase();
+const normalizeReadyToWearColor = (value: unknown) =>
+  String(value || DEFAULT_READY_TO_WEAR_COLOR)
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ') || DEFAULT_READY_TO_WEAR_COLOR;
+const encodeReadyToWearVariantKey = (size: unknown, color?: unknown) =>
+  `${normalizeReadyToWearSize(size)}${READY_TO_WEAR_VARIANT_SEPARATOR}${normalizeReadyToWearColor(color)}`;
+const decodeReadyToWearVariantKey = (variantKey: unknown) => {
+  const raw = String(variantKey || '').trim().toUpperCase();
+  if (!raw.includes(READY_TO_WEAR_VARIANT_SEPARATOR)) {
+    return {
+      size: normalizeReadyToWearSize(raw),
+      color: DEFAULT_READY_TO_WEAR_COLOR,
+      variantKey: raw,
+    };
+  }
+  const [sizePart, colorPart] = raw.split(READY_TO_WEAR_VARIANT_SEPARATOR);
+  return {
+    size: normalizeReadyToWearSize(sizePart),
+    color: normalizeReadyToWearColor(colorPart),
+    variantKey: raw,
+  };
+};
+
 router.use(authenticate);
 
 let cachedTransporter: nodemailer.Transporter | null | undefined;
@@ -393,6 +420,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
     type ValidatedReadyToWearItem = {
       readyToWearId: string;
       size: string;
+      color: string;
       quantity: number;
       price: number;
       sizeVariationId: string;
@@ -402,6 +430,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       items: z.array(z.object({
         readyToWearId: z.string().uuid(),
         size: z.string(),
+        color: z.string().optional(),
         quantity: z.number().min(1),
       })),
       shippingAddressId: z.string().uuid(),
@@ -438,6 +467,10 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
     const validatedItems: ValidatedReadyToWearItem[] = [];
 
     for (const item of data.items) {
+      const requestedSize = normalizeReadyToWearSize(item.size);
+      const hasRequestedColor = String(item.color || '').trim().length > 0;
+      const requestedColor = normalizeReadyToWearColor(item.color);
+      const requestedVariantKey = encodeReadyToWearVariantKey(requestedSize, requestedColor);
       const product = await prisma.readyToWear.findFirst({
         where: {
           id: item.readyToWearId,
@@ -445,9 +478,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
           isAvailable: true,
         },
         include: {
-          sizeVariations: {
-            where: { size: item.size },
-          },
+          sizeVariations: true,
         },
       });
 
@@ -458,18 +489,27 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
         });
       }
 
-      if (product.sizeVariations.length === 0) {
+      const exactVariant = product.sizeVariations.find(
+        (row) => String(row.size || '').toUpperCase() === requestedVariantKey
+      );
+      const sizeFallbackVariant = product.sizeVariations.find((row) => {
+        const decoded = decodeReadyToWearVariantKey(row.size);
+        return decoded.size === requestedSize;
+      });
+      const matchingVariant = hasRequestedColor ? exactVariant || null : exactVariant || sizeFallbackVariant || null;
+      if (!matchingVariant) {
         return res.status(400).json({
           success: false,
-          message: `Size ${item.size} not available for ${product.name}`,
+          message: `Variant ${requestedSize}/${requestedColor} not available for ${product.name}`,
         });
       }
 
-      const sizeVar = product.sizeVariations[0];
+      const sizeVar = matchingVariant;
+      const selectedVariant = decodeReadyToWearVariantKey(sizeVar.size);
       if (sizeVar.stock < item.quantity) {
         return res.status(400).json({
           success: false,
-          message: `Not enough stock for ${product.name} in size ${item.size}. Available: ${sizeVar.stock}`,
+          message: `Not enough stock for ${product.name} in ${selectedVariant.size}/${selectedVariant.color}. Available: ${sizeVar.stock}`,
         });
       }
 
@@ -477,7 +517,10 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       subtotal += itemTotal;
 
       validatedItems.push({
-        ...item,
+        readyToWearId: item.readyToWearId,
+        size: selectedVariant.size,
+        color: selectedVariant.color,
+        quantity: item.quantity,
         price: Number(sizeVar.price),
         sizeVariationId: sizeVar.id,
       });
@@ -537,7 +580,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
           readyToWearItems: {
             create: validatedItems.map((item) => ({
               readyToWearId: item.readyToWearId,
-              size: item.size,
+              size: item.color === DEFAULT_READY_TO_WEAR_COLOR ? item.size : `${item.size} / ${item.color}`,
               price: item.price,
               quantity: item.quantity,
             })),

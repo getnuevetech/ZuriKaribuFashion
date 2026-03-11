@@ -411,6 +411,7 @@ export default function Checkout() {
           items: readyToWearItems.map((item) => ({
             readyToWearId: item.readyToWearId,
             size: item.selectedSize,
+            color: item.selectedColor || undefined,
             quantity: item.quantity,
           })),
           shippingAddressId,

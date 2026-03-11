@@ -13,7 +13,7 @@ interface ReadyToWearProduct {
   images: { url: string }[];
   category?: { id: string; name: string };
   designer?: { businessName?: string; country?: string };
-  sizeVariations?: Array<{ id?: string; size: string; price: number; stock?: number }>;
+  sizeVariations?: Array<{ id?: string; size: string; color?: string; variantKey?: string; price: number; stock?: number }>;
 }
 
 interface TryOnMeasurements {
@@ -41,6 +41,7 @@ export default function ReadyToWearTryOn() {
   const [product, setProduct] = useState<ReadyToWearProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedSize, setSelectedSize] = useState('');
+  const [selectedColor, setSelectedColor] = useState('DEFAULT');
   const [quantity, setQuantity] = useState(1);
   const [measurements, setMeasurements] = useState<TryOnMeasurements>(DEFAULT_MEASUREMENTS);
   const [previewGenerated, setPreviewGenerated] = useState(false);
@@ -78,6 +79,10 @@ export default function ReadyToWearTryOn() {
               }
             }
             setMeasurements(nextMeasurements);
+            const draftColor = String((draft as any)?.selectedColor || '').trim().toUpperCase();
+            if (draftColor) {
+              setSelectedColor(draftColor);
+            }
           }
           const firstAvailableSize = (response.data.sizeVariations || [])
             .find((variation: any) => Number(variation?.stock || 0) > 0)?.size;
@@ -89,6 +94,12 @@ export default function ReadyToWearTryOn() {
           const resolvedSize = draftSize && availableSizes.includes(draftSize) ? draftSize : firstAvailableSize;
           if (resolvedSize) {
             setSelectedSize(resolvedSize);
+          }
+          if (!selectedColor) {
+            const firstColor = String(
+              (response.data.sizeVariations || []).find((variation: any) => Number(variation?.stock || 0) > 0)?.color || 'DEFAULT'
+            ).toUpperCase();
+            setSelectedColor(firstColor || 'DEFAULT');
           }
         }
       } finally {
@@ -119,7 +130,12 @@ export default function ReadyToWearTryOn() {
     );
   }
 
-  const selectedVariation = (product.sizeVariations || []).find((variation) => variation.size === selectedSize);
+  const selectedVariation =
+    (product.sizeVariations || []).find(
+      (variation) =>
+        variation.size === selectedSize &&
+        String(variation.color || 'DEFAULT').trim().toUpperCase() === String(selectedColor || 'DEFAULT').toUpperCase()
+    ) || (product.sizeVariations || []).find((variation) => variation.size === selectedSize);
   const unitPrice = Number(selectedVariation?.price || 0);
 
   const handleGeneratePreview = async () => {
@@ -144,6 +160,7 @@ export default function ReadyToWearTryOn() {
       productName: product.name,
       productImage: product.images?.[0]?.url || '/images/placeholder.jpg',
       selectedSize,
+      selectedColor: selectedColor === 'DEFAULT' ? undefined : selectedColor,
       quantity,
       unitPrice,
       designerName: product.designer?.businessName || 'Designer',
@@ -232,6 +249,10 @@ export default function ReadyToWearTryOn() {
               </div>
               <div className="col-span-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
                 Selected size from product page: <span className="font-semibold">{selectedSize || 'Not selected'}</span>
+              </div>
+              <div className="col-span-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
+                Selected color from product page:{' '}
+                <span className="font-semibold">{selectedColor === 'DEFAULT' ? 'Default' : selectedColor}</span>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>

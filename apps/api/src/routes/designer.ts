@@ -150,6 +150,31 @@ const normalizeCurrencyCode = (value: unknown) => String(value || '').trim().toU
 const DEFAULT_READY_TO_WEAR_STANDARD_SIZES = ['S', 'M', 'L', 'XL'];
 const HOMEPAGE_READY_TO_WEAR_SIZES_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZES';
 const normalizeReadyToWearSize = (value: unknown) => String(value || '').trim().toUpperCase();
+const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
+const DEFAULT_READY_TO_WEAR_COLOR = 'DEFAULT';
+const normalizeReadyToWearColor = (value: unknown) =>
+  String(value || DEFAULT_READY_TO_WEAR_COLOR)
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ') || DEFAULT_READY_TO_WEAR_COLOR;
+const encodeReadyToWearVariantKey = (size: unknown, color?: unknown) =>
+  `${normalizeReadyToWearSize(size)}${READY_TO_WEAR_VARIANT_SEPARATOR}${normalizeReadyToWearColor(color)}`;
+const decodeReadyToWearVariantKey = (variantKey: unknown) => {
+  const raw = String(variantKey || '').trim().toUpperCase();
+  if (!raw.includes(READY_TO_WEAR_VARIANT_SEPARATOR)) {
+    return {
+      size: normalizeReadyToWearSize(raw),
+      color: DEFAULT_READY_TO_WEAR_COLOR,
+      variantKey: raw,
+    };
+  }
+  const [sizePart, colorPart] = raw.split(READY_TO_WEAR_VARIANT_SEPARATOR);
+  return {
+    size: normalizeReadyToWearSize(sizePart),
+    color: normalizeReadyToWearColor(colorPart),
+    variantKey: raw,
+  };
+};
 
 async function readAllowedReadyToWearSizes() {
   await prisma.$executeRawUnsafe(
@@ -987,6 +1012,25 @@ router.get('/ready-to-wear', async (req, res, next) => {
         const currencyMeta = metadataByProductId.get(item.id) || null;
         return {
           ...item,
+          sizeVariations: Array.isArray(item.sizeVariations)
+            ? item.sizeVariations.map((variation: any) => {
+                const decoded = decodeReadyToWearVariantKey(variation?.size);
+                return {
+                  ...variation,
+                  size: decoded.size,
+                  color: decoded.color,
+                  variantKey: decoded.variantKey,
+                };
+              })
+            : [],
+          colors: Array.from(
+            new Set(
+              (Array.isArray(item.sizeVariations) ? item.sizeVariations : [])
+                .filter((variation: any) => Number(variation?.stock || 0) > 0)
+                .map((variation: any) => decodeReadyToWearVariantKey(variation?.size).color)
+                .filter(Boolean)
+            )
+          ),
           isFeatured: featuredSections.length > 0,
           featuredSections,
           listingCurrencyCode: String(currencyMeta?.currencyCode || 'USD'),
@@ -1028,6 +1072,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
       priceCurrencyCode: z.string().min(3).max(8).optional(),
       sizes: z.array(z.object({
         size: z.string(),
+        color: z.string().max(30).optional(),
         price: z.number().positive(),
         stock: z.number().min(0),
       })).min(1).max(20),
@@ -1042,6 +1087,8 @@ router.post('/ready-to-wear', async (req, res, next) => {
     const normalizedSizes = data.sizes.map((row) => ({
       ...row,
       size: normalizeReadyToWearSize(row.size),
+      color: normalizeReadyToWearColor(row.color),
+      variantKey: encodeReadyToWearVariantKey(row.size, row.color),
     }));
     const invalidSize = normalizedSizes.find((row) => !allowedSizes.includes(row.size as any));
     if (invalidSize) {
@@ -1050,10 +1097,10 @@ router.post('/ready-to-wear', async (req, res, next) => {
         message: `Invalid size "${invalidSize.size}". Allowed sizes: ${allowedSizes.join(', ')}`,
       });
     }
-    if (new Set(normalizedSizes.map((row) => row.size)).size !== normalizedSizes.length) {
+    if (new Set(normalizedSizes.map((row) => row.variantKey)).size !== normalizedSizes.length) {
       return res.status(400).json({
         success: false,
-        message: 'Duplicate ready-to-wear sizes are not allowed.',
+        message: 'Duplicate ready-to-wear size + color variants are not allowed.',
       });
     }
     const profile = await resolveDesignerProfile(req.user!.id);
@@ -1077,8 +1124,9 @@ router.post('/ready-to-wear', async (req, res, next) => {
         status: ProductStatus.PENDING_REVIEW,
         sizeVariations: {
           create: normalizedSizes.map((row) => ({
-            ...row,
+            size: row.variantKey,
             price: Number((Number(row.price || 0) * pricing.usdPerUnit).toFixed(2)),
+            stock: row.stock,
           })),
         },
         images: {
@@ -1108,7 +1156,20 @@ router.post('/ready-to-wear', async (req, res, next) => {
     res.status(201).json({
       success: true,
       message: 'Ready-to-wear product submitted for review.',
-      data: product,
+      data: {
+        ...product,
+        sizeVariations: Array.isArray(product.sizeVariations)
+          ? product.sizeVariations.map((variation: any) => {
+              const decoded = decodeReadyToWearVariantKey(variation?.size);
+              return {
+                ...variation,
+                size: decoded.size,
+                color: decoded.color,
+                variantKey: decoded.variantKey,
+              };
+            })
+          : [],
+      },
     });
   } catch (error) {
     next(error);
@@ -1129,6 +1190,7 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         .array(
           z.object({
             size: z.string(),
+            color: z.string().max(30).optional(),
             price: z.number().positive(),
             stock: z.number().min(0),
           })
@@ -1153,6 +1215,8 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
       ? data.sizes.map((row) => ({
           ...row,
           size: normalizeReadyToWearSize(row.size),
+          color: normalizeReadyToWearColor(row.color),
+          variantKey: encodeReadyToWearVariantKey(row.size, row.color),
         }))
       : undefined;
     if (normalizedSizes) {
@@ -1163,10 +1227,10 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
           message: `Invalid size "${invalidSize.size}". Allowed sizes: ${allowedSizes.join(', ')}`,
         });
       }
-      if (new Set(normalizedSizes.map((row) => row.size)).size !== normalizedSizes.length) {
+      if (new Set(normalizedSizes.map((row) => row.variantKey)).size !== normalizedSizes.length) {
         return res.status(400).json({
           success: false,
-          message: 'Duplicate ready-to-wear sizes are not allowed.',
+          message: 'Duplicate ready-to-wear size + color variants are not allowed.',
         });
       }
     }
@@ -1226,11 +1290,12 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
       if (normalizedSizes) {
         payload.sizeVariations = {
           create: normalizedSizes.map((row) => ({
-            ...row,
+            size: row.variantKey,
             price:
               effectiveCurrencyCode === 'USD'
                 ? Number(row.price || 0)
                 : Number((Number(row.price || 0) * effectiveUsdPerUnit).toFixed(2)),
+            stock: row.stock,
           })),
         };
       }
@@ -1269,7 +1334,20 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
     res.json({
       success: true,
       message: 'Ready-to-wear product updated successfully.',
-      data: updated,
+      data: {
+        ...updated,
+        sizeVariations: Array.isArray(updated.sizeVariations)
+          ? updated.sizeVariations.map((variation: any) => {
+              const decoded = decodeReadyToWearVariantKey(variation?.size);
+              return {
+                ...variation,
+                size: decoded.size,
+                color: decoded.color,
+                variantKey: decoded.variantKey,
+              };
+            })
+          : [],
+      },
     });
   } catch (error) {
     next(error);
@@ -1284,6 +1362,7 @@ router.patch('/ready-to-wear/:id/size-stock', async (req, res, next) => {
         .array(
           z.object({
             size: z.string().min(1),
+            color: z.string().max(30).optional(),
             stock: z.number().min(0),
           })
         )
@@ -1293,12 +1372,14 @@ router.patch('/ready-to-wear/:id/size-stock', async (req, res, next) => {
     const payload = schema.parse(req.body);
     const normalizedSizes = payload.sizes.map((entry) => ({
       size: normalizeReadyToWearSize(entry.size),
+      color: normalizeReadyToWearColor(entry.color),
       stock: Number(entry.stock || 0),
+      variantKey: encodeReadyToWearVariantKey(entry.size, entry.color),
     }));
-    if (new Set(normalizedSizes.map((entry) => entry.size)).size !== normalizedSizes.length) {
+    if (new Set(normalizedSizes.map((entry) => entry.variantKey)).size !== normalizedSizes.length) {
       return res.status(400).json({
         success: false,
-        message: 'Duplicate ready-to-wear sizes are not allowed.',
+        message: 'Duplicate ready-to-wear size + color variants are not allowed.',
       });
     }
 
@@ -1325,15 +1406,15 @@ router.patch('/ready-to-wear/:id/size-stock', async (req, res, next) => {
       where: { readyToWearId: id },
       select: { id: true, size: true },
     });
-    const sizeIdByName = new Map(
-      sizeRows.map((row) => [normalizeReadyToWearSize(row.size), String(row.id)] as const)
+    const sizeIdByVariantKey = new Map(
+      sizeRows.map((row) => [String(row.size || '').trim().toUpperCase(), String(row.id)] as const)
     );
 
     for (const entry of normalizedSizes) {
-      if (!sizeIdByName.has(entry.size)) {
+      if (!sizeIdByVariantKey.has(entry.variantKey)) {
         return res.status(400).json({
           success: false,
-          message: `Size "${entry.size}" does not exist on this product.`,
+          message: `Variant "${entry.size}/${entry.color}" does not exist on this product.`,
         });
       }
     }
@@ -1341,7 +1422,7 @@ router.patch('/ready-to-wear/:id/size-stock', async (req, res, next) => {
     await prisma.$transaction(
       normalizedSizes.map((entry) =>
         prisma.readyToWearSize.update({
-          where: { id: sizeIdByName.get(entry.size)! },
+          where: { id: sizeIdByVariantKey.get(entry.variantKey)! },
           data: { stock: entry.stock },
         })
       )
@@ -1357,7 +1438,20 @@ router.patch('/ready-to-wear/:id/size-stock', async (req, res, next) => {
     res.json({
       success: true,
       message: 'Ready-to-wear size stock updated.',
-      data: updated,
+      data: {
+        ...updated,
+        sizeVariations: Array.isArray(updated?.sizeVariations)
+          ? updated!.sizeVariations.map((variation: any) => {
+              const decoded = decodeReadyToWearVariantKey(variation?.size);
+              return {
+                ...variation,
+                size: decoded.size,
+                color: decoded.color,
+                variantKey: decoded.variantKey,
+              };
+            })
+          : [],
+      },
     });
   } catch (error) {
     next(error);

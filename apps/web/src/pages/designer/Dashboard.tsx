@@ -74,7 +74,7 @@ interface ReadyProduct {
   status: string;
   images: string[];
   orderCount: number;
-  sizeVariations: Array<{ id?: string; size: string; price: number; stock: number }>;
+  sizeVariations: Array<{ id?: string; size: string; color?: string; variantKey?: string; price: number; stock: number }>;
   isFeatured?: boolean;
   featuredSections?: string[];
   listingCurrencyCode?: string;
@@ -125,6 +125,23 @@ interface DesignFormState {
   yardsByFabricId: Record<string, string>;
   measurementLines: string;
   priceCurrencyCode: string;
+}
+
+interface ReadyVariantFormRow {
+  size: string;
+  color: string;
+  price: string;
+  stock: string;
+}
+
+interface ReadyToWearFormState {
+  name: string;
+  description: string;
+  categoryId: string;
+  basePrice: string;
+  imageUrls: string;
+  priceCurrencyCode: string;
+  variants: ReadyVariantFormRow[];
 }
 
 interface VendorProfileField {
@@ -239,6 +256,19 @@ export default function DesignerDashboard() {
     measurementLines: 'chest|cm|required\nwaist|cm|required\nhips|cm|required',
     priceCurrencyCode: 'USD',
   });
+  const [showReadyModal, setShowReadyModal] = useState(false);
+  const [isSavingReady, setIsSavingReady] = useState(false);
+  const [readyError, setReadyError] = useState<string | null>(null);
+  const [readySizeOptions, setReadySizeOptions] = useState<string[]>(['S', 'M', 'L', 'XL']);
+  const [readyForm, setReadyForm] = useState<ReadyToWearFormState>({
+    name: '',
+    description: '',
+    categoryId: '',
+    basePrice: '',
+    imageUrls: '',
+    priceCurrencyCode: 'USD',
+    variants: [{ size: 'M', color: 'DEFAULT', price: '', stock: '0' }],
+  });
   const [currencyOptions, setCurrencyOptions] = useState<{
     defaultCurrency: string;
     allowedCurrencies: string[];
@@ -260,7 +290,7 @@ export default function DesignerDashboard() {
   const [productCategoryFilter, setProductCategoryFilter] = useState('');
   const [showReadyStockModal, setShowReadyStockModal] = useState(false);
   const [selectedReadyProduct, setSelectedReadyProduct] = useState<ReadyProduct | null>(null);
-  const [readyStockDraft, setReadyStockDraft] = useState<Array<{ size: string; stock: string }>>([]);
+  const [readyStockDraft, setReadyStockDraft] = useState<Array<{ size: string; color: string; stock: string }>>([]);
   const [readyStockSaving, setReadyStockSaving] = useState(false);
   const [readyStockError, setReadyStockError] = useState<string | null>(null);
 
@@ -289,7 +319,7 @@ export default function DesignerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsResult, designsResult, readyResult, ordersResult, categoriesResult, fabricsResult, currencyResult] = await Promise.allSettled([
+      const [statsResult, designsResult, readyResult, ordersResult, categoriesResult, fabricsResult, currencyResult, readySizeOptionsResult] = await Promise.allSettled([
         api.designer.getDashboard(),
         api.designer.getDesigns(),
         api.designer.getReadyToWear(),
@@ -297,6 +327,7 @@ export default function DesignerDashboard() {
         api.products.getCategories(),
         api.products.getFabrics({ limit: 200 }),
         api.currency.getMyOptions(),
+        api.designer.getReadyToWearSizeOptions(),
       ]);
       const statsRes = statsResult.status === 'fulfilled' ? statsResult.value : null;
       const designsRes = designsResult.status === 'fulfilled' ? designsResult.value : null;
@@ -305,6 +336,7 @@ export default function DesignerDashboard() {
       const categoriesRes = categoriesResult.status === 'fulfilled' ? categoriesResult.value : null;
       const fabricsRes = fabricsResult.status === 'fulfilled' ? fabricsResult.value : null;
       const currencyRes = currencyResult.status === 'fulfilled' ? currencyResult.value : null;
+      const readySizeOptionsRes = readySizeOptionsResult.status === 'fulfilled' ? readySizeOptionsResult.value : null;
       const settledCallStatus = (result: PromiseSettledResult<any>) => {
         if (result.status === 'fulfilled') {
           return result.value?.success
@@ -432,6 +464,8 @@ export default function DesignerDashboard() {
             ? item.sizeVariations.map((variation: any) => ({
                 id: String(variation?.id || ''),
                 size: String(variation?.size || ''),
+                color: String(variation?.color || 'DEFAULT'),
+                variantKey: String(variation?.variantKey || ''),
                 price: Number(variation?.price || 0),
                 stock: Number(variation?.stock || 0),
               }))
@@ -464,6 +498,15 @@ export default function DesignerDashboard() {
             : ['USD'],
           usdPerUnitByCurrency: (currencyRes.data?.usdPerUnitByCurrency || { USD: 1 }) as Record<string, number>,
         });
+      }
+      if (readySizeOptionsRes?.success) {
+        const rows = Array.isArray(readySizeOptionsRes.data?.sizes) ? readySizeOptionsRes.data.sizes : [];
+        const normalized = rows
+          .map((entry: any) => String(entry || '').trim().toUpperCase())
+          .filter(Boolean);
+        if (normalized.length > 0) {
+          setReadySizeOptions(normalized);
+        }
       }
       const completionPayload = dashboardCompletion || (profileRes?.success ? profileRes.data : null);
       const dashboardGovernanceFields = statsRes?.success && Array.isArray(statsRes.data?.governanceFields)
@@ -691,6 +734,25 @@ export default function DesignerDashboard() {
     setShowDesignModal(true);
   };
 
+  const resetReadyForm = () => {
+    const defaultSize = readySizeOptions[0] || 'M';
+    setReadyForm({
+      name: '',
+      description: '',
+      categoryId: categories[0]?.id || '',
+      basePrice: '',
+      imageUrls: '',
+      priceCurrencyCode: currencyOptions.defaultCurrency || 'USD',
+      variants: [{ size: defaultSize, color: 'DEFAULT', price: '', stock: '0' }],
+    });
+    setReadyError(null);
+  };
+
+  const openCreateReadyModal = () => {
+    resetReadyForm();
+    setShowReadyModal(true);
+  };
+
   const openEditDesignModal = (design: Design) => {
     const yardsByFabricId = (design.suitableFabrics || []).reduce<Record<string, string>>((acc, item) => {
       if (item.fabricId) acc[item.fabricId] = String(item.yardsNeeded || 1);
@@ -743,6 +805,21 @@ export default function DesignerDashboard() {
         };
       })
       .filter((row) => row.name);
+
+  const addReadyVariantRow = () => {
+    const defaultSize = readySizeOptions[0] || 'M';
+    setReadyForm((prev) => ({
+      ...prev,
+      variants: [...prev.variants, { size: defaultSize, color: 'DEFAULT', price: prev.basePrice || '', stock: '0' }],
+    }));
+  };
+
+  const removeReadyVariantRow = (index: number) => {
+    setReadyForm((prev) => ({
+      ...prev,
+      variants: prev.variants.filter((_, rowIndex) => rowIndex !== index),
+    }));
+  };
 
   const toggleFabricSelection = (fabricId: string) => {
     setDesignForm((prev) => {
@@ -832,6 +909,95 @@ export default function DesignerDashboard() {
     }
   };
 
+  const handleSaveReadyToWear = async () => {
+    setReadyError(null);
+    const images = parseImageInputs(readyForm.imageUrls);
+    const basePrice = Number(readyForm.basePrice || 0);
+    const normalizedVariants = readyForm.variants.map((row) => ({
+      size: String(row.size || '').trim().toUpperCase(),
+      color: String(row.color || '').trim().toUpperCase() || 'DEFAULT',
+      price: Number(row.price || 0),
+      stock: Number(row.stock || 0),
+    }));
+
+    if (!readyForm.name.trim()) {
+      setReadyError('Product name is required.');
+      return;
+    }
+    if (!readyForm.description.trim() || readyForm.description.trim().length < 10) {
+      setReadyError('Description must be at least 10 characters.');
+      return;
+    }
+    if (!readyForm.categoryId) {
+      setReadyError('Please select a category.');
+      return;
+    }
+    if (basePrice <= 0) {
+      setReadyError('Base price must be greater than zero.');
+      return;
+    }
+    if (images.length < 3 || images.length > 4) {
+      setReadyError('Ready-to-wear products require 3 to 4 images.');
+      return;
+    }
+    if (normalizedVariants.length === 0) {
+      setReadyError('Please add at least one size/color variant.');
+      return;
+    }
+    if (
+      normalizedVariants.some(
+        (row) =>
+          !row.size ||
+          !row.color ||
+          !Number.isFinite(row.price) ||
+          row.price <= 0 ||
+          !Number.isFinite(row.stock) ||
+          row.stock < 0
+      )
+    ) {
+      setReadyError('Each variant must include size, color, price, and stock quantity (0 or greater).');
+      return;
+    }
+    if (new Set(normalizedVariants.map((row) => `${row.size}::${row.color}`)).size !== normalizedVariants.length) {
+      setReadyError('Duplicate size/color variants are not allowed.');
+      return;
+    }
+
+    try {
+      setIsSavingReady(true);
+      await api.designer.createReadyToWear({
+        name: readyForm.name.trim(),
+        description: readyForm.description.trim(),
+        categoryId: readyForm.categoryId,
+        basePrice,
+        priceCurrencyCode: readyForm.priceCurrencyCode,
+        sizes: normalizedVariants.map((row) => ({
+          size: row.size,
+          color: row.color,
+          price: row.price,
+          stock: Math.max(0, Math.floor(row.stock)),
+        })),
+        images: images.map((entry, index) => ({
+          url: entry.url,
+          alt: `${readyForm.name.trim() || 'Ready To Wear'} image ${index + 1}`,
+        })),
+      });
+      setShowReadyModal(false);
+      resetReadyForm();
+      await fetchDashboardData();
+    } catch (error: any) {
+      const issueText = Array.isArray(error?.response?.data?.issues)
+        ? error.response.data.issues
+            .map((issue: any) => String(issue?.message || '').trim())
+            .filter(Boolean)
+            .join(', ')
+        : '';
+      setReadyError(issueText || error?.response?.data?.message || error?.message || 'Failed to save ready-to-wear product.');
+    } finally {
+      setIsSavingReady(false);
+    }
+  };
+
   const handleSubmitProfile = async () => {
     if (!profileCompletion) return;
     setProfileMessage(null);
@@ -884,6 +1050,7 @@ export default function DesignerDashboard() {
   const openReadyStockModal = (product: ReadyProduct) => {
     const rows = (product.sizeVariations || []).map((entry) => ({
       size: String(entry.size || ''),
+      color: String(entry.color || 'DEFAULT'),
       stock: String(Math.max(0, Number(entry.stock || 0))),
     }));
     setSelectedReadyProduct(product);
@@ -896,6 +1063,7 @@ export default function DesignerDashboard() {
     if (!selectedReadyProduct) return;
     const normalized = readyStockDraft.map((entry) => ({
       size: String(entry.size || '').trim(),
+      color: String(entry.color || 'DEFAULT').trim().toUpperCase(),
       stock: Number(entry.stock || 0),
     }));
     if (normalized.length === 0) {
@@ -986,10 +1154,16 @@ export default function DesignerDashboard() {
             </a>
           ) : null}
         </div>
-        <Button onClick={openCreateDesignModal}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Design Product
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={openCreateReadyModal}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Ready-To-Wear
+          </Button>
+          <Button onClick={openCreateDesignModal}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Design Product
+          </Button>
+        </div>
       </div>
 
       {profileCompletion ? (
@@ -1366,7 +1540,7 @@ export default function DesignerDashboard() {
                     const readySizeSummary =
                       item.productType === 'READY_TO_WEAR'
                         ? (((item as ReadyProduct).sizeVariations || [])
-                            .map((entry) => `${entry.size}: ${Number(entry.stock || 0)}`)
+                            .map((entry) => `${entry.size}/${String(entry.color || 'DEFAULT')}: ${Number(entry.stock || 0)}`)
                             .join(' • ') || 'No sizes')
                         : '';
                     return (
@@ -1523,7 +1697,7 @@ export default function DesignerDashboard() {
               {readyStockDraft.map((row, index) => (
                 <div key={`${row.size}-${index}`} className="grid grid-cols-[1fr_140px] items-center gap-3">
                   <div className="rounded-lg border bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700">
-                    {row.size}
+                    {row.size} / {row.color === 'DEFAULT' ? 'Default' : row.color}
                   </div>
                   <input
                     type="number"
@@ -1563,6 +1737,209 @@ export default function DesignerDashboard() {
               </Button>
               <Button onClick={handleSaveReadyStock} disabled={readyStockSaving}>
                 {readyStockSaving ? 'Saving...' : 'Save Stock'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showReadyModal ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-3xl rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Add Ready-To-Wear Product</h3>
+            <p className="text-sm text-gray-500 mb-5">
+              Configure variant rows by size, color, and quantity to manage stock accurately.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
+                <input
+                  type="text"
+                  value={readyForm.name}
+                  onChange={(e) => setReadyForm((prev) => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  placeholder="e.g. Ready-to-wear Kaftan"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={readyForm.description}
+                  onChange={(e) => setReadyForm((prev) => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg min-h-[90px]"
+                  placeholder="Describe fit, cut, fabric, and styling details."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select
+                  value={readyForm.categoryId}
+                  onChange={(e) => setReadyForm((prev) => ({ ...prev, categoryId: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                >
+                  {categories.length === 0 ? <option value="">No categories found</option> : null}
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Base Price ({readyForm.priceCurrencyCode})</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={readyForm.basePrice}
+                  onChange={(e) => setReadyForm((prev) => ({ ...prev, basePrice: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Listing Currency</label>
+                <select
+                  value={readyForm.priceCurrencyCode}
+                  onChange={(e) => setReadyForm((prev) => ({ ...prev, priceCurrencyCode: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  disabled={(currencyOptions.allowedCurrencies || []).length <= 1}
+                >
+                  {(currencyOptions.allowedCurrencies || [currencyOptions.defaultCurrency || 'USD']).map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Image URLs (one per line)</label>
+                <textarea
+                  value={readyForm.imageUrls}
+                  onChange={(e) => setReadyForm((prev) => ({ ...prev, imageUrls: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg min-h-[90px]"
+                  placeholder={'https://.../image1.jpg\nhttps://.../image2.jpg\nhttps://.../image3.jpg'}
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="block text-sm font-medium text-gray-700">Variant Rows (Size + Color + Quantity)</label>
+                  <Button variant="outline" size="sm" onClick={addReadyVariantRow}>
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Variant
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {readyForm.variants.map((row, index) => (
+                    <div key={`${index}-${row.size}-${row.color}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 rounded-lg border p-3">
+                      <div className="md:col-span-3">
+                        <label className="mb-1 block text-xs font-medium text-gray-600">Size</label>
+                        <select
+                          value={row.size}
+                          onChange={(event) =>
+                            setReadyForm((prev) => ({
+                              ...prev,
+                              variants: prev.variants.map((entry, rowIndex) =>
+                                rowIndex === index ? { ...entry, size: event.target.value } : entry
+                              ),
+                            }))
+                          }
+                          className="w-full rounded-lg border px-3 py-2 text-sm"
+                        >
+                          {readySizeOptions.map((size) => (
+                            <option key={size} value={size}>
+                              {size}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="md:col-span-3">
+                        <label className="mb-1 block text-xs font-medium text-gray-600">Color</label>
+                        <input
+                          type="text"
+                          value={row.color}
+                          onChange={(event) =>
+                            setReadyForm((prev) => ({
+                              ...prev,
+                              variants: prev.variants.map((entry, rowIndex) =>
+                                rowIndex === index ? { ...entry, color: event.target.value } : entry
+                              ),
+                            }))
+                          }
+                          placeholder="e.g. Black"
+                          className="w-full rounded-lg border px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="mb-1 block text-xs font-medium text-gray-600">Price</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={row.price}
+                          onChange={(event) =>
+                            setReadyForm((prev) => ({
+                              ...prev,
+                              variants: prev.variants.map((entry, rowIndex) =>
+                                rowIndex === index ? { ...entry, price: event.target.value } : entry
+                              ),
+                            }))
+                          }
+                          className="w-full rounded-lg border px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="mb-1 block text-xs font-medium text-gray-600">Quantity</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={row.stock}
+                          onChange={(event) =>
+                            setReadyForm((prev) => ({
+                              ...prev,
+                              variants: prev.variants.map((entry, rowIndex) =>
+                                rowIndex === index ? { ...entry, stock: event.target.value } : entry
+                              ),
+                            }))
+                          }
+                          className="w-full rounded-lg border px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div className="md:col-span-2 flex items-end justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeReadyVariantRow(index)}
+                          disabled={readyForm.variants.length <= 1}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {readyError ? (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {readyError}
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowReadyModal(false)} disabled={isSavingReady}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveReadyToWear} disabled={isSavingReady}>
+                {isSavingReady ? 'Saving...' : 'Submit Ready-To-Wear Product'}
               </Button>
             </div>
           </div>
