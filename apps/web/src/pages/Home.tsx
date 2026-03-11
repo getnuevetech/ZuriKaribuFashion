@@ -900,9 +900,9 @@ export default function Home() {
         </div>
 
         {sectionVisibility.countries ? (
-          <div className="absolute bottom-8 left-4 sm:left-6 lg:left-12 xl:left-20 right-4 sm:right-6 lg:right-12 xl:right-20">
+          <div className="absolute bottom-6 left-4 sm:left-6 lg:left-12 xl:left-20 right-4 sm:right-6 lg:right-12 xl:right-20">
             <div
-              className="flex flex-nowrap gap-4 justify-start overflow-x-auto overflow-y-hidden pb-2 scrollbar-hide"
+              className="flex flex-nowrap gap-4 justify-start overflow-x-auto overflow-y-visible pt-2 pb-2 scrollbar-hide"
               onWheel={handleCountryStripWheel}
             >
               {countries.map((country) => (
