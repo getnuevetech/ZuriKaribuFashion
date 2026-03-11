@@ -24,7 +24,6 @@ interface ReadyToWearProduct {
   };
   category?: { id: string; name: string };
   sizeVariations?: Array<{ id?: string; size: string; price: number; stock?: number }>;
-  sizes?: string[];
   colors?: string[];
   material?: string;
   careInstructions?: string;
@@ -110,9 +109,8 @@ export default function ReadyToWearDetail() {
           setProduct(response.data);
           const firstAvailableSize = (response.data.sizeVariations || [])
             .find((variation: any) => Number(variation?.stock || 0) > 0)?.size;
-          const fallbackSize = response.data.sizes?.[0];
-          if (firstAvailableSize || fallbackSize) {
-            setSelectedSize(firstAvailableSize || fallbackSize);
+          if (firstAvailableSize) {
+            setSelectedSize(firstAvailableSize);
           }
           if (response.data.colors && response.data.colors.length > 0) {
             setSelectedColor(response.data.colors[0]);
@@ -217,18 +215,22 @@ export default function ReadyToWearDetail() {
           .replace(/^-+|-+$/g, '') || 'designer'
       )}`
     : null;
-  const matchingVariation = (product.sizeVariations || []).find((variation) => variation.size === selectedSize);
+  const availableSizes = Array.from(
+    new Set(
+      (product.sizeVariations || [])
+        .filter((variation) => Number(variation.stock || 0) > 0)
+        .map((variation) => String(variation.size || '').trim())
+        .filter(Boolean)
+    )
+  );
+  const effectiveSelectedSize = availableSizes.includes(selectedSize) ? selectedSize : availableSizes[0] || '';
+  const matchingVariation = (product.sizeVariations || []).find((variation) => variation.size === effectiveSelectedSize);
   const selectedUnitPrice = Number(matchingVariation?.price || product.price || 0);
   const hasDiscount = product.originalPrice && product.originalPrice > selectedUnitPrice;
-  const availableSizes =
-    (product.sizeVariations || [])
-      .filter((variation) => Number(variation.stock || 0) > 0)
-      .map((variation) => variation.size)
-      .filter(Boolean) || product.sizes || [];
 
   const handleAddToCart = () => {
     if (!product) return;
-    if (!selectedSize) {
+    if (!effectiveSelectedSize) {
       setAddToCartMessage('Please select a size before adding to cart.');
       return;
     }
@@ -237,7 +239,7 @@ export default function ReadyToWearDetail() {
       readyToWearId: product.id,
       productName: product.name,
       productImage: product.images?.[0]?.url || '/images/placeholder.jpg',
-      selectedSize,
+      selectedSize: effectiveSelectedSize,
       selectedColor: selectedColor || undefined,
       quantity,
       unitPrice: selectedUnitPrice,
@@ -441,7 +443,7 @@ export default function ReadyToWearDetail() {
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
                   <select
-                    value={selectedSize}
+                    value={effectiveSelectedSize}
                     onChange={(event) => setSelectedSize(event.target.value)}
                     className="min-w-[150px] flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
                   >
@@ -459,6 +461,11 @@ export default function ReadyToWearDetail() {
                 </div>
               </div>
             )}
+            {availableSizes.length === 0 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                No standard sizes are currently available for this product.
+              </div>
+            ) : null}
 
             {/* Quantity */}
             <div className="flex items-center gap-4">
@@ -490,6 +497,12 @@ export default function ReadyToWearDetail() {
 
             {/* Actions */}
             <div className="flex flex-col gap-3">
+              <div className="rounded-lg border border-coral-200 bg-coral-50 px-3 py-2 text-sm text-coral-700">
+                Size selected:{' '}
+                <span className="font-semibold text-coral-800">
+                  {effectiveSelectedSize || 'Not selected'}
+                </span>
+              </div>
               <div className="flex gap-4">
                 <Button className="flex-1 py-4" onClick={handleAddToCart}>
                   <ShoppingCart className="w-5 h-5 mr-2" />
@@ -747,6 +760,9 @@ export default function ReadyToWearDetail() {
       <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 p-3 shadow-lg backdrop-blur md:hidden">
         <div className="mx-auto flex max-w-7xl items-center gap-3">
           <div className="min-w-0">
+            <p className="text-[11px] text-coral-700">
+              Size: <span className="font-semibold">{effectiveSelectedSize || 'Not selected'}</span>
+            </p>
             <p className="text-xs text-gray-500">Total</p>
             <p className="text-lg font-bold text-coral-600">{formatFromUsd(selectedUnitPrice * quantity)}</p>
           </div>
