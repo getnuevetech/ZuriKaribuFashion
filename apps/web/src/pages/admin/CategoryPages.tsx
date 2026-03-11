@@ -9,10 +9,12 @@ type CategoryPageSettingsForm = {
   bannerTitle: string;
   bannerSubtitle: string;
   bannerImage: string;
+  bannerHeight: number;
   pageSize: number;
   columns: number;
   showPagination: boolean;
   featuredProductIds: string[];
+  rotatingProductIds: string[];
 };
 
 type ProductOption = {
@@ -34,10 +36,12 @@ const emptySettings: CategoryPageSettingsForm = {
   bannerTitle: '',
   bannerSubtitle: '',
   bannerImage: '',
+  bannerHeight: 320,
   pageSize: 24,
   columns: 4,
   showPagination: true,
   featuredProductIds: [],
+  rotatingProductIds: [],
 };
 
 const normalizeFeaturedIds = (input: string[]) =>
@@ -52,6 +56,7 @@ export default function AdminCategoryPages() {
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshingOptions, setIsRefreshingOptions] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const [selectedRotatingProductId, setSelectedRotatingProductId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
 
   const featuredOne = settings.featuredProductIds[0] || '';
@@ -95,10 +100,14 @@ export default function AdminCategoryPages() {
           bannerTitle: String(nextSettings.bannerTitle || ''),
           bannerSubtitle: String(nextSettings.bannerSubtitle || ''),
           bannerImage: String(nextSettings.bannerImage || ''),
+          bannerHeight: Number(nextSettings.bannerHeight || 320),
           pageSize: Number(nextSettings.pageSize || 24),
           columns: Number(nextSettings.columns || 4),
           showPagination: Boolean(nextSettings.showPagination),
           featuredProductIds: normalizeFeaturedIds(Array.isArray(nextSettings.featuredProductIds) ? nextSettings.featuredProductIds : []),
+          rotatingProductIds: Array.isArray(nextSettings.rotatingProductIds)
+            ? Array.from(new Set(nextSettings.rotatingProductIds.map((entry: any) => String(entry || '').trim()).filter(Boolean))).slice(0, 24)
+            : [],
         });
       }
       await loadOptions(optionSearch);
@@ -123,20 +132,30 @@ export default function AdminCategoryPages() {
         bannerTitle: settings.bannerTitle.trim(),
         bannerSubtitle: settings.bannerSubtitle.trim(),
         bannerImage: settings.bannerImage.trim(),
+        bannerHeight: Math.max(220, Math.min(560, Math.round(Number(settings.bannerHeight || 320)))),
         pageSize: Math.max(8, Math.min(120, Math.round(Number(settings.pageSize || 24)))),
         columns: Math.max(2, Math.min(6, Math.round(Number(settings.columns || 4)))),
         showPagination: Boolean(settings.showPagination),
         featuredProductIds: normalizeFeaturedIds(settings.featuredProductIds),
+        rotatingProductIds: Array.from(
+          new Set((settings.rotatingProductIds || []).map((entry) => String(entry || '').trim()).filter(Boolean))
+        ).slice(0, 24),
       });
       if (response.success && response.data?.settings) {
         setSettings({
           bannerTitle: String(response.data.settings.bannerTitle || ''),
           bannerSubtitle: String(response.data.settings.bannerSubtitle || ''),
           bannerImage: String(response.data.settings.bannerImage || ''),
+          bannerHeight: Number(response.data.settings.bannerHeight || 320),
           pageSize: Number(response.data.settings.pageSize || 24),
           columns: Number(response.data.settings.columns || 4),
           showPagination: Boolean(response.data.settings.showPagination),
           featuredProductIds: normalizeFeaturedIds(response.data.settings.featuredProductIds || []),
+          rotatingProductIds: Array.isArray(response.data.settings.rotatingProductIds)
+            ? Array.from(
+                new Set(response.data.settings.rotatingProductIds.map((entry: any) => String(entry || '').trim()).filter(Boolean))
+              ).slice(0, 24)
+            : [],
         });
       }
       setMessage('Category page settings saved.');
@@ -147,6 +166,28 @@ export default function AdminCategoryPages() {
       setIsSaving(false);
     }
   };
+
+  const addRotatingProduct = () => {
+    const productId = String(selectedRotatingProductId || '').trim();
+    if (!productId) return;
+    setSettings((prev) => ({
+      ...prev,
+      rotatingProductIds: Array.from(new Set([...(prev.rotatingProductIds || []), productId])).slice(0, 24),
+    }));
+    setSelectedRotatingProductId('');
+  };
+
+  const removeRotatingProduct = (productId: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      rotatingProductIds: (prev.rotatingProductIds || []).filter((entry) => entry !== productId),
+    }));
+  };
+
+  const optionById = useMemo(
+    () => new Map(productOptions.map((option) => [option.id, option] as const)),
+    [productOptions]
+  );
 
   const updateFeaturedAt = (index: 0 | 1, value: string) => {
     const next = [...settings.featuredProductIds];
@@ -256,6 +297,22 @@ export default function AdminCategoryPages() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <label className="text-sm space-y-1">
+                <span className="text-gray-700">Banner height (px)</span>
+                <input
+                  type="number"
+                  min={220}
+                  max={560}
+                  value={settings.bannerHeight}
+                  onChange={(event) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      bannerHeight: Number.parseInt(event.target.value || '320', 10) || 320,
+                    }))
+                  }
+                  className="w-full rounded-md border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm space-y-1">
                 <span className="text-gray-700">Products per page (pagination)</span>
                 <input
                   type="number"
@@ -357,9 +414,65 @@ export default function AdminCategoryPages() {
               ) : null}
             </div>
 
+            {activePage === 'READY_TO_WEAR' ? (
+              <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+                <h3 className="text-sm font-semibold text-gray-800">
+                  Rotating Ready-To-Wear section (after filters)
+                </h3>
+                <p className="text-xs text-gray-600">
+                  Add up to 24 products. On each customer refresh, two products are randomly shown.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={selectedRotatingProductId}
+                    onChange={(event) => setSelectedRotatingProductId(event.target.value)}
+                    className="min-w-[280px] flex-1 rounded-md border px-3 py-2 text-sm"
+                  >
+                    <option value="">Select product to add</option>
+                    {productOptions.map((option) => (
+                      <option key={`rotating-option-${option.id}`} value={option.id}>
+                        {option.name} · {option.ownerName} · ${Number(option.priceUsd || 0).toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
+                  <Button type="button" size="sm" variant="outline" onClick={addRotatingProduct}>
+                    Add product
+                  </Button>
+                </div>
+                {settings.rotatingProductIds.length > 0 ? (
+                  <div className="space-y-2">
+                    {settings.rotatingProductIds.map((productId) => {
+                      const option = optionById.get(productId);
+                      return (
+                        <div key={`rotating-${productId}`} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
+                          <span className="truncate">
+                            {option ? `${option.name} · ${option.ownerName}` : productId}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeRotatingProduct(productId)}
+                            className="ml-3 shrink-0 text-xs font-medium text-red-600 hover:text-red-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">No rotating products selected yet.</p>
+                )}
+              </div>
+            ) : null}
+
             {settings.bannerImage ? (
               <div className="rounded-lg border overflow-hidden">
-                <img src={settings.bannerImage} alt={`${selectedPageMeta.label} banner preview`} className="w-full h-44 object-cover" />
+                <img
+                  src={settings.bannerImage}
+                  alt={`${selectedPageMeta.label} banner preview`}
+                  className="w-full object-cover"
+                  style={{ height: `${Math.max(220, Math.min(560, Number(settings.bannerHeight || 320)))}px` }}
+                />
               </div>
             ) : null}
 

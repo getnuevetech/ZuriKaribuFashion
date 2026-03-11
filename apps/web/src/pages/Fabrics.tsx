@@ -38,10 +38,12 @@ type CategoryPageSettings = {
   bannerTitle: string;
   bannerSubtitle: string;
   bannerImage: string;
+  bannerHeight: number;
   pageSize: number;
   columns: number;
   showPagination: boolean;
   featuredProductIds: string[];
+  rotatingProductIds: string[];
 };
 
 type FeaturedProduct = {
@@ -58,11 +60,28 @@ const DEFAULT_SETTINGS: CategoryPageSettings = {
   bannerTitle: 'Fabrics To Buy',
   bannerSubtitle: 'Choose quality fabrics by material and country.',
   bannerImage: '/images/hero-fabrics.jpg',
+  bannerHeight: 320,
   pageSize: 24,
   columns: 4,
   showPagination: true,
   featuredProductIds: [],
+  rotatingProductIds: [],
 };
+
+const COMMON_COLOR_OPTIONS = [
+  'Black',
+  'White',
+  'Red',
+  'Blue',
+  'Green',
+  'Yellow',
+  'Pink',
+  'Purple',
+  'Orange',
+  'Brown',
+  'Gold',
+  'Silver',
+];
 
 const lgGridByColumns: Record<number, string> = {
   2: 'lg:grid-cols-2',
@@ -101,11 +120,23 @@ export default function Fabrics() {
     search: searchParams.get('search') || '',
     material: searchParams.get('material') || '',
     country: searchParams.get('country') || '',
-    sellerId: searchParams.get('sellerId') || '',
+    color: searchParams.get('color') || '',
     page: Number.parseInt(searchParams.get('page') || '1', 10) || 1,
   });
 
   const selectedMaterialId = useMemo(() => resolveMaterialId(filters.material, materials), [filters.material, materials]);
+
+  const countryOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          fabrics
+            .map((fabric) => String(fabric.seller?.country || '').trim())
+            .filter(Boolean)
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [fabrics]
+  );
 
   const productGridClass = useMemo(() => {
     const columns = Math.max(2, Math.min(6, Math.round(Number(settings.columns || 4))));
@@ -121,10 +152,12 @@ export default function Fabrics() {
           bannerTitle: String(response.data.settings.bannerTitle || DEFAULT_SETTINGS.bannerTitle),
           bannerSubtitle: String(response.data.settings.bannerSubtitle || DEFAULT_SETTINGS.bannerSubtitle),
           bannerImage: String(response.data.settings.bannerImage || DEFAULT_SETTINGS.bannerImage),
+          bannerHeight: Number(response.data.settings.bannerHeight || DEFAULT_SETTINGS.bannerHeight),
           pageSize: Number(response.data.settings.pageSize || DEFAULT_SETTINGS.pageSize),
           columns: Number(response.data.settings.columns || DEFAULT_SETTINGS.columns),
           showPagination: Boolean(response.data.settings.showPagination),
           featuredProductIds: Array.isArray(response.data.settings.featuredProductIds) ? response.data.settings.featuredProductIds : [],
+          rotatingProductIds: Array.isArray(response.data.settings.rotatingProductIds) ? response.data.settings.rotatingProductIds : [],
         });
         setFeaturedProducts(Array.isArray(response.data.featuredProducts) ? response.data.featuredProducts : []);
       } catch (settingsError) {
@@ -156,7 +189,7 @@ export default function Fabrics() {
           search: filters.search || undefined,
           materialTypeId: selectedMaterialId,
           country: filters.country || undefined,
-          sellerId: filters.sellerId || undefined,
+          color: filters.color || undefined,
           page: filters.page,
           limit: settings.pageSize,
         });
@@ -178,14 +211,14 @@ export default function Fabrics() {
       }
     };
     void loadFabrics();
-  }, [filters.country, filters.page, filters.search, filters.sellerId, selectedMaterialId, settings.pageSize]);
+  }, [filters.color, filters.country, filters.page, filters.search, selectedMaterialId, settings.pageSize]);
 
   const updateUrl = (next: typeof filters) => {
     const params = new URLSearchParams();
     if (next.search.trim()) params.set('search', next.search.trim());
     if (next.material.trim()) params.set('material', next.material.trim());
     if (next.country.trim()) params.set('country', next.country.trim());
-    if (next.sellerId.trim()) params.set('sellerId', next.sellerId.trim());
+    if (next.color.trim()) params.set('color', next.color.trim());
     if (next.page > 1) params.set('page', String(next.page));
     setSearchParams(params);
   };
@@ -202,7 +235,10 @@ export default function Fabrics() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5]">
-      <section className="relative h-52 md:h-64 overflow-hidden">
+      <section
+        className="relative overflow-hidden"
+        style={{ height: `${Math.max(220, Math.min(560, Number(settings.bannerHeight || DEFAULT_SETTINGS.bannerHeight)))}px` }}
+      >
         <img src={settings.bannerImage || DEFAULT_SETTINGS.bannerImage} alt={settings.bannerTitle} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-black/45" />
         <div className="absolute inset-0 flex items-center">
@@ -222,37 +258,8 @@ export default function Fabrics() {
           <p className="text-sm text-gray-600">Material: {filters.material || 'All'}</p>
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <button
-            type="button"
-            onClick={() => updateFilter('material', '')}
-            className={`shrink-0 border px-4 py-2 text-sm font-medium ${
-              !filters.material ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
-            }`}
-          >
-            All
-          </button>
-          {materials.map((material) => {
-            const isActive =
-              Boolean(filters.material) &&
-              (filters.material.toLowerCase() === material.id.toLowerCase() || filters.material.toLowerCase() === material.name.toLowerCase());
-            return (
-              <button
-                key={material.id}
-                type="button"
-                onClick={() => updateFilter('material', material.id)}
-                className={`shrink-0 border px-4 py-2 text-sm font-medium ${
-                  isActive ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
-                }`}
-              >
-                {material.name}
-              </button>
-            );
-          })}
-        </div>
-
         <div className="bg-white border border-gray-200 p-3 flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[220px]">
+          <div className="relative min-w-[240px] flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
@@ -262,11 +269,47 @@ export default function Fabrics() {
               className="w-full pl-9 pr-3 py-2 border rounded-md"
             />
           </div>
-          {(filters.search || filters.material || filters.country || filters.sellerId) ? (
+          <select
+            value={filters.country}
+            onChange={(event) => updateFilter('country', event.target.value)}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">Country (All)</option>
+            {countryOptions.map((country) => (
+              <option key={`fabric-country-${country}`} value={country}>
+                {country}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.material}
+            onChange={(event) => updateFilter('material', event.target.value)}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">Material (All)</option>
+            {materials.map((material) => (
+              <option key={material.id} value={material.id}>
+                {material.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.color}
+            onChange={(event) => updateFilter('color', event.target.value)}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">Color (All)</option>
+            {COMMON_COLOR_OPTIONS.map((color) => (
+              <option key={`fabric-color-${color}`} value={color}>
+                {color}
+              </option>
+            ))}
+          </select>
+          {(filters.search || filters.material || filters.country || filters.color) ? (
             <button
               type="button"
               onClick={() => {
-                const next = { search: '', material: '', country: '', sellerId: '', page: 1 };
+                const next = { search: '', material: '', country: '', color: '', page: 1 };
                 setFilters(next);
                 updateUrl(next);
               }}

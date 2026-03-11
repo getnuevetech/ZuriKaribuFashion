@@ -18,10 +18,12 @@ const updateCategoryPageSettingsSchema = z
     bannerTitle: z.string().trim().max(120).optional(),
     bannerSubtitle: z.string().trim().max(320).optional(),
     bannerImage: z.string().trim().max(2048).optional(),
+    bannerHeight: z.number().int().min(220).max(560).optional(),
     pageSize: z.number().int().min(8).max(120).optional(),
     columns: z.number().int().min(2).max(6).optional(),
     showPagination: z.boolean().optional(),
     featuredProductIds: z.array(z.string().trim().min(1)).max(2).optional(),
+    rotatingProductIds: z.array(z.string().trim().min(1)).max(24).optional(),
   })
   .strict();
 
@@ -64,12 +66,17 @@ router.get('/admin/:pageType', authenticate, authorizePermissions(Permissions.HO
     if (!pageType) return;
     const snapshot = await readCategoryPageSettings(pageType);
     const featuredProducts = await readCategoryFeaturedProducts(pageType, snapshot.settings.featuredProductIds);
+    const rotatingProducts =
+      pageType === 'READY_TO_WEAR'
+        ? await readCategoryFeaturedProducts(pageType, snapshot.settings.rotatingProductIds)
+        : [];
     res.json({
       success: true,
       data: {
         pageType,
         ...snapshot,
         featuredProducts,
+        rotatingProducts,
       },
     });
   } catch (error) {
@@ -84,12 +91,17 @@ router.put('/admin/:pageType', authenticate, authorizePermissions(Permissions.HO
     const payload = updateCategoryPageSettingsSchema.parse(req.body || {});
     const settings = await writeCategoryPageSettings(pageType, payload, false);
     const featuredProducts = await readCategoryFeaturedProducts(pageType, settings.featuredProductIds);
+    const rotatingProducts =
+      pageType === 'READY_TO_WEAR'
+        ? await readCategoryFeaturedProducts(pageType, settings.rotatingProductIds)
+        : [];
     res.json({
       success: true,
       data: {
         pageType,
         settings,
         featuredProducts,
+        rotatingProducts,
       },
     });
   } catch (error) {
@@ -107,12 +119,17 @@ router.patch('/admin/:pageType', authenticate, authorizePermissions(Permissions.
     const payload = updateCategoryPageSettingsSchema.parse(req.body || {});
     const settings = await writeCategoryPageSettings(pageType, payload, true);
     const featuredProducts = await readCategoryFeaturedProducts(pageType, settings.featuredProductIds);
+    const rotatingProducts =
+      pageType === 'READY_TO_WEAR'
+        ? await readCategoryFeaturedProducts(pageType, settings.rotatingProductIds)
+        : [];
     res.json({
       success: true,
       data: {
         pageType,
         settings,
         featuredProducts,
+        rotatingProducts,
       },
     });
   } catch (error) {
@@ -129,12 +146,17 @@ router.get('/:pageType', async (req, res, next) => {
     if (!pageType) return;
     const snapshot = await readCategoryPageSettings(pageType);
     const featuredProducts = await readCategoryFeaturedProducts(pageType, snapshot.settings.featuredProductIds);
+    const rotatingProducts =
+      pageType === 'READY_TO_WEAR'
+        ? await readCategoryFeaturedProducts(pageType, snapshot.settings.rotatingProductIds)
+        : [];
     res.json({
       success: true,
       data: {
         pageType,
         ...snapshot,
         featuredProducts,
+        rotatingProducts,
       },
     });
   } catch (error) {

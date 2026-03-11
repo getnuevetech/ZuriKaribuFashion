@@ -1209,12 +1209,15 @@ async function readAdminCategoryPageSettingsWithFallback<T>(pageType: 'READY_TO_
         bannerTitle: pageType === 'FABRIC_TO_BUY' ? 'Fabrics To Buy' : pageType === 'CUSTOM_TO_WEAR' ? 'Custom To Wear' : 'Ready To Wear',
         bannerSubtitle: '',
         bannerImage: '',
+        bannerHeight: 320,
         pageSize: 24,
         columns: 4,
         showPagination: true,
         featuredProductIds: [],
+        rotatingProductIds: [],
       },
       featuredProducts: [],
+      rotatingProducts: [],
     },
     message: 'Category page settings loaded from local fallback.',
   } as T;
@@ -1247,6 +1250,7 @@ async function writeAdminCategoryPageSettingsWithFallback<T>(
       pageType,
       settings,
       featuredProducts: [],
+      rotatingProducts: [],
     },
     message: 'Category page settings saved to local fallback.',
   } as T;
@@ -3574,6 +3578,7 @@ const productsApi = {
   getFabrics: (params?: {
     country?: string;
     materialTypeId?: string;
+    color?: string;
     sellerId?: string;
     search?: string;
     page?: number;
@@ -3590,6 +3595,9 @@ const productsApi = {
   getDesigns: (params?: {
     categoryId?: string;
     country?: string;
+    materialTypeId?: string;
+    size?: string;
+    color?: string;
     designerId?: string;
     search?: string;
     page?: number;
@@ -3606,6 +3614,9 @@ const productsApi = {
   getReadyToWear: (params?: {
     categoryId?: string;
     country?: string;
+    material?: string;
+    size?: string;
+    color?: string;
     designerId?: string;
     search?: string;
     page?: number;
@@ -3637,12 +3648,23 @@ const productsApi = {
           bannerTitle: string;
           bannerSubtitle: string;
           bannerImage: string;
+          bannerHeight: number;
           pageSize: number;
           columns: number;
           showPagination: boolean;
           featuredProductIds: string[];
+          rotatingProductIds: string[];
         };
         featuredProducts: Array<{
+          id: string;
+          name: string;
+          image: string;
+          priceUsd: number;
+          country: string;
+          ownerName: string;
+          href: string;
+        }>;
+        rotatingProducts: Array<{
           id: string;
           name: string;
           image: string;
@@ -4922,12 +4944,23 @@ const adminApi = {
           bannerTitle: string;
           bannerSubtitle: string;
           bannerImage: string;
+          bannerHeight: number;
           pageSize: number;
           columns: number;
           showPagination: boolean;
           featuredProductIds: string[];
+          rotatingProductIds: string[];
         };
         featuredProducts: Array<{
+          id: string;
+          name: string;
+          image: string;
+          priceUsd: number;
+          country: string;
+          ownerName: string;
+          href: string;
+        }>;
+        rotatingProducts: Array<{
           id: string;
           name: string;
           image: string;
@@ -4946,10 +4979,12 @@ const adminApi = {
       bannerTitle: string;
       bannerSubtitle: string;
       bannerImage: string;
+      bannerHeight: number;
       pageSize: number;
       columns: number;
       showPagination: boolean;
       featuredProductIds: string[];
+      rotatingProductIds: string[];
     }>
   ) =>
     writeAdminCategoryPageSettingsWithFallback<{
@@ -4960,12 +4995,23 @@ const adminApi = {
           bannerTitle: string;
           bannerSubtitle: string;
           bannerImage: string;
+          bannerHeight: number;
           pageSize: number;
           columns: number;
           showPagination: boolean;
           featuredProductIds: string[];
+          rotatingProductIds: string[];
         };
         featuredProducts: Array<{
+          id: string;
+          name: string;
+          image: string;
+          priceUsd: number;
+          country: string;
+          ownerName: string;
+          href: string;
+        }>;
+        rotatingProducts: Array<{
           id: string;
           name: string;
           image: string;

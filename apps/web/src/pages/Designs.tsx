@@ -27,6 +27,11 @@ interface Category {
   name: string;
 }
 
+interface Material {
+  id: string;
+  name: string;
+}
+
 interface Pagination {
   page: number;
   limit: number;
@@ -38,10 +43,12 @@ type CategoryPageSettings = {
   bannerTitle: string;
   bannerSubtitle: string;
   bannerImage: string;
+  bannerHeight: number;
   pageSize: number;
   columns: number;
   showPagination: boolean;
   featuredProductIds: string[];
+  rotatingProductIds: string[];
 };
 
 type FeaturedProduct = {
@@ -58,11 +65,29 @@ const DEFAULT_SETTINGS: CategoryPageSettings = {
   bannerTitle: 'Custom To Wear',
   bannerSubtitle: 'Discover custom designs from top fashion designers.',
   bannerImage: '/images/hero-designs.jpg',
+  bannerHeight: 320,
   pageSize: 24,
   columns: 4,
   showPagination: true,
   featuredProductIds: [],
+  rotatingProductIds: [],
 };
+
+const COMMON_SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+const COMMON_COLOR_OPTIONS = [
+  'Black',
+  'White',
+  'Red',
+  'Blue',
+  'Green',
+  'Yellow',
+  'Pink',
+  'Purple',
+  'Orange',
+  'Brown',
+  'Gold',
+  'Silver',
+];
 
 const lgGridByColumns: Record<number, string> = {
   2: 'lg:grid-cols-2',
@@ -84,6 +109,7 @@ export default function Designs() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [designs, setDesigns] = useState<Design[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [materials, setMaterials] = useState<Material[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([]);
   const [settings, setSettings] = useState<CategoryPageSettings>(DEFAULT_SETTINGS);
@@ -95,9 +121,24 @@ export default function Designs() {
     search: searchParams.get('search') || '',
     categoryId: searchParams.get('category') || '',
     country: searchParams.get('country') || '',
+    size: searchParams.get('size') || '',
+    color: searchParams.get('color') || '',
+    materialTypeId: searchParams.get('material') || '',
     designerId: searchParams.get('designerId') || '',
     page: parseInt(searchParams.get('page') || '1', 10),
   });
+
+  const countryOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          designs
+            .map((design) => String(design.designer?.country || '').trim())
+            .filter(Boolean)
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [designs]
+  );
 
   const productGridClass = useMemo(() => {
     const columns = Math.max(2, Math.min(6, Math.round(Number(settings.columns || 4))));
@@ -119,10 +160,12 @@ export default function Designs() {
           bannerTitle: String(response.data.settings.bannerTitle || DEFAULT_SETTINGS.bannerTitle),
           bannerSubtitle: String(response.data.settings.bannerSubtitle || DEFAULT_SETTINGS.bannerSubtitle),
           bannerImage: String(response.data.settings.bannerImage || DEFAULT_SETTINGS.bannerImage),
+          bannerHeight: Number(response.data.settings.bannerHeight || DEFAULT_SETTINGS.bannerHeight),
           pageSize: Number(response.data.settings.pageSize || DEFAULT_SETTINGS.pageSize),
           columns: Number(response.data.settings.columns || DEFAULT_SETTINGS.columns),
           showPagination: Boolean(response.data.settings.showPagination),
           featuredProductIds: Array.isArray(response.data.settings.featuredProductIds) ? response.data.settings.featuredProductIds : [],
+          rotatingProductIds: Array.isArray(response.data.settings.rotatingProductIds) ? response.data.settings.rotatingProductIds : [],
         });
         setFeaturedProducts(Array.isArray(response.data.featuredProducts) ? response.data.featuredProducts : []);
       } catch (settingsError) {
@@ -133,17 +176,23 @@ export default function Designs() {
   }, []);
 
   useEffect(() => {
-    const loadCategories = async () => {
+    const loadTaxonomy = async () => {
       try {
-        const response = await api.products.getCategories();
-        if (response.success && Array.isArray(response.data)) {
-          setCategories(response.data);
+        const [categoryResponse, materialResponse] = await Promise.all([
+          api.products.getCategories(),
+          api.products.getMaterials(),
+        ]);
+        if (categoryResponse.success && Array.isArray(categoryResponse.data)) {
+          setCategories(categoryResponse.data);
+        }
+        if (materialResponse.success && Array.isArray(materialResponse.data)) {
+          setMaterials(materialResponse.data);
         }
       } catch (categoriesError) {
         console.error('Failed to load categories:', categoriesError);
       }
     };
-    void loadCategories();
+    void loadTaxonomy();
   }, []);
 
   useEffect(() => {
@@ -155,6 +204,9 @@ export default function Designs() {
           search: filters.search || undefined,
           categoryId: filters.categoryId || undefined,
           country: filters.country || undefined,
+          size: filters.size || undefined,
+          color: filters.color || undefined,
+          materialTypeId: filters.materialTypeId || undefined,
           designerId: filters.designerId || undefined,
           page: filters.page,
           limit: settings.pageSize,
@@ -184,6 +236,9 @@ export default function Designs() {
     if (newFilters.search) params.set('search', newFilters.search);
     if (newFilters.categoryId) params.set('category', newFilters.categoryId);
     if (newFilters.country) params.set('country', newFilters.country);
+    if (newFilters.size) params.set('size', newFilters.size);
+    if (newFilters.color) params.set('color', newFilters.color);
+    if (newFilters.materialTypeId) params.set('material', newFilters.materialTypeId);
     if (newFilters.designerId) params.set('designerId', newFilters.designerId);
     if (newFilters.page > 1) params.set('page', newFilters.page.toString());
     setSearchParams(params);
@@ -197,7 +252,10 @@ export default function Designs() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5]">
-      <section className="relative h-52 md:h-64 overflow-hidden">
+      <section
+        className="relative overflow-hidden"
+        style={{ height: `${Math.max(220, Math.min(560, Number(settings.bannerHeight || DEFAULT_SETTINGS.bannerHeight)))}px` }}
+      >
         <img src={settings.bannerImage || DEFAULT_SETTINGS.bannerImage} alt={settings.bannerTitle} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-black/45" />
         <div className="absolute inset-0 flex items-center">
@@ -217,34 +275,8 @@ export default function Designs() {
           <p className="text-sm text-gray-600">Style: {selectedCategoryLabel}</p>
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <button
-            type="button"
-            onClick={() => updateFilter('categoryId', '')}
-            className={`shrink-0 border px-4 py-2 text-sm font-medium ${
-              !filters.categoryId ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
-            }`}
-          >
-            All
-          </button>
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              type="button"
-              onClick={() => updateFilter('categoryId', category.id)}
-              className={`shrink-0 border px-4 py-2 text-sm font-medium ${
-                filters.categoryId === category.id
-                  ? 'bg-black text-white border-black'
-                  : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
-              }`}
-            >
-              {category.name}
-            </button>
-          ))}
-        </div>
-
         <div className="bg-white border border-gray-200 p-3 flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[220px]">
+          <div className="relative min-w-[240px] flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
@@ -254,11 +286,80 @@ export default function Designs() {
               className="w-full pl-9 pr-3 py-2 border rounded-md"
             />
           </div>
-          {(filters.search || filters.categoryId || filters.country || filters.designerId) ? (
+          <select
+            value={filters.country}
+            onChange={(event) => updateFilter('country', event.target.value)}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">Country (All)</option>
+            {countryOptions.map((country) => (
+              <option key={`design-country-${country}`} value={country}>
+                {country}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.categoryId}
+            onChange={(event) => updateFilter('categoryId', event.target.value)}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">Style (All)</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.size}
+            onChange={(event) => updateFilter('size', event.target.value)}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">Size (All)</option>
+            {COMMON_SIZE_OPTIONS.map((size) => (
+              <option key={`design-size-${size}`} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.color}
+            onChange={(event) => updateFilter('color', event.target.value)}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">Color (All)</option>
+            {COMMON_COLOR_OPTIONS.map((color) => (
+              <option key={`design-color-${color}`} value={color}>
+                {color}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.materialTypeId}
+            onChange={(event) => updateFilter('materialTypeId', event.target.value)}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">Material (All)</option>
+            {materials.map((material) => (
+              <option key={material.id} value={material.id}>
+                {material.name}
+              </option>
+            ))}
+          </select>
+          {(filters.search || filters.categoryId || filters.country || filters.size || filters.color || filters.materialTypeId) ? (
             <button
               type="button"
               onClick={() => {
-                const next = { search: '', categoryId: '', country: '', designerId: '', page: 1 };
+                const next = {
+                  search: '',
+                  categoryId: '',
+                  country: '',
+                  size: '',
+                  color: '',
+                  materialTypeId: '',
+                  designerId: '',
+                  page: 1,
+                };
                 setFilters(next);
                 updateURLParams(next);
               }}

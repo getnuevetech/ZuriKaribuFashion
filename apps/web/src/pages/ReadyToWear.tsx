@@ -11,6 +11,11 @@ interface Category {
   slug?: string;
 }
 
+interface MaterialType {
+  id: string;
+  name: string;
+}
+
 interface Pagination {
   page: number;
   limit: number;
@@ -25,17 +30,20 @@ interface ReadyToWearProduct {
   images: { url: string }[];
   designer?: { businessName?: string; country?: string };
   category?: { id: string; name: string; slug?: string };
-  sizeVariations?: Array<{ size: string; price: number; stock: number }>;
+  sizeVariations?: Array<{ size: string; color?: string; price: number; stock: number }>;
+  colors?: string[];
 }
 
 type CategoryPageSettings = {
   bannerTitle: string;
   bannerSubtitle: string;
   bannerImage: string;
+  bannerHeight: number;
   pageSize: number;
   columns: number;
   showPagination: boolean;
   featuredProductIds: string[];
+  rotatingProductIds: string[];
 };
 
 type FeaturedProduct = {
@@ -52,11 +60,29 @@ const DEFAULT_SETTINGS: CategoryPageSettings = {
   bannerTitle: 'Ready To Wear',
   bannerSubtitle: 'Shop ready styles from designers across Africa.',
   bannerImage: '/images/hero-readytowear.jpg',
+  bannerHeight: 320,
   pageSize: 24,
   columns: 4,
   showPagination: true,
   featuredProductIds: [],
+  rotatingProductIds: [],
 };
+
+const COMMON_SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+const COMMON_COLOR_OPTIONS = [
+  'Black',
+  'White',
+  'Red',
+  'Blue',
+  'Green',
+  'Yellow',
+  'Pink',
+  'Purple',
+  'Orange',
+  'Brown',
+  'Gold',
+  'Silver',
+];
 
 const lgGridByColumns: Record<number, string> = {
   2: 'lg:grid-cols-2',
@@ -91,12 +117,23 @@ function resolveCategoryIdFromQuery(queryValue: string, categories: Category[]):
   return matched?.id;
 }
 
+function pickRandomProducts(rows: FeaturedProduct[], count: number) {
+  const copy = [...rows];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[randomIndex]] = [copy[randomIndex], copy[index]];
+  }
+  return copy.slice(0, Math.max(0, count));
+}
+
 export default function ReadyToWear() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<ReadyToWearProduct[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [materials, setMaterials] = useState<MaterialType[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([]);
+  const [rotatingProducts, setRotatingProducts] = useState<FeaturedProduct[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<CategoryPageSettings>(DEFAULT_SETTINGS);
@@ -104,7 +141,11 @@ export default function ReadyToWear() {
 
   const [filters, setFilters] = useState({
     search: searchParams.get('search') || '',
+    country: searchParams.get('country') || '',
     category: searchParams.get('category') || '',
+    size: searchParams.get('size') || '',
+    color: searchParams.get('color') || '',
+    material: searchParams.get('material') || '',
     page: Number.parseInt(searchParams.get('page') || '1', 10) || 1,
   });
 
@@ -130,18 +171,72 @@ export default function ReadyToWear() {
     return `grid grid-cols-2 ${mdGridByColumns[columns]} ${lgGridByColumns[columns]} gap-4 md:gap-6`;
   }, [settings.columns]);
 
+  const countryOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          products
+            .map((product) => String(product.designer?.country || '').trim())
+            .filter(Boolean)
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [products]
+  );
+
+  const sizeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...COMMON_SIZE_OPTIONS,
+          ...products.flatMap((product) =>
+            (product.sizeVariations || [])
+              .map((variation) => String(variation.size || '').trim().toUpperCase())
+              .filter(Boolean)
+          ),
+        ])
+      ).sort((a, b) => a.localeCompare(b)),
+    [products]
+  );
+
+  const colorOptions = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...COMMON_COLOR_OPTIONS,
+          ...products.flatMap((product) => (product.colors || []).map((entry) => String(entry || '').trim())),
+          ...products.flatMap((product) =>
+            (product.sizeVariations || []).map((variation) => String(variation.color || '').trim())
+          ),
+        ])
+      )
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b)),
+    [products]
+  );
+
   useEffect(() => {
-    const loadCategories = async () => {
+    const loadTaxonomy = async () => {
       try {
-        const response = await api.products.getCategories();
-        if (response.success && Array.isArray(response.data)) {
-          setCategories(response.data);
+        const [categoryResponse, materialResponse] = await Promise.all([
+          api.products.getCategories(),
+          api.products.getMaterials(),
+        ]);
+        if (categoryResponse.success && Array.isArray(categoryResponse.data)) {
+          setCategories(categoryResponse.data);
+        }
+        if (materialResponse.success && Array.isArray(materialResponse.data)) {
+          setMaterials(
+            materialResponse.data.map((entry: any) => ({
+              id: String(entry.id || '').trim(),
+              name: String(entry.name || '').trim(),
+            }))
+          );
         }
       } catch (loadError) {
-        console.error('Failed to load ready-to-wear categories:', loadError);
+        console.error('Failed to load ready-to-wear taxonomy data:', loadError);
       }
     };
-    void loadCategories();
+    void loadTaxonomy();
   }, []);
 
   useEffect(() => {
@@ -149,16 +244,22 @@ export default function ReadyToWear() {
       try {
         const response = await api.products.getCategoryPageSettings('READY_TO_WEAR');
         if (!response.success || !response.data?.settings) return;
+        const nextSettings = response.data.settings;
         setSettings({
-          bannerTitle: String(response.data.settings.bannerTitle || DEFAULT_SETTINGS.bannerTitle),
-          bannerSubtitle: String(response.data.settings.bannerSubtitle || DEFAULT_SETTINGS.bannerSubtitle),
-          bannerImage: String(response.data.settings.bannerImage || DEFAULT_SETTINGS.bannerImage),
-          pageSize: Number(response.data.settings.pageSize || DEFAULT_SETTINGS.pageSize),
-          columns: Number(response.data.settings.columns || DEFAULT_SETTINGS.columns),
-          showPagination: Boolean(response.data.settings.showPagination),
-          featuredProductIds: Array.isArray(response.data.settings.featuredProductIds) ? response.data.settings.featuredProductIds : [],
+          bannerTitle: String(nextSettings.bannerTitle || DEFAULT_SETTINGS.bannerTitle),
+          bannerSubtitle: String(nextSettings.bannerSubtitle || DEFAULT_SETTINGS.bannerSubtitle),
+          bannerImage: String(nextSettings.bannerImage || DEFAULT_SETTINGS.bannerImage),
+          bannerHeight: Number(nextSettings.bannerHeight || DEFAULT_SETTINGS.bannerHeight),
+          pageSize: Number(nextSettings.pageSize || DEFAULT_SETTINGS.pageSize),
+          columns: Number(nextSettings.columns || DEFAULT_SETTINGS.columns),
+          showPagination: Boolean(nextSettings.showPagination),
+          featuredProductIds: Array.isArray(nextSettings.featuredProductIds) ? nextSettings.featuredProductIds : [],
+          rotatingProductIds: Array.isArray(nextSettings.rotatingProductIds) ? nextSettings.rotatingProductIds : [],
         });
-        setFeaturedProducts(Array.isArray(response.data.featuredProducts) ? response.data.featuredProducts : []);
+        const nextFeaturedProducts = Array.isArray(response.data.featuredProducts) ? response.data.featuredProducts : [];
+        const nextRotatingPool = Array.isArray(response.data.rotatingProducts) ? response.data.rotatingProducts : [];
+        setFeaturedProducts(nextFeaturedProducts);
+        setRotatingProducts(pickRandomProducts(nextRotatingPool, 2));
       } catch (loadError) {
         console.error('Failed to load ready-to-wear category page settings:', loadError);
       }
@@ -173,7 +274,11 @@ export default function ReadyToWear() {
       try {
         const response = await api.products.getReadyToWear({
           search: filters.search || undefined,
+          country: filters.country || undefined,
           categoryId: selectedCategoryId,
+          size: filters.size || undefined,
+          color: filters.color || undefined,
+          material: filters.material || undefined,
           page: filters.page,
           limit: settings.pageSize,
         });
@@ -195,12 +300,16 @@ export default function ReadyToWear() {
       }
     };
     void loadProducts();
-  }, [filters.page, filters.search, selectedCategoryId, settings.pageSize]);
+  }, [filters.color, filters.country, filters.material, filters.page, filters.search, filters.size, selectedCategoryId, settings.pageSize]);
 
   const updateUrl = (next: typeof filters) => {
     const params = new URLSearchParams();
     if (next.search.trim()) params.set('search', next.search.trim());
+    if (next.country.trim()) params.set('country', next.country.trim());
     if (next.category.trim()) params.set('category', next.category.trim());
+    if (next.size.trim()) params.set('size', next.size.trim());
+    if (next.color.trim()) params.set('color', next.color.trim());
+    if (next.material.trim()) params.set('material', next.material.trim());
     if (next.page > 1) params.set('page', String(next.page));
     setSearchParams(params);
   };
@@ -217,13 +326,18 @@ export default function ReadyToWear() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5]">
-      <section className="relative h-52 md:h-64 overflow-hidden">
+      <section
+        className="relative overflow-hidden"
+        style={{ height: `${Math.max(220, Math.min(560, Number(settings.bannerHeight || DEFAULT_SETTINGS.bannerHeight)))}px` }}
+      >
         <img src={settings.bannerImage || DEFAULT_SETTINGS.bannerImage} alt={settings.bannerTitle} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-black/45" />
         <div className="absolute inset-0 flex items-center">
           <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 text-white">
             <h1 className="text-3xl md:text-4xl font-bold">{settings.bannerTitle || DEFAULT_SETTINGS.bannerTitle}</h1>
-            <p className="mt-2 max-w-2xl text-sm md:text-base text-white/90">{settings.bannerSubtitle || DEFAULT_SETTINGS.bannerSubtitle}</p>
+            <p className="mt-2 max-w-2xl text-sm md:text-base text-white/90">
+              {settings.bannerSubtitle || DEFAULT_SETTINGS.bannerSubtitle}
+            </p>
           </div>
         </div>
       </section>
@@ -237,40 +351,8 @@ export default function ReadyToWear() {
           <p className="text-sm text-gray-600">Style: {selectedCategoryLabel}</p>
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <button
-            type="button"
-            onClick={() => updateFilter('category', '')}
-            className={`shrink-0 border px-4 py-2 text-sm font-medium ${
-              !filters.category ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
-            }`}
-          >
-            All
-          </button>
-          {categories.map((category) => {
-            const token = getCategoryToken(category);
-            const isActive =
-              Boolean(filters.category) &&
-              (filters.category.toLowerCase() === category.id.toLowerCase() ||
-                filters.category.toLowerCase() === (category.slug || '').toLowerCase() ||
-                filters.category.toLowerCase() === category.name.toLowerCase());
-            return (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() => updateFilter('category', token || category.id)}
-                className={`shrink-0 border px-4 py-2 text-sm font-medium ${
-                  isActive ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
-                }`}
-              >
-                {category.name}
-              </button>
-            );
-          })}
-        </div>
-
         <div className="bg-white border border-gray-200 p-3 flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[220px]">
+          <div className="relative min-w-[240px] flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
@@ -280,11 +362,79 @@ export default function ReadyToWear() {
               className="w-full pl-9 pr-3 py-2 border rounded-md"
             />
           </div>
-          {(filters.search || filters.category) ? (
+          <select
+            value={filters.country}
+            onChange={(event) => updateFilter('country', event.target.value)}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">Country (All)</option>
+            {countryOptions.map((country) => (
+              <option key={`country-${country}`} value={country}>
+                {country}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.category}
+            onChange={(event) => updateFilter('category', event.target.value)}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">Style (All)</option>
+            {categories.map((category) => (
+              <option key={category.id} value={getCategoryToken(category) || category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.size}
+            onChange={(event) => updateFilter('size', event.target.value)}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">Size (All)</option>
+            {sizeOptions.map((size) => (
+              <option key={`size-${size}`} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.color}
+            onChange={(event) => updateFilter('color', event.target.value)}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">Color (All)</option>
+            {colorOptions.map((color) => (
+              <option key={`color-${color}`} value={color}>
+                {color}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.material}
+            onChange={(event) => updateFilter('material', event.target.value)}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">Material (All)</option>
+            {materials.map((material) => (
+              <option key={material.id} value={material.name}>
+                {material.name}
+              </option>
+            ))}
+          </select>
+          {(filters.search || filters.country || filters.category || filters.size || filters.color || filters.material) ? (
             <button
               type="button"
               onClick={() => {
-                const next = { search: '', category: '', page: 1 };
+                const next = {
+                  search: '',
+                  country: '',
+                  category: '',
+                  size: '',
+                  color: '',
+                  material: '',
+                  page: 1,
+                };
                 setFilters(next);
                 updateUrl(next);
               }}
@@ -294,6 +444,44 @@ export default function ReadyToWear() {
             </button>
           ) : null}
         </div>
+
+        {rotatingProducts.length > 0 ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Ready-To-Wear Picks For You</h2>
+              <span className="text-xs text-gray-500">Randomized on each refresh</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {rotatingProducts.map((product) => {
+                const flagCode = resolveCountryCode(product.country || '');
+                return (
+                  <Link key={`rotating-${product.id}`} to={product.href} className="group bg-white border border-gray-200 overflow-hidden">
+                    <div className="relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
+                      <img
+                        src={product.image || '/placeholder.jpg'}
+                        alt={product.name}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      {flagCode ? (
+                        <img
+                          src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
+                          alt={`${product.country || 'Country'} flag`}
+                          className="absolute left-3 top-3 h-6 w-9 rounded-sm object-cover shadow"
+                        />
+                      ) : null}
+                    </div>
+                    <div className="p-4">
+                      <h2 className="text-2xl font-semibold text-gray-900">{product.name}</h2>
+                      <p className="text-gray-500 text-sm">{product.ownerName}</p>
+                      <p className="mt-2 text-xl font-semibold text-gray-900">{formatFromUsd(Number(product.priceUsd || 0))}</p>
+                      <span className="inline-flex mt-3 bg-black text-white text-xs px-3 py-2">VIEW PRODUCT</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
 
         {featuredProducts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -361,7 +361,7 @@ router.get('/ready-to-wear-size-guide', async (_req, res) => {
 // Get fabrics with filters
 router.get('/fabrics', async (req, res, next) => {
   try {
-    const { country, materialTypeId, sellerId, search, page, limit } = req.query;
+    const { country, materialTypeId, color, sellerId, search, page, limit } = req.query;
 
     const where: any = {
       status: ProductStatus.APPROVED,
@@ -379,11 +379,21 @@ router.get('/fabrics', async (req, res, next) => {
       where.sellerId = sellerId as string;
     }
 
+    const orConditions: any[] = [];
     if (search) {
-      where.OR = [
+      orConditions.push(
         { name: { contains: search as string, mode: 'insensitive' } },
-        { description: { contains: search as string, mode: 'insensitive' } },
-      ];
+        { description: { contains: search as string, mode: 'insensitive' } }
+      );
+    }
+    if (color) {
+      orConditions.push(
+        { name: { contains: color as string, mode: 'insensitive' } },
+        { description: { contains: color as string, mode: 'insensitive' } }
+      );
+    }
+    if (orConditions.length > 0) {
+      where.OR = orConditions;
     }
 
     const pagination = parsePagination(page, limit, 20);
@@ -495,7 +505,7 @@ router.get('/fabrics/:id', async (req, res, next) => {
 // Get designs with filters
 router.get('/designs', async (req, res, next) => {
   try {
-    const { categoryId, country, designerId, search, page, limit } = req.query;
+    const { categoryId, country, materialTypeId, size, color, designerId, search, page, limit } = req.query;
 
     const where: any = {
       status: ProductStatus.APPROVED,
@@ -504,13 +514,31 @@ router.get('/designs', async (req, res, next) => {
 
     if (categoryId) where.categoryId = categoryId as string;
     if (country) where.designer = { country: country as string };
+    if (materialTypeId) where.materialTypeId = materialTypeId as string;
     if (designerId) where.designerId = designerId as string;
 
+    const orConditions: any[] = [];
     if (search) {
-      where.OR = [
+      orConditions.push(
         { name: { contains: search as string, mode: 'insensitive' } },
-        { description: { contains: search as string, mode: 'insensitive' } },
-      ];
+        { description: { contains: search as string, mode: 'insensitive' } }
+      );
+    }
+    // Designs do not have explicit size/color columns yet, so we apply token matching on text fields.
+    if (size) {
+      orConditions.push(
+        { name: { contains: size as string, mode: 'insensitive' } },
+        { description: { contains: size as string, mode: 'insensitive' } }
+      );
+    }
+    if (color) {
+      orConditions.push(
+        { name: { contains: color as string, mode: 'insensitive' } },
+        { description: { contains: color as string, mode: 'insensitive' } }
+      );
+    }
+    if (orConditions.length > 0) {
+      where.OR = orConditions;
     }
 
     const pagination = parsePagination(page, limit, 20);
@@ -522,6 +550,7 @@ router.get('/designs', async (req, res, next) => {
         take: pagination.limit,
         include: {
           category: true,
+          materialType: true,
           designer: {
             select: {
               id: true,
@@ -654,7 +683,7 @@ router.get('/designs/:id', async (req, res, next) => {
 // Get ready-to-wear with filters
 router.get('/ready-to-wear', async (req, res, next) => {
   try {
-    const { categoryId, country, designerId, search, page, limit } = req.query;
+    const { categoryId, country, material, size, color, designerId, search, page, limit } = req.query;
 
     const where: any = {
       status: ProductStatus.APPROVED,
@@ -665,11 +694,49 @@ router.get('/ready-to-wear', async (req, res, next) => {
     if (country) where.designer = { country: country as string };
     if (designerId) where.designerId = designerId as string;
 
+    const orConditions: any[] = [];
     if (search) {
-      where.OR = [
+      orConditions.push(
         { name: { contains: search as string, mode: 'insensitive' } },
-        { description: { contains: search as string, mode: 'insensitive' } },
-      ];
+        { description: { contains: search as string, mode: 'insensitive' } }
+      );
+    }
+    if (material) {
+      orConditions.push(
+        { name: { contains: material as string, mode: 'insensitive' } },
+        { description: { contains: material as string, mode: 'insensitive' } }
+      );
+    }
+    if (orConditions.length > 0) {
+      where.OR = orConditions;
+    }
+    if (size) {
+      const sizeToken = String(size || '').trim().toUpperCase();
+      if (sizeToken) {
+        where.sizeVariations = {
+          some: {
+            OR: [
+              { size: { equals: sizeToken, mode: 'insensitive' } },
+              { size: { startsWith: `${sizeToken}${READY_TO_WEAR_VARIANT_SEPARATOR}`, mode: 'insensitive' } },
+            ],
+          },
+        };
+      }
+    }
+    if (color) {
+      const colorToken = String(color || '').trim().toUpperCase();
+      if (colorToken) {
+        where.sizeVariations = {
+          ...(where.sizeVariations || {}),
+          some: {
+            ...(where.sizeVariations?.some || {}),
+            AND: [
+              ...(Array.isArray(where.sizeVariations?.some?.AND) ? where.sizeVariations.some.AND : []),
+              { size: { contains: `${READY_TO_WEAR_VARIANT_SEPARATOR}${colorToken}`, mode: 'insensitive' } },
+            ],
+          },
+        };
+      }
     }
 
     const pagination = parsePagination(page, limit, 20);

@@ -30,10 +30,12 @@ const categoryPageSettingsSchema = z.object({
   bannerTitle: z.string().trim().max(120),
   bannerSubtitle: z.string().trim().max(320),
   bannerImage: z.string().trim().max(2048),
+  bannerHeight: z.number().int().min(220).max(560),
   pageSize: z.number().int().min(8).max(120),
   columns: z.number().int().min(2).max(6),
   showPagination: z.boolean(),
   featuredProductIds: z.array(z.string().trim().min(1)).max(2),
+  rotatingProductIds: z.array(z.string().trim().min(1)).max(24),
 });
 
 const categoryPageSettingsPatchSchema = categoryPageSettingsSchema.partial();
@@ -45,28 +47,34 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     bannerTitle: 'Ready To Wear',
     bannerSubtitle: 'Shop ready styles from designers across Africa.',
     bannerImage: '/images/hero-readytowear.jpg',
+    bannerHeight: 320,
     pageSize: 24,
     columns: 4,
     showPagination: true,
     featuredProductIds: [],
+    rotatingProductIds: [],
   },
   FABRIC_TO_BUY: {
     bannerTitle: 'Fabrics To Buy',
     bannerSubtitle: 'Choose quality fabrics by material and country.',
     bannerImage: '/images/hero-fabrics.jpg',
+    bannerHeight: 320,
     pageSize: 24,
     columns: 4,
     showPagination: true,
     featuredProductIds: [],
+    rotatingProductIds: [],
   },
   CUSTOM_TO_WEAR: {
     bannerTitle: 'Custom To Wear',
     bannerSubtitle: 'Discover custom designs made for your measurements.',
     bannerImage: '/images/hero-designs.jpg',
+    bannerHeight: 320,
     pageSize: 24,
     columns: 4,
     showPagination: true,
     featuredProductIds: [],
+    rotatingProductIds: [],
   },
 };
 
@@ -99,10 +107,23 @@ const normalizeCategoryPageSettings = (pageType: CategoryPageType, raw: unknown)
         )
       )
     : fallback.featuredProductIds;
+  const rotatingProductIds = Array.isArray(row.rotatingProductIds)
+    ? Array.from(
+        new Set(
+          row.rotatingProductIds
+            .map((entry) => String(entry || '').trim())
+            .filter(Boolean)
+            .slice(0, 24)
+        )
+      )
+    : fallback.rotatingProductIds;
   const parsed = categoryPageSettingsSchema.safeParse({
     bannerTitle: String(row.bannerTitle ?? fallback.bannerTitle).trim().slice(0, 120),
     bannerSubtitle: String(row.bannerSubtitle ?? fallback.bannerSubtitle).trim().slice(0, 320),
     bannerImage: String(row.bannerImage ?? fallback.bannerImage).trim().slice(0, 2048),
+    bannerHeight: Number.isFinite(Number(row.bannerHeight))
+      ? Math.max(220, Math.min(560, Math.round(Number(row.bannerHeight))))
+      : fallback.bannerHeight,
     pageSize: Number.isFinite(Number(row.pageSize))
       ? Math.max(8, Math.min(120, Math.round(Number(row.pageSize))))
       : fallback.pageSize,
@@ -111,6 +132,7 @@ const normalizeCategoryPageSettings = (pageType: CategoryPageType, raw: unknown)
       : fallback.columns,
     showPagination: typeof row.showPagination === 'boolean' ? row.showPagination : fallback.showPagination,
     featuredProductIds,
+    rotatingProductIds,
   });
   return parsed.success ? parsed.data : { ...fallback };
 };
