@@ -2012,6 +2012,11 @@ async function createPaymentSessionWithFallback<T>(data: {
     '/payments/intent/create',
     '/payment/intent/create',
   ];
+  const isAmountUsdRequiredError = (error: unknown) => {
+    const status = (error as AxiosError)?.response?.status;
+    const message = String((error as AxiosError)?.response?.data?.message || '').toLowerCase();
+    return status === 400 && message.includes('amountusd') && message.includes('required');
+  };
   const postLegacyStripeIntent = async () => {
     let lastError: unknown = null;
     for (const path of createIntentPaths) {
@@ -2021,6 +2026,30 @@ async function createPaymentSessionWithFallback<T>(data: {
           currency: data.currency,
         });
       } catch (error) {
+        if (isAmountUsdRequiredError(error)) {
+          try {
+            return await apiService.post<{ success: boolean; data: { clientSecret: string; paymentIntentId: string } }>(path, {
+              providerKey: data.providerKey,
+              amount: normalizedAmountMinor,
+              amountMinor: normalizedAmountMinor,
+              amountCents: normalizedAmountMinor,
+              amountUsd: normalizedAmountUsd,
+              amountUSD: normalizedAmountUsd,
+              amount_usd: normalizedAmountUsd,
+              amountInUsd: normalizedAmountUsd,
+              convertedAmountUsd: normalizedAmountUsd,
+              currency: data.currency,
+              reference: data.reference,
+              returnUrl: data.returnUrl,
+              cancelUrl: data.cancelUrl,
+              customer: data.customer,
+            });
+          } catch (compatibilityError) {
+            lastError = compatibilityError;
+            if (isRetryableRouteError(compatibilityError)) continue;
+            throw compatibilityError;
+          }
+        }
         lastError = error;
         if (isRetryableRouteError(error)) continue;
         throw error;
