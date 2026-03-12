@@ -1693,7 +1693,7 @@ const PAYMENT_INTEGRATIONS_FALLBACK_DEFAULTS = {
         { key: 'secretKey', label: 'Secret Key', type: 'PASSWORD', required: false, isSecret: true },
       ],
       configValues: {
-        publishableKey: String(import.meta.env.VITE_STRIPE_PUBLIC_KEY || ''),
+        publishableKey: '',
       },
       notes: 'Local fallback config',
       updatedAt: new Date().toISOString(),

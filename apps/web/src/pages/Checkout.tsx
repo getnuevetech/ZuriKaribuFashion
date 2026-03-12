@@ -260,8 +260,6 @@ export default function Checkout() {
   const promoDiscount = Number(promoPreview?.discountUsd || 0);
   const finalTotal = Math.max(0, totalPrice - promoDiscount + shipping);
   const selectedProvider = paymentProviders.find((entry) => entry.providerKey === selectedPaymentProvider) || null;
-  const configuredStripeKey = String(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '').trim();
-  const hasConfiguredStripeKey = /^pk_(test|live)_/i.test(configuredStripeKey);
   const currentStepSummary =
     step === 'shipping'
       ? 'Step 1 of 3: Shipping details'
@@ -290,7 +288,7 @@ export default function Checkout() {
               window.localStorage.setItem('af_runtime_stripe_publishable_key', runtimeStripeKey);
             }
             const reloadKey = 'af_runtime_stripe_reloaded_once_v1';
-            if (!hasConfiguredStripeKey && storedKey !== runtimeStripeKey && !window.sessionStorage.getItem(reloadKey)) {
+            if (storedKey !== runtimeStripeKey && !window.sessionStorage.getItem(reloadKey)) {
               window.sessionStorage.setItem(reloadKey, '1');
               setRuntimeStripeReloading(true);
               window.location.reload();
@@ -312,7 +310,7 @@ export default function Checkout() {
           { providerKey: 'STRIPE', displayName: 'Stripe', checkoutType: 'INLINE', mode: 'TEST', publicConfig: {} },
         ]);
       });
-  }, [hasConfiguredStripeKey]);
+  }, []);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -1362,7 +1360,7 @@ export default function Checkout() {
                 {!stripe ? (
                   <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                     Stripe checkout key is not initialized in this browser yet. If this persists, refresh page once or configure
-                    VITE_STRIPE_PUBLIC_KEY.
+                    Stripe publishable key in Admin &gt; Payments.
                   </p>
                 ) : null}
 

@@ -81,12 +81,12 @@ const queryClient = new QueryClient({
   },
 });
 
-// Initialize Stripe from env first, then runtime key saved from payment integrations.
+// Initialize Stripe strictly from runtime key sourced via Admin Payment Integrations API.
 const runtimeStripeKey =
   typeof window !== 'undefined'
     ? String(window.localStorage.getItem('af_runtime_stripe_publishable_key') || '').trim()
     : '';
-const configuredStripeKey = String(import.meta.env.VITE_STRIPE_PUBLIC_KEY || runtimeStripeKey || '').trim();
+const configuredStripeKey = String(runtimeStripeKey || '').trim();
 const hasUsableStripeKey = /^pk_(test|live)_/i.test(configuredStripeKey);
 const stripePromise = hasUsableStripeKey ? loadStripe(configuredStripeKey) : null;
 
