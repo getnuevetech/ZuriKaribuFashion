@@ -23,6 +23,7 @@ interface Product {
   category: string;
   orderCount: number;
   image?: string | null;
+  images?: string[];
   sizeVariations?: Array<{ id?: string; size: string; color?: string; variantKey?: string; price: number; stock: number }>;
   isFeatured?: boolean;
   featuredSections?: string[];
@@ -787,7 +788,12 @@ export default function AdminProducts() {
       publishNow: product.status === 'APPROVED' && product.isAvailable,
       isFeatured: Boolean(product.isFeatured),
       featuredSection: product.featuredSections?.[0] || getDefaultFeaturedSection(product.type),
-      images: product.image ? [product.image] : [],
+      images:
+        Array.isArray(product.images) && product.images.length > 0
+          ? product.images.map((entry) => String(entry || '').trim()).filter(Boolean)
+          : product.image
+            ? [product.image]
+            : [],
       minYards: 1,
       stockYards: 0,
       stock: Math.max(0, Number(existingReadyVariants[0]?.stock || 0)),

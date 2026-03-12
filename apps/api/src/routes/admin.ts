@@ -21,6 +21,7 @@ import { readTryOnSettings, saveTryOnSettings } from '../utils/try-on-settings';
 const router = Router();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
 const DEFAULT_READY_TO_WEAR_COLOR = 'DEFAULT';
+const LEGACY_READY_TO_WEAR_VARIANT_SEPARATORS = [' / ', '/', '|'] as const;
 const normalizeReadyToWearSize = (value: unknown) => String(value || '').trim().toUpperCase();
 const normalizeReadyToWearColor = (value: unknown) =>
   String(value || DEFAULT_READY_TO_WEAR_COLOR)
@@ -31,21 +32,32 @@ const encodeReadyToWearVariantKey = (size: unknown, color?: unknown) =>
   `${normalizeReadyToWearSize(size)}${READY_TO_WEAR_VARIANT_SEPARATOR}${normalizeReadyToWearColor(color)}`;
 const decodeReadyToWearVariantKey = (variantKey: unknown) => {
   const raw = String(variantKey || '').trim().toUpperCase();
-  if (!raw.includes(READY_TO_WEAR_VARIANT_SEPARATOR)) {
-    const normalizedSize = normalizeReadyToWearSize(raw);
+  if (raw.includes(READY_TO_WEAR_VARIANT_SEPARATOR)) {
+    const [sizePart, colorPart] = raw.split(READY_TO_WEAR_VARIANT_SEPARATOR);
+    const normalizedSize = normalizeReadyToWearSize(sizePart);
+    const normalizedColor = normalizeReadyToWearColor(colorPart);
     return {
       size: normalizedSize,
-      color: DEFAULT_READY_TO_WEAR_COLOR,
-      variantKey: encodeReadyToWearVariantKey(normalizedSize, DEFAULT_READY_TO_WEAR_COLOR),
+      color: normalizedColor,
+      variantKey: encodeReadyToWearVariantKey(normalizedSize, normalizedColor),
     };
   }
-  const [sizePart, colorPart] = raw.split(READY_TO_WEAR_VARIANT_SEPARATOR);
-  const normalizedSize = normalizeReadyToWearSize(sizePart);
-  const normalizedColor = normalizeReadyToWearColor(colorPart);
+  for (const separator of LEGACY_READY_TO_WEAR_VARIANT_SEPARATORS) {
+    if (!raw.includes(separator)) continue;
+    const [sizePart, colorPart] = raw.split(separator);
+    const normalizedSize = normalizeReadyToWearSize(sizePart);
+    const normalizedColor = normalizeReadyToWearColor(colorPart);
+    return {
+      size: normalizedSize,
+      color: normalizedColor,
+      variantKey: encodeReadyToWearVariantKey(normalizedSize, normalizedColor),
+    };
+  }
+  const normalizedSize = normalizeReadyToWearSize(raw);
   return {
     size: normalizedSize,
-    color: normalizedColor,
-    variantKey: encodeReadyToWearVariantKey(normalizedSize, normalizedColor),
+    color: DEFAULT_READY_TO_WEAR_COLOR,
+    variantKey: encodeReadyToWearVariantKey(normalizedSize, DEFAULT_READY_TO_WEAR_COLOR),
   };
 };
 
@@ -3350,7 +3362,7 @@ router.get('/products', async (req, res, next) => {
             include: {
               seller: { select: { id: true, businessName: true, country: true } },
               materialType: { select: { name: true } },
-              images: { select: { url: true }, take: 1, orderBy: { sortOrder: 'asc' } },
+              images: { select: { url: true }, orderBy: { sortOrder: 'asc' } },
               _count: { select: { orderItems: true } },
             },
             orderBy: { createdAt: 'desc' },
@@ -3372,7 +3384,7 @@ router.get('/products', async (req, res, next) => {
             include: {
               designer: { select: { id: true, businessName: true, country: true } },
               category: { select: { name: true } },
-              images: { select: { url: true }, take: 1, orderBy: { sortOrder: 'asc' } },
+              images: { select: { url: true }, orderBy: { sortOrder: 'asc' } },
               _count: { select: { orderItems: true } },
             },
             orderBy: { createdAt: 'desc' },
@@ -3394,7 +3406,7 @@ router.get('/products', async (req, res, next) => {
             include: {
               designer: { select: { id: true, businessName: true, country: true } },
               category: { select: { id: true, name: true } },
-              images: { select: { url: true }, take: 1, orderBy: { sortOrder: 'asc' } },
+              images: { select: { url: true }, orderBy: { sortOrder: 'asc' } },
               sizeVariations: true,
               _count: { select: { orderItems: true } },
             },
@@ -3418,6 +3430,7 @@ router.get('/products', async (req, res, next) => {
         ownerCountry: item.seller.country || null,
         category: item.materialType?.name || 'Material',
         orderCount: item._count.orderItems,
+        images: (Array.isArray(item.images) ? item.images : []).map((entry) => entry?.url).filter(Boolean),
         image: item.images?.[0]?.url || null,
         createdAt: item.createdAt,
       })),
@@ -3435,6 +3448,7 @@ router.get('/products', async (req, res, next) => {
         ownerCountry: item.designer.country || null,
         category: item.category?.name || 'Category',
         orderCount: item._count.orderItems,
+        images: (Array.isArray(item.images) ? item.images : []).map((entry) => entry?.url).filter(Boolean),
         image: item.images?.[0]?.url || null,
         createdAt: item.createdAt,
       })),
@@ -3453,6 +3467,7 @@ router.get('/products', async (req, res, next) => {
         categoryId: item.category?.id || null,
         category: item.category?.name || 'Category',
         orderCount: item._count.orderItems,
+        images: (Array.isArray(item.images) ? item.images : []).map((entry) => entry?.url).filter(Boolean),
         image: item.images?.[0]?.url || null,
         sizeVariations: Array.isArray(item.sizeVariations)
           ? item.sizeVariations.map((variation: any) => {
