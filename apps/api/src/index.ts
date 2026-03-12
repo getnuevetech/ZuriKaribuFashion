@@ -42,16 +42,26 @@ import { runStartupRepairs } from './bootstrap';
 const app = express();
 const PORT = process.env.PORT || 3001;
 const API_ROUTE_FINGERPRINT_VERSION = '2026-03-05-route-guardrails-v1';
-const configuredOrigins = (process.env.FRONTEND_URL || '')
-  .split(',')
+const splitOriginList = (value: string) =>
+  value
+    .split(/[,\n;]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+const configuredOrigins = splitOriginList(process.env.FRONTEND_URL || '')
   .map((value) => value.trim())
   .filter(Boolean);
+const trustedOriginHints = splitOriginList(process.env.CORS_TRUSTED_ORIGIN_HINTS || 'african-fashion,zurikaribu');
+const allowVercelPreviewOrigins = ['1', 'true', 'yes', 'on'].includes(
+  String(process.env.ALLOW_VERCEL_PREVIEW_ORIGINS || 'true').trim().toLowerCase()
+);
 const defaultAllowedOrigins = [
   'http://localhost:5173',
   'http://localhost:4173',
   'https://african-fashion-web.onrender.com',
+  'https://african-fashion-zurikaribu.vercel.app',
 ];
 const allowedOrigins = new Set([...defaultAllowedOrigins, ...configuredOrigins]);
+const vercelOriginPattern = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i;
 
 // Middleware
 app.use(cors({
@@ -59,8 +69,20 @@ app.use(cors({
     if (!origin) {
       return callback(null, true);
     }
+    if (/^http:\/\/localhost:\d+$/i.test(origin)) {
+      return callback(null, true);
+    }
     if (allowedOrigins.has(origin)) {
       return callback(null, true);
+    }
+    if (allowVercelPreviewOrigins && vercelOriginPattern.test(origin)) {
+      const normalizedOrigin = origin.toLowerCase();
+      const isTrustedVercelOrigin = trustedOriginHints.some(
+        (hint) => hint && normalizedOrigin.includes(String(hint).toLowerCase())
+      );
+      if (isTrustedVercelOrigin) {
+        return callback(null, true);
+      }
     }
     return callback(new Error('CORS origin not allowed'));
   },
@@ -193,6 +215,15 @@ app.use('/api/category-page-settings', categoryPageSettingsRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (String(err?.message || '').trim().toLowerCase() === 'cors origin not allowed') {
+    const origin = String(req.headers.origin || '').trim();
+    console.warn(`[cors] blocked origin=${origin || 'unknown'}`);
+    return res.status(403).json({
+      success: false,
+      message: 'CORS origin not allowed',
+      origin: origin || null,
+    });
+  }
   console.error('Error:', err);
   if (err instanceof ZodError) {
     return res.status(400).json({
