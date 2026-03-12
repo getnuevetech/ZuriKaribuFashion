@@ -101,7 +101,6 @@ const normalizePromoPreviewResponse = (
   const eligibleSubtotalUsd = Math.max(0, toFiniteMoney(row.eligibleSubtotalUsd, subtotalUsd));
   const discountValueCandidates = [
     row.discountValue,
-    row.value,
     row.discountPercent,
     row.percentage,
     row.percent,
@@ -140,6 +139,18 @@ const normalizePromoPreviewResponse = (
     subtotalUsd: Number(subtotalUsd.toFixed(2)),
     eligibleSubtotalUsd: Number(eligibleSubtotalUsd.toFixed(2)),
   };
+};
+
+const isStrictPromoPreviewMatch = (preview: PromoPreviewResult, expectedCode: string) => {
+  const normalizedExpectedCode = String(expectedCode || '').trim().toUpperCase();
+  if (!normalizedExpectedCode) return false;
+  if (String(preview.code || '').trim().toUpperCase() !== normalizedExpectedCode) return false;
+  if (!(preview.discountType === 'PERCENTAGE' || preview.discountType === 'FIXED')) return false;
+  if (!Number.isFinite(Number(preview.discountValue)) || Number(preview.discountValue) <= 0) return false;
+  if (!Number.isFinite(Number(preview.discountUsd)) || Number(preview.discountUsd) <= 0) return false;
+  if (!Number.isFinite(Number(preview.subtotalUsd)) || Number(preview.subtotalUsd) <= 0) return false;
+  if (!Number.isFinite(Number(preview.eligibleSubtotalUsd)) || Number(preview.eligibleSubtotalUsd) <= 0) return false;
+  return true;
 };
 
 interface SuggestedCheckoutProduct {
@@ -1013,7 +1024,8 @@ export default function Checkout() {
   }, []);
 
   const handleApplyPromo = async () => {
-    if (!promoCode.trim()) {
+    const requestedCode = String(promoCode || '').trim().toUpperCase();
+    if (!requestedCode) {
       setError('Enter a promo code to apply.');
       return;
     }
@@ -1045,7 +1057,7 @@ export default function Checkout() {
         };
       });
       const preview = await api.promotions.preview({
-        code: promoCode.trim().toUpperCase(),
+        code: requestedCode,
         items: payloadItems,
         paymentProvider: selectedPaymentProvider || undefined,
         shippingProvider: selectedShippingQuote?.providerKey || undefined,
@@ -1061,9 +1073,12 @@ export default function Checkout() {
         (sum, entry) => sum + Number(entry.unitPrice || 0) * Number(entry.quantity || 0),
         0
       );
-      const normalizedPreview = normalizePromoPreviewResponse(preview.data, promoCode.trim(), subtotalFromItems);
+      const normalizedPreview = normalizePromoPreviewResponse(preview.data, requestedCode, subtotalFromItems);
+      if (!isStrictPromoPreviewMatch(normalizedPreview, requestedCode)) {
+        throw new Error('Promo validation failed for this code. Please verify the code is configured and active.');
+      }
       setPromoPreview(normalizedPreview);
-      setPromoCode(String(normalizedPreview.code || promoCode).toUpperCase());
+      setPromoCode(String(normalizedPreview.code || requestedCode).toUpperCase());
     } catch (promoError: any) {
       setPromoPreview(null);
       const promoMessage = String(promoError?.response?.data?.message || promoError?.message || 'Failed to apply promo code.');
