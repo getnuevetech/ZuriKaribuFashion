@@ -381,6 +381,47 @@ const normalizeDesignerDashboardGovernance = (input: any): DesignerDashboardGove
 const LOCATION_COUNTRIES = getCountryOptions();
 const COUNTRY_FIELD_HINTS = ['country', 'businesscountry', 'vendorcountry'];
 const CITY_FIELD_HINTS = ['city', 'businesscity', 'vendorcity', 'town'];
+const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
+const LEGACY_READY_TO_WEAR_VARIANT_SEPARATORS = [' / ', '/', '|'] as const;
+const DEFAULT_READY_TO_WEAR_COLOR = 'DEFAULT';
+
+const normalizeReadyVariantSize = (value: unknown) => String(value || '').trim().toUpperCase();
+const normalizeReadyVariantColor = (value: unknown) =>
+  String(value || DEFAULT_READY_TO_WEAR_COLOR)
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ') || DEFAULT_READY_TO_WEAR_COLOR;
+const encodeReadyVariantKey = (size: unknown, color?: unknown) =>
+  `${normalizeReadyVariantSize(size)}${READY_TO_WEAR_VARIANT_SEPARATOR}${normalizeReadyVariantColor(color)}`;
+const decodeReadyVariant = (sizeValue: unknown, colorValue?: unknown) => {
+  const rawSize = String(sizeValue || '').trim().toUpperCase();
+  const rawColor = String(colorValue || '').trim();
+  if (rawSize.includes(READY_TO_WEAR_VARIANT_SEPARATOR)) {
+    const [sizePart, colorPart] = rawSize.split(READY_TO_WEAR_VARIANT_SEPARATOR);
+    const size = normalizeReadyVariantSize(sizePart);
+    const color = normalizeReadyVariantColor(colorPart);
+    return { size, color, variantKey: encodeReadyVariantKey(size, color) };
+  }
+  for (const separator of LEGACY_READY_TO_WEAR_VARIANT_SEPARATORS) {
+    if (!rawSize.includes(separator)) continue;
+    const [sizePart, colorPart] = rawSize.split(separator);
+    const size = normalizeReadyVariantSize(sizePart);
+    const color = normalizeReadyVariantColor(colorPart);
+    return { size, color, variantKey: encodeReadyVariantKey(size, color) };
+  }
+  const size = normalizeReadyVariantSize(rawSize);
+  const color = normalizeReadyVariantColor(rawColor || DEFAULT_READY_TO_WEAR_COLOR);
+  return { size, color, variantKey: encodeReadyVariantKey(size, color) };
+};
+const normalizeImageUrlList = (input: unknown): string[] =>
+  (Array.isArray(input) ? input : [])
+    .map((entry) => {
+      if (typeof entry === 'string') return entry;
+      if (entry && typeof entry === 'object') return String((entry as any).url || '');
+      return '';
+    })
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean);
 
 const normalizeFieldKey = (value: unknown) =>
   String(value || '')
@@ -685,7 +726,7 @@ export default function DesignerDashboard() {
           description: design.description || '',
           categoryId: design.categoryId || design.category?.id || '',
           basePrice: Number(design.basePrice || 0),
-          images: Array.isArray(design.images) ? design.images.map((img: any) => img?.url).filter(Boolean) : [],
+          images: normalizeImageUrlList(design.images),
           category: design.category || { name: 'Style' },
           suitableFabrics: Array.isArray(design.suitableFabrics)
             ? design.suitableFabrics.map((item: any) => ({
@@ -725,17 +766,20 @@ export default function DesignerDashboard() {
           category: item.category || { name: 'Style' },
           basePrice: Number(item.basePrice || 0),
           status: item.status || 'DRAFT',
-          images: Array.isArray(item.images) ? item.images.map((img: any) => img?.url).filter(Boolean) : [],
+          images: normalizeImageUrlList(item.images),
           orderCount: Number(item?._count?.orderItems || 0),
           sizeVariations: Array.isArray(item.sizeVariations)
-            ? item.sizeVariations.map((variation: any) => ({
-                id: String(variation?.id || ''),
-                size: String(variation?.size || ''),
-                color: String(variation?.color || 'DEFAULT'),
-                variantKey: String(variation?.variantKey || ''),
-                price: Number(variation?.price || 0),
-                stock: Number(variation?.stock || 0),
-              }))
+            ? item.sizeVariations.map((variation: any) => {
+                const decoded = decodeReadyVariant(variation?.size, variation?.color);
+                return {
+                  id: String(variation?.id || ''),
+                  size: decoded.size,
+                  color: decoded.color,
+                  variantKey: String(variation?.variantKey || decoded.variantKey || ''),
+                  price: Number(variation?.price || 0),
+                  stock: Number(variation?.stock || 0),
+                };
+              })
             : [],
           isFeatured: Boolean(item.isFeatured),
           featuredSections: Array.isArray(item.featuredSections) ? item.featuredSections : [],

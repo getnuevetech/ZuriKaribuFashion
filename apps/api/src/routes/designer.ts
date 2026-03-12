@@ -255,6 +255,7 @@ const HOMEPAGE_READY_TO_WEAR_SIZES_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZES'
 const normalizeReadyToWearSize = (value: unknown) => String(value || '').trim().toUpperCase();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
 const DEFAULT_READY_TO_WEAR_COLOR = 'DEFAULT';
+const LEGACY_READY_TO_WEAR_VARIANT_SEPARATORS = [' / ', '/', '|'] as const;
 const normalizeReadyToWearColor = (value: unknown) =>
   String(value || DEFAULT_READY_TO_WEAR_COLOR)
     .trim()
@@ -264,18 +265,32 @@ const encodeReadyToWearVariantKey = (size: unknown, color?: unknown) =>
   `${normalizeReadyToWearSize(size)}${READY_TO_WEAR_VARIANT_SEPARATOR}${normalizeReadyToWearColor(color)}`;
 const decodeReadyToWearVariantKey = (variantKey: unknown) => {
   const raw = String(variantKey || '').trim().toUpperCase();
-  if (!raw.includes(READY_TO_WEAR_VARIANT_SEPARATOR)) {
+  if (raw.includes(READY_TO_WEAR_VARIANT_SEPARATOR)) {
+    const [sizePart, colorPart] = raw.split(READY_TO_WEAR_VARIANT_SEPARATOR);
+    const normalizedSize = normalizeReadyToWearSize(sizePart);
+    const normalizedColor = normalizeReadyToWearColor(colorPart);
     return {
-      size: normalizeReadyToWearSize(raw),
-      color: DEFAULT_READY_TO_WEAR_COLOR,
-      variantKey: raw,
+      size: normalizedSize,
+      color: normalizedColor,
+      variantKey: encodeReadyToWearVariantKey(normalizedSize, normalizedColor),
     };
   }
-  const [sizePart, colorPart] = raw.split(READY_TO_WEAR_VARIANT_SEPARATOR);
+  for (const separator of LEGACY_READY_TO_WEAR_VARIANT_SEPARATORS) {
+    if (!raw.includes(separator)) continue;
+    const [sizePart, colorPart] = raw.split(separator);
+    const normalizedSize = normalizeReadyToWearSize(sizePart);
+    const normalizedColor = normalizeReadyToWearColor(colorPart);
+    return {
+      size: normalizedSize,
+      color: normalizedColor,
+      variantKey: encodeReadyToWearVariantKey(normalizedSize, normalizedColor),
+    };
+  }
+  const normalizedSize = normalizeReadyToWearSize(raw);
   return {
-    size: normalizeReadyToWearSize(sizePart),
-    color: normalizeReadyToWearColor(colorPart),
-    variantKey: raw,
+    size: normalizedSize,
+    color: DEFAULT_READY_TO_WEAR_COLOR,
+    variantKey: encodeReadyToWearVariantKey(normalizedSize, DEFAULT_READY_TO_WEAR_COLOR),
   };
 };
 

@@ -73,6 +73,47 @@ interface DesignerFabricCountryAccessRequestRow {
 }
 
 const STATIC_COUNTRIES = getCountryOptions().map((entry) => String(entry.name || '').trim()).filter(Boolean);
+const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
+const LEGACY_READY_TO_WEAR_VARIANT_SEPARATORS = [' / ', '/', '|'] as const;
+const DEFAULT_READY_TO_WEAR_COLOR = 'DEFAULT';
+
+const normalizeReadyVariantSize = (value: unknown) => String(value || '').trim().toUpperCase();
+const normalizeReadyVariantColor = (value: unknown) =>
+  String(value || DEFAULT_READY_TO_WEAR_COLOR)
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ') || DEFAULT_READY_TO_WEAR_COLOR;
+const encodeReadyVariantKey = (size: unknown, color?: unknown) =>
+  `${normalizeReadyVariantSize(size)}${READY_TO_WEAR_VARIANT_SEPARATOR}${normalizeReadyVariantColor(color)}`;
+const decodeReadyVariant = (sizeValue: unknown, colorValue?: unknown) => {
+  const rawSize = String(sizeValue || '').trim().toUpperCase();
+  const rawColor = String(colorValue || '').trim();
+  if (rawSize.includes(READY_TO_WEAR_VARIANT_SEPARATOR)) {
+    const [sizePart, colorPart] = rawSize.split(READY_TO_WEAR_VARIANT_SEPARATOR);
+    const size = normalizeReadyVariantSize(sizePart);
+    const color = normalizeReadyVariantColor(colorPart);
+    return { size, color, variantKey: encodeReadyVariantKey(size, color) };
+  }
+  for (const separator of LEGACY_READY_TO_WEAR_VARIANT_SEPARATORS) {
+    if (!rawSize.includes(separator)) continue;
+    const [sizePart, colorPart] = rawSize.split(separator);
+    const size = normalizeReadyVariantSize(sizePart);
+    const color = normalizeReadyVariantColor(colorPart);
+    return { size, color, variantKey: encodeReadyVariantKey(size, color) };
+  }
+  const size = normalizeReadyVariantSize(rawSize);
+  const color = normalizeReadyVariantColor(rawColor || DEFAULT_READY_TO_WEAR_COLOR);
+  return { size, color, variantKey: encodeReadyVariantKey(size, color) };
+};
+const normalizeImageUrlList = (input: unknown): string[] =>
+  (Array.isArray(input) ? input : [])
+    .map((entry) => {
+      if (typeof entry === 'string') return entry;
+      if (entry && typeof entry === 'object') return String((entry as any).url || '');
+      return '';
+    })
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean);
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -762,12 +803,15 @@ export default function AdminProducts() {
           ? (product as any).sizeVariations
           : []
     )
-      .map((entry: any) => ({
-        size: String(entry?.size || '').trim() || 'M',
-        color: String(entry?.color || 'DEFAULT').trim() || 'DEFAULT',
-        price: Number(entry?.price || product.finalPrice || 0),
-        stock: Math.max(0, Number(entry?.stock || 0)),
-      }))
+      .map((entry: any) => {
+        const decoded = decodeReadyVariant(entry?.size, entry?.color);
+        return {
+          size: decoded.size || 'M',
+          color: decoded.color || 'DEFAULT',
+          price: Number(entry?.price || product.finalPrice || 0),
+          stock: Math.max(0, Number(entry?.stock || 0)),
+        };
+      })
       .filter((entry: any) => entry.size && Number.isFinite(entry.price));
 
     setEditing(product);
@@ -790,7 +834,7 @@ export default function AdminProducts() {
       featuredSection: product.featuredSections?.[0] || getDefaultFeaturedSection(product.type),
       images:
         Array.isArray(product.images) && product.images.length > 0
-          ? product.images.map((entry) => String(entry || '').trim()).filter(Boolean)
+          ? normalizeImageUrlList(product.images)
           : product.image
             ? [product.image]
             : [],
