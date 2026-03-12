@@ -15,6 +15,18 @@ import { emitPartnerOrderEvent } from '../utils/partner-api';
 
 const router = Router();
 
+// Compatibility aliases for legacy order-create route variants.
+router.use((req, _res, next) => {
+  if (req.path === '/custom' || req.path === '/design' || req.path === '/custom-order') {
+    req.url = req.url.replace(req.path, '/custom-design');
+  } else if (req.path === '/ready' || req.path === '/readytowear' || req.path === '/ready-to-buy') {
+    req.url = req.url.replace(req.path, '/ready-to-wear');
+  } else if (req.path === '/fabric' || req.path === '/fabric-order' || req.path === '/fabric-only-order') {
+    req.url = req.url.replace(req.path, '/fabric-only');
+  }
+  next();
+});
+
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
 const DEFAULT_READY_TO_WEAR_COLOR = 'DEFAULT';
 const normalizeReadyToWearSize = (value: unknown) => String(value || '').trim().toUpperCase();

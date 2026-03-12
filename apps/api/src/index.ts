@@ -111,6 +111,7 @@ app.use('/api/designer', designerRoutes);
 app.use('/api/customer', customerRoutes);
 app.use('/api/qa', qaRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/order', orderRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/banners', bannerRoutes);

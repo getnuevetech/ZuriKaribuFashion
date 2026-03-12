@@ -4304,6 +4304,10 @@ const customDesignOrderCreatePaths = [
   '/order/design',
   '/orders/custom',
   '/order/custom',
+  '/orders/custom-order',
+  '/order/custom-order',
+  '/customer/orders/custom-design',
+  '/customer/order/custom-design',
 ];
 
 const readyToWearOrderCreatePaths = [
@@ -4313,6 +4317,10 @@ const readyToWearOrderCreatePaths = [
   '/order/readytowear',
   '/orders/ready-to-buy',
   '/order/ready-to-buy',
+  '/orders/ready',
+  '/order/ready',
+  '/customer/orders/ready-to-wear',
+  '/customer/order/ready-to-wear',
 ];
 
 const fabricOnlyOrderCreatePaths = [
@@ -4322,11 +4330,17 @@ const fabricOnlyOrderCreatePaths = [
   '/order/fabric',
   '/orders/fabric-order',
   '/order/fabric-order',
+  '/orders/fabric-only-order',
+  '/order/fabric-only-order',
+  '/customer/orders/fabric-only',
+  '/customer/order/fabric-only',
 ];
 
 async function createOrderWithFallback<T>(paths: string[], data: any) {
   let lastError: unknown = null;
+  const attemptedPaths: string[] = [];
   for (const path of paths) {
+    attemptedPaths.push(path);
     try {
       return await apiService.post<T>(path, data);
     } catch (error) {
@@ -4334,6 +4348,10 @@ async function createOrderWithFallback<T>(paths: string[], data: any) {
       if (isRetryableRouteError(error)) continue;
       throw error;
     }
+  }
+  const routeMessage = String((lastError as AxiosError)?.response?.data?.message || '').toLowerCase();
+  if (isRetryableRouteError(lastError) || routeMessage.includes('route not found')) {
+    throw new Error(`Order create route not found. Tried: ${attemptedPaths.join(', ')}`);
   }
   throw lastError ?? new Error('Order create route not found.');
 }
