@@ -162,6 +162,9 @@ interface SavedCustomerAddress {
   isDefault?: boolean;
 }
 
+const isUuid = (value: unknown) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
+
 const parseAddressLines = (address: unknown) => {
   const tokens = String(address || '')
     .split(',')
@@ -226,6 +229,7 @@ export default function Checkout() {
   const [cardPromoHint, setCardPromoHint] = useState('');
   const [paymentDebugInfo, setPaymentDebugInfo] = useState<PaymentSessionDebugInfo | null>(null);
   const [runtimeStripeReloading, setRuntimeStripeReloading] = useState(false);
+  const [validatedShippingAddressId, setValidatedShippingAddressId] = useState('');
   const checkoutPromoStorageKey = `${CHECKOUT_PROMO_STORAGE_KEY_PREFIX}:${String(user?.id || 'guest')}`;
   
   const fullName = user?.firstName && user?.lastName 
@@ -559,6 +563,50 @@ export default function Checkout() {
         throw new Error('Checkout total must be greater than 0 to initialize payment.');
       }
       const providerKey = selectedProvider?.providerKey || 'STRIPE';
+      const ensureServerShippingAddressId = async () => {
+        const candidateIds = [
+          selectedSavedAddressId,
+          validatedShippingAddressId,
+        ].map((entry) => String(entry || '').trim());
+        const usableExisting = candidateIds.find((id) => isUuid(id));
+        if (usableExisting) {
+          return usableExisting;
+        }
+        const addressPayload = {
+          label: 'Checkout Address',
+          fullName: shippingAddress.fullName,
+          phone: shippingAddress.phone,
+          country: shippingAddress.country,
+          city: shippingAddress.city,
+          address: [shippingAddress.addressLine1, shippingAddress.addressLine2, shippingAddress.state].filter(Boolean).join(', '),
+          postalCode: shippingAddress.postalCode,
+          isDefault: false,
+        };
+        const addressResponse = await api.customer.addAddress(addressPayload);
+        const responseId = String(addressResponse?.data?.id || '').trim();
+        if (addressResponse?.success && isUuid(responseId)) {
+          return responseId;
+        }
+        const refreshed = await api.customer.getAddresses();
+        const rows = Array.isArray(refreshed?.data)
+          ? refreshed.data
+          : Array.isArray((refreshed?.data as any)?.addresses)
+            ? (refreshed?.data as any).addresses
+            : [];
+        const matched = rows.find((entry: any) => {
+          if (!isUuid(entry?.id)) return false;
+          const sameName = String(entry?.fullName || '').trim() === String(addressPayload.fullName || '').trim();
+          const sameCity = String(entry?.city || '').trim() === String(addressPayload.city || '').trim();
+          const sameCountry = String(entry?.country || '').trim() === String(addressPayload.country || '').trim();
+          return sameName && sameCity && sameCountry;
+        });
+        if (matched?.id && isUuid(matched.id)) {
+          return String(matched.id);
+        }
+        throw new Error('Unable to verify shipping address on server. Please save address in Profile and retry checkout.');
+      };
+      const serverShippingAddressId = await ensureServerShippingAddressId();
+      setValidatedShippingAddressId(serverShippingAddressId);
       const response = await api.payments.createPaymentSession({
         providerKey,
         amount: Math.round(normalizedTotalUsd * 100), // Convert to cents
@@ -590,6 +638,7 @@ export default function Checkout() {
             reference: response.data.reference,
             shippingAddress,
             selectedSavedAddressId,
+            validatedShippingAddressId: serverShippingAddressId,
             shippingQuote: selectedShippingQuote,
             promoPreview,
             promoCode,
@@ -671,9 +720,42 @@ export default function Checkout() {
     shippingAddressIdOverride?: string | null
   ) => {
     try {
-      const candidateAddressId = String(shippingAddressIdOverride || selectedSavedAddressId || '').trim();
+      const resolveServerShippingAddressId = async () => {
+        const candidateAddressId = String(
+          shippingAddressIdOverride || validatedShippingAddressId || selectedSavedAddressId || ''
+        ).trim();
+        if (isUuid(candidateAddressId)) {
+          return candidateAddressId;
+        }
+        const addressResponse = await api.customer.addAddress({
+          label: 'Checkout Address',
+          fullName: shippingAddress.fullName,
+          phone: shippingAddress.phone,
+          country: shippingAddress.country,
+          city: shippingAddress.city,
+          address: [shippingAddress.addressLine1, shippingAddress.addressLine2, shippingAddress.state].filter(Boolean).join(', '),
+          postalCode: shippingAddress.postalCode,
+          isDefault: false,
+        });
+        const responseId = String(addressResponse?.data?.id || '').trim();
+        if (addressResponse?.success && isUuid(responseId)) {
+          return responseId;
+        }
+        const refreshed = await api.customer.getAddresses();
+        const rows = Array.isArray(refreshed?.data)
+          ? refreshed.data
+          : Array.isArray((refreshed?.data as any)?.addresses)
+            ? (refreshed?.data as any).addresses
+            : [];
+        const firstServerAddress = rows.find((entry: any) => isUuid(entry?.id));
+        if (firstServerAddress?.id) {
+          return String(firstServerAddress.id);
+        }
+        throw new Error('Unable to verify shipping address on server.');
+      };
+      const candidateAddressId = await resolveServerShippingAddressId();
       let shippingAddressId = '';
-      if (candidateAddressId && savedAddresses.some((entry) => entry.id === candidateAddressId)) {
+      if (candidateAddressId && isUuid(candidateAddressId)) {
         shippingAddressId = candidateAddressId;
       } else {
         const addressResponse = await api.customer.addAddress({
@@ -687,11 +769,12 @@ export default function Checkout() {
           isDefault: false,
         });
 
-        if (!addressResponse.success || !addressResponse.data?.id) {
+        if (!addressResponse.success || !addressResponse.data?.id || !isUuid(addressResponse.data.id)) {
           throw new Error('Failed to save shipping address');
         }
         shippingAddressId = String(addressResponse.data.id);
       }
+      setValidatedShippingAddressId(shippingAddressId);
 
       const createdOrderNumbers: string[] = [];
       const shippingPayload = {
@@ -855,6 +938,9 @@ export default function Checkout() {
     if (pending.selectedSavedAddressId) {
       setSelectedSavedAddressId(String(pending.selectedSavedAddressId || ''));
     }
+    if (pending.validatedShippingAddressId) {
+      setValidatedShippingAddressId(String(pending.validatedShippingAddressId || ''));
+    }
     if (pending.promoPreview && typeof pending.promoPreview === 'object') {
       setPromoPreview(pending.promoPreview as PromoPreviewResult);
     }
@@ -899,7 +985,11 @@ export default function Checkout() {
           String(verifyResponse.data.paymentReference || reference),
           providerKey,
           pendingShippingQuote,
-          pending?.selectedSavedAddressId ? String(pending.selectedSavedAddressId) : undefined
+          pending?.validatedShippingAddressId
+            ? String(pending.validatedShippingAddressId)
+            : pending?.selectedSavedAddressId
+              ? String(pending.selectedSavedAddressId)
+              : undefined
         );
       })
       .catch((err: any) => {
