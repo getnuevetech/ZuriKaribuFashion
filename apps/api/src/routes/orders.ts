@@ -29,6 +29,7 @@ router.use((req, _res, next) => {
 
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
 const DEFAULT_READY_TO_WEAR_COLOR = 'DEFAULT';
+const LEGACY_READY_TO_WEAR_VARIANT_SEPARATORS = [' / ', '/', '|'] as const;
 const normalizeReadyToWearSize = (value: unknown) => String(value || '').trim().toUpperCase();
 const normalizeReadyToWearColor = (value: unknown) =>
   String(value || DEFAULT_READY_TO_WEAR_COLOR)
@@ -39,18 +40,32 @@ const encodeReadyToWearVariantKey = (size: unknown, color?: unknown) =>
   `${normalizeReadyToWearSize(size)}${READY_TO_WEAR_VARIANT_SEPARATOR}${normalizeReadyToWearColor(color)}`;
 const decodeReadyToWearVariantKey = (variantKey: unknown) => {
   const raw = String(variantKey || '').trim().toUpperCase();
-  if (!raw.includes(READY_TO_WEAR_VARIANT_SEPARATOR)) {
+  if (raw.includes(READY_TO_WEAR_VARIANT_SEPARATOR)) {
+    const [sizePart, colorPart] = raw.split(READY_TO_WEAR_VARIANT_SEPARATOR);
+    const normalizedSize = normalizeReadyToWearSize(sizePart);
+    const normalizedColor = normalizeReadyToWearColor(colorPart);
     return {
-      size: normalizeReadyToWearSize(raw),
-      color: DEFAULT_READY_TO_WEAR_COLOR,
-      variantKey: raw,
+      size: normalizedSize,
+      color: normalizedColor,
+      variantKey: encodeReadyToWearVariantKey(normalizedSize, normalizedColor),
     };
   }
-  const [sizePart, colorPart] = raw.split(READY_TO_WEAR_VARIANT_SEPARATOR);
+  for (const separator of LEGACY_READY_TO_WEAR_VARIANT_SEPARATORS) {
+    if (!raw.includes(separator)) continue;
+    const [sizePart, colorPart] = raw.split(separator);
+    const normalizedSize = normalizeReadyToWearSize(sizePart);
+    const normalizedColor = normalizeReadyToWearColor(colorPart);
+    return {
+      size: normalizedSize,
+      color: normalizedColor,
+      variantKey: encodeReadyToWearVariantKey(normalizedSize, normalizedColor),
+    };
+  }
+  const normalizedSize = normalizeReadyToWearSize(raw);
   return {
-    size: normalizeReadyToWearSize(sizePart),
-    color: normalizeReadyToWearColor(colorPart),
-    variantKey: raw,
+    size: normalizedSize,
+    color: DEFAULT_READY_TO_WEAR_COLOR,
+    variantKey: encodeReadyToWearVariantKey(normalizedSize, DEFAULT_READY_TO_WEAR_COLOR),
   };
 };
 
@@ -794,18 +809,44 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
         });
       }
 
-      const exactVariant = product.sizeVariations.find(
-        (row) => String(row.size || '').toUpperCase() === requestedVariantKey
+      const decodedVariants = product.sizeVariations.map((row) => ({
+        row,
+        decoded: decodeReadyToWearVariantKey(row.size),
+      }));
+      const exactVariant =
+        decodedVariants.find((entry) => String(entry.row.size || '').trim().toUpperCase() === requestedVariantKey)?.row ||
+        decodedVariants.find(
+          (entry) => entry.decoded.size === requestedSize && entry.decoded.color === requestedColor
+        )?.row ||
+        null;
+      const defaultColorVariant =
+        decodedVariants.find(
+          (entry) =>
+            entry.decoded.size === requestedSize && entry.decoded.color === DEFAULT_READY_TO_WEAR_COLOR
+        )?.row || null;
+      const sizeFallbackVariant =
+        decodedVariants.find((entry) => entry.decoded.size === requestedSize)?.row || null;
+      const availableColorsForSize = new Set(
+        decodedVariants
+          .filter((entry) => entry.decoded.size === requestedSize)
+          .map((entry) => entry.decoded.color)
       );
-      const sizeFallbackVariant = product.sizeVariations.find((row) => {
-        const decoded = decodeReadyToWearVariantKey(row.size);
-        return decoded.size === requestedSize;
-      });
-      const matchingVariant = hasRequestedColor ? exactVariant || null : exactVariant || sizeFallbackVariant || null;
+      const canFallbackToSizeOnly =
+        !hasRequestedColor ||
+        requestedColor === DEFAULT_READY_TO_WEAR_COLOR ||
+        availableColorsForSize.size === 0 ||
+        (availableColorsForSize.size === 1 && availableColorsForSize.has(DEFAULT_READY_TO_WEAR_COLOR));
+      const matchingVariant = exactVariant || (canFallbackToSizeOnly ? defaultColorVariant || sizeFallbackVariant : null);
       if (!matchingVariant) {
+        const availableColorLabels = Array.from(availableColorsForSize).filter(
+          (color) => color !== DEFAULT_READY_TO_WEAR_COLOR
+        );
+        const availabilityHint = availableColorLabels.length > 0
+          ? ` Available colors for size ${requestedSize}: ${availableColorLabels.join(', ')}.`
+          : '';
         return res.status(400).json({
           success: false,
-          message: `Variant ${requestedSize}/${requestedColor} not available for ${product.name}`,
+          message: `Variant ${requestedSize}/${requestedColor} not available for ${product.name}.${availabilityHint}`,
         });
       }
 
