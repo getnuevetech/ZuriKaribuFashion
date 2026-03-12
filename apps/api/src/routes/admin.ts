@@ -1390,7 +1390,7 @@ const resolveAdminRoutePermissions = (method: string, path: string) => {
   if (path.startsWith('/vendor-dashboard-governance')) {
     return method === 'GET' ? [Permissions.VENDOR_PROFILES_READ] : [Permissions.VENDOR_PROFILES_REVIEW];
   }
-  if (path.startsWith('/try-on')) {
+  if (path.startsWith('/try-on') || path.startsWith('/tryon') || path.startsWith('/3d-try-on')) {
     return [Permissions.PRODUCTS_MANAGE];
   }
   if (path.startsWith('/vendor-profiles')) {
@@ -2335,7 +2335,7 @@ router.put('/vendor-dashboard-governance', async (req, res, next) => {
   }
 });
 
-router.get('/try-on/settings', async (_req, res, next) => {
+const handleGetTryOnSettings = async (_req: any, res: any, next: any) => {
   try {
     const payload = await readTryOnSettings();
     res.json({
@@ -2349,9 +2349,9 @@ router.get('/try-on/settings', async (_req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
 
-router.put('/try-on/settings', async (req, res, next) => {
+const handleUpdateTryOnSettings = async (req: any, res: any, next: any) => {
   try {
     const settings = await saveTryOnSettings(req.body?.settings ?? req.body);
     await prisma.activityLog.create({
@@ -2369,9 +2369,9 @@ router.put('/try-on/settings', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
 
-router.get('/try-on/insights', async (req, res, next) => {
+const handleGetTryOnInsights = async (req: any, res: any, next: any) => {
   try {
     const settingsPayload = await readTryOnSettings();
     if (settingsPayload.settings.applyLocations.adminDashboard === false) {
@@ -2393,7 +2393,22 @@ router.get('/try-on/insights', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
+
+router.get('/try-on/settings', handleGetTryOnSettings);
+router.get('/tryon/settings', handleGetTryOnSettings);
+router.get('/3d-try-on/settings', handleGetTryOnSettings);
+
+router.put('/try-on/settings', handleUpdateTryOnSettings);
+router.put('/tryon/settings', handleUpdateTryOnSettings);
+router.put('/3d-try-on/settings', handleUpdateTryOnSettings);
+router.patch('/try-on/settings', handleUpdateTryOnSettings);
+router.patch('/tryon/settings', handleUpdateTryOnSettings);
+router.patch('/3d-try-on/settings', handleUpdateTryOnSettings);
+
+router.get('/try-on/insights', handleGetTryOnInsights);
+router.get('/tryon/insights', handleGetTryOnInsights);
+router.get('/3d-try-on/insights', handleGetTryOnInsights);
 
 router.get('/vendor-profiles', async (req, res, next) => {
   try {

@@ -4907,15 +4907,55 @@ const adminApi = {
     }>('/admin/vendor-dashboard-governance', { settings }),
 
   getTryOnSettings: () =>
-    apiService.get<{ success: boolean; data: { source?: 'DEFAULT' | 'DATABASE'; updatedAt?: string | null; settings: any } }>(
-      '/admin/try-on/settings'
-    ),
+    (async () => {
+      let lastError: unknown = null;
+      for (const path of ['/admin/try-on/settings', '/admin/tryon/settings', '/admin/3d-try-on/settings']) {
+        try {
+          return await apiService.get<{
+            success: boolean;
+            data: { source?: 'DEFAULT' | 'DATABASE'; updatedAt?: string | null; settings: any };
+          }>(path, noCacheRequestConfig());
+        } catch (error) {
+          lastError = error;
+          if (!isRetryableRouteError(error)) throw error;
+        }
+      }
+      throw lastError ?? new Error('TryON settings route not available.');
+    })(),
 
   updateTryOnSettings: (settings: any) =>
-    apiService.put<{ success: boolean; data: any; message?: string }>('/admin/try-on/settings', { settings }),
+    (async () => {
+      let lastError: unknown = null;
+      for (const path of ['/admin/try-on/settings', '/admin/tryon/settings', '/admin/3d-try-on/settings']) {
+        try {
+          return await apiService.put<{ success: boolean; data: any; message?: string }>(path, { settings });
+        } catch (error) {
+          lastError = error;
+          if (!isRetryableRouteError(error)) throw error;
+        }
+        try {
+          return await apiService.patch<{ success: boolean; data: any; message?: string }>(path, { settings });
+        } catch (error) {
+          lastError = error;
+          if (!isRetryableRouteError(error)) throw error;
+        }
+      }
+      throw lastError ?? new Error('TryON settings update route not available.');
+    })(),
 
   getTryOnInsights: () =>
-    apiService.get<{ success: boolean; data: any }>('/admin/try-on/insights'),
+    (async () => {
+      let lastError: unknown = null;
+      for (const path of ['/admin/try-on/insights', '/admin/tryon/insights', '/admin/3d-try-on/insights']) {
+        try {
+          return await apiService.get<{ success: boolean; data: any }>(path, noCacheRequestConfig());
+        } catch (error) {
+          lastError = error;
+          if (!isRetryableRouteError(error)) throw error;
+        }
+      }
+      throw lastError ?? new Error('TryON insights route not available.');
+    })(),
 
   getDesignerFabricCountryAccess: (params?: { search?: string }) =>
     readAdminDesignerFabricCountryAccessWithFallback<{
