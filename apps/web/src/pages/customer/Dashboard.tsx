@@ -58,6 +58,45 @@ interface Order {
   trackingNumber?: string;
 }
 
+const normalizeCustomerOrder = (row: any): Order => {
+  const designImage =
+    row?.design?.images?.[0] ||
+    row?.designOrder?.design?.images?.[0]?.url ||
+    row?.readyToWearItems?.[0]?.readyToWear?.images?.[0]?.url ||
+    row?.fabricOrder?.fabric?.images?.[0]?.url ||
+    '/images/placeholder.jpg';
+  const designName =
+    row?.design?.name ||
+    row?.designOrder?.design?.name ||
+    row?.readyToWearItems?.[0]?.readyToWear?.name ||
+    row?.fabricOrder?.fabric?.name ||
+    'Order Item';
+  const fabricName = row?.fabric?.name || row?.fabricOrder?.fabric?.name || 'N/A';
+  const designerName = row?.designer?.businessName || row?.designOrder?.designer?.businessName || 'Designer';
+  return {
+    id: String(row?.id || ''),
+    orderNumber: String(row?.orderNumber || 'Order'),
+    status: String(row?.status || 'PENDING'),
+    totalAmount: Number(row?.totalAmount ?? row?.totalPrice ?? 0),
+    createdAt: String(row?.createdAt || new Date().toISOString()),
+    design: {
+      name: String(designName),
+      images: [String(designImage)],
+    },
+    fabric: {
+      name: String(fabricName),
+      images: [String(row?.fabric?.images?.[0] || row?.fabricOrder?.fabric?.images?.[0]?.url || '/images/placeholder.jpg')],
+    },
+    designer: {
+      businessName: String(designerName),
+    },
+    designStatus: String(row?.designStatus || row?.designOrder?.status || row?.status || 'PENDING'),
+    fabricStatus: String(row?.fabricStatus || row?.fabricOrder?.status || row?.status || 'PENDING'),
+    shippingStatus: String(row?.shippingStatus || row?.status || 'PENDING'),
+    trackingNumber: row?.trackingNumber ? String(row.trackingNumber) : undefined,
+  };
+};
+
 interface WishlistItem {
   id: string;
   name: string;
@@ -185,7 +224,8 @@ export default function CustomerDashboard() {
         setWishlist(statsRes.value.data.wishlist || []);
       }
       if (ordersRes.status === 'fulfilled' && ordersRes.value.success) {
-        setOrders(ordersRes.value.data.orders || []);
+        const rows = Array.isArray(ordersRes.value.data?.orders) ? ordersRes.value.data.orders : [];
+        setOrders(rows.map((row: any) => normalizeCustomerOrder(row)));
       }
       if (tryOnSummaryRes.status === 'fulfilled' && tryOnSummaryRes.value.success) {
         setTryOnSummary(tryOnSummaryRes.value.data || null);
