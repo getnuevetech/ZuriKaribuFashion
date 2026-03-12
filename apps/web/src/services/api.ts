@@ -3663,6 +3663,111 @@ const currencyApi = {
 };
 
 // Products API
+const toFiniteNumber = (...values: any[]) => {
+  for (const value of values) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+};
+
+const normalizeImageUrls = (images: any): string[] =>
+  (Array.isArray(images) ? images : [])
+    .map((entry) => String(entry?.url || entry || '').trim())
+    .filter(Boolean);
+
+const normalizeImageObjects = (images: any): Array<{ url: string }> =>
+  normalizeImageUrls(images).map((url) => ({ url }));
+
+const normalizeFabricDetailPayload = (raw: any) => {
+  const pricePerMeter = toFiniteNumber(
+    raw?.finalPrice,
+    raw?.listingUsdPrice,
+    raw?.sellerPrice,
+    raw?.pricePerMeter,
+    raw?.price
+  );
+  const minOrderMeters = toFiniteNumber(raw?.minOrderMeters, raw?.minYards, 1);
+  const stockMeters = toFiniteNumber(raw?.stockMeters, raw?.stockYards, 0);
+  return {
+    ...(raw || {}),
+    images: normalizeImageObjects(raw?.images),
+    pricePerMeter,
+    finalPrice: toFiniteNumber(raw?.finalPrice, pricePerMeter),
+    sellerPrice: toFiniteNumber(raw?.sellerPrice, pricePerMeter),
+    minOrderMeters,
+    minYards: minOrderMeters,
+    stockMeters,
+    stockYards: stockMeters,
+  };
+};
+
+const normalizeDesignDetailPayload = (raw: any) => {
+  const images = normalizeImageUrls(raw?.images);
+  const basePrice = toFiniteNumber(raw?.finalPrice, raw?.basePrice, raw?.price);
+  const suitableFabrics = (Array.isArray(raw?.suitableFabrics) ? raw.suitableFabrics : []).map((entry: any) => {
+    const fabricImages = normalizeImageUrls(entry?.fabric?.images);
+    const fabricPricePerMeter = toFiniteNumber(
+      entry?.fabric?.finalPrice,
+      entry?.fabric?.listingUsdPrice,
+      entry?.fabric?.sellerPrice,
+      entry?.fabric?.pricePerMeter,
+      entry?.fabric?.price
+    );
+    return {
+      ...(entry || {}),
+      minMeters: toFiniteNumber(entry?.minMeters, entry?.yardsNeeded, 1),
+      maxMeters: toFiniteNumber(entry?.maxMeters, entry?.yardsNeeded, 1),
+      fabric: {
+        ...(entry?.fabric || {}),
+        images: fabricImages,
+        pricePerMeter: fabricPricePerMeter,
+        finalPrice: toFiniteNumber(entry?.fabric?.finalPrice, fabricPricePerMeter),
+        sellerPrice: toFiniteNumber(entry?.fabric?.sellerPrice, fabricPricePerMeter),
+      },
+    };
+  });
+  const measurements = (Array.isArray(raw?.measurementVariables) ? raw.measurementVariables : [])
+    .map((entry: any) => ({
+      name: String(entry?.name || '').trim(),
+      description: String(entry?.instructions || entry?.description || '').trim(),
+      unit: String(entry?.unit || 'cm').trim() || 'cm',
+      isRequired: entry?.isRequired !== false,
+    }))
+    .filter((entry: any) => entry.name);
+
+  return {
+    ...(raw || {}),
+    images,
+    basePrice,
+    finalPrice: toFiniteNumber(raw?.finalPrice, basePrice),
+    suitableFabrics,
+    measurements,
+  };
+};
+
+const normalizeReadyToWearDetailPayload = (raw: any) => {
+  const sizeVariations = (Array.isArray(raw?.sizeVariations) ? raw.sizeVariations : []).map((entry: any) => ({
+    ...(entry || {}),
+    price: toFiniteNumber(entry?.price, raw?.finalPrice, raw?.basePrice, raw?.price),
+    stock: toFiniteNumber(entry?.stock, 0),
+  }));
+  const firstVariantPrice = toFiniteNumber(
+    sizeVariations.find((entry: any) => toFiniteNumber(entry?.price, 0) > 0)?.price,
+    0
+  );
+  const price = toFiniteNumber(raw?.finalPrice, raw?.price, raw?.basePrice, firstVariantPrice);
+  return {
+    ...(raw || {}),
+    images: normalizeImageObjects(raw?.images),
+    sizeVariations,
+    basePrice: toFiniteNumber(raw?.basePrice, raw?.finalPrice, firstVariantPrice, price),
+    finalPrice: toFiniteNumber(raw?.finalPrice, price),
+    price,
+    inStock: sizeVariations.some((entry: any) => Number(entry?.stock || 0) > 0),
+  };
+};
+
 const productsApi = {
   getCategories: () =>
     apiService.get<{ success: boolean; data: any[] }>('/products/categories'),
@@ -3681,11 +3786,23 @@ const productsApi = {
   }) =>
     apiService.get<{ success: boolean; data: { fabrics: any[]; pagination: any } }>('/products/fabrics', { params }),
 
-  getFabric: (id: string) =>
-    apiService.get<{ success: boolean; data: any }>(`/products/fabrics/${id}`),
+  getFabric: async (id: string) => {
+    const response = await apiService.get<{ success: boolean; data: any }>(`/products/fabrics/${id}`);
+    if (!response?.success) return response;
+    return {
+      ...response,
+      data: normalizeFabricDetailPayload(response.data),
+    };
+  },
 
-  getFabricById: (id: string) =>
-    apiService.get<{ success: boolean; data: any }>(`/products/fabrics/${id}`),
+  getFabricById: async (id: string) => {
+    const response = await apiService.get<{ success: boolean; data: any }>(`/products/fabrics/${id}`);
+    if (!response?.success) return response;
+    return {
+      ...response,
+      data: normalizeFabricDetailPayload(response.data),
+    };
+  },
 
   getDesigns: (params?: {
     categoryId?: string;
@@ -3700,11 +3817,23 @@ const productsApi = {
   }) =>
     apiService.get<{ success: boolean; data: { designs: any[]; pagination: any } }>('/products/designs', { params }),
 
-  getDesign: (id: string) =>
-    apiService.get<{ success: boolean; data: any }>(`/products/designs/${id}`),
+  getDesign: async (id: string) => {
+    const response = await apiService.get<{ success: boolean; data: any }>(`/products/designs/${id}`);
+    if (!response?.success) return response;
+    return {
+      ...response,
+      data: normalizeDesignDetailPayload(response.data),
+    };
+  },
 
-  getDesignById: (id: string) =>
-    apiService.get<{ success: boolean; data: any }>(`/products/designs/${id}`),
+  getDesignById: async (id: string) => {
+    const response = await apiService.get<{ success: boolean; data: any }>(`/products/designs/${id}`);
+    if (!response?.success) return response;
+    return {
+      ...response,
+      data: normalizeDesignDetailPayload(response.data),
+    };
+  },
 
   getReadyToWear: (params?: {
     categoryId?: string;
@@ -3719,8 +3848,14 @@ const productsApi = {
   }) =>
     apiService.get<{ success: boolean; data: { products: any[]; pagination: any } }>('/products/ready-to-wear', { params }),
 
-  getReadyToWearProduct: (id: string) =>
-    apiService.get<{ success: boolean; data: any }>(`/products/ready-to-wear/${id}`),
+  getReadyToWearProduct: async (id: string) => {
+    const response = await apiService.get<{ success: boolean; data: any }>(`/products/ready-to-wear/${id}`);
+    if (!response?.success) return response;
+    return {
+      ...response,
+      data: normalizeReadyToWearDetailPayload(response.data),
+    };
+  },
 
   getReadyToWearSizeGuide: () =>
     apiService.get<{ success: boolean; data: { title: string; content: string } }>('/products/ready-to-wear-size-guide'),
