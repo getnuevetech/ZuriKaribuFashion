@@ -106,6 +106,7 @@ app.use('/api/admin/designer-fabric-access', adminDesignerFabricCountryAccessRou
 app.use('/api/admin/designer/fabric-country-access', adminDesignerFabricCountryAccessRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/fabric-seller', fabricSellerRoutes);
+app.use('/api/seller', fabricSellerRoutes);
 app.use('/api/designer', designerRoutes);
 app.use('/api/customer', customerRoutes);
 app.use('/api/qa', qaRoutes);

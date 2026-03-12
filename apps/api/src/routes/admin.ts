@@ -15,6 +15,8 @@ import {
   readVendorDashboardGovernanceSettings,
   saveVendorDashboardGovernanceSettings,
 } from '../utils/vendor-dashboard-governance';
+import { readTryOnInsights } from '../utils/try-on-insights';
+import { readTryOnSettings, saveTryOnSettings } from '../utils/try-on-settings';
 
 const router = Router();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
@@ -1388,6 +1390,9 @@ const resolveAdminRoutePermissions = (method: string, path: string) => {
   if (path.startsWith('/vendor-dashboard-governance')) {
     return method === 'GET' ? [Permissions.VENDOR_PROFILES_READ] : [Permissions.VENDOR_PROFILES_REVIEW];
   }
+  if (path.startsWith('/try-on')) {
+    return [Permissions.PRODUCTS_MANAGE];
+  }
   if (path.startsWith('/vendor-profiles')) {
     return method === 'GET' ? [Permissions.VENDOR_PROFILES_READ] : [Permissions.VENDOR_PROFILES_REVIEW];
   }
@@ -2324,6 +2329,66 @@ router.put('/vendor-dashboard-governance', async (req, res, next) => {
       success: true,
       message: 'Vendor dashboard governance updated successfully.',
       data: settings,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/try-on/settings', async (_req, res, next) => {
+  try {
+    const payload = await readTryOnSettings();
+    res.json({
+      success: true,
+      data: {
+        source: payload.source,
+        updatedAt: payload.updatedAt,
+        settings: payload.settings,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put('/try-on/settings', async (req, res, next) => {
+  try {
+    const settings = await saveTryOnSettings(req.body?.settings ?? req.body);
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'TRY_ON_SETTINGS_UPDATED',
+        details: settings as any,
+      },
+    });
+    res.json({
+      success: true,
+      message: 'Try-On settings updated successfully.',
+      data: settings,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/try-on/insights', async (req, res, next) => {
+  try {
+    const settingsPayload = await readTryOnSettings();
+    if (settingsPayload.settings.applyLocations.adminDashboard === false) {
+      return res.json({
+        success: true,
+        data: {
+          disabled: true,
+          totalTryOns: 0,
+          measurementAverages: {},
+          recentTryOns: [],
+        },
+      });
+    }
+    const insights = await readTryOnInsights({ role: 'ADMIN', userId: req.user?.id });
+    res.json({
+      success: true,
+      data: insights,
     });
   } catch (error) {
     next(error);

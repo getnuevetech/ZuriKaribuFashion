@@ -12,6 +12,8 @@ import {
   getUsdPerUnit,
   setProductCurrencyMetadata,
 } from '../utils/currency';
+import { readTryOnInsights } from '../utils/try-on-insights';
+import { readTryOnSettings } from '../utils/try-on-settings';
 import { readVendorDashboardGovernanceSettings } from '../utils/vendor-dashboard-governance';
 
 const router = Router();
@@ -407,6 +409,33 @@ router.get('/dashboard-governance', async (_req, res, next) => {
     res.json({
       success: true,
       data: payload.settings.seller,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/try-on/insights', async (req, res, next) => {
+  try {
+    const settingsPayload = await readTryOnSettings();
+    if (settingsPayload.settings.applyLocations.sellerDashboard === false) {
+      return res.json({
+        success: true,
+        data: {
+          disabled: true,
+          totalTryOns: 0,
+          measurementAverages: {},
+          recentTryOns: [],
+        },
+      });
+    }
+    const insights = await readTryOnInsights({
+      role: 'SELLER',
+      userId: req.user?.id,
+    });
+    res.json({
+      success: true,
+      data: insights,
     });
   } catch (error) {
     next(error);

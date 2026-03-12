@@ -4041,6 +4041,20 @@ const customerApi = {
   saveMeasurements: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/customer/measurements', data),
 
+  getTryOnSummary: () =>
+    apiService.get<{ success: boolean; data: any }>('/customer/try-on/summary'),
+
+  getTryOnCatalog: (params?: { search?: string; productType?: 'ALL' | 'DESIGN' | 'READY_TO_WEAR'; page?: number; limit?: number }) =>
+    apiService.get<{ success: boolean; data: any[]; pagination?: any }>('/customer/try-on/catalog', { params }),
+
+  runTryOnBatch: (payload: {
+    measurements: Record<string, number>;
+    selectedProducts: Array<{ productType: 'DESIGN' | 'READY_TO_WEAR'; productId: string }>;
+  }) => apiService.post<{ success: boolean; data?: any; requiresPayment?: boolean; message?: string }>('/customer/try-on/batch', payload),
+
+  purchaseTryOnCredits: (payload: { bundles: number }) =>
+    apiService.post<{ success: boolean; data?: any; message?: string }>('/customer/try-on/purchase', payload),
+
   getOrders: (params?: { page?: number; limit?: number }) =>
     apiService.get<{ success: boolean; data: { orders: any[]; pagination: any } }>('/customer/orders', { params }),
 
@@ -4839,6 +4853,17 @@ const adminApi = {
       message?: string;
     }>('/admin/vendor-dashboard-governance', { settings }),
 
+  getTryOnSettings: () =>
+    apiService.get<{ success: boolean; data: { source?: 'DEFAULT' | 'DATABASE'; updatedAt?: string | null; settings: any } }>(
+      '/admin/try-on/settings'
+    ),
+
+  updateTryOnSettings: (settings: any) =>
+    apiService.put<{ success: boolean; data: any; message?: string }>('/admin/try-on/settings', { settings }),
+
+  getTryOnInsights: () =>
+    apiService.get<{ success: boolean; data: any }>('/admin/try-on/insights'),
+
   getDesignerFabricCountryAccess: (params?: { search?: string }) =>
     readAdminDesignerFabricCountryAccessWithFallback<{
       success: boolean;
@@ -5389,6 +5414,9 @@ const sellerApi = {
   getDashboardGovernance: () =>
     apiService.get<{ success: boolean; data: any }>('/seller/dashboard-governance'),
 
+  getTryOnInsights: () =>
+    apiService.get<{ success: boolean; data: any }>('/seller/try-on/insights'),
+
   getFabrics: () =>
     readSellerFabricsWithFallback<{ success: boolean; data: any[] }>(),
 
@@ -5446,6 +5474,9 @@ const designerApi = {
 
   getDashboardGovernance: () =>
     apiService.get<{ success: boolean; data: any }>('/designer/dashboard-governance'),
+
+  getTryOnInsights: () =>
+    apiService.get<{ success: boolean; data: any }>('/designer/try-on/insights'),
 
   getDesigns: () =>
     readDesignerDesignsWithFallback<{ success: boolean; data: any[] }>(),
@@ -5580,6 +5611,9 @@ const designerApi = {
 const qaApi = {
   getDashboard: () =>
     apiService.get<{ success: boolean; data: any }>('/qa/dashboard'),
+
+  getTryOnInsights: () =>
+    apiService.get<{ success: boolean; data: any }>('/qa/try-on/insights'),
 
   getOrders: (params?: { status?: string }) =>
     apiService.get<{ success: boolean; data: any[] }>('/qa/orders', { params }),

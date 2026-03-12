@@ -34,11 +34,13 @@ const FIELD_TYPES: FieldType[] = [
 ];
 
 type DashboardToggleMap = Record<string, boolean>;
+type DashboardFieldMode = 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+type DashboardFieldModeMap = Record<string, DashboardFieldMode>;
 type RoleDashboardGovernance = {
   tabs: DashboardToggleMap;
   sections: DashboardToggleMap;
   actions: DashboardToggleMap;
-  fields: DashboardToggleMap;
+  fields: DashboardFieldModeMap;
 };
 type DashboardGovernanceSettings = {
   seller: RoleDashboardGovernance;
@@ -55,6 +57,7 @@ const DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS: DashboardGovernanceSettings = {
       overviewCharts: true,
       overviewRecentOrders: true,
       overviewActivity: true,
+      overviewTryOnInsights: true,
       fabricsTable: true,
       featuredTable: true,
       ordersTable: true,
@@ -67,14 +70,14 @@ const DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS: DashboardGovernanceSettings = {
       updateOrderStatus: true,
     },
     fields: {
-      productName: true,
-      productDescription: true,
-      materialType: true,
-      sellerPrice: true,
-      listingCurrency: true,
-      minYards: true,
-      stockYards: true,
-      productImages: true,
+      productName: 'ENABLED',
+      productDescription: 'ENABLED',
+      materialType: 'ENABLED',
+      sellerPrice: 'ENABLED',
+      listingCurrency: 'ENABLED',
+      minYards: 'ENABLED',
+      stockYards: 'ENABLED',
+      productImages: 'ENABLED',
     },
   },
   designer: {
@@ -87,6 +90,7 @@ const DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS: DashboardGovernanceSettings = {
       overviewTopDesigns: true,
       overviewActivity: true,
       overviewPendingOrdersAlert: true,
+      overviewTryOnInsights: true,
       productsTable: true,
       featuredTable: true,
       ordersTable: true,
@@ -104,21 +108,21 @@ const DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS: DashboardGovernanceSettings = {
       updateOrderStatus: true,
     },
     fields: {
-      designName: true,
-      designDescription: true,
-      designStyle: true,
-      designBasePrice: true,
-      designListingCurrency: true,
-      designImages: true,
-      designSuitableFabrics: true,
-      designMeasurementVariables: true,
-      readyName: true,
-      readyDescription: true,
-      readyStyle: true,
-      readyBasePrice: true,
-      readyListingCurrency: true,
-      readyImages: true,
-      readyVariants: true,
+      designName: 'ENABLED',
+      designDescription: 'ENABLED',
+      designStyle: 'ENABLED',
+      designBasePrice: 'ENABLED',
+      designListingCurrency: 'ENABLED',
+      designImages: 'ENABLED',
+      designSuitableFabrics: 'ENABLED',
+      designMeasurementVariables: 'ENABLED',
+      readyName: 'ENABLED',
+      readyDescription: 'ENABLED',
+      readyStyle: 'ENABLED',
+      readyBasePrice: 'ENABLED',
+      readyListingCurrency: 'ENABLED',
+      readyImages: 'ENABLED',
+      readyVariants: 'ENABLED',
     },
   },
 };
@@ -138,6 +142,7 @@ const GOVERNANCE_LABELS = {
       overviewCharts: 'Overview charts',
       overviewRecentOrders: 'Recent orders panel',
       overviewActivity: 'Activity feed',
+      overviewTryOnInsights: 'TryON insights panel',
       fabricsTable: 'Fabrics table',
       featuredTable: 'Featured products table',
       ordersTable: 'Orders table',
@@ -175,6 +180,7 @@ const GOVERNANCE_LABELS = {
       overviewTopDesigns: 'Top designs chart',
       overviewActivity: 'Activity feed',
       overviewPendingOrdersAlert: 'Pending order alert',
+      overviewTryOnInsights: 'TryON insights panel',
       productsTable: 'Products table',
       featuredTable: 'Featured products table',
       ordersTable: 'Orders table',
@@ -211,11 +217,23 @@ const GOVERNANCE_LABELS = {
   },
 } as const;
 
+const normalizeFieldMode = (value: unknown): DashboardFieldMode => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'READ_ONLY') return 'READ_ONLY';
+  if (normalized === 'HIDDEN') return 'HIDDEN';
+  if (normalized === 'ENABLED') return 'ENABLED';
+  if (typeof value === 'boolean') return value ? 'ENABLED' : 'HIDDEN';
+  return 'ENABLED';
+};
+
 const mergeRoleGovernance = (defaults: RoleDashboardGovernance, input: any): RoleDashboardGovernance => ({
   tabs: { ...defaults.tabs, ...(input?.tabs || {}) },
   sections: { ...defaults.sections, ...(input?.sections || {}) },
   actions: { ...defaults.actions, ...(input?.actions || {}) },
-  fields: { ...defaults.fields, ...(input?.fields || {}) },
+  fields: Object.keys(defaults.fields).reduce((acc, key) => {
+    acc[key] = normalizeFieldMode(input?.fields?.[key] ?? defaults.fields[key]);
+    return acc;
+  }, {} as DashboardFieldModeMap),
 });
 
 const normalizeDashboardGovernance = (input: any): DashboardGovernanceSettings => ({
@@ -645,7 +663,7 @@ export default function AdminVendorProfiles() {
       {!loading && tab === 'dashboard' && (
         <div className="space-y-4 rounded-xl border bg-white p-4">
           <p className="text-sm text-gray-600">
-            Configure which seller/designer dashboard tabs, sections, actions, and form variables are enabled.
+            Configure seller/designer dashboard tabs, sections, actions, and per-field modes (enabled, read-only, hidden).
           </p>
           {(() => {
             const roleKey = role === 'FABRIC_SELLER' ? 'seller' : 'designer';
@@ -672,22 +690,45 @@ export default function AdminVendorProfiles() {
                             className="flex items-center justify-between rounded border px-3 py-2 text-sm"
                           >
                             <span>{(labelMap as any)?.[toggleKey] || toggleKey}</span>
-                            <input
-                              type="checkbox"
-                              checked={Boolean(values[toggleKey])}
-                              onChange={(event) =>
-                                setDashboardGovernance((previous) => ({
-                                  ...previous,
-                                  [roleKey]: {
-                                    ...previous[roleKey],
-                                    [group.key]: {
-                                      ...previous[roleKey][group.key],
-                                      [toggleKey]: event.target.checked,
+                            {group.key === 'fields' ? (
+                              <select
+                                value={String((values as DashboardFieldModeMap)[toggleKey] || 'ENABLED')}
+                                onChange={(event) =>
+                                  setDashboardGovernance((previous) => ({
+                                    ...previous,
+                                    [roleKey]: {
+                                      ...previous[roleKey],
+                                      [group.key]: {
+                                        ...previous[roleKey][group.key],
+                                        [toggleKey]: normalizeFieldMode(event.target.value),
+                                      },
                                     },
-                                  },
-                                }))
-                              }
-                            />
+                                  }))
+                                }
+                                className="rounded border px-2 py-1 text-xs"
+                              >
+                                <option value="ENABLED">Enabled</option>
+                                <option value="READ_ONLY">Read only</option>
+                                <option value="HIDDEN">Hidden</option>
+                              </select>
+                            ) : (
+                              <input
+                                type="checkbox"
+                                checked={Boolean((values as DashboardToggleMap)[toggleKey])}
+                                onChange={(event) =>
+                                  setDashboardGovernance((previous) => ({
+                                    ...previous,
+                                    [roleKey]: {
+                                      ...previous[roleKey],
+                                      [group.key]: {
+                                        ...previous[roleKey][group.key],
+                                        [toggleKey]: event.target.checked,
+                                      },
+                                    },
+                                  }))
+                                }
+                              />
+                            )}
                           </label>
                         ))}
                       </div>

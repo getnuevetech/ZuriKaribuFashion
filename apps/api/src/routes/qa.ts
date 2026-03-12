@@ -4,6 +4,8 @@ import { prisma, UserRole, OrderStatus } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import { appendWorkflowMetadataToShippingAddress, readOrderWorkflowSettings } from '../utils/order-workflow';
+import { readTryOnInsights } from '../utils/try-on-insights';
+import { readTryOnSettings } from '../utils/try-on-settings';
 
 const router = Router();
 
@@ -51,6 +53,33 @@ router.get('/dashboard', async (req, res, next) => {
           completedToday,
         },
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/try-on/insights', async (req, res, next) => {
+  try {
+    const settingsPayload = await readTryOnSettings();
+    if (settingsPayload.settings.applyLocations.qaDashboard === false) {
+      return res.json({
+        success: true,
+        data: {
+          disabled: true,
+          totalTryOns: 0,
+          measurementAverages: {},
+          recentTryOns: [],
+        },
+      });
+    }
+    const insights = await readTryOnInsights({
+      role: 'QA',
+      userId: req.user?.id,
+    });
+    res.json({
+      success: true,
+      data: insights,
     });
   } catch (error) {
     next(error);

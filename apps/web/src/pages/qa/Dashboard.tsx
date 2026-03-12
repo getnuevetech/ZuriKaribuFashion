@@ -16,7 +16,8 @@ import {
   ArrowRight,
   Filter,
   Search,
-  Truck
+  Truck,
+  Sparkles
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useSearchParams } from 'react-router-dom';
@@ -82,6 +83,7 @@ export default function QADashboard() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState('');
   const [showShipModal, setShowShipModal] = useState(false);
+  const [tryOnInsights, setTryOnInsights] = useState<any>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const syncTabWithUrl = (tab: 'overview' | 'pending' | 'history') => {
@@ -109,15 +111,17 @@ export default function QADashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsRes, pendingRes, historyRes] = await Promise.all([
+      const [statsRes, pendingRes, historyRes, tryOnRes] = await Promise.all([
         api.qa.getStats(),
         api.qa.getPendingItems(),
-        api.qa.getReviewHistory()
+        api.qa.getReviewHistory(),
+        api.qa.getTryOnInsights(),
       ]);
       
       if (statsRes.success) setStats(statsRes.data);
       if (pendingRes.success) setPendingItems(pendingRes.data);
       if (historyRes.success) setRecentReviews(historyRes.data);
+      if (tryOnRes.success) setTryOnInsights(tryOnRes.data || null);
       
       // Mock activities
       setActivities([
@@ -314,6 +318,24 @@ export default function QADashboard() {
               </div>
             </div>
           )}
+
+          <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+            <div className="flex items-start gap-3">
+              <Sparkles className="mt-0.5 h-5 w-5 text-purple-700" />
+              <div>
+                <p className="font-medium text-purple-900">3D TryON Body Insights</p>
+                <p className="text-sm text-purple-800">
+                  Total TryON runs: <span className="font-semibold">{Number(tryOnInsights?.totalTryOns || 0)}</span>
+                </p>
+                <p className="mt-1 text-xs text-purple-700">
+                  {Object.entries(tryOnInsights?.measurementAverages || {})
+                    .slice(0, 5)
+                    .map(([key, value]) => `${key}: ${value}`)
+                    .join(' • ') || 'No trend data available yet.'}
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

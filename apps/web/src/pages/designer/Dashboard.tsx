@@ -20,7 +20,8 @@ import {
   Search,
   Filter,
   Upload,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
@@ -242,6 +243,7 @@ type DesignerDashboardGovernance = {
     overviewTopDesigns: boolean;
     overviewActivity: boolean;
     overviewPendingOrdersAlert: boolean;
+    overviewTryOnInsights: boolean;
     productsTable: boolean;
     featuredTable: boolean;
     ordersTable: boolean;
@@ -259,21 +261,21 @@ type DesignerDashboardGovernance = {
     updateOrderStatus: boolean;
   };
   fields: {
-    designName: boolean;
-    designDescription: boolean;
-    designStyle: boolean;
-    designBasePrice: boolean;
-    designListingCurrency: boolean;
-    designImages: boolean;
-    designSuitableFabrics: boolean;
-    designMeasurementVariables: boolean;
-    readyName: boolean;
-    readyDescription: boolean;
-    readyStyle: boolean;
-    readyBasePrice: boolean;
-    readyListingCurrency: boolean;
-    readyImages: boolean;
-    readyVariants: boolean;
+    designName: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    designDescription: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    designStyle: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    designBasePrice: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    designListingCurrency: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    designImages: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    designSuitableFabrics: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    designMeasurementVariables: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    readyName: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    readyDescription: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    readyStyle: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    readyBasePrice: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    readyListingCurrency: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    readyImages: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    readyVariants: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
   };
 };
 
@@ -287,6 +289,7 @@ const DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE: DesignerDashboardGovernance = {
     overviewTopDesigns: true,
     overviewActivity: true,
     overviewPendingOrdersAlert: true,
+    overviewTryOnInsights: true,
     productsTable: true,
     featuredTable: true,
     ordersTable: true,
@@ -304,29 +307,70 @@ const DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE: DesignerDashboardGovernance = {
     updateOrderStatus: true,
   },
   fields: {
-    designName: true,
-    designDescription: true,
-    designStyle: true,
-    designBasePrice: true,
-    designListingCurrency: true,
-    designImages: true,
-    designSuitableFabrics: true,
-    designMeasurementVariables: true,
-    readyName: true,
-    readyDescription: true,
-    readyStyle: true,
-    readyBasePrice: true,
-    readyListingCurrency: true,
-    readyImages: true,
-    readyVariants: true,
+    designName: 'ENABLED',
+    designDescription: 'ENABLED',
+    designStyle: 'ENABLED',
+    designBasePrice: 'ENABLED',
+    designListingCurrency: 'ENABLED',
+    designImages: 'ENABLED',
+    designSuitableFabrics: 'ENABLED',
+    designMeasurementVariables: 'ENABLED',
+    readyName: 'ENABLED',
+    readyDescription: 'ENABLED',
+    readyStyle: 'ENABLED',
+    readyBasePrice: 'ENABLED',
+    readyListingCurrency: 'ENABLED',
+    readyImages: 'ENABLED',
+    readyVariants: 'ENABLED',
   },
+};
+
+const normalizeFieldMode = (value: unknown): 'ENABLED' | 'READ_ONLY' | 'HIDDEN' => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'READ_ONLY') return 'READ_ONLY';
+  if (normalized === 'HIDDEN') return 'HIDDEN';
+  if (normalized === 'ENABLED') return 'ENABLED';
+  if (typeof value === 'boolean') return value ? 'ENABLED' : 'HIDDEN';
+  return 'ENABLED';
 };
 
 const normalizeDesignerDashboardGovernance = (input: any): DesignerDashboardGovernance => ({
   tabs: { ...DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.tabs, ...(input?.tabs || {}) },
   sections: { ...DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.sections, ...(input?.sections || {}) },
   actions: { ...DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.actions, ...(input?.actions || {}) },
-  fields: { ...DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields, ...(input?.fields || {}) },
+  fields: {
+    designName: normalizeFieldMode(input?.fields?.designName ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.designName),
+    designDescription: normalizeFieldMode(
+      input?.fields?.designDescription ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.designDescription
+    ),
+    designStyle: normalizeFieldMode(input?.fields?.designStyle ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.designStyle),
+    designBasePrice: normalizeFieldMode(
+      input?.fields?.designBasePrice ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.designBasePrice
+    ),
+    designListingCurrency: normalizeFieldMode(
+      input?.fields?.designListingCurrency ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.designListingCurrency
+    ),
+    designImages: normalizeFieldMode(input?.fields?.designImages ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.designImages),
+    designSuitableFabrics: normalizeFieldMode(
+      input?.fields?.designSuitableFabrics ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.designSuitableFabrics
+    ),
+    designMeasurementVariables: normalizeFieldMode(
+      input?.fields?.designMeasurementVariables ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.designMeasurementVariables
+    ),
+    readyName: normalizeFieldMode(input?.fields?.readyName ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.readyName),
+    readyDescription: normalizeFieldMode(
+      input?.fields?.readyDescription ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.readyDescription
+    ),
+    readyStyle: normalizeFieldMode(input?.fields?.readyStyle ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.readyStyle),
+    readyBasePrice: normalizeFieldMode(
+      input?.fields?.readyBasePrice ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.readyBasePrice
+    ),
+    readyListingCurrency: normalizeFieldMode(
+      input?.fields?.readyListingCurrency ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.readyListingCurrency
+    ),
+    readyImages: normalizeFieldMode(input?.fields?.readyImages ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.readyImages),
+    readyVariants: normalizeFieldMode(input?.fields?.readyVariants ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.readyVariants),
+  },
 });
 
 const LOCATION_COUNTRIES = getCountryOptions();
@@ -462,6 +506,7 @@ export default function DesignerDashboard() {
   const [readyStockDraft, setReadyStockDraft] = useState<Array<{ size: string; color: string; stock: string }>>([]);
   const [readyStockSaving, setReadyStockSaving] = useState(false);
   const [readyStockError, setReadyStockError] = useState<string | null>(null);
+  const [tryOnInsights, setTryOnInsights] = useState<any>(null);
 
   const visibleTabs = useMemo(
     () =>
@@ -515,6 +560,7 @@ export default function DesignerDashboard() {
         currencyResult,
         readySizeOptionsResult,
         governanceResult,
+        tryOnInsightsResult,
       ] = await Promise.allSettled([
         api.designer.getDashboard(),
         api.designer.getDesigns(),
@@ -526,6 +572,7 @@ export default function DesignerDashboard() {
         api.currency.getMyOptions(),
         api.designer.getReadyToWearSizeOptions(),
         api.designer.getDashboardGovernance(),
+        api.designer.getTryOnInsights(),
       ]);
       const statsRes = statsResult.status === 'fulfilled' ? statsResult.value : null;
       const designsRes = designsResult.status === 'fulfilled' ? designsResult.value : null;
@@ -538,6 +585,7 @@ export default function DesignerDashboard() {
       const currencyRes = currencyResult.status === 'fulfilled' ? currencyResult.value : null;
       const readySizeOptionsRes = readySizeOptionsResult.status === 'fulfilled' ? readySizeOptionsResult.value : null;
       const governanceRes = governanceResult.status === 'fulfilled' ? governanceResult.value : null;
+      const tryOnInsightsRes = tryOnInsightsResult.status === 'fulfilled' ? tryOnInsightsResult.value : null;
       const settledCallStatus = (result: PromiseSettledResult<any>) => {
         if (result.status === 'fulfilled') {
           return result.value?.success
@@ -758,6 +806,9 @@ export default function DesignerDashboard() {
         setDashboardGovernance(normalizeDesignerDashboardGovernance(governanceRes.data));
       } else {
         setDashboardGovernance(DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE);
+      }
+      if (tryOnInsightsRes?.success) {
+        setTryOnInsights(tryOnInsightsRes.data || null);
       }
       const completionPayload = dashboardCompletion || (profileRes?.success ? profileRes.data : null);
       const dashboardGovernanceFields = statsRes?.success && Array.isArray(statsRes.data?.governanceFields)
@@ -1742,13 +1793,30 @@ export default function DesignerDashboard() {
     selectedReadyListingCurrency === 'USD'
       ? readyLocalPricePreview
       : Number((readyLocalPricePreview * selectedReadyUsdPerUnit).toFixed(2));
+  const isFieldHidden = (mode: 'ENABLED' | 'READ_ONLY' | 'HIDDEN') => mode === 'HIDDEN';
+  const isFieldReadOnly = (mode: 'ENABLED' | 'READ_ONLY' | 'HIDDEN') => mode === 'READ_ONLY';
+  const canUseDesignForm =
+    !isFieldHidden(dashboardGovernance.fields.designName) &&
+    !isFieldHidden(dashboardGovernance.fields.designDescription) &&
+    !isFieldHidden(dashboardGovernance.fields.designStyle) &&
+    !isFieldHidden(dashboardGovernance.fields.designBasePrice) &&
+    !isFieldHidden(dashboardGovernance.fields.designImages) &&
+    !isFieldHidden(dashboardGovernance.fields.designSuitableFabrics) &&
+    !isFieldHidden(dashboardGovernance.fields.designMeasurementVariables);
+  const canUseReadyForm =
+    !isFieldHidden(dashboardGovernance.fields.readyName) &&
+    !isFieldHidden(dashboardGovernance.fields.readyDescription) &&
+    !isFieldHidden(dashboardGovernance.fields.readyStyle) &&
+    !isFieldHidden(dashboardGovernance.fields.readyBasePrice) &&
+    !isFieldHidden(dashboardGovernance.fields.readyImages) &&
+    !isFieldHidden(dashboardGovernance.fields.readyVariants);
   const showProfileGovernance = dashboardGovernance.sections.profileGovernance !== false;
   const showStats = dashboardGovernance.sections.stats !== false;
   const canSubmitProfile = dashboardGovernance.actions.submitProfile !== false;
-  const canAddDesignProduct = dashboardGovernance.actions.addDesignProduct !== false;
-  const canAddReadyProduct = dashboardGovernance.actions.addReadyToWearProduct !== false;
-  const canEditDesignProduct = dashboardGovernance.actions.editDesignProduct !== false;
-  const canEditReadyProduct = dashboardGovernance.actions.editReadyToWearProduct !== false;
+  const canAddDesignProduct = dashboardGovernance.actions.addDesignProduct !== false && canUseDesignForm;
+  const canAddReadyProduct = dashboardGovernance.actions.addReadyToWearProduct !== false && canUseReadyForm;
+  const canEditDesignProduct = dashboardGovernance.actions.editDesignProduct !== false && canUseDesignForm;
+  const canEditReadyProduct = dashboardGovernance.actions.editReadyToWearProduct !== false && canUseReadyForm;
   const canManageReadyStock = dashboardGovernance.actions.manageReadyStock !== false;
   const canRequestFabricCountryAccess = dashboardGovernance.actions.requestFabricCountryAccess !== false;
   const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false;
@@ -2113,6 +2181,26 @@ export default function DesignerDashboard() {
               </div>
             </div>
           )}
+          {dashboardGovernance.sections.overviewTryOnInsights !== false ? (
+            <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+              <div className="flex items-start gap-3">
+                <Sparkles className="mt-0.5 h-5 w-5 text-purple-700" />
+                <div>
+                  <p className="font-medium text-purple-900">3D TryON Body Insights</p>
+                  <p className="text-sm text-purple-800">
+                    Total TryON runs linked to your products:{' '}
+                    <span className="font-semibold">{Number(tryOnInsights?.totalTryOns || 0)}</span>
+                  </p>
+                  <p className="mt-1 text-xs text-purple-700">
+                    {Object.entries(tryOnInsights?.measurementAverages || {})
+                      .slice(0, 5)
+                      .map(([key, value]) => `${key}: ${value}`)
+                      .join(' • ') || 'No measurement trends yet.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </>
       )}
 
@@ -2443,7 +2531,7 @@ export default function DesignerDashboard() {
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
+              <div className={`md:col-span-2 ${isFieldHidden(dashboardGovernance.fields.readyName) ? 'hidden' : ''}`}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
                 <input
                   type="text"
@@ -2451,28 +2539,28 @@ export default function DesignerDashboard() {
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, name: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                   placeholder="e.g. Ready-to-wear Kaftan"
-                  disabled={dashboardGovernance.fields.readyName === false}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.readyName)}
                 />
               </div>
 
-              <div className="md:col-span-2">
+              <div className={`md:col-span-2 ${isFieldHidden(dashboardGovernance.fields.readyDescription) ? 'hidden' : ''}`}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea
                   value={readyForm.description}
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, description: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg min-h-[90px]"
                   placeholder="Describe fit, cut, fabric, and styling details."
-                  disabled={dashboardGovernance.fields.readyDescription === false}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.readyDescription)}
                 />
               </div>
 
-              <div>
+              <div className={isFieldHidden(dashboardGovernance.fields.readyStyle) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Style</label>
                 <select
                   value={readyForm.categoryId}
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, categoryId: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={dashboardGovernance.fields.readyStyle === false}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.readyStyle)}
                 >
                   {categories.length === 0 ? <option value="">No styles found</option> : null}
                   {categories.map((category) => (
@@ -2483,7 +2571,7 @@ export default function DesignerDashboard() {
                 </select>
               </div>
 
-              <div>
+              <div className={isFieldHidden(dashboardGovernance.fields.readyBasePrice) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Base Price ({readyForm.priceCurrencyCode})</label>
                 <input
                   type="number"
@@ -2492,19 +2580,19 @@ export default function DesignerDashboard() {
                   value={readyForm.basePrice}
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, basePrice: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={dashboardGovernance.fields.readyBasePrice === false}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.readyBasePrice)}
                 />
                 <p className="mt-1 text-xs text-gray-500">Converted USD: ${readyUsdPricePreview.toFixed(2)}</p>
               </div>
 
-              <div>
+              <div className={isFieldHidden(dashboardGovernance.fields.readyListingCurrency) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Listing Currency</label>
                 <select
                   value={readyForm.priceCurrencyCode}
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, priceCurrencyCode: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                   disabled={
-                    dashboardGovernance.fields.readyListingCurrency === false ||
+                    isFieldReadOnly(dashboardGovernance.fields.readyListingCurrency) ||
                     (currencyOptions.allowedCurrencies || []).length <= 1
                   }
                 >
@@ -2516,7 +2604,7 @@ export default function DesignerDashboard() {
                 </select>
               </div>
 
-              {dashboardGovernance.fields.readyImages !== false ? (
+              {!isFieldHidden(dashboardGovernance.fields.readyImages) ? (
                 <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Product Images (minimum 3, maximum 5)</label>
                 <div className="flex gap-2">
@@ -2527,7 +2615,12 @@ export default function DesignerDashboard() {
                     placeholder="Paste image URL and add"
                     className="w-full rounded-lg border px-3 py-2 text-sm"
                   />
-                  <Button type="button" variant="outline" onClick={handleAddReadyImageUrl}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleAddReadyImageUrl}
+                    disabled={isFieldReadOnly(dashboardGovernance.fields.readyImages)}
+                  >
                     Add URL
                   </Button>
                   <label className="inline-flex cursor-pointer items-center rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
@@ -2538,7 +2631,7 @@ export default function DesignerDashboard() {
                       accept="image/*"
                       className="hidden"
                       onChange={handleReadyImageUpload}
-                      disabled={readyUploadingImage}
+                      disabled={readyUploadingImage || isFieldReadOnly(dashboardGovernance.fields.readyImages)}
                       multiple
                     />
                   </label>
@@ -2555,6 +2648,7 @@ export default function DesignerDashboard() {
                           type="button"
                           onClick={() => handleRemoveReadyImage(entry.url)}
                           className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white"
+                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyImages)}
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -2565,11 +2659,16 @@ export default function DesignerDashboard() {
                 </div>
               ) : null}
 
-              {dashboardGovernance.fields.readyVariants !== false ? (
+              {!isFieldHidden(dashboardGovernance.fields.readyVariants) ? (
                 <div className="md:col-span-2">
                 <div className="mb-2 flex items-center justify-between">
                   <label className="block text-sm font-medium text-gray-700">Variant Rows (Size + Color + Quantity)</label>
-                  <Button variant="outline" size="sm" onClick={addReadyVariantRow}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={addReadyVariantRow}
+                    disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants)}
+                  >
                     <Plus className="w-4 h-4 mr-1" />
                     Add Variant
                   </Button>
@@ -2590,7 +2689,7 @@ export default function DesignerDashboard() {
                             }))
                           }
                           className="w-full rounded-lg border px-3 py-2 text-sm"
-                          disabled={dashboardGovernance.fields.readyVariants === false}
+                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants)}
                         >
                           {readySizeOptions.map((size) => (
                             <option key={size} value={size}>
@@ -2614,7 +2713,7 @@ export default function DesignerDashboard() {
                           }
                           placeholder="e.g. Black"
                           className="w-full rounded-lg border px-3 py-2 text-sm"
-                          disabled={dashboardGovernance.fields.readyVariants === false}
+                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants)}
                         />
                       </div>
                       <div className="md:col-span-2">
@@ -2633,7 +2732,7 @@ export default function DesignerDashboard() {
                             }))
                           }
                           className="w-full rounded-lg border px-3 py-2 text-sm"
-                          disabled={dashboardGovernance.fields.readyVariants === false}
+                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants)}
                         />
                       </div>
                       <div className="md:col-span-2">
@@ -2652,7 +2751,7 @@ export default function DesignerDashboard() {
                             }))
                           }
                           className="w-full rounded-lg border px-3 py-2 text-sm"
-                          disabled={dashboardGovernance.fields.readyVariants === false}
+                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants)}
                         />
                       </div>
                       <div className="md:col-span-2 flex items-end justify-end">
@@ -2660,7 +2759,7 @@ export default function DesignerDashboard() {
                           variant="outline"
                           size="sm"
                           onClick={() => removeReadyVariantRow(index)}
-                          disabled={readyForm.variants.length <= 1 || dashboardGovernance.fields.readyVariants === false}
+                          disabled={readyForm.variants.length <= 1 || isFieldReadOnly(dashboardGovernance.fields.readyVariants)}
                         >
                           Remove
                         </Button>
@@ -2708,7 +2807,7 @@ export default function DesignerDashboard() {
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
+              <div className={`md:col-span-2 ${isFieldHidden(dashboardGovernance.fields.designName) ? 'hidden' : ''}`}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Design Name</label>
                 <input
                   type="text"
@@ -2716,28 +2815,28 @@ export default function DesignerDashboard() {
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, name: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                   placeholder="e.g. Royal Kente Evening Gown"
-                  disabled={dashboardGovernance.fields.designName === false}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.designName)}
                 />
               </div>
 
-              <div className="md:col-span-2">
+              <div className={`md:col-span-2 ${isFieldHidden(dashboardGovernance.fields.designDescription) ? 'hidden' : ''}`}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea
                   value={designForm.description}
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, description: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg min-h-[90px]"
                   placeholder="Describe style, fit, silhouette, and special details."
-                  disabled={dashboardGovernance.fields.designDescription === false}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.designDescription)}
                 />
               </div>
 
-              <div>
+              <div className={isFieldHidden(dashboardGovernance.fields.designStyle) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Style</label>
                 <select
                   value={designForm.categoryId}
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, categoryId: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={dashboardGovernance.fields.designStyle === false}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.designStyle)}
                 >
                   {categories.length === 0 ? <option value="">No styles found</option> : null}
                   {categories.map((category) => (
@@ -2748,7 +2847,7 @@ export default function DesignerDashboard() {
                 </select>
               </div>
 
-              <div>
+              <div className={isFieldHidden(dashboardGovernance.fields.designBasePrice) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Base Price ({selectedListingCurrency})
                 </label>
@@ -2759,19 +2858,19 @@ export default function DesignerDashboard() {
                   value={designForm.basePrice}
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, basePrice: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={dashboardGovernance.fields.designBasePrice === false}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.designBasePrice)}
                 />
                 <p className="mt-1 text-xs text-gray-500">Converted USD: ${usdPricePreview.toFixed(2)}</p>
               </div>
 
-              <div>
+              <div className={isFieldHidden(dashboardGovernance.fields.designListingCurrency) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Listing Currency</label>
                 <select
                   value={designForm.priceCurrencyCode}
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, priceCurrencyCode: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                   disabled={
-                    dashboardGovernance.fields.designListingCurrency === false ||
+                    isFieldReadOnly(dashboardGovernance.fields.designListingCurrency) ||
                     (currencyOptions.allowedCurrencies || []).length <= 1
                   }
                 >
@@ -2783,7 +2882,7 @@ export default function DesignerDashboard() {
                 </select>
               </div>
 
-              {dashboardGovernance.fields.designImages !== false ? (
+              {!isFieldHidden(dashboardGovernance.fields.designImages) ? (
                 <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Product Images (minimum 4, maximum 6)</label>
                 <div className="flex gap-2">
@@ -2794,7 +2893,12 @@ export default function DesignerDashboard() {
                     placeholder="Paste image URL and add"
                     className="w-full rounded-lg border px-3 py-2 text-sm"
                   />
-                  <Button type="button" variant="outline" onClick={handleAddDesignImageUrl}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleAddDesignImageUrl}
+                    disabled={isFieldReadOnly(dashboardGovernance.fields.designImages)}
+                  >
                     Add URL
                   </Button>
                   <label className="inline-flex cursor-pointer items-center rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
@@ -2805,7 +2909,7 @@ export default function DesignerDashboard() {
                       accept="image/*"
                       className="hidden"
                       onChange={handleDesignImageUpload}
-                      disabled={designUploadingImage}
+                      disabled={designUploadingImage || isFieldReadOnly(dashboardGovernance.fields.designImages)}
                       multiple
                     />
                   </label>
@@ -2822,6 +2926,7 @@ export default function DesignerDashboard() {
                           type="button"
                           onClick={() => handleRemoveDesignImage(entry.url)}
                           className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white"
+                          disabled={isFieldReadOnly(dashboardGovernance.fields.designImages)}
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -2832,7 +2937,7 @@ export default function DesignerDashboard() {
                 </div>
               ) : null}
 
-              {dashboardGovernance.fields.designSuitableFabrics !== false ? (
+              {!isFieldHidden(dashboardGovernance.fields.designSuitableFabrics) ? (
                 <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Suitable Fabrics (country → material → fabric name)
@@ -2859,7 +2964,11 @@ export default function DesignerDashboard() {
                             )
                           }
                           className="h-20 w-full rounded border px-2 py-1 text-xs"
-                          disabled={fabricAccessLoading || !canRequestFabricCountryAccess}
+                          disabled={
+                            fabricAccessLoading ||
+                            !canRequestFabricCountryAccess ||
+                            isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)
+                          }
                         >
                           {fabricAccessAvailableCountries
                             .filter((country) => !fabricAccessAllowedCountries.includes(country))
@@ -2875,14 +2984,22 @@ export default function DesignerDashboard() {
                           onChange={(event) => setFabricAccessRequestReason(event.target.value)}
                           placeholder="Reason (optional)"
                           className="rounded border px-2 py-1 text-xs"
-                          disabled={!canRequestFabricCountryAccess}
+                          disabled={
+                            !canRequestFabricCountryAccess ||
+                            isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)
+                          }
                         />
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
                           onClick={submitFabricCountryAccessRequest}
-                          disabled={fabricAccessSubmitting || fabricAccessLoading || !canRequestFabricCountryAccess}
+                          disabled={
+                            fabricAccessSubmitting ||
+                            fabricAccessLoading ||
+                            !canRequestFabricCountryAccess ||
+                            isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)
+                          }
                         >
                           {fabricAccessSubmitting ? 'Submitting...' : 'Request Access'}
                         </Button>
@@ -2910,6 +3027,7 @@ export default function DesignerDashboard() {
                           setDesignFabricMaterialFilter('');
                         }}
                         className="w-full rounded-lg border px-3 py-2 text-sm"
+                        disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)}
                       >
                         <option value="">All allowed countries</option>
                         {fabricCountryOptions.map((country) => (
@@ -2925,6 +3043,7 @@ export default function DesignerDashboard() {
                         value={designFabricMaterialFilter}
                         onChange={(event) => setDesignFabricMaterialFilter(event.target.value)}
                         className="w-full rounded-lg border px-3 py-2 text-sm"
+                        disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)}
                       >
                         <option value="">All materials</option>
                         {fabricMaterialOptions.map((material) => (
@@ -2942,6 +3061,7 @@ export default function DesignerDashboard() {
                         onChange={(event) => setDesignFabricSearch(event.target.value)}
                         className="w-full rounded-lg border px-3 py-2 text-sm"
                         placeholder="Search by fabric name"
+                        disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)}
                       />
                     </div>
                   </div>
@@ -2951,6 +3071,7 @@ export default function DesignerDashboard() {
                       value={designSelectedFabricOptionId}
                       onChange={(event) => setDesignSelectedFabricOptionId(event.target.value)}
                       className="w-full rounded-lg border px-3 py-2 text-sm"
+                      disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)}
                     >
                       <option value="">
                         {designFabricOptionsLoading
@@ -2965,7 +3086,12 @@ export default function DesignerDashboard() {
                         </option>
                       ))}
                     </select>
-                    <Button type="button" variant="outline" onClick={addSelectedFabricFromDropdown}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addSelectedFabricFromDropdown}
+                      disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)}
+                    >
                       Add Fabric
                     </Button>
                   </div>
@@ -2994,8 +3120,15 @@ export default function DesignerDashboard() {
                               }))
                             }
                             className="rounded border px-2 py-1 text-sm"
+                            disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)}
                           />
-                          <Button type="button" variant="outline" size="sm" onClick={() => removeSelectedFabric(fabric.id)}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeSelectedFabric(fabric.id)}
+                            disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)}
+                          >
                             Remove
                           </Button>
                         </div>
@@ -3006,7 +3139,7 @@ export default function DesignerDashboard() {
                 </div>
               ) : null}
 
-              {dashboardGovernance.fields.designMeasurementVariables !== false ? (
+              {!isFieldHidden(dashboardGovernance.fields.designMeasurementVariables) ? (
                 <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Measurement Fields (admin-defined templates)
@@ -3030,7 +3163,7 @@ export default function DesignerDashboard() {
                                 return { ...prev, selectedMeasurementNames: Array.from(new Set(next)) };
                               })
                             }
-                            disabled={dashboardGovernance.fields.designMeasurementVariables === false}
+                            disabled={isFieldReadOnly(dashboardGovernance.fields.designMeasurementVariables)}
                           />
                           <span>
                             <span className="font-medium">{template.name}</span> ({template.unit})

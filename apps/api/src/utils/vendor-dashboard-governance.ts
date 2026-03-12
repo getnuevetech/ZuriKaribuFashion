@@ -12,6 +12,7 @@ const sellerSectionKeys = [
   'overviewCharts',
   'overviewRecentOrders',
   'overviewActivity',
+  'overviewTryOnInsights',
   'fabricsTable',
   'featuredTable',
   'ordersTable',
@@ -43,6 +44,7 @@ const designerSectionKeys = [
   'overviewTopDesigns',
   'overviewActivity',
   'overviewPendingOrdersAlert',
+  'overviewTryOnInsights',
   'productsTable',
   'featuredTable',
   'ordersTable',
@@ -78,19 +80,21 @@ const designerFieldKeys = [
 ] as const;
 
 type ToggleRecord<T extends readonly string[]> = Record<T[number], boolean>;
+export type DashboardFieldMode = 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+type FieldModeRecord<T extends readonly string[]> = Record<T[number], DashboardFieldMode>;
 
 export type SellerDashboardGovernance = {
   tabs: ToggleRecord<typeof sellerTabKeys>;
   sections: ToggleRecord<typeof sellerSectionKeys>;
   actions: ToggleRecord<typeof sellerActionKeys>;
-  fields: ToggleRecord<typeof sellerFieldKeys>;
+  fields: FieldModeRecord<typeof sellerFieldKeys>;
 };
 
 export type DesignerDashboardGovernance = {
   tabs: ToggleRecord<typeof designerTabKeys>;
   sections: ToggleRecord<typeof designerSectionKeys>;
   actions: ToggleRecord<typeof designerActionKeys>;
-  fields: ToggleRecord<typeof designerFieldKeys>;
+  fields: FieldModeRecord<typeof designerFieldKeys>;
 };
 
 export type VendorDashboardGovernanceSettings = {
@@ -104,18 +108,24 @@ const buildAllEnabled = <T extends readonly string[]>(keys: T): ToggleRecord<T> 
     return acc;
   }, {} as ToggleRecord<T>);
 
+const buildAllFieldModesEnabled = <T extends readonly string[]>(keys: T): FieldModeRecord<T> =>
+  keys.reduce((acc, key) => {
+    (acc as Record<string, DashboardFieldMode>)[String(key)] = 'ENABLED';
+    return acc;
+  }, {} as FieldModeRecord<T>);
+
 export const VENDOR_DASHBOARD_GOVERNANCE_DEFAULTS: VendorDashboardGovernanceSettings = {
   seller: {
     tabs: buildAllEnabled(sellerTabKeys),
     sections: buildAllEnabled(sellerSectionKeys),
     actions: buildAllEnabled(sellerActionKeys),
-    fields: buildAllEnabled(sellerFieldKeys),
+    fields: buildAllFieldModesEnabled(sellerFieldKeys),
   },
   designer: {
     tabs: buildAllEnabled(designerTabKeys),
     sections: buildAllEnabled(designerSectionKeys),
     actions: buildAllEnabled(designerActionKeys),
-    fields: buildAllEnabled(designerFieldKeys),
+    fields: buildAllFieldModesEnabled(designerFieldKeys),
   },
 };
 
@@ -127,18 +137,27 @@ const booleanRecordSchema = (keys: readonly string[]) =>
       'Missing required governance toggle key(s).'
     );
 
+const fieldModeSchema = z.enum(['ENABLED', 'READ_ONLY', 'HIDDEN']);
+const fieldModeRecordSchema = (keys: readonly string[]) =>
+  z
+    .record(fieldModeSchema)
+    .refine(
+      (value) => keys.every((key) => Object.prototype.hasOwnProperty.call(value, key)),
+      'Missing required governance field mode key(s).'
+    );
+
 const sellerGovernanceSchema = z.object({
   tabs: booleanRecordSchema(sellerTabKeys),
   sections: booleanRecordSchema(sellerSectionKeys),
   actions: booleanRecordSchema(sellerActionKeys),
-  fields: booleanRecordSchema(sellerFieldKeys),
+  fields: fieldModeRecordSchema(sellerFieldKeys),
 });
 
 const designerGovernanceSchema = z.object({
   tabs: booleanRecordSchema(designerTabKeys),
   sections: booleanRecordSchema(designerSectionKeys),
   actions: booleanRecordSchema(designerActionKeys),
-  fields: booleanRecordSchema(designerFieldKeys),
+  fields: fieldModeRecordSchema(designerFieldKeys),
 });
 
 export const vendorDashboardGovernanceSchema = z.object({
@@ -176,6 +195,25 @@ const mergeToggleMap = <T extends Record<string, boolean>>(defaults: T, input: u
   return next;
 };
 
+const normalizeFieldMode = (value: unknown): DashboardFieldMode => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'READ_ONLY') return 'READ_ONLY';
+  if (normalized === 'HIDDEN') return 'HIDDEN';
+  if (normalized === 'ENABLED') return 'ENABLED';
+  if (typeof value === 'boolean') return value ? 'ENABLED' : 'HIDDEN';
+  return 'ENABLED';
+};
+
+const mergeFieldModeMap = <T extends Record<string, DashboardFieldMode>>(defaults: T, input: unknown): T => {
+  const next = { ...defaults };
+  if (!input || typeof input !== 'object') return next;
+  for (const key of Object.keys(defaults)) {
+    if (!Object.prototype.hasOwnProperty.call(input, key)) continue;
+    next[key as keyof T] = normalizeFieldMode((input as any)[key]) as T[keyof T];
+  }
+  return next;
+};
+
 export const normalizeVendorDashboardGovernanceSettings = (input: unknown): VendorDashboardGovernanceSettings => {
   const raw = input && typeof input === 'object' ? (input as any) : {};
   return {
@@ -183,13 +221,13 @@ export const normalizeVendorDashboardGovernanceSettings = (input: unknown): Vend
       tabs: mergeToggleMap(VENDOR_DASHBOARD_GOVERNANCE_DEFAULTS.seller.tabs, raw?.seller?.tabs),
       sections: mergeToggleMap(VENDOR_DASHBOARD_GOVERNANCE_DEFAULTS.seller.sections, raw?.seller?.sections),
       actions: mergeToggleMap(VENDOR_DASHBOARD_GOVERNANCE_DEFAULTS.seller.actions, raw?.seller?.actions),
-      fields: mergeToggleMap(VENDOR_DASHBOARD_GOVERNANCE_DEFAULTS.seller.fields, raw?.seller?.fields),
+      fields: mergeFieldModeMap(VENDOR_DASHBOARD_GOVERNANCE_DEFAULTS.seller.fields, raw?.seller?.fields),
     },
     designer: {
       tabs: mergeToggleMap(VENDOR_DASHBOARD_GOVERNANCE_DEFAULTS.designer.tabs, raw?.designer?.tabs),
       sections: mergeToggleMap(VENDOR_DASHBOARD_GOVERNANCE_DEFAULTS.designer.sections, raw?.designer?.sections),
       actions: mergeToggleMap(VENDOR_DASHBOARD_GOVERNANCE_DEFAULTS.designer.actions, raw?.designer?.actions),
-      fields: mergeToggleMap(VENDOR_DASHBOARD_GOVERNANCE_DEFAULTS.designer.fields, raw?.designer?.fields),
+      fields: mergeFieldModeMap(VENDOR_DASHBOARD_GOVERNANCE_DEFAULTS.designer.fields, raw?.designer?.fields),
     },
   };
 };

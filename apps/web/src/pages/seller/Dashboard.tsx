@@ -18,7 +18,8 @@ import {
   Search,
   Filter,
   Upload,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
@@ -154,6 +155,7 @@ type SellerDashboardGovernance = {
     overviewCharts: boolean;
     overviewRecentOrders: boolean;
     overviewActivity: boolean;
+    overviewTryOnInsights: boolean;
     fabricsTable: boolean;
     featuredTable: boolean;
     ordersTable: boolean;
@@ -166,14 +168,14 @@ type SellerDashboardGovernance = {
     updateOrderStatus: boolean;
   };
   fields: {
-    productName: boolean;
-    productDescription: boolean;
-    materialType: boolean;
-    sellerPrice: boolean;
-    listingCurrency: boolean;
-    minYards: boolean;
-    stockYards: boolean;
-    productImages: boolean;
+    productName: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    productDescription: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    materialType: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    sellerPrice: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    listingCurrency: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    minYards: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    stockYards: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    productImages: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
   };
 };
 
@@ -191,6 +193,7 @@ const DEFAULT_SELLER_DASHBOARD_GOVERNANCE: SellerDashboardGovernance = {
     overviewCharts: true,
     overviewRecentOrders: true,
     overviewActivity: true,
+    overviewTryOnInsights: true,
     fabricsTable: true,
     featuredTable: true,
     ordersTable: true,
@@ -203,22 +206,44 @@ const DEFAULT_SELLER_DASHBOARD_GOVERNANCE: SellerDashboardGovernance = {
     updateOrderStatus: true,
   },
   fields: {
-    productName: true,
-    productDescription: true,
-    materialType: true,
-    sellerPrice: true,
-    listingCurrency: true,
-    minYards: true,
-    stockYards: true,
-    productImages: true,
+    productName: 'ENABLED',
+    productDescription: 'ENABLED',
+    materialType: 'ENABLED',
+    sellerPrice: 'ENABLED',
+    listingCurrency: 'ENABLED',
+    minYards: 'ENABLED',
+    stockYards: 'ENABLED',
+    productImages: 'ENABLED',
   },
+};
+
+const normalizeFieldMode = (value: unknown): 'ENABLED' | 'READ_ONLY' | 'HIDDEN' => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'READ_ONLY') return 'READ_ONLY';
+  if (normalized === 'HIDDEN') return 'HIDDEN';
+  if (normalized === 'ENABLED') return 'ENABLED';
+  if (typeof value === 'boolean') return value ? 'ENABLED' : 'HIDDEN';
+  return 'ENABLED';
 };
 
 const normalizeSellerDashboardGovernance = (input: any): SellerDashboardGovernance => ({
   tabs: { ...DEFAULT_SELLER_DASHBOARD_GOVERNANCE.tabs, ...(input?.tabs || {}) },
   sections: { ...DEFAULT_SELLER_DASHBOARD_GOVERNANCE.sections, ...(input?.sections || {}) },
   actions: { ...DEFAULT_SELLER_DASHBOARD_GOVERNANCE.actions, ...(input?.actions || {}) },
-  fields: { ...DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields, ...(input?.fields || {}) },
+  fields: {
+    productName: normalizeFieldMode(input?.fields?.productName ?? DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields.productName),
+    productDescription: normalizeFieldMode(
+      input?.fields?.productDescription ?? DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields.productDescription
+    ),
+    materialType: normalizeFieldMode(input?.fields?.materialType ?? DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields.materialType),
+    sellerPrice: normalizeFieldMode(input?.fields?.sellerPrice ?? DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields.sellerPrice),
+    listingCurrency: normalizeFieldMode(
+      input?.fields?.listingCurrency ?? DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields.listingCurrency
+    ),
+    minYards: normalizeFieldMode(input?.fields?.minYards ?? DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields.minYards),
+    stockYards: normalizeFieldMode(input?.fields?.stockYards ?? DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields.stockYards),
+    productImages: normalizeFieldMode(input?.fields?.productImages ?? DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields.productImages),
+  },
 });
 
 const LOCATION_COUNTRIES = getCountryOptions();
@@ -305,6 +330,7 @@ export default function SellerDashboard() {
   const [dashboardGovernance, setDashboardGovernance] = useState<SellerDashboardGovernance>(
     DEFAULT_SELLER_DASHBOARD_GOVERNANCE
   );
+  const [tryOnInsights, setTryOnInsights] = useState<any>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [fabricSearch, setFabricSearch] = useState('');
   const [fabricStatusFilter, setFabricStatusFilter] = useState('');
@@ -357,13 +383,14 @@ export default function SellerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [dashboardResult, fabricsResult, ordersResult, materialsResult, currencyResult, governanceResult] = await Promise.allSettled([
+      const [dashboardResult, fabricsResult, ordersResult, materialsResult, currencyResult, governanceResult, tryOnInsightsResult] = await Promise.allSettled([
         api.seller.getDashboard(),
         api.seller.getFabrics(),
         api.seller.getOrders(),
         api.products.getMaterials(),
         api.currency.getMyOptions(),
         api.seller.getDashboardGovernance(),
+        api.seller.getTryOnInsights(),
       ]);
       const dashboardRes = dashboardResult.status === 'fulfilled' ? dashboardResult.value : null;
       const fabricsRes = fabricsResult.status === 'fulfilled' ? fabricsResult.value : null;
@@ -371,6 +398,7 @@ export default function SellerDashboard() {
       const materialsRes = materialsResult.status === 'fulfilled' ? materialsResult.value : null;
       const currencyRes = currencyResult.status === 'fulfilled' ? currencyResult.value : null;
       const governanceRes = governanceResult.status === 'fulfilled' ? governanceResult.value : null;
+      const tryOnInsightsRes = tryOnInsightsResult.status === 'fulfilled' ? tryOnInsightsResult.value : null;
       const settledCallStatus = (result: PromiseSettledResult<any>) => {
         if (result.status === 'fulfilled') {
           return result.value?.success
@@ -471,6 +499,9 @@ export default function SellerDashboard() {
           };
         });
         setOrders(mappedOrders);
+      }
+      if (tryOnInsightsRes?.success) {
+        setTryOnInsights(tryOnInsightsRes.data || null);
       }
       const completionPayload = dashboardCompletion || (profileRes?.success ? profileRes.data : null);
       const dashboardGovernanceFields = dashboardRes?.success && Array.isArray(dashboardRes.data?.governanceFields)
@@ -939,14 +970,16 @@ export default function SellerDashboard() {
       : Number((localPricePreview * selectedUsdPerUnit).toFixed(2));
   const showProfileGovernance = dashboardGovernance.sections.profileGovernance !== false;
   const showStats = dashboardGovernance.sections.stats !== false;
+  const isFieldHidden = (mode: 'ENABLED' | 'READ_ONLY' | 'HIDDEN') => mode === 'HIDDEN';
+  const isFieldReadOnly = (mode: 'ENABLED' | 'READ_ONLY' | 'HIDDEN') => mode === 'READ_ONLY';
   const canUseProductForm =
-    dashboardGovernance.fields.productName !== false &&
-    dashboardGovernance.fields.productDescription !== false &&
-    dashboardGovernance.fields.materialType !== false &&
-    dashboardGovernance.fields.sellerPrice !== false &&
-    dashboardGovernance.fields.productImages !== false;
+    !isFieldHidden(dashboardGovernance.fields.productName) &&
+    !isFieldHidden(dashboardGovernance.fields.productDescription) &&
+    !isFieldHidden(dashboardGovernance.fields.materialType) &&
+    !isFieldHidden(dashboardGovernance.fields.sellerPrice) &&
+    !isFieldHidden(dashboardGovernance.fields.productImages);
   const canAddProduct = dashboardGovernance.actions.addProduct !== false && canUseProductForm;
-  const canEditProduct = dashboardGovernance.actions.editProduct !== false;
+  const canEditProduct = dashboardGovernance.actions.editProduct !== false && canUseProductForm;
   const canUpdateStock = dashboardGovernance.actions.updateStock !== false;
   const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false;
   const canSubmitProfile = dashboardGovernance.actions.submitProfile !== false;
@@ -1246,6 +1279,26 @@ export default function SellerDashboard() {
                   ]}
                   height={200}
                 />
+              </div>
+            </div>
+          ) : null}
+
+          {dashboardGovernance.sections.overviewTryOnInsights !== false ? (
+            <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+              <div className="flex items-start gap-3">
+                <Sparkles className="mt-0.5 h-5 w-5 text-purple-700" />
+                <div>
+                  <p className="font-medium text-purple-900">3D TryON Insights</p>
+                  <p className="text-sm text-purple-800">
+                    Total customer TryON runs: <span className="font-semibold">{Number(tryOnInsights?.totalTryOns || 0)}</span>
+                  </p>
+                  <p className="mt-1 text-xs text-purple-700">
+                    {Object.entries(tryOnInsights?.measurementAverages || {})
+                      .slice(0, 4)
+                      .map(([key, value]) => `${key}: ${value}`)
+                      .join(' • ') || 'No measurement trend data yet.'}
+                  </p>
+                </div>
               </div>
             </div>
           ) : null}
@@ -1585,7 +1638,7 @@ export default function SellerDashboard() {
             <p className="text-sm text-gray-500 mb-5">Fabrics require 3 to 4 image URLs.</p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
+              <div className={`md:col-span-2 ${isFieldHidden(dashboardGovernance.fields.productName) ? 'hidden' : ''}`}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Fabric Name</label>
                 <input
                   type="text"
@@ -1593,26 +1646,26 @@ export default function SellerDashboard() {
                   onChange={(e) => setProductForm((prev) => ({ ...prev, name: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                   placeholder="e.g. Premium Ankara Cotton"
-                  disabled={dashboardGovernance.fields.productName === false}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.productName)}
                 />
               </div>
-              <div className="md:col-span-2">
+              <div className={`md:col-span-2 ${isFieldHidden(dashboardGovernance.fields.productDescription) ? 'hidden' : ''}`}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea
                   value={productForm.description}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, description: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg min-h-[90px]"
                   placeholder="Describe fabric quality, weave, and best use."
-                  disabled={dashboardGovernance.fields.productDescription === false}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.productDescription)}
                 />
               </div>
-              <div>
+              <div className={isFieldHidden(dashboardGovernance.fields.materialType) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Material Type</label>
                 <select
                   value={productForm.materialTypeId}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, materialTypeId: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={dashboardGovernance.fields.materialType === false}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.materialType)}
                 >
                   {materialOptions.length === 0 ? (
                     <option value="">No material types found</option>
@@ -1624,7 +1677,7 @@ export default function SellerDashboard() {
                   ))}
                 </select>
               </div>
-              <div>
+              <div className={isFieldHidden(dashboardGovernance.fields.sellerPrice) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Seller Price ({selectedListingCurrency})
                 </label>
@@ -1635,18 +1688,18 @@ export default function SellerDashboard() {
                   value={productForm.sellerPrice}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, sellerPrice: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={dashboardGovernance.fields.sellerPrice === false}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.sellerPrice)}
                 />
                 <p className="mt-1 text-xs text-gray-500">Converted USD: ${usdPricePreview.toFixed(2)}</p>
               </div>
-              <div>
+              <div className={isFieldHidden(dashboardGovernance.fields.listingCurrency) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Listing Currency</label>
                 <select
                   value={productForm.priceCurrencyCode}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, priceCurrencyCode: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                   disabled={
-                    dashboardGovernance.fields.listingCurrency === false ||
+                    isFieldReadOnly(dashboardGovernance.fields.listingCurrency) ||
                     (currencyOptions.allowedCurrencies || []).length <= 1
                   }
                 >
@@ -1657,7 +1710,7 @@ export default function SellerDashboard() {
                   ))}
                 </select>
               </div>
-              <div>
+              <div className={isFieldHidden(dashboardGovernance.fields.minYards) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Yards</label>
                 <input
                   type="number"
@@ -1666,10 +1719,10 @@ export default function SellerDashboard() {
                   value={productForm.minYards}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, minYards: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={dashboardGovernance.fields.minYards === false}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.minYards)}
                 />
               </div>
-              <div>
+              <div className={isFieldHidden(dashboardGovernance.fields.stockYards) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Stock Yards</label>
                 <input
                   type="number"
@@ -1678,10 +1731,10 @@ export default function SellerDashboard() {
                   value={productForm.stockYards}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, stockYards: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={dashboardGovernance.fields.stockYards === false}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.stockYards)}
                 />
               </div>
-              {dashboardGovernance.fields.productImages !== false ? (
+              {!isFieldHidden(dashboardGovernance.fields.productImages) ? (
                 <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Product Images (minimum 3, maximum 4)</label>
                 <div className="flex gap-2">
@@ -1692,7 +1745,12 @@ export default function SellerDashboard() {
                     placeholder="Paste image URL and add"
                     className="w-full rounded-lg border px-3 py-2 text-sm"
                   />
-                  <Button type="button" variant="outline" onClick={handleAddProductImageUrl}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleAddProductImageUrl}
+                    disabled={isFieldReadOnly(dashboardGovernance.fields.productImages)}
+                  >
                     Add URL
                   </Button>
                   <label className="inline-flex cursor-pointer items-center rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
@@ -1703,7 +1761,7 @@ export default function SellerDashboard() {
                       accept="image/*"
                       className="hidden"
                       onChange={handleProductImageUpload}
-                      disabled={uploadingProductImage}
+                      disabled={uploadingProductImage || isFieldReadOnly(dashboardGovernance.fields.productImages)}
                       multiple
                     />
                   </label>
@@ -1720,6 +1778,7 @@ export default function SellerDashboard() {
                           type="button"
                           onClick={() => handleRemoveProductImage(entry.url)}
                           className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white"
+                          disabled={isFieldReadOnly(dashboardGovernance.fields.productImages)}
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>

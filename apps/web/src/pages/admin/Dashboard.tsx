@@ -15,7 +15,8 @@ import {
   Star,
   MoreHorizontal,
   Filter,
-  Download
+  Download,
+  Sparkles
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '../../services/api';
@@ -65,6 +66,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [tryOnInsights, setTryOnInsights] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState('7d');
 
@@ -75,9 +77,10 @@ export default function AdminDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsRes, ordersRes] = await Promise.all([
+      const [statsRes, ordersRes, tryOnRes] = await Promise.all([
         api.admin.getDashboardStats(),
-        api.admin.getRecentOrders()
+        api.admin.getRecentOrders(),
+        api.admin.getTryOnInsights()
       ]);
       
       if (statsRes.success) {
@@ -85,6 +88,9 @@ export default function AdminDashboard() {
       }
       if (ordersRes.success) {
         setRecentOrders(ordersRes.data);
+      }
+      if (tryOnRes.success) {
+        setTryOnInsights(tryOnRes.data || null);
       }
       
       // Mock activities for now
@@ -204,6 +210,29 @@ export default function AdminDashboard() {
           iconColor="text-amber-600"
           iconBgColor="bg-amber-100"
         />
+      </div>
+
+      <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <Sparkles className="mt-0.5 h-5 w-5 text-purple-700" />
+            <div>
+              <p className="font-medium text-purple-900">3D TryON Insights</p>
+              <p className="text-sm text-purple-800">
+                Total TryON runs: <span className="font-semibold">{Number(tryOnInsights?.totalTryOns || 0)}</span>
+              </p>
+              <p className="mt-1 text-xs text-purple-700">
+                {Object.entries(tryOnInsights?.measurementAverages || {})
+                  .slice(0, 5)
+                  .map(([key, value]) => `${key}: ${value}`)
+                  .join(' • ') || 'No measurement trends yet.'}
+              </p>
+            </div>
+          </div>
+          <Button asChild size="sm" variant="outline">
+            <Link to="/admin/try-on">Manage TryON Settings</Link>
+          </Button>
+        </div>
       </div>
 
       {/* Charts Row */}
