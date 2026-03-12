@@ -1433,7 +1433,7 @@ const resolveAdminRoutePermissions = (method: string, path: string) => {
     return method === 'GET' ? [Permissions.VENDOR_PROFILES_READ] : [Permissions.VENDOR_PROFILES_REVIEW];
   }
   if (path.startsWith('/products') || path.startsWith('/categories') || path.startsWith('/materials')) {
-    return [Permissions.PRODUCTS_MANAGE];
+    return method === 'GET' ? [Permissions.ADMIN_DASHBOARD_READ] : [Permissions.PRODUCTS_MANAGE];
   }
   if (path.startsWith('/product-labels')) return [Permissions.PRODUCTS_MANAGE];
   if (path.startsWith('/measurement-templates')) return [Permissions.MEASUREMENT_TEMPLATES_MANAGE];

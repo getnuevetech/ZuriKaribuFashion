@@ -733,6 +733,7 @@ export default function AdminProducts() {
   const fetchProducts = async (pageOverride?: number) => {
     try {
       setLoading(true);
+      setError('');
       const requestedPage = pageOverride ?? currentPage;
       const response = await api.admin.getProducts({
         search: search || undefined,
@@ -751,6 +752,8 @@ export default function AdminProducts() {
       }
     } catch (error) {
       console.error('Failed to fetch products:', error);
+      setProducts([]);
+      setError(formatApiError(error, 'Unable to load products. Check admin permissions and API deployment.'));
     } finally {
       setLoading(false);
     }
