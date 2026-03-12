@@ -517,21 +517,23 @@ export default function ReadyToWear() {
                           className="absolute left-3 top-3 h-6 w-9 rounded-sm object-cover shadow"
                         />
                       ) : null}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/65 to-transparent p-4 text-white">
-                        <h2
-                          className="font-semibold leading-tight"
-                          style={{
-                            fontSize: `${Math.max(16, Math.min(64, Number(settings.rotatingTitleSize || DEFAULT_SETTINGS.rotatingTitleSize)))}px`,
-                          }}
-                        >
-                          {product.name}
-                        </h2>
-                        {product.description ? (
-                          <p className="mt-2 line-clamp-2 text-sm text-white/90">{product.description}</p>
-                        ) : null}
-                        <p className="mt-2 text-xs text-white/90">{product.ownerName}</p>
-                        <p className="mt-1 text-base font-semibold">{formatFromUsd(Number(product.priceUsd || 0))}</p>
-                        <span className="mt-3 inline-flex bg-white px-3 py-1.5 text-xs font-semibold text-black">VIEW PRODUCT</span>
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/45 p-4 text-white">
+                        <div className="max-w-[92%] text-center">
+                          <h2
+                            className="font-semibold leading-tight"
+                            style={{
+                              fontSize: `${Math.max(16, Math.min(64, Number(settings.rotatingTitleSize || DEFAULT_SETTINGS.rotatingTitleSize)))}px`,
+                            }}
+                          >
+                            {product.name}
+                          </h2>
+                          {product.description ? (
+                            <p className="mt-2 line-clamp-2 text-sm text-white/90">{product.description}</p>
+                          ) : null}
+                          <p className="mt-2 text-xs text-white/90">{product.ownerName}</p>
+                          <p className="mt-1 text-base font-semibold">{formatFromUsd(Number(product.priceUsd || 0))}</p>
+                          <span className="mt-3 inline-flex bg-white px-3 py-1.5 text-xs font-semibold text-black">VIEW PRODUCT</span>
+                        </div>
                       </div>
                     </div>
                   </Link>
