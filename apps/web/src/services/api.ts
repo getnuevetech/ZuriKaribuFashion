@@ -102,6 +102,51 @@ const noCacheRequestConfig = () => ({
   },
 });
 
+const CHECKOUT_PAYMENT_DEBUG_KEY = 'af_checkout_last_payment_session_debug_v1';
+
+type CheckoutPaymentDebugInfo = {
+  routePath: string;
+  mode: 'PRIMARY' | 'COMPATIBILITY' | 'LEGACY_INTENT';
+  amountMinor: number;
+  amountUsd: number;
+  providerKey: string;
+  timestamp: string;
+};
+
+const setCheckoutPaymentDebugInfo = (entry: CheckoutPaymentDebugInfo) => {
+  if (typeof window === 'undefined' || !window.sessionStorage) return;
+  try {
+    window.sessionStorage.setItem(CHECKOUT_PAYMENT_DEBUG_KEY, JSON.stringify(entry));
+  } catch {
+    // ignore storage write failures
+  }
+};
+
+const getCheckoutPaymentDebugInfo = (): CheckoutPaymentDebugInfo | null => {
+  if (typeof window === 'undefined' || !window.sessionStorage) return null;
+  try {
+    const raw = window.sessionStorage.getItem(CHECKOUT_PAYMENT_DEBUG_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      routePath: String((parsed as any).routePath || ''),
+      mode:
+        String((parsed as any).mode || '').toUpperCase() === 'COMPATIBILITY'
+          ? 'COMPATIBILITY'
+          : String((parsed as any).mode || '').toUpperCase() === 'LEGACY_INTENT'
+            ? 'LEGACY_INTENT'
+            : 'PRIMARY',
+      amountMinor: Number((parsed as any).amountMinor || 0),
+      amountUsd: Number((parsed as any).amountUsd || 0),
+      providerKey: String((parsed as any).providerKey || ''),
+      timestamp: String((parsed as any).timestamp || ''),
+    };
+  } catch {
+    return null;
+  }
+};
+
 const STATIC_COUNTRY_NAMES = getCountryOptions().map((entry) => String(entry.name || '').trim()).filter(Boolean);
 
 async function readSellerProfileCompletionWithFallback<T>() {
@@ -1952,11 +1997,23 @@ async function createPaymentSessionWithFallback<T>(data: {
     amountUsd: normalizedAmountUsd,
   };
   const createSessionPaths = ['/payments/create-session', '/payments/create_session', '/payments/session/create'];
-  const postCreateSession = async (sessionPayload: Record<string, unknown>) => {
+  const postCreateSession = async (
+    sessionPayload: Record<string, unknown>,
+    mode: CheckoutPaymentDebugInfo['mode']
+  ) => {
     let lastError: unknown = null;
     for (const path of createSessionPaths) {
       try {
-        return await apiService.post<T>(path, sessionPayload);
+        const response = await apiService.post<T>(path, sessionPayload);
+        setCheckoutPaymentDebugInfo({
+          routePath: path,
+          mode,
+          amountMinor: normalizedAmountMinor,
+          amountUsd: normalizedAmountUsd,
+          providerKey: normalizePaymentProviderKey(data.providerKey),
+          timestamp: new Date().toISOString(),
+        });
+        return response;
       } catch (error) {
         lastError = error;
         if (isRetryableRouteError(error)) continue;
@@ -1971,6 +2028,14 @@ async function createPaymentSessionWithFallback<T>(data: {
       { amount: normalizedAmountMinor, currency: data.currency }
     );
     if (!legacy.success) throw new Error('Failed to initialize Stripe payment.');
+    setCheckoutPaymentDebugInfo({
+      routePath: '/payments/create-intent',
+      mode: 'LEGACY_INTENT',
+      amountMinor: normalizedAmountMinor,
+      amountUsd: normalizedAmountUsd,
+      providerKey: 'STRIPE',
+      timestamp: new Date().toISOString(),
+    });
     return {
       success: true,
       data: {
@@ -1983,7 +2048,7 @@ async function createPaymentSessionWithFallback<T>(data: {
     } as T;
   };
   try {
-    return await postCreateSession(payload as Record<string, unknown>);
+    return await postCreateSession(payload as Record<string, unknown>, 'PRIMARY');
   } catch (error) {
     const message = String((error as AxiosError)?.response?.data?.message || '').toLowerCase();
     if (
@@ -2008,7 +2073,7 @@ async function createPaymentSessionWithFallback<T>(data: {
         customer: data.customer,
       };
       try {
-        return await postCreateSession(compatibilityPayload as Record<string, unknown>);
+        return await postCreateSession(compatibilityPayload as Record<string, unknown>, 'COMPATIBILITY');
       } catch (compatibilityError) {
         const providerKey = normalizePaymentProviderKey(data.providerKey);
         if (providerKey === 'STRIPE' && normalizedAmountMinor > 0) {
@@ -4522,6 +4587,13 @@ const normalizeCustomerAddressesFromResponse = (response: any) => {
     .filter((entry: CustomerAddressFallbackRow | null): entry is CustomerAddressFallbackRow => Boolean(entry));
 };
 
+const isNetworkLikeError = (error: unknown) => {
+  const code = String((error as AxiosError)?.code || '').toUpperCase();
+  const status = (error as AxiosError)?.response?.status;
+  const message = String((error as AxiosError)?.message || '').toLowerCase();
+  return !status && (code === 'ERR_NETWORK' || message.includes('network error') || message.includes('failed to fetch'));
+};
+
 async function readCustomerAddressesWithFallback<T>() {
   let lastError: unknown = null;
   for (const path of ['/customer/addresses', '/customer/addresses/list', '/customer/address']) {
@@ -4549,12 +4621,12 @@ async function readCustomerAddressesWithFallback<T>() {
       } as T;
     } catch (error) {
       lastError = error;
-      if (isRetryableRouteError(error)) continue;
+      if (isRetryableRouteError(error) || isNetworkLikeError(error)) continue;
       throw error;
     }
   }
   const fallbackRows = readCustomerAddressesFallback();
-  if (fallbackRows.length > 0) {
+  if (fallbackRows.length > 0 && (isRetryableRouteError(lastError) || isNetworkLikeError(lastError))) {
     return {
       success: true,
       data: fallbackRows,
@@ -4576,9 +4648,25 @@ async function createCustomerAddressWithFallback<T>(data: any) {
       return response as T;
     } catch (error) {
       lastError = error;
-      if (isRetryableRouteError(error)) continue;
+      if (isRetryableRouteError(error) || isNetworkLikeError(error)) continue;
       throw error;
     }
+  }
+  if (isRetryableRouteError(lastError) || isNetworkLikeError(lastError)) {
+    const rows = readCustomerAddressesFallback();
+    const generatedId = `local-address-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const localRow = normalizeCustomerAddressFallbackRow({
+      ...data,
+      id: generatedId,
+      isDefault: Boolean(data?.isDefault),
+    });
+    if (!localRow) throw lastError ?? new Error('Customer add-address route not found.');
+    writeCustomerAddressesFallback(upsertCustomerAddressFallback(rows, localRow));
+    return {
+      success: true,
+      data: localRow,
+      message: 'Address saved locally while backend address route is unavailable.',
+    } as T;
   }
   throw lastError ?? new Error('Customer add-address route not found.');
 }
@@ -4595,9 +4683,26 @@ async function updateCustomerAddressWithFallback<T>(id: string, data: any) {
       return response as T;
     } catch (error) {
       lastError = error;
-      if (isRetryableRouteError(error)) continue;
+      if (isRetryableRouteError(error) || isNetworkLikeError(error)) continue;
       throw error;
     }
+  }
+  if (isRetryableRouteError(lastError) || isNetworkLikeError(lastError)) {
+    const rows = readCustomerAddressesFallback();
+    const existing = rows.find((entry) => entry.id === String(id));
+    if (!existing) throw lastError ?? new Error('Customer update-address route not found.');
+    const localRow = normalizeCustomerAddressFallbackRow({
+      ...existing,
+      ...data,
+      id: String(id),
+    });
+    if (!localRow) throw lastError ?? new Error('Customer update-address route not found.');
+    writeCustomerAddressesFallback(upsertCustomerAddressFallback(rows, localRow));
+    return {
+      success: true,
+      data: localRow,
+      message: 'Address update saved locally while backend address route is unavailable.',
+    } as T;
   }
   throw lastError ?? new Error('Customer update-address route not found.');
 }
@@ -4612,9 +4717,17 @@ async function deleteCustomerAddressWithFallback<T>(id: string) {
       return response;
     } catch (error) {
       lastError = error;
-      if (isRetryableRouteError(error)) continue;
+      if (isRetryableRouteError(error) || isNetworkLikeError(error)) continue;
       throw error;
     }
+  }
+  if (isRetryableRouteError(lastError) || isNetworkLikeError(lastError)) {
+    const rows = readCustomerAddressesFallback().filter((entry) => entry.id !== String(id));
+    writeCustomerAddressesFallback(rows);
+    return {
+      success: true,
+      message: 'Address deleted locally while backend address route is unavailable.',
+    } as T;
   }
   throw lastError ?? new Error('Customer delete-address route not found.');
 }
@@ -5041,6 +5154,20 @@ function buildPromoPreviewFromFallback(payload: {
   };
 }
 
+const isPromoNotFoundOrInactiveError = (error: unknown) => {
+  const status = (error as AxiosError)?.response?.status;
+  const responseMessage = String((error as AxiosError)?.response?.data?.message || '').toLowerCase();
+  const errorMessage = String((error as Error)?.message || '').toLowerCase();
+  return (
+    status === 404 ||
+    responseMessage.includes('promo code not found') ||
+    responseMessage.includes('promo code not found or inactive') ||
+    responseMessage.includes('inactive') ||
+    errorMessage.includes('promo code not found') ||
+    errorMessage.includes('promo code not found or inactive')
+  );
+};
+
 async function previewPromotionWithFallback<T>(payload: {
   code: string;
   items: Array<{ productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; productId: string; unitPrice: number; quantity: number }>;
@@ -5057,12 +5184,17 @@ async function previewPromotionWithFallback<T>(payload: {
       return await apiService.post<T>(path, payload);
     } catch (error) {
       lastError = error;
-      if (isRetryableRouteError(error)) continue;
+      if (isRetryableRouteError(error) || isPromoNotFoundOrInactiveError(error)) continue;
       throw error;
     }
   }
-  if (isRetryableRouteError(lastError)) {
-    return buildPromoPreviewFromFallback(payload) as T;
+  if (isRetryableRouteError(lastError) || isPromoNotFoundOrInactiveError(lastError)) {
+    try {
+      return buildPromoPreviewFromFallback(payload) as T;
+    } catch {
+      if (lastError) throw lastError;
+      throw new Error('Promo preview route not found.');
+    }
   }
   throw lastError ?? new Error('Promo preview route not found.');
 }
@@ -6435,6 +6567,8 @@ const qaApi = {
 
 // Payments API
 const paymentsApi = {
+  getLastCreateSessionDebugInfo: () => getCheckoutPaymentDebugInfo(),
+
   getOptions: () =>
     readPaymentOptionsWithFallback<{
       success: boolean;

@@ -69,6 +69,15 @@ interface PromoPreviewResult {
   eligibleSubtotalUsd: number;
 }
 
+interface PaymentSessionDebugInfo {
+  routePath: string;
+  mode: 'PRIMARY' | 'COMPATIBILITY' | 'LEGACY_INTENT';
+  amountMinor: number;
+  amountUsd: number;
+  providerKey: string;
+  timestamp: string;
+}
+
 const CHECKOUT_PROMO_STORAGE_KEY_PREFIX = 'af_checkout_promo_state_v1';
 
 const toFiniteMoney = (value: unknown, fallback = 0) => {
@@ -215,6 +224,7 @@ export default function Checkout() {
   const [promoPreview, setPromoPreview] = useState<PromoPreviewResult | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const [cardPromoHint, setCardPromoHint] = useState('');
+  const [paymentDebugInfo, setPaymentDebugInfo] = useState<PaymentSessionDebugInfo | null>(null);
   const checkoutPromoStorageKey = `${CHECKOUT_PROMO_STORAGE_KEY_PREFIX}:${String(user?.id || 'guest')}`;
   
   const fullName = user?.firstName && user?.lastName 
@@ -546,6 +556,10 @@ export default function Checkout() {
           phone: shippingAddress.phone || undefined,
         },
       });
+      const debugInfo = api.payments.getLastCreateSessionDebugInfo();
+      if (debugInfo) {
+        setPaymentDebugInfo(debugInfo as PaymentSessionDebugInfo);
+      }
 
       if (response.success && response.data?.flow === 'INLINE') {
         setClientSecret(response.data.clientSecret);
@@ -1010,6 +1024,19 @@ export default function Checkout() {
                 <p className="text-red-700">{error}</p>
               </div>
             )}
+            {(import.meta.env.DEV || (typeof window !== 'undefined' && window.localStorage.getItem('af_debug_checkout') === '1')) &&
+            paymentDebugInfo ? (
+              <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
+                <p className="font-semibold">Checkout debug</p>
+                <p>create-session route: {paymentDebugInfo.routePath}</p>
+                <p>mode: {paymentDebugInfo.mode}</p>
+                <p>
+                  amount: {paymentDebugInfo.amountMinor} ({Number(paymentDebugInfo.amountUsd || 0).toFixed(2)} USD)
+                </p>
+                <p>provider: {paymentDebugInfo.providerKey}</p>
+                <p>at: {paymentDebugInfo.timestamp ? new Date(paymentDebugInfo.timestamp).toLocaleString() : 'N/A'}</p>
+              </div>
+            ) : null}
 
             {step === 'shipping' && (
               <form onSubmit={handleShippingSubmit} className="bg-white rounded-xl p-6 shadow-sm border">

@@ -84,6 +84,7 @@ export default function CustomerProfile() {
   const countryOptions = getCountryOptions();
   const addressCountryCode = resolveCountryCode(newAddress.country);
   const cityOptions = getCityOptionsByCountryCode(addressCountryCode);
+  const hasPredefinedCityOptions = cityOptions.length > 0;
 
   useEffect(() => {
     if (!user?.id) return;
@@ -463,20 +464,32 @@ export default function CustomerProfile() {
                   className="w-full px-4 py-2 border rounded-lg"
                 />
               </div>
-              <select
-                value={newAddress.city}
-                onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
-                className="px-4 py-2 border rounded-lg"
-                required
-                disabled={!newAddress.country}
-              >
-                <option value="">{newAddress.country ? 'Select city' : 'Select country first'}</option>
-                {cityOptions.map((city) => (
-                  <option key={city} value={city}>
-                    {city}
-                  </option>
-                ))}
-              </select>
+              {hasPredefinedCityOptions ? (
+                <select
+                  value={newAddress.city}
+                  onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                  className="px-4 py-2 border rounded-lg"
+                  required
+                  disabled={!newAddress.country}
+                >
+                  <option value="">{newAddress.country ? 'Select city' : 'Select country first'}</option>
+                  {cityOptions.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder={newAddress.country ? 'Enter city' : 'Select country first'}
+                  value={newAddress.city}
+                  onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                  className="px-4 py-2 border rounded-lg"
+                  required
+                  disabled={!newAddress.country}
+                />
+              )}
               <input
                 type="text"
                 placeholder="State"
@@ -491,7 +504,6 @@ export default function CustomerProfile() {
                 value={newAddress.postalCode}
                 onChange={(e) => setNewAddress({ ...newAddress, postalCode: e.target.value })}
                 className="px-4 py-2 border rounded-lg"
-                required
               />
               <select
                 value={newAddress.country}
