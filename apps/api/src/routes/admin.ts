@@ -29,6 +29,25 @@ const normalizeReadyToWearColor = (value: unknown) =>
     .replace(/\s+/g, ' ') || DEFAULT_READY_TO_WEAR_COLOR;
 const encodeReadyToWearVariantKey = (size: unknown, color?: unknown) =>
   `${normalizeReadyToWearSize(size)}${READY_TO_WEAR_VARIANT_SEPARATOR}${normalizeReadyToWearColor(color)}`;
+const decodeReadyToWearVariantKey = (variantKey: unknown) => {
+  const raw = String(variantKey || '').trim().toUpperCase();
+  if (!raw.includes(READY_TO_WEAR_VARIANT_SEPARATOR)) {
+    const normalizedSize = normalizeReadyToWearSize(raw);
+    return {
+      size: normalizedSize,
+      color: DEFAULT_READY_TO_WEAR_COLOR,
+      variantKey: encodeReadyToWearVariantKey(normalizedSize, DEFAULT_READY_TO_WEAR_COLOR),
+    };
+  }
+  const [sizePart, colorPart] = raw.split(READY_TO_WEAR_VARIANT_SEPARATOR);
+  const normalizedSize = normalizeReadyToWearSize(sizePart);
+  const normalizedColor = normalizeReadyToWearColor(colorPart);
+  return {
+    size: normalizedSize,
+    color: normalizedColor,
+    variantKey: encodeReadyToWearVariantKey(normalizedSize, normalizedColor),
+  };
+};
 
 function parsePagination(pageValue: unknown, limitValue: unknown, defaultLimit = 20) {
   const page = Math.max(1, Number.parseInt(String(pageValue ?? '1'), 10) || 1);
@@ -3374,8 +3393,9 @@ router.get('/products', async (req, res, next) => {
             },
             include: {
               designer: { select: { id: true, businessName: true, country: true } },
-              category: { select: { name: true } },
+              category: { select: { id: true, name: true } },
               images: { select: { url: true }, take: 1, orderBy: { sortOrder: 'asc' } },
+              sizeVariations: true,
               _count: { select: { orderItems: true } },
             },
             orderBy: { createdAt: 'desc' },
@@ -3430,9 +3450,23 @@ router.get('/products', async (req, res, next) => {
         designerId: item.designer.id,
         ownerName: item.designer.businessName || 'Designer',
         ownerCountry: item.designer.country || null,
+        categoryId: item.category?.id || null,
         category: item.category?.name || 'Category',
         orderCount: item._count.orderItems,
         image: item.images?.[0]?.url || null,
+        sizeVariations: Array.isArray(item.sizeVariations)
+          ? item.sizeVariations.map((variation: any) => {
+              const decoded = decodeReadyToWearVariantKey(variation?.size);
+              return {
+                id: variation?.id,
+                size: decoded.size,
+                color: decoded.color,
+                variantKey: decoded.variantKey,
+                price: Number(variation?.price || 0),
+                stock: Number(variation?.stock || 0),
+              };
+            })
+          : [],
         createdAt: item.createdAt,
       })),
     ].sort((a, b) => Number(new Date(b.createdAt)) - Number(new Date(a.createdAt)));
@@ -3777,19 +3811,26 @@ router.patch('/products/:type/:id', async (req, res, next) => {
           })),
         });
       }
-    } else if (resolvedPrice !== undefined || payload.stock !== undefined) {
-      const existingSize = await prisma.readyToWearSize.findFirst({
-        where: { readyToWearId: updated.id },
-        orderBy: { size: 'asc' },
-      });
-      if (existingSize) {
-        await prisma.readyToWearSize.update({
-          where: { id: existingSize.id },
-          data: {
-            price: resolvedPrice ?? undefined,
-            stock: payload.stock ?? undefined,
-          },
+    } else {
+      // Keep base-price edits in sync with all variants when a variant matrix is not explicitly provided.
+      if (resolvedPrice !== undefined) {
+        await prisma.readyToWearSize.updateMany({
+          where: { readyToWearId: updated.id },
+          data: { price: Number(resolvedPrice) },
         });
+      }
+      if (payload.stock !== undefined) {
+        const existingSizes = await prisma.readyToWearSize.findMany({
+          where: { readyToWearId: updated.id },
+          select: { id: true },
+          take: 2,
+        });
+        if (existingSizes.length === 1) {
+          await prisma.readyToWearSize.update({
+            where: { id: existingSizes[0].id },
+            data: { stock: payload.stock },
+          });
+        }
       }
     }
     return res.json({ success: true, data: { id: updated.id, type }, message: 'Product updated.' });

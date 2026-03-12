@@ -19,9 +19,11 @@ interface Product {
   designerId?: string;
   ownerName: string;
   ownerCountry?: string | null;
+  categoryId?: string | null;
   category: string;
   orderCount: number;
   image?: string | null;
+  sizeVariations?: Array<{ id?: string; size: string; color?: string; variantKey?: string; price: number; stock: number }>;
   isFeatured?: boolean;
   featuredSections?: string[];
   createdAt: string;
@@ -746,6 +748,7 @@ export default function AdminProducts() {
 
   const openEditModal = (product: Product) => {
     const matchedCategoryId =
+      String(product.categoryId || '').trim() ||
       options.categories.find((item) => String(item.name || '').trim().toLowerCase() === String(product.category || '').trim().toLowerCase())?.id ||
       '';
     const matchedMaterialTypeId =
@@ -787,7 +790,7 @@ export default function AdminProducts() {
       images: product.image ? [product.image] : [],
       minYards: 1,
       stockYards: 0,
-      stock: 0,
+      stock: Math.max(0, Number(existingReadyVariants[0]?.stock || 0)),
       size: 'M',
       readyVariants:
         existingReadyVariants.length > 0
@@ -890,6 +893,8 @@ export default function AdminProducts() {
       let savedType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR' = editing ? editing.type : form.type;
       let savedId: string | null = editing?.id || null;
       if (editing) {
+        const isFabricEdit = editing.type === 'FABRIC';
+        const isReadyEdit = editing.type === 'READY_TO_WEAR';
         await api.admin.updateProduct(editing.type, editing.id, {
           name: form.name,
           description: form.description,
@@ -902,11 +907,11 @@ export default function AdminProducts() {
           images: imagesDirty ? form.images : undefined,
           materialTypeId: form.materialTypeId || undefined,
           categoryId: form.categoryId || undefined,
-          stock: form.stock,
-          stockYards: form.stockYards,
-          minYards: form.minYards,
+          stock: isFabricEdit ? form.stock : undefined,
+          stockYards: isFabricEdit ? form.stockYards : undefined,
+          minYards: isFabricEdit ? form.minYards : undefined,
           variants:
-            editing.type === 'READY_TO_WEAR' && readyVariantsDirty
+            isReadyEdit && readyVariantsDirty
               ? form.readyVariants.map((variant) => ({
                   size: String(variant.size || '').trim().toUpperCase(),
                   color: String(variant.color || 'DEFAULT').trim().toUpperCase() || 'DEFAULT',
