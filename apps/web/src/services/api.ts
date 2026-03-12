@@ -1951,8 +1951,39 @@ async function createPaymentSessionWithFallback<T>(data: {
     amount: normalizedAmountMinor,
     amountUsd: normalizedAmountUsd,
   };
+  const createSessionPaths = ['/payments/create-session', '/payments/create_session', '/payments/session/create'];
+  const postCreateSession = async (sessionPayload: Record<string, unknown>) => {
+    let lastError: unknown = null;
+    for (const path of createSessionPaths) {
+      try {
+        return await apiService.post<T>(path, sessionPayload);
+      } catch (error) {
+        lastError = error;
+        if (isRetryableRouteError(error)) continue;
+        throw error;
+      }
+    }
+    throw lastError ?? new Error('Payment create-session route not found.');
+  };
+  const createStripeLegacyIntentFallback = async () => {
+    const legacy = await apiService.post<{ success: boolean; data: { clientSecret: string; paymentIntentId: string } }>(
+      '/payments/create-intent',
+      { amount: normalizedAmountMinor, currency: data.currency }
+    );
+    if (!legacy.success) throw new Error('Failed to initialize Stripe payment.');
+    return {
+      success: true,
+      data: {
+        providerKey: 'STRIPE',
+        flow: 'INLINE',
+        reference: String(legacy.data.paymentIntentId || ''),
+        clientSecret: legacy.data.clientSecret,
+        paymentIntentId: legacy.data.paymentIntentId,
+      },
+    } as T;
+  };
   try {
-    return await apiService.post<T>('/payments/create-session', payload);
+    return await postCreateSession(payload as Record<string, unknown>);
   } catch (error) {
     const message = String((error as AxiosError)?.response?.data?.message || '').toLowerCase();
     if (
@@ -1961,36 +1992,35 @@ async function createPaymentSessionWithFallback<T>(data: {
       message.includes('required') &&
       payload.amount > 0
     ) {
-      // Some legacy deployments reject mixed payloads; retry with an explicit amountUsd-first body.
-      return await apiService.post<T>('/payments/create-session', {
+      // Legacy deployments may parse alternate USD amount keys only.
+      const compatibilityPayload = {
         providerKey: data.providerKey,
         amountUsd: payload.amountUsd,
+        amountUSD: payload.amountUsd,
+        amount_usd: payload.amountUsd,
+        convertedAmountUsd: payload.amountUsd,
+        amountInUsd: payload.amountUsd,
         amount: payload.amount,
         currency: data.currency,
         reference: data.reference,
         returnUrl: data.returnUrl,
         cancelUrl: data.cancelUrl,
         customer: data.customer,
-      });
+      };
+      try {
+        return await postCreateSession(compatibilityPayload as Record<string, unknown>);
+      } catch (compatibilityError) {
+        const providerKey = normalizePaymentProviderKey(data.providerKey);
+        if (providerKey === 'STRIPE' && normalizedAmountMinor > 0) {
+          return await createStripeLegacyIntentFallback();
+        }
+        throw compatibilityError;
+      }
     }
     if (!isRetryableRouteError(error)) throw error;
     const providerKey = normalizePaymentProviderKey(data.providerKey);
     if (providerKey === 'STRIPE') {
-      const legacy = await apiService.post<{ success: boolean; data: { clientSecret: string; paymentIntentId: string } }>(
-        '/payments/create-intent',
-        { amount: data.amount, currency: data.currency }
-      );
-      if (!legacy.success) throw new Error('Failed to initialize Stripe payment.');
-      return {
-        success: true,
-        data: {
-          providerKey: 'STRIPE',
-          flow: 'INLINE',
-          reference: String(legacy.data.paymentIntentId || ''),
-          clientSecret: legacy.data.clientSecret,
-          paymentIntentId: legacy.data.paymentIntentId,
-        },
-      } as T;
+      return await createStripeLegacyIntentFallback();
     }
     throw new Error(
       `${providerKey} payment session endpoint is not available on the current backend deployment yet.`
@@ -4413,16 +4443,123 @@ async function completeCustomerTryOnPurchaseWithFallback<T>(payload: {
   throw lastError ?? new Error('Customer TryON purchase-complete route not found.');
 }
 
+const CUSTOMER_ADDRESSES_FALLBACK_KEY = 'af_customer_addresses_fallback_v1';
+
+type CustomerAddressFallbackRow = {
+  id: string;
+  label: string;
+  fullName: string;
+  phone: string;
+  country: string;
+  city: string;
+  address: string;
+  postalCode?: string;
+  isDefault: boolean;
+};
+
+const normalizeCustomerAddressFallbackRow = (input: any): CustomerAddressFallbackRow | null => {
+  const id = String(input?.id || '').trim();
+  if (!id) return null;
+  return {
+    id,
+    label: String(input?.label || '').trim(),
+    fullName: String(input?.fullName || '').trim(),
+    phone: String(input?.phone || '').trim(),
+    country: String(input?.country || '').trim(),
+    city: String(input?.city || '').trim(),
+    address: String(input?.address || '').trim(),
+    postalCode: input?.postalCode ? String(input.postalCode).trim() : undefined,
+    isDefault: input?.isDefault === true,
+  };
+};
+
+const readCustomerAddressesFallback = () => {
+  if (typeof window === 'undefined' || !window.localStorage) return [] as CustomerAddressFallbackRow[];
+  try {
+    const raw = window.localStorage.getItem(CUSTOMER_ADDRESSES_FALLBACK_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((entry) => normalizeCustomerAddressFallbackRow(entry))
+      .filter((entry): entry is CustomerAddressFallbackRow => Boolean(entry));
+  } catch {
+    return [];
+  }
+};
+
+const writeCustomerAddressesFallback = (rows: CustomerAddressFallbackRow[]) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(CUSTOMER_ADDRESSES_FALLBACK_KEY, JSON.stringify(Array.isArray(rows) ? rows : []));
+  } catch {
+    // ignore localStorage write failures
+  }
+};
+
+const upsertCustomerAddressFallback = (rows: CustomerAddressFallbackRow[], row: CustomerAddressFallbackRow) => {
+  const next = [...rows];
+  const index = next.findIndex((entry) => entry.id === row.id);
+  if (index >= 0) {
+    next[index] = { ...next[index], ...row };
+  } else {
+    next.unshift(row);
+  }
+  if (row.isDefault) {
+    return next.map((entry) => (entry.id === row.id ? entry : { ...entry, isDefault: false }));
+  }
+  return next;
+};
+
+const normalizeCustomerAddressesFromResponse = (response: any) => {
+  const rows = Array.isArray(response?.data)
+    ? response.data
+    : Array.isArray(response?.data?.addresses)
+      ? response.data.addresses
+      : [];
+  return rows
+    .map((entry: any) => normalizeCustomerAddressFallbackRow(entry))
+    .filter((entry: CustomerAddressFallbackRow | null): entry is CustomerAddressFallbackRow => Boolean(entry));
+};
+
 async function readCustomerAddressesWithFallback<T>() {
   let lastError: unknown = null;
   for (const path of ['/customer/addresses', '/customer/addresses/list', '/customer/address']) {
     try {
-      return await apiService.get<T>(path, noCacheRequestConfig());
+      const response = await apiService.get<any>(path, noCacheRequestConfig());
+      const rows = normalizeCustomerAddressesFromResponse(response);
+      if (rows.length > 0) {
+        writeCustomerAddressesFallback(rows);
+      }
+      if (rows.length === 0) {
+        const fallbackRows = readCustomerAddressesFallback();
+        if (fallbackRows.length > 0) {
+          return {
+            ...(response || {}),
+            success: true,
+            data: fallbackRows,
+            message: 'Loaded saved addresses from local cache while backend returned empty results.',
+          } as T;
+        }
+      }
+      return {
+        ...(response || {}),
+        success: response?.success !== false,
+        data: rows,
+      } as T;
     } catch (error) {
       lastError = error;
       if (isRetryableRouteError(error)) continue;
       throw error;
     }
+  }
+  const fallbackRows = readCustomerAddressesFallback();
+  if (fallbackRows.length > 0) {
+    return {
+      success: true,
+      data: fallbackRows,
+      message: 'Loaded saved addresses from local cache while backend address routes are unavailable.',
+    } as T;
   }
   throw lastError ?? new Error('Customer addresses route not found.');
 }
@@ -4431,7 +4568,12 @@ async function createCustomerAddressWithFallback<T>(data: any) {
   let lastError: unknown = null;
   for (const path of ['/customer/addresses', '/customer/address']) {
     try {
-      return await apiService.post<T>(path, data);
+      const response = await apiService.post<any>(path, data);
+      const normalized = normalizeCustomerAddressFallbackRow(response?.data);
+      if (normalized) {
+        writeCustomerAddressesFallback(upsertCustomerAddressFallback(readCustomerAddressesFallback(), normalized));
+      }
+      return response as T;
     } catch (error) {
       lastError = error;
       if (isRetryableRouteError(error)) continue;
@@ -4445,7 +4587,12 @@ async function updateCustomerAddressWithFallback<T>(id: string, data: any) {
   let lastError: unknown = null;
   for (const path of [`/customer/addresses/${id}`, `/customer/address/${id}`]) {
     try {
-      return await apiService.patch<T>(path, data);
+      const response = await apiService.patch<any>(path, data);
+      const normalized = normalizeCustomerAddressFallbackRow(response?.data || { ...data, id });
+      if (normalized) {
+        writeCustomerAddressesFallback(upsertCustomerAddressFallback(readCustomerAddressesFallback(), normalized));
+      }
+      return response as T;
     } catch (error) {
       lastError = error;
       if (isRetryableRouteError(error)) continue;
@@ -4459,7 +4606,10 @@ async function deleteCustomerAddressWithFallback<T>(id: string) {
   let lastError: unknown = null;
   for (const path of [`/customer/addresses/${id}`, `/customer/address/${id}`]) {
     try {
-      return await apiService.delete<T>(path);
+      const response = await apiService.delete<T>(path);
+      const rows = readCustomerAddressesFallback().filter((entry) => entry.id !== String(id));
+      writeCustomerAddressesFallback(rows);
+      return response;
     } catch (error) {
       lastError = error;
       if (isRetryableRouteError(error)) continue;

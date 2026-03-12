@@ -86,11 +86,13 @@ export default function CustomerProfile() {
   const cityOptions = getCityOptionsByCountryCode(addressCountryCode);
 
   useEffect(() => {
+    if (!user?.id) return;
     fetchAddresses();
     fetchGoogleLinkStatus();
-  }, []);
+  }, [user?.id]);
 
   const fetchAddresses = async () => {
+    if (!user?.id) return;
     try {
       const response = await api.customer.getAddresses();
       if (response.success) {

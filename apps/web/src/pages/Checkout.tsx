@@ -69,6 +69,70 @@ interface PromoPreviewResult {
   eligibleSubtotalUsd: number;
 }
 
+const CHECKOUT_PROMO_STORAGE_KEY_PREFIX = 'af_checkout_promo_state_v1';
+
+const toFiniteMoney = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return Number(fallback || 0);
+  return Number(parsed.toFixed(2));
+};
+
+const normalizePromoPreviewResponse = (
+  input: unknown,
+  fallbackCode: string,
+  fallbackSubtotalUsd: number
+): PromoPreviewResult => {
+  const row = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  const code = String(row.code || fallbackCode || '')
+    .trim()
+    .toUpperCase();
+  const name = String(row.name || row.title || code || 'Promo').trim() || code || 'Promo';
+  const discountType = String(row.discountType || '').trim().toUpperCase() === 'FIXED' ? 'FIXED' : 'PERCENTAGE';
+  const subtotalUsd = Math.max(0, toFiniteMoney(row.subtotalUsd, fallbackSubtotalUsd));
+  const eligibleSubtotalUsd = Math.max(0, toFiniteMoney(row.eligibleSubtotalUsd, subtotalUsd));
+  const discountValueCandidates = [
+    row.discountValue,
+    row.value,
+    row.discountPercent,
+    row.percentage,
+    row.percent,
+    row.discountRate,
+  ];
+  const discountValue = Math.max(
+    0,
+    toFiniteMoney(discountValueCandidates.find((entry) => Number.isFinite(Number(entry))), 0)
+  );
+  const explicitDiscountUsdCandidates = [
+    row.discountUsd,
+    row.discountAmountUsd,
+    row.discountAmount,
+    row.amountOffUsd,
+    row.amountOff,
+  ];
+  const explicitDiscountUsd = explicitDiscountUsdCandidates.find((entry) => Number.isFinite(Number(entry)));
+  const computedFromDiscountValue =
+    discountType === 'FIXED' ? discountValue : (eligibleSubtotalUsd * discountValue) / 100;
+  const computedDiscountUsd =
+    discountValue > 0
+      ? computedFromDiscountValue
+      : explicitDiscountUsd !== undefined
+        ? Number(explicitDiscountUsd)
+        : 0;
+  const maxDiscountUsd = Number.isFinite(Number(row.maxDiscountUsd)) ? Number(row.maxDiscountUsd) : null;
+  const cappedDiscountUsd =
+    maxDiscountUsd !== null ? Math.min(Number(computedDiscountUsd || 0), Math.max(0, maxDiscountUsd)) : Number(computedDiscountUsd || 0);
+  const discountUsd = Math.max(0, Math.min(eligibleSubtotalUsd, toFiniteMoney(cappedDiscountUsd, 0)));
+  return {
+    code,
+    name,
+    discountType,
+    discountValue,
+    discountUsd,
+    subtotalUsd: Number(subtotalUsd.toFixed(2)),
+    eligibleSubtotalUsd: Number(eligibleSubtotalUsd.toFixed(2)),
+  };
+};
+
 interface SuggestedCheckoutProduct {
   id: string;
   name: string;
@@ -151,6 +215,7 @@ export default function Checkout() {
   const [promoPreview, setPromoPreview] = useState<PromoPreviewResult | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const [cardPromoHint, setCardPromoHint] = useState('');
+  const checkoutPromoStorageKey = `${CHECKOUT_PROMO_STORAGE_KEY_PREFIX}:${String(user?.id || 'guest')}`;
   
   const fullName = user?.firstName && user?.lastName 
     ? `${user.firstName} ${user.lastName}` 
@@ -229,7 +294,11 @@ export default function Checkout() {
       .getAddresses()
       .then((response) => {
         if (cancelled || !response.success) return;
-        const rows = Array.isArray(response.data) ? response.data : [];
+        const rows = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray((response.data as any)?.addresses)
+            ? (response.data as any).addresses
+            : [];
         const normalized = rows.map((entry: any) => ({
           id: String(entry?.id || ''),
           label: String(entry?.label || ''),
@@ -267,6 +336,54 @@ export default function Checkout() {
       cancelled = true;
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.sessionStorage.getItem(checkoutPromoStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed?.promoCode) {
+        setPromoCode(String(parsed.promoCode || '').trim().toUpperCase());
+      }
+      if (parsed?.promoPreview && typeof parsed.promoPreview === 'object') {
+        const subtotalFromItems = items.reduce((sum, item) => {
+          if (item.kind === 'READY_TO_WEAR') {
+            return sum + Number(item.unitPrice || 0) * Number(item.quantity || 1);
+          }
+          if (item.kind === 'FABRIC_ONLY') {
+            return sum + Number(item.pricePerYard || 0) * Number(item.yards || 1);
+          }
+          return sum + Number(item.totalPrice || 0);
+        }, 0);
+        setPromoPreview(
+          normalizePromoPreviewResponse(parsed.promoPreview, String(parsed.promoCode || ''), Number(subtotalFromItems || 0))
+        );
+      }
+    } catch {
+      // ignore malformed session promo cache
+    }
+  }, [checkoutPromoStorageKey, items]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (!promoPreview && !String(promoCode || '').trim()) {
+        window.sessionStorage.removeItem(checkoutPromoStorageKey);
+        return;
+      }
+      window.sessionStorage.setItem(
+        checkoutPromoStorageKey,
+        JSON.stringify({
+          promoCode: String(promoCode || '').trim().toUpperCase(),
+          promoPreview,
+          updatedAt: Date.now(),
+        })
+      );
+    } catch {
+      // ignore storage write failures
+    }
+  }, [checkoutPromoStorageKey, promoCode, promoPreview]);
 
   useEffect(() => {
     const countryCode = shippingCountryCode || shippingAddress.country;
@@ -648,6 +765,9 @@ export default function Checkout() {
       }
 
       setOrderNumbers(createdOrderNumbers);
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(checkoutPromoStorageKey);
+      }
       clearCart();
       const orderParams = new URLSearchParams({ success: 'true' });
       if (createdOrderNumbers.length > 0) {
@@ -795,8 +915,13 @@ export default function Checkout() {
       if (!preview.success || !preview.data) {
         throw new Error(preview.message || 'Promo code could not be applied.');
       }
-      setPromoPreview(preview.data as PromoPreviewResult);
-      setPromoCode(String((preview.data as PromoPreviewResult).code || promoCode).toUpperCase());
+      const subtotalFromItems = payloadItems.reduce(
+        (sum, entry) => sum + Number(entry.unitPrice || 0) * Number(entry.quantity || 0),
+        0
+      );
+      const normalizedPreview = normalizePromoPreviewResponse(preview.data, promoCode.trim(), subtotalFromItems);
+      setPromoPreview(normalizedPreview);
+      setPromoCode(String(normalizedPreview.code || promoCode).toUpperCase());
     } catch (promoError: any) {
       setPromoPreview(null);
       setError(promoError?.response?.data?.message || promoError?.message || 'Failed to apply promo code.');
