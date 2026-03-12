@@ -55,6 +55,7 @@ import AdminPayments from './pages/admin/Payments';
 import AdminShipping from './pages/admin/Shipping';
 import AdminPartnerIntegrations from './pages/admin/PartnerIntegrations';
 import AdminTryOnSettings from './pages/admin/TryOnSettings';
+import AdminApiRouteDiagnostics from './pages/admin/ApiRouteDiagnostics';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -266,6 +267,10 @@ function App() {
                       <AdminPartnerIntegrations />
                     </AdminPermissionGuard>
                   }
+                />
+                <Route
+                  path="/admin/api-diagnostics"
+                  element={<AdminApiRouteDiagnostics />}
                 />
                 <Route
                   path="/admin/banners"
