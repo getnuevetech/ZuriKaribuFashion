@@ -1365,12 +1365,18 @@ router.patch('/designs/:id', async (req, res, next) => {
 
     const existing = await prisma.design.findFirst({
       where: { id, designerId: profile.id },
-      select: { id: true, basePrice: true },
+      select: { id: true, basePrice: true, status: true },
     });
     if (!existing) {
       return res.status(404).json({
         success: false,
         message: 'Design not found.',
+      });
+    }
+    if (existing.status !== ProductStatus.REJECTED) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only rejected designs can be edited. Approved or pending designs are locked.',
       });
     }
 
@@ -1853,7 +1859,7 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
 
     const existing = await prisma.readyToWear.findFirst({
       where: { id, designerId: profile.id },
-      select: { id: true },
+      select: { id: true, status: true, basePrice: true },
     });
     if (!existing) {
       return res.status(404).json({
@@ -1861,11 +1867,12 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         message: 'Ready-to-wear product not found.',
       });
     }
-
-    const existingPriceRow = await prisma.readyToWear.findFirst({
-      where: { id, designerId: profile.id },
-      select: { basePrice: true },
-    });
+    if (existing.status !== ProductStatus.REJECTED) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only rejected ready-to-wear products can be edited. Approved or pending products are locked.',
+      });
+    }
     const existingCurrencyMeta = await getProductCurrencyMetadata('READY_TO_WEAR', id);
     const pricing =
       data.basePrice !== undefined
@@ -1876,7 +1883,7 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
             requestedCurrencyCode: data.priceCurrencyCode,
           })
         : null;
-    const nextBasePriceUsd = Number(pricing?.usdPrice ?? existingPriceRow?.basePrice ?? 0);
+    const nextBasePriceUsd = Number(pricing?.usdPrice ?? existing.basePrice ?? 0);
     const effectiveUsdPerUnit = Number(pricing?.usdPerUnit ?? existingCurrencyMeta?.exchangeRate ?? 1);
     const effectiveCurrencyCode = String(pricing?.selectedCurrency || existingCurrencyMeta?.currencyCode || 'USD');
 
@@ -1962,7 +1969,7 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
   }
 });
 
-router.patch('/ready-to-wear/:id/size-stock', async (req, res, next) => {
+const handleReadyToWearSizeStockUpdate = async (req: any, res: any, next: any) => {
   try {
     const { id } = req.params;
     const schema = z.object({
@@ -2064,7 +2071,10 @@ router.patch('/ready-to-wear/:id/size-stock', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
+router.patch('/ready-to-wear/:id/size-stock', handleReadyToWearSizeStockUpdate);
+router.patch('/ready-to-wear/:id/stock', handleReadyToWearSizeStockUpdate);
+router.patch('/ready-to-wear/:id/sizes/stock', handleReadyToWearSizeStockUpdate);
 
 // Get design orders
 router.get('/orders', async (req, res, next) => {

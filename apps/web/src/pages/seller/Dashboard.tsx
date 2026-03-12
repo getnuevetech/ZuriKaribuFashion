@@ -602,6 +602,10 @@ export default function SellerDashboard() {
   };
 
   const openEditProductModal = (fabric: Fabric) => {
+    if (String(fabric.status || '').toUpperCase() !== 'REJECTED') {
+      setProductError('Only rejected products can be edited. Approved or pending products are locked.');
+      return;
+    }
     setSelectedFabric(fabric);
     setIsEditMode(true);
     setProductError(null);
@@ -823,6 +827,7 @@ export default function SellerDashboard() {
     selectedListingCurrency === 'USD'
       ? localPricePreview
       : Number((localPricePreview * selectedUsdPerUnit).toFixed(2));
+  const isEditableProductStatus = (status?: string) => String(status || '').toUpperCase() === 'REJECTED';
 
   if (loading) {
     return (
@@ -1256,13 +1261,24 @@ export default function SellerDashboard() {
                         <td className="px-4 py-3 text-gray-600">{item.orderCount}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
-                            <button
-                              onClick={() => openEditProductModal(item)}
-                              className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
-                              title="Edit product"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
+                            {isEditableProductStatus(item.status) ? (
+                              <button
+                                onClick={() => openEditProductModal(item)}
+                                className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
+                                title="Edit product"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                className="cursor-not-allowed rounded-lg p-2 text-gray-300"
+                                title="Only rejected products can be edited"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </button>
+                            )}
                             <button
                               onClick={() => openStockModal(item)}
                               className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-700"

@@ -880,6 +880,10 @@ export default function DesignerDashboard() {
   };
 
   const openEditDesignModal = (design: Design) => {
+    if (String(design.status || '').toUpperCase() !== 'REJECTED') {
+      setDesignError('Only rejected products can be edited. Approved or pending products are locked.');
+      return;
+    }
     const yardsByFabricId = (design.suitableFabrics || []).reduce<Record<string, string>>((acc, item) => {
       if (item.fabricId) acc[item.fabricId] = String(item.yardsNeeded || 1);
       return acc;
@@ -1556,6 +1560,14 @@ export default function DesignerDashboard() {
     selectedListingCurrency === 'USD'
       ? localPricePreview
       : Number((localPricePreview * selectedUsdPerUnit).toFixed(2));
+  const selectedReadyListingCurrency = String(readyForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD').toUpperCase();
+  const selectedReadyUsdPerUnit = Number(currencyOptions.usdPerUnitByCurrency?.[selectedReadyListingCurrency] || 1);
+  const readyLocalPricePreview = Number(readyForm.basePrice || 0);
+  const readyUsdPricePreview =
+    selectedReadyListingCurrency === 'USD'
+      ? readyLocalPricePreview
+      : Number((readyLocalPricePreview * selectedReadyUsdPerUnit).toFixed(2));
+  const isEditableProductStatus = (status?: string) => String(status || '').toUpperCase() === 'REJECTED';
   const fabricOptionById = useMemo(() => {
     const map = new Map<string, FabricOption>();
     for (const option of Object.values(designFabricCache)) {
@@ -2028,13 +2040,24 @@ export default function DesignerDashboard() {
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
                             {item.productType !== 'READY_TO_WEAR' ? (
-                              <button
-                                onClick={() => openEditDesignModal(item as Design)}
-                                className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
-                                title="Edit product"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </button>
+                              isEditableProductStatus(item.status) ? (
+                                <button
+                                  onClick={() => openEditDesignModal(item as Design)}
+                                  className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
+                                  title="Edit product"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="cursor-not-allowed rounded-lg p-2 text-gray-300"
+                                  title="Only rejected products can be edited"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                              )
                             ) : null}
                             {item.productType === 'READY_TO_WEAR' ? (
                               <button
@@ -2241,6 +2264,7 @@ export default function DesignerDashboard() {
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, basePrice: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                 />
+                <p className="mt-1 text-xs text-gray-500">Converted USD: ${readyUsdPricePreview.toFixed(2)}</p>
               </div>
 
               <div>

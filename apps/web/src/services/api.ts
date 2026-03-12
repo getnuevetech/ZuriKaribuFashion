@@ -885,27 +885,33 @@ async function reviewAdminDesignerFabricCountryAccessRequestWithFallback<T>(
 
 async function readDesignerFabricCountryAccessSummaryWithFallback<T>() {
   let lastError: unknown = null;
-  try {
-    const response = await apiService.get<any>('/designer/fabric-country-access', noCacheRequestConfig());
-    const homeCountry = String(response?.data?.homeCountry || '').trim();
-    const allowedCountries = dedupeCountryList(response?.data?.allowedCountries || []);
-    const availableCountries = dedupeCountryList([
-      ...(Array.isArray(response?.data?.availableCountries) ? response.data.availableCountries : []),
-      ...allowedCountries,
-      ...STATIC_COUNTRY_NAMES,
-    ]);
-    return {
-      ...(response || {}),
-      data: {
-        ...(response?.data || {}),
-        homeCountry,
-        allowedCountries,
-        availableCountries,
-      },
-    } as T;
-  } catch (error) {
-    lastError = error;
-    if (!isRetryableRouteError(error)) throw error;
+  for (const path of [
+    '/designer/fabric-country-access',
+    '/fashion-designer/fabric-country-access',
+    '/designer/fabric-country-access/summary',
+  ]) {
+    try {
+      const response = await apiService.get<any>(path, noCacheRequestConfig());
+      const homeCountry = String(response?.data?.homeCountry || '').trim();
+      const allowedCountries = dedupeCountryList(response?.data?.allowedCountries || []);
+      const availableCountries = dedupeCountryList([
+        ...(Array.isArray(response?.data?.availableCountries) ? response.data.availableCountries : []),
+        ...allowedCountries,
+        ...STATIC_COUNTRY_NAMES,
+      ]);
+      return {
+        ...(response || {}),
+        data: {
+          ...(response?.data || {}),
+          homeCountry,
+          allowedCountries,
+          availableCountries,
+        },
+      } as T;
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableRouteError(error)) throw error;
+    }
   }
   if (!isRetryableRouteError(lastError)) throw lastError;
   const profileCompletion = await readDesignerProfileCompletionWithFallback<any>().catch(() => null);
@@ -928,13 +934,52 @@ async function createDesignerFabricCountryAccessRequestWithFallback<T>(payload: 
   reason?: string;
 }) {
   let lastError: unknown = null;
-  try {
-    return await apiService.post<T>('/designer/fabric-country-access/requests', payload);
-  } catch (error) {
-    lastError = error;
-    if (!isRetryableRouteError(error)) throw error;
+  for (const path of [
+    '/designer/fabric-country-access/requests',
+    '/fashion-designer/fabric-country-access/requests',
+    '/designer/fabric-country-access/request',
+  ]) {
+    try {
+      return await apiService.post<T>(path, payload);
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableRouteError(error)) throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    return {
+      success: false,
+      message:
+        'Designer fabric country access request route is not available on the current backend deployment. Please contact admin.',
+    } as T;
   }
   throw lastError ?? new Error('Country access request route not available.');
+}
+
+async function updateDesignerReadyToWearSizeStockWithFallback<T>(
+  productId: string,
+  sizes: Array<{ size: string; color?: string; stock: number }>
+) {
+  const safeProductId = encodeURIComponent(String(productId || '').trim());
+  let lastError: unknown = null;
+  const payload = { sizes };
+  for (const path of [
+    `/designer/ready-to-wear/${safeProductId}/size-stock`,
+    `/designer/ready-to-wear/${safeProductId}/stock`,
+    `/designer/ready-to-wear/${safeProductId}/sizes/stock`,
+    `/fashion-designer/ready-to-wear/${safeProductId}/size-stock`,
+  ]) {
+    try {
+      return await apiService.patch<T>(path, payload);
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableRouteError(error)) throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    throw new Error('Ready-to-wear size stock endpoint is not available on this backend deployment yet.');
+  }
+  throw lastError ?? new Error('Ready-to-wear size stock route not found.');
 }
 
 const PARTNER_APPS_FALLBACK_KEY = 'af_partner_apps_fallback_v1';
@@ -5294,9 +5339,7 @@ const designerApi = {
     apiService.patch<{ success: boolean; data: any }>(`/designer/ready-to-wear/${productId}`, data),
 
   updateReadyToWearSizeStock: (productId: string, sizes: Array<{ size: string; color?: string; stock: number }>) =>
-    apiService.patch<{ success: boolean; data: any; message?: string }>(`/designer/ready-to-wear/${productId}/size-stock`, {
-      sizes,
-    }),
+    updateDesignerReadyToWearSizeStockWithFallback<{ success: boolean; data: any; message?: string }>(productId, sizes),
 
   getOrders: () =>
     readDesignerOrdersWithFallback<{ success: boolean; data: any[] }>(),

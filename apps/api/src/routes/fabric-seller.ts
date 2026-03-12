@@ -800,12 +800,18 @@ router.patch('/fabrics/:id', async (req, res, next) => {
 
     const existing = await prisma.fabric.findFirst({
       where: { id, sellerId: profile.id },
-      select: { id: true, sellerPrice: true },
+      select: { id: true, sellerPrice: true, status: true },
     });
     if (!existing) {
       return res.status(404).json({
         success: false,
         message: 'Fabric not found.',
+      });
+    }
+    if (existing.status !== ProductStatus.REJECTED) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only rejected fabrics can be edited. Approved or pending fabrics are locked.',
       });
     }
 
