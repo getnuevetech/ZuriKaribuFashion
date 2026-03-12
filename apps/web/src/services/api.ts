@@ -4356,6 +4356,32 @@ async function createOrderWithFallback<T>(paths: string[], data: any) {
   throw lastError ?? new Error('Order create route not found.');
 }
 
+const isRouteMissingCreateOrderError = (error: unknown) => {
+  const responseMessage = String((error as AxiosError)?.response?.data?.message || '').toLowerCase();
+  const message = String((error as Error)?.message || '').toLowerCase();
+  return (
+    isRetryableRouteError(error) ||
+    responseMessage.includes('route not found') ||
+    message.includes('route not found')
+  );
+};
+
+async function probeOrderCreateRoute(paths: string[]) {
+  try {
+    await createOrderWithFallback(paths, {});
+    return { available: true, message: '' };
+  } catch (error) {
+    if (isRouteMissingCreateOrderError(error)) {
+      return { available: false, message: String((error as Error)?.message || 'Route not found') };
+    }
+    // Non-route errors (e.g. 400 validation) imply route exists.
+    return {
+      available: true,
+      message: String((error as AxiosError)?.response?.data?.message || (error as Error)?.message || ''),
+    };
+  }
+}
+
 // Orders API
 const ordersApi = {
   getOrder: (id: string) =>
@@ -4372,6 +4398,10 @@ const ordersApi = {
 
   createFabricOnlyOrder: (data: any) =>
     createOrderWithFallback<{ success: boolean; data: any }>(fabricOnlyOrderCreatePaths, data),
+
+  probeCustomDesignCreateRoute: () => probeOrderCreateRoute(customDesignOrderCreatePaths),
+  probeReadyToWearCreateRoute: () => probeOrderCreateRoute(readyToWearOrderCreatePaths),
+  probeFabricOnlyCreateRoute: () => probeOrderCreateRoute(fabricOnlyOrderCreatePaths),
 
   updateStatus: (id: string, status: string, notes?: string) =>
     apiService.patch(`/orders/${id}/status`, { status, notes }),

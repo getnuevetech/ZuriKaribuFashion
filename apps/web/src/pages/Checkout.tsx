@@ -560,6 +560,35 @@ export default function Checkout() {
     setError(null);
 
     try {
+      const requiresCustomDesignOrder = items.some((entry) => entry.kind === 'CUSTOM_DESIGN');
+      const requiresReadyToWearOrder = items.some((entry) => entry.kind === 'READY_TO_WEAR');
+      const requiresFabricOnlyOrder = items.some((entry) => entry.kind === 'FABRIC_ONLY');
+      const missingOrderRoutes: string[] = [];
+      if (requiresCustomDesignOrder) {
+        const customRoute = await api.orders.probeCustomDesignCreateRoute();
+        if (!customRoute.available) {
+          missingOrderRoutes.push('custom-design');
+        }
+      }
+      if (requiresReadyToWearOrder) {
+        const readyRoute = await api.orders.probeReadyToWearCreateRoute();
+        if (!readyRoute.available) {
+          missingOrderRoutes.push('ready-to-wear');
+        }
+      }
+      if (requiresFabricOnlyOrder) {
+        const fabricRoute = await api.orders.probeFabricOnlyCreateRoute();
+        if (!fabricRoute.available) {
+          missingOrderRoutes.push('fabric-only');
+        }
+      }
+      if (missingOrderRoutes.length > 0) {
+        throw new Error(
+          `Checkout is blocked because backend order route(s) are missing: ${missingOrderRoutes.join(
+            ', '
+          )}. Please deploy latest API routes before charging payment.`
+        );
+      }
       if (shippingQuotes.length > 0 && !selectedShippingQuote) {
         throw new Error('Please select a shipping option to continue.');
       }
