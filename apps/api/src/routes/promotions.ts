@@ -7,6 +7,18 @@ import { Permissions } from '../rbac';
 
 const router = Router();
 
+// Compatibility aliases for legacy preview route variants.
+router.use((req, _res, next) => {
+  if (req.path === '/check') {
+    req.url = req.url.replace('/check', '/preview');
+  } else if (req.path === '/validate') {
+    req.url = req.url.replace('/validate', '/preview');
+  } else if (req.path === '/preview-checkout') {
+    req.url = req.url.replace('/preview-checkout', '/preview');
+  }
+  next();
+});
+
 const promoCriteriaSchema = z.object({
   productTypes: z.array(z.enum(['FABRIC', 'DESIGN', 'READY_TO_WEAR'])).optional(),
   productIds: z.array(z.string().trim().min(1)).optional(),

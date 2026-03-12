@@ -8,6 +8,18 @@ import { Permissions } from '../rbac';
 
 const router = Router();
 
+// Compatibility aliases for legacy frontend route variants.
+router.use((req, _res, next) => {
+  if (req.path === '/create_session') {
+    req.url = req.url.replace('/create_session', '/create-session');
+  } else if (req.path === '/session/create') {
+    req.url = req.url.replace('/session/create', '/create-session');
+  } else if (req.path === '/intent/create') {
+    req.url = req.url.replace('/intent/create', '/create-intent');
+  }
+  next();
+});
+
 type IntegrationFieldType = 'TEXT' | 'PASSWORD' | 'URL' | 'NUMBER' | 'BOOLEAN' | 'SELECT' | 'TEXTAREA';
 type ProviderMode = 'TEST' | 'LIVE';
 type CheckoutType = 'INLINE' | 'REDIRECT';

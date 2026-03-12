@@ -1998,7 +1998,36 @@ async function createPaymentSessionWithFallback<T>(data: {
     amount: normalizedAmountMinor,
     amountUsd: normalizedAmountUsd,
   };
-  const createSessionPaths = ['/payments/create-session', '/payments/create_session', '/payments/session/create'];
+  const createSessionPaths = [
+    '/payments/create-session',
+    '/payments/create_session',
+    '/payments/session/create',
+    '/payment/create-session',
+    '/payment/create_session',
+    '/payment/session/create',
+  ];
+  const createIntentPaths = [
+    '/payments/create-intent',
+    '/payment/create-intent',
+    '/payments/intent/create',
+    '/payment/intent/create',
+  ];
+  const postLegacyStripeIntent = async () => {
+    let lastError: unknown = null;
+    for (const path of createIntentPaths) {
+      try {
+        return await apiService.post<{ success: boolean; data: { clientSecret: string; paymentIntentId: string } }>(path, {
+          amount: normalizedAmountMinor,
+          currency: data.currency,
+        });
+      } catch (error) {
+        lastError = error;
+        if (isRetryableRouteError(error)) continue;
+        throw error;
+      }
+    }
+    throw lastError ?? new Error('Legacy create-intent route not found.');
+  };
   const postCreateSession = async (
     sessionPayload: Record<string, unknown>,
     mode: CheckoutPaymentDebugInfo['mode']
@@ -2025,10 +2054,7 @@ async function createPaymentSessionWithFallback<T>(data: {
     throw lastError ?? new Error('Payment create-session route not found.');
   };
   const createStripeLegacyIntentFallback = async () => {
-    const legacy = await apiService.post<{ success: boolean; data: { clientSecret: string; paymentIntentId: string } }>(
-      '/payments/create-intent',
-      { amount: normalizedAmountMinor, currency: data.currency }
-    );
+    const legacy = await postLegacyStripeIntent();
     if (!legacy.success) throw new Error('Failed to initialize Stripe payment.');
     setCheckoutPaymentDebugInfo({
       routePath: '/payments/create-intent',
@@ -2050,10 +2076,7 @@ async function createPaymentSessionWithFallback<T>(data: {
     } as T;
   };
   const createStripeLegacyIntentForcedFallback = async () => {
-    const legacy = await apiService.post<{ success: boolean; data: { clientSecret: string; paymentIntentId: string } }>(
-      '/payments/create-intent',
-      { amount: normalizedAmountMinor, currency: data.currency }
-    );
+    const legacy = await postLegacyStripeIntent();
     if (!legacy.success) throw new Error('Failed to initialize Stripe fallback payment.');
     setCheckoutPaymentDebugInfo({
       routePath: '/payments/create-intent',
@@ -4846,7 +4869,15 @@ const adminPromoCodesDeletePaths = (id: string) => [
   `/admin/promotions/${id}`,
   `/admin/promo-codes/${id}`,
 ];
-const promoPreviewPaths = ['/promotions/preview', '/promo/preview'];
+const promoPreviewPaths = [
+  '/promotions/preview',
+  '/promo/preview',
+  '/promo-codes/preview',
+  '/promotions/check',
+  '/promotions/validate',
+  '/promo/check',
+  '/promo/validate',
+];
 
 type PromoCriteriaFallback = {
   productTypes?: string[];
