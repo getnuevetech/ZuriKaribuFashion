@@ -1373,13 +1373,6 @@ router.patch('/designs/:id', async (req, res, next) => {
         message: 'Design not found.',
       });
     }
-    if (existing.status !== ProductStatus.REJECTED) {
-      return res.status(403).json({
-        success: false,
-        message: 'Only rejected designs can be edited. Approved or pending designs are locked.',
-      });
-    }
-
     let normalizedSuitableFabrics:
       | Array<{
           fabricId: string;
@@ -1865,12 +1858,6 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: 'Ready-to-wear product not found.',
-      });
-    }
-    if (existing.status !== ProductStatus.REJECTED) {
-      return res.status(403).json({
-        success: false,
-        message: 'Only rejected ready-to-wear products can be edited. Approved or pending products are locked.',
       });
     }
     const existingCurrencyMeta = await getProductCurrencyMetadata('READY_TO_WEAR', id);

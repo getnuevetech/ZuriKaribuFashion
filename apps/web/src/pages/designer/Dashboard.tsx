@@ -318,6 +318,8 @@ export default function DesignerDashboard() {
   });
   const [showReadyModal, setShowReadyModal] = useState(false);
   const [isSavingReady, setIsSavingReady] = useState(false);
+  const [isReadyEditMode, setIsReadyEditMode] = useState(false);
+  const [selectedReadyForEdit, setSelectedReadyForEdit] = useState<ReadyProduct | null>(null);
   const [readyError, setReadyError] = useState<string | null>(null);
   const [readyUploadingImage, setReadyUploadingImage] = useState(false);
   const [readyImageUrlInput, setReadyImageUrlInput] = useState('');
@@ -870,6 +872,8 @@ export default function DesignerDashboard() {
       priceCurrencyCode: currencyOptions.defaultCurrency || 'USD',
       variants: [{ size: defaultSize, color: 'DEFAULT', price: '', stock: '0' }],
     });
+    setIsReadyEditMode(false);
+    setSelectedReadyForEdit(null);
     setReadyError(null);
     setReadyImageUrlInput('');
   };
@@ -880,10 +884,6 @@ export default function DesignerDashboard() {
   };
 
   const openEditDesignModal = (design: Design) => {
-    if (String(design.status || '').toUpperCase() !== 'REJECTED') {
-      setDesignError('Only rejected products can be edited. Approved or pending products are locked.');
-      return;
-    }
     const yardsByFabricId = (design.suitableFabrics || []).reduce<Record<string, string>>((acc, item) => {
       if (item.fabricId) acc[item.fabricId] = String(item.yardsNeeded || 1);
       return acc;
@@ -926,6 +926,36 @@ export default function DesignerDashboard() {
     setDesignSelectedFabricOptionId('');
     setDesignImageUrlInput('');
     setShowDesignModal(true);
+  };
+
+  const openEditReadyModal = (product: ReadyProduct) => {
+    const matchedCategoryId =
+      categories.find((entry) => String(entry.name || '').trim().toLowerCase() === String(product.category?.name || '').trim().toLowerCase())?.id ||
+      categories[0]?.id ||
+      '';
+    const mappedVariants =
+      Array.isArray(product.sizeVariations) && product.sizeVariations.length > 0
+        ? product.sizeVariations.map((entry) => ({
+            size: String(entry.size || '').trim() || 'M',
+            color: String(entry.color || 'DEFAULT').trim() || 'DEFAULT',
+            price: String(Number(entry.price || 0)),
+            stock: String(Math.max(0, Number(entry.stock || 0))),
+          }))
+        : [{ size: readySizeOptions[0] || 'M', color: 'DEFAULT', price: String(Number(product.basePrice || 0)), stock: '0' }];
+    setIsReadyEditMode(true);
+    setSelectedReadyForEdit(product);
+    setReadyError(null);
+    setReadyImageUrlInput('');
+    setReadyForm({
+      name: product.name || '',
+      description: product.description || '',
+      categoryId: matchedCategoryId,
+      basePrice: String(product.listingLocalPrice || product.basePrice || 0),
+      imageUrls: Array.isArray(product.images) ? product.images.join('\n') : '',
+      priceCurrencyCode: String(product.listingCurrencyCode || currencyOptions.defaultCurrency || 'USD'),
+      variants: mappedVariants,
+    });
+    setShowReadyModal(true);
   };
 
   const parseImageInputs = (value: string) =>
@@ -1398,7 +1428,7 @@ export default function DesignerDashboard() {
 
     try {
       setIsSavingReady(true);
-      await api.designer.createReadyToWear({
+      const payload = {
         name: readyForm.name.trim(),
         description: readyForm.description.trim(),
         categoryId: readyForm.categoryId,
@@ -1414,7 +1444,12 @@ export default function DesignerDashboard() {
           url: entry.url,
           alt: `${readyForm.name.trim() || 'Ready To Wear'} image ${index + 1}`,
         })),
-      });
+      };
+      if (isReadyEditMode && selectedReadyForEdit) {
+        await api.designer.updateReadyToWear(selectedReadyForEdit.id, payload);
+      } else {
+        await api.designer.createReadyToWear(payload);
+      }
       setShowReadyModal(false);
       resetReadyForm();
       await fetchDashboardData();
@@ -1567,7 +1602,6 @@ export default function DesignerDashboard() {
     selectedReadyListingCurrency === 'USD'
       ? readyLocalPricePreview
       : Number((readyLocalPricePreview * selectedReadyUsdPerUnit).toFixed(2));
-  const isEditableProductStatus = (status?: string) => String(status || '').toUpperCase() === 'REJECTED';
   const fabricOptionById = useMemo(() => {
     const map = new Map<string, FabricOption>();
     for (const option of Object.values(designFabricCache)) {
@@ -2040,33 +2074,31 @@ export default function DesignerDashboard() {
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
                             {item.productType !== 'READY_TO_WEAR' ? (
-                              isEditableProductStatus(item.status) ? (
+                              <button
+                                onClick={() => openEditDesignModal(item as Design)}
+                                className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
+                                title="Edit product"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </button>
+                            ) : null}
+                            {item.productType === 'READY_TO_WEAR' ? (
+                              <>
                                 <button
-                                  onClick={() => openEditDesignModal(item as Design)}
+                                  onClick={() => openEditReadyModal(item as ReadyProduct)}
                                   className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
                                   title="Edit product"
                                 >
                                   <Edit className="h-4 w-4" />
                                 </button>
-                              ) : (
                                 <button
-                                  type="button"
-                                  disabled
-                                  className="cursor-not-allowed rounded-lg p-2 text-gray-300"
-                                  title="Only rejected products can be edited"
+                                  onClick={() => openReadyStockModal(item as ReadyProduct)}
+                                  className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-700"
+                                  title="Manage size stock"
                                 >
-                                  <Edit className="h-4 w-4" />
+                                  <Scissors className="h-4 w-4" />
                                 </button>
-                              )
-                            ) : null}
-                            {item.productType === 'READY_TO_WEAR' ? (
-                              <button
-                                onClick={() => openReadyStockModal(item as ReadyProduct)}
-                                className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-700"
-                                title="Manage size stock"
-                              >
-                                <Scissors className="h-4 w-4" />
-                              </button>
+                              </>
                             ) : null}
                             <Link
                               to={item.productType === 'READY_TO_WEAR' ? `/ready-to-wear/${item.id}` : `/designs/${item.id}`}
@@ -2211,7 +2243,9 @@ export default function DesignerDashboard() {
       {showReadyModal ? (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
           <div className="mx-auto w-full max-w-3xl rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Add Ready-To-Wear Product</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              {isReadyEditMode ? 'Update Ready-To-Wear Product' : 'Add Ready-To-Wear Product'}
+            </h3>
             <p className="text-sm text-gray-500 mb-5">
               Configure variant rows by size, color, and quantity to manage stock accurately.
             </p>
@@ -2449,7 +2483,7 @@ export default function DesignerDashboard() {
                 Cancel
               </Button>
               <Button onClick={handleSaveReadyToWear} disabled={isSavingReady}>
-                {isSavingReady ? 'Saving...' : 'Submit Ready-To-Wear Product'}
+                {isSavingReady ? 'Saving...' : isReadyEditMode ? 'Update Ready-To-Wear Product' : 'Submit Ready-To-Wear Product'}
               </Button>
             </div>
           </div>

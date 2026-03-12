@@ -808,13 +808,6 @@ router.patch('/fabrics/:id', async (req, res, next) => {
         message: 'Fabric not found.',
       });
     }
-    if (existing.status !== ProductStatus.REJECTED) {
-      return res.status(403).json({
-        success: false,
-        message: 'Only rejected fabrics can be edited. Approved or pending fabrics are locked.',
-      });
-    }
-
     const pricing =
       data.sellerPrice !== undefined
         ? await resolveSellerListingPrice({

@@ -848,7 +848,8 @@ export default function AdminProducts() {
       }
       const imagePolicy = getImagePolicy(currentType);
       const imageCount = form.images.length;
-      if (imageCount < imagePolicy.min || imageCount > imagePolicy.max) {
+      const shouldValidateImages = !editing || imagesDirty;
+      if (shouldValidateImages && (imageCount < imagePolicy.min || imageCount > imagePolicy.max)) {
         const message = `${imagePolicy.label} requires between ${imagePolicy.min} and ${imagePolicy.max} images.`;
         setError(message);
         setModalError(message);
