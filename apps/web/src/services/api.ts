@@ -106,7 +106,7 @@ const CHECKOUT_PAYMENT_DEBUG_KEY = 'af_checkout_last_payment_session_debug_v1';
 
 type CheckoutPaymentDebugInfo = {
   routePath: string;
-  mode: 'PRIMARY' | 'COMPATIBILITY' | 'LEGACY_INTENT';
+  mode: 'PRIMARY' | 'COMPATIBILITY' | 'LEGACY_INTENT' | 'LEGACY_INTENT_FORCED';
   amountMinor: number;
   amountUsd: number;
   providerKey: string;
@@ -134,6 +134,8 @@ const getCheckoutPaymentDebugInfo = (): CheckoutPaymentDebugInfo | null => {
       mode:
         String((parsed as any).mode || '').toUpperCase() === 'COMPATIBILITY'
           ? 'COMPATIBILITY'
+          : String((parsed as any).mode || '').toUpperCase() === 'LEGACY_INTENT_FORCED'
+            ? 'LEGACY_INTENT_FORCED'
           : String((parsed as any).mode || '').toUpperCase() === 'LEGACY_INTENT'
             ? 'LEGACY_INTENT'
             : 'PRIMARY',
@@ -2047,6 +2049,31 @@ async function createPaymentSessionWithFallback<T>(data: {
       },
     } as T;
   };
+  const createStripeLegacyIntentForcedFallback = async () => {
+    const legacy = await apiService.post<{ success: boolean; data: { clientSecret: string; paymentIntentId: string } }>(
+      '/payments/create-intent',
+      { amount: normalizedAmountMinor, currency: data.currency }
+    );
+    if (!legacy.success) throw new Error('Failed to initialize Stripe fallback payment.');
+    setCheckoutPaymentDebugInfo({
+      routePath: '/payments/create-intent',
+      mode: 'LEGACY_INTENT_FORCED',
+      amountMinor: normalizedAmountMinor,
+      amountUsd: normalizedAmountUsd,
+      providerKey: 'STRIPE',
+      timestamp: new Date().toISOString(),
+    });
+    return {
+      success: true,
+      data: {
+        providerKey: 'STRIPE',
+        flow: 'INLINE',
+        reference: String(legacy.data.paymentIntentId || ''),
+        clientSecret: legacy.data.clientSecret,
+        paymentIntentId: legacy.data.paymentIntentId,
+      },
+    } as T;
+  };
   try {
     return await postCreateSession(payload as Record<string, unknown>, 'PRIMARY');
   } catch (error) {
@@ -2075,9 +2102,12 @@ async function createPaymentSessionWithFallback<T>(data: {
       try {
         return await postCreateSession(compatibilityPayload as Record<string, unknown>, 'COMPATIBILITY');
       } catch (compatibilityError) {
-        const providerKey = normalizePaymentProviderKey(data.providerKey);
-        if (providerKey === 'STRIPE' && normalizedAmountMinor > 0) {
-          return await createStripeLegacyIntentFallback();
+        if (normalizedAmountMinor > 0) {
+          try {
+            return await createStripeLegacyIntentForcedFallback();
+          } catch {
+            // fall through to original compatibility error
+          }
         }
         throw compatibilityError;
       }

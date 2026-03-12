@@ -71,7 +71,7 @@ interface PromoPreviewResult {
 
 interface PaymentSessionDebugInfo {
   routePath: string;
-  mode: 'PRIMARY' | 'COMPATIBILITY' | 'LEGACY_INTENT';
+  mode: 'PRIMARY' | 'COMPATIBILITY' | 'LEGACY_INTENT' | 'LEGACY_INTENT_FORCED';
   amountMinor: number;
   amountUsd: number;
   providerKey: string;
@@ -585,7 +585,15 @@ export default function Checkout() {
       }
       throw new Error('Payment provider could not initialize checkout.');
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || 'Failed to initialize payment');
+      const rawMessage = String(err?.response?.data?.message || err?.message || 'Failed to initialize payment');
+      const normalizedMessage = rawMessage.toLowerCase();
+      if (normalizedMessage.includes('amountusd') && normalizedMessage.includes('required')) {
+        setError(
+          'Payment session failed because this backend expects an old amountUsd format. Checkout automatically attempted a compatibility fallback. If this still appears, switch to Stripe or redeploy the latest API.'
+        );
+      } else {
+        setError(rawMessage);
+      }
     } finally {
       setLoading(false);
     }
