@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma, UserRole, UserStatus, ProductStatus, ProductType } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
@@ -60,6 +61,10 @@ const decodeReadyToWearVariantKey = (variantKey: unknown) => {
     variantKey: encodeReadyToWearVariantKey(normalizedSize, DEFAULT_READY_TO_WEAR_COLOR),
   };
 };
+
+const isSchemaDriftError = (error: unknown) =>
+  error instanceof Prisma.PrismaClientKnownRequestError &&
+  (error.code === 'P2021' || error.code === 'P2022');
 
 function parsePagination(pageValue: unknown, limitValue: unknown, defaultLimit = 20) {
   const page = Math.max(1, Number.parseInt(String(pageValue ?? '1'), 10) || 1);
@@ -4085,41 +4090,72 @@ router.patch('/products/:type/:id/featured', async (req, res, next) => {
 
     if (payload.isFeatured) {
       const section = payload.section || getDefaultFeaturedSectionForType(productType);
-      const featured = await prisma.featuredProduct.upsert({
-        where: {
-          productId_productType_section: {
+      try {
+        const featured = await prisma.featuredProduct.upsert({
+          where: {
+            productId_productType_section: {
+              productId: id,
+              productType,
+              section,
+            },
+          },
+          update: {
+            isActive: true,
+            displayOrder: payload.displayOrder ?? 0,
+          },
+          create: {
             productId: id,
             productType,
             section,
+            displayOrder: payload.displayOrder ?? 0,
+            isActive: true,
           },
-        },
-        update: {
-          isActive: true,
-          displayOrder: payload.displayOrder ?? 0,
-        },
-        create: {
-          productId: id,
-          productType,
-          section,
-          displayOrder: payload.displayOrder ?? 0,
-          isActive: true,
-        },
-      });
+        });
 
-      return res.json({
-        success: true,
-        message: 'Product marked as featured.',
-        data: featured,
-      });
+        return res.json({
+          success: true,
+          message: 'Product marked as featured.',
+          data: featured,
+        });
+      } catch (featuredError) {
+        if (!isSchemaDriftError(featuredError)) throw featuredError;
+        console.warn('[admin/products/featured] Skipping featured upsert due to schema drift:', featuredError);
+        return res.json({
+          success: true,
+          message: 'Product updated, but featured settings are unavailable on this deployment.',
+          data: {
+            productId: id,
+            productType,
+            section,
+            isFeatured: false,
+            warning: 'FEATURED_SETTINGS_UNAVAILABLE',
+          },
+        });
+      }
     }
 
-    await prisma.featuredProduct.deleteMany({
-      where: {
-        productId: id,
-        productType,
-        ...(payload.section ? { section: payload.section } : {}),
-      },
-    });
+    try {
+      await prisma.featuredProduct.deleteMany({
+        where: {
+          productId: id,
+          productType,
+          ...(payload.section ? { section: payload.section } : {}),
+        },
+      });
+    } catch (featuredError) {
+      if (!isSchemaDriftError(featuredError)) throw featuredError;
+      console.warn('[admin/products/featured] Skipping featured delete due to schema drift:', featuredError);
+      return res.json({
+        success: true,
+        message: 'Product updated, but featured settings are unavailable on this deployment.',
+        data: {
+          productId: id,
+          productType,
+          isFeatured: false,
+          warning: 'FEATURED_SETTINGS_UNAVAILABLE',
+        },
+      });
+    }
 
     return res.json({
       success: true,

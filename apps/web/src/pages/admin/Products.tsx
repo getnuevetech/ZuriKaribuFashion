@@ -1039,11 +1039,16 @@ export default function AdminProducts() {
       }
 
       if (savedId) {
-        await api.admin.setProductFeatured(savedType, savedId, {
-          isFeatured: form.isFeatured,
-          section: form.isFeatured ? form.featuredSection : undefined,
-          displayOrder: 0,
-        });
+        try {
+          await api.admin.setProductFeatured(savedType, savedId, {
+            isFeatured: form.isFeatured,
+            section: form.isFeatured ? form.featuredSection : undefined,
+            displayOrder: 0,
+          });
+        } catch (featuredError) {
+          console.warn('Featured toggle failed; product data was still saved.', featuredError);
+          setError('Product updated, but featured setting could not be saved on this deployment.');
+        }
       }
       setSuccess(editing ? 'Product updated successfully.' : 'Product created successfully.');
       setShowModal(false);
