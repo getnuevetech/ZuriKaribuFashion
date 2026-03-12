@@ -15,7 +15,7 @@ import {
   AlertCircle,
   Sparkles
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { api } from '../../services/api';
 import StatCard from '../../components/dashboard/StatCard';
@@ -94,6 +94,18 @@ interface PaymentProviderOption {
   publicConfig?: Record<string, any>;
 }
 
+type DashboardTab = 'overview' | 'orders' | 'wishlist' | 'tryon';
+
+const resolveDashboardTab = (value: unknown): DashboardTab => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'orders') return 'orders';
+  if (normalized === 'wishlist') return 'wishlist';
+  if (normalized === 'tryon' || normalized === 'try-on' || normalized === '3d-tryon' || normalized === '3d-try-on') {
+    return 'tryon';
+  }
+  return 'overview';
+};
+
 const statusConfig: Record<string, { icon: any; color: string; label: string; bgColor: string }> = {
   PENDING: { icon: Clock, color: 'text-yellow-600', label: 'Pending', bgColor: 'bg-yellow-50' },
   CONFIRMED: { icon: CheckCircle, color: 'text-blue-600', label: 'Confirmed', bgColor: 'bg-blue-50' },
@@ -108,12 +120,13 @@ const statusConfig: Record<string, { icon: any; color: string; label: string; bg
 export default function CustomerDashboard() {
   const stripe = useStripe();
   const elements = useElements();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [stats, setStats] = useState<CustomerStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'wishlist' | 'tryon'>('overview');
+  const [activeTab, setActiveTab] = useState<DashboardTab>(() => resolveDashboardTab(searchParams.get('tab')));
   const [tryOnSummary, setTryOnSummary] = useState<any>(null);
   const [tryOnCatalog, setTryOnCatalog] = useState<TryOnCatalogItem[]>([]);
   const [tryOnSelected, setTryOnSelected] = useState<Array<{ productType: 'DESIGN' | 'READY_TO_WEAR'; productId: string }>>([]);
@@ -135,10 +148,31 @@ export default function CustomerDashboard() {
     fetchDashboardData();
   }, []);
 
+  useEffect(() => {
+    const nextTab = resolveDashboardTab(searchParams.get('tab'));
+    setActiveTab((current) => (current === nextTab ? current : nextTab));
+  }, [searchParams]);
+
+  const handleTabChange = (tab: DashboardTab) => {
+    setActiveTab(tab);
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (tab === 'overview') {
+          next.delete('tab');
+        } else {
+          next.set('tab', tab);
+        }
+        return next;
+      },
+      { replace: true }
+    );
+  };
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsRes, ordersRes, tryOnSummaryRes, tryOnCatalogRes, paymentOptionsRes] = await Promise.all([
+      const [statsRes, ordersRes, tryOnSummaryRes, tryOnCatalogRes, paymentOptionsRes] = await Promise.allSettled([
         api.customer.getProfile(),
         api.customer.getOrders(),
         api.customer.getTryOnSummary(),
@@ -146,16 +180,16 @@ export default function CustomerDashboard() {
         api.payments.getOptions(),
       ]);
       
-      if (statsRes.success) {
-        setStats(statsRes.data.stats);
-        setWishlist(statsRes.data.wishlist || []);
+      if (statsRes.status === 'fulfilled' && statsRes.value.success) {
+        setStats(statsRes.value.data.stats);
+        setWishlist(statsRes.value.data.wishlist || []);
       }
-      if (ordersRes.success) {
-        setOrders(ordersRes.data.orders || []);
+      if (ordersRes.status === 'fulfilled' && ordersRes.value.success) {
+        setOrders(ordersRes.value.data.orders || []);
       }
-      if (tryOnSummaryRes.success) {
-        setTryOnSummary(tryOnSummaryRes.data || null);
-        const measurementSeed = tryOnSummaryRes.data?.measurements;
+      if (tryOnSummaryRes.status === 'fulfilled' && tryOnSummaryRes.value.success) {
+        setTryOnSummary(tryOnSummaryRes.value.data || null);
+        const measurementSeed = tryOnSummaryRes.value.data?.measurements;
         if (measurementSeed && typeof measurementSeed === 'object') {
           setTryOnMeasurements(
             Object.keys(measurementSeed).reduce((acc, key) => {
@@ -165,12 +199,19 @@ export default function CustomerDashboard() {
             }, {} as Record<string, number>)
           );
         }
+      } else if (tryOnSummaryRes.status === 'rejected') {
+        const message = String((tryOnSummaryRes.reason as any)?.response?.data?.message || '').toLowerCase();
+        if (message.includes('route not found') || message.includes('not found')) {
+          setTryOnError('3D TryON is currently unavailable on this backend deployment. Please redeploy API.');
+        } else if (message) {
+          setTryOnError(String((tryOnSummaryRes.reason as any)?.response?.data?.message || ''));
+        }
       }
-      if (tryOnCatalogRes.success) {
-        setTryOnCatalog((tryOnCatalogRes.data || []) as TryOnCatalogItem[]);
+      if (tryOnCatalogRes.status === 'fulfilled' && tryOnCatalogRes.value.success) {
+        setTryOnCatalog((tryOnCatalogRes.value.data || []) as TryOnCatalogItem[]);
       }
-      if (paymentOptionsRes.success) {
-        const providers = (paymentOptionsRes.data?.providers || []).map((entry: any) => ({
+      if (paymentOptionsRes.status === 'fulfilled' && paymentOptionsRes.value.success) {
+        const providers = (paymentOptionsRes.value.data?.providers || []).map((entry: any) => ({
           providerKey: String(entry.providerKey || 'STRIPE').toUpperCase(),
           displayName: String(entry.displayName || entry.providerKey || 'Payment Provider'),
           checkoutType: entry.checkoutType === 'REDIRECT' ? 'REDIRECT' : 'INLINE',
@@ -513,12 +554,12 @@ export default function CustomerDashboard() {
           {(['overview', 'orders', 'wishlist', 'tryon'] as const).map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`pb-3 text-sm font-medium capitalize transition-colors relative ${
+              onClick={() => handleTabChange(tab)}
+              className={`pb-3 text-sm font-medium transition-colors relative ${
                 activeTab === tab ? 'text-amber-600' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              {tab}
+              {tab === 'overview' ? 'Overview' : tab === 'orders' ? 'Orders' : tab === 'wishlist' ? 'Wishlist' : '3D TryON'}
               {activeTab === tab && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-600" />
               )}
@@ -545,7 +586,7 @@ export default function CustomerDashboard() {
                 <Button 
                   variant="outline" 
                   size="sm"
-                  onClick={() => setActiveTab('orders')}
+                  onClick={() => handleTabChange('orders')}
                 >
                   Track Orders
                 </Button>
@@ -575,7 +616,7 @@ export default function CustomerDashboard() {
             <div className="bg-white rounded-xl p-6 shadow-sm border">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Recent Orders</h3>
-                <Button variant="ghost" size="sm" onClick={() => setActiveTab('orders')}>
+                <Button variant="ghost" size="sm" onClick={() => handleTabChange('orders')}>
                   View All
                   <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>

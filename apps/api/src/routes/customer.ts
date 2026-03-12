@@ -362,7 +362,7 @@ router.post('/measurements', async (req, res, next) => {
   }
 });
 
-router.get('/try-on/summary', async (req, res, next) => {
+const handleGetTryOnSummary = async (req: any, res: any, next: any) => {
   try {
     const settingsPayload = await readTryOnSettings();
     if (!settingsPayload.settings.enabled || settingsPayload.settings.applyLocations.customerDashboard === false) {
@@ -385,9 +385,12 @@ router.get('/try-on/summary', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
+router.get('/try-on/summary', handleGetTryOnSummary);
+router.get('/tryon/summary', handleGetTryOnSummary);
+router.get('/3d-try-on/summary', handleGetTryOnSummary);
 
-router.get('/try-on/catalog', async (req, res, next) => {
+const handleGetTryOnCatalog = async (req: any, res: any, next: any) => {
   try {
     const settingsPayload = await readTryOnSettings();
     if (!settingsPayload.settings.enabled || settingsPayload.settings.applyLocations.customerDashboard === false) {
@@ -481,9 +484,12 @@ router.get('/try-on/catalog', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
+router.get('/try-on/catalog', handleGetTryOnCatalog);
+router.get('/tryon/catalog', handleGetTryOnCatalog);
+router.get('/3d-try-on/catalog', handleGetTryOnCatalog);
 
-router.post('/try-on/purchase/session', async (req, res, next) => {
+const handleCreateTryOnPurchaseSession = async (req: any, res: any, next: any) => {
   try {
     const settingsPayload = await readTryOnSettings();
     if (!settingsPayload.settings.enabled || settingsPayload.settings.applyLocations.customerDashboard === false) {
@@ -568,7 +574,10 @@ router.post('/try-on/purchase/session', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
+router.post('/try-on/purchase/session', handleCreateTryOnPurchaseSession);
+router.post('/tryon/purchase/session', handleCreateTryOnPurchaseSession);
+router.post('/3d-try-on/purchase/session', handleCreateTryOnPurchaseSession);
 
 const handleTryOnPurchaseComplete = async (req: any, res: any, next: any) => {
   try {
@@ -688,8 +697,12 @@ const handleTryOnPurchaseComplete = async (req: any, res: any, next: any) => {
 
 router.post('/try-on/purchase', handleTryOnPurchaseComplete);
 router.post('/try-on/purchase/complete', handleTryOnPurchaseComplete);
+router.post('/tryon/purchase', handleTryOnPurchaseComplete);
+router.post('/tryon/purchase/complete', handleTryOnPurchaseComplete);
+router.post('/3d-try-on/purchase', handleTryOnPurchaseComplete);
+router.post('/3d-try-on/purchase/complete', handleTryOnPurchaseComplete);
 
-router.post('/try-on/batch', async (req, res, next) => {
+const handleRunTryOnBatch = async (req: any, res: any, next: any) => {
   try {
     const settingsPayload = await readTryOnSettings();
     const settings = settingsPayload.settings;
@@ -846,7 +859,10 @@ router.post('/try-on/batch', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
+router.post('/try-on/batch', handleRunTryOnBatch);
+router.post('/tryon/batch', handleRunTryOnBatch);
+router.post('/3d-try-on/batch', handleRunTryOnBatch);
 
 // Get customer orders
 router.get('/orders', async (req, res, next) => {

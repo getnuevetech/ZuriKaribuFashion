@@ -4066,6 +4066,111 @@ const ordersApi = {
     apiService.patch(`/orders/${id}/tracking`, { trackingNumber }),
 };
 
+const customerTryOnSummaryPaths = ['/customer/try-on/summary', '/customer/tryon/summary', '/customer/3d-try-on/summary'];
+const customerTryOnCatalogPaths = ['/customer/try-on/catalog', '/customer/tryon/catalog', '/customer/3d-try-on/catalog'];
+const customerTryOnBatchPaths = ['/customer/try-on/batch', '/customer/tryon/batch', '/customer/3d-try-on/batch'];
+const customerTryOnPurchaseSessionPaths = [
+  '/customer/try-on/purchase/session',
+  '/customer/tryon/purchase/session',
+  '/customer/3d-try-on/purchase/session',
+];
+const customerTryOnPurchaseCompletePaths = [
+  '/customer/try-on/purchase',
+  '/customer/try-on/purchase/complete',
+  '/customer/tryon/purchase',
+  '/customer/tryon/purchase/complete',
+  '/customer/3d-try-on/purchase',
+  '/customer/3d-try-on/purchase/complete',
+];
+
+async function readCustomerTryOnSummaryWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of customerTryOnSummaryPaths) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Customer TryON summary route not found.');
+}
+
+async function readCustomerTryOnCatalogWithFallback<T>(params?: {
+  search?: string;
+  productType?: 'ALL' | 'DESIGN' | 'READY_TO_WEAR';
+  page?: number;
+  limit?: number;
+}) {
+  let lastError: unknown = null;
+  for (const path of customerTryOnCatalogPaths) {
+    try {
+      return await apiService.get<T>(path, { params });
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Customer TryON catalog route not found.');
+}
+
+async function runCustomerTryOnBatchWithFallback<T>(payload: {
+  measurements: Record<string, number>;
+  selectedProducts: Array<{ productType: 'DESIGN' | 'READY_TO_WEAR'; productId: string }>;
+}) {
+  let lastError: unknown = null;
+  for (const path of customerTryOnBatchPaths) {
+    try {
+      return await apiService.post<T>(path, payload);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Customer TryON batch route not found.');
+}
+
+async function createCustomerTryOnPurchaseSessionWithFallback<T>(payload: {
+  bundles: number;
+  providerKey: string;
+  returnUrl?: string;
+  cancelUrl?: string;
+}) {
+  let lastError: unknown = null;
+  for (const path of customerTryOnPurchaseSessionPaths) {
+    try {
+      return await apiService.post<T>(path, payload);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Customer TryON purchase-session route not found.');
+}
+
+async function completeCustomerTryOnPurchaseWithFallback<T>(payload: {
+  purchaseId: string;
+  providerKey: string;
+  reference: string;
+  payerId?: string;
+}) {
+  let lastError: unknown = null;
+  for (const path of customerTryOnPurchaseCompletePaths) {
+    try {
+      return await apiService.post<T>(path, payload);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Customer TryON purchase-complete route not found.');
+}
+
 // Customer API
 const customerApi = {
   getProfile: () =>
@@ -4087,26 +4192,25 @@ const customerApi = {
     apiService.post<{ success: boolean; data: any }>('/customer/measurements', data),
 
   getTryOnSummary: () =>
-    apiService.get<{ success: boolean; data: any }>('/customer/try-on/summary'),
+    readCustomerTryOnSummaryWithFallback<{ success: boolean; data: any }>(),
 
   getTryOnCatalog: (params?: { search?: string; productType?: 'ALL' | 'DESIGN' | 'READY_TO_WEAR'; page?: number; limit?: number }) =>
-    apiService.get<{ success: boolean; data: any[]; pagination?: any }>('/customer/try-on/catalog', { params }),
+    readCustomerTryOnCatalogWithFallback<{ success: boolean; data: any[]; pagination?: any }>(params),
 
   runTryOnBatch: (payload: {
     measurements: Record<string, number>;
     selectedProducts: Array<{ productType: 'DESIGN' | 'READY_TO_WEAR'; productId: string }>;
-  }) => apiService.post<{ success: boolean; data?: any; requiresPayment?: boolean; message?: string }>('/customer/try-on/batch', payload),
+  }) => runCustomerTryOnBatchWithFallback<{ success: boolean; data?: any; requiresPayment?: boolean; message?: string }>(payload),
 
   createTryOnPurchaseSession: (payload: {
     bundles: number;
     providerKey: string;
     returnUrl?: string;
     cancelUrl?: string;
-  }) =>
-    apiService.post<{ success: boolean; data?: any; message?: string }>('/customer/try-on/purchase/session', payload),
+  }) => createCustomerTryOnPurchaseSessionWithFallback<{ success: boolean; data?: any; message?: string }>(payload),
 
   completeTryOnPurchase: (payload: { purchaseId: string; providerKey: string; reference: string; payerId?: string }) =>
-    apiService.post<{ success: boolean; data?: any; message?: string }>('/customer/try-on/purchase', payload),
+    completeCustomerTryOnPurchaseWithFallback<{ success: boolean; data?: any; message?: string }>(payload),
 
   getOrders: (params?: { page?: number; limit?: number }) =>
     apiService.get<{ success: boolean; data: { orders: any[]; pagination: any } }>('/customer/orders', { params }),
