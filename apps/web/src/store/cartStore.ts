@@ -115,6 +115,19 @@ function getItemTotal(item: CartItem): number {
   return Number.isFinite(computed) && computed > 0 ? computed : Number(item.totalPrice || 0);
 }
 
+function computeCartTotal(items: CartItem[]): number {
+  return items.reduce((sum, item) => sum + getItemTotal(item), 0);
+}
+
+function computeCartItemCount(items: CartItem[]): number {
+  return items.reduce((count, item) => {
+    if (item.kind === 'READY_TO_WEAR') {
+      return count + Math.max(1, Number(item.quantity || 1));
+    }
+    return count + 1;
+  }, 0);
+}
+
 interface CartStore {
   items: CartItem[];
   addItem: (item: CartItem | LegacyCustomItem) => void;
@@ -132,12 +145,19 @@ export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
       items: [],
+      totalPrice: 0,
+      itemCount: 0,
       
       addItem: (item) => {
         const normalized = normalizeCartItem(item);
-        set((state) => ({
-          items: [...state.items, normalized],
-        }));
+        set((state) => {
+          const nextItems = [...state.items, normalized];
+          return {
+            items: nextItems,
+            totalPrice: computeCartTotal(nextItems),
+            itemCount: computeCartItemCount(nextItems),
+          };
+        });
       },
 
       addReadyToWearItem: (item) => {
@@ -151,7 +171,12 @@ export const useCartStore = create<CartStore>()(
               (cartItem.selectedColor || '') === (normalized.selectedColor || '')
           );
           if (existingIndex === -1) {
-            return { items: [...state.items, normalized] };
+            const nextItems = [...state.items, normalized];
+            return {
+              items: nextItems,
+              totalPrice: computeCartTotal(nextItems),
+              itemCount: computeCartItemCount(nextItems),
+            };
           }
           const existing = state.items[existingIndex] as ReadyToWearCartItem;
           const merged: ReadyToWearCartItem = {
@@ -160,8 +185,11 @@ export const useCartStore = create<CartStore>()(
             unitPrice: normalized.unitPrice || existing.unitPrice,
             tryOnMeasurements: normalized.tryOnMeasurements || existing.tryOnMeasurements,
           };
+          const nextItems = state.items.map((cartItem, index) => (index === existingIndex ? merged : cartItem));
           return {
-            items: state.items.map((cartItem, index) => (index === existingIndex ? merged : cartItem)),
+            items: nextItems,
+            totalPrice: computeCartTotal(nextItems),
+            itemCount: computeCartItemCount(nextItems),
           };
         });
       },
@@ -173,7 +201,12 @@ export const useCartStore = create<CartStore>()(
             (cartItem) => cartItem.kind === 'FABRIC_ONLY' && cartItem.fabricId === normalized.fabricId
           );
           if (existingIndex === -1) {
-            return { items: [...state.items, normalized] };
+            const nextItems = [...state.items, normalized];
+            return {
+              items: nextItems,
+              totalPrice: computeCartTotal(nextItems),
+              itemCount: computeCartItemCount(nextItems),
+            };
           }
           const existing = state.items[existingIndex] as FabricOnlyCartItem;
           const merged: FabricOnlyCartItem = {
@@ -181,21 +214,29 @@ export const useCartStore = create<CartStore>()(
             yards: existing.yards + normalized.yards,
             pricePerYard: normalized.pricePerYard || existing.pricePerYard,
           };
+          const nextItems = state.items.map((cartItem, index) => (index === existingIndex ? merged : cartItem));
           return {
-            items: state.items.map((cartItem, index) => (index === existingIndex ? merged : cartItem)),
+            items: nextItems,
+            totalPrice: computeCartTotal(nextItems),
+            itemCount: computeCartItemCount(nextItems),
           };
         });
       },
       
       removeItem: (index) => {
-        set((state) => ({
-          items: state.items.filter((_, i) => i !== index),
-        }));
+        set((state) => {
+          const nextItems = state.items.filter((_, i) => i !== index);
+          return {
+            items: nextItems,
+            totalPrice: computeCartTotal(nextItems),
+            itemCount: computeCartItemCount(nextItems),
+          };
+        });
       },
       
       updateItem: (index, updates) => {
-        set((state) => ({
-          items: state.items.map((item, i) => {
+        set((state) => {
+          const nextItems = state.items.map((item, i) => {
             if (i === index) {
               if (item.kind === 'READY_TO_WEAR') {
                 const merged = {
@@ -221,51 +262,35 @@ export const useCartStore = create<CartStore>()(
               return merged;
             }
             return item;
-          }),
-        }));
+          });
+          return {
+            items: nextItems,
+            totalPrice: computeCartTotal(nextItems),
+            itemCount: computeCartItemCount(nextItems),
+          };
+        });
       },
       
       clearCart: () => {
-        set({ items: [] });
-      },
-      
-      get totalPrice() {
-        return get().items.reduce((sum, item) => sum + getItemTotal(item), 0);
-      },
-      
-      get itemCount() {
-        return get().items.reduce((count, item) => {
-          if (item.kind === 'READY_TO_WEAR') {
-            return count + Math.max(1, Number(item.quantity || 1));
-          }
-          if (item.kind === 'FABRIC_ONLY') {
-            return count + 1;
-          }
-          return count + 1;
-        }, 0);
+        set({ items: [], totalPrice: 0, itemCount: 0 });
       },
       
       getItemCount: () =>
-        get().items.reduce((count, item) => {
-          if (item.kind === 'READY_TO_WEAR') {
-            return count + Math.max(1, Number(item.quantity || 1));
-          }
-          if (item.kind === 'FABRIC_ONLY') {
-            return count + 1;
-          }
-          return count + 1;
-        }, 0),
+        computeCartItemCount(get().items),
     }),
     {
       name: 'cart-storage',
-      version: 2,
+      version: 3,
       migrate: (persistedState: any) => {
         if (!persistedState || !Array.isArray(persistedState.items)) {
           return persistedState;
         }
+        const items = persistedState.items.map((item: any) => normalizeCartItem(item));
         return {
           ...persistedState,
-          items: persistedState.items.map((item: any) => normalizeCartItem(item)),
+          items,
+          totalPrice: computeCartTotal(items),
+          itemCount: computeCartItemCount(items),
         };
       },
     }
