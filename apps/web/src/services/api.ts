@@ -5279,9 +5279,20 @@ async function previewPromotionWithFallback<T>(payload: {
     }
   }
   if (isRetryableRouteError(lastError) || isPromoNotFoundOrInactiveError(lastError)) {
+    const localPromoRows = readPromoCodesFallback();
     try {
       return buildPromoPreviewFromFallback(payload) as T;
-    } catch {
+    } catch (fallbackError: any) {
+      const fallbackMessage = String(fallbackError?.message || '').toLowerCase();
+      if (
+        isRetryableRouteError(lastError) &&
+        localPromoRows.length === 0 &&
+        (fallbackMessage.includes('promo code not found') || fallbackMessage.includes('inactive'))
+      ) {
+        throw new Error(
+          'Promo validation is unavailable on this backend deployment right now (promo routes missing). Please continue checkout without promo or deploy the latest API.'
+        );
+      }
       if (lastError) throw lastError;
       throw new Error('Promo preview route not found.');
     }

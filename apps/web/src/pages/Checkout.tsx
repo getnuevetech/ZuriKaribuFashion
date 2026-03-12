@@ -603,6 +603,9 @@ export default function Checkout() {
     e.preventDefault();
     
     if (!stripe || !elements) {
+      setError(
+        'Stripe inline checkout is not configured on this deployment. Choose another payment option or configure a valid Stripe publishable key.'
+      );
       return;
     }
 

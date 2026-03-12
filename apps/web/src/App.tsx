@@ -81,8 +81,10 @@ const queryClient = new QueryClient({
   },
 });
 
-// Initialize Stripe
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || 'pk_test_placeholder');
+// Initialize Stripe only when a valid publishable key is configured.
+const configuredStripeKey = String(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '').trim();
+const hasUsableStripeKey = /^pk_(test|live)_/i.test(configuredStripeKey);
+const stripePromise = hasUsableStripeKey ? loadStripe(configuredStripeKey) : null;
 
 function App() {
   const { isAuthenticated, user } = useAuthStore();
