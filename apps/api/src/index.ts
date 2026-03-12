@@ -228,6 +228,7 @@ void (async () => {
   app.listen(PORT, () => {
     const deployment = getDeploymentMetadata();
     console.log(`🚀 API Server running on port ${PORT}`);
+    console.log(`[runtime] node=${process.version}`);
     console.log(`📚 API Documentation: http://localhost:${PORT}/health`);
     console.log(
       `[deploy] route-fingerprint=${API_ROUTE_FINGERPRINT_VERSION} commit=${deployment.commit || 'n/a'} branch=${deployment.branch || 'n/a'} service=${deployment.service || 'n/a'} env=${deployment.environment || 'n/a'}`
