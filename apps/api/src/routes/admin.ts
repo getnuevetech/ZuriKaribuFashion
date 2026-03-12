@@ -3802,6 +3802,12 @@ router.patch('/products/:type/:id', async (req, res, next) => {
       }
     }
     if (Array.isArray(payload.variants)) {
+      if (payload.variants.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Ready-to-wear variants cannot be empty.',
+        });
+      }
       const normalizedVariants = payload.variants.map((entry) => ({
         size: normalizeReadyToWearSize(entry.size),
         color: normalizeReadyToWearColor(entry.color),
@@ -3846,6 +3852,19 @@ router.patch('/products/:type/:id', async (req, res, next) => {
             data: { stock: payload.stock },
           });
         }
+      }
+      const remainingVariantCount = await prisma.readyToWearSize.count({
+        where: { readyToWearId: updated.id },
+      });
+      if (remainingVariantCount === 0 && resolvedPrice !== undefined) {
+        await prisma.readyToWearSize.create({
+          data: {
+            readyToWearId: updated.id,
+            size: encodeReadyToWearVariantKey('M', DEFAULT_READY_TO_WEAR_COLOR),
+            price: Number(resolvedPrice),
+            stock: Number.isFinite(Number(payload.stock)) ? Math.max(0, Math.floor(Number(payload.stock))) : 0,
+          },
+        });
       }
     }
     return res.json({ success: true, data: { id: updated.id, type }, message: 'Product updated.' });

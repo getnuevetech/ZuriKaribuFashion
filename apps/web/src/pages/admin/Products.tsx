@@ -788,19 +788,40 @@ export default function AdminProducts() {
     setShowModal(true);
   };
 
-  const openEditModal = (product: Product) => {
+  const openEditModal = async (product: Product) => {
+    let sourceProduct: Product & Record<string, any> = product as Product & Record<string, any>;
+    if (product.type === 'READY_TO_WEAR') {
+      try {
+        const detail = await api.products.getReadyToWearProduct(product.id);
+        if (detail?.success && detail.data) {
+          const detailImages = normalizeImageUrlList((detail.data as any).images);
+          sourceProduct = {
+            ...sourceProduct,
+            ...(detail.data as any),
+            categoryId: String((detail.data as any).categoryId || sourceProduct.categoryId || ''),
+            category: (detail.data as any).category || sourceProduct.category,
+            finalPrice: Number((detail.data as any).finalPrice || (detail.data as any).basePrice || sourceProduct.finalPrice || 0),
+            image: detailImages[0] || sourceProduct.image || null,
+            images: detailImages,
+            sizeVariations: Array.isArray((detail.data as any).sizeVariations) ? (detail.data as any).sizeVariations : [],
+          };
+        }
+      } catch (error) {
+        // Fall back to table row payload if detail hydration fails.
+      }
+    }
     const matchedCategoryId =
-      String(product.categoryId || '').trim() ||
-      options.categories.find((item) => String(item.name || '').trim().toLowerCase() === String(product.category || '').trim().toLowerCase())?.id ||
+      String(sourceProduct.categoryId || '').trim() ||
+      options.categories.find((item) => String(item.name || '').trim().toLowerCase() === String(sourceProduct.category || '').trim().toLowerCase())?.id ||
       '';
     const matchedMaterialTypeId =
-      options.materials.find((item) => String(item.name || '').trim().toLowerCase() === String(product.category || '').trim().toLowerCase())?.id ||
+      options.materials.find((item) => String(item.name || '').trim().toLowerCase() === String(sourceProduct.category || '').trim().toLowerCase())?.id ||
       '';
     const existingReadyVariants = (
-      Array.isArray((product as any).readyVariants)
-        ? (product as any).readyVariants
-        : Array.isArray((product as any).sizeVariations)
-          ? (product as any).sizeVariations
+      Array.isArray((sourceProduct as any).readyVariants)
+        ? (sourceProduct as any).readyVariants
+        : Array.isArray((sourceProduct as any).sizeVariations)
+          ? (sourceProduct as any).sizeVariations
           : []
     )
       .map((entry: any) => {
@@ -808,35 +829,36 @@ export default function AdminProducts() {
         return {
           size: decoded.size || 'M',
           color: decoded.color || 'DEFAULT',
-          price: Number(entry?.price || product.finalPrice || 0),
+          price: Number(entry?.price || sourceProduct.finalPrice || 0),
           stock: Math.max(0, Number(entry?.stock || 0)),
         };
       })
       .filter((entry: any) => entry.size && Number.isFinite(entry.price));
+    const shouldForceVariantSave = sourceProduct.type === 'READY_TO_WEAR' && existingReadyVariants.length === 0;
 
-    setEditing(product);
+    setEditing(sourceProduct as Product);
     setError('');
     setSuccess('');
     setModalError('');
     setForm({
-      type: product.type,
-      name: product.name,
-      description: product.description || '',
-      price: Number(product.finalPrice || 0),
+      type: sourceProduct.type,
+      name: sourceProduct.name,
+      description: sourceProduct.description || '',
+      price: Number(sourceProduct.finalPrice || 0),
       materialTypeId: matchedMaterialTypeId,
       categoryId: matchedCategoryId,
-      sellerId: product.sellerId || '',
-      designerId: product.designerId || '',
-      status: product.status,
-      isAvailable: product.isAvailable,
-      publishNow: product.status === 'APPROVED' && product.isAvailable,
-      isFeatured: Boolean(product.isFeatured),
-      featuredSection: product.featuredSections?.[0] || getDefaultFeaturedSection(product.type),
+      sellerId: sourceProduct.sellerId || '',
+      designerId: sourceProduct.designerId || '',
+      status: sourceProduct.status,
+      isAvailable: sourceProduct.isAvailable,
+      publishNow: sourceProduct.status === 'APPROVED' && sourceProduct.isAvailable,
+      isFeatured: Boolean(sourceProduct.isFeatured),
+      featuredSection: sourceProduct.featuredSections?.[0] || getDefaultFeaturedSection(sourceProduct.type),
       images:
-        Array.isArray(product.images) && product.images.length > 0
-          ? normalizeImageUrlList(product.images)
-          : product.image
-            ? [product.image]
+        Array.isArray(sourceProduct.images) && sourceProduct.images.length > 0
+          ? normalizeImageUrlList(sourceProduct.images)
+          : sourceProduct.image
+            ? [sourceProduct.image]
             : [],
       minYards: 1,
       stockYards: 0,
@@ -845,10 +867,13 @@ export default function AdminProducts() {
       readyVariants:
         existingReadyVariants.length > 0
           ? existingReadyVariants
-          : [{ size: 'M', color: 'DEFAULT', price: Number(product.finalPrice || 0), stock: 0 }],
+          : [{ size: 'M', color: 'DEFAULT', price: Number(sourceProduct.finalPrice || 0), stock: 0 }],
     });
     setImagesDirty(false);
-    setReadyVariantsDirty(false);
+    setReadyVariantsDirty(shouldForceVariantSave);
+    if (shouldForceVariantSave) {
+      setModalError('No saved variants were found for this ready-to-wear product. Please confirm variants and save to restore inventory rows.');
+    }
     setImageUrlInput('');
     setShowModal(true);
   };
