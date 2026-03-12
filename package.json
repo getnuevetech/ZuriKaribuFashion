@@ -11,6 +11,6 @@
     "smoke:api:routes": "node ./scripts/smoke-api-routes.mjs"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": "20.x"
   }
 }
