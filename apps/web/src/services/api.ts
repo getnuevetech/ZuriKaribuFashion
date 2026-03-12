@@ -765,7 +765,7 @@ async function readAdminDesignerFabricCountryAccessWithFallback<T>(params?: { se
       } as T;
     } catch (error) {
       lastError = error;
-      if (!isRetryableRouteError(error)) throw error;
+      // Keep probing aliases; fallback logic below also handles network failures.
     }
   }
 
@@ -843,10 +843,15 @@ async function writeAdminDesignerFabricCountryAccessWithFallback<T>(designerUser
       return response as T;
     } catch (error) {
       lastError = error;
-      if (!isRetryableRouteError(error)) throw error;
+      // Try next alias and gracefully degrade for network errors.
     }
   }
-  throw lastError ?? new Error('Designer fabric country access route not available.');
+  return {
+    success: false,
+    message: isRetryableRouteError(lastError)
+      ? 'Designer fabric country access route not available on this backend deployment.'
+      : String((lastError as any)?.response?.data?.message || (lastError as any)?.message || 'Network error while updating designer country access.'),
+  } as T;
 }
 
 async function readAdminDesignerFabricCountryAccessRequestsWithFallback<T>(params?: {
@@ -882,10 +887,38 @@ async function readAdminDesignerFabricCountryAccessRequestsWithFallback<T>(param
       } as T;
     } catch (error) {
       lastError = error;
-      if (!isRetryableRouteError(error)) throw error;
+      // Continue alias probing and use local fallback below on errors.
     }
   }
-  throw lastError ?? new Error('Country access requests route not available.');
+  const fallbackRows = readDesignerFabricAccessRequestsFallback();
+  const normalizedStatus = normalizeRequestStatus(params?.status);
+  const search = String(params?.search || '').trim().toLowerCase();
+  const filtered = fallbackRows.filter((row) => {
+    if (normalizedStatus !== 'ALL' && row.status !== normalizedStatus) return false;
+    if (!search) return true;
+    return (
+      String(row.designerUserId || '').toLowerCase().includes(search) ||
+      row.requestedCountries.some((country) => String(country || '').toLowerCase().includes(search)) ||
+      String(row.reason || '').toLowerCase().includes(search)
+    );
+  });
+  const page = Math.max(1, Number(params?.page || 1));
+  const limit = Math.max(1, Math.min(100, Number(params?.limit || 20)));
+  const start = (page - 1) * limit;
+  const data = filtered.slice(start, start + limit);
+  return {
+    success: true,
+    data,
+    pagination: {
+      page,
+      limit,
+      total: filtered.length,
+      pages: Math.max(1, Math.ceil(filtered.length / limit)),
+    },
+    message: isRetryableRouteError(lastError)
+      ? 'Country access requests route unavailable; showing local fallback.'
+      : String((lastError as any)?.response?.data?.message || (lastError as any)?.message || 'Network error while loading country access requests; showing fallback.'),
+  } as T;
 }
 
 async function reviewAdminDesignerFabricCountryAccessRequestWithFallback<T>(
@@ -906,17 +939,22 @@ async function reviewAdminDesignerFabricCountryAccessRequestWithFallback<T>(
       return response as T;
     } catch (error) {
       lastError = error;
-      if (!isRetryableRouteError(error)) throw error;
+      // Continue alias probing and degrade gracefully on network failures.
     }
     try {
       const response = await apiService.put<any>(path, payload);
       return response as T;
     } catch (error) {
       lastError = error;
-      if (!isRetryableRouteError(error)) throw error;
+      // Continue alias probing and degrade gracefully on network failures.
     }
   }
-  throw lastError ?? new Error('Country access review route not available.');
+  return {
+    success: false,
+    message: isRetryableRouteError(lastError)
+      ? 'Country access review route is not available on this backend deployment.'
+      : String((lastError as any)?.response?.data?.message || (lastError as any)?.message || 'Network error while reviewing country access request.'),
+  } as T;
 }
 
 async function readDesignerFabricCountryAccessSummaryWithFallback<T>() {
@@ -946,13 +984,15 @@ async function readDesignerFabricCountryAccessSummaryWithFallback<T>() {
       } as T;
     } catch (error) {
       lastError = error;
-      if (!isRetryableRouteError(error)) throw error;
+      // Continue probing aliases and then fallback, including network errors.
     }
   }
-  if (!isRetryableRouteError(lastError)) throw lastError;
   const profileCompletion = await readDesignerProfileCompletionWithFallback<any>().catch(() => null);
   const homeCountry = String(profileCompletion?.data?.profile?.country || '').trim();
   const allowedCountries = dedupeCountryList([homeCountry]);
+  const fallbackMessage = isRetryableRouteError(lastError)
+    ? 'Designer country-access route unavailable; showing home-country-only fallback.'
+    : String((lastError as any)?.response?.data?.message || (lastError as any)?.message || 'Network error while loading country-access summary.');
   return {
     success: true,
     data: {
@@ -961,7 +1001,7 @@ async function readDesignerFabricCountryAccessSummaryWithFallback<T>() {
       availableCountries: dedupeCountryList([...allowedCountries, ...STATIC_COUNTRY_NAMES]),
       requests: [],
     },
-    message: 'Designer country-access route unavailable; showing home-country-only fallback.',
+    message: fallbackMessage,
   } as T;
 }
 
@@ -982,14 +1022,12 @@ async function createDesignerFabricCountryAccessRequestWithFallback<T>(payload: 
       if (!isRetryableRouteError(error)) throw error;
     }
   }
-  if (isRetryableRouteError(lastError)) {
-    return {
-      success: false,
-      message:
-        'Designer fabric country access request route is not available on the current backend deployment. Please contact admin.',
-    } as T;
-  }
-  throw lastError ?? new Error('Country access request route not available.');
+  return {
+    success: false,
+    message: isRetryableRouteError(lastError)
+      ? 'Designer fabric country access request route is not available on the current backend deployment. Please contact admin.'
+      : String((lastError as any)?.response?.data?.message || (lastError as any)?.message || 'Network error while submitting country access request.'),
+  } as T;
 }
 
 async function updateDesignerReadyToWearSizeStockWithFallback<T>(
@@ -1841,6 +1879,7 @@ async function readPaymentOptionsWithFallback<T>() {
 async function createPaymentSessionWithFallback<T>(data: {
   providerKey: string;
   amount: number;
+  amountUsd?: number;
   currency: string;
   reference?: string;
   returnUrl?: string;
@@ -1848,7 +1887,13 @@ async function createPaymentSessionWithFallback<T>(data: {
   customer?: { email?: string; name?: string; phone?: string };
 }) {
   try {
-    return await apiService.post<T>('/payments/create-session', data);
+    return await apiService.post<T>('/payments/create-session', {
+      ...data,
+      amountUsd:
+        Number.isFinite(Number(data.amountUsd)) && Number(data.amountUsd) > 0
+          ? Number(data.amountUsd)
+          : Number((Number(data.amount || 0) / 100).toFixed(2)),
+    });
   } catch (error) {
     if (!isRetryableRouteError(error)) throw error;
     const providerKey = normalizePaymentProviderKey(data.providerKey);
@@ -5755,6 +5800,7 @@ const paymentsApi = {
   createPaymentSession: (data: {
     providerKey: string;
     amount: number;
+    amountUsd?: number;
     currency: string;
     reference?: string;
     returnUrl?: string;

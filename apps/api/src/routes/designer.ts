@@ -8,7 +8,6 @@ import { Permissions } from '../rbac';
 import {
   createDesignerFabricCountryAccessRequest,
   getAllowedFabricCountriesForDesigner,
-  isCountryAllowed,
   listDesignerFabricCountryAccessRequests,
 } from '../utils/designer-fabric-country-access';
 import {
@@ -401,12 +400,61 @@ const writeAliasValue = (
   profileData[aliases[0]] = value;
 };
 
+const normalizeHomeCountryValue = (value: unknown) => {
+  const country = String(value || '').trim().replace(/\s+/g, ' ');
+  const token = country.toLowerCase();
+  if (!country) return '';
+  if (token === 'not specified' || token === 'not set' || token === 'n/a' || token === 'na') return '';
+  return country;
+};
+
+const countryNameFromIso2 = (value: unknown) => {
+  const code = String(value || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return '';
+  try {
+    return String(new Intl.DisplayNames(['en'], { type: 'region' }).of(code) || '').trim();
+  } catch {
+    return '';
+  }
+};
+
+const countryCandidateSet = (value: unknown) => {
+  const base = String(value || '').trim().replace(/\s+/g, ' ');
+  const set = new Set<string>();
+  if (!base) return set;
+  set.add(base.toLowerCase());
+  const isoName = countryNameFromIso2(base);
+  if (isoName) set.add(isoName.toLowerCase());
+  return set;
+};
+
+const isEquivalentCountry = (left: unknown, right: unknown) => {
+  const leftSet = countryCandidateSet(left);
+  const rightSet = countryCandidateSet(right);
+  if (leftSet.size === 0 || rightSet.size === 0) return false;
+  for (const token of leftSet) {
+    if (rightSet.has(token)) return true;
+  }
+  return false;
+};
+
+async function resolveDesignerHomeCountry(userId: string, profile: { country?: string | null }) {
+  const current = normalizeHomeCountryValue(profile?.country);
+  if (current) return current;
+  const submission = await readDesignerSubmission(userId);
+  const profileData = getProfileDataObject(submission?.profileData);
+  const fromProfileData = normalizeHomeCountryValue(readAliasValue(profileData, PROFILE_FIELD_ALIASES.country));
+  if (fromProfileData) return fromProfileData;
+  return current;
+}
+
 async function readDesignerSubmission(userId: string) {
   await ensureDesignerGovernanceSchema();
   const rows = await prisma.$queryRawUnsafe<Array<any>>(
     `SELECT "id","profileStatus","profileData","profileSubmittedAt","profileReviewedAt","profileReviewNotes"
      FROM "VendorProfileSubmission"
      WHERE "role" = 'FASHION_DESIGNER' AND "userId" = $1
+     ORDER BY "updatedAt" DESC, "profileSubmittedAt" DESC
      LIMIT 1`,
     userId
   );
@@ -644,19 +692,30 @@ router.get('/fabric-options', async (req, res, next) => {
       }
     }
 
+    const homeCountry = await resolveDesignerHomeCountry(req.user!.id, profile);
     const allowedCountries = await getAllowedFabricCountriesForDesigner({
       designerUserId: req.user!.id,
-      homeCountry: profile.country,
+      homeCountry,
     });
-    if (requestedCountry && !isCountryAllowed(allowedCountries, requestedCountry)) {
+    if (requestedCountry && !allowedCountries.some((country) => isEquivalentCountry(country, requestedCountry))) {
       return res.status(403).json({
         success: false,
         message: 'Selected fabric seller country is not allowed for this designer.',
       });
     }
 
+    const sellerCountryRows = await prisma.fabricSellerProfile.findMany({
+      select: { country: true },
+    });
+    const allSellerCountries = dedupeCountryList(sellerCountryRows.map((row) => row.country));
     const countryScope = requestedCountry ? [requestedCountry] : allowedCountries;
-    const scopedCountryFilters = dedupeCountryList(countryScope).map((entry) => ({
+    const resolvedCountryScope = dedupeCountryList([
+      ...countryScope,
+      ...allSellerCountries.filter((sellerCountry) =>
+        countryScope.some((entry) => isEquivalentCountry(entry, sellerCountry))
+      ),
+    ]);
+    const scopedCountryFilters = resolvedCountryScope.map((entry) => ({
       seller: {
         country: {
           equals: entry,
@@ -726,7 +785,7 @@ router.get('/fabric-options', async (req, res, next) => {
     ]);
 
     const countryOptions = dedupeCountryList([
-      ...allowedCountries,
+      ...resolvedCountryScope,
       ...optionRows.map((row) => row.seller?.country),
     ]);
     const materialMap = new Map<string, { id: string; name: string }>();
@@ -770,10 +829,11 @@ router.get('/fabric-country-access', async (req, res, next) => {
         message: 'Designer profile not found.',
       });
     }
+    const homeCountry = await resolveDesignerHomeCountry(req.user!.id, profile);
     const [allowedCountries, sellerRows, requests] = await Promise.all([
       getAllowedFabricCountriesForDesigner({
         designerUserId: req.user!.id,
-        homeCountry: profile.country,
+        homeCountry,
       }),
       prisma.fabricSellerProfile.findMany({
         select: { country: true },
@@ -781,13 +841,13 @@ router.get('/fabric-country-access', async (req, res, next) => {
       listDesignerFabricCountryAccessRequests({ designerUserId: req.user!.id }),
     ]);
     const availableCountries = dedupeCountryList([
-      profile.country,
+      homeCountry || profile.country,
       ...sellerRows.map((row) => row.country).filter((value) => String(value || '').trim()),
     ]);
     res.json({
       success: true,
       data: {
-        homeCountry: profile.country,
+        homeCountry: homeCountry || profile.country,
         allowedCountries,
         availableCountries,
         requests,
@@ -813,19 +873,21 @@ router.post('/fabric-country-access/requests', async (req, res, next) => {
         message: 'Designer profile not found.',
       });
     }
+    const homeCountry = await resolveDesignerHomeCountry(req.user!.id, profile);
     const [allowedCountries, sellerRows, existingRequests] = await Promise.all([
       getAllowedFabricCountriesForDesigner({
         designerUserId: req.user!.id,
-        homeCountry: profile.country,
+        homeCountry,
       }),
       prisma.fabricSellerProfile.findMany({
         select: { country: true },
       }),
       listDesignerFabricCountryAccessRequests({ designerUserId: req.user!.id }),
     ]);
-    const availableCountries = dedupeCountryList(
-      sellerRows.map((row) => row.country).filter((value) => String(value || '').trim())
-    );
+    const availableCountries = dedupeCountryList([
+      homeCountry || profile.country,
+      ...sellerRows.map((row) => row.country).filter((value) => String(value || '').trim()),
+    ]);
     const allowedTokens = new Set(allowedCountries.map((entry) => normalizeCountryToken(entry)));
     const availableTokens = new Set(availableCountries.map((entry) => normalizeCountryToken(entry)));
     const pendingTokens = new Set(
@@ -1206,9 +1268,10 @@ router.post('/designs', async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Designer profile not found.' });
     }
 
+    const homeCountry = await resolveDesignerHomeCountry(req.user!.id, profile);
     const allowedCountries = await getAllowedFabricCountriesForDesigner({
       designerUserId: req.user!.id,
-      homeCountry: profile.country,
+      homeCountry,
     });
     const selectedFabricIds = Array.from(
       new Set((data.suitableFabricIds || []).map((item) => String(item.fabricId || '').trim()).filter(Boolean))
@@ -1219,27 +1282,34 @@ router.post('/designs', async (req, res, next) => {
         message: 'Please select at least one suitable fabric.',
       });
     }
-    const allowedCountryFilters = dedupeCountryList(allowedCountries).map((country) => ({
-      seller: {
-        country: {
-          equals: country,
-          mode: 'insensitive' as const,
-        },
-      },
-    }));
-    const allowedFabricRows = await prisma.fabric.findMany({
+    const selectedFabricRows = await prisma.fabric.findMany({
       where: {
         id: { in: selectedFabricIds },
         status: ProductStatus.APPROVED,
         isAvailable: true,
-        ...(allowedCountryFilters.length > 0 ? { OR: allowedCountryFilters } : {}),
       },
-      select: { id: true },
+      select: {
+        id: true,
+        seller: {
+          select: {
+            country: true,
+          },
+        },
+      },
     });
-    if (allowedFabricRows.length !== selectedFabricIds.length) {
+    if (selectedFabricRows.length !== selectedFabricIds.length) {
       return res.status(400).json({
         success: false,
-        message: 'One or more selected fabrics are unavailable for this designer country access.',
+        message: 'One or more selected fabrics are unavailable.',
+      });
+    }
+    const hasDisallowedFabric = selectedFabricRows.some(
+      (row) => !allowedCountries.some((country) => isEquivalentCountry(country, row.seller?.country))
+    );
+    if (hasDisallowedFabric) {
+      return res.status(400).json({
+        success: false,
+        message: 'One or more selected fabrics are outside your allowed country access scope.',
       });
     }
     const suitableFabricById = new Map<string, number>();
@@ -1422,34 +1492,42 @@ router.patch('/designs/:id', async (req, res, next) => {
         }>
       | undefined = undefined;
     if (data.suitableFabricIds) {
+      const homeCountry = await resolveDesignerHomeCountry(req.user!.id, profile);
       const allowedCountries = await getAllowedFabricCountriesForDesigner({
         designerUserId: req.user!.id,
-        homeCountry: profile.country,
+        homeCountry,
       });
       const selectedFabricIds = Array.from(
         new Set(data.suitableFabricIds.map((item) => String(item.fabricId || '').trim()).filter(Boolean))
       );
-      const allowedCountryFilters = dedupeCountryList(allowedCountries).map((country) => ({
-        seller: {
-          country: {
-            equals: country,
-            mode: 'insensitive' as const,
-          },
-        },
-      }));
-      const allowedFabricRows = await prisma.fabric.findMany({
+      const selectedFabricRows = await prisma.fabric.findMany({
         where: {
           id: { in: selectedFabricIds },
           status: ProductStatus.APPROVED,
           isAvailable: true,
-          ...(allowedCountryFilters.length > 0 ? { OR: allowedCountryFilters } : {}),
         },
-        select: { id: true },
+        select: {
+          id: true,
+          seller: {
+            select: {
+              country: true,
+            },
+          },
+        },
       });
-      if (allowedFabricRows.length !== selectedFabricIds.length) {
+      if (selectedFabricRows.length !== selectedFabricIds.length) {
         return res.status(400).json({
           success: false,
-          message: 'One or more selected fabrics are unavailable for this designer country access.',
+          message: 'One or more selected fabrics are unavailable.',
+        });
+      }
+      const hasDisallowedFabric = selectedFabricRows.some(
+        (row) => !allowedCountries.some((country) => isEquivalentCountry(country, row.seller?.country))
+      );
+      if (hasDisallowedFabric) {
+        return res.status(400).json({
+          success: false,
+          message: 'One or more selected fabrics are outside your allowed country access scope.',
         });
       }
       const suitableFabricById = new Map<string, number>();

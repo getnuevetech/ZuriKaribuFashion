@@ -939,7 +939,8 @@ router.post('/create-session', authenticate, authorizePermissions(Permissions.PA
     const payload = z
       .object({
         providerKey: z.string().min(2),
-        amount: z.number().int().positive(),
+        amount: z.number().int().positive().optional(),
+        amountUsd: z.number().positive().optional(),
         currency: z.string().min(3).max(3).default('usd'),
         reference: z.string().min(3).max(120).optional(),
         returnUrl: z.string().url().optional(),
@@ -953,6 +954,18 @@ router.post('/create-session', authenticate, authorizePermissions(Permissions.PA
           .optional(),
       })
       .parse(req.body);
+    const amountMinor =
+      Number.isFinite(Number(payload.amount)) && Number(payload.amount) > 0
+        ? Math.round(Number(payload.amount))
+        : Number.isFinite(Number(payload.amountUsd)) && Number(payload.amountUsd) > 0
+          ? Math.round(Number(payload.amountUsd) * 100)
+          : 0;
+    if (!amountMinor || amountMinor <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'amount or amountUsd is required and must be positive.',
+      });
+    }
 
     const providerKey = normalizeProviderKey(payload.providerKey);
     const provider =
@@ -978,7 +991,7 @@ router.post('/create-session', authenticate, authorizePermissions(Permissions.PA
       });
     }
 
-    const amountMajor = Number((payload.amount / 100).toFixed(2));
+    const amountMajor = Number((amountMinor / 100).toFixed(2));
     const currency = payload.currency.toUpperCase();
     const reference = payload.reference || `AF-${providerKey}-${Date.now()}`;
 
@@ -991,7 +1004,7 @@ router.post('/create-session', authenticate, authorizePermissions(Permissions.PA
         });
       }
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: payload.amount,
+        amount: amountMinor,
         currency: payload.currency.toLowerCase(),
         automatic_payment_methods: { enabled: true },
         metadata: {
