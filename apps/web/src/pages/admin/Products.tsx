@@ -1668,6 +1668,7 @@ export default function AdminProducts() {
                           {product.isFeatured ? <Star className="ml-1 inline h-3.5 w-3.5 text-amber-500" /> : null}
                         </p>
                         <p className="text-sm text-gray-500">{product.category}</p>
+                        <p className="font-mono text-[11px] text-gray-400">ID: {product.id}</p>
                       </div>
                     </div>
                   </td>

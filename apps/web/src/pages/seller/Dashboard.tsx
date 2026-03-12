@@ -1531,6 +1531,7 @@ export default function SellerDashboard() {
                             <div>
                               <p className="font-medium text-gray-900">{item.name}</p>
                               <p className="text-sm text-gray-500">{item.materialType?.name || 'Material'}</p>
+                              <p className="font-mono text-[11px] text-gray-400">ID: {item.id}</p>
                             </div>
                           </div>
                         </td>

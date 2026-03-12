@@ -2442,6 +2442,7 @@ export default function DesignerDashboard() {
                             <div>
                               <p className="font-medium text-gray-900">{item.name}</p>
                               <p className="text-sm text-gray-500">{item.productType === 'READY_TO_WEAR' ? 'Ready To Wear' : 'Custom To Wear'}</p>
+                              <p className="font-mono text-[11px] text-gray-400">ID: {item.id}</p>
                             </div>
                           </div>
                         </td>
