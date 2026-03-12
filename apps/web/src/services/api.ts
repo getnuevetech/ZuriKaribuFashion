@@ -4776,6 +4776,33 @@ const adminApi = {
     data: { status: 'APPROVED' | 'REJECTED'; notes?: string }
   ) => apiService.patch<{ success: boolean; message?: string }>(`/admin/vendor-profiles/${role}/${userId}/review`, data),
 
+  getVendorDashboardGovernance: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        source?: 'DEFAULT' | 'DATABASE';
+        updatedAt?: string | null;
+        settings: {
+          seller: Record<string, any>;
+          designer: Record<string, any>;
+        };
+      };
+      message?: string;
+    }>('/admin/vendor-dashboard-governance'),
+
+  updateVendorDashboardGovernance: (settings: {
+    seller: Record<string, any>;
+    designer: Record<string, any>;
+  }) =>
+    apiService.put<{
+      success: boolean;
+      data: {
+        seller: Record<string, any>;
+        designer: Record<string, any>;
+      };
+      message?: string;
+    }>('/admin/vendor-dashboard-governance', { settings }),
+
   getDesignerFabricCountryAccess: (params?: { search?: string }) =>
     readAdminDesignerFabricCountryAccessWithFallback<{
       success: boolean;
@@ -5323,6 +5350,9 @@ const sellerApi = {
   getDashboard: () =>
     readSellerDashboardWithFallback<{ success: boolean; data: any }>(),
 
+  getDashboardGovernance: () =>
+    apiService.get<{ success: boolean; data: any }>('/seller/dashboard-governance'),
+
   getFabrics: () =>
     readSellerFabricsWithFallback<{ success: boolean; data: any[] }>(),
 
@@ -5377,6 +5407,9 @@ const sellerApi = {
 const designerApi = {
   getDashboard: () =>
     readDesignerDashboardWithFallback<{ success: boolean; data: any }>(),
+
+  getDashboardGovernance: () =>
+    apiService.get<{ success: boolean; data: any }>('/designer/dashboard-governance'),
 
   getDesigns: () =>
     readDesignerDesignsWithFallback<{ success: boolean; data: any[] }>(),

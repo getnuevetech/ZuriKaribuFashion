@@ -140,6 +140,87 @@ interface GovernanceDebugInfo {
   error?: string;
 }
 
+type SellerDashboardGovernance = {
+  tabs: {
+    overview: boolean;
+    fabrics: boolean;
+    featured: boolean;
+    orders: boolean;
+  };
+  sections: {
+    profileGovernance: boolean;
+    stats: boolean;
+    overviewLowStockAlert: boolean;
+    overviewCharts: boolean;
+    overviewRecentOrders: boolean;
+    overviewActivity: boolean;
+    fabricsTable: boolean;
+    featuredTable: boolean;
+    ordersTable: boolean;
+  };
+  actions: {
+    submitProfile: boolean;
+    addProduct: boolean;
+    editProduct: boolean;
+    updateStock: boolean;
+    updateOrderStatus: boolean;
+  };
+  fields: {
+    productName: boolean;
+    productDescription: boolean;
+    materialType: boolean;
+    sellerPrice: boolean;
+    listingCurrency: boolean;
+    minYards: boolean;
+    stockYards: boolean;
+    productImages: boolean;
+  };
+};
+
+const DEFAULT_SELLER_DASHBOARD_GOVERNANCE: SellerDashboardGovernance = {
+  tabs: {
+    overview: true,
+    fabrics: true,
+    featured: true,
+    orders: true,
+  },
+  sections: {
+    profileGovernance: true,
+    stats: true,
+    overviewLowStockAlert: true,
+    overviewCharts: true,
+    overviewRecentOrders: true,
+    overviewActivity: true,
+    fabricsTable: true,
+    featuredTable: true,
+    ordersTable: true,
+  },
+  actions: {
+    submitProfile: true,
+    addProduct: true,
+    editProduct: true,
+    updateStock: true,
+    updateOrderStatus: true,
+  },
+  fields: {
+    productName: true,
+    productDescription: true,
+    materialType: true,
+    sellerPrice: true,
+    listingCurrency: true,
+    minYards: true,
+    stockYards: true,
+    productImages: true,
+  },
+};
+
+const normalizeSellerDashboardGovernance = (input: any): SellerDashboardGovernance => ({
+  tabs: { ...DEFAULT_SELLER_DASHBOARD_GOVERNANCE.tabs, ...(input?.tabs || {}) },
+  sections: { ...DEFAULT_SELLER_DASHBOARD_GOVERNANCE.sections, ...(input?.sections || {}) },
+  actions: { ...DEFAULT_SELLER_DASHBOARD_GOVERNANCE.actions, ...(input?.actions || {}) },
+  fields: { ...DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields, ...(input?.fields || {}) },
+});
+
 const LOCATION_COUNTRIES = getCountryOptions();
 const COUNTRY_FIELD_HINTS = ['country', 'businesscountry', 'vendorcountry'];
 const CITY_FIELD_HINTS = ['city', 'businesscity', 'vendorcity', 'town'];
@@ -221,18 +302,31 @@ export default function SellerDashboard() {
   const [submittingProfile, setSubmittingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [governanceDebug, setGovernanceDebug] = useState<GovernanceDebugInfo | null>(null);
+  const [dashboardGovernance, setDashboardGovernance] = useState<SellerDashboardGovernance>(
+    DEFAULT_SELLER_DASHBOARD_GOVERNANCE
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const [fabricSearch, setFabricSearch] = useState('');
   const [fabricStatusFilter, setFabricStatusFilter] = useState('');
   const [fabricMaterialFilter, setFabricMaterialFilter] = useState('');
 
+  const visibleTabs = useMemo(
+    () =>
+      (['overview', 'fabrics', 'featured', 'orders'] as const).filter(
+        (tab) => dashboardGovernance.tabs[tab] !== false
+      ),
+    [dashboardGovernance.tabs]
+  );
+  const fallbackTab = visibleTabs[0] || 'overview';
+
   const syncTabWithUrl = (tab: 'overview' | 'fabrics' | 'featured' | 'orders') => {
-    setActiveTab(tab);
-    if (tab === 'overview') {
+    const nextTab = dashboardGovernance.tabs[tab] !== false ? tab : fallbackTab;
+    setActiveTab(nextTab);
+    if (nextTab === 'overview') {
       setSearchParams({});
       return;
     }
-    setSearchParams({ tab });
+    setSearchParams({ tab: nextTab });
   };
 
   useEffect(() => {
@@ -249,6 +343,12 @@ export default function SellerDashboard() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (!visibleTabs.includes(activeTab)) {
+      syncTabWithUrl(fallbackTab);
+    }
+  }, [activeTab, fallbackTab, visibleTabs]);
+
+  useEffect(() => {
     if (materialOptions.length > 0 && !productForm.materialTypeId) {
       setProductForm((prev) => ({ ...prev, materialTypeId: materialOptions[0].id }));
     }
@@ -257,18 +357,20 @@ export default function SellerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [dashboardResult, fabricsResult, ordersResult, materialsResult, currencyResult] = await Promise.allSettled([
+      const [dashboardResult, fabricsResult, ordersResult, materialsResult, currencyResult, governanceResult] = await Promise.allSettled([
         api.seller.getDashboard(),
         api.seller.getFabrics(),
         api.seller.getOrders(),
         api.products.getMaterials(),
         api.currency.getMyOptions(),
+        api.seller.getDashboardGovernance(),
       ]);
       const dashboardRes = dashboardResult.status === 'fulfilled' ? dashboardResult.value : null;
       const fabricsRes = fabricsResult.status === 'fulfilled' ? fabricsResult.value : null;
       const ordersRes = ordersResult.status === 'fulfilled' ? ordersResult.value : null;
       const materialsRes = materialsResult.status === 'fulfilled' ? materialsResult.value : null;
       const currencyRes = currencyResult.status === 'fulfilled' ? currencyResult.value : null;
+      const governanceRes = governanceResult.status === 'fulfilled' ? governanceResult.value : null;
       const settledCallStatus = (result: PromiseSettledResult<any>) => {
         if (result.status === 'fulfilled') {
           return result.value?.success
@@ -341,6 +443,11 @@ export default function SellerDashboard() {
             : ['USD'],
           usdPerUnitByCurrency: (currencyRes.data?.usdPerUnitByCurrency || { USD: 1 }) as Record<string, number>,
         });
+      }
+      if (governanceRes?.success) {
+        setDashboardGovernance(normalizeSellerDashboardGovernance(governanceRes.data));
+      } else {
+        setDashboardGovernance(DEFAULT_SELLER_DASHBOARD_GOVERNANCE);
       }
       if (materialsRes?.success) {
         const options = Array.isArray(materialsRes.data)
@@ -554,6 +661,7 @@ export default function SellerDashboard() {
   };
 
   const handleUpdateStock = async (fabricId: string, stock: number) => {
+    if (!canUpdateStock) return;
     try {
       await api.seller.updateFabricStock(fabricId, stock);
       setShowStockModal(false);
@@ -565,6 +673,7 @@ export default function SellerDashboard() {
   };
 
   const handleUpdateOrderStatus = async (orderId: string, status: string) => {
+    if (!canUpdateOrderStatus) return;
     try {
       await api.seller.updateOrderStatus(orderId, status);
       fetchDashboardData();
@@ -574,6 +683,7 @@ export default function SellerDashboard() {
   };
 
   const openStockModal = (fabric: Fabric) => {
+    if (!canUpdateStock || dashboardGovernance.sections.fabricsTable === false) return;
     setSelectedFabric(fabric);
     setNewStock(fabric.stockMeters);
     setShowStockModal(true);
@@ -597,11 +707,13 @@ export default function SellerDashboard() {
   };
 
   const openCreateProductModal = () => {
+    if (!canAddProduct) return;
     resetProductForm();
     setShowProductModal(true);
   };
 
   const openEditProductModal = (fabric: Fabric) => {
+    if (!canEditProduct) return;
     setSelectedFabric(fabric);
     setIsEditMode(true);
     setProductError(null);
@@ -677,6 +789,8 @@ export default function SellerDashboard() {
   };
 
   const handleSaveProduct = async () => {
+    if (!isEditMode && !canAddProduct) return;
+    if (isEditMode && !canEditProduct) return;
     setProductError(null);
     const images = parseImageInputs(productForm.imageUrls);
     if (!productForm.name.trim()) {
@@ -737,7 +851,7 @@ export default function SellerDashboard() {
   };
 
   const handleSubmitProfile = async () => {
-    if (!profileCompletion) return;
+    if (!profileCompletion || !canSubmitProfile) return;
     setProfileMessage(null);
     setSubmittingProfile(true);
     try {
@@ -823,6 +937,20 @@ export default function SellerDashboard() {
     selectedListingCurrency === 'USD'
       ? localPricePreview
       : Number((localPricePreview * selectedUsdPerUnit).toFixed(2));
+  const showProfileGovernance = dashboardGovernance.sections.profileGovernance !== false;
+  const showStats = dashboardGovernance.sections.stats !== false;
+  const canUseProductForm =
+    dashboardGovernance.fields.productName !== false &&
+    dashboardGovernance.fields.productDescription !== false &&
+    dashboardGovernance.fields.materialType !== false &&
+    dashboardGovernance.fields.sellerPrice !== false &&
+    dashboardGovernance.fields.productImages !== false;
+  const canAddProduct = dashboardGovernance.actions.addProduct !== false && canUseProductForm;
+  const canEditProduct = dashboardGovernance.actions.editProduct !== false;
+  const canUpdateStock = dashboardGovernance.actions.updateStock !== false;
+  const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false;
+  const canSubmitProfile = dashboardGovernance.actions.submitProfile !== false;
+  const hasNoDashboardTabs = visibleTabs.length === 0;
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -849,13 +977,15 @@ export default function SellerDashboard() {
             </a>
           ) : null}
         </div>
-        <Button onClick={openCreateProductModal}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Fabric Product
-        </Button>
+        {canAddProduct ? (
+          <Button onClick={openCreateProductModal}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Fabric Product
+          </Button>
+        ) : null}
       </div>
 
-      {profileCompletion ? (
+      {showProfileGovernance && profileCompletion ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-amber-900">Vendor governance profile</h2>
@@ -980,7 +1110,11 @@ export default function SellerDashboard() {
             </div>
           ) : null}
           <div>
-            <Button size="sm" onClick={handleSubmitProfile} disabled={submittingProfile || activeProfileFields.length === 0}>
+            <Button
+              size="sm"
+              onClick={handleSubmitProfile}
+              disabled={submittingProfile || activeProfileFields.length === 0 || !canSubmitProfile}
+            >
               {submittingProfile ? 'Submitting...' : 'Submit for Admin Approval'}
             </Button>
           </div>
@@ -988,45 +1122,47 @@ export default function SellerDashboard() {
       ) : null}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Fabrics"
-          value={stats?.totalFabrics || 0}
-          icon={Package}
-          iconColor="text-blue-600"
-          iconBgColor="bg-blue-100"
-          subtitle="Active fabrics"
-        />
-        <StatCard
-          title="Total Sales"
-          value={stats?.totalSales || 0}
-          change={stats?.salesChange}
-          icon={ShoppingBag}
-          iconColor="text-green-600"
-          iconBgColor="bg-green-100"
-        />
-        <StatCard
-          title="Revenue"
-          value={`$${(stats?.totalRevenue || 0).toFixed(2)}`}
-          change={stats?.revenueChange}
-          icon={DollarSign}
-          iconColor="text-amber-600"
-          iconBgColor="bg-amber-100"
-        />
-        <StatCard
-          title="Pending Orders"
-          value={stats?.pendingOrders || 0}
-          icon={Clock}
-          iconColor="text-purple-600"
-          iconBgColor="bg-purple-100"
-          subtitle="Awaiting shipment"
-        />
-      </div>
+      {showStats ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            title="Total Fabrics"
+            value={stats?.totalFabrics || 0}
+            icon={Package}
+            iconColor="text-blue-600"
+            iconBgColor="bg-blue-100"
+            subtitle="Active fabrics"
+          />
+          <StatCard
+            title="Total Sales"
+            value={stats?.totalSales || 0}
+            change={stats?.salesChange}
+            icon={ShoppingBag}
+            iconColor="text-green-600"
+            iconBgColor="bg-green-100"
+          />
+          <StatCard
+            title="Revenue"
+            value={`$${(stats?.totalRevenue || 0).toFixed(2)}`}
+            change={stats?.revenueChange}
+            icon={DollarSign}
+            iconColor="text-amber-600"
+            iconBgColor="bg-amber-100"
+          />
+          <StatCard
+            title="Pending Orders"
+            value={stats?.pendingOrders || 0}
+            icon={Clock}
+            iconColor="text-purple-600"
+            iconBgColor="bg-purple-100"
+            subtitle="Awaiting shipment"
+          />
+        </div>
+      ) : null}
 
       {/* Tabs */}
       <div className="border-b">
         <div className="flex gap-6">
-          {(['overview', 'fabrics', 'featured', 'orders'] as const).map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab}
               onClick={() => syncTabWithUrl(tab)}
@@ -1047,11 +1183,16 @@ export default function SellerDashboard() {
           ))}
         </div>
       </div>
+      {hasNoDashboardTabs ? (
+        <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+          All seller dashboard tabs are disabled by admin governance.
+        </div>
+      ) : null}
 
       {activeTab === 'overview' && (
         <>
           {/* Low Stock Alert */}
-          {lowStockFabrics.length > 0 && (
+          {dashboardGovernance.sections.overviewLowStockAlert !== false && lowStockFabrics.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-4">
               <div className="flex items-center gap-3">
                 <AlertCircle className="w-5 h-5 text-red-600" />
@@ -1075,73 +1216,86 @@ export default function SellerDashboard() {
           )}
 
           {/* Charts Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Monthly Sales */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Sales</h3>
-              <LineChart 
-                data={stats?.monthlySales || [
-                  { label: 'Jan', value: 45 },
-                  { label: 'Feb', value: 52 },
-                  { label: 'Mar', value: 68 },
-                  { label: 'Apr', value: 61 },
-                  { label: 'May', value: 85 },
-                  { label: 'Jun', value: 92 },
-                ]}
-                height={200}
-              />
-            </div>
+          {dashboardGovernance.sections.overviewCharts !== false ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Monthly Sales */}
+              <div className="bg-white rounded-xl p-6 shadow-sm border">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Sales</h3>
+                <LineChart
+                  data={stats?.monthlySales || [
+                    { label: 'Jan', value: 45 },
+                    { label: 'Feb', value: 52 },
+                    { label: 'Mar', value: 68 },
+                    { label: 'Apr', value: 61 },
+                    { label: 'May', value: 85 },
+                    { label: 'Jun', value: 92 },
+                  ]}
+                  height={200}
+                />
+              </div>
 
-            {/* Top Fabrics */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Selling Fabrics</h3>
-              <BarChart 
-                data={stats?.topFabrics || [
-                  { label: 'Kente', value: 156, color: 'bg-amber-500' },
-                  { label: 'Ankara', value: 142, color: 'bg-blue-500' },
-                  { label: 'Aso Oke', value: 98, color: 'bg-purple-500' },
-                  { label: 'Adinkra', value: 76, color: 'bg-green-500' },
-                ]}
-                height={200}
-              />
+              {/* Top Fabrics */}
+              <div className="bg-white rounded-xl p-6 shadow-sm border">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Selling Fabrics</h3>
+                <BarChart
+                  data={stats?.topFabrics || [
+                    { label: 'Kente', value: 156, color: 'bg-amber-500' },
+                    { label: 'Ankara', value: 142, color: 'bg-blue-500' },
+                    { label: 'Aso Oke', value: 98, color: 'bg-purple-500' },
+                    { label: 'Adinkra', value: 76, color: 'bg-green-500' },
+                  ]}
+                  height={200}
+                />
+              </div>
             </div>
-          </div>
+          ) : null}
 
           {/* Recent Orders & Activity */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Recent Orders */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Recent Orders</h3>
-                <Button variant="ghost" size="sm" onClick={() => syncTabWithUrl('orders')}>
-                  View All
-                  <ArrowRight className="w-4 h-4 ml-1" />
-                </Button>
-              </div>
-              <div className="space-y-3">
-                {orders.slice(0, 5).map((order) => (
-                  <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-900">{order.orderNumber}</p>
-                      <p className="text-sm text-gray-500">{order.fabricName} · {order.meters}m</p>
+            {dashboardGovernance.sections.overviewRecentOrders !== false ? (
+              <div className="bg-white rounded-xl p-6 shadow-sm border">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Recent Orders</h3>
+                  <Button variant="ghost" size="sm" onClick={() => syncTabWithUrl('orders')}>
+                    View All
+                    <ArrowRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {orders.slice(0, 5).map((order) => (
+                    <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-medium text-gray-900">{order.orderNumber}</p>
+                        <p className="text-sm text-gray-500">{order.fabricName} · {order.meters}m</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium text-amber-700">${order.totalAmount.toFixed(2)}</p>
+                        <Badge
+                          variant={
+                            order.status === 'DELIVERED'
+                              ? 'green'
+                              : order.status === 'SHIPPED_TO_DESIGNER'
+                                ? 'blue'
+                                : order.status === 'CONFIRMED'
+                                  ? 'yellow'
+                                  : 'gray'
+                          }
+                          size="sm"
+                        >
+                          {order.status}
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-medium text-amber-700">${order.totalAmount.toFixed(2)}</p>
-                      <Badge variant={
-                        order.status === 'DELIVERED' ? 'green' :
-                        order.status === 'SHIPPED_TO_DESIGNER' ? 'blue' :
-                        order.status === 'CONFIRMED' ? 'yellow' : 'gray'
-                      } size="sm">
-                        {order.status}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : null}
 
             {/* Activity Feed */}
-            <ActivityFeed activities={activities} title="Recent Activity" />
+            {dashboardGovernance.sections.overviewActivity !== false ? (
+              <ActivityFeed activities={activities} title="Recent Activity" />
+            ) : null}
           </div>
         </>
       )}
@@ -1150,10 +1304,12 @@ export default function SellerDashboard() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">My Fabrics</h2>
-            <Button size="sm" onClick={openCreateProductModal}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Product
-            </Button>
+            {canAddProduct ? (
+              <Button size="sm" onClick={openCreateProductModal}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Product
+              </Button>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -1199,7 +1355,8 @@ export default function SellerDashboard() {
             </Button>
           </div>
 
-          <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+          {dashboardGovernance.sections.fabricsTable !== false ? (
+            <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -1255,20 +1412,24 @@ export default function SellerDashboard() {
                         <td className="px-4 py-3 text-gray-600">{item.orderCount}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
-                            <button
-                              onClick={() => openEditProductModal(item)}
-                              className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
-                              title="Edit product"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => openStockModal(item)}
-                              className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-700"
-                              title="Update stock"
-                            >
-                              <Package className="h-4 w-4" />
-                            </button>
+                            {canEditProduct ? (
+                              <button
+                                onClick={() => openEditProductModal(item)}
+                                className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
+                                title="Edit product"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </button>
+                            ) : null}
+                            {canUpdateStock ? (
+                              <button
+                                onClick={() => openStockModal(item)}
+                                className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-700"
+                                title="Update stock"
+                              >
+                                <Package className="h-4 w-4" />
+                              </button>
+                            ) : null}
                             <Link
                               to={`/fabrics/${item.id}`}
                               className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
@@ -1291,57 +1452,69 @@ export default function SellerDashboard() {
                 </tbody>
               </table>
             </div>
-          </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+              Fabric table is disabled by admin governance.
+            </div>
+          )}
         </div>
       )}
 
       {activeTab === 'featured' && (
-        <DataTable
-          title="Featured Products"
-          columns={[
-            {
-              key: 'name',
-              header: 'Product',
-              render: (item) => (
-                <div className="flex items-center gap-3">
-                  <img src={item.images[0] || '/images/placeholder.jpg'} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
-                  <div>
-                    <p className="font-medium text-gray-900">{item.name}</p>
-                    <p className="text-xs text-gray-500">{item.materialType?.name}</p>
+        dashboardGovernance.sections.featuredTable !== false ? (
+          <DataTable
+            title="Featured Products"
+            columns={[
+              {
+                key: 'name',
+                header: 'Product',
+                render: (item) => (
+                  <div className="flex items-center gap-3">
+                    <img src={item.images[0] || '/images/placeholder.jpg'} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
+                    <div>
+                      <p className="font-medium text-gray-900">{item.name}</p>
+                      <p className="text-xs text-gray-500">{item.materialType?.name}</p>
+                    </div>
                   </div>
-                </div>
-              ),
-            },
-            { key: 'pricePerMeter', header: 'Price', render: (item) => `$${item.pricePerMeter}/m` },
-            {
-              key: 'featuredSections',
-              header: 'Homepage Sections',
-              render: (item) => (
-                <span className="text-xs text-gray-600">{(item.featuredSections || []).join(', ') || 'Featured'}</span>
-              ),
-            },
-            {
-              key: 'status',
-              header: 'Status',
-              render: (item) => <Badge variant={item.status === 'ACTIVE' ? 'green' : 'gray'}>{item.status}</Badge>,
-            },
-          ]}
-          data={featuredFabrics}
-          keyExtractor={(item) => item.id}
-          searchable
-          searchKeys={['name', 'materialType.name']}
-          emptyMessage="No featured fabrics yet. Ask admin to feature one of your products."
-          actions={(item) => (
-            <Button variant="outline" size="sm" asChild>
-              <Link to={`/fabrics/${item.id}`}>
-                <Eye className="w-4 h-4" />
-              </Link>
-            </Button>
-          )}
-        />
+                ),
+              },
+              { key: 'pricePerMeter', header: 'Price', render: (item) => `$${item.pricePerMeter}/m` },
+              {
+                key: 'featuredSections',
+                header: 'Homepage Sections',
+                render: (item) => (
+                  <span className="text-xs text-gray-600">{(item.featuredSections || []).join(', ') || 'Featured'}</span>
+                ),
+              },
+              {
+                key: 'status',
+                header: 'Status',
+                render: (item) => <Badge variant={item.status === 'ACTIVE' ? 'green' : 'gray'}>{item.status}</Badge>,
+              },
+            ]}
+            data={featuredFabrics}
+            keyExtractor={(item) => item.id}
+            searchable
+            searchKeys={['name', 'materialType.name']}
+            emptyMessage="No featured fabrics yet. Ask admin to feature one of your products."
+            actions={(item) => (
+              <Button variant="outline" size="sm" asChild>
+                <Link to={`/fabrics/${item.id}`}>
+                  <Eye className="w-4 h-4" />
+                </Link>
+              </Button>
+            )}
+          />
+        ) : (
+          <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+            Featured table is disabled by admin governance.
+          </div>
+        )
       )}
 
       {activeTab === 'orders' && (
+        dashboardGovernance.sections.ordersTable !== false ? (
         <DataTable
           title="All Fabric Orders"
           columns={[
@@ -1383,7 +1556,7 @@ export default function SellerDashboard() {
           searchKeys={['orderNumber', 'fabricName', 'designerCountry']}
           actions={(item) => (
             <div className="flex gap-2">
-              {item.status === 'CONFIRMED' && (
+              {canUpdateOrderStatus && item.status === 'CONFIRMED' && (
                 <Button 
                   size="sm"
                   onClick={() => handleUpdateOrderStatus(item.orderId, 'SHIPPED_TO_DESIGNER')}
@@ -1395,10 +1568,15 @@ export default function SellerDashboard() {
             </div>
           )}
         />
+        ) : (
+          <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+            Orders table is disabled by admin governance.
+          </div>
+        )
       )}
 
       {/* Product Create/Edit Modal */}
-      {showProductModal && (
+      {showProductModal && (canAddProduct || canEditProduct) && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
           <div className="mx-auto w-full max-w-2xl rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -1415,6 +1593,7 @@ export default function SellerDashboard() {
                   onChange={(e) => setProductForm((prev) => ({ ...prev, name: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                   placeholder="e.g. Premium Ankara Cotton"
+                  disabled={dashboardGovernance.fields.productName === false}
                 />
               </div>
               <div className="md:col-span-2">
@@ -1424,6 +1603,7 @@ export default function SellerDashboard() {
                   onChange={(e) => setProductForm((prev) => ({ ...prev, description: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg min-h-[90px]"
                   placeholder="Describe fabric quality, weave, and best use."
+                  disabled={dashboardGovernance.fields.productDescription === false}
                 />
               </div>
               <div>
@@ -1432,6 +1612,7 @@ export default function SellerDashboard() {
                   value={productForm.materialTypeId}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, materialTypeId: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
+                  disabled={dashboardGovernance.fields.materialType === false}
                 >
                   {materialOptions.length === 0 ? (
                     <option value="">No material types found</option>
@@ -1454,6 +1635,7 @@ export default function SellerDashboard() {
                   value={productForm.sellerPrice}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, sellerPrice: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
+                  disabled={dashboardGovernance.fields.sellerPrice === false}
                 />
                 <p className="mt-1 text-xs text-gray-500">Converted USD: ${usdPricePreview.toFixed(2)}</p>
               </div>
@@ -1463,7 +1645,10 @@ export default function SellerDashboard() {
                   value={productForm.priceCurrencyCode}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, priceCurrencyCode: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={(currencyOptions.allowedCurrencies || []).length <= 1}
+                  disabled={
+                    dashboardGovernance.fields.listingCurrency === false ||
+                    (currencyOptions.allowedCurrencies || []).length <= 1
+                  }
                 >
                   {(currencyOptions.allowedCurrencies || [currencyOptions.defaultCurrency || 'USD']).map((code) => (
                     <option key={code} value={code}>
@@ -1481,6 +1666,7 @@ export default function SellerDashboard() {
                   value={productForm.minYards}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, minYards: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
+                  disabled={dashboardGovernance.fields.minYards === false}
                 />
               </div>
               <div>
@@ -1492,9 +1678,11 @@ export default function SellerDashboard() {
                   value={productForm.stockYards}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, stockYards: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
+                  disabled={dashboardGovernance.fields.stockYards === false}
                 />
               </div>
-              <div className="md:col-span-2">
+              {dashboardGovernance.fields.productImages !== false ? (
+                <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Product Images (minimum 3, maximum 4)</label>
                 <div className="flex gap-2">
                   <input
@@ -1539,7 +1727,8 @@ export default function SellerDashboard() {
                     ))}
                   </div>
                 ) : null}
-              </div>
+                </div>
+              ) : null}
             </div>
 
             {productError ? (
@@ -1569,7 +1758,7 @@ export default function SellerDashboard() {
       )}
 
       {/* Stock Update Modal */}
-      {showStockModal && selectedFabric && (
+      {showStockModal && selectedFabric && canUpdateStock && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
           <div className="mx-auto w-full max-w-lg rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">

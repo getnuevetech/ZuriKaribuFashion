@@ -19,6 +19,7 @@ import {
   getUsdPerUnit,
   setProductCurrencyMetadata,
 } from '../utils/currency';
+import { readVendorDashboardGovernanceSettings } from '../utils/vendor-dashboard-governance';
 
 const router = Router();
 let designerGovernanceSchemaEnsured = false;
@@ -558,6 +559,18 @@ router.get('/dashboard', async (req, res, next) => {
           totalRevenue: totalRevenue._sum.price || 0,
         },
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/dashboard-governance', async (_req, res, next) => {
+  try {
+    const payload = await readVendorDashboardGovernanceSettings();
+    res.json({
+      success: true,
+      data: payload.settings.designer,
     });
   } catch (error) {
     next(error);

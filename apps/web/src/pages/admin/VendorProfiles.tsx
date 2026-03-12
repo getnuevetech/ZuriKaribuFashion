@@ -33,8 +33,198 @@ const FIELD_TYPES: FieldType[] = [
   'IMAGE',
 ];
 
+type DashboardToggleMap = Record<string, boolean>;
+type RoleDashboardGovernance = {
+  tabs: DashboardToggleMap;
+  sections: DashboardToggleMap;
+  actions: DashboardToggleMap;
+  fields: DashboardToggleMap;
+};
+type DashboardGovernanceSettings = {
+  seller: RoleDashboardGovernance;
+  designer: RoleDashboardGovernance;
+};
+
+const DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS: DashboardGovernanceSettings = {
+  seller: {
+    tabs: { overview: true, fabrics: true, featured: true, orders: true },
+    sections: {
+      profileGovernance: true,
+      stats: true,
+      overviewLowStockAlert: true,
+      overviewCharts: true,
+      overviewRecentOrders: true,
+      overviewActivity: true,
+      fabricsTable: true,
+      featuredTable: true,
+      ordersTable: true,
+    },
+    actions: {
+      submitProfile: true,
+      addProduct: true,
+      editProduct: true,
+      updateStock: true,
+      updateOrderStatus: true,
+    },
+    fields: {
+      productName: true,
+      productDescription: true,
+      materialType: true,
+      sellerPrice: true,
+      listingCurrency: true,
+      minYards: true,
+      stockYards: true,
+      productImages: true,
+    },
+  },
+  designer: {
+    tabs: { overview: true, designs: true, featured: true, orders: true },
+    sections: {
+      profileGovernance: true,
+      stats: true,
+      overviewOrderStatus: true,
+      overviewRevenueChart: true,
+      overviewTopDesigns: true,
+      overviewActivity: true,
+      overviewPendingOrdersAlert: true,
+      productsTable: true,
+      featuredTable: true,
+      ordersTable: true,
+      fabricCountryAccess: true,
+      readyStockModal: true,
+    },
+    actions: {
+      submitProfile: true,
+      addDesignProduct: true,
+      addReadyToWearProduct: true,
+      editDesignProduct: true,
+      editReadyToWearProduct: true,
+      manageReadyStock: true,
+      requestFabricCountryAccess: true,
+      updateOrderStatus: true,
+    },
+    fields: {
+      designName: true,
+      designDescription: true,
+      designStyle: true,
+      designBasePrice: true,
+      designListingCurrency: true,
+      designImages: true,
+      designSuitableFabrics: true,
+      designMeasurementVariables: true,
+      readyName: true,
+      readyDescription: true,
+      readyStyle: true,
+      readyBasePrice: true,
+      readyListingCurrency: true,
+      readyImages: true,
+      readyVariants: true,
+    },
+  },
+};
+
+const GOVERNANCE_LABELS = {
+  seller: {
+    tabs: {
+      overview: 'Overview tab',
+      fabrics: 'Fabrics tab',
+      featured: 'Featured tab',
+      orders: 'Orders tab',
+    },
+    sections: {
+      profileGovernance: 'Vendor governance profile card',
+      stats: 'Stats cards',
+      overviewLowStockAlert: 'Low-stock alert',
+      overviewCharts: 'Overview charts',
+      overviewRecentOrders: 'Recent orders panel',
+      overviewActivity: 'Activity feed',
+      fabricsTable: 'Fabrics table',
+      featuredTable: 'Featured products table',
+      ordersTable: 'Orders table',
+    },
+    actions: {
+      submitProfile: 'Submit profile for approval',
+      addProduct: 'Add new fabric',
+      editProduct: 'Edit fabric',
+      updateStock: 'Update stock',
+      updateOrderStatus: 'Update order status',
+    },
+    fields: {
+      productName: 'Product name field',
+      productDescription: 'Product description field',
+      materialType: 'Material type field',
+      sellerPrice: 'Seller price field',
+      listingCurrency: 'Listing currency field',
+      minYards: 'Minimum yards field',
+      stockYards: 'Stock yards field',
+      productImages: 'Product images field',
+    },
+  },
+  designer: {
+    tabs: {
+      overview: 'Overview tab',
+      designs: 'Products tab',
+      featured: 'Featured tab',
+      orders: 'Orders tab',
+    },
+    sections: {
+      profileGovernance: 'Vendor governance profile card',
+      stats: 'Stats cards',
+      overviewOrderStatus: 'Order status widget',
+      overviewRevenueChart: 'Revenue chart',
+      overviewTopDesigns: 'Top designs chart',
+      overviewActivity: 'Activity feed',
+      overviewPendingOrdersAlert: 'Pending order alert',
+      productsTable: 'Products table',
+      featuredTable: 'Featured products table',
+      ordersTable: 'Orders table',
+      fabricCountryAccess: 'Fabric country access request panel',
+      readyStockModal: 'Ready-to-wear stock modal',
+    },
+    actions: {
+      submitProfile: 'Submit profile for approval',
+      addDesignProduct: 'Add custom-to-wear product',
+      addReadyToWearProduct: 'Add ready-to-wear product',
+      editDesignProduct: 'Edit custom-to-wear product',
+      editReadyToWearProduct: 'Edit ready-to-wear product',
+      manageReadyStock: 'Manage ready-to-wear stock',
+      requestFabricCountryAccess: 'Request additional fabric countries',
+      updateOrderStatus: 'Update order status',
+    },
+    fields: {
+      designName: 'Design name field',
+      designDescription: 'Design description field',
+      designStyle: 'Design style field',
+      designBasePrice: 'Design base price field',
+      designListingCurrency: 'Design listing currency field',
+      designImages: 'Design images field',
+      designSuitableFabrics: 'Suitable fabrics picker',
+      designMeasurementVariables: 'Measurement templates picker',
+      readyName: 'RTW name field',
+      readyDescription: 'RTW description field',
+      readyStyle: 'RTW style field',
+      readyBasePrice: 'RTW base price field',
+      readyListingCurrency: 'RTW listing currency field',
+      readyImages: 'RTW images field',
+      readyVariants: 'RTW variants/size rows',
+    },
+  },
+} as const;
+
+const mergeRoleGovernance = (defaults: RoleDashboardGovernance, input: any): RoleDashboardGovernance => ({
+  tabs: { ...defaults.tabs, ...(input?.tabs || {}) },
+  sections: { ...defaults.sections, ...(input?.sections || {}) },
+  actions: { ...defaults.actions, ...(input?.actions || {}) },
+  fields: { ...defaults.fields, ...(input?.fields || {}) },
+});
+
+const normalizeDashboardGovernance = (input: any): DashboardGovernanceSettings => ({
+  seller: mergeRoleGovernance(DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS.seller, input?.seller),
+  designer: mergeRoleGovernance(DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS.designer, input?.designer),
+});
+
 export default function AdminVendorProfiles() {
-  const [tab, setTab] = useState<'fields' | 'reviews'>('fields');
+  const [tab, setTab] = useState<'fields' | 'reviews' | 'dashboard'>('fields');
   const [role, setRole] = useState<VendorRole>('FABRIC_SELLER');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -46,6 +236,10 @@ export default function AdminVendorProfiles() {
   const [selectedProfile, setSelectedProfile] = useState<any | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
   const [reviewing, setReviewing] = useState(false);
+  const [dashboardGovernance, setDashboardGovernance] = useState<DashboardGovernanceSettings>(
+    DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS
+  );
+  const [savingDashboardGovernance, setSavingDashboardGovernance] = useState(false);
   const [showAddVendorModal, setShowAddVendorModal] = useState(false);
   const [creatingVendor, setCreatingVendor] = useState(false);
   const [newVendor, setNewVendor] = useState({
@@ -101,13 +295,45 @@ export default function AdminVendorProfiles() {
     }
   };
 
+  const loadDashboardGovernance = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const res = await api.admin.getVendorDashboardGovernance();
+      if (res.success) {
+        setDashboardGovernance(normalizeDashboardGovernance(res.data?.settings || res.data));
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to load dashboard governance settings.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (tab === 'fields') {
       void loadFields();
-    } else {
+    } else if (tab === 'reviews') {
       void loadProfiles();
+    } else {
+      void loadDashboardGovernance();
     }
   }, [tab, role, statusFilter]);
+
+  const saveDashboardGovernance = async () => {
+    setSavingDashboardGovernance(true);
+    setError('');
+    setSuccess('');
+    try {
+      const response = await api.admin.updateVendorDashboardGovernance(dashboardGovernance);
+      setDashboardGovernance(normalizeDashboardGovernance(response.data || dashboardGovernance));
+      setSuccess('Dashboard governance settings updated successfully.');
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to save dashboard governance settings.');
+    } finally {
+      setSavingDashboardGovernance(false);
+    }
+  };
 
   const addField = () => {
     setFields((prev) => [
@@ -237,6 +463,12 @@ export default function AdminVendorProfiles() {
             className={`pb-3 text-sm font-medium ${tab === 'reviews' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-500'}`}
           >
             Profile Reviews
+          </button>
+          <button
+            onClick={() => setTab('dashboard')}
+            className={`pb-3 text-sm font-medium ${tab === 'dashboard' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-500'}`}
+          >
+            Dashboard Controls
           </button>
         </div>
       </div>
@@ -407,6 +639,69 @@ export default function AdminVendorProfiles() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {!loading && tab === 'dashboard' && (
+        <div className="space-y-4 rounded-xl border bg-white p-4">
+          <p className="text-sm text-gray-600">
+            Configure which seller/designer dashboard tabs, sections, actions, and form variables are enabled.
+          </p>
+          {(() => {
+            const roleKey = role === 'FABRIC_SELLER' ? 'seller' : 'designer';
+            const roleGovernance = dashboardGovernance[roleKey];
+            const roleLabels = GOVERNANCE_LABELS[roleKey];
+            const groups: Array<{ key: keyof RoleDashboardGovernance; title: string }> = [
+              { key: 'tabs', title: 'Tabs' },
+              { key: 'sections', title: 'Sections' },
+              { key: 'actions', title: 'Actions' },
+              { key: 'fields', title: 'Variables / Form Fields' },
+            ];
+            return (
+              <div className="space-y-4">
+                {groups.map((group) => {
+                  const values = roleGovernance[group.key] || {};
+                  const labelMap = roleLabels[group.key] || {};
+                  return (
+                    <div key={group.key} className="rounded-lg border p-3">
+                      <h3 className="mb-3 text-sm font-semibold text-gray-900">{group.title}</h3>
+                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                        {Object.keys(values).map((toggleKey) => (
+                          <label
+                            key={`${group.key}-${toggleKey}`}
+                            className="flex items-center justify-between rounded border px-3 py-2 text-sm"
+                          >
+                            <span>{(labelMap as any)?.[toggleKey] || toggleKey}</span>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(values[toggleKey])}
+                              onChange={(event) =>
+                                setDashboardGovernance((previous) => ({
+                                  ...previous,
+                                  [roleKey]: {
+                                    ...previous[roleKey],
+                                    [group.key]: {
+                                      ...previous[roleKey][group.key],
+                                      [toggleKey]: event.target.checked,
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-end">
+                  <Button onClick={saveDashboardGovernance} disabled={savingDashboardGovernance}>
+                    {savingDashboardGovernance ? 'Saving...' : `Save ${roleLabel} Dashboard Controls`}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

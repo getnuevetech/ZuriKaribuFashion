@@ -11,6 +11,10 @@ import {
   Permissions,
   sanitizePermissionGrants,
 } from '../rbac';
+import {
+  readVendorDashboardGovernanceSettings,
+  saveVendorDashboardGovernanceSettings,
+} from '../utils/vendor-dashboard-governance';
 
 const router = Router();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
@@ -1381,6 +1385,9 @@ const resolveAdminRoutePermissions = (method: string, path: string) => {
   if (path.startsWith('/vendor-profile/fields')) {
     return method === 'GET' ? [Permissions.VENDOR_PROFILES_READ] : [Permissions.VENDOR_PROFILES_REVIEW];
   }
+  if (path.startsWith('/vendor-dashboard-governance')) {
+    return method === 'GET' ? [Permissions.VENDOR_PROFILES_READ] : [Permissions.VENDOR_PROFILES_REVIEW];
+  }
   if (path.startsWith('/vendor-profiles')) {
     return method === 'GET' ? [Permissions.VENDOR_PROFILES_READ] : [Permissions.VENDOR_PROFILES_REVIEW];
   }
@@ -2281,6 +2288,42 @@ router.put('/vendor-profile/fields', async (req, res, next) => {
       success: true,
       message: 'Vendor profile fields updated successfully.',
       data: { role: payload.role, fields },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/vendor-dashboard-governance', async (_req, res, next) => {
+  try {
+    const payload = await readVendorDashboardGovernanceSettings();
+    res.json({
+      success: true,
+      data: {
+        source: payload.source,
+        updatedAt: payload.updatedAt,
+        settings: payload.settings,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put('/vendor-dashboard-governance', async (req, res, next) => {
+  try {
+    const settings = await saveVendorDashboardGovernanceSettings(req.body?.settings ?? req.body);
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'VENDOR_DASHBOARD_GOVERNANCE_UPDATED',
+        details: settings,
+      },
+    });
+    res.json({
+      success: true,
+      message: 'Vendor dashboard governance updated successfully.',
+      data: settings,
     });
   } catch (error) {
     next(error);

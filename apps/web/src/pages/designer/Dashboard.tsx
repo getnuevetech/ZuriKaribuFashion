@@ -227,6 +227,108 @@ interface GovernanceDebugInfo {
   error?: string;
 }
 
+type DesignerDashboardGovernance = {
+  tabs: {
+    overview: boolean;
+    designs: boolean;
+    featured: boolean;
+    orders: boolean;
+  };
+  sections: {
+    profileGovernance: boolean;
+    stats: boolean;
+    overviewOrderStatus: boolean;
+    overviewRevenueChart: boolean;
+    overviewTopDesigns: boolean;
+    overviewActivity: boolean;
+    overviewPendingOrdersAlert: boolean;
+    productsTable: boolean;
+    featuredTable: boolean;
+    ordersTable: boolean;
+    fabricCountryAccess: boolean;
+    readyStockModal: boolean;
+  };
+  actions: {
+    submitProfile: boolean;
+    addDesignProduct: boolean;
+    addReadyToWearProduct: boolean;
+    editDesignProduct: boolean;
+    editReadyToWearProduct: boolean;
+    manageReadyStock: boolean;
+    requestFabricCountryAccess: boolean;
+    updateOrderStatus: boolean;
+  };
+  fields: {
+    designName: boolean;
+    designDescription: boolean;
+    designStyle: boolean;
+    designBasePrice: boolean;
+    designListingCurrency: boolean;
+    designImages: boolean;
+    designSuitableFabrics: boolean;
+    designMeasurementVariables: boolean;
+    readyName: boolean;
+    readyDescription: boolean;
+    readyStyle: boolean;
+    readyBasePrice: boolean;
+    readyListingCurrency: boolean;
+    readyImages: boolean;
+    readyVariants: boolean;
+  };
+};
+
+const DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE: DesignerDashboardGovernance = {
+  tabs: { overview: true, designs: true, featured: true, orders: true },
+  sections: {
+    profileGovernance: true,
+    stats: true,
+    overviewOrderStatus: true,
+    overviewRevenueChart: true,
+    overviewTopDesigns: true,
+    overviewActivity: true,
+    overviewPendingOrdersAlert: true,
+    productsTable: true,
+    featuredTable: true,
+    ordersTable: true,
+    fabricCountryAccess: true,
+    readyStockModal: true,
+  },
+  actions: {
+    submitProfile: true,
+    addDesignProduct: true,
+    addReadyToWearProduct: true,
+    editDesignProduct: true,
+    editReadyToWearProduct: true,
+    manageReadyStock: true,
+    requestFabricCountryAccess: true,
+    updateOrderStatus: true,
+  },
+  fields: {
+    designName: true,
+    designDescription: true,
+    designStyle: true,
+    designBasePrice: true,
+    designListingCurrency: true,
+    designImages: true,
+    designSuitableFabrics: true,
+    designMeasurementVariables: true,
+    readyName: true,
+    readyDescription: true,
+    readyStyle: true,
+    readyBasePrice: true,
+    readyListingCurrency: true,
+    readyImages: true,
+    readyVariants: true,
+  },
+};
+
+const normalizeDesignerDashboardGovernance = (input: any): DesignerDashboardGovernance => ({
+  tabs: { ...DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.tabs, ...(input?.tabs || {}) },
+  sections: { ...DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.sections, ...(input?.sections || {}) },
+  actions: { ...DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.actions, ...(input?.actions || {}) },
+  fields: { ...DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields, ...(input?.fields || {}) },
+});
+
 const LOCATION_COUNTRIES = getCountryOptions();
 const COUNTRY_FIELD_HINTS = ['country', 'businesscountry', 'vendorcountry'];
 const CITY_FIELD_HINTS = ['city', 'businesscity', 'vendorcity', 'town'];
@@ -347,6 +449,9 @@ export default function DesignerDashboard() {
   const [submittingProfile, setSubmittingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [governanceDebug, setGovernanceDebug] = useState<GovernanceDebugInfo | null>(null);
+  const [dashboardGovernance, setDashboardGovernance] = useState<DesignerDashboardGovernance>(
+    DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const [productSearch, setProductSearch] = useState('');
   const [productTypeFilter, setProductTypeFilter] = useState('');
@@ -358,13 +463,23 @@ export default function DesignerDashboard() {
   const [readyStockSaving, setReadyStockSaving] = useState(false);
   const [readyStockError, setReadyStockError] = useState<string | null>(null);
 
+  const visibleTabs = useMemo(
+    () =>
+      (['overview', 'designs', 'featured', 'orders'] as const).filter(
+        (tab) => dashboardGovernance.tabs[tab] !== false
+      ),
+    [dashboardGovernance.tabs]
+  );
+  const fallbackTab = visibleTabs[0] || 'overview';
+
   const syncTabWithUrl = (tab: 'overview' | 'designs' | 'featured' | 'orders') => {
-    setActiveTab(tab);
-    if (tab === 'overview') {
+    const nextTab = dashboardGovernance.tabs[tab] !== false ? tab : fallbackTab;
+    setActiveTab(nextTab);
+    if (nextTab === 'overview') {
       setSearchParams({});
       return;
     }
-    setSearchParams({ tab });
+    setSearchParams({ tab: nextTab });
   };
 
   useEffect(() => {
@@ -380,6 +495,12 @@ export default function DesignerDashboard() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    if (!visibleTabs.includes(activeTab)) {
+      syncTabWithUrl(fallbackTab);
+    }
+  }, [activeTab, fallbackTab, visibleTabs]);
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
@@ -393,6 +514,7 @@ export default function DesignerDashboard() {
         measurementTemplatesResult,
         currencyResult,
         readySizeOptionsResult,
+        governanceResult,
       ] = await Promise.allSettled([
         api.designer.getDashboard(),
         api.designer.getDesigns(),
@@ -403,6 +525,7 @@ export default function DesignerDashboard() {
         api.designer.getMeasurementTemplateOptions(),
         api.currency.getMyOptions(),
         api.designer.getReadyToWearSizeOptions(),
+        api.designer.getDashboardGovernance(),
       ]);
       const statsRes = statsResult.status === 'fulfilled' ? statsResult.value : null;
       const designsRes = designsResult.status === 'fulfilled' ? designsResult.value : null;
@@ -414,6 +537,7 @@ export default function DesignerDashboard() {
         measurementTemplatesResult.status === 'fulfilled' ? measurementTemplatesResult.value : null;
       const currencyRes = currencyResult.status === 'fulfilled' ? currencyResult.value : null;
       const readySizeOptionsRes = readySizeOptionsResult.status === 'fulfilled' ? readySizeOptionsResult.value : null;
+      const governanceRes = governanceResult.status === 'fulfilled' ? governanceResult.value : null;
       const settledCallStatus = (result: PromiseSettledResult<any>) => {
         if (result.status === 'fulfilled') {
           return result.value?.success
@@ -630,6 +754,11 @@ export default function DesignerDashboard() {
           setReadySizeOptions(normalized);
         }
       }
+      if (governanceRes?.success) {
+        setDashboardGovernance(normalizeDesignerDashboardGovernance(governanceRes.data));
+      } else {
+        setDashboardGovernance(DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE);
+      }
       const completionPayload = dashboardCompletion || (profileRes?.success ? profileRes.data : null);
       const dashboardGovernanceFields = statsRes?.success && Array.isArray(statsRes.data?.governanceFields)
         ? statsRes.data.governanceFields.filter((entry: any) => entry?.isActive !== false)
@@ -820,6 +949,7 @@ export default function DesignerDashboard() {
   };
 
   const handleUpdateOrderStatus = async (orderId: string, status: string) => {
+    if (!canUpdateOrderStatus) return;
     try {
       await api.designer.updateOrderStatus(orderId, status);
       fetchDashboardData();
@@ -857,6 +987,7 @@ export default function DesignerDashboard() {
   };
 
   const openCreateDesignModal = () => {
+    if (!canAddDesignProduct) return;
     resetDesignForm();
     setShowDesignModal(true);
   };
@@ -879,11 +1010,13 @@ export default function DesignerDashboard() {
   };
 
   const openCreateReadyModal = () => {
+    if (!canAddReadyProduct) return;
     resetReadyForm();
     setShowReadyModal(true);
   };
 
   const openEditDesignModal = (design: Design) => {
+    if (!canEditDesignProduct) return;
     const yardsByFabricId = (design.suitableFabrics || []).reduce<Record<string, string>>((acc, item) => {
       if (item.fabricId) acc[item.fabricId] = String(item.yardsNeeded || 1);
       return acc;
@@ -929,6 +1062,7 @@ export default function DesignerDashboard() {
   };
 
   const openEditReadyModal = (product: ReadyProduct) => {
+    if (!canEditReadyProduct) return;
     const matchedCategoryId =
       categories.find((entry) => String(entry.name || '').trim().toLowerCase() === String(product.category?.name || '').trim().toLowerCase())?.id ||
       categories[0]?.id ||
@@ -1227,6 +1361,7 @@ export default function DesignerDashboard() {
   };
 
   const submitFabricCountryAccessRequest = async () => {
+    if (!canRequestFabricCountryAccess) return;
     const selectedCountries = (fabricAccessRequestCountries || []).map((entry) => String(entry || '').trim()).filter(Boolean);
     if (selectedCountries.length === 0) {
       setFabricAccessMessage('Select at least one country to request.');
@@ -1286,6 +1421,8 @@ export default function DesignerDashboard() {
   }, [showDesignModal, measurementTemplateOptions]);
 
   const handleSaveDesign = async () => {
+    if (!isEditMode && !canAddDesignProduct) return;
+    if (isEditMode && !canEditDesignProduct) return;
     setDesignError(null);
     const images = parseImageInputs(designForm.imageUrls);
     const selectedMeasurementSet = new Set(
@@ -1373,6 +1510,8 @@ export default function DesignerDashboard() {
   };
 
   const handleSaveReadyToWear = async () => {
+    if (!isReadyEditMode && !canAddReadyProduct) return;
+    if (isReadyEditMode && !canEditReadyProduct) return;
     setReadyError(null);
     const images = parseImageInputs(readyForm.imageUrls);
     const basePrice = Number(readyForm.basePrice || 0);
@@ -1467,7 +1606,7 @@ export default function DesignerDashboard() {
   };
 
   const handleSubmitProfile = async () => {
-    if (!profileCompletion) return;
+    if (!profileCompletion || !canSubmitProfile) return;
     setProfileMessage(null);
     setSubmittingProfile(true);
     try {
@@ -1516,6 +1655,7 @@ export default function DesignerDashboard() {
   };
 
   const openReadyStockModal = (product: ReadyProduct) => {
+    if (!canManageReadyStock || dashboardGovernance.sections.readyStockModal === false) return;
     const rows = (product.sizeVariations || []).map((entry) => ({
       size: String(entry.size || ''),
       color: String(entry.color || 'DEFAULT'),
@@ -1528,7 +1668,7 @@ export default function DesignerDashboard() {
   };
 
   const handleSaveReadyStock = async () => {
-    if (!selectedReadyProduct) return;
+    if (!selectedReadyProduct || !canManageReadyStock) return;
     const normalized = readyStockDraft.map((entry) => ({
       size: String(entry.size || '').trim(),
       color: String(entry.color || 'DEFAULT').trim().toUpperCase(),
@@ -1602,6 +1742,17 @@ export default function DesignerDashboard() {
     selectedReadyListingCurrency === 'USD'
       ? readyLocalPricePreview
       : Number((readyLocalPricePreview * selectedReadyUsdPerUnit).toFixed(2));
+  const showProfileGovernance = dashboardGovernance.sections.profileGovernance !== false;
+  const showStats = dashboardGovernance.sections.stats !== false;
+  const canSubmitProfile = dashboardGovernance.actions.submitProfile !== false;
+  const canAddDesignProduct = dashboardGovernance.actions.addDesignProduct !== false;
+  const canAddReadyProduct = dashboardGovernance.actions.addReadyToWearProduct !== false;
+  const canEditDesignProduct = dashboardGovernance.actions.editDesignProduct !== false;
+  const canEditReadyProduct = dashboardGovernance.actions.editReadyToWearProduct !== false;
+  const canManageReadyStock = dashboardGovernance.actions.manageReadyStock !== false;
+  const canRequestFabricCountryAccess = dashboardGovernance.actions.requestFabricCountryAccess !== false;
+  const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false;
+  const hasNoDashboardTabs = visibleTabs.length === 0;
   const fabricOptionById = useMemo(() => {
     const map = new Map<string, FabricOption>();
     for (const option of Object.values(designFabricCache)) {
@@ -1643,18 +1794,22 @@ export default function DesignerDashboard() {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={openCreateReadyModal}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Ready-To-Wear
-          </Button>
-          <Button onClick={openCreateDesignModal}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Design Product
-          </Button>
+          {canAddReadyProduct ? (
+            <Button variant="outline" onClick={openCreateReadyModal}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Ready-To-Wear
+            </Button>
+          ) : null}
+          {canAddDesignProduct ? (
+            <Button onClick={openCreateDesignModal}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Design Product
+            </Button>
+          ) : null}
         </div>
       </div>
 
-      {profileCompletion ? (
+      {showProfileGovernance && profileCompletion ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-amber-900">Vendor governance profile</h2>
@@ -1779,7 +1934,11 @@ export default function DesignerDashboard() {
             </div>
           ) : null}
           <div>
-            <Button size="sm" onClick={handleSubmitProfile} disabled={submittingProfile || activeProfileFields.length === 0}>
+            <Button
+              size="sm"
+              onClick={handleSubmitProfile}
+              disabled={submittingProfile || activeProfileFields.length === 0 || !canSubmitProfile}
+            >
               {submittingProfile ? 'Submitting...' : 'Submit for Admin Approval'}
             </Button>
           </div>
@@ -1787,45 +1946,47 @@ export default function DesignerDashboard() {
       ) : null}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Designs"
-          value={stats?.totalDesigns || 0}
-          icon={Palette}
-          iconColor="text-purple-600"
-          iconBgColor="bg-purple-100"
-          subtitle="Active designs"
-        />
-        <StatCard
-          title="Total Orders"
-          value={stats?.totalOrders || 0}
-          change={stats?.orderChange}
-          icon={ShoppingBag}
-          iconColor="text-blue-600"
-          iconBgColor="bg-blue-100"
-        />
-        <StatCard
-          title="Revenue"
-          value={`$${(stats?.totalRevenue || 0).toFixed(2)}`}
-          change={stats?.revenueChange}
-          icon={DollarSign}
-          iconColor="text-green-600"
-          iconBgColor="bg-green-100"
-        />
-        <StatCard
-          title="Rating"
-          value={`${(stats?.rating || 0).toFixed(1)} ⭐`}
-          icon={Star}
-          iconColor="text-amber-600"
-          iconBgColor="bg-amber-100"
-          subtitle="Average rating"
-        />
-      </div>
+      {showStats ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            title="Total Designs"
+            value={stats?.totalDesigns || 0}
+            icon={Palette}
+            iconColor="text-purple-600"
+            iconBgColor="bg-purple-100"
+            subtitle="Active designs"
+          />
+          <StatCard
+            title="Total Orders"
+            value={stats?.totalOrders || 0}
+            change={stats?.orderChange}
+            icon={ShoppingBag}
+            iconColor="text-blue-600"
+            iconBgColor="bg-blue-100"
+          />
+          <StatCard
+            title="Revenue"
+            value={`$${(stats?.totalRevenue || 0).toFixed(2)}`}
+            change={stats?.revenueChange}
+            icon={DollarSign}
+            iconColor="text-green-600"
+            iconBgColor="bg-green-100"
+          />
+          <StatCard
+            title="Rating"
+            value={`${(stats?.rating || 0).toFixed(1)} ⭐`}
+            icon={Star}
+            iconColor="text-amber-600"
+            iconBgColor="bg-amber-100"
+            subtitle="Average rating"
+          />
+        </div>
+      ) : null}
 
       {/* Tabs */}
       <div className="border-b">
         <div className="flex gap-6">
-          {(['overview', 'designs', 'featured', 'orders'] as const).map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab}
               onClick={() => syncTabWithUrl(tab)}
@@ -1846,78 +2007,91 @@ export default function DesignerDashboard() {
           ))}
         </div>
       </div>
+      {hasNoDashboardTabs ? (
+        <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+          All designer dashboard tabs are disabled by admin governance.
+        </div>
+      ) : null}
 
       {activeTab === 'overview' && (
         <>
           {/* Order Status & Revenue Chart */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Order Status */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Status</h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Clock className="w-5 h-5 text-yellow-600" />
-                    <span className="text-sm font-medium text-yellow-900">Pending</span>
+            {dashboardGovernance.sections.overviewOrderStatus !== false ? (
+              <div className="bg-white rounded-xl p-6 shadow-sm border">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Status</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Clock className="w-5 h-5 text-yellow-600" />
+                      <span className="text-sm font-medium text-yellow-900">Pending</span>
+                    </div>
+                    <span className="text-xl font-bold text-yellow-700">{stats?.pendingOrders || 0}</span>
                   </div>
-                  <span className="text-xl font-bold text-yellow-700">{stats?.pendingOrders || 0}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Scissors className="w-5 h-5 text-purple-600" />
-                    <span className="text-sm font-medium text-purple-900">In Production</span>
+                  <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Scissors className="w-5 h-5 text-purple-600" />
+                      <span className="text-sm font-medium text-purple-900">In Production</span>
+                    </div>
+                    <span className="text-xl font-bold text-purple-700">{stats?.inProductionOrders || 0}</span>
                   </div>
-                  <span className="text-xl font-bold text-purple-700">{stats?.inProductionOrders || 0}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-600" />
-                    <span className="text-sm font-medium text-green-900">Completed</span>
+                  <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                      <span className="text-sm font-medium text-green-900">Completed</span>
+                    </div>
+                    <span className="text-xl font-bold text-green-700">{stats?.completedOrders || 0}</span>
                   </div>
-                  <span className="text-xl font-bold text-green-700">{stats?.completedOrders || 0}</span>
                 </div>
               </div>
-            </div>
+            ) : null}
 
             {/* Revenue Chart */}
-            <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Revenue</h3>
-              <LineChart 
-                data={stats?.monthlyRevenue || [
-                  { label: 'Jan', value: 1200 },
-                  { label: 'Feb', value: 1800 },
-                  { label: 'Mar', value: 2400 },
-                  { label: 'Apr', value: 2100 },
-                  { label: 'May', value: 3200 },
-                  { label: 'Jun', value: 3800 },
-                ]}
-                height={200}
-              />
-            </div>
+            {dashboardGovernance.sections.overviewRevenueChart !== false ? (
+              <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Revenue</h3>
+                <LineChart
+                  data={stats?.monthlyRevenue || [
+                    { label: 'Jan', value: 1200 },
+                    { label: 'Feb', value: 1800 },
+                    { label: 'Mar', value: 2400 },
+                    { label: 'Apr', value: 2100 },
+                    { label: 'May', value: 3200 },
+                    { label: 'Jun', value: 3800 },
+                  ]}
+                  height={200}
+                />
+              </div>
+            ) : null}
           </div>
 
           {/* Top Designs & Activity */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Top Performing Designs */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Performing Designs</h3>
-              <BarChart 
-                data={stats?.topDesigns || [
-                  { label: 'Kente Gown', value: 45, color: 'bg-amber-500' },
-                  { label: 'Ankara Dress', value: 38, color: 'bg-blue-500' },
-                  { label: 'Dashiki', value: 32, color: 'bg-purple-500' },
-                  { label: 'Boubou', value: 28, color: 'bg-green-500' },
-                ]}
-                height={180}
-              />
-            </div>
+            {dashboardGovernance.sections.overviewTopDesigns !== false ? (
+              <div className="bg-white rounded-xl p-6 shadow-sm border">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Performing Designs</h3>
+                <BarChart
+                  data={stats?.topDesigns || [
+                    { label: 'Kente Gown', value: 45, color: 'bg-amber-500' },
+                    { label: 'Ankara Dress', value: 38, color: 'bg-blue-500' },
+                    { label: 'Dashiki', value: 32, color: 'bg-purple-500' },
+                    { label: 'Boubou', value: 28, color: 'bg-green-500' },
+                  ]}
+                  height={180}
+                />
+              </div>
+            ) : null}
 
             {/* Activity Feed */}
-            <ActivityFeed activities={activities} title="Recent Activity" />
+            {dashboardGovernance.sections.overviewActivity !== false ? (
+              <ActivityFeed activities={activities} title="Recent Activity" />
+            ) : null}
           </div>
 
           {/* Pending Orders Alert */}
-          {pendingOrders.length > 0 && (
+          {dashboardGovernance.sections.overviewPendingOrdersAlert !== false && pendingOrders.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
               <div className="flex items-center gap-3">
                 <AlertCircle className="w-5 h-5 text-amber-600" />
@@ -1946,10 +2120,12 @@ export default function DesignerDashboard() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">My Products</h2>
-            <Button size="sm" onClick={openCreateDesignModal}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Custom Product
-            </Button>
+            {canAddDesignProduct ? (
+              <Button size="sm" onClick={openCreateDesignModal}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Custom Product
+              </Button>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -2004,7 +2180,8 @@ export default function DesignerDashboard() {
             </Button>
           </div>
 
-          <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+          {dashboardGovernance.sections.productsTable !== false ? (
+            <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -2073,7 +2250,7 @@ export default function DesignerDashboard() {
                         <td className="px-4 py-3 text-gray-600">{item.orderCount}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
-                            {item.productType !== 'READY_TO_WEAR' ? (
+                            {item.productType !== 'READY_TO_WEAR' && canEditDesignProduct ? (
                               <button
                                 onClick={() => openEditDesignModal(item as Design)}
                                 className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
@@ -2084,20 +2261,24 @@ export default function DesignerDashboard() {
                             ) : null}
                             {item.productType === 'READY_TO_WEAR' ? (
                               <>
-                                <button
-                                  onClick={() => openEditReadyModal(item as ReadyProduct)}
-                                  className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
-                                  title="Edit product"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => openReadyStockModal(item as ReadyProduct)}
-                                  className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-700"
-                                  title="Manage size stock"
-                                >
-                                  <Scissors className="h-4 w-4" />
-                                </button>
+                                {canEditReadyProduct ? (
+                                  <button
+                                    onClick={() => openEditReadyModal(item as ReadyProduct)}
+                                    className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
+                                    title="Edit product"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </button>
+                                ) : null}
+                                {canManageReadyStock ? (
+                                  <button
+                                    onClick={() => openReadyStockModal(item as ReadyProduct)}
+                                    className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-700"
+                                    title="Manage size stock"
+                                  >
+                                    <Scissors className="h-4 w-4" />
+                                  </button>
+                                ) : null}
                               </>
                             ) : null}
                             <Link
@@ -2122,11 +2303,17 @@ export default function DesignerDashboard() {
                 </tbody>
               </table>
             </div>
-          </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+              Products table is disabled by admin governance.
+            </div>
+          )}
         </div>
       )}
 
       {activeTab === 'featured' && (
+        dashboardGovernance.sections.featuredTable !== false ? (
         <DataTable
           title="Featured Products"
           columns={[
@@ -2182,9 +2369,14 @@ export default function DesignerDashboard() {
             </Button>
           )}
         />
+        ) : (
+          <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+            Featured table is disabled by admin governance.
+          </div>
+        )
       )}
 
-      {showReadyStockModal && selectedReadyProduct ? (
+      {showReadyStockModal && selectedReadyProduct && canManageReadyStock && dashboardGovernance.sections.readyStockModal !== false ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl">
             <h3 className="text-lg font-semibold text-gray-900">Manage Ready-To-Wear Size Stock</h3>
@@ -2240,7 +2432,7 @@ export default function DesignerDashboard() {
         </div>
       ) : null}
 
-      {showReadyModal ? (
+      {showReadyModal && (canAddReadyProduct || canEditReadyProduct) ? (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
           <div className="mx-auto w-full max-w-3xl rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -2259,6 +2451,7 @@ export default function DesignerDashboard() {
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, name: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                   placeholder="e.g. Ready-to-wear Kaftan"
+                  disabled={dashboardGovernance.fields.readyName === false}
                 />
               </div>
 
@@ -2269,6 +2462,7 @@ export default function DesignerDashboard() {
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, description: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg min-h-[90px]"
                   placeholder="Describe fit, cut, fabric, and styling details."
+                  disabled={dashboardGovernance.fields.readyDescription === false}
                 />
               </div>
 
@@ -2278,6 +2472,7 @@ export default function DesignerDashboard() {
                   value={readyForm.categoryId}
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, categoryId: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
+                  disabled={dashboardGovernance.fields.readyStyle === false}
                 >
                   {categories.length === 0 ? <option value="">No styles found</option> : null}
                   {categories.map((category) => (
@@ -2297,6 +2492,7 @@ export default function DesignerDashboard() {
                   value={readyForm.basePrice}
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, basePrice: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
+                  disabled={dashboardGovernance.fields.readyBasePrice === false}
                 />
                 <p className="mt-1 text-xs text-gray-500">Converted USD: ${readyUsdPricePreview.toFixed(2)}</p>
               </div>
@@ -2307,7 +2503,10 @@ export default function DesignerDashboard() {
                   value={readyForm.priceCurrencyCode}
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, priceCurrencyCode: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={(currencyOptions.allowedCurrencies || []).length <= 1}
+                  disabled={
+                    dashboardGovernance.fields.readyListingCurrency === false ||
+                    (currencyOptions.allowedCurrencies || []).length <= 1
+                  }
                 >
                   {(currencyOptions.allowedCurrencies || [currencyOptions.defaultCurrency || 'USD']).map((code) => (
                     <option key={code} value={code}>
@@ -2317,7 +2516,8 @@ export default function DesignerDashboard() {
                 </select>
               </div>
 
-              <div className="md:col-span-2">
+              {dashboardGovernance.fields.readyImages !== false ? (
+                <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Product Images (minimum 3, maximum 5)</label>
                 <div className="flex gap-2">
                   <input
@@ -2362,9 +2562,11 @@ export default function DesignerDashboard() {
                     ))}
                   </div>
                 ) : null}
-              </div>
+                </div>
+              ) : null}
 
-              <div className="md:col-span-2">
+              {dashboardGovernance.fields.readyVariants !== false ? (
+                <div className="md:col-span-2">
                 <div className="mb-2 flex items-center justify-between">
                   <label className="block text-sm font-medium text-gray-700">Variant Rows (Size + Color + Quantity)</label>
                   <Button variant="outline" size="sm" onClick={addReadyVariantRow}>
@@ -2388,6 +2590,7 @@ export default function DesignerDashboard() {
                             }))
                           }
                           className="w-full rounded-lg border px-3 py-2 text-sm"
+                          disabled={dashboardGovernance.fields.readyVariants === false}
                         >
                           {readySizeOptions.map((size) => (
                             <option key={size} value={size}>
@@ -2411,6 +2614,7 @@ export default function DesignerDashboard() {
                           }
                           placeholder="e.g. Black"
                           className="w-full rounded-lg border px-3 py-2 text-sm"
+                          disabled={dashboardGovernance.fields.readyVariants === false}
                         />
                       </div>
                       <div className="md:col-span-2">
@@ -2429,6 +2633,7 @@ export default function DesignerDashboard() {
                             }))
                           }
                           className="w-full rounded-lg border px-3 py-2 text-sm"
+                          disabled={dashboardGovernance.fields.readyVariants === false}
                         />
                       </div>
                       <div className="md:col-span-2">
@@ -2447,6 +2652,7 @@ export default function DesignerDashboard() {
                             }))
                           }
                           className="w-full rounded-lg border px-3 py-2 text-sm"
+                          disabled={dashboardGovernance.fields.readyVariants === false}
                         />
                       </div>
                       <div className="md:col-span-2 flex items-end justify-end">
@@ -2454,7 +2660,7 @@ export default function DesignerDashboard() {
                           variant="outline"
                           size="sm"
                           onClick={() => removeReadyVariantRow(index)}
-                          disabled={readyForm.variants.length <= 1}
+                          disabled={readyForm.variants.length <= 1 || dashboardGovernance.fields.readyVariants === false}
                         >
                           Remove
                         </Button>
@@ -2462,7 +2668,8 @@ export default function DesignerDashboard() {
                     </div>
                   ))}
                 </div>
-              </div>
+                </div>
+              ) : null}
             </div>
 
             {readyError ? (
@@ -2490,7 +2697,7 @@ export default function DesignerDashboard() {
         </div>
       ) : null}
 
-      {showDesignModal && (
+      {showDesignModal && (canAddDesignProduct || canEditDesignProduct) && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
           <div className="mx-auto w-full max-w-3xl rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -2509,6 +2716,7 @@ export default function DesignerDashboard() {
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, name: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                   placeholder="e.g. Royal Kente Evening Gown"
+                  disabled={dashboardGovernance.fields.designName === false}
                 />
               </div>
 
@@ -2519,6 +2727,7 @@ export default function DesignerDashboard() {
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, description: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg min-h-[90px]"
                   placeholder="Describe style, fit, silhouette, and special details."
+                  disabled={dashboardGovernance.fields.designDescription === false}
                 />
               </div>
 
@@ -2528,6 +2737,7 @@ export default function DesignerDashboard() {
                   value={designForm.categoryId}
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, categoryId: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
+                  disabled={dashboardGovernance.fields.designStyle === false}
                 >
                   {categories.length === 0 ? <option value="">No styles found</option> : null}
                   {categories.map((category) => (
@@ -2549,6 +2759,7 @@ export default function DesignerDashboard() {
                   value={designForm.basePrice}
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, basePrice: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
+                  disabled={dashboardGovernance.fields.designBasePrice === false}
                 />
                 <p className="mt-1 text-xs text-gray-500">Converted USD: ${usdPricePreview.toFixed(2)}</p>
               </div>
@@ -2559,7 +2770,10 @@ export default function DesignerDashboard() {
                   value={designForm.priceCurrencyCode}
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, priceCurrencyCode: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={(currencyOptions.allowedCurrencies || []).length <= 1}
+                  disabled={
+                    dashboardGovernance.fields.designListingCurrency === false ||
+                    (currencyOptions.allowedCurrencies || []).length <= 1
+                  }
                 >
                   {(currencyOptions.allowedCurrencies || [currencyOptions.defaultCurrency || 'USD']).map((code) => (
                     <option key={code} value={code}>
@@ -2569,7 +2783,8 @@ export default function DesignerDashboard() {
                 </select>
               </div>
 
-              <div className="md:col-span-2">
+              {dashboardGovernance.fields.designImages !== false ? (
+                <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Product Images (minimum 4, maximum 6)</label>
                 <div className="flex gap-2">
                   <input
@@ -2614,71 +2829,76 @@ export default function DesignerDashboard() {
                     ))}
                   </div>
                 ) : null}
-              </div>
+                </div>
+              ) : null}
 
-              <div className="md:col-span-2">
+              {dashboardGovernance.fields.designSuitableFabrics !== false ? (
+                <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Suitable Fabrics (country → material → fabric name)
                 </label>
                 <div className="rounded-lg border p-3 space-y-3">
-                  <div className="rounded border border-amber-100 bg-amber-50 p-3">
-                    <p className="text-xs text-amber-900">
-                      Home country: <span className="font-semibold">{fabricAccessHomeCountry || 'Not set'}</span>
-                    </p>
-                    <p className="mt-1 text-xs text-amber-800">
-                      Allowed countries: {fabricAccessAllowedCountries.join(', ') || 'None'}
-                    </p>
-                    {fabricAccessMessage ? (
-                      <p className="mt-1 text-xs text-amber-900">{fabricAccessMessage}</p>
-                    ) : null}
-                    <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto]">
-                      <select
-                        multiple
-                        value={fabricAccessRequestCountries}
-                        onChange={(event) =>
-                          setFabricAccessRequestCountries(
-                            Array.from(event.target.selectedOptions).map((option) => option.value)
-                          )
-                        }
-                        className="h-20 w-full rounded border px-2 py-1 text-xs"
-                        disabled={fabricAccessLoading}
-                      >
-                        {fabricAccessAvailableCountries
-                          .filter((country) => !fabricAccessAllowedCountries.includes(country))
-                          .map((country) => (
-                            <option key={`request-${country}`} value={country}>
-                              {country}
-                            </option>
-                          ))}
-                      </select>
-                      <input
-                        type="text"
-                        value={fabricAccessRequestReason}
-                        onChange={(event) => setFabricAccessRequestReason(event.target.value)}
-                        placeholder="Reason (optional)"
-                        className="rounded border px-2 py-1 text-xs"
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={submitFabricCountryAccessRequest}
-                        disabled={fabricAccessSubmitting || fabricAccessLoading}
-                      >
-                        {fabricAccessSubmitting ? 'Submitting...' : 'Request Access'}
-                      </Button>
-                    </div>
-                    {fabricAccessRequests.length > 0 ? (
-                      <div className="mt-2 space-y-1">
-                        {fabricAccessRequests.slice(0, 3).map((request) => (
-                          <p key={request.id} className="text-[11px] text-amber-900">
-                            {request.status}: {request.requestedCountries.join(', ')}
-                            {request.reviewNotes ? ` (${request.reviewNotes})` : ''}
-                          </p>
-                        ))}
+                  {dashboardGovernance.sections.fabricCountryAccess !== false ? (
+                    <div className="rounded border border-amber-100 bg-amber-50 p-3">
+                      <p className="text-xs text-amber-900">
+                        Home country: <span className="font-semibold">{fabricAccessHomeCountry || 'Not set'}</span>
+                      </p>
+                      <p className="mt-1 text-xs text-amber-800">
+                        Allowed countries: {fabricAccessAllowedCountries.join(', ') || 'None'}
+                      </p>
+                      {fabricAccessMessage ? (
+                        <p className="mt-1 text-xs text-amber-900">{fabricAccessMessage}</p>
+                      ) : null}
+                      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto]">
+                        <select
+                          multiple
+                          value={fabricAccessRequestCountries}
+                          onChange={(event) =>
+                            setFabricAccessRequestCountries(
+                              Array.from(event.target.selectedOptions).map((option) => option.value)
+                            )
+                          }
+                          className="h-20 w-full rounded border px-2 py-1 text-xs"
+                          disabled={fabricAccessLoading || !canRequestFabricCountryAccess}
+                        >
+                          {fabricAccessAvailableCountries
+                            .filter((country) => !fabricAccessAllowedCountries.includes(country))
+                            .map((country) => (
+                              <option key={`request-${country}`} value={country}>
+                                {country}
+                              </option>
+                            ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={fabricAccessRequestReason}
+                          onChange={(event) => setFabricAccessRequestReason(event.target.value)}
+                          placeholder="Reason (optional)"
+                          className="rounded border px-2 py-1 text-xs"
+                          disabled={!canRequestFabricCountryAccess}
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={submitFabricCountryAccessRequest}
+                          disabled={fabricAccessSubmitting || fabricAccessLoading || !canRequestFabricCountryAccess}
+                        >
+                          {fabricAccessSubmitting ? 'Submitting...' : 'Request Access'}
+                        </Button>
                       </div>
-                    ) : null}
-                  </div>
+                      {fabricAccessRequests.length > 0 ? (
+                        <div className="mt-2 space-y-1">
+                          {fabricAccessRequests.slice(0, 3).map((request) => (
+                            <p key={request.id} className="text-[11px] text-amber-900">
+                              {request.status}: {request.requestedCountries.join(', ')}
+                              {request.reviewNotes ? ` (${request.reviewNotes})` : ''}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                     <div>
@@ -2783,9 +3003,11 @@ export default function DesignerDashboard() {
                     )}
                   </div>
                 </div>
-              </div>
+                </div>
+              ) : null}
 
-              <div className="md:col-span-2">
+              {dashboardGovernance.fields.designMeasurementVariables !== false ? (
+                <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Measurement Fields (admin-defined templates)
                 </label>
@@ -2808,6 +3030,7 @@ export default function DesignerDashboard() {
                                 return { ...prev, selectedMeasurementNames: Array.from(new Set(next)) };
                               })
                             }
+                            disabled={dashboardGovernance.fields.designMeasurementVariables === false}
                           />
                           <span>
                             <span className="font-medium">{template.name}</span> ({template.unit})
@@ -2821,7 +3044,8 @@ export default function DesignerDashboard() {
                     })
                   )}
                 </div>
-              </div>
+                </div>
+              ) : null}
             </div>
 
             {designError ? (
@@ -2851,6 +3075,7 @@ export default function DesignerDashboard() {
       )}
 
       {activeTab === 'orders' && (
+        dashboardGovernance.sections.ordersTable !== false ? (
         <DataTable
           title="All Orders"
           columns={[
@@ -2887,7 +3112,7 @@ export default function DesignerDashboard() {
           searchKeys={['orderNumber', 'designName', 'customerName']}
           actions={(item) => (
             <div className="flex gap-2">
-              {['PENDING', 'PAYMENT_CONFIRMED', 'FABRIC_RECEIVED'].includes(item.status) && (
+              {canUpdateOrderStatus && ['PENDING', 'PAYMENT_CONFIRMED', 'FABRIC_RECEIVED'].includes(item.status) && (
                 <Button 
                   size="sm"
                   onClick={() => handleUpdateOrderStatus(item.orderId, 'IN_PRODUCTION')}
@@ -2895,7 +3120,7 @@ export default function DesignerDashboard() {
                   Start
                 </Button>
               )}
-              {item.status === 'IN_PRODUCTION' && (
+              {canUpdateOrderStatus && item.status === 'IN_PRODUCTION' && (
                 <Button 
                   size="sm"
                   onClick={() => handleUpdateOrderStatus(item.orderId, 'COMPLETED')}
@@ -2909,6 +3134,11 @@ export default function DesignerDashboard() {
             </div>
           )}
         />
+        ) : (
+          <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+            Orders table is disabled by admin governance.
+          </div>
+        )
       )}
     </div>
   );
