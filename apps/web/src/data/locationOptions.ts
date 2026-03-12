@@ -9,6 +9,11 @@ type CountryRow = {
   cities: string[];
 };
 
+type StateCityRow = {
+  name: string;
+  cities: string[];
+};
+
 const COUNTRY_ROWS: CountryRow[] = [
   { code: 'DZ', name: 'Algeria', cities: ['Algiers', 'Oran', 'Constantine'] },
   { code: 'AO', name: 'Angola', cities: ['Luanda', 'Huambo', 'Lobito'] },
@@ -97,7 +102,83 @@ const ALL_COUNTRIES: CountryOption[] = COUNTRY_ROWS.map((row) => ({ code: row.co
 const COUNTRY_BY_CODE = new Map(ALL_COUNTRIES.map((country) => [country.code, country]));
 const COUNTRY_BY_NAME = new Map(ALL_COUNTRIES.map((country) => [country.name.toLowerCase(), country]));
 const COUNTRY_CITIES_BY_CODE = new Map(COUNTRY_ROWS.map((row) => [row.code, row.cities]));
+const COUNTRY_STATES_BY_CODE = new Map<string, StateCityRow[]>([
+  [
+    'NG',
+    [
+      { name: 'Abuja (FCT)', cities: ['Abuja'] },
+      { name: 'Lagos', cities: ['Lagos', 'Ikeja'] },
+      { name: 'Kano', cities: ['Kano'] },
+      { name: 'Rivers', cities: ['Port Harcourt'] },
+    ],
+  ],
+  [
+    'GH',
+    [
+      { name: 'Greater Accra', cities: ['Accra', 'Tema'] },
+      { name: 'Ashanti', cities: ['Kumasi'] },
+      { name: 'Northern', cities: ['Tamale'] },
+    ],
+  ],
+  [
+    'KE',
+    [
+      { name: 'Nairobi County', cities: ['Nairobi'] },
+      { name: 'Mombasa County', cities: ['Mombasa'] },
+      { name: 'Kisumu County', cities: ['Kisumu'] },
+    ],
+  ],
+  [
+    'ZA',
+    [
+      { name: 'Gauteng', cities: ['Johannesburg', 'Pretoria'] },
+      { name: 'Western Cape', cities: ['Cape Town'] },
+      { name: 'KwaZulu-Natal', cities: ['Durban'] },
+    ],
+  ],
+  [
+    'US',
+    [
+      { name: 'New York', cities: ['New York'] },
+      { name: 'California', cities: ['Los Angeles'] },
+      { name: 'Illinois', cities: ['Chicago'] },
+    ],
+  ],
+  [
+    'GB',
+    [
+      { name: 'England', cities: ['London', 'Manchester', 'Birmingham'] },
+      { name: 'Scotland', cities: ['Edinburgh', 'Glasgow'] },
+      { name: 'Wales', cities: ['Cardiff'] },
+    ],
+  ],
+  [
+    'CA',
+    [
+      { name: 'Ontario', cities: ['Toronto', 'Ottawa'] },
+      { name: 'British Columbia', cities: ['Vancouver'] },
+      { name: 'Quebec', cities: ['Montreal'] },
+    ],
+  ],
+  [
+    'IN',
+    [
+      { name: 'Maharashtra', cities: ['Mumbai', 'Pune'] },
+      { name: 'Delhi', cities: ['Delhi', 'New Delhi'] },
+      { name: 'Karnataka', cities: ['Bengaluru'] },
+    ],
+  ],
+  [
+    'AE',
+    [
+      { name: 'Dubai', cities: ['Dubai'] },
+      { name: 'Abu Dhabi', cities: ['Abu Dhabi'] },
+      { name: 'Sharjah', cities: ['Sharjah'] },
+    ],
+  ],
+]);
 const CITY_CACHE = new Map<string, string[]>();
+const STATE_CACHE = new Map<string, string[]>();
 
 export function getCountryOptions() {
   return ALL_COUNTRIES;
@@ -130,4 +211,47 @@ export function getCityOptionsByCountryCode(countryCode: string | null | undefin
   const uniqueSorted = Array.from(new Set(cities)).sort((a, b) => a.localeCompare(b));
   CITY_CACHE.set(normalizedCode, uniqueSorted);
   return uniqueSorted;
+}
+
+export function getStateOptionsByCountryCode(countryCode: string | null | undefined) {
+  const normalizedCode = resolveCountryCode(countryCode);
+  if (!normalizedCode) return [];
+  const cached = STATE_CACHE.get(normalizedCode);
+  if (cached) return cached;
+
+  const explicitStates = COUNTRY_STATES_BY_CODE.get(normalizedCode) || [];
+  const derivedFallbackStates =
+    explicitStates.length > 0 ? explicitStates.map((entry) => entry.name) : getCityOptionsByCountryCode(normalizedCode);
+  const uniqueSorted = Array.from(new Set(derivedFallbackStates.map((row) => String(row || '').trim()).filter(Boolean))).sort(
+    (a, b) => a.localeCompare(b)
+  );
+  STATE_CACHE.set(normalizedCode, uniqueSorted);
+  return uniqueSorted;
+}
+
+export function getCityOptionsByCountryAndState(
+  countryCode: string | null | undefined,
+  stateName: string | null | undefined
+) {
+  const normalizedCode = resolveCountryCode(countryCode);
+  const normalizedState = String(stateName || '').trim().toLowerCase();
+  if (!normalizedCode) return [];
+
+  const states = COUNTRY_STATES_BY_CODE.get(normalizedCode) || [];
+  if (states.length === 0) {
+    return getCityOptionsByCountryCode(normalizedCode);
+  }
+
+  if (!normalizedState) {
+    const allCities = states.flatMap((entry) => entry.cities || []);
+    return Array.from(new Set(allCities.map((row) => String(row || '').trim()).filter(Boolean))).sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }
+
+  const matchedState = states.find((entry) => String(entry.name || '').trim().toLowerCase() === normalizedState);
+  if (!matchedState) return [];
+  return Array.from(new Set((matchedState.cities || []).map((row) => String(row || '').trim()).filter(Boolean))).sort(
+    (a, b) => a.localeCompare(b)
+  );
 }

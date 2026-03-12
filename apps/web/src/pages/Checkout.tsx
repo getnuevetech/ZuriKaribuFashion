@@ -17,7 +17,12 @@ import {
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import { useCurrencyStore } from '../store/currencyStore';
-import { getCityOptionsByCountryCode, getCountryOptions, resolveCountryCode } from '../data/locationOptions';
+import {
+  getCityOptionsByCountryAndState,
+  getCountryOptions,
+  getStateOptionsByCountryCode,
+  resolveCountryCode,
+} from '../data/locationOptions';
 import { api } from '../services/api';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -112,7 +117,14 @@ export default function Checkout() {
   });
   const countryOptions = getCountryOptions();
   const shippingCountryCode = resolveCountryCode(shippingAddress.country);
-  const cityOptions = getCityOptionsByCountryCode(shippingCountryCode);
+  const stateOptions = getStateOptionsByCountryCode(shippingCountryCode);
+  const cityOptions = getCityOptionsByCountryAndState(shippingCountryCode, shippingAddress.state);
+  const selectableStateOptions = Array.from(
+    new Set([shippingAddress.state, ...stateOptions].map((value) => String(value || '').trim()).filter(Boolean))
+  );
+  const selectableCityOptions = Array.from(
+    new Set([shippingAddress.city, ...cityOptions].map((value) => String(value || '').trim()).filter(Boolean))
+  );
 
   const fallbackShipping = totalPrice > 200 ? 0 : 25;
   const selectedShippingQuote =
@@ -819,6 +831,7 @@ export default function Checkout() {
                         setShippingAddress((prev) => ({
                           ...prev,
                           country: e.target.value,
+                          state: '',
                           city: '',
                         }))
                       }
@@ -835,19 +848,25 @@ export default function Checkout() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      City *
+                      State/Province *
                     </label>
                     <select
                       required
-                      value={shippingAddress.city}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, city: e.target.value }))}
+                      value={shippingAddress.state}
+                      onChange={(e) =>
+                        setShippingAddress((prev) => ({
+                          ...prev,
+                          state: e.target.value,
+                          city: '',
+                        }))
+                      }
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                       disabled={!shippingAddress.country}
                     >
-                      <option value="">{shippingAddress.country ? 'Select city' : 'Select country first'}</option>
-                      {cityOptions.map((city) => (
-                        <option key={city} value={city}>
-                          {city}
+                      <option value="">{shippingAddress.country ? 'Select state/province' : 'Select country first'}</option>
+                      {selectableStateOptions.map((state) => (
+                        <option key={state} value={state}>
+                          {state}
                         </option>
                       ))}
                     </select>
@@ -888,15 +907,28 @@ export default function Checkout() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      State/Province *
+                      City *
                     </label>
-                    <input
-                      type="text"
+                    <select
                       required
-                      value={shippingAddress.state}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, state: e.target.value }))}
+                      value={shippingAddress.city}
+                      onChange={(e) => setShippingAddress(prev => ({ ...prev, city: e.target.value }))}
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    />
+                      disabled={!shippingAddress.country || !shippingAddress.state}
+                    >
+                      <option value="">
+                        {!shippingAddress.country
+                          ? 'Select country first'
+                          : !shippingAddress.state
+                            ? 'Select state first'
+                            : 'Select city'}
+                      </option>
+                      {selectableCityOptions.map((city) => (
+                        <option key={city} value={city}>
+                          {city}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
