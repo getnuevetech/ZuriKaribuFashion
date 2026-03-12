@@ -32,6 +32,13 @@ const PROBE_DEFINITIONS: ProbeDefinition[] = [
   { label: 'Stripe create-intent (canonical)', method: 'POST', path: '/payments/create-intent', payload: {} },
   { label: 'Stripe create-intent (intent/create alias)', method: 'POST', path: '/payments/intent/create', payload: {} },
   { label: 'Stripe create-intent (payment alias)', method: 'POST', path: '/payment/create-intent', payload: {} },
+  { label: 'Order create custom (canonical)', method: 'POST', path: '/orders/custom-design', payload: {} },
+  { label: 'Order create custom (legacy alias)', method: 'POST', path: '/order/custom-order', payload: {} },
+  { label: 'Order create ready (canonical)', method: 'POST', path: '/orders/ready-to-wear', payload: {} },
+  { label: 'Order create ready (legacy alias)', method: 'POST', path: '/order/ready', payload: {} },
+  { label: 'Order create fabric (canonical)', method: 'POST', path: '/orders/fabric-only', payload: {} },
+  { label: 'Order create fabric (legacy alias)', method: 'POST', path: '/order/fabric-order', payload: {} },
+  { label: 'Order create fabric (customer alias)', method: 'POST', path: '/customer/orders/fabric-only', payload: {} },
 ];
 
 const parseResponseMessage = (payload: unknown) => {
