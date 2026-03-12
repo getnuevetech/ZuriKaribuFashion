@@ -130,6 +130,7 @@ const CRITICAL_ROUTE_PATHS = [
 const ROUTE_MOUNTS = [
   '/api/orders',
   '/api/order',
+  '/api/customer/orders',
   '/api/payments',
   '/api/payment',
   '/api/promotions',
@@ -195,6 +196,7 @@ app.use('/api/customer', customerRoutes);
 app.use('/api/qa', qaRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/order', orderRoutes);
+app.use('/api/customer/orders', orderRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/banners', bannerRoutes);
