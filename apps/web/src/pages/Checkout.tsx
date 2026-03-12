@@ -411,11 +411,16 @@ export default function Checkout() {
       if (shippingQuotes.length > 0 && !selectedShippingQuote) {
         throw new Error('Please select a shipping option to continue.');
       }
+      const normalizedTotalUsd = Number(Number(finalTotal || 0).toFixed(2));
+      if (!Number.isFinite(normalizedTotalUsd) || normalizedTotalUsd <= 0) {
+        throw new Error('Checkout total must be greater than 0 to initialize payment.');
+      }
       const providerKey = selectedProvider?.providerKey || 'STRIPE';
       const response = await api.payments.createPaymentSession({
         providerKey,
-        amount: Math.round(finalTotal * 100), // Convert to cents
-        currency: 'usd',
+        amount: Math.round(normalizedTotalUsd * 100), // Convert to cents
+        amountUsd: normalizedTotalUsd,
+        currency: 'USD',
         returnUrl: `${window.location.origin}/checkout?payment_provider=${providerKey}`,
         cancelUrl: `${window.location.origin}/checkout?payment_provider=${providerKey}&payment_cancelled=true`,
         customer: {

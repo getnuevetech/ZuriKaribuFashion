@@ -1928,15 +1928,47 @@ async function createPaymentSessionWithFallback<T>(data: {
   cancelUrl?: string;
   customer?: { email?: string; name?: string; phone?: string };
 }) {
+  const providedAmountMinor = Number(data.amount);
+  const providedAmountUsd = Number(data.amountUsd);
+  const normalizedAmountMinor =
+    Number.isFinite(providedAmountMinor) && providedAmountMinor > 0
+      ? Math.round(providedAmountMinor)
+      : Number.isFinite(providedAmountUsd) && providedAmountUsd > 0
+        ? Math.round(providedAmountUsd * 100)
+        : 0;
+  const normalizedAmountUsd =
+    Number.isFinite(providedAmountUsd) && providedAmountUsd > 0
+      ? Number(providedAmountUsd.toFixed(2))
+      : normalizedAmountMinor > 0
+        ? Number((normalizedAmountMinor / 100).toFixed(2))
+        : 0;
+  const payload = {
+    ...data,
+    amount: normalizedAmountMinor,
+    amountUsd: normalizedAmountUsd,
+  };
   try {
-    return await apiService.post<T>('/payments/create-session', {
-      ...data,
-      amountUsd:
-        Number.isFinite(Number(data.amountUsd)) && Number(data.amountUsd) > 0
-          ? Number(data.amountUsd)
-          : Number((Number(data.amount || 0) / 100).toFixed(2)),
-    });
+    return await apiService.post<T>('/payments/create-session', payload);
   } catch (error) {
+    const message = String((error as AxiosError)?.response?.data?.message || '').toLowerCase();
+    if (
+      (error as AxiosError)?.response?.status === 400 &&
+      message.includes('amountusd') &&
+      message.includes('required') &&
+      payload.amount > 0
+    ) {
+      // Some legacy deployments reject mixed payloads; retry with an explicit amountUsd-first body.
+      return await apiService.post<T>('/payments/create-session', {
+        providerKey: data.providerKey,
+        amountUsd: payload.amountUsd,
+        amount: payload.amount,
+        currency: data.currency,
+        reference: data.reference,
+        returnUrl: data.returnUrl,
+        cancelUrl: data.cancelUrl,
+        customer: data.customer,
+      });
+    }
     if (!isRetryableRouteError(error)) throw error;
     const providerKey = normalizePaymentProviderKey(data.providerKey);
     if (providerKey === 'STRIPE') {
