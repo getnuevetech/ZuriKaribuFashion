@@ -47,11 +47,13 @@ type CategoryPageSettings = {
   rotatingProductIds: string[];
   rotatingColumns: number;
   rotatingRows: number;
+  rotatingTitleSize: number;
 };
 
 type FeaturedProduct = {
   id: string;
   name: string;
+  description?: string;
   image: string;
   priceUsd: number;
   country: string;
@@ -71,6 +73,7 @@ const DEFAULT_SETTINGS: CategoryPageSettings = {
   rotatingProductIds: [],
   rotatingColumns: 2,
   rotatingRows: 1,
+  rotatingTitleSize: 32,
 };
 
 const COMMON_SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
@@ -281,6 +284,7 @@ export default function ReadyToWear() {
           rotatingProductIds: Array.isArray(nextSettings.rotatingProductIds) ? nextSettings.rotatingProductIds : [],
           rotatingColumns: Number(nextSettings.rotatingColumns || DEFAULT_SETTINGS.rotatingColumns),
           rotatingRows: Number(nextSettings.rotatingRows || DEFAULT_SETTINGS.rotatingRows),
+          rotatingTitleSize: Number(nextSettings.rotatingTitleSize || DEFAULT_SETTINGS.rotatingTitleSize),
         });
         const nextFeaturedProducts = Array.isArray(response.data.featuredProducts) ? response.data.featuredProducts : [];
         const nextRotatingPool = Array.isArray(response.data.rotatingProducts) ? response.data.rotatingProducts : [];
@@ -513,49 +517,27 @@ export default function ReadyToWear() {
                           className="absolute left-3 top-3 h-6 w-9 rounded-sm object-cover shadow"
                         />
                       ) : null}
-                    </div>
-                    <div className="p-4">
-                      <h2 className="text-2xl font-semibold text-gray-900">{product.name}</h2>
-                      <p className="text-gray-500 text-sm">{product.ownerName}</p>
-                      <p className="mt-2 text-xl font-semibold text-gray-900">{formatFromUsd(Number(product.priceUsd || 0))}</p>
-                      <span className="inline-flex mt-3 bg-black text-white text-xs px-3 py-2">VIEW PRODUCT</span>
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/65 to-transparent p-4 text-white">
+                        <h2
+                          className="font-semibold leading-tight"
+                          style={{
+                            fontSize: `${Math.max(16, Math.min(64, Number(settings.rotatingTitleSize || DEFAULT_SETTINGS.rotatingTitleSize)))}px`,
+                          }}
+                        >
+                          {product.name}
+                        </h2>
+                        {product.description ? (
+                          <p className="mt-2 line-clamp-2 text-sm text-white/90">{product.description}</p>
+                        ) : null}
+                        <p className="mt-2 text-xs text-white/90">{product.ownerName}</p>
+                        <p className="mt-1 text-base font-semibold">{formatFromUsd(Number(product.priceUsd || 0))}</p>
+                        <span className="mt-3 inline-flex bg-white px-3 py-1.5 text-xs font-semibold text-black">VIEW PRODUCT</span>
+                      </div>
                     </div>
                   </Link>
                 );
               })}
             </div>
-          </div>
-        ) : null}
-
-        {featuredProducts.length > 0 ? (
-          <div className={featuredGridClass}>
-            {featuredProducts.slice(0, 3).map((product) => {
-              const flagCode = resolveCountryCode(product.country || '');
-              return (
-                <Link key={product.id} to={product.href} className="group bg-white border border-gray-200 overflow-hidden">
-                  <div className="relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
-                    <img
-                      src={product.image || '/placeholder.jpg'}
-                      alt={product.name}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                    {flagCode ? (
-                      <img
-                        src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
-                        alt={`${product.country || 'Country'} flag`}
-                        className="absolute left-3 top-3 h-6 w-9 rounded-sm object-cover shadow"
-                      />
-                    ) : null}
-                  </div>
-                  <div className="p-4">
-                    <h2 className="text-2xl font-semibold text-gray-900">{product.name}</h2>
-                    <p className="text-gray-500 text-sm">{product.ownerName}</p>
-                    <p className="mt-2 text-xl font-semibold text-gray-900">{formatFromUsd(Number(product.priceUsd || 0))}</p>
-                    <span className="inline-flex mt-3 bg-black text-white text-xs px-3 py-2">VIEW PRODUCT</span>
-                  </div>
-                </Link>
-              );
-            })}
           </div>
         ) : null}
 
@@ -649,6 +631,38 @@ export default function ReadyToWear() {
             ) : null}
           </>
         )}
+
+        {featuredProducts.length > 0 ? (
+          <div className={featuredGridClass}>
+            {featuredProducts.slice(0, 3).map((product) => {
+              const flagCode = resolveCountryCode(product.country || '');
+              return (
+                <Link key={product.id} to={product.href} className="group bg-white border border-gray-200 overflow-hidden">
+                  <div className="relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
+                    <img
+                      src={product.image || '/placeholder.jpg'}
+                      alt={product.name}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    {flagCode ? (
+                      <img
+                        src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
+                        alt={`${product.country || 'Country'} flag`}
+                        className="absolute left-3 top-3 h-6 w-9 rounded-sm object-cover shadow"
+                      />
+                    ) : null}
+                  </div>
+                  <div className="p-4">
+                    <h2 className="text-2xl font-semibold text-gray-900">{product.name}</h2>
+                    <p className="text-gray-500 text-sm">{product.ownerName}</p>
+                    <p className="mt-2 text-xl font-semibold text-gray-900">{formatFromUsd(Number(product.priceUsd || 0))}</p>
+                    <span className="inline-flex mt-3 bg-black text-white text-xs px-3 py-2">VIEW PRODUCT</span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
     </div>
   );

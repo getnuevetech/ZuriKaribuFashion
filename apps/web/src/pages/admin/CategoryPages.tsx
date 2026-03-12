@@ -17,6 +17,7 @@ type CategoryPageSettingsForm = {
   rotatingProductIds: string[];
   rotatingColumns: number;
   rotatingRows: number;
+  rotatingTitleSize: number;
 };
 
 type ProductOption = {
@@ -50,6 +51,7 @@ const emptySettings: CategoryPageSettingsForm = {
   rotatingProductIds: [],
   rotatingColumns: 2,
   rotatingRows: 1,
+  rotatingTitleSize: 32,
 };
 const normalizeFeaturedSlots = (input: unknown) => {
   const rows = Array.isArray(input) ? input : [];
@@ -140,6 +142,7 @@ export default function AdminCategoryPages() {
             : [],
           rotatingColumns: Number(nextSettings.rotatingColumns || 2),
           rotatingRows: Number(nextSettings.rotatingRows || 1),
+          rotatingTitleSize: Number(nextSettings.rotatingTitleSize || 32),
         });
       }
       await loadOptions(optionSearch);
@@ -175,6 +178,7 @@ export default function AdminCategoryPages() {
         ).slice(0, 24),
         rotatingColumns: Math.max(1, Math.min(6, Math.round(Number(settings.rotatingColumns || 2)))),
         rotatingRows: Math.max(1, Math.min(6, Math.round(Number(settings.rotatingRows || 1)))),
+        rotatingTitleSize: Math.max(16, Math.min(64, Math.round(Number(settings.rotatingTitleSize || 32)))),
       });
       if (response.success && response.data?.settings) {
         setSettings({
@@ -199,6 +203,7 @@ export default function AdminCategoryPages() {
             : [],
           rotatingColumns: Number(response.data.settings.rotatingColumns || 2),
           rotatingRows: Number(response.data.settings.rotatingRows || 1),
+          rotatingTitleSize: Number(response.data.settings.rotatingTitleSize || 32),
         });
       }
       setMessage('Category page settings saved.');
@@ -495,6 +500,22 @@ export default function AdminCategoryPages() {
                         setSettings((prev) => ({
                           ...prev,
                           rotatingRows: Number.parseInt(event.target.value || '1', 10) || 1,
+                        }))
+                      }
+                      className="w-full rounded-md border px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm space-y-1 md:col-span-2">
+                    <span className="text-gray-700">Rotating product title text size (px)</span>
+                    <input
+                      type="number"
+                      min={16}
+                      max={64}
+                      value={settings.rotatingTitleSize}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          rotatingTitleSize: Number.parseInt(event.target.value || '32', 10) || 32,
                         }))
                       }
                       className="w-full rounded-md border px-3 py-2"

@@ -8,6 +8,7 @@ export type CategoryPageType = (typeof CATEGORY_PAGE_TYPES)[number];
 export type CategoryPageProductPreview = {
   id: string;
   name: string;
+  description: string | undefined;
   image: string;
   priceUsd: number;
   country: string;
@@ -18,6 +19,7 @@ export type CategoryPageProductPreview = {
 export type CategoryPageProductOption = {
   id: string;
   name: string;
+  description: string | undefined;
   ownerName: string;
   country: string;
   priceUsd: number;
@@ -44,6 +46,7 @@ const categoryPageSettingsSchema = z.object({
   rotatingProductIds: z.array(z.string().trim().min(1)).max(24),
   rotatingColumns: z.number().int().min(1).max(6),
   rotatingRows: z.number().int().min(1).max(6),
+  rotatingTitleSize: z.number().int().min(16).max(64),
 });
 
 const categoryPageSettingsPatchSchema = categoryPageSettingsSchema.partial();
@@ -68,6 +71,7 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     rotatingProductIds: [],
     rotatingColumns: 2,
     rotatingRows: 1,
+    rotatingTitleSize: 32,
   },
   FABRIC_TO_BUY: {
     bannerTitle: 'Fabrics To Buy',
@@ -86,6 +90,7 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     rotatingProductIds: [],
     rotatingColumns: 2,
     rotatingRows: 1,
+    rotatingTitleSize: 32,
   },
   CUSTOM_TO_WEAR: {
     bannerTitle: 'Custom To Wear',
@@ -104,6 +109,7 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     rotatingProductIds: [],
     rotatingColumns: 2,
     rotatingRows: 1,
+    rotatingTitleSize: 32,
   },
 };
 
@@ -195,6 +201,9 @@ const normalizeCategoryPageSettings = (pageType: CategoryPageType, raw: unknown)
     rotatingRows: Number.isFinite(Number(row.rotatingRows))
       ? Math.max(1, Math.min(6, Math.round(Number(row.rotatingRows))))
       : fallback.rotatingRows,
+    rotatingTitleSize: Number.isFinite(Number(row.rotatingTitleSize))
+      ? Math.max(16, Math.min(64, Math.round(Number(row.rotatingTitleSize))))
+      : fallback.rotatingTitleSize,
   });
   return parsed.success ? parsed.data : { ...fallback };
 };
@@ -318,6 +327,7 @@ export async function readCategoryFeaturedProducts(
           {
             id: row.id,
             name: row.name,
+            description: String((row as any).description || '').trim() || undefined,
             image: pickFirstImage(row.images),
             priceUsd,
             country: String(row.designer?.country || ''),
@@ -344,6 +354,7 @@ export async function readCategoryFeaturedProducts(
         {
           id: row.id,
           name: row.name,
+          description: String((row as any).description || '').trim() || undefined,
           image: pickFirstImage(row.images),
           priceUsd: Number((row as any).finalPrice || (row as any).sellerPrice || 0),
           country: String(row.seller?.country || ''),
@@ -368,6 +379,7 @@ export async function readCategoryFeaturedProducts(
       {
         id: row.id,
         name: row.name,
+        description: String((row as any).description || '').trim() || undefined,
         image: pickFirstImage(row.images),
         priceUsd: Number((row as any).finalPrice || row.basePrice || 0),
         country: String(row.designer?.country || ''),
@@ -415,6 +427,7 @@ export async function listCategoryPageProductOptions(
       return {
         id: row.id,
         name: row.name,
+        description: String((row as any).description || '').trim() || undefined,
         ownerName: String(row.designer?.businessName || 'Designer'),
         country: String(row.designer?.country || ''),
         priceUsd: variationPrices.length > 0 ? Math.min(...variationPrices) : Number(row.basePrice || 0),
@@ -447,6 +460,7 @@ export async function listCategoryPageProductOptions(
     return rows.map((row) => ({
       id: row.id,
       name: row.name,
+      description: String((row as any).description || '').trim() || undefined,
       ownerName: String(row.seller?.businessName || 'Seller'),
       country: String(row.seller?.country || ''),
       priceUsd: Number((row as any).finalPrice || (row as any).sellerPrice || 0),
@@ -477,6 +491,7 @@ export async function listCategoryPageProductOptions(
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
+    description: String((row as any).description || '').trim() || undefined,
     ownerName: String(row.designer?.businessName || 'Designer'),
     country: String(row.designer?.country || ''),
     priceUsd: Number((row as any).finalPrice || row.basePrice || 0),

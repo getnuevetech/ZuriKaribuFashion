@@ -994,6 +994,7 @@ const defaultCategoryPageSettings = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY'
   rotatingProductIds: [] as string[],
   rotatingColumns: 2,
   rotatingRows: 1,
+  rotatingTitleSize: 32,
 });
 
 const resolveActiveFeaturedIdsFromSettings = (settings: any) => {
@@ -1021,6 +1022,7 @@ const optionToPreview = (
 ) => ({
   id: String(option?.id || ''),
   name: String(option?.name || '').trim() || 'Product',
+  description: String(option?.description || '').trim() || undefined,
   image: String(option?.image || '').trim(),
   priceUsd: Number(option?.priceUsd || 0),
   country: String(option?.country || '').trim(),
@@ -1161,11 +1163,15 @@ async function readAdminCategoryPageSettingsWithFallback<T>(pageType: 'READY_TO_
     }
   }
   if (!isRetryableRouteError(lastError)) throw lastError;
+  const fallbackSettings = {
+    ...defaultCategoryPageSettings(pageType),
+    ...(readCategoryPageSettingsFallback(pageType) || {}),
+  };
   return {
     success: true,
     data: {
       pageType,
-      settings: readCategoryPageSettingsFallback(pageType) || defaultCategoryPageSettings(pageType),
+      settings: fallbackSettings,
       featuredProducts: [],
       rotatingProducts: [],
     },
@@ -1191,7 +1197,10 @@ async function writeAdminCategoryPageSettingsWithFallback<T>(
     }
   }
   if (!isRetryableRouteError(lastError)) throw lastError;
-  const current = readCategoryPageSettingsFallback(pageType) || {};
+  const current = {
+    ...defaultCategoryPageSettings(pageType),
+    ...(readCategoryPageSettingsFallback(pageType) || {}),
+  };
   const settings = { ...current, ...(data || {}) };
   writeCategoryPageSettingsFallback(pageType, settings);
   return {
@@ -3698,10 +3707,12 @@ const productsApi = {
           rotatingProductIds: string[];
           rotatingColumns: number;
           rotatingRows: number;
+          rotatingTitleSize: number;
         };
         featuredProducts: Array<{
           id: string;
           name: string;
+          description?: string;
           image: string;
           priceUsd: number;
           country: string;
@@ -3711,6 +3722,7 @@ const productsApi = {
         rotatingProducts: Array<{
           id: string;
           name: string;
+          description?: string;
           image: string;
           priceUsd: number;
           country: string;
@@ -4998,10 +5010,12 @@ const adminApi = {
           rotatingProductIds: string[];
           rotatingColumns: number;
           rotatingRows: number;
+          rotatingTitleSize: number;
         };
         featuredProducts: Array<{
           id: string;
           name: string;
+          description?: string;
           image: string;
           priceUsd: number;
           country: string;
@@ -5011,6 +5025,7 @@ const adminApi = {
         rotatingProducts: Array<{
           id: string;
           name: string;
+          description?: string;
           image: string;
           priceUsd: number;
           country: string;
@@ -5036,6 +5051,7 @@ const adminApi = {
       rotatingProductIds: string[];
       rotatingColumns: number;
       rotatingRows: number;
+      rotatingTitleSize: number;
     }>
   ) =>
     writeAdminCategoryPageSettingsWithFallback<{
@@ -5055,10 +5071,12 @@ const adminApi = {
           rotatingProductIds: string[];
           rotatingColumns: number;
           rotatingRows: number;
+          rotatingTitleSize: number;
         };
         featuredProducts: Array<{
           id: string;
           name: string;
+          description?: string;
           image: string;
           priceUsd: number;
           country: string;
@@ -5068,6 +5086,7 @@ const adminApi = {
         rotatingProducts: Array<{
           id: string;
           name: string;
+          description?: string;
           image: string;
           priceUsd: number;
           country: string;
@@ -5087,6 +5106,7 @@ const adminApi = {
       data: Array<{
         id: string;
         name: string;
+        description?: string;
         ownerName: string;
         country: string;
         priceUsd: number;
