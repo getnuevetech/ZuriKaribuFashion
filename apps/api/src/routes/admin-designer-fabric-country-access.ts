@@ -188,7 +188,7 @@ router.put('/:designerUserId', async (req, res, next) => {
   }
 });
 
-router.get('/requests/list', async (req, res, next) => {
+const handleListRequests = async (req: any, res: any, next: any) => {
   try {
     const query = z
       .object({
@@ -301,9 +301,13 @@ router.get('/requests/list', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
 
-router.patch('/requests/:requestId/review', async (req, res, next) => {
+router.get('/requests/list', handleListRequests);
+router.get('/requests', handleListRequests);
+router.get('/request/list', handleListRequests);
+
+const handleReviewRequest = async (req: any, res: any, next: any) => {
   try {
     const requestId = String(req.params.requestId || '').trim();
     const payload = z
@@ -388,7 +392,12 @@ router.patch('/requests/:requestId/review', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
+
+router.patch('/requests/:requestId/review', handleReviewRequest);
+router.patch('/requests/:requestId', handleReviewRequest);
+router.put('/requests/:requestId/review', handleReviewRequest);
+router.put('/requests/:requestId', handleReviewRequest);
 
 export default router;
 

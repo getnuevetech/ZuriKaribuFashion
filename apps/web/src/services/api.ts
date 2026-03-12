@@ -733,32 +733,40 @@ const writeDesignerFabricAccessRequestsFallback = (value: DesignerFabricAccessFa
 };
 
 async function readAdminDesignerFabricCountryAccessWithFallback<T>(params?: { search?: string }) {
-  try {
-    const response = await apiService.get<any>('/admin/designer-fabric-country-access', {
-      params: { ...(params || {}), _r: Date.now() },
-    });
-    const designers = Array.isArray(response?.data?.designers) ? response.data.designers : [];
-    const map: Record<string, string[]> = {};
-    for (const row of designers) {
-      const userId = String(row?.designerUserId || '').trim();
-      if (!userId) continue;
-      map[userId] = dedupeCountryList(row?.extraCountries);
+  let lastError: unknown = null;
+  for (const path of [
+    '/admin/designer-fabric-country-access',
+    '/admin/designer/fabric-country-access',
+    '/admin/designer-fabric-access',
+  ]) {
+    try {
+      const response = await apiService.get<any>(path, {
+        params: { ...(params || {}), _r: Date.now() },
+      });
+      const designers = Array.isArray(response?.data?.designers) ? response.data.designers : [];
+      const map: Record<string, string[]> = {};
+      for (const row of designers) {
+        const userId = String(row?.designerUserId || '').trim();
+        if (!userId) continue;
+        map[userId] = dedupeCountryList(row?.extraCountries);
+      }
+      writeDesignerFabricAccessFallbackMap(map);
+      const serverAvailableCountries = Array.isArray(response?.data?.availableCountries)
+        ? response.data.availableCountries
+        : [];
+      return {
+        ...(response || {}),
+        success: response?.success !== false,
+        data: {
+          ...(response?.data || {}),
+          designers,
+          availableCountries: dedupeCountryList([...serverAvailableCountries, ...STATIC_COUNTRY_NAMES]),
+        },
+      } as T;
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableRouteError(error)) throw error;
     }
-    writeDesignerFabricAccessFallbackMap(map);
-    const serverAvailableCountries = Array.isArray(response?.data?.availableCountries)
-      ? response.data.availableCountries
-      : [];
-    return {
-      ...(response || {}),
-      success: response?.success !== false,
-      data: {
-        ...(response?.data || {}),
-        designers,
-        availableCountries: dedupeCountryList([...serverAvailableCountries, ...STATIC_COUNTRY_NAMES]),
-      },
-    } as T;
-  } catch (error) {
-    if (!isRetryableRouteError(error)) throw error;
   }
 
   const fallbackMap = readDesignerFabricAccessFallbackMap();
@@ -818,19 +826,25 @@ async function writeAdminDesignerFabricCountryAccessWithFallback<T>(designerUser
   const normalizedUserId = String(designerUserId || '').trim();
   const normalizedExtraCountries = dedupeCountryList(extraCountries);
   let lastError: unknown = null;
-  try {
-    const response = await apiService.put<any>(`/admin/designer-fabric-country-access/${normalizedUserId}`, {
-      extraCountries: normalizedExtraCountries,
-    });
-    const nextMap = {
-      ...readDesignerFabricAccessFallbackMap(),
-      [normalizedUserId]: dedupeCountryList(response?.data?.extraCountries || normalizedExtraCountries),
-    };
-    writeDesignerFabricAccessFallbackMap(nextMap);
-    return response as T;
-  } catch (error) {
-    lastError = error;
-    if (!isRetryableRouteError(error)) throw error;
+  for (const path of [
+    `/admin/designer-fabric-country-access/${normalizedUserId}`,
+    `/admin/designer/fabric-country-access/${normalizedUserId}`,
+    `/admin/designer-fabric-access/${normalizedUserId}`,
+  ]) {
+    try {
+      const response = await apiService.put<any>(path, {
+        extraCountries: normalizedExtraCountries,
+      });
+      const nextMap = {
+        ...readDesignerFabricAccessFallbackMap(),
+        [normalizedUserId]: dedupeCountryList(response?.data?.extraCountries || normalizedExtraCountries),
+      };
+      writeDesignerFabricAccessFallbackMap(nextMap);
+      return response as T;
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableRouteError(error)) throw error;
+    }
   }
   throw lastError ?? new Error('Designer fabric country access route not available.');
 }
@@ -842,25 +856,34 @@ async function readAdminDesignerFabricCountryAccessRequestsWithFallback<T>(param
   limit?: number;
 }) {
   let lastError: unknown = null;
-  try {
-    const response = await apiService.get<any>('/admin/designer-fabric-country-access/requests/list', {
-      params: { ...(params || {}), _r: Date.now() },
-    });
-    const rows = Array.isArray(response?.data) ? response.data : [];
-    writeDesignerFabricAccessRequestsFallback(rows);
-    return {
-      ...(response || {}),
-      data: rows,
-      pagination: response?.pagination || {
-        page: Math.max(1, Number(params?.page || 1)),
-        limit: Math.max(1, Math.min(100, Number(params?.limit || 20))),
-        total: rows.length,
-        pages: Math.max(1, Math.ceil(rows.length / Math.max(1, Math.min(100, Number(params?.limit || 20))))),
-      },
-    } as T;
-  } catch (error) {
-    lastError = error;
-    if (!isRetryableRouteError(error)) throw error;
+  for (const path of [
+    '/admin/designer-fabric-country-access/requests/list',
+    '/admin/designer-fabric-country-access/requests',
+    '/admin/designer/fabric-country-access/requests/list',
+    '/admin/designer/fabric-country-access/requests',
+    '/admin/designer-fabric-access/requests/list',
+    '/admin/designer-fabric-access/requests',
+  ]) {
+    try {
+      const response = await apiService.get<any>(path, {
+        params: { ...(params || {}), _r: Date.now() },
+      });
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      writeDesignerFabricAccessRequestsFallback(rows);
+      return {
+        ...(response || {}),
+        data: rows,
+        pagination: response?.pagination || {
+          page: Math.max(1, Number(params?.page || 1)),
+          limit: Math.max(1, Math.min(100, Number(params?.limit || 20))),
+          total: rows.length,
+          pages: Math.max(1, Math.ceil(rows.length / Math.max(1, Math.min(100, Number(params?.limit || 20))))),
+        },
+      } as T;
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableRouteError(error)) throw error;
+    }
   }
   throw lastError ?? new Error('Country access requests route not available.');
 }
@@ -870,15 +893,28 @@ async function reviewAdminDesignerFabricCountryAccessRequestWithFallback<T>(
   payload: { status: 'APPROVED' | 'REJECTED'; reviewNotes?: string; grantedCountries?: string[] }
 ) {
   let lastError: unknown = null;
-  try {
-    const response = await apiService.patch<any>(
-      `/admin/designer-fabric-country-access/requests/${encodeURIComponent(requestId)}/review`,
-      payload
-    );
-    return response as T;
-  } catch (error) {
-    lastError = error;
-    if (!isRetryableRouteError(error)) throw error;
+  for (const path of [
+    `/admin/designer-fabric-country-access/requests/${encodeURIComponent(requestId)}/review`,
+    `/admin/designer-fabric-country-access/requests/${encodeURIComponent(requestId)}`,
+    `/admin/designer/fabric-country-access/requests/${encodeURIComponent(requestId)}/review`,
+    `/admin/designer/fabric-country-access/requests/${encodeURIComponent(requestId)}`,
+    `/admin/designer-fabric-access/requests/${encodeURIComponent(requestId)}/review`,
+    `/admin/designer-fabric-access/requests/${encodeURIComponent(requestId)}`,
+  ]) {
+    try {
+      const response = await apiService.patch<any>(path, payload);
+      return response as T;
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableRouteError(error)) throw error;
+    }
+    try {
+      const response = await apiService.put<any>(path, payload);
+      return response as T;
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableRouteError(error)) throw error;
+    }
   }
   throw lastError ?? new Error('Country access review route not available.');
 }
