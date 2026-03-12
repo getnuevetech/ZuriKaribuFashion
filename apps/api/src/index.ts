@@ -41,6 +41,7 @@ import { runStartupRepairs } from './bootstrap';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const API_ROUTE_FINGERPRINT_VERSION = '2026-03-05-route-guardrails-v1';
 const configuredOrigins = (process.env.FRONTEND_URL || '')
   .split(',')
   .map((value) => value.trim())
@@ -75,24 +76,84 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static('uploads'));
 
-// Health check
-app.get('/health', (req, res) => {
+const getDeploymentMetadata = () => ({
+  commit:
+    process.env.RAILWAY_GIT_COMMIT_SHA ||
+    process.env.GIT_COMMIT_SHA ||
+    process.env.COMMIT_SHA ||
+    null,
+  branch:
+    process.env.RAILWAY_GIT_BRANCH ||
+    process.env.GIT_BRANCH ||
+    process.env.BRANCH ||
+    null,
+  service: process.env.RAILWAY_SERVICE_NAME || null,
+  environment: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || null,
+});
+
+const CRITICAL_ROUTE_PATHS = [
+  '/api/promotions/preview',
+  '/api/promo/preview',
+  '/api/promo-codes/preview',
+  '/api/payments/create-session',
+  '/api/payment/create-session',
+  '/api/payments/create-intent',
+  '/api/orders/custom-design',
+  '/api/orders/ready-to-wear',
+  '/api/orders/fabric-only',
+  '/api/order/fabric-order',
+  '/api/customer/orders/fabric-only',
+] as const;
+
+const ROUTE_MOUNTS = [
+  '/api/orders',
+  '/api/order',
+  '/api/payments',
+  '/api/payment',
+  '/api/promotions',
+  '/api/promo',
+  '/api/promo-codes',
+] as const;
+
+// Health checks
+app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    deployment: {
-      commit:
-        process.env.RAILWAY_GIT_COMMIT_SHA ||
-        process.env.GIT_COMMIT_SHA ||
-        process.env.COMMIT_SHA ||
-        null,
-      branch:
-        process.env.RAILWAY_GIT_BRANCH ||
-        process.env.GIT_BRANCH ||
-        process.env.BRANCH ||
-        null,
-      service: process.env.RAILWAY_SERVICE_NAME || null,
-      environment: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || null,
+    deployment: getDeploymentMetadata(),
+  });
+});
+
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    deployment: getDeploymentMetadata(),
+  });
+});
+
+app.get('/health/routes', (_req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    deployment: getDeploymentMetadata(),
+    routeFingerprint: {
+      version: API_ROUTE_FINGERPRINT_VERSION,
+      mounts: ROUTE_MOUNTS,
+      criticalPaths: CRITICAL_ROUTE_PATHS,
+    },
+  });
+});
+
+app.get('/api/health/routes', (_req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    deployment: getDeploymentMetadata(),
+    routeFingerprint: {
+      version: API_ROUTE_FINGERPRINT_VERSION,
+      mounts: ROUTE_MOUNTS,
+      criticalPaths: CRITICAL_ROUTE_PATHS,
     },
   });
 });

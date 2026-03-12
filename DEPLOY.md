@@ -36,6 +36,29 @@ After deployment (~5 minutes), you'll get:
 5. Set environment variables
 6. Deploy!
 
+### Railway reliability guardrails (recommended)
+
+Use these settings on the API service to avoid "route missing" drift:
+
+- **Root Directory:** `apps/api`
+- **Build Command:** `npm ci && npm run build`
+- **Start Command:** `npm run start`
+- After changing settings: **Clear Build Cache** and redeploy.
+
+After each deploy, run a route smoke check from repo root:
+
+```bash
+npm run smoke:api:routes -- --base="https://YOUR-RAILWAY-API-DOMAIN/api" --token="YOUR_JWT_TOKEN"
+```
+
+Expected behavior:
+- `200/400/401/403` = route exists
+- `404` = route missing in deployed runtime
+
+You can also inspect runtime route fingerprint endpoints:
+- `https://YOUR-RAILWAY-API-DOMAIN/health/routes`
+- `https://YOUR-RAILWAY-API-DOMAIN/api/health/routes`
+
 ---
 
 ## Option 3: Deploy to Heroku
