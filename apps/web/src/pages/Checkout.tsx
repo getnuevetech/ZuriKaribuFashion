@@ -900,7 +900,18 @@ export default function Checkout() {
       navigate(`/orders?${orderParams.toString()}`);
     } catch (err) {
       console.error('Failed to create orders:', err);
-      setError('Payment succeeded but order creation failed. Please contact support.');
+      const details = String((err as any)?.response?.data?.message || (err as any)?.message || '').trim();
+      if (details.toLowerCase().includes('route not found') || details.toLowerCase().includes('not found')) {
+        setError(
+          'Payment succeeded, but this backend deployment is missing one or more order creation routes. Please deploy latest API routes.'
+        );
+      } else {
+        setError(
+          details
+            ? `Payment succeeded but order creation failed: ${details}`
+            : 'Payment succeeded but order creation failed. Please contact support.'
+        );
+      }
     }
   };
 

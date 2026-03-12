@@ -4297,22 +4297,63 @@ const productsApi = {
     }>(`/products/${productType}/${id}/discover`, { params: { limit } }),
 };
 
+const customDesignOrderCreatePaths = [
+  '/orders/custom-design',
+  '/order/custom-design',
+  '/orders/design',
+  '/order/design',
+  '/orders/custom',
+  '/order/custom',
+];
+
+const readyToWearOrderCreatePaths = [
+  '/orders/ready-to-wear',
+  '/order/ready-to-wear',
+  '/orders/readytowear',
+  '/order/readytowear',
+  '/orders/ready-to-buy',
+  '/order/ready-to-buy',
+];
+
+const fabricOnlyOrderCreatePaths = [
+  '/orders/fabric-only',
+  '/order/fabric-only',
+  '/orders/fabric',
+  '/order/fabric',
+  '/orders/fabric-order',
+  '/order/fabric-order',
+];
+
+async function createOrderWithFallback<T>(paths: string[], data: any) {
+  let lastError: unknown = null;
+  for (const path of paths) {
+    try {
+      return await apiService.post<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Order create route not found.');
+}
+
 // Orders API
 const ordersApi = {
   getOrder: (id: string) =>
     apiService.get<{ success: boolean; data: any }>(`/orders/${id}`),
 
   createOrder: (data: any) =>
-    apiService.post<{ success: boolean; data: any }>('/orders/custom-design', data),
+    createOrderWithFallback<{ success: boolean; data: any }>(customDesignOrderCreatePaths, data),
 
   createCustomDesignOrder: (data: any) =>
-    apiService.post<{ success: boolean; data: any }>('/orders/custom-design', data),
+    createOrderWithFallback<{ success: boolean; data: any }>(customDesignOrderCreatePaths, data),
 
   createReadyToWearOrder: (data: any) =>
-    apiService.post<{ success: boolean; data: any }>('/orders/ready-to-wear', data),
+    createOrderWithFallback<{ success: boolean; data: any }>(readyToWearOrderCreatePaths, data),
 
   createFabricOnlyOrder: (data: any) =>
-    apiService.post<{ success: boolean; data: any }>('/orders/fabric-only', data),
+    createOrderWithFallback<{ success: boolean; data: any }>(fabricOnlyOrderCreatePaths, data),
 
   updateStatus: (id: string, status: string, notes?: string) =>
     apiService.patch(`/orders/${id}/status`, { status, notes }),
