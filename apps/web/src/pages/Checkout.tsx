@@ -225,6 +225,7 @@ export default function Checkout() {
   const [promoLoading, setPromoLoading] = useState(false);
   const [cardPromoHint, setCardPromoHint] = useState('');
   const [paymentDebugInfo, setPaymentDebugInfo] = useState<PaymentSessionDebugInfo | null>(null);
+  const [runtimeStripeReloading, setRuntimeStripeReloading] = useState(false);
   const checkoutPromoStorageKey = `${CHECKOUT_PROMO_STORAGE_KEY_PREFIX}:${String(user?.id || 'guest')}`;
   
   const fullName = user?.firstName && user?.lastName 
@@ -259,6 +260,8 @@ export default function Checkout() {
   const promoDiscount = Number(promoPreview?.discountUsd || 0);
   const finalTotal = Math.max(0, totalPrice - promoDiscount + shipping);
   const selectedProvider = paymentProviders.find((entry) => entry.providerKey === selectedPaymentProvider) || null;
+  const configuredStripeKey = String(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '').trim();
+  const hasConfiguredStripeKey = /^pk_(test|live)_/i.test(configuredStripeKey);
   const currentStepSummary =
     step === 'shipping'
       ? 'Step 1 of 3: Shipping details'
@@ -279,6 +282,21 @@ export default function Checkout() {
             publicConfig: entry.publicConfig || {},
           }));
           setPaymentProviders(providers);
+          const stripeProvider = providers.find((entry) => entry.providerKey === 'STRIPE');
+          const runtimeStripeKey = String(stripeProvider?.publicConfig?.publishableKey || '').trim();
+          if (/^pk_(test|live)_/i.test(runtimeStripeKey) && typeof window !== 'undefined') {
+            const storedKey = String(window.localStorage.getItem('af_runtime_stripe_publishable_key') || '').trim();
+            if (storedKey !== runtimeStripeKey) {
+              window.localStorage.setItem('af_runtime_stripe_publishable_key', runtimeStripeKey);
+            }
+            const reloadKey = 'af_runtime_stripe_reloaded_once_v1';
+            if (!hasConfiguredStripeKey && storedKey !== runtimeStripeKey && !window.sessionStorage.getItem(reloadKey)) {
+              window.sessionStorage.setItem(reloadKey, '1');
+              setRuntimeStripeReloading(true);
+              window.location.reload();
+              return;
+            }
+          }
           setSelectedPaymentProvider((current) => {
             const preferred = providers.find((entry) => entry.providerKey === current);
             return preferred ? preferred.providerKey : providers[0].providerKey;
@@ -294,7 +312,7 @@ export default function Checkout() {
           { providerKey: 'STRIPE', displayName: 'Stripe', checkoutType: 'INLINE', mode: 'TEST', publicConfig: {} },
         ]);
       });
-  }, []);
+  }, [hasConfiguredStripeKey]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -949,7 +967,14 @@ export default function Checkout() {
       setPromoCode(String(normalizedPreview.code || promoCode).toUpperCase());
     } catch (promoError: any) {
       setPromoPreview(null);
-      setError(promoError?.response?.data?.message || promoError?.message || 'Failed to apply promo code.');
+      const promoMessage = String(promoError?.response?.data?.message || promoError?.message || 'Failed to apply promo code.');
+      if (promoMessage.toLowerCase().includes('route not found')) {
+        setError(
+          'Promo validation is unavailable on this backend deployment right now (promo routes missing). Please continue checkout without promo or deploy the latest API.'
+        );
+      } else {
+        setError(promoMessage);
+      }
     } finally {
       setPromoLoading(false);
     }
@@ -1035,6 +1060,11 @@ export default function Checkout() {
                 <p className="text-red-700">{error}</p>
               </div>
             )}
+            {runtimeStripeReloading ? (
+              <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                Applying Stripe publishable key from payment integrations. Reloading checkout...
+              </div>
+            ) : null}
             {(import.meta.env.DEV || (typeof window !== 'undefined' && window.localStorage.getItem('af_debug_checkout') === '1')) &&
             paymentDebugInfo ? (
               <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
@@ -1329,6 +1359,12 @@ export default function Checkout() {
                   <h2 className="text-lg font-semibold">Payment Details</h2>
                 </div>
                 <p className="mb-4 text-sm text-gray-500">Payment method: Card ({selectedProvider?.displayName || 'Stripe'})</p>
+                {!stripe ? (
+                  <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    Stripe checkout key is not initialized in this browser yet. If this persists, refresh page once or configure
+                    VITE_STRIPE_PUBLIC_KEY.
+                  </p>
+                ) : null}
 
                 <div className="p-4 bg-gray-50 rounded-lg mb-6">
                   <div className="flex items-center gap-2 mb-4">
@@ -1349,7 +1385,7 @@ export default function Checkout() {
                   <Button 
                     type="submit" 
                     className="flex-1"
-                    disabled={!stripe || loading}
+                    disabled={!stripe || !clientSecret || loading}
                   >
                     {loading ? 'Processing...' : `Step 3: Pay ${formatFromUsd(finalTotal)}`}
                   </Button>

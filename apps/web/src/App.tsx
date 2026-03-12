@@ -81,8 +81,12 @@ const queryClient = new QueryClient({
   },
 });
 
-// Initialize Stripe only when a valid publishable key is configured.
-const configuredStripeKey = String(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '').trim();
+// Initialize Stripe from env first, then runtime key saved from payment integrations.
+const runtimeStripeKey =
+  typeof window !== 'undefined'
+    ? String(window.localStorage.getItem('af_runtime_stripe_publishable_key') || '').trim()
+    : '';
+const configuredStripeKey = String(import.meta.env.VITE_STRIPE_PUBLIC_KEY || runtimeStripeKey || '').trim();
 const hasUsableStripeKey = /^pk_(test|live)_/i.test(configuredStripeKey);
 const stripePromise = hasUsableStripeKey ? loadStripe(configuredStripeKey) : null;
 
