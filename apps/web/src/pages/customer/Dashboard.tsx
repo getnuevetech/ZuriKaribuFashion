@@ -156,6 +156,23 @@ const statusConfig: Record<string, { icon: any; color: string; label: string; bg
   CANCELLED: { icon: AlertCircle, color: 'text-red-600', label: 'Cancelled', bgColor: 'bg-red-50' },
 };
 
+const getStatusMeta = (status: string) => {
+  const normalized = String(status || '').trim().toUpperCase();
+  return (
+    statusConfig[normalized] || {
+      icon: Clock,
+      color: 'text-gray-600',
+      label: normalized || 'Unknown',
+      bgColor: 'bg-gray-50',
+    }
+  );
+};
+
+const getBadgeVariantFromStatusMeta = (meta: { color: string }) => {
+  const token = String(meta?.color || '').replace(/^text-/, '').trim();
+  return (token || 'gray-600') as any;
+};
+
 export default function CustomerDashboard() {
   const stripe = useStripe();
   const elements = useElements();
@@ -663,7 +680,7 @@ export default function CustomerDashboard() {
               </div>
               <div className="space-y-4">
                 {recentOrders.map((order) => {
-                  const status = statusConfig[order.status];
+                  const status = getStatusMeta(order.status);
                   const StatusIcon = status?.icon || Clock;
                   
                   return (
@@ -676,7 +693,7 @@ export default function CustomerDashboard() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-gray-900">{order.orderNumber}</p>
-                          <Badge variant={status?.color.replace('text-', '') as any} size="sm">
+                          <Badge variant={getBadgeVariantFromStatusMeta(status)} size="sm">
                             {status?.label}
                           </Badge>
                         </div>
@@ -699,7 +716,7 @@ export default function CustomerDashboard() {
       {activeTab === 'orders' && (
         <div className="space-y-4">
           {orders.map((order) => {
-            const status = statusConfig[order.status];
+            const status = getStatusMeta(order.status);
             const StatusIcon = status?.icon || Clock;
             const progress = getOrderProgress(order.status);
             
@@ -709,7 +726,7 @@ export default function CustomerDashboard() {
                   <div>
                     <div className="flex items-center gap-3">
                       <h3 className="font-semibold text-gray-900">{order.orderNumber}</h3>
-                      <Badge variant={status?.color.replace('text-', '') as any}>
+                      <Badge variant={getBadgeVariantFromStatusMeta(status)}>
                         {status?.label}
                       </Badge>
                     </div>
