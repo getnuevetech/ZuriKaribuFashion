@@ -4413,22 +4413,78 @@ async function completeCustomerTryOnPurchaseWithFallback<T>(payload: {
   throw lastError ?? new Error('Customer TryON purchase-complete route not found.');
 }
 
+async function readCustomerAddressesWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of ['/customer/addresses', '/customer/addresses/list', '/customer/address']) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Customer addresses route not found.');
+}
+
+async function createCustomerAddressWithFallback<T>(data: any) {
+  let lastError: unknown = null;
+  for (const path of ['/customer/addresses', '/customer/address']) {
+    try {
+      return await apiService.post<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Customer add-address route not found.');
+}
+
+async function updateCustomerAddressWithFallback<T>(id: string, data: any) {
+  let lastError: unknown = null;
+  for (const path of [`/customer/addresses/${id}`, `/customer/address/${id}`]) {
+    try {
+      return await apiService.patch<T>(path, data);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Customer update-address route not found.');
+}
+
+async function deleteCustomerAddressWithFallback<T>(id: string) {
+  let lastError: unknown = null;
+  for (const path of [`/customer/addresses/${id}`, `/customer/address/${id}`]) {
+    try {
+      return await apiService.delete<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Customer delete-address route not found.');
+}
+
 // Customer API
 const customerApi = {
   getProfile: () =>
     apiService.get<{ success: boolean; data: any }>('/customer/profile'),
 
   getAddresses: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/customer/addresses'),
+    readCustomerAddressesWithFallback<{ success: boolean; data: any[] }>(),
 
   addAddress: (data: any) =>
-    apiService.post<{ success: boolean; data: any }>('/customer/addresses', data),
+    createCustomerAddressWithFallback<{ success: boolean; data: any }>(data),
 
   updateAddress: (id: string, data: any) =>
-    apiService.patch<{ success: boolean; data: any }>(`/customer/addresses/${id}`, data),
+    updateCustomerAddressWithFallback<{ success: boolean; data: any }>(id, data),
 
   deleteAddress: (id: string) =>
-    apiService.delete(`/customer/addresses/${id}`),
+    deleteCustomerAddressWithFallback(id),
 
   saveMeasurements: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/customer/measurements', data),

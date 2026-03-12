@@ -94,7 +94,12 @@ export default function CustomerProfile() {
     try {
       const response = await api.customer.getAddresses();
       if (response.success) {
-        setAddresses(response.data);
+        const rows = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray((response.data as any)?.addresses)
+            ? (response.data as any).addresses
+            : [];
+        setAddresses(rows);
       }
     } catch (error) {
       console.error('Failed to fetch addresses:', error);
@@ -148,7 +153,7 @@ export default function CustomerProfile() {
       };
       const response = await api.customer.addAddress(payload);
       if (response.success) {
-        setAddresses([...addresses, response.data]);
+        await fetchAddresses();
         setShowAddressForm(false);
         setNewAddress({
           label: 'Home',
@@ -172,7 +177,7 @@ export default function CustomerProfile() {
   const handleDeleteAddress = async (id: string) => {
     try {
       await api.customer.deleteAddress(id);
-      setAddresses(addresses.filter(a => a.id !== id));
+      setAddresses((previous) => previous.filter((entry) => entry.id !== id));
     } catch (error) {
       console.error('Failed to delete address:', error);
     }

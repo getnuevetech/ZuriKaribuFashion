@@ -162,19 +162,9 @@ router.get('/profile', async (req, res, next) => {
   }
 });
 
-// Get customer addresses
-router.get('/addresses', async (req, res, next) => {
+const handleGetCustomerAddresses = async (req: any, res: any, next: any) => {
   try {
-    const profile = await prisma.customerProfile.findUnique({
-      where: { userId: req.user!.id },
-    });
-
-    if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer profile not found.',
-      });
-    }
+    const profile = await resolveCustomerProfile(req.user!.id);
 
     const addresses = await prisma.address.findMany({
       where: { customerProfileId: profile.id },
@@ -188,10 +178,12 @@ router.get('/addresses', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
+router.get('/addresses', handleGetCustomerAddresses);
+router.get('/addresses/list', handleGetCustomerAddresses);
+router.get('/address', handleGetCustomerAddresses);
 
-// Add address
-router.post('/addresses', async (req, res, next) => {
+const handleAddCustomerAddress = async (req: any, res: any, next: any) => {
   try {
     const schema = z.object({
       label: z.string().min(1),
@@ -206,16 +198,7 @@ router.post('/addresses', async (req, res, next) => {
 
     const data = schema.parse(req.body);
 
-    const profile = await prisma.customerProfile.findUnique({
-      where: { userId: req.user!.id },
-    });
-
-    if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer profile not found.',
-      });
-    }
+    const profile = await resolveCustomerProfile(req.user!.id);
 
     // If setting as default, unset other defaults
     if (data.isDefault) {
@@ -240,10 +223,11 @@ router.post('/addresses', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
+router.post('/addresses', handleAddCustomerAddress);
+router.post('/address', handleAddCustomerAddress);
 
-// Update address
-router.patch('/addresses/:id', async (req, res, next) => {
+const handleUpdateCustomerAddress = async (req: any, res: any, next: any) => {
   try {
     const { id } = req.params;
     const schema = z.object({
@@ -258,16 +242,7 @@ router.patch('/addresses/:id', async (req, res, next) => {
     });
     const updateData = schema.parse(req.body);
 
-    const profile = await prisma.customerProfile.findUnique({
-      where: { userId: req.user!.id },
-    });
-
-    if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer profile not found.',
-      });
-    }
+    const profile = await resolveCustomerProfile(req.user!.id);
 
     // If setting as default, unset other defaults
     if (updateData.isDefault) {
@@ -290,23 +265,15 @@ router.patch('/addresses/:id', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
+router.patch('/addresses/:id', handleUpdateCustomerAddress);
+router.patch('/address/:id', handleUpdateCustomerAddress);
 
-// Delete address
-router.delete('/addresses/:id', async (req, res, next) => {
+const handleDeleteCustomerAddress = async (req: any, res: any, next: any) => {
   try {
     const { id } = req.params;
 
-    const profile = await prisma.customerProfile.findUnique({
-      where: { userId: req.user!.id },
-    });
-
-    if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer profile not found.',
-      });
-    }
+    const profile = await resolveCustomerProfile(req.user!.id);
 
     await prisma.address.delete({
       where: { id, customerProfileId: profile.id },
@@ -319,7 +286,9 @@ router.delete('/addresses/:id', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
+router.delete('/addresses/:id', handleDeleteCustomerAddress);
+router.delete('/address/:id', handleDeleteCustomerAddress);
 
 // Save measurements
 router.post('/measurements', async (req, res, next) => {
