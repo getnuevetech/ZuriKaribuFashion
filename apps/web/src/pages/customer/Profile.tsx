@@ -69,6 +69,15 @@ export default function CustomerProfile() {
     phone: user?.phone || '',
   });
 
+  useEffect(() => {
+    setProfile({
+      firstName: String(user?.firstName || ''),
+      lastName: String(user?.lastName || ''),
+      email: String(user?.email || ''),
+      phone: String(user?.phone || ''),
+    });
+  }, [user?.id, user?.firstName, user?.lastName, user?.email, user?.phone]);
+
   const [newAddress, setNewAddress] = useState<AddressForm>({
     label: 'Home',
     fullName: '',
@@ -90,6 +99,16 @@ export default function CustomerProfile() {
     if (!user?.id) return;
     fetchAddresses();
     fetchGoogleLinkStatus();
+    api.auth
+      .getMe()
+      .then((response) => {
+        if (!response.success || !response.data) return;
+        const nextUser = response.data?.user && typeof response.data.user === 'object' ? response.data.user : response.data;
+        updateUser(nextUser);
+      })
+      .catch(() => {
+        // ignore me-refresh failures and keep existing auth-store state
+      });
   }, [user?.id]);
 
   const fetchAddresses = async () => {
@@ -125,9 +144,26 @@ export default function CustomerProfile() {
   const handleSaveProfile = async () => {
     try {
       setLoading(true);
-      const response = await api.auth.updateProfile(profile);
+      const response = await api.auth.updateProfile({
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        phone: profile.phone,
+      });
       if (response.success) {
-        updateUser(response.data);
+        const payload =
+          response.data?.user && typeof response.data.user === 'object'
+            ? response.data.user
+            : response.data && typeof response.data === 'object'
+              ? response.data
+              : {};
+        updateUser(payload);
+        setProfile((prev) => ({
+          ...prev,
+          firstName: String((payload as any).firstName ?? prev.firstName),
+          lastName: String((payload as any).lastName ?? prev.lastName),
+          phone: String((payload as any).phone ?? prev.phone),
+          email: String((payload as any).email ?? prev.email),
+        }));
         setEditing(false);
       }
     } catch (error) {
