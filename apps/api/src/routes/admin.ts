@@ -3363,7 +3363,6 @@ router.get('/products', async (req, res, next) => {
               seller: { select: { id: true, businessName: true, country: true } },
               materialType: { select: { name: true } },
               images: { select: { url: true }, orderBy: { sortOrder: 'asc' } },
-              _count: { select: { orderItems: true } },
             },
             orderBy: { createdAt: 'desc' },
           })
@@ -3385,7 +3384,6 @@ router.get('/products', async (req, res, next) => {
               designer: { select: { id: true, businessName: true, country: true } },
               category: { select: { name: true } },
               images: { select: { url: true }, orderBy: { sortOrder: 'asc' } },
-              _count: { select: { orderItems: true } },
             },
             orderBy: { createdAt: 'desc' },
           })
@@ -3408,7 +3406,6 @@ router.get('/products', async (req, res, next) => {
               category: { select: { id: true, name: true } },
               images: { select: { url: true }, orderBy: { sortOrder: 'asc' } },
               sizeVariations: true,
-              _count: { select: { orderItems: true } },
             },
             orderBy: { createdAt: 'desc' },
           })
@@ -3429,7 +3426,7 @@ router.get('/products', async (req, res, next) => {
         ownerName: item.seller?.businessName || 'Fabric Seller',
         ownerCountry: item.seller?.country || null,
         category: item.materialType?.name || 'Material',
-        orderCount: Number(item?._count?.orderItems || 0),
+        orderCount: Number((item as any)?.totalSold || 0),
         images: (Array.isArray(item.images) ? item.images : []).map((entry) => entry?.url).filter(Boolean),
         image: item.images?.[0]?.url || null,
         createdAt: item.createdAt,
@@ -3447,7 +3444,7 @@ router.get('/products', async (req, res, next) => {
         ownerName: item.designer?.businessName || 'Designer',
         ownerCountry: item.designer?.country || null,
         category: item.category?.name || 'Category',
-        orderCount: Number(item?._count?.orderItems || 0),
+        orderCount: Number((item as any)?.totalSold || 0),
         images: (Array.isArray(item.images) ? item.images : []).map((entry) => entry?.url).filter(Boolean),
         image: item.images?.[0]?.url || null,
         createdAt: item.createdAt,
@@ -3466,7 +3463,7 @@ router.get('/products', async (req, res, next) => {
         ownerCountry: item.designer?.country || null,
         categoryId: item.category?.id || null,
         category: item.category?.name || 'Category',
-        orderCount: Number(item?._count?.orderItems || 0),
+        orderCount: Number((item as any)?.totalSold || 0),
         images: (Array.isArray(item.images) ? item.images : []).map((entry) => entry?.url).filter(Boolean),
         image: item.images?.[0]?.url || null,
         sizeVariations: Array.isArray(item.sizeVariations)
@@ -3486,39 +3483,48 @@ router.get('/products', async (req, res, next) => {
       })),
     ].sort((a, b) => Number(new Date(b.createdAt)) - Number(new Date(a.createdAt)));
 
-    const featuredRows =
-      rows.length > 0
-        ? await prisma.featuredProduct.findMany({
-            where: {
-              OR: [
-                {
-                  productType: ProductType.FABRIC,
-                  productId: {
-                    in: rows.filter((row) => row.type === ProductType.FABRIC).map((row) => row.id),
-                  },
+    let featuredRows: Array<{
+      productId: string;
+      productType: ProductType;
+      section: string;
+      isActive: boolean;
+    }> = [];
+    if (rows.length > 0) {
+      try {
+        featuredRows = await prisma.featuredProduct.findMany({
+          where: {
+            OR: [
+              {
+                productType: ProductType.FABRIC,
+                productId: {
+                  in: rows.filter((row) => row.type === ProductType.FABRIC).map((row) => row.id),
                 },
-                {
-                  productType: ProductType.DESIGN,
-                  productId: {
-                    in: rows.filter((row) => row.type === ProductType.DESIGN).map((row) => row.id),
-                  },
+              },
+              {
+                productType: ProductType.DESIGN,
+                productId: {
+                  in: rows.filter((row) => row.type === ProductType.DESIGN).map((row) => row.id),
                 },
-                {
-                  productType: ProductType.READY_TO_WEAR,
-                  productId: {
-                    in: rows.filter((row) => row.type === ProductType.READY_TO_WEAR).map((row) => row.id),
-                  },
+              },
+              {
+                productType: ProductType.READY_TO_WEAR,
+                productId: {
+                  in: rows.filter((row) => row.type === ProductType.READY_TO_WEAR).map((row) => row.id),
                 },
-              ],
-            },
-            select: {
-              productId: true,
-              productType: true,
-              section: true,
-              isActive: true,
-            },
-          })
-        : [];
+              },
+            ],
+          },
+          select: {
+            productId: true,
+            productType: true,
+            section: true,
+            isActive: true,
+          },
+        });
+      } catch (featuredError) {
+        console.warn('[admin/products] Skipping featuredProduct lookup:', featuredError);
+      }
+    }
 
     const featuredMap = new Map<string, string[]>();
     for (const row of featuredRows) {

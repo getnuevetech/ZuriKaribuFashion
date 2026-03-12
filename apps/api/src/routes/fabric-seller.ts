@@ -463,24 +463,27 @@ router.get('/fabrics', async (req, res, next) => {
       include: {
         materialType: true,
         images: true,
-        _count: { select: { orderItems: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
-    const featuredRows =
-      fabrics.length > 0
-        ? await prisma.featuredProduct.findMany({
-            where: {
-              productType: 'FABRIC',
-              productId: { in: fabrics.map((item) => item.id) },
-              isActive: true,
-            },
-            select: {
-              productId: true,
-              section: true,
-            },
-          })
-        : [];
+    let featuredRows: Array<{ productId: string; section: string }> = [];
+    if (fabrics.length > 0) {
+      try {
+        featuredRows = await prisma.featuredProduct.findMany({
+          where: {
+            productType: 'FABRIC',
+            productId: { in: fabrics.map((item) => item.id) },
+            isActive: true,
+          },
+          select: {
+            productId: true,
+            section: true,
+          },
+        });
+      } catch (featuredError) {
+        console.warn('[seller/fabrics] Skipping featuredProduct lookup:', featuredError);
+      }
+    }
 
     const featuredByFabricId = new Map<string, string[]>();
     for (const row of featuredRows) {

@@ -1026,24 +1026,27 @@ router.get('/designs', async (req, res, next) => {
           },
         },
         measurementVariables: true,
-        _count: { select: { orderItems: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
-    const featuredRows =
-      designs.length > 0
-        ? await prisma.featuredProduct.findMany({
-            where: {
-              productType: 'DESIGN',
-              productId: { in: designs.map((item) => item.id) },
-              isActive: true,
-            },
-            select: {
-              productId: true,
-              section: true,
-            },
-          })
-        : [];
+    let featuredRows: Array<{ productId: string; section: string }> = [];
+    if (designs.length > 0) {
+      try {
+        featuredRows = await prisma.featuredProduct.findMany({
+          where: {
+            productType: 'DESIGN',
+            productId: { in: designs.map((item) => item.id) },
+            isActive: true,
+          },
+          select: {
+            productId: true,
+            section: true,
+          },
+        });
+      } catch (featuredError) {
+        console.warn('[designer/designs] Skipping featuredProduct lookup:', featuredError);
+      }
+    }
     const featuredByProductId = new Map<string, string[]>();
     for (const row of featuredRows) {
       const existing = featuredByProductId.get(row.productId) || [];
@@ -1722,24 +1725,27 @@ router.get('/ready-to-wear', async (req, res, next) => {
         category: true,
         images: true,
         sizeVariations: true,
-        _count: { select: { orderItems: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
-    const featuredRows =
-      products.length > 0
-        ? await prisma.featuredProduct.findMany({
-            where: {
-              productType: 'READY_TO_WEAR',
-              productId: { in: products.map((item) => item.id) },
-              isActive: true,
-            },
-            select: {
-              productId: true,
-              section: true,
-            },
-          })
-        : [];
+    let featuredRows: Array<{ productId: string; section: string }> = [];
+    if (products.length > 0) {
+      try {
+        featuredRows = await prisma.featuredProduct.findMany({
+          where: {
+            productType: 'READY_TO_WEAR',
+            productId: { in: products.map((item) => item.id) },
+            isActive: true,
+          },
+          select: {
+            productId: true,
+            section: true,
+          },
+        });
+      } catch (featuredError) {
+        console.warn('[designer/ready-to-wear] Skipping featuredProduct lookup:', featuredError);
+      }
+    }
     const featuredByProductId = new Map<string, string[]>();
     for (const row of featuredRows) {
       const existing = featuredByProductId.get(row.productId) || [];
