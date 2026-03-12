@@ -83,17 +83,19 @@ export default function AdminTryOnSettings() {
     setLoading(true);
     setError('');
     try {
-      const [settingsRes, insightsRes] = await Promise.all([
+      const [settingsRes, insightsRes] = await Promise.allSettled([
         api.admin.getTryOnSettings(),
         api.admin.getTryOnInsights(),
       ]);
-      if (settingsRes.success) {
-        const normalized = normalizeSettings(settingsRes.data?.settings || settingsRes.data);
+      if (settingsRes.status === 'fulfilled' && settingsRes.value.success) {
+        const normalized = normalizeSettings(settingsRes.value.data?.settings || settingsRes.value.data);
         setSettings(normalized);
         setMeasurementDraft(normalized.requiredMeasurementFields.join(','));
+      } else if (settingsRes.status === 'rejected') {
+        throw settingsRes.reason;
       }
-      if (insightsRes.success) {
-        setInsights(insightsRes.data || null);
+      if (insightsRes.status === 'fulfilled' && insightsRes.value.success) {
+        setInsights(insightsRes.value.data || null);
       }
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to load TryON settings.');

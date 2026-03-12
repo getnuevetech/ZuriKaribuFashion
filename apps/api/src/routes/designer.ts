@@ -656,6 +656,7 @@ const handleGetDesignerTryOnInsights = async (req: any, res: any, next: any) => 
 router.get('/try-on/insights', handleGetDesignerTryOnInsights);
 router.get('/tryon/insights', handleGetDesignerTryOnInsights);
 router.get('/3d-try-on/insights', handleGetDesignerTryOnInsights);
+router.get('/3d-tryon/insights', handleGetDesignerTryOnInsights);
 
 router.get('/measurement-template-options', async (_req, res, next) => {
   try {

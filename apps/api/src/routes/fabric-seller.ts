@@ -444,6 +444,7 @@ const handleGetSellerTryOnInsights = async (req: any, res: any, next: any) => {
 router.get('/try-on/insights', handleGetSellerTryOnInsights);
 router.get('/tryon/insights', handleGetSellerTryOnInsights);
 router.get('/3d-try-on/insights', handleGetSellerTryOnInsights);
+router.get('/3d-tryon/insights', handleGetSellerTryOnInsights);
 
 // Get seller fabrics
 router.get('/fabrics', async (req, res, next) => {

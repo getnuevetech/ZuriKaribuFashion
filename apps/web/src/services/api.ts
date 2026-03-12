@@ -169,6 +169,8 @@ async function readSellerTryOnInsightsWithFallback<T>() {
     '/fabric-seller/tryon/insights',
     '/seller/3d-try-on/insights',
     '/fabric-seller/3d-try-on/insights',
+    '/seller/3d-tryon/insights',
+    '/fabric-seller/3d-tryon/insights',
   ]) {
     try {
       return await apiService.get<T>(path, noCacheRequestConfig());
@@ -274,6 +276,8 @@ async function readDesignerTryOnInsightsWithFallback<T>() {
     '/fashion-designer/tryon/insights',
     '/designer/3d-try-on/insights',
     '/fashion-designer/3d-try-on/insights',
+    '/designer/3d-tryon/insights',
+    '/fashion-designer/3d-tryon/insights',
   ]) {
     try {
       return await apiService.get<T>(path, noCacheRequestConfig());
@@ -4140,13 +4144,29 @@ const ordersApi = {
     apiService.patch(`/orders/${id}/tracking`, { trackingNumber }),
 };
 
-const customerTryOnSummaryPaths = ['/customer/try-on/summary', '/customer/tryon/summary', '/customer/3d-try-on/summary'];
-const customerTryOnCatalogPaths = ['/customer/try-on/catalog', '/customer/tryon/catalog', '/customer/3d-try-on/catalog'];
-const customerTryOnBatchPaths = ['/customer/try-on/batch', '/customer/tryon/batch', '/customer/3d-try-on/batch'];
+const customerTryOnSummaryPaths = [
+  '/customer/try-on/summary',
+  '/customer/tryon/summary',
+  '/customer/3d-try-on/summary',
+  '/customer/3d-tryon/summary',
+];
+const customerTryOnCatalogPaths = [
+  '/customer/try-on/catalog',
+  '/customer/tryon/catalog',
+  '/customer/3d-try-on/catalog',
+  '/customer/3d-tryon/catalog',
+];
+const customerTryOnBatchPaths = [
+  '/customer/try-on/batch',
+  '/customer/tryon/batch',
+  '/customer/3d-try-on/batch',
+  '/customer/3d-tryon/batch',
+];
 const customerTryOnPurchaseSessionPaths = [
   '/customer/try-on/purchase/session',
   '/customer/tryon/purchase/session',
   '/customer/3d-try-on/purchase/session',
+  '/customer/3d-tryon/purchase/session',
 ];
 const customerTryOnPurchaseCompletePaths = [
   '/customer/try-on/purchase',
@@ -4155,7 +4175,123 @@ const customerTryOnPurchaseCompletePaths = [
   '/customer/tryon/purchase/complete',
   '/customer/3d-try-on/purchase',
   '/customer/3d-try-on/purchase/complete',
+  '/customer/3d-tryon/purchase',
+  '/customer/3d-tryon/purchase/complete',
 ];
+
+const TRY_ON_SETTINGS_FALLBACK_KEY = 'af_try_on_settings_fallback_v1';
+const TRY_ON_SETTINGS_FALLBACK_DEFAULTS = {
+  enabled: true,
+  freeTryOnsPerCustomer: 5,
+  additionalTryOnBundleSize: 5,
+  additionalTryOnBundlePriceUsd: 1,
+  maxProductsPerBatch: 5,
+  requiredMeasurementFields: ['height', 'bust', 'waist', 'hips', 'shoulder'],
+  chargeNoticeText:
+    'First 5 TryON runs are free. Additional bundles are paid and controlled by admin pricing settings.',
+  applyLocations: {
+    customerDashboard: true,
+    adminDashboard: true,
+    sellerDashboard: true,
+    designerDashboard: true,
+    qaDashboard: true,
+    designProductPage: true,
+    readyToWearProductPage: true,
+  },
+  apiProviders: [] as Array<any>,
+};
+
+const normalizeTryOnSettingsFallback = (input: unknown) => {
+  const row = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  const applyLocationsRow =
+    row.applyLocations && typeof row.applyLocations === 'object'
+      ? (row.applyLocations as Record<string, unknown>)
+      : {};
+  const requiredMeasurementFields = Array.isArray(row.requiredMeasurementFields)
+    ? Array.from(
+        new Set(
+          row.requiredMeasurementFields
+            .map((entry) => String(entry || '').trim().toLowerCase())
+            .filter(Boolean)
+        )
+      )
+    : [...TRY_ON_SETTINGS_FALLBACK_DEFAULTS.requiredMeasurementFields];
+  return {
+    enabled: row.enabled !== false,
+    freeTryOnsPerCustomer: Math.max(0, Number(row.freeTryOnsPerCustomer || TRY_ON_SETTINGS_FALLBACK_DEFAULTS.freeTryOnsPerCustomer)),
+    additionalTryOnBundleSize: Math.max(
+      1,
+      Number(row.additionalTryOnBundleSize || TRY_ON_SETTINGS_FALLBACK_DEFAULTS.additionalTryOnBundleSize)
+    ),
+    additionalTryOnBundlePriceUsd: Math.max(
+      0,
+      Number(row.additionalTryOnBundlePriceUsd || TRY_ON_SETTINGS_FALLBACK_DEFAULTS.additionalTryOnBundlePriceUsd)
+    ),
+    maxProductsPerBatch: Math.max(1, Number(row.maxProductsPerBatch || TRY_ON_SETTINGS_FALLBACK_DEFAULTS.maxProductsPerBatch)),
+    requiredMeasurementFields:
+      requiredMeasurementFields.length > 0
+        ? requiredMeasurementFields
+        : [...TRY_ON_SETTINGS_FALLBACK_DEFAULTS.requiredMeasurementFields],
+    chargeNoticeText:
+      String(row.chargeNoticeText || '').trim() || TRY_ON_SETTINGS_FALLBACK_DEFAULTS.chargeNoticeText,
+    applyLocations: {
+      customerDashboard:
+        typeof applyLocationsRow.customerDashboard === 'boolean'
+          ? applyLocationsRow.customerDashboard
+          : TRY_ON_SETTINGS_FALLBACK_DEFAULTS.applyLocations.customerDashboard,
+      adminDashboard:
+        typeof applyLocationsRow.adminDashboard === 'boolean'
+          ? applyLocationsRow.adminDashboard
+          : TRY_ON_SETTINGS_FALLBACK_DEFAULTS.applyLocations.adminDashboard,
+      sellerDashboard:
+        typeof applyLocationsRow.sellerDashboard === 'boolean'
+          ? applyLocationsRow.sellerDashboard
+          : TRY_ON_SETTINGS_FALLBACK_DEFAULTS.applyLocations.sellerDashboard,
+      designerDashboard:
+        typeof applyLocationsRow.designerDashboard === 'boolean'
+          ? applyLocationsRow.designerDashboard
+          : TRY_ON_SETTINGS_FALLBACK_DEFAULTS.applyLocations.designerDashboard,
+      qaDashboard:
+        typeof applyLocationsRow.qaDashboard === 'boolean'
+          ? applyLocationsRow.qaDashboard
+          : TRY_ON_SETTINGS_FALLBACK_DEFAULTS.applyLocations.qaDashboard,
+      designProductPage:
+        typeof applyLocationsRow.designProductPage === 'boolean'
+          ? applyLocationsRow.designProductPage
+          : TRY_ON_SETTINGS_FALLBACK_DEFAULTS.applyLocations.designProductPage,
+      readyToWearProductPage:
+        typeof applyLocationsRow.readyToWearProductPage === 'boolean'
+          ? applyLocationsRow.readyToWearProductPage
+          : TRY_ON_SETTINGS_FALLBACK_DEFAULTS.applyLocations.readyToWearProductPage,
+    },
+    apiProviders: Array.isArray(row.apiProviders) ? row.apiProviders : [],
+  };
+};
+
+const readTryOnSettingsFallback = () => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return normalizeTryOnSettingsFallback(TRY_ON_SETTINGS_FALLBACK_DEFAULTS);
+  }
+  try {
+    const raw = window.localStorage.getItem(TRY_ON_SETTINGS_FALLBACK_KEY);
+    if (!raw) return normalizeTryOnSettingsFallback(TRY_ON_SETTINGS_FALLBACK_DEFAULTS);
+    return normalizeTryOnSettingsFallback(JSON.parse(raw));
+  } catch {
+    return normalizeTryOnSettingsFallback(TRY_ON_SETTINGS_FALLBACK_DEFAULTS);
+  }
+};
+
+const writeTryOnSettingsFallback = (settings: unknown) => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(
+      TRY_ON_SETTINGS_FALLBACK_KEY,
+      JSON.stringify(normalizeTryOnSettingsFallback(settings))
+    );
+  } catch {
+    // ignore localStorage write failures
+  }
+};
 
 async function readCustomerTryOnSummaryWithFallback<T>() {
   let lastError: unknown = null;
@@ -4168,7 +4304,26 @@ async function readCustomerTryOnSummaryWithFallback<T>() {
       throw error;
     }
   }
-  throw lastError ?? new Error('Customer TryON summary route not found.');
+  if (!lastError || isRetryableRouteError(lastError)) {
+    const settings = readTryOnSettingsFallback();
+    return {
+      success: true,
+      data: {
+        settings,
+        usage: {
+          freeUsedCount: 0,
+          freeRemaining: Math.max(0, Number(settings.freeTryOnsPerCustomer || 0)),
+          paidCreditsRemaining: 0,
+          totalRuns: 0,
+          purchaseCount: 0,
+        },
+        measurements: {},
+        recent: [],
+      },
+      message: 'Using fallback TryON settings while backend routes are unavailable.',
+    } as T;
+  }
+  throw lastError;
 }
 
 async function readCustomerTryOnCatalogWithFallback<T>(params?: {
@@ -4187,7 +4342,20 @@ async function readCustomerTryOnCatalogWithFallback<T>(params?: {
       throw error;
     }
   }
-  throw lastError ?? new Error('Customer TryON catalog route not found.');
+  if (!lastError || isRetryableRouteError(lastError)) {
+    return {
+      success: true,
+      data: [],
+      pagination: {
+        page: Math.max(1, Number(params?.page || 1)),
+        limit: Math.max(1, Number(params?.limit || 24)),
+        total: 0,
+        pages: 1,
+      },
+      message: 'TryON catalog fallback in use while backend routes are unavailable.',
+    } as T;
+  }
+  throw lastError;
 }
 
 async function runCustomerTryOnBatchWithFallback<T>(payload: {
@@ -5087,44 +5255,92 @@ const adminApi = {
   getTryOnSettings: () =>
     (async () => {
       let lastError: unknown = null;
-      for (const path of ['/admin/try-on/settings', '/admin/tryon/settings', '/admin/3d-try-on/settings']) {
+      for (const path of [
+        '/admin/try-on/settings',
+        '/admin/tryon/settings',
+        '/admin/3d-try-on/settings',
+        '/admin/3d-tryon/settings',
+      ]) {
         try {
-          return await apiService.get<{
+          const response = await apiService.get<{
             success: boolean;
             data: { source?: 'DEFAULT' | 'DATABASE'; updatedAt?: string | null; settings: any };
           }>(path, noCacheRequestConfig());
+          if (response.success) {
+            writeTryOnSettingsFallback(response.data?.settings || response.data);
+          }
+          return response;
         } catch (error) {
           lastError = error;
           if (!isRetryableRouteError(error)) throw error;
         }
       }
-      throw lastError ?? new Error('TryON settings route not available.');
+      if (!lastError || isRetryableRouteError(lastError)) {
+        const fallbackSettings = readTryOnSettingsFallback();
+        return {
+          success: true,
+          data: {
+            source: 'DEFAULT',
+            updatedAt: null,
+            settings: fallbackSettings,
+          },
+          message: 'Using local fallback TryON settings while backend route is unavailable.',
+        };
+      }
+      throw lastError;
     })(),
 
   updateTryOnSettings: (settings: any) =>
     (async () => {
       let lastError: unknown = null;
-      for (const path of ['/admin/try-on/settings', '/admin/tryon/settings', '/admin/3d-try-on/settings']) {
+      const normalizedSettings = normalizeTryOnSettingsFallback(settings);
+      for (const path of [
+        '/admin/try-on/settings',
+        '/admin/tryon/settings',
+        '/admin/3d-try-on/settings',
+        '/admin/3d-tryon/settings',
+      ]) {
         try {
-          return await apiService.put<{ success: boolean; data: any; message?: string }>(path, { settings });
+          const response = await apiService.put<{ success: boolean; data: any; message?: string }>(path, {
+            settings: normalizedSettings,
+          });
+          if (response.success) writeTryOnSettingsFallback(response.data || normalizedSettings);
+          return response;
         } catch (error) {
           lastError = error;
           if (!isRetryableRouteError(error)) throw error;
         }
         try {
-          return await apiService.patch<{ success: boolean; data: any; message?: string }>(path, { settings });
+          const response = await apiService.patch<{ success: boolean; data: any; message?: string }>(path, {
+            settings: normalizedSettings,
+          });
+          if (response.success) writeTryOnSettingsFallback(response.data || normalizedSettings);
+          return response;
         } catch (error) {
           lastError = error;
           if (!isRetryableRouteError(error)) throw error;
         }
       }
-      throw lastError ?? new Error('TryON settings update route not available.');
+      if (!lastError || isRetryableRouteError(lastError)) {
+        writeTryOnSettingsFallback(normalizedSettings);
+        return {
+          success: true,
+          data: normalizedSettings,
+          message: 'Saved TryON settings locally. Backend route is currently unavailable.',
+        };
+      }
+      throw lastError;
     })(),
 
   getTryOnInsights: () =>
     (async () => {
       let lastError: unknown = null;
-      for (const path of ['/admin/try-on/insights', '/admin/tryon/insights', '/admin/3d-try-on/insights']) {
+      for (const path of [
+        '/admin/try-on/insights',
+        '/admin/tryon/insights',
+        '/admin/3d-try-on/insights',
+        '/admin/3d-tryon/insights',
+      ]) {
         try {
           return await apiService.get<{ success: boolean; data: any }>(path, noCacheRequestConfig());
         } catch (error) {
@@ -5132,7 +5348,19 @@ const adminApi = {
           if (!isRetryableRouteError(error)) throw error;
         }
       }
-      throw lastError ?? new Error('TryON insights route not available.');
+      if (!lastError || isRetryableRouteError(lastError)) {
+        return {
+          success: true,
+          data: {
+            disabled: false,
+            totalTryOns: 0,
+            measurementAverages: {},
+            recentTryOns: [],
+          },
+          message: 'Using fallback TryON insights while backend route is unavailable.',
+        };
+      }
+      throw lastError;
     })(),
 
   getDesignerFabricCountryAccess: (params?: { search?: string }) =>

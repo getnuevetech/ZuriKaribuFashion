@@ -389,6 +389,7 @@ const handleGetTryOnSummary = async (req: any, res: any, next: any) => {
 router.get('/try-on/summary', handleGetTryOnSummary);
 router.get('/tryon/summary', handleGetTryOnSummary);
 router.get('/3d-try-on/summary', handleGetTryOnSummary);
+router.get('/3d-tryon/summary', handleGetTryOnSummary);
 
 const handleGetTryOnCatalog = async (req: any, res: any, next: any) => {
   try {
@@ -488,6 +489,7 @@ const handleGetTryOnCatalog = async (req: any, res: any, next: any) => {
 router.get('/try-on/catalog', handleGetTryOnCatalog);
 router.get('/tryon/catalog', handleGetTryOnCatalog);
 router.get('/3d-try-on/catalog', handleGetTryOnCatalog);
+router.get('/3d-tryon/catalog', handleGetTryOnCatalog);
 
 const handleCreateTryOnPurchaseSession = async (req: any, res: any, next: any) => {
   try {
@@ -578,6 +580,7 @@ const handleCreateTryOnPurchaseSession = async (req: any, res: any, next: any) =
 router.post('/try-on/purchase/session', handleCreateTryOnPurchaseSession);
 router.post('/tryon/purchase/session', handleCreateTryOnPurchaseSession);
 router.post('/3d-try-on/purchase/session', handleCreateTryOnPurchaseSession);
+router.post('/3d-tryon/purchase/session', handleCreateTryOnPurchaseSession);
 
 const handleTryOnPurchaseComplete = async (req: any, res: any, next: any) => {
   try {
@@ -701,6 +704,8 @@ router.post('/tryon/purchase', handleTryOnPurchaseComplete);
 router.post('/tryon/purchase/complete', handleTryOnPurchaseComplete);
 router.post('/3d-try-on/purchase', handleTryOnPurchaseComplete);
 router.post('/3d-try-on/purchase/complete', handleTryOnPurchaseComplete);
+router.post('/3d-tryon/purchase', handleTryOnPurchaseComplete);
+router.post('/3d-tryon/purchase/complete', handleTryOnPurchaseComplete);
 
 const handleRunTryOnBatch = async (req: any, res: any, next: any) => {
   try {
@@ -863,6 +868,7 @@ const handleRunTryOnBatch = async (req: any, res: any, next: any) => {
 router.post('/try-on/batch', handleRunTryOnBatch);
 router.post('/tryon/batch', handleRunTryOnBatch);
 router.post('/3d-try-on/batch', handleRunTryOnBatch);
+router.post('/3d-tryon/batch', handleRunTryOnBatch);
 
 // Get customer orders
 router.get('/orders', async (req, res, next) => {

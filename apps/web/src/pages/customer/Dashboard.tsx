@@ -202,7 +202,7 @@ export default function CustomerDashboard() {
       } else if (tryOnSummaryRes.status === 'rejected') {
         const message = String((tryOnSummaryRes.reason as any)?.response?.data?.message || '').toLowerCase();
         if (message.includes('route not found') || message.includes('not found')) {
-          setTryOnError('3D TryON is currently unavailable on this backend deployment. Please redeploy API.');
+          setTryOnError('Unable to load 3D TryON details right now. Please try again shortly.');
         } else if (message) {
           setTryOnError(String((tryOnSummaryRes.reason as any)?.response?.data?.message || ''));
         }
