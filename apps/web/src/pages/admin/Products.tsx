@@ -93,6 +93,7 @@ export default function AdminProducts() {
   const [activeTab, setActiveTab] = useState<'all' | 'fabrics' | 'designs' | 'ready-to-wear'>('all');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
+  const [readyVariantsDirty, setReadyVariantsDirty] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkAction, setBulkAction] = useState<ModerationAction>('REQUEST_CHANGES');
   const [imagesDirty, setImagesDirty] = useState(false);
@@ -738,11 +739,33 @@ export default function AdminProducts() {
       readyVariants: [{ size: 'M', color: 'DEFAULT', price: 0, stock: 0 }],
     });
     setImagesDirty(false);
+    setReadyVariantsDirty(false);
     setImageUrlInput('');
     setShowModal(true);
   };
 
   const openEditModal = (product: Product) => {
+    const matchedCategoryId =
+      options.categories.find((item) => String(item.name || '').trim().toLowerCase() === String(product.category || '').trim().toLowerCase())?.id ||
+      '';
+    const matchedMaterialTypeId =
+      options.materials.find((item) => String(item.name || '').trim().toLowerCase() === String(product.category || '').trim().toLowerCase())?.id ||
+      '';
+    const existingReadyVariants = (
+      Array.isArray((product as any).readyVariants)
+        ? (product as any).readyVariants
+        : Array.isArray((product as any).sizeVariations)
+          ? (product as any).sizeVariations
+          : []
+    )
+      .map((entry: any) => ({
+        size: String(entry?.size || '').trim() || 'M',
+        color: String(entry?.color || 'DEFAULT').trim() || 'DEFAULT',
+        price: Number(entry?.price || product.finalPrice || 0),
+        stock: Math.max(0, Number(entry?.stock || 0)),
+      }))
+      .filter((entry: any) => entry.size && Number.isFinite(entry.price));
+
     setEditing(product);
     setError('');
     setSuccess('');
@@ -752,8 +775,8 @@ export default function AdminProducts() {
       name: product.name,
       description: product.description || '',
       price: Number(product.finalPrice || 0),
-      materialTypeId: '',
-      categoryId: '',
+      materialTypeId: matchedMaterialTypeId,
+      categoryId: matchedCategoryId,
       sellerId: product.sellerId || '',
       designerId: product.designerId || '',
       status: product.status,
@@ -766,9 +789,13 @@ export default function AdminProducts() {
       stockYards: 0,
       stock: 0,
       size: 'M',
-      readyVariants: [{ size: 'M', color: 'DEFAULT', price: Number(product.finalPrice || 0), stock: 0 }],
+      readyVariants:
+        existingReadyVariants.length > 0
+          ? existingReadyVariants
+          : [{ size: 'M', color: 'DEFAULT', price: Number(product.finalPrice || 0), stock: 0 }],
     });
     setImagesDirty(false);
+    setReadyVariantsDirty(false);
     setImageUrlInput('');
     setShowModal(true);
   };
@@ -797,23 +824,23 @@ export default function AdminProducts() {
         return;
       }
       if (currentType === 'FABRIC') {
-        if (!form.sellerId) {
+        if (!editing && !form.sellerId) {
           setModalError('Please select a seller for this fabric product.');
           setSaving(false);
           return;
         }
-        if (!form.materialTypeId) {
+        if (!editing && !form.materialTypeId) {
           setModalError('Please select a material type for this fabric product.');
           setSaving(false);
           return;
         }
       } else {
-        if (!form.designerId) {
+        if (!editing && !form.designerId) {
           setModalError('Please select a designer for this product.');
           setSaving(false);
           return;
         }
-        if (!form.categoryId) {
+        if (!editing && !form.categoryId) {
           setModalError('Please select a style for this product.');
           setSaving(false);
           return;
@@ -877,6 +904,15 @@ export default function AdminProducts() {
           stock: form.stock,
           stockYards: form.stockYards,
           minYards: form.minYards,
+          variants:
+            editing.type === 'READY_TO_WEAR' && readyVariantsDirty
+              ? form.readyVariants.map((variant) => ({
+                  size: String(variant.size || '').trim().toUpperCase(),
+                  color: String(variant.color || 'DEFAULT').trim().toUpperCase() || 'DEFAULT',
+                  price: Number(variant.price || 0),
+                  stock: Math.max(0, Math.floor(Number(variant.stock || 0))),
+                }))
+              : undefined,
         });
       } else {
         const created = await api.admin.createProduct({
@@ -923,6 +959,7 @@ export default function AdminProducts() {
       setShowModal(false);
       setModalError('');
       setImagesDirty(false);
+      setReadyVariantsDirty(false);
       setImageUrlInput('');
       await fetchProducts();
     } catch (error) {
@@ -1801,15 +1838,16 @@ export default function AdminProducts() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() =>
+                      onClick={() => {
+                        setReadyVariantsDirty(true);
                         setForm((prev) => ({
                           ...prev,
                           readyVariants: [
                             ...prev.readyVariants,
                             { size: 'M', color: 'DEFAULT', price: Number(prev.price || 0), stock: 0 },
                           ],
-                        }))
-                      }
+                        }));
+                      }}
                     >
                       Add Variant
                     </Button>
@@ -1819,27 +1857,29 @@ export default function AdminProducts() {
                       <div key={`${index}-${variant.size}-${variant.color}`} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
                         <input
                           value={variant.size}
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            setReadyVariantsDirty(true);
                             setForm((prev) => ({
                               ...prev,
                               readyVariants: prev.readyVariants.map((entry, rowIndex) =>
                                 rowIndex === index ? { ...entry, size: event.target.value } : entry
                               ),
-                            }))
-                          }
+                            }));
+                          }}
                           placeholder="Size (e.g. M)"
                           className="rounded border px-2 py-1 text-sm md:col-span-2"
                         />
                         <input
                           value={variant.color}
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            setReadyVariantsDirty(true);
                             setForm((prev) => ({
                               ...prev,
                               readyVariants: prev.readyVariants.map((entry, rowIndex) =>
                                 rowIndex === index ? { ...entry, color: event.target.value } : entry
                               ),
-                            }))
-                          }
+                            }));
+                          }}
                           placeholder="Color (e.g. Black)"
                           className="rounded border px-2 py-1 text-sm md:col-span-3"
                         />
@@ -1848,14 +1888,15 @@ export default function AdminProducts() {
                           min={0}
                           step="0.01"
                           value={variant.price}
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            setReadyVariantsDirty(true);
                             setForm((prev) => ({
                               ...prev,
                               readyVariants: prev.readyVariants.map((entry, rowIndex) =>
                                 rowIndex === index ? { ...entry, price: Number(event.target.value || 0) } : entry
                               ),
-                            }))
-                          }
+                            }));
+                          }}
                           placeholder="Price"
                           className="rounded border px-2 py-1 text-sm md:col-span-2"
                         />
@@ -1864,14 +1905,15 @@ export default function AdminProducts() {
                           min={0}
                           step="1"
                           value={variant.stock}
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            setReadyVariantsDirty(true);
                             setForm((prev) => ({
                               ...prev,
                               readyVariants: prev.readyVariants.map((entry, rowIndex) =>
                                 rowIndex === index ? { ...entry, stock: Number(event.target.value || 0) } : entry
                               ),
-                            }))
-                          }
+                            }));
+                          }}
                           placeholder="Qty"
                           className="rounded border px-2 py-1 text-sm md:col-span-2"
                         />
@@ -1880,12 +1922,13 @@ export default function AdminProducts() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() =>
+                            onClick={() => {
+                              setReadyVariantsDirty(true);
                               setForm((prev) => ({
                                 ...prev,
                                 readyVariants: prev.readyVariants.filter((_, rowIndex) => rowIndex !== index),
-                              }))
-                            }
+                              }));
+                            }}
                             disabled={form.readyVariants.length <= 1}
                           >
                             Remove
