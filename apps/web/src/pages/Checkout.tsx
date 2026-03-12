@@ -77,6 +77,54 @@ interface SuggestedCheckoutProduct {
   href: string;
 }
 
+interface SavedCustomerAddress {
+  id: string;
+  label?: string;
+  fullName?: string;
+  address?: string;
+  city?: string;
+  postalCode?: string;
+  country?: string;
+  phone?: string;
+  isDefault?: boolean;
+}
+
+const parseAddressLines = (address: unknown) => {
+  const tokens = String(address || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (tokens.length === 0) {
+    return { addressLine1: '', addressLine2: '', state: '' };
+  }
+  if (tokens.length === 1) {
+    return { addressLine1: tokens[0], addressLine2: '', state: '' };
+  }
+  if (tokens.length === 2) {
+    return { addressLine1: tokens[0], addressLine2: '', state: tokens[1] };
+  }
+  return {
+    addressLine1: tokens[0],
+    addressLine2: tokens.slice(1, -1).join(', '),
+    state: tokens[tokens.length - 1],
+  };
+};
+
+const mapSavedAddressToShipping = (address: SavedCustomerAddress): ShippingAddress => {
+  const parsed = parseAddressLines(address.address);
+  const countryCode = resolveCountryCode(address.country);
+  return {
+    fullName: String(address.fullName || ''),
+    addressLine1: parsed.addressLine1,
+    addressLine2: parsed.addressLine2,
+    city: String(address.city || ''),
+    state: parsed.state,
+    postalCode: String(address.postalCode || ''),
+    country: countryCode || String(address.country || ''),
+    phone: String(address.phone || ''),
+  };
+};
+
 export default function Checkout() {
   const navigate = useNavigate();
   const stripe = useStripe();
@@ -93,6 +141,9 @@ export default function Checkout() {
   const [suggestedProducts, setSuggestedProducts] = useState<SuggestedCheckoutProduct[]>([]);
   const [paymentProviders, setPaymentProviders] = useState<PaymentProviderOption[]>([]);
   const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<string>('STRIPE');
+  const [savedAddresses, setSavedAddresses] = useState<SavedCustomerAddress[]>([]);
+  const [savedAddressesLoading, setSavedAddressesLoading] = useState(false);
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState('');
   const [shippingQuotes, setShippingQuotes] = useState<ShippingQuoteOption[]>([]);
   const [selectedShippingQuoteId, setSelectedShippingQuoteId] = useState<string>('');
   const [shippingQuotesLoading, setShippingQuotesLoading] = useState(false);
@@ -169,6 +220,53 @@ export default function Checkout() {
         ]);
       });
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    setSavedAddressesLoading(true);
+    api.customer
+      .getAddresses()
+      .then((response) => {
+        if (cancelled || !response.success) return;
+        const rows = Array.isArray(response.data) ? response.data : [];
+        const normalized = rows.map((entry: any) => ({
+          id: String(entry?.id || ''),
+          label: String(entry?.label || ''),
+          fullName: String(entry?.fullName || ''),
+          address: String(entry?.address || ''),
+          city: String(entry?.city || ''),
+          postalCode: entry?.postalCode ? String(entry.postalCode) : '',
+          country: String(entry?.country || ''),
+          phone: String(entry?.phone || ''),
+          isDefault: Boolean(entry?.isDefault),
+        })) as SavedCustomerAddress[];
+        setSavedAddresses(normalized);
+
+        setShippingAddress((prev) => {
+          const hasManualAddress = Boolean(
+            String(prev.addressLine1 || '').trim() ||
+              String(prev.city || '').trim() ||
+              String(prev.country || '').trim()
+          );
+          if (hasManualAddress) return prev;
+          const preferred = normalized.find((entry) => entry.isDefault) || normalized[0];
+          if (!preferred?.id) return prev;
+          setSelectedSavedAddressId(preferred.id);
+          return { ...prev, ...mapSavedAddressToShipping(preferred) };
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSavedAddresses([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSavedAddressesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     const countryCode = shippingCountryCode || shippingAddress.country;
@@ -339,6 +437,7 @@ export default function Checkout() {
             providerKey,
             reference: response.data.reference,
             shippingAddress,
+            selectedSavedAddressId,
             shippingQuote: selectedShippingQuote,
             promoPreview,
             promoCode,
@@ -405,25 +504,32 @@ export default function Checkout() {
   const createOrders = async (
     paymentIntentId: string,
     paymentMethod: string,
-    shippingQuote: ShippingQuoteOption | null = selectedShippingQuote
+    shippingQuote: ShippingQuoteOption | null = selectedShippingQuote,
+    shippingAddressIdOverride?: string | null
   ) => {
     try {
-      const addressResponse = await api.customer.addAddress({
-        label: 'Checkout Address',
-        fullName: shippingAddress.fullName,
-        phone: shippingAddress.phone,
-        country: shippingAddress.country,
-        city: shippingAddress.city,
-        address: [shippingAddress.addressLine1, shippingAddress.addressLine2].filter(Boolean).join(', '),
-        postalCode: shippingAddress.postalCode,
-        isDefault: false,
-      });
+      const candidateAddressId = String(shippingAddressIdOverride || selectedSavedAddressId || '').trim();
+      let shippingAddressId = '';
+      if (candidateAddressId && savedAddresses.some((entry) => entry.id === candidateAddressId)) {
+        shippingAddressId = candidateAddressId;
+      } else {
+        const addressResponse = await api.customer.addAddress({
+          label: 'Checkout Address',
+          fullName: shippingAddress.fullName,
+          phone: shippingAddress.phone,
+          country: shippingAddress.country,
+          city: shippingAddress.city,
+          address: [shippingAddress.addressLine1, shippingAddress.addressLine2, shippingAddress.state].filter(Boolean).join(', '),
+          postalCode: shippingAddress.postalCode,
+          isDefault: false,
+        });
 
-      if (!addressResponse.success || !addressResponse.data?.id) {
-        throw new Error('Failed to save shipping address');
+        if (!addressResponse.success || !addressResponse.data?.id) {
+          throw new Error('Failed to save shipping address');
+        }
+        shippingAddressId = String(addressResponse.data.id);
       }
 
-      const shippingAddressId = addressResponse.data.id;
       const createdOrderNumbers: string[] = [];
       const shippingPayload = {
         shippingCostUsd: Number(shippingQuote?.priceUsd ?? shipping),
@@ -580,6 +686,9 @@ export default function Checkout() {
     if (pending.shippingAddress && typeof pending.shippingAddress === 'object') {
       setShippingAddress((prev) => ({ ...prev, ...pending.shippingAddress }));
     }
+    if (pending.selectedSavedAddressId) {
+      setSelectedSavedAddressId(String(pending.selectedSavedAddressId || ''));
+    }
     if (pending.promoPreview && typeof pending.promoPreview === 'object') {
       setPromoPreview(pending.promoPreview as PromoPreviewResult);
     }
@@ -623,7 +732,8 @@ export default function Checkout() {
         await createOrders(
           String(verifyResponse.data.paymentReference || reference),
           providerKey,
-          pendingShippingQuote
+          pendingShippingQuote,
+          pending?.selectedSavedAddressId ? String(pending.selectedSavedAddressId) : undefined
         );
       })
       .catch((err: any) => {
@@ -781,6 +891,36 @@ export default function Checkout() {
                   Enter delivery details exactly as they appear on your local courier records.
                 </p>
 
+                <div className="mb-4">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Saved Address</label>
+                  <select
+                    value={selectedSavedAddressId}
+                    onChange={(event) => {
+                      const nextId = String(event.target.value || '');
+                      setSelectedSavedAddressId(nextId);
+                      if (!nextId) return;
+                      const selected = savedAddresses.find((entry) => entry.id === nextId);
+                      if (!selected) return;
+                      setShippingAddress((prev) => ({ ...prev, ...mapSavedAddressToShipping(selected) }));
+                    }}
+                    className="w-full rounded-lg border px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-amber-500"
+                    disabled={savedAddressesLoading || savedAddresses.length === 0}
+                  >
+                    <option value="">
+                      {savedAddressesLoading
+                        ? 'Loading saved addresses...'
+                        : savedAddresses.length > 0
+                          ? 'Select saved address or continue manually'
+                          : 'No saved addresses found'}
+                    </option>
+                    {savedAddresses.map((address) => (
+                      <option key={address.id} value={address.id}>
+                        {[address.label || 'Address', address.city, address.country].filter(Boolean).join(' • ')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -790,7 +930,10 @@ export default function Checkout() {
                       type="text"
                       required
                       value={shippingAddress.fullName}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, fullName: e.target.value }))}
+                      onChange={(e) => {
+                        setSelectedSavedAddressId('');
+                        setShippingAddress(prev => ({ ...prev, fullName: e.target.value }));
+                      }}
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     />
                   </div>
@@ -803,7 +946,10 @@ export default function Checkout() {
                       type="text"
                       required
                       value={shippingAddress.addressLine1}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, addressLine1: e.target.value }))}
+                      onChange={(e) => {
+                        setSelectedSavedAddressId('');
+                        setShippingAddress(prev => ({ ...prev, addressLine1: e.target.value }));
+                      }}
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     />
                   </div>
@@ -815,7 +961,10 @@ export default function Checkout() {
                     <input
                       type="text"
                       value={shippingAddress.addressLine2}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, addressLine2: e.target.value }))}
+                      onChange={(e) => {
+                        setSelectedSavedAddressId('');
+                        setShippingAddress(prev => ({ ...prev, addressLine2: e.target.value }));
+                      }}
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     />
                   </div>
@@ -828,12 +977,15 @@ export default function Checkout() {
                       required
                       value={shippingAddress.country}
                       onChange={(e) =>
-                        setShippingAddress((prev) => ({
-                          ...prev,
-                          country: e.target.value,
-                          state: '',
-                          city: '',
-                        }))
+                        {
+                          setSelectedSavedAddressId('');
+                          setShippingAddress((prev) => ({
+                            ...prev,
+                            country: e.target.value,
+                            state: '',
+                            city: '',
+                          }));
+                        }
                       }
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     >
@@ -854,11 +1006,14 @@ export default function Checkout() {
                       required
                       value={shippingAddress.state}
                       onChange={(e) =>
-                        setShippingAddress((prev) => ({
-                          ...prev,
-                          state: e.target.value,
-                          city: '',
-                        }))
+                        {
+                          setSelectedSavedAddressId('');
+                          setShippingAddress((prev) => ({
+                            ...prev,
+                            state: e.target.value,
+                            city: '',
+                          }));
+                        }
                       }
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                       disabled={!shippingAddress.country}
@@ -912,7 +1067,10 @@ export default function Checkout() {
                     <select
                       required
                       value={shippingAddress.city}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, city: e.target.value }))}
+                      onChange={(e) => {
+                        setSelectedSavedAddressId('');
+                        setShippingAddress(prev => ({ ...prev, city: e.target.value }));
+                      }}
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                       disabled={!shippingAddress.country || !shippingAddress.state}
                     >
@@ -939,7 +1097,10 @@ export default function Checkout() {
                       type="text"
                       required
                       value={shippingAddress.postalCode}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, postalCode: e.target.value }))}
+                      onChange={(e) => {
+                        setSelectedSavedAddressId('');
+                        setShippingAddress(prev => ({ ...prev, postalCode: e.target.value }));
+                      }}
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     />
                   </div>
@@ -970,7 +1131,10 @@ export default function Checkout() {
                       type="tel"
                       required
                       value={shippingAddress.phone}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, phone: e.target.value }))}
+                      onChange={(e) => {
+                        setSelectedSavedAddressId('');
+                        setShippingAddress(prev => ({ ...prev, phone: e.target.value }));
+                      }}
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     />
                   </div>
