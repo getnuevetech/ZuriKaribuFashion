@@ -970,6 +970,15 @@ export default function AdminProducts() {
       if (editing) {
         const isFabricEdit = editing.type === 'FABRIC';
         const isReadyEdit = editing.type === 'READY_TO_WEAR';
+        const readyVariantPayload =
+          isReadyEdit && readyVariantsDirty
+            ? form.readyVariants.map((variant) => ({
+                size: String(variant.size || '').trim().toUpperCase(),
+                color: String(variant.color || 'DEFAULT').trim().toUpperCase() || 'DEFAULT',
+                price: Number(variant.price || 0),
+                stock: Math.max(0, Math.floor(Number(variant.stock || 0))),
+              }))
+            : undefined;
         await api.admin.updateProduct(editing.type, editing.id, {
           name: form.name,
           description: form.description,
@@ -985,17 +994,20 @@ export default function AdminProducts() {
           stock: isFabricEdit ? form.stock : undefined,
           stockYards: isFabricEdit ? form.stockYards : undefined,
           minYards: isFabricEdit ? form.minYards : undefined,
-          variants:
-            isReadyEdit && readyVariantsDirty
-              ? form.readyVariants.map((variant) => ({
-                  size: String(variant.size || '').trim().toUpperCase(),
-                  color: String(variant.color || 'DEFAULT').trim().toUpperCase() || 'DEFAULT',
-                  price: Number(variant.price || 0),
-                  stock: Math.max(0, Math.floor(Number(variant.stock || 0))),
-                }))
-              : undefined,
+          variants: readyVariantPayload,
+          // Backward compatibility for older admin APIs that expect `sizes`.
+          sizes: readyVariantPayload,
         });
       } else {
+        const readyVariantPayload =
+          form.type === 'READY_TO_WEAR'
+            ? form.readyVariants.map((variant) => ({
+                size: String(variant.size || '').trim().toUpperCase(),
+                color: String(variant.color || 'DEFAULT').trim().toUpperCase() || 'DEFAULT',
+                price: Number(variant.price || 0),
+                stock: Math.max(0, Math.floor(Number(variant.stock || 0))),
+              }))
+            : undefined;
         const created = await api.admin.createProduct({
           type: form.type,
           name: form.name,
@@ -1015,15 +1027,9 @@ export default function AdminProducts() {
           stockYards: form.stockYards,
           stock: form.stock,
           size: form.size || undefined,
-          variants:
-            form.type === 'READY_TO_WEAR'
-              ? form.readyVariants.map((variant) => ({
-                  size: String(variant.size || '').trim().toUpperCase(),
-                  color: String(variant.color || 'DEFAULT').trim().toUpperCase() || 'DEFAULT',
-                  price: Number(variant.price || 0),
-                  stock: Math.max(0, Math.floor(Number(variant.stock || 0))),
-                }))
-              : undefined,
+          variants: readyVariantPayload,
+          // Backward compatibility for older admin APIs that expect `sizes`.
+          sizes: readyVariantPayload,
         });
         savedId = created.data?.id || null;
         savedType = (created.data?.type as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR') || form.type;
