@@ -482,6 +482,274 @@ async function getPayPalAccessToken(integration: PaymentIntegrationRow) {
   };
 }
 
+export type PaymentSessionInput = {
+  user: { id: string; email: string; firstName?: string | null; lastName?: string | null };
+  providerKey: string;
+  amount: number;
+  currency: string;
+  reference?: string;
+  returnUrl?: string;
+  cancelUrl?: string;
+  customer?: { email?: string; name?: string; phone?: string };
+};
+
+export async function createPaymentSessionForUser(input: PaymentSessionInput) {
+  const providerKey = normalizeProviderKey(input.providerKey);
+  const provider =
+    (await readPaymentIntegrations({ activeOnly: true, providerKey }))[0] ||
+    (providerKey === 'STRIPE' && String(process.env.STRIPE_SECRET_KEY || '').trim()
+      ? ({
+          id: 'fallback-stripe',
+          providerKey: 'STRIPE',
+          displayName: 'Stripe',
+          checkoutType: 'INLINE',
+          mode: 'TEST',
+          isActive: true,
+          configSchema: [],
+          configValues: {},
+          notes: null,
+          updatedAt: new Date().toISOString(),
+        } as PaymentIntegrationRow)
+      : null);
+  if (!provider) {
+    throw Object.assign(new Error(`Payment provider ${providerKey} is not active.`), { status: 404 });
+  }
+
+  const amountMajor = Number((input.amount / 100).toFixed(2));
+  const currency = String(input.currency || 'usd').toUpperCase();
+  const reference = input.reference || `AF-${providerKey}-${Date.now()}`;
+
+  if (provider.providerKey === 'STRIPE') {
+    const stripe = getStripeClient(provider);
+    if (!stripe) {
+      throw Object.assign(new Error('Stripe is not configured. Set secretKey in Payment Integrations.'), { status: 503 });
+    }
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: input.amount,
+      currency: String(input.currency || 'usd').toLowerCase(),
+      automatic_payment_methods: { enabled: true },
+      metadata: {
+        userId: input.user.id,
+        reference,
+        provider: provider.providerKey,
+      },
+    });
+    return {
+      providerKey: provider.providerKey,
+      flow: 'INLINE' as const,
+      reference,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+    };
+  }
+
+  if (provider.providerKey === 'FLUTTERWAVE') {
+    const secretKey = readIntegrationValue(provider, 'secretKey');
+    if (!secretKey) {
+      throw Object.assign(new Error('Flutterwave is not configured. Set secretKey in Payment Integrations.'), { status: 503 });
+    }
+    const apiBase = readIntegrationValue(provider, 'apiBaseUrl') || 'https://api.flutterwave.com/v3';
+    const redirectUrl =
+      input.returnUrl ||
+      readIntegrationValue(provider, 'redirectUrl') ||
+      `${FALLBACK_FRONTEND_URL}/checkout?payment_provider=FLUTTERWAVE`;
+    const paymentOptions = readIntegrationValue(provider, 'paymentOptions') || 'card,banktransfer,ussd';
+
+    const response = await fetch(`${apiBase.replace(/\/+$/, '')}/payments`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        tx_ref: reference,
+        amount: amountMajor,
+        currency,
+        redirect_url: redirectUrl,
+        payment_options: paymentOptions,
+        customer: {
+          email: input.customer?.email || input.user.email,
+          name:
+            input.customer?.name ||
+            `${input.user.firstName || ''} ${input.user.lastName || ''}`.trim() ||
+            'Customer',
+          phonenumber: input.customer?.phone || undefined,
+        },
+        customizations: {
+          title: 'African Fashion',
+          description: 'Order payment',
+        },
+        meta: {
+          userId: input.user.id,
+          platformReference: reference,
+        },
+      }),
+    });
+    const data = await parseJsonResponse(response);
+    const checkoutUrl = String(data?.data?.link || '');
+    if (!response.ok || String(data?.status || '').toLowerCase() !== 'success' || !checkoutUrl) {
+      throw Object.assign(new Error(String(data?.message || 'Flutterwave payment initialization failed.')), {
+        status: 502,
+      });
+    }
+    return {
+      providerKey: provider.providerKey,
+      flow: 'REDIRECT' as const,
+      reference,
+      checkoutUrl,
+    };
+  }
+
+  if (provider.providerKey === 'PAYPAL') {
+    const { token, baseUrl } = await getPayPalAccessToken(provider);
+    const returnUrl =
+      input.returnUrl ||
+      readIntegrationValue(provider, 'returnUrl') ||
+      `${FALLBACK_FRONTEND_URL}/checkout?payment_provider=PAYPAL`;
+    const cancelUrl =
+      input.cancelUrl ||
+      readIntegrationValue(provider, 'cancelUrl') ||
+      `${FALLBACK_FRONTEND_URL}/checkout?payment_provider=PAYPAL&payment_cancelled=true`;
+    const response = await fetch(`${baseUrl}/v2/checkout/orders`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        intent: 'CAPTURE',
+        purchase_units: [
+          {
+            reference_id: reference,
+            amount: {
+              currency_code: currency,
+              value: amountMajor.toFixed(2),
+            },
+          },
+        ],
+        application_context: {
+          return_url: returnUrl,
+          cancel_url: cancelUrl,
+          user_action: 'PAY_NOW',
+        },
+      }),
+    });
+    const data = await parseJsonResponse(response);
+    const approveLink = Array.isArray(data?.links)
+      ? data.links.find((entry: any) => String(entry?.rel || '').toLowerCase() === 'approve')?.href
+      : '';
+    if (!response.ok || !approveLink) {
+      throw Object.assign(new Error(String(data?.message || data?.name || 'PayPal payment initialization failed.')), {
+        status: 502,
+      });
+    }
+    return {
+      providerKey: provider.providerKey,
+      flow: 'REDIRECT' as const,
+      reference: String(data?.id || reference),
+      checkoutUrl: String(approveLink),
+    };
+  }
+
+  throw Object.assign(new Error(`${provider.providerKey} initialization is not supported yet.`), { status: 400 });
+}
+
+export async function verifyPaymentForUser(input: {
+  userId: string;
+  providerKey: string;
+  reference: string;
+  payerId?: string;
+}) {
+  const providerKey = normalizeProviderKey(input.providerKey);
+  const provider = (await readPaymentIntegrations({ activeOnly: true, providerKey }))[0];
+  if (!provider) {
+    throw Object.assign(new Error(`Payment provider ${providerKey} is not active.`), { status: 404 });
+  }
+
+  if (provider.providerKey === 'STRIPE') {
+    const stripe = getStripeClient(provider);
+    if (!stripe) {
+      throw Object.assign(new Error('Stripe is not configured.'), { status: 503 });
+    }
+    const paymentIntent = await stripe.paymentIntents.retrieve(input.reference);
+    if (paymentIntent.metadata?.userId && String(paymentIntent.metadata.userId) !== String(input.userId)) {
+      throw Object.assign(new Error('Payment reference does not belong to this user.'), { status: 403 });
+    }
+    const isPaid = paymentIntent.status === 'succeeded';
+    return {
+      providerKey: provider.providerKey,
+      isPaid,
+      paymentReference: paymentIntent.id,
+      status: paymentIntent.status,
+    };
+  }
+
+  if (provider.providerKey === 'FLUTTERWAVE') {
+    const secretKey = readIntegrationValue(provider, 'secretKey');
+    const apiBase = readIntegrationValue(provider, 'apiBaseUrl') || 'https://api.flutterwave.com/v3';
+    if (!secretKey) {
+      throw Object.assign(new Error('Flutterwave is not configured.'), { status: 503 });
+    }
+    const response = await fetch(
+      `${apiBase.replace(/\/+$/, '')}/transactions/verify_by_reference?tx_ref=${encodeURIComponent(input.reference)}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    const data = await parseJsonResponse(response);
+    if (data?.data?.meta?.userId && String(data.data.meta.userId) !== String(input.userId)) {
+      throw Object.assign(new Error('Payment reference does not belong to this user.'), { status: 403 });
+    }
+    const transactionStatus = String(data?.data?.status || '').toLowerCase();
+    const isPaid = response.ok && String(data?.status || '').toLowerCase() === 'success' && transactionStatus === 'successful';
+    return {
+      providerKey: provider.providerKey,
+      isPaid,
+      paymentReference: String(data?.data?.id || input.reference),
+      status: String(data?.data?.status || data?.status || 'unknown'),
+    };
+  }
+
+  if (provider.providerKey === 'PAYPAL') {
+    const { token, baseUrl } = await getPayPalAccessToken(provider);
+    const captureResponse = await fetch(`${baseUrl}/v2/checkout/orders/${encodeURIComponent(input.reference)}/capture`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    let data = await parseJsonResponse(captureResponse);
+    if (!captureResponse.ok) {
+      const detail = String(data?.details?.[0]?.issue || '');
+      if (detail === 'ORDER_ALREADY_CAPTURED') {
+        const statusResponse = await fetch(`${baseUrl}/v2/checkout/orders/${encodeURIComponent(input.reference)}`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        data = await parseJsonResponse(statusResponse);
+      }
+    }
+    const status = String(data?.status || '').toUpperCase();
+    const isPaid = status === 'COMPLETED';
+    return {
+      providerKey: provider.providerKey,
+      isPaid,
+      paymentReference: String(data?.id || input.reference),
+      status: status || 'UNKNOWN',
+    };
+  }
+
+  throw Object.assign(new Error(`Verification is not supported for provider ${provider.providerKey}.`), { status: 400 });
+}
+
 router.get(
   '/admin/integrations',
   authenticate,

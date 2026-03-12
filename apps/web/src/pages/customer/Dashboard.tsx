@@ -16,6 +16,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { api } from '../../services/api';
 import StatCard from '../../components/dashboard/StatCard';
 import ActivityFeed from '../../components/dashboard/ActivityFeed';
@@ -85,6 +86,14 @@ interface TryOnCatalogItem {
   style?: string;
 }
 
+interface PaymentProviderOption {
+  providerKey: string;
+  displayName: string;
+  checkoutType: 'INLINE' | 'REDIRECT';
+  mode: 'TEST' | 'LIVE';
+  publicConfig?: Record<string, any>;
+}
+
 const statusConfig: Record<string, { icon: any; color: string; label: string; bgColor: string }> = {
   PENDING: { icon: Clock, color: 'text-yellow-600', label: 'Pending', bgColor: 'bg-yellow-50' },
   CONFIRMED: { icon: CheckCircle, color: 'text-blue-600', label: 'Confirmed', bgColor: 'bg-blue-50' },
@@ -97,6 +106,8 @@ const statusConfig: Record<string, { icon: any; color: string; label: string; bg
 };
 
 export default function CustomerDashboard() {
+  const stripe = useStripe();
+  const elements = useElements();
   const [stats, setStats] = useState<CustomerStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
@@ -111,6 +122,14 @@ export default function CustomerDashboard() {
   const [tryOnPurchasing, setTryOnPurchasing] = useState(false);
   const [tryOnMessage, setTryOnMessage] = useState('');
   const [tryOnError, setTryOnError] = useState('');
+  const [paymentProviders, setPaymentProviders] = useState<PaymentProviderOption[]>([]);
+  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState('STRIPE');
+  const [tryOnStripeClientSecret, setTryOnStripeClientSecret] = useState<string | null>(null);
+  const [pendingTryOnPurchase, setPendingTryOnPurchase] = useState<{
+    purchaseId: string;
+    providerKey: string;
+    verificationReference: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -119,11 +138,12 @@ export default function CustomerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsRes, ordersRes, tryOnSummaryRes, tryOnCatalogRes] = await Promise.all([
+      const [statsRes, ordersRes, tryOnSummaryRes, tryOnCatalogRes, paymentOptionsRes] = await Promise.all([
         api.customer.getProfile(),
         api.customer.getOrders(),
         api.customer.getTryOnSummary(),
         api.customer.getTryOnCatalog({ productType: 'ALL', page: 1, limit: 120 }),
+        api.payments.getOptions(),
       ]);
       
       if (statsRes.success) {
@@ -148,6 +168,20 @@ export default function CustomerDashboard() {
       }
       if (tryOnCatalogRes.success) {
         setTryOnCatalog((tryOnCatalogRes.data || []) as TryOnCatalogItem[]);
+      }
+      if (paymentOptionsRes.success) {
+        const providers = (paymentOptionsRes.data?.providers || []).map((entry: any) => ({
+          providerKey: String(entry.providerKey || 'STRIPE').toUpperCase(),
+          displayName: String(entry.displayName || entry.providerKey || 'Payment Provider'),
+          checkoutType: entry.checkoutType === 'REDIRECT' ? 'REDIRECT' : 'INLINE',
+          mode: entry.mode === 'LIVE' ? 'LIVE' : 'TEST',
+          publicConfig: entry.publicConfig && typeof entry.publicConfig === 'object' ? entry.publicConfig : {},
+        })) as PaymentProviderOption[];
+        setPaymentProviders(providers);
+        setSelectedPaymentProvider((previous) => {
+          const current = providers.find((entry) => entry.providerKey === previous);
+          return current ? current.providerKey : providers[0]?.providerKey || 'STRIPE';
+        });
       }
       
       // Mock activities
@@ -218,22 +252,169 @@ export default function CustomerDashboard() {
     try {
       setTryOnPurchasing(true);
       setTryOnError('');
-      const response = await api.customer.purchaseTryOnCredits({ bundles: 1 });
-      if (response.success) {
-        setTryOnMessage(
-          `Purchased ${response.data?.creditsAdded || 0} additional TryON credits for $${Number(
-            response.data?.amountChargedUsd || 0
-          ).toFixed(2)}.`
-        );
-        const summaryRes = await api.customer.getTryOnSummary();
-        if (summaryRes.success) setTryOnSummary(summaryRes.data || null);
+      setTryOnMessage('');
+      setTryOnStripeClientSecret(null);
+      setPendingTryOnPurchase(null);
+      const providerKey = selectedPaymentProvider || paymentProviders[0]?.providerKey || 'STRIPE';
+      const returnUrl = `${window.location.origin}/dashboard?tryon_payment=1&provider=${encodeURIComponent(providerKey)}`;
+      const cancelUrl = `${window.location.origin}/dashboard?tryon_payment=1&provider=${encodeURIComponent(providerKey)}&cancelled=true`;
+      const response = await api.customer.createTryOnPurchaseSession({
+        bundles: 1,
+        providerKey,
+        returnUrl,
+        cancelUrl,
+      });
+      const purchaseId = String(response.data?.purchaseId || '');
+      const payment = response.data?.payment || {};
+      if (!purchaseId) {
+        throw new Error('Unable to initialize TryON purchase.');
       }
+      const verificationReference = String(payment.paymentIntentId || payment.reference || '').trim();
+      if (!verificationReference) {
+        throw new Error('Missing payment reference from provider.');
+      }
+      if (payment.flow === 'INLINE') {
+        if (!payment.clientSecret) {
+          throw new Error('Inline payment did not return client secret.');
+        }
+        setTryOnStripeClientSecret(String(payment.clientSecret));
+        setPendingTryOnPurchase({
+          purchaseId,
+          providerKey,
+          verificationReference,
+        });
+        setTryOnMessage('Card details required: complete payment below to unlock TryON credits.');
+        return;
+      }
+      if (payment.flow === 'REDIRECT' && payment.checkoutUrl) {
+        sessionStorage.setItem(
+          'tryon_pending_payment',
+          JSON.stringify({
+            purchaseId,
+            providerKey,
+            verificationReference,
+            createdAt: Date.now(),
+          })
+        );
+        window.location.href = String(payment.checkoutUrl);
+        return;
+      }
+      throw new Error('Unsupported payment flow for selected provider.');
     } catch (error: any) {
       setTryOnError(error?.response?.data?.message || 'Failed to purchase TryON credits.');
     } finally {
       setTryOnPurchasing(false);
     }
   };
+
+  const handleConfirmInlineTryOnPayment = async () => {
+    try {
+      setTryOnPurchasing(true);
+      setTryOnError('');
+      if (!stripe || !elements) {
+        throw new Error('Stripe is not ready yet. Please try again.');
+      }
+      if (!tryOnStripeClientSecret || !pendingTryOnPurchase) {
+        throw new Error('No pending inline TryON payment found.');
+      }
+      const card = elements.getElement(CardElement);
+      if (!card) {
+        throw new Error('Card input is not ready.');
+      }
+      const result = await stripe.confirmCardPayment(tryOnStripeClientSecret, {
+        payment_method: {
+          card,
+        },
+      });
+      if (result.error) {
+        throw new Error(result.error.message || 'Card payment failed.');
+      }
+      if (!result.paymentIntent || result.paymentIntent.status !== 'succeeded') {
+        throw new Error(`Payment not completed. Status: ${result.paymentIntent?.status || 'unknown'}`);
+      }
+      const complete = await api.customer.completeTryOnPurchase({
+        purchaseId: pendingTryOnPurchase.purchaseId,
+        providerKey: pendingTryOnPurchase.providerKey,
+        reference: String(result.paymentIntent.id),
+      });
+      if (complete.success) {
+        setTryOnMessage(
+          `Purchased ${complete.data?.creditsAdded || 0} TryON credits for $${Number(
+            complete.data?.amountChargedUsd || 0
+          ).toFixed(2)}.`
+        );
+        setTryOnStripeClientSecret(null);
+        setPendingTryOnPurchase(null);
+        const summaryRes = await api.customer.getTryOnSummary();
+        if (summaryRes.success) setTryOnSummary(summaryRes.data || null);
+      }
+    } catch (error: any) {
+      setTryOnError(error?.response?.data?.message || error?.message || 'Failed to complete inline payment.');
+    } finally {
+      setTryOnPurchasing(false);
+    }
+  };
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get('tryon_payment') !== '1') return;
+    setActiveTab('tryon');
+    const providerKey = String(query.get('provider') || '').toUpperCase();
+    const cancelled = query.get('cancelled') === 'true' || query.get('payment_cancelled') === 'true';
+    const pendingRaw = sessionStorage.getItem('tryon_pending_payment');
+    if (!pendingRaw) return;
+    let pending: any = null;
+    try {
+      pending = JSON.parse(pendingRaw);
+    } catch {
+      sessionStorage.removeItem('tryon_pending_payment');
+      return;
+    }
+    if (!pending || String(pending.providerKey || '').toUpperCase() !== providerKey) return;
+    if (cancelled) {
+      setTryOnError('Payment was cancelled. You can choose a provider and try again.');
+      sessionStorage.removeItem('tryon_pending_payment');
+      window.history.replaceState({}, '', '/dashboard');
+      return;
+    }
+    const reference =
+      providerKey === 'FLUTTERWAVE'
+        ? String(query.get('tx_ref') || pending.verificationReference || '')
+        : String(query.get('token') || pending.verificationReference || '');
+    if (!reference) {
+      setTryOnError('Unable to resolve payment reference from provider callback.');
+      return;
+    }
+    setTryOnPurchasing(true);
+    setTryOnError('');
+    api.customer
+      .completeTryOnPurchase({
+        purchaseId: String(pending.purchaseId || ''),
+        providerKey,
+        reference,
+        payerId: query.get('PayerID') || undefined,
+      })
+      .then(async (complete) => {
+        if (!complete.success) {
+          throw new Error('TryON payment could not be completed.');
+        }
+        setTryOnMessage(
+          `Purchased ${complete.data?.creditsAdded || 0} TryON credits for $${Number(
+            complete.data?.amountChargedUsd || 0
+          ).toFixed(2)}.`
+        );
+        const summaryRes = await api.customer.getTryOnSummary();
+        if (summaryRes.success) setTryOnSummary(summaryRes.data || null);
+      })
+      .catch((error: any) => {
+        setTryOnError(error?.response?.data?.message || error?.message || 'Failed to finalize TryON payment.');
+      })
+      .finally(() => {
+        setTryOnPurchasing(false);
+        sessionStorage.removeItem('tryon_pending_payment');
+        window.history.replaceState({}, '', '/dashboard');
+      });
+  }, []);
 
   const handleRunTryOnBatch = async () => {
     try {
@@ -608,16 +789,54 @@ export default function CustomerDashboard() {
                   </span>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={handleTryOnPurchase} disabled={tryOnPurchasing}>
-                {tryOnPurchasing ? 'Processing...' : `Buy +${Number(tryOnSummary?.settings?.additionalTryOnBundleSize || 5)} for $${Number(
-                  tryOnSummary?.settings?.additionalTryOnBundlePriceUsd || 1
-                ).toFixed(2)}`}
-              </Button>
+              <div className="flex flex-col gap-2">
+                <select
+                  value={selectedPaymentProvider}
+                  onChange={(event) => setSelectedPaymentProvider(event.target.value)}
+                  className="rounded border bg-white px-3 py-2 text-xs"
+                >
+                  {paymentProviders.map((provider) => (
+                    <option key={provider.providerKey} value={provider.providerKey}>
+                      {provider.displayName} ({provider.providerKey})
+                    </option>
+                  ))}
+                  {paymentProviders.length === 0 ? <option value="STRIPE">Stripe (default)</option> : null}
+                </select>
+                <Button variant="outline" size="sm" onClick={handleTryOnPurchase} disabled={tryOnPurchasing}>
+                  {tryOnPurchasing ? 'Processing...' : `Buy +${Number(tryOnSummary?.settings?.additionalTryOnBundleSize || 5)} for $${Number(
+                    tryOnSummary?.settings?.additionalTryOnBundlePriceUsd || 1
+                  ).toFixed(2)}`}
+                </Button>
+              </div>
             </div>
           </div>
 
           {tryOnError ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{tryOnError}</div> : null}
           {tryOnMessage ? <div className="rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{tryOnMessage}</div> : null}
+          {tryOnStripeClientSecret && pendingTryOnPurchase ? (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <h3 className="mb-2 text-sm font-semibold text-blue-900">Complete Card Payment</h3>
+              <div className="rounded border bg-white p-3">
+                <CardElement options={{ hidePostalCode: true }} />
+              </div>
+              <div className="mt-3 flex gap-2">
+                <Button size="sm" onClick={handleConfirmInlineTryOnPayment} disabled={tryOnPurchasing}>
+                  {tryOnPurchasing ? 'Confirming...' : 'Confirm Card Payment'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setTryOnStripeClientSecret(null);
+                    setPendingTryOnPurchase(null);
+                  }}
+                  disabled={tryOnPurchasing}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="rounded-xl border bg-white p-4">
             <h3 className="mb-3 text-sm font-semibold text-gray-900">Body Measurements for TryON (cm)</h3>

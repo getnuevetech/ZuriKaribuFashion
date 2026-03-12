@@ -4052,7 +4052,15 @@ const customerApi = {
     selectedProducts: Array<{ productType: 'DESIGN' | 'READY_TO_WEAR'; productId: string }>;
   }) => apiService.post<{ success: boolean; data?: any; requiresPayment?: boolean; message?: string }>('/customer/try-on/batch', payload),
 
-  purchaseTryOnCredits: (payload: { bundles: number }) =>
+  createTryOnPurchaseSession: (payload: {
+    bundles: number;
+    providerKey: string;
+    returnUrl?: string;
+    cancelUrl?: string;
+  }) =>
+    apiService.post<{ success: boolean; data?: any; message?: string }>('/customer/try-on/purchase/session', payload),
+
+  completeTryOnPurchase: (payload: { purchaseId: string; providerKey: string; reference: string; payerId?: string }) =>
     apiService.post<{ success: boolean; data?: any; message?: string }>('/customer/try-on/purchase', payload),
 
   getOrders: (params?: { page?: number; limit?: number }) =>

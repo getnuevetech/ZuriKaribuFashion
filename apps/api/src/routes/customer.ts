@@ -1,9 +1,11 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma, ProductStatus, UserRole } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import { autoCloseOverdueDeliveredOrders } from '../utils/order-workflow';
+import { createPaymentSessionForUser, verifyPaymentForUser } from './payments';
 import { readCustomerTryOnProfileState } from '../utils/try-on-insights';
 import { readTryOnSettings } from '../utils/try-on-settings';
 
@@ -29,6 +31,50 @@ const normalizeMeasurementMap = (input: unknown) => {
   }
   return output;
 };
+
+type PendingTryOnPurchase = {
+  id: string;
+  bundles: number;
+  creditsToAdd: number;
+  amountUsd: number;
+  providerKey: string;
+  sessionReference: string;
+  verificationReference: string;
+  status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
+  createdAt: string;
+  completedAt?: string;
+  paymentReference?: string;
+};
+
+const readPendingTryOnPurchases = (avatarData: unknown): PendingTryOnPurchase[] => {
+  const source = avatarData && typeof avatarData === 'object' ? (avatarData as Record<string, unknown>) : {};
+  const raw = Array.isArray(source.tryOnPendingPurchases) ? source.tryOnPendingPurchases : [];
+  return raw
+    .map((entry: any) => ({
+      id: String(entry?.id || '').trim(),
+      bundles: Math.max(1, Math.floor(Number(entry?.bundles || 1))),
+      creditsToAdd: Math.max(1, Math.floor(Number(entry?.creditsToAdd || 1))),
+      amountUsd: Number(Number(entry?.amountUsd || 0).toFixed(2)),
+      providerKey: String(entry?.providerKey || '').toUpperCase(),
+      sessionReference: String(entry?.sessionReference || '').trim(),
+      verificationReference: String(entry?.verificationReference || entry?.sessionReference || '').trim(),
+      status: (String(entry?.status || 'PENDING').toUpperCase() === 'COMPLETED' ? 'COMPLETED' : 'PENDING') as
+        | 'PENDING'
+        | 'COMPLETED'
+        | 'CANCELLED',
+      createdAt: String(entry?.createdAt || new Date().toISOString()),
+      completedAt: entry?.completedAt ? String(entry.completedAt) : undefined,
+      paymentReference: entry?.paymentReference ? String(entry.paymentReference) : undefined,
+    }))
+    .filter((entry) => entry.id && entry.providerKey && entry.verificationReference);
+};
+
+const writePendingTryOnPurchases = (baseAvatarData: unknown, rows: PendingTryOnPurchase[]) => ({
+  ...(baseAvatarData && typeof baseAvatarData === 'object' ? (baseAvatarData as any) : {}),
+  tryOnPendingPurchases: rows
+    .slice(-50)
+    .map((row) => ({ ...row })),
+});
 
 const resolveCustomerProfile = async (userId: string) => {
   const existing = await prisma.customerProfile.findUnique({ where: { userId } });
@@ -437,7 +483,7 @@ router.get('/try-on/catalog', async (req, res, next) => {
   }
 });
 
-router.post('/try-on/purchase', async (req, res, next) => {
+router.post('/try-on/purchase/session', async (req, res, next) => {
   try {
     const settingsPayload = await readTryOnSettings();
     if (!settingsPayload.settings.enabled || settingsPayload.settings.applyLocations.customerDashboard === false) {
@@ -449,6 +495,96 @@ router.post('/try-on/purchase', async (req, res, next) => {
     const payload = z
       .object({
         bundles: z.number().int().min(1).max(100).default(1),
+        providerKey: z.string().min(2),
+        returnUrl: z.string().url().optional(),
+        cancelUrl: z.string().url().optional(),
+      })
+      .parse(req.body || {});
+    const settings = settingsPayload.settings;
+    const amountUsd = Number((payload.bundles * settings.additionalTryOnBundlePriceUsd).toFixed(2));
+    const amountMinor = Math.max(1, Math.round(amountUsd * 100));
+    const providerKey = String(payload.providerKey || '').toUpperCase();
+    const profile = await resolveCustomerProfile(req.user!.id);
+    const measurement = await prisma.customerMeasurement.upsert({
+      where: { customerProfileId: profile.id },
+      create: {
+        customerProfileId: profile.id,
+        measurements: {},
+        avatarData: {},
+      },
+      update: {},
+    });
+    const creditIncrement = payload.bundles * settings.additionalTryOnBundleSize;
+    const paymentSession = await createPaymentSessionForUser({
+      user: {
+        id: req.user!.id,
+        email: req.user!.email,
+        firstName: req.user!.firstName,
+        lastName: req.user!.lastName,
+      },
+      providerKey,
+      amount: amountMinor,
+      currency: 'usd',
+      reference: `TRYON-${req.user!.id.slice(0, 8)}-${Date.now()}`,
+      returnUrl: payload.returnUrl,
+      cancelUrl: payload.cancelUrl,
+      customer: {
+        email: req.user!.email,
+        name: `${req.user!.firstName || ''} ${req.user!.lastName || ''}`.trim() || undefined,
+      },
+    });
+    const pendingRows = readPendingTryOnPurchases(measurement.avatarData);
+    const purchaseId = randomUUID();
+    const verificationReference =
+      String(paymentSession.paymentIntentId || paymentSession.reference || '').trim();
+    pendingRows.push({
+      id: purchaseId,
+      bundles: payload.bundles,
+      creditsToAdd: creditIncrement,
+      amountUsd,
+      providerKey,
+      sessionReference: String(paymentSession.reference || '').trim(),
+      verificationReference,
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+    });
+    await prisma.customerMeasurement.update({
+      where: { id: measurement.id },
+      data: {
+        avatarData: writePendingTryOnPurchases(measurement.avatarData, pendingRows) as any,
+      },
+    });
+    res.json({
+      success: true,
+      message: 'Try-On payment session created successfully.',
+      data: {
+        purchaseId,
+        bundles: payload.bundles,
+        creditsToAdd: creditIncrement,
+        amountUsd,
+        payment: paymentSession,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const handleTryOnPurchaseComplete = async (req: any, res: any, next: any) => {
+  try {
+    const settingsPayload = await readTryOnSettings();
+    if (!settingsPayload.settings.enabled || settingsPayload.settings.applyLocations.customerDashboard === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Try-On purchasing is disabled by admin settings.',
+      });
+    }
+    const payload = z
+      .object({
+        purchaseId: z.string().min(3),
+        providerKey: z.string().min(2),
+        reference: z.string().min(1),
+        payerId: z.string().optional(),
       })
       .parse(req.body || {});
     const settings = settingsPayload.settings;
@@ -462,23 +598,70 @@ router.post('/try-on/purchase', async (req, res, next) => {
       },
       update: {},
     });
+    const pendingRows = readPendingTryOnPurchases(measurement.avatarData);
+    const target = pendingRows.find((row) => row.id === payload.purchaseId && row.status === 'PENDING');
+    if (!target) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pending Try-On purchase not found or already completed.',
+      });
+    }
+    if (String(target.providerKey).toUpperCase() !== String(payload.providerKey).toUpperCase()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment provider does not match the pending Try-On purchase.',
+      });
+    }
+    const verificationReference = String(payload.reference || '').trim();
+    const allowedReferences = new Set(
+      [String(target.verificationReference || '').trim(), String(target.sessionReference || '').trim()].filter(Boolean)
+    );
+    if (!allowedReferences.has(verificationReference)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment reference does not match the pending Try-On purchase.',
+      });
+    }
+    const verify = await verifyPaymentForUser({
+      userId: req.user!.id,
+      providerKey: target.providerKey,
+      reference: verificationReference,
+      payerId: payload.payerId,
+    });
+    if (!verify.isPaid) {
+      return res.status(402).json({
+        success: false,
+        message: 'Payment has not been completed yet.',
+        data: verify,
+      });
+    }
     const usage = readCustomerTryOnProfileState(measurement.avatarData);
-    const creditIncrement = payload.bundles * settings.additionalTryOnBundleSize;
+    const currentCharge = Number(
+      (
+        Number(
+          (measurement.avatarData && typeof measurement.avatarData === 'object'
+            ? (measurement.avatarData as any).tryOnTotalChargedUsd
+            : 0) || 0
+        ) + Number(target.amountUsd || 0)
+      ).toFixed(2)
+    );
+    const nextPendingRows = pendingRows.map((row) =>
+      row.id === target.id
+        ? {
+            ...row,
+            status: 'COMPLETED' as const,
+            completedAt: new Date().toISOString(),
+            paymentReference: String(verify.paymentReference || verificationReference),
+          }
+        : row
+    );
     const nextAvatar = {
       ...(measurement.avatarData && typeof measurement.avatarData === 'object' ? (measurement.avatarData as any) : {}),
-      tryOnPaidCreditsRemaining: usage.paidCreditsRemaining + creditIncrement,
-      tryOnPurchaseCount: usage.purchaseCount + payload.bundles,
+      tryOnPaidCreditsRemaining: usage.paidCreditsRemaining + Number(target.creditsToAdd || 0),
+      tryOnPurchaseCount: usage.purchaseCount + Number(target.bundles || 1),
       tryOnLastPurchaseAt: new Date().toISOString(),
-      tryOnTotalChargedUsd:
-        Number(
-          (
-            Number(
-              (measurement.avatarData && typeof measurement.avatarData === 'object'
-                ? (measurement.avatarData as any).tryOnTotalChargedUsd
-                : 0) || 0
-            ) + payload.bundles * settings.additionalTryOnBundlePriceUsd
-          ).toFixed(2)
-        ),
+      tryOnTotalChargedUsd: currentCharge,
+      tryOnPendingPurchases: nextPendingRows.slice(-50),
     };
     await prisma.customerMeasurement.update({
       where: { id: measurement.id },
@@ -490,16 +673,21 @@ router.post('/try-on/purchase', async (req, res, next) => {
       success: true,
       message: 'Try-On credits purchased successfully.',
       data: {
-        bundles: payload.bundles,
-        creditsAdded: creditIncrement,
-        amountChargedUsd: Number((payload.bundles * settings.additionalTryOnBundlePriceUsd).toFixed(2)),
-        paidCreditsRemaining: usage.paidCreditsRemaining + creditIncrement,
+        purchaseId: target.id,
+        bundles: target.bundles,
+        creditsAdded: target.creditsToAdd,
+        amountChargedUsd: Number(target.amountUsd || 0),
+        paidCreditsRemaining: usage.paidCreditsRemaining + Number(target.creditsToAdd || 0),
+        paymentReference: String(verify.paymentReference || verificationReference),
       },
     });
   } catch (error) {
     next(error);
   }
-});
+};
+
+router.post('/try-on/purchase', handleTryOnPurchaseComplete);
+router.post('/try-on/purchase/complete', handleTryOnPurchaseComplete);
 
 router.post('/try-on/batch', async (req, res, next) => {
   try {
