@@ -303,6 +303,7 @@ export default function SellerDashboard() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [isSavingProduct, setIsSavingProduct] = useState(false);
   const [productError, setProductError] = useState<string | null>(null);
+  const [dashboardLoadError, setDashboardLoadError] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [materialOptions, setMaterialOptions] = useState<MaterialOption[]>([]);
   const [uploadingProductImage, setUploadingProductImage] = useState(false);
@@ -400,6 +401,7 @@ export default function SellerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      setDashboardLoadError(null);
       const [dashboardResult, fabricsResult, ordersResult, materialsResult, currencyResult, governanceResult, tryOnInsightsResult] = await Promise.allSettled([
         api.seller.getDashboard(),
         api.seller.getFabrics(),
@@ -427,6 +429,27 @@ export default function SellerDashboard() {
         const message = String(reason?.response?.data?.message || reason?.message || 'unknown');
         return `request-failed:${status ?? 'no-status'}:${message.slice(0, 120)}`;
       };
+      const getSettledFailureMessage = (label: string, result: PromiseSettledResult<any>) => {
+        if (result.status === 'rejected') {
+          const reason: any = result.reason;
+          const status = reason?.response?.status;
+          const message = String(reason?.response?.data?.message || reason?.message || 'Request failed');
+          return `${label}: ${status ? `${status} ` : ''}${message}`;
+        }
+        if (!result.value?.success) {
+          const message = String(result.value?.message || 'Request failed');
+          return `${label}: ${message}`;
+        }
+        return null;
+      };
+      const firstCriticalFailure = [
+        getSettledFailureMessage('Dashboard', dashboardResult),
+        getSettledFailureMessage('Fabrics', fabricsResult),
+        getSettledFailureMessage('Orders', ordersResult),
+      ].find((entry): entry is string => Boolean(entry));
+      if (firstCriticalFailure) {
+        setDashboardLoadError(firstCriticalFailure);
+      }
       const dashboardCompletion = dashboardRes?.success ? dashboardRes.data?.profileCompletion : null;
       let profileCompletionCallStatus = dashboardCompletion ? 'from-dashboard' : 'skipped';
       let profileFieldsCallStatus = dashboardCompletion ? 'from-dashboard' : 'skipped';
@@ -691,6 +714,9 @@ export default function SellerDashboard() {
       ]);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
+      const message =
+        String((error as any)?.response?.data?.message || (error as any)?.message || 'Unknown error');
+      setDashboardLoadError(`Unable to load seller dashboard data: ${message}`);
       setGovernanceDebug({
         dashboardCall: 'not-reached',
         fabricsCall: 'not-reached',
@@ -1034,6 +1060,12 @@ export default function SellerDashboard() {
           </Button>
         ) : null}
       </div>
+
+      {dashboardLoadError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {dashboardLoadError}
+        </div>
+      ) : null}
 
       {showProfileGovernance && profileCompletion ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-4">

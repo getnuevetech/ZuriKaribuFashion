@@ -495,6 +495,7 @@ export default function DesignerDashboard() {
   const [showDesignModal, setShowDesignModal] = useState(false);
   const [isSavingDesign, setIsSavingDesign] = useState(false);
   const [designError, setDesignError] = useState<string | null>(null);
+  const [dashboardLoadError, setDashboardLoadError] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedDesign, setSelectedDesign] = useState<Design | null>(null);
   const [designForm, setDesignForm] = useState<DesignFormState>({
@@ -606,6 +607,7 @@ export default function DesignerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      setDashboardLoadError(null);
       const [
         statsResult,
         designsResult,
@@ -654,6 +656,28 @@ export default function DesignerDashboard() {
         const message = String(reason?.response?.data?.message || reason?.message || 'unknown');
         return `request-failed:${status ?? 'no-status'}:${message.slice(0, 120)}`;
       };
+      const getSettledFailureMessage = (label: string, result: PromiseSettledResult<any>) => {
+        if (result.status === 'rejected') {
+          const reason: any = result.reason;
+          const status = reason?.response?.status;
+          const message = String(reason?.response?.data?.message || reason?.message || 'Request failed');
+          return `${label}: ${status ? `${status} ` : ''}${message}`;
+        }
+        if (!result.value?.success) {
+          const message = String(result.value?.message || 'Request failed');
+          return `${label}: ${message}`;
+        }
+        return null;
+      };
+      const firstCriticalFailure = [
+        getSettledFailureMessage('Dashboard', statsResult),
+        getSettledFailureMessage('Designs', designsResult),
+        getSettledFailureMessage('Ready-to-wear', readyResult),
+        getSettledFailureMessage('Orders', ordersResult),
+      ].find((entry): entry is string => Boolean(entry));
+      if (firstCriticalFailure) {
+        setDashboardLoadError(firstCriticalFailure);
+      }
       const dashboardCompletion = statsRes?.success ? statsRes.data?.profileCompletion : null;
       let profileCompletionCallStatus = dashboardCompletion ? 'from-dashboard' : 'skipped';
       let profileFieldsCallStatus = dashboardCompletion ? 'from-dashboard' : 'skipped';
@@ -1042,6 +1066,9 @@ export default function DesignerDashboard() {
       ]);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
+      const message =
+        String((error as any)?.response?.data?.message || (error as any)?.message || 'Unknown error');
+      setDashboardLoadError(`Unable to load designer dashboard data: ${message}`);
       setGovernanceDebug({
         dashboardCall: 'not-reached',
         designsCall: 'not-reached',
@@ -1936,6 +1963,12 @@ export default function DesignerDashboard() {
           ) : null}
         </div>
       </div>
+
+      {dashboardLoadError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {dashboardLoadError}
+        </div>
+      ) : null}
 
       {showProfileGovernance && profileCompletion ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-4">
