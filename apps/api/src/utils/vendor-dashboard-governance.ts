@@ -4,7 +4,7 @@ import { prisma } from '../db';
 
 export const VENDOR_DASHBOARD_GOVERNANCE_SETTINGS_KEY = 'VENDOR_DASHBOARD_GOVERNANCE';
 
-const sellerTabKeys = ['overview', 'fabrics', 'featured', 'orders'] as const;
+const sellerTabKeys = ['overview', 'fabrics', 'featured', 'orders', 'tryon'] as const;
 const sellerSectionKeys = [
   'profileGovernance',
   'stats',
@@ -13,6 +13,8 @@ const sellerSectionKeys = [
   'overviewRecentOrders',
   'overviewActivity',
   'overviewTryOnInsights',
+  'tryOnInsightsSummary',
+  'tryOnInsightsRecent',
   'fabricsTable',
   'featuredTable',
   'ordersTable',
@@ -35,7 +37,7 @@ const sellerFieldKeys = [
   'productImages',
 ] as const;
 
-const designerTabKeys = ['overview', 'designs', 'featured', 'orders'] as const;
+const designerTabKeys = ['overview', 'designs', 'featured', 'orders', 'tryon'] as const;
 const designerSectionKeys = [
   'profileGovernance',
   'stats',
@@ -45,6 +47,8 @@ const designerSectionKeys = [
   'overviewActivity',
   'overviewPendingOrdersAlert',
   'overviewTryOnInsights',
+  'tryOnInsightsSummary',
+  'tryOnInsightsRecent',
   'productsTable',
   'featuredTable',
   'ordersTable',

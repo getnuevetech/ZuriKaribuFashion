@@ -627,7 +627,7 @@ router.get('/dashboard-governance', async (_req, res, next) => {
   }
 });
 
-router.get('/try-on/insights', async (req, res, next) => {
+const handleGetDesignerTryOnInsights = async (req: any, res: any, next: any) => {
   try {
     const settingsPayload = await readTryOnSettings();
     if (settingsPayload.settings.applyLocations.designerDashboard === false) {
@@ -652,7 +652,10 @@ router.get('/try-on/insights', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
+router.get('/try-on/insights', handleGetDesignerTryOnInsights);
+router.get('/tryon/insights', handleGetDesignerTryOnInsights);
+router.get('/3d-try-on/insights', handleGetDesignerTryOnInsights);
 
 router.get('/measurement-template-options', async (_req, res, next) => {
   try {

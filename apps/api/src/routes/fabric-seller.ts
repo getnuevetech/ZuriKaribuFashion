@@ -415,7 +415,7 @@ router.get('/dashboard-governance', async (_req, res, next) => {
   }
 });
 
-router.get('/try-on/insights', async (req, res, next) => {
+const handleGetSellerTryOnInsights = async (req: any, res: any, next: any) => {
   try {
     const settingsPayload = await readTryOnSettings();
     if (settingsPayload.settings.applyLocations.sellerDashboard === false) {
@@ -440,7 +440,10 @@ router.get('/try-on/insights', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
+router.get('/try-on/insights', handleGetSellerTryOnInsights);
+router.get('/tryon/insights', handleGetSellerTryOnInsights);
+router.get('/3d-try-on/insights', handleGetSellerTryOnInsights);
 
 // Get seller fabrics
 router.get('/fabrics', async (req, res, next) => {

@@ -160,6 +160,27 @@ async function readSellerOrdersWithFallback<T>() {
   throw lastError ?? new Error('Seller orders route not found.');
 }
 
+async function readSellerTryOnInsightsWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of [
+    '/seller/try-on/insights',
+    '/fabric-seller/try-on/insights',
+    '/seller/tryon/insights',
+    '/fabric-seller/tryon/insights',
+    '/seller/3d-try-on/insights',
+    '/fabric-seller/3d-try-on/insights',
+  ]) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Seller TryON insights route not found.');
+}
+
 async function writeSellerProfileCompletionWithFallback<T>(data: any) {
   let lastError: unknown = null;
   for (const path of ['/fabric-seller/profile-completion', '/seller/profile-completion']) {
@@ -242,6 +263,27 @@ async function readDesignerOrdersWithFallback<T>() {
     }
   }
   throw lastError ?? new Error('Designer orders route not found.');
+}
+
+async function readDesignerTryOnInsightsWithFallback<T>() {
+  let lastError: unknown = null;
+  for (const path of [
+    '/designer/try-on/insights',
+    '/fashion-designer/try-on/insights',
+    '/designer/tryon/insights',
+    '/fashion-designer/tryon/insights',
+    '/designer/3d-try-on/insights',
+    '/fashion-designer/3d-try-on/insights',
+  ]) {
+    try {
+      return await apiService.get<T>(path, noCacheRequestConfig());
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Designer TryON insights route not found.');
 }
 
 async function readDesignerProfileCompletionWithFallback<T>() {
@@ -5612,7 +5654,7 @@ const sellerApi = {
     apiService.get<{ success: boolean; data: any }>('/seller/dashboard-governance'),
 
   getTryOnInsights: () =>
-    apiService.get<{ success: boolean; data: any }>('/seller/try-on/insights'),
+    readSellerTryOnInsightsWithFallback<{ success: boolean; data: any }>(),
 
   getFabrics: () =>
     readSellerFabricsWithFallback<{ success: boolean; data: any[] }>(),
@@ -5673,7 +5715,7 @@ const designerApi = {
     apiService.get<{ success: boolean; data: any }>('/designer/dashboard-governance'),
 
   getTryOnInsights: () =>
-    apiService.get<{ success: boolean; data: any }>('/designer/try-on/insights'),
+    readDesignerTryOnInsightsWithFallback<{ success: boolean; data: any }>(),
 
   getDesigns: () =>
     readDesignerDesignsWithFallback<{ success: boolean; data: any[] }>(),

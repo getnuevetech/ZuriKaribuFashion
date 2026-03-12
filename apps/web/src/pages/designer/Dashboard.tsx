@@ -234,6 +234,7 @@ type DesignerDashboardGovernance = {
     designs: boolean;
     featured: boolean;
     orders: boolean;
+    tryon: boolean;
   };
   sections: {
     profileGovernance: boolean;
@@ -244,6 +245,8 @@ type DesignerDashboardGovernance = {
     overviewActivity: boolean;
     overviewPendingOrdersAlert: boolean;
     overviewTryOnInsights: boolean;
+    tryOnInsightsSummary: boolean;
+    tryOnInsightsRecent: boolean;
     productsTable: boolean;
     featuredTable: boolean;
     ordersTable: boolean;
@@ -280,7 +283,7 @@ type DesignerDashboardGovernance = {
 };
 
 const DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE: DesignerDashboardGovernance = {
-  tabs: { overview: true, designs: true, featured: true, orders: true },
+  tabs: { overview: true, designs: true, featured: true, orders: true, tryon: true },
   sections: {
     profileGovernance: true,
     stats: true,
@@ -290,6 +293,8 @@ const DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE: DesignerDashboardGovernance = {
     overviewActivity: true,
     overviewPendingOrdersAlert: true,
     overviewTryOnInsights: true,
+    tryOnInsightsSummary: true,
+    tryOnInsightsRecent: true,
     productsTable: true,
     featuredTable: true,
     ordersTable: true,
@@ -445,7 +450,7 @@ export default function DesignerDashboard() {
   const [designUploadingImage, setDesignUploadingImage] = useState(false);
   const [designImageUrlInput, setDesignImageUrlInput] = useState('');
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'designs' | 'featured' | 'orders'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'designs' | 'featured' | 'orders' | 'tryon'>('overview');
   const [showDesignModal, setShowDesignModal] = useState(false);
   const [isSavingDesign, setIsSavingDesign] = useState(false);
   const [designError, setDesignError] = useState<string | null>(null);
@@ -510,14 +515,14 @@ export default function DesignerDashboard() {
 
   const visibleTabs = useMemo(
     () =>
-      (['overview', 'designs', 'featured', 'orders'] as const).filter(
+      (['overview', 'designs', 'featured', 'orders', 'tryon'] as const).filter(
         (tab) => dashboardGovernance.tabs[tab] !== false
       ),
     [dashboardGovernance.tabs]
   );
   const fallbackTab = visibleTabs[0] || 'overview';
 
-  const syncTabWithUrl = (tab: 'overview' | 'designs' | 'featured' | 'orders') => {
+  const syncTabWithUrl = (tab: 'overview' | 'designs' | 'featured' | 'orders' | 'tryon') => {
     const nextTab = dashboardGovernance.tabs[tab] !== false ? tab : fallbackTab;
     setActiveTab(nextTab);
     if (nextTab === 'overview') {
@@ -533,8 +538,19 @@ export default function DesignerDashboard() {
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam === 'designs' || tabParam === 'featured' || tabParam === 'orders' || tabParam === 'overview') {
-      setActiveTab(tabParam);
+    const normalizedTab = String(tabParam || '').toLowerCase();
+    if (normalizedTab === 'try-on' || normalizedTab === '3d-tryon' || normalizedTab === '3d-try-on') {
+      setActiveTab('tryon');
+      return;
+    }
+    if (
+      normalizedTab === 'designs' ||
+      normalizedTab === 'featured' ||
+      normalizedTab === 'orders' ||
+      normalizedTab === 'overview' ||
+      normalizedTab === 'tryon'
+    ) {
+      setActiveTab(normalizedTab as 'overview' | 'designs' | 'featured' | 'orders' | 'tryon');
     } else {
       setActiveTab('overview');
     }
@@ -2058,11 +2074,11 @@ export default function DesignerDashboard() {
             <button
               key={tab}
               onClick={() => syncTabWithUrl(tab)}
-              className={`pb-3 text-sm font-medium capitalize transition-colors relative ${
+              className={`pb-3 text-sm font-medium transition-colors relative ${
                 activeTab === tab ? 'text-amber-600' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              {tab}
+              {tab === 'overview' ? 'Overview' : tab === 'designs' ? 'Products' : tab === 'featured' ? 'Featured' : tab === 'orders' ? 'Orders' : '3D TryON'}
               {tab === 'orders' && pendingOrders.length > 0 && (
                 <span className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
                   {pendingOrders.length}
@@ -2202,6 +2218,84 @@ export default function DesignerDashboard() {
             </div>
           ) : null}
         </>
+      )}
+
+      {activeTab === 'tryon' && (
+        <div className="space-y-4">
+          {dashboardGovernance.sections.tryOnInsightsSummary !== false ? (
+            <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+              <div className="flex items-start gap-3">
+                <Sparkles className="mt-0.5 h-5 w-5 text-purple-700" />
+                <div className="flex-1">
+                  <p className="font-medium text-purple-900">3D TryON Body Insights</p>
+                  <p className="text-sm text-purple-800">
+                    Total TryON runs linked to your products:{' '}
+                    <span className="font-semibold">{Number(tryOnInsights?.totalTryOns || 0)}</span>
+                  </p>
+                  <p className="mt-1 text-xs text-purple-700">
+                    {Object.entries(tryOnInsights?.measurementAverages || {})
+                      .slice(0, 8)
+                      .map(([key, value]) => `${key}: ${value}`)
+                      .join(' • ') || 'No measurement trends yet.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {dashboardGovernance.sections.tryOnInsightsRecent !== false ? (
+            <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+              <div className="border-b bg-gray-50 px-4 py-3">
+                <h2 className="text-sm font-semibold text-gray-900">Recent TryON activity</h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">When</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Product</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Customer</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Country</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Sample Measures</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(Array.isArray(tryOnInsights?.recentTryOns) ? tryOnInsights.recentTryOns : [])
+                      .slice(0, 25)
+                      .map((row: any, index: number) => (
+                        <tr key={String(row?.id || `tryon-${index}`)}>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {row?.createdAt ? new Date(row.createdAt).toLocaleString() : '—'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            <div className="font-medium">{String(row?.productName || 'Product')}</div>
+                            <div className="text-xs text-gray-500">
+                              {String(row?.productType || '') === 'READY_TO_WEAR' ? 'Ready-To-Wear' : 'Design'}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{String(row?.customerName || 'Customer')}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{String(row?.country || '—')}</td>
+                          <td className="px-4 py-3 text-xs text-gray-600">
+                            {Object.entries((row?.measurements as Record<string, unknown>) || {})
+                              .slice(0, 4)
+                              .map(([key, value]) => `${key}:${value}`)
+                              .join(' • ') || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    {(Array.isArray(tryOnInsights?.recentTryOns) ? tryOnInsights.recentTryOns.length : 0) === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-6 text-center text-sm text-gray-500">
+                          No TryON activity yet.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+        </div>
       )}
 
       {activeTab === 'designs' && (

@@ -71,11 +71,13 @@ const navItems: Record<DashboardType, NavItem[]> = {
   seller: [
     { label: 'Dashboard', href: '/seller', icon: LayoutDashboard },
     { label: 'My Fabrics', href: '/seller?tab=fabrics', icon: Layers },
+    { label: '3D TryON', href: '/seller?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/seller?tab=orders', icon: ShoppingBag },
   ],
   designer: [
     { label: 'Dashboard', href: '/designer', icon: LayoutDashboard },
     { label: 'My Designs', href: '/designer?tab=designs', icon: Scissors },
+    { label: '3D TryON', href: '/designer?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/designer?tab=orders', icon: ShoppingBag },
   ],
   qa: [

@@ -49,7 +49,7 @@ type DashboardGovernanceSettings = {
 
 const DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS: DashboardGovernanceSettings = {
   seller: {
-    tabs: { overview: true, fabrics: true, featured: true, orders: true },
+    tabs: { overview: true, fabrics: true, featured: true, orders: true, tryon: true },
     sections: {
       profileGovernance: true,
       stats: true,
@@ -58,6 +58,8 @@ const DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS: DashboardGovernanceSettings = {
       overviewRecentOrders: true,
       overviewActivity: true,
       overviewTryOnInsights: true,
+      tryOnInsightsSummary: true,
+      tryOnInsightsRecent: true,
       fabricsTable: true,
       featuredTable: true,
       ordersTable: true,
@@ -81,7 +83,7 @@ const DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS: DashboardGovernanceSettings = {
     },
   },
   designer: {
-    tabs: { overview: true, designs: true, featured: true, orders: true },
+    tabs: { overview: true, designs: true, featured: true, orders: true, tryon: true },
     sections: {
       profileGovernance: true,
       stats: true,
@@ -91,6 +93,8 @@ const DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS: DashboardGovernanceSettings = {
       overviewActivity: true,
       overviewPendingOrdersAlert: true,
       overviewTryOnInsights: true,
+      tryOnInsightsSummary: true,
+      tryOnInsightsRecent: true,
       productsTable: true,
       featuredTable: true,
       ordersTable: true,
@@ -134,6 +138,7 @@ const GOVERNANCE_LABELS = {
       fabrics: 'Fabrics tab',
       featured: 'Featured tab',
       orders: 'Orders tab',
+      tryon: '3D TryON tab',
     },
     sections: {
       profileGovernance: 'Vendor governance profile card',
@@ -143,6 +148,8 @@ const GOVERNANCE_LABELS = {
       overviewRecentOrders: 'Recent orders panel',
       overviewActivity: 'Activity feed',
       overviewTryOnInsights: 'TryON insights panel',
+      tryOnInsightsSummary: 'TryON summary cards',
+      tryOnInsightsRecent: 'TryON recent activity table',
       fabricsTable: 'Fabrics table',
       featuredTable: 'Featured products table',
       ordersTable: 'Orders table',
@@ -171,6 +178,7 @@ const GOVERNANCE_LABELS = {
       designs: 'Products tab',
       featured: 'Featured tab',
       orders: 'Orders tab',
+      tryon: '3D TryON tab',
     },
     sections: {
       profileGovernance: 'Vendor governance profile card',
@@ -181,6 +189,8 @@ const GOVERNANCE_LABELS = {
       overviewActivity: 'Activity feed',
       overviewPendingOrdersAlert: 'Pending order alert',
       overviewTryOnInsights: 'TryON insights panel',
+      tryOnInsightsSummary: 'TryON summary cards',
+      tryOnInsightsRecent: 'TryON recent activity table',
       productsTable: 'Products table',
       featuredTable: 'Featured products table',
       ordersTable: 'Orders table',
