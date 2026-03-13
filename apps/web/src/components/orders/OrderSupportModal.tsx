@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, MessageSquare, X } from 'lucide-react';
+import { AlertCircle, MessageSquare, Paperclip, Upload, X } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
@@ -48,6 +48,8 @@ export default function OrderSupportModal({
   const [sending, setSending] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
   const [messageNotice, setMessageNotice] = useState('');
+  const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
 
   const loadData = async () => {
     if (!orderId || !isOpen) return;
@@ -76,6 +78,7 @@ export default function OrderSupportModal({
     setActiveTab(initialTab);
     setMessageBody('');
     setMessageNotice('');
+    setAttachmentUrls([]);
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, orderId, initialTab]);
@@ -98,6 +101,30 @@ export default function OrderSupportModal({
     });
   };
 
+  const handleAttachmentUpload = async (file: File | null) => {
+    if (!file) return;
+    try {
+      setUploadingAttachment(true);
+      setMessageNotice('');
+      const formData = new FormData();
+      formData.append('image', file);
+      const response = await api.upload.image(formData);
+      if (response.success && response.data?.url) {
+        setAttachmentUrls((previous) => Array.from(new Set([...previous, String(response.data.url)])).slice(0, 12));
+      } else {
+        setMessageNotice('Attachment upload failed.');
+      }
+    } catch (uploadError: any) {
+      setMessageNotice(uploadError?.response?.data?.message || uploadError?.message || 'Attachment upload failed.');
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const removeAttachment = (url: string) => {
+    setAttachmentUrls((previous) => previous.filter((entry) => entry !== url));
+  };
+
   const handleSendMessage = async () => {
     if (!orderId || !String(messageBody || '').trim()) return;
     try {
@@ -106,17 +133,20 @@ export default function OrderSupportModal({
       const payload: {
         body: string;
         recipientRoles?: TicketRole[];
+        attachments?: string[];
         visibleToCustomer?: boolean;
       } = {
         body: String(messageBody || '').trim(),
       };
       if (selectedRecipients.length > 0) payload.recipientRoles = selectedRecipients;
+      if (attachmentUrls.length > 0) payload.attachments = attachmentUrls;
       if (thread?.permissions?.canControlCustomerVisibility) {
         payload.visibleToCustomer = Boolean(visibleToCustomer);
       }
       const response = await api.orders.sendOrderTicketMessage(orderId, payload);
       if (response.success) {
         setMessageBody('');
+        setAttachmentUrls([]);
         setMessageNotice('Message sent.');
         await reloadThread();
       }
@@ -242,6 +272,11 @@ export default function OrderSupportModal({
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">Ticket: {thread?.ticket?.id ? String(thread.ticket.id).slice(0, 8) : 'Not created'}</Badge>
               <Badge variant="outline">Status: {thread?.ticket?.status || 'OPEN'}</Badge>
+              {thread?.ticket?.assignedToRole ? <Badge variant="outline">Assigned: {statusLabel(thread.ticket.assignedToRole)}</Badge> : null}
+              {thread?.ticket?.dueAt ? (
+                <Badge variant="outline">Due: {new Date(thread.ticket.dueAt).toLocaleString()}</Badge>
+              ) : null}
+              {thread?.ticket?.escalatedAt ? <Badge variant="red">Escalated</Badge> : null}
               {thread?.permissions?.canManageTicket ? (
                 <select
                   className="rounded border px-2 py-1 text-xs"
@@ -275,6 +310,22 @@ export default function OrderSupportModal({
                       </Badge>
                     </div>
                     <p className="mt-2 text-sm text-gray-800 whitespace-pre-wrap">{message.body}</p>
+                    {Array.isArray(message.attachments) && message.attachments.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {message.attachments.map((url: string) => (
+                          <a
+                            key={`${message.id}-${url}`}
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                          >
+                            <Paperclip className="h-3.5 w-3.5" />
+                            Attachment
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ))
               )}
@@ -317,6 +368,42 @@ export default function OrderSupportModal({
                   placeholder="Write your message..."
                   className="min-h-[110px] w-full rounded border px-3 py-2 text-sm"
                 />
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded border px-2 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                      <Upload className="h-3.5 w-3.5" />
+                      {uploadingAttachment ? 'Uploading...' : 'Add attachment'}
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        disabled={uploadingAttachment}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] || null;
+                          void handleAttachmentUpload(file);
+                          event.currentTarget.value = '';
+                        }}
+                      />
+                    </label>
+                    <span className="text-xs text-gray-500">Up to 12 attachments per message.</span>
+                  </div>
+                  {attachmentUrls.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {attachmentUrls.map((url) => (
+                        <button
+                          key={url}
+                          type="button"
+                          onClick={() => removeAttachment(url)}
+                          className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                        >
+                          <Paperclip className="h-3.5 w-3.5" />
+                          Attached
+                          <X className="h-3 w-3" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-gray-500">
                     Ticket is attached to this order. All messages are logged for operations traceability.

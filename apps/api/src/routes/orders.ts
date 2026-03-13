@@ -42,6 +42,11 @@ type OrderTicketingSettings = {
   allowCustomerToVendorDirect: boolean;
   allowQaToVendorMessaging: boolean;
   allowQaToCustomerMessaging: boolean;
+  autoAssignEnabled: boolean;
+  autoAssignRole: OrderTicketingRole;
+  slaResponseHours: number;
+  escalationRole: OrderTicketingRole;
+  escalationNotifyRoles: OrderTicketingRole[];
   recipientMatrix: Record<OrderTicketingRole, OrderTicketingRole[]>;
 };
 const DEFAULT_ORDER_TICKETING_SETTINGS: OrderTicketingSettings = {
@@ -52,6 +57,11 @@ const DEFAULT_ORDER_TICKETING_SETTINGS: OrderTicketingSettings = {
   allowCustomerToVendorDirect: false,
   allowQaToVendorMessaging: true,
   allowQaToCustomerMessaging: true,
+  autoAssignEnabled: true,
+  autoAssignRole: UserRole.QA_TEAM,
+  slaResponseHours: 24,
+  escalationRole: UserRole.ADMINISTRATOR,
+  escalationNotifyRoles: [UserRole.ADMINISTRATOR, UserRole.QA_TEAM],
   recipientMatrix: {
     [UserRole.CUSTOMER]: [UserRole.ADMINISTRATOR, UserRole.QA_TEAM],
     [UserRole.FABRIC_SELLER]: [UserRole.ADMINISTRATOR, UserRole.QA_TEAM],
@@ -89,7 +99,7 @@ const asRoleToken = (value: unknown): OrderTicketingRole | null => {
   const token = String(value || '').trim().toUpperCase();
   return ORDER_TICKETING_ROLES.includes(token as OrderTicketingRole) ? (token as OrderTicketingRole) : null;
 };
-const parseRoleArray = (value: unknown): unknown[] => {
+const parseJsonArray = (value: unknown): unknown[] => {
   if (Array.isArray(value)) return value;
   if (typeof value === 'string') {
     try {
@@ -99,6 +109,11 @@ const parseRoleArray = (value: unknown): unknown[] => {
       return [];
     }
   }
+  return [];
+};
+const parseRoleArray = (value: unknown): unknown[] => {
+  const parsed = parseJsonArray(value);
+  if (parsed.length > 0) return parsed;
   if (value && typeof value === 'object') {
     const objectValue = value as Record<string, unknown>;
     if (Array.isArray(objectValue.roles)) return objectValue.roles;
@@ -120,6 +135,14 @@ const normalizeOrderTicketingSettings = (value: unknown): OrderTicketingSettings
     allowCustomerToVendorDirect: Boolean(source.allowCustomerToVendorDirect),
     allowQaToVendorMessaging: source.allowQaToVendorMessaging !== false,
     allowQaToCustomerMessaging: source.allowQaToCustomerMessaging !== false,
+    autoAssignEnabled: source.autoAssignEnabled !== false,
+    autoAssignRole: asRoleToken(source.autoAssignRole) || DEFAULT_ORDER_TICKETING_SETTINGS.autoAssignRole,
+    slaResponseHours: Math.max(1, Math.min(24 * 30, Number(source.slaResponseHours || DEFAULT_ORDER_TICKETING_SETTINGS.slaResponseHours))),
+    escalationRole: asRoleToken(source.escalationRole) || DEFAULT_ORDER_TICKETING_SETTINGS.escalationRole,
+    escalationNotifyRoles:
+      dedupeRoleTokens(source.escalationNotifyRoles).length > 0
+        ? dedupeRoleTokens(source.escalationNotifyRoles)
+        : DEFAULT_ORDER_TICKETING_SETTINGS.escalationNotifyRoles,
     recipientMatrix: {
       [UserRole.CUSTOMER]:
         dedupeRoleTokens(matrixSource[UserRole.CUSTOMER]).length > 0
@@ -235,6 +258,30 @@ async function ensureOrderTicketingSchema() {
     `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "isLocked" BOOLEAN NOT NULL DEFAULT false`
   );
   await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "assignedToUserId" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "assignedToRole" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "dueAt" TIMESTAMP(3)`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "lastMessageAt" TIMESTAMP(3)`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "escalatedAt" TIMESTAMP(3)`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "escalationStatus" TEXT NOT NULL DEFAULT 'NONE'`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "OrderTicket_status_idx" ON "OrderTicket"("status","updatedAt")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "OrderTicket_dueAt_idx" ON "OrderTicket"("dueAt","escalatedAt")`
+  );
+  await prisma.$executeRawUnsafe(
     `CREATE TABLE IF NOT EXISTS "OrderTicketMessage" (
       "id" TEXT NOT NULL,
       "ticketId" TEXT NOT NULL,
@@ -248,6 +295,9 @@ async function ensureOrderTicketingSchema() {
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "OrderTicketMessage_pkey" PRIMARY KEY ("id")
     )`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicketMessage" ADD COLUMN IF NOT EXISTS "attachments" JSONB NOT NULL DEFAULT '[]'::jsonb`
   );
   await prisma.$executeRawUnsafe(
     `CREATE INDEX IF NOT EXISTS "OrderTicketMessage_ticketId_idx" ON "OrderTicketMessage"("ticketId","createdAt")`
@@ -289,6 +339,32 @@ async function writeOrderTicketingSettings(payload: Partial<OrderTicketingSettin
   }
   return normalized;
 }
+
+const resolveUsersForTicketRole = (
+  role: OrderTicketingRole,
+  participants: Record<OrderTicketingRole, Array<{ id: string; name: string }>>
+) => participants[role] || [];
+
+const pickDefaultAssignee = (
+  role: OrderTicketingRole,
+  participants: Record<OrderTicketingRole, Array<{ id: string; name: string }>>
+) => {
+  const pool = resolveUsersForTicketRole(role, participants);
+  return pool.length > 0 ? pool[0] : null;
+};
+
+const isTicketStatusActive = (status: unknown) => {
+  const token = String(status || '').trim().toUpperCase();
+  return token === 'OPEN' || token === 'PENDING';
+};
+
+const normalizeAttachmentUrls = (input: unknown) => {
+  const rows = Array.isArray(input) ? input : [];
+  return rows
+    .map((entry) => String(entry || '').trim())
+    .filter((entry) => Boolean(entry))
+    .slice(0, 12);
+};
 type OrderAccessContext = {
   orderId: string;
   orderNumber: string;
@@ -822,6 +898,11 @@ const orderTicketingSettingsSchema = z
     allowCustomerToVendorDirect: z.boolean().optional(),
     allowQaToVendorMessaging: z.boolean().optional(),
     allowQaToCustomerMessaging: z.boolean().optional(),
+    autoAssignEnabled: z.boolean().optional(),
+    autoAssignRole: z.string().trim().optional(),
+    slaResponseHours: z.number().int().min(1).max(24 * 30).optional(),
+    escalationRole: z.string().trim().optional(),
+    escalationNotifyRoles: z.array(z.string()).optional(),
     recipientMatrix: z.record(z.array(z.string())).optional(),
   })
   .strict();
@@ -830,6 +911,7 @@ const orderTicketMessageSchema = z
   .object({
     body: z.string().trim().min(1).max(4000),
     recipientRoles: z.array(z.string()).max(8).optional(),
+    attachments: z.array(z.string().trim().max(4096)).max(12).optional(),
     visibleToCustomer: z.boolean().optional(),
     subject: z.string().trim().max(240).optional(),
   })
@@ -843,9 +925,24 @@ const ticketStatusUpdateSchema = z
 
 async function getLatestOrderTicket(orderId: string) {
   const rows = await prisma.$queryRawUnsafe<
-    Array<{ id: string; orderId: string; subject: string | null; status: string; createdById: string; isLocked: boolean; createdAt: Date; updatedAt: Date }>
+    Array<{
+      id: string;
+      orderId: string;
+      subject: string | null;
+      status: string;
+      createdById: string;
+      isLocked: boolean;
+      assignedToUserId: string | null;
+      assignedToRole: string | null;
+      dueAt: Date | null;
+      escalatedAt: Date | null;
+      escalationStatus: string | null;
+      lastMessageAt: Date | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }>
   >(
-    `SELECT "id","orderId","subject","status","createdById","isLocked","createdAt","updatedAt"
+    `SELECT "id","orderId","subject","status","createdById","isLocked","assignedToUserId","assignedToRole","dueAt","escalatedAt","escalationStatus","lastMessageAt","createdAt","updatedAt"
      FROM "OrderTicket"
      WHERE "orderId" = $1
      ORDER BY "updatedAt" DESC, "createdAt" DESC
@@ -862,22 +959,114 @@ async function getLatestOrderTicket(orderId: string) {
       : 'OPEN',
     createdById: String(rows[0].createdById),
     isLocked: Boolean(rows[0].isLocked),
+    assignedToUserId: rows[0].assignedToUserId ? String(rows[0].assignedToUserId) : null,
+    assignedToRole: asRoleToken(rows[0].assignedToRole) || null,
+    dueAt: rows[0].dueAt ? new Date(rows[0].dueAt).toISOString() : null,
+    escalatedAt: rows[0].escalatedAt ? new Date(rows[0].escalatedAt).toISOString() : null,
+    escalationStatus: String(rows[0].escalationStatus || 'NONE').toUpperCase(),
+    lastMessageAt: rows[0].lastMessageAt ? new Date(rows[0].lastMessageAt).toISOString() : null,
     createdAt: new Date(rows[0].createdAt || Date.now()).toISOString(),
     updatedAt: new Date(rows[0].updatedAt || Date.now()).toISOString(),
   };
 }
 
-async function createOrderTicket(orderId: string, createdById: string, subject?: string) {
+async function createOrderTicket(params: {
+  orderId: string;
+  createdById: string;
+  subject?: string;
+  settings: OrderTicketingSettings;
+  orderContext: OrderAccessContext;
+}) {
+  const autoAssignRole = params.settings.autoAssignEnabled ? params.settings.autoAssignRole : null;
+  const assignee = autoAssignRole ? pickDefaultAssignee(autoAssignRole, params.orderContext.participantUsersByRole) : null;
+  const dueAtIso = new Date(Date.now() + Number(params.settings.slaResponseHours || 24) * 60 * 60 * 1000).toISOString();
   const id = randomUUID();
   await prisma.$executeRawUnsafe(
-    `INSERT INTO "OrderTicket" ("id","orderId","subject","status","createdById","isLocked","createdAt","updatedAt")
-     VALUES ($1,$2,$3,'OPEN',$4,false,NOW(),NOW())`,
+    `INSERT INTO "OrderTicket" ("id","orderId","subject","status","createdById","isLocked","assignedToUserId","assignedToRole","dueAt","lastMessageAt","createdAt","updatedAt")
+     VALUES ($1,$2,$3,'OPEN',$4,false,$5,$6,$7::timestamp,NOW(),NOW(),NOW())`,
     id,
-    orderId,
-    subject ? String(subject).slice(0, 240) : null,
-    createdById
+    params.orderId,
+    params.subject ? String(params.subject).slice(0, 240) : null,
+    params.createdById,
+    assignee?.id ? String(assignee.id) : null,
+    autoAssignRole,
+    dueAtIso
   );
-  return getLatestOrderTicket(orderId);
+  return getLatestOrderTicket(params.orderId);
+}
+
+async function runTicketEscalationIfDue(params: {
+  ticket: any;
+  settings: OrderTicketingSettings;
+  orderContext: OrderAccessContext;
+}) {
+  const ticket = params.ticket;
+  if (!ticket || !isTicketStatusActive(ticket.status)) return ticket;
+  const dueAtMs = ticket.dueAt ? Number(new Date(ticket.dueAt)) : Number.NaN;
+  if (!Number.isFinite(dueAtMs)) {
+    const nextDueAtIso = new Date(Date.now() + Number(params.settings.slaResponseHours || 24) * 60 * 60 * 1000).toISOString();
+    await prisma.$executeRawUnsafe(
+      `UPDATE "OrderTicket" SET "dueAt" = $2::timestamp, "updatedAt" = NOW() WHERE "id" = $1`,
+      ticket.id,
+      nextDueAtIso
+    );
+    return getLatestOrderTicket(ticket.orderId);
+  }
+  if (ticket.escalatedAt || Date.now() <= dueAtMs) return ticket;
+
+  const escalationRole = params.settings.escalationRole || UserRole.ADMINISTRATOR;
+  const assignee = pickDefaultAssignee(escalationRole, params.orderContext.participantUsersByRole);
+  await prisma.$executeRawUnsafe(
+    `UPDATE "OrderTicket"
+     SET "escalatedAt" = NOW(),
+         "escalationStatus" = 'ESCALATED',
+         "assignedToRole" = COALESCE("assignedToRole", $2),
+         "assignedToUserId" = COALESCE("assignedToUserId", $3),
+         "updatedAt" = NOW()
+     WHERE "id" = $1`,
+    ticket.id,
+    escalationRole,
+    assignee?.id ? String(assignee.id) : null
+  );
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "OrderTicketMessage"
+      ("id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","visibleToCustomer","isInternal","attachments","createdAt")
+     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,false,true,'[]'::jsonb,NOW())`,
+    randomUUID(),
+    ticket.id,
+    params.orderContext.orderId,
+    assignee?.id || params.orderContext.adminUsers[0]?.id || params.orderContext.qaUsers[0]?.id || ticket.createdById,
+    UserRole.ADMINISTRATOR,
+    `Ticket escalated after SLA deadline. Routed to ${ORDER_TICKETING_ROLE_LABELS[escalationRole]}.`,
+    JSON.stringify([UserRole.ADMINISTRATOR, UserRole.QA_TEAM])
+  );
+
+  const notifyRoles = params.settings.escalationNotifyRoles || [UserRole.ADMINISTRATOR, UserRole.QA_TEAM];
+  const notifyUserIds = Array.from(
+    new Set(
+      notifyRoles
+        .flatMap((role) => resolveUsersForTicketRole(role as OrderTicketingRole, params.orderContext.participantUsersByRole))
+        .map((entry) => String(entry.id || ''))
+        .filter(Boolean)
+    )
+  );
+  await Promise.all(
+    notifyUserIds.map((userId) =>
+      prisma.notification
+        .create({
+          data: {
+            userId,
+            type: 'SYSTEM' as any,
+            title: `Ticket escalation • ${params.orderContext.orderNumber}`,
+            message: `Order ticket exceeded ${Number(params.settings.slaResponseHours || 24)}h SLA and has been escalated.`,
+            relatedId: params.orderContext.orderId,
+            relatedType: 'ORDER',
+          },
+        })
+        .catch(() => undefined)
+    )
+  );
+  return getLatestOrderTicket(ticket.orderId);
 }
 
 async function readOrderTicketThread(params: {
@@ -887,12 +1076,30 @@ async function readOrderTicketThread(params: {
   createIfMissing?: boolean;
   ticketSubject?: string;
   orderContext: OrderAccessContext;
+  settings: OrderTicketingSettings;
 }) {
   await ensureOrderTicketingSchema();
   let ticket = await getLatestOrderTicket(params.orderId);
   if (!ticket && params.createIfMissing) {
-    ticket = await createOrderTicket(params.orderId, params.viewerId, params.ticketSubject);
+    ticket = await createOrderTicket({
+      orderId: params.orderId,
+      createdById: params.viewerId,
+      subject: params.ticketSubject,
+      settings: params.settings,
+      orderContext: params.orderContext,
+    });
   }
+  if (!ticket) {
+    return {
+      ticket: null,
+      messages: [] as any[],
+    };
+  }
+  ticket = await runTicketEscalationIfDue({
+    ticket,
+    settings: params.settings,
+    orderContext: params.orderContext,
+  });
   if (!ticket) {
     return {
       ticket: null,
@@ -909,12 +1116,13 @@ async function readOrderTicketThread(params: {
       senderRole: string;
       body: string;
       recipientRoles: unknown;
+      attachments: unknown;
       visibleToCustomer: boolean;
       isInternal: boolean;
       createdAt: Date;
     }>
   >(
-    `SELECT "id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","visibleToCustomer","isInternal","createdAt"
+    `SELECT "id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","attachments","visibleToCustomer","isInternal","createdAt"
      FROM "OrderTicketMessage"
      WHERE "ticketId" = $1
      ORDER BY "createdAt" ASC`,
@@ -958,6 +1166,7 @@ async function readOrderTicketThread(params: {
         senderDisplayName: displayName,
         body: String(entry.body || ''),
         recipientRoles,
+        attachments: normalizeAttachmentUrls(parseJsonArray(entry.attachments)),
         visibleToCustomer: Boolean(entry.visibleToCustomer),
         isInternal: Boolean(entry.isInternal),
         createdAt: new Date(entry.createdAt || Date.now()).toISOString(),
@@ -1028,6 +1237,243 @@ router.patch(
 );
 
 router.get(
+  '/admin/tickets',
+  authorizePermissions(Permissions.ORDERS_MANAGE),
+  async (req, res, next) => {
+    try {
+      await ensureOrderTicketingSchema();
+      const query = z
+        .object({
+          search: z.string().trim().max(120).optional(),
+          status: z.string().trim().max(30).optional(),
+          assignedRole: z.string().trim().max(40).optional(),
+          escalated: z.union([z.literal('true'), z.literal('false'), z.literal('1'), z.literal('0')]).optional(),
+          page: z.coerce.number().int().min(1).max(500).optional(),
+          limit: z.coerce.number().int().min(1).max(100).optional(),
+        })
+        .parse(req.query || {});
+      const page = Math.max(1, Number(query.page || 1));
+      const limit = Math.max(1, Math.min(100, Number(query.limit || 20)));
+      const offset = (page - 1) * limit;
+      const search = String(query.search || '').trim().toLowerCase();
+      const statusFilter = String(query.status || '').trim().toUpperCase();
+      const assignedRoleFilter = asRoleToken(query.assignedRole);
+      const escalatedFilter =
+        query.escalated === 'true' || query.escalated === '1'
+          ? true
+          : query.escalated === 'false' || query.escalated === '0'
+            ? false
+            : null;
+
+      const whereClauses: string[] = [];
+      const values: unknown[] = [];
+      if (search) {
+        values.push(`%${search}%`);
+        whereClauses.push(
+          `(LOWER(COALESCE(t."subject", '')) LIKE $${values.length}
+            OR LOWER(COALESCE(o."orderNumber", '')) LIKE $${values.length}
+            OR LOWER(COALESCE(c."firstName", '') || ' ' || COALESCE(c."lastName", '')) LIKE $${values.length})`
+        );
+      }
+      if (statusFilter) {
+        values.push(statusFilter);
+        whereClauses.push(`UPPER(COALESCE(t."status", 'OPEN')) = $${values.length}`);
+      }
+      if (assignedRoleFilter) {
+        values.push(assignedRoleFilter);
+        whereClauses.push(`UPPER(COALESCE(t."assignedToRole", '')) = $${values.length}`);
+      }
+      if (escalatedFilter !== null) {
+        whereClauses.push(escalatedFilter ? `t."escalatedAt" IS NOT NULL` : `t."escalatedAt" IS NULL`);
+      }
+      const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+      const rows = await prisma.$queryRawUnsafe<
+        Array<{
+          id: string;
+          orderId: string;
+          subject: string | null;
+          status: string;
+          assignedToUserId: string | null;
+          assignedToRole: string | null;
+          dueAt: Date | null;
+          escalatedAt: Date | null;
+          escalationStatus: string | null;
+          updatedAt: Date;
+          createdAt: Date;
+          orderNumber: string | null;
+          orderStatus: string | null;
+          customerName: string | null;
+          messageCount: number;
+        }>
+      >(
+        `SELECT
+          t."id",
+          t."orderId",
+          t."subject",
+          t."status",
+          t."assignedToUserId",
+          t."assignedToRole",
+          t."dueAt",
+          t."escalatedAt",
+          t."escalationStatus",
+          t."updatedAt",
+          t."createdAt",
+          o."orderNumber",
+          o."status" AS "orderStatus",
+          TRIM(COALESCE(c."firstName",'') || ' ' || COALESCE(c."lastName",'')) AS "customerName",
+          COALESCE(COUNT(m."id"), 0)::int AS "messageCount"
+         FROM "OrderTicket" t
+         LEFT JOIN "Order" o ON o."id" = t."orderId"
+         LEFT JOIN "User" c ON c."id" = o."customerId"
+         LEFT JOIN "OrderTicketMessage" m ON m."ticketId" = t."id"
+         ${whereSql}
+         GROUP BY t."id", o."id", c."id"
+         ORDER BY t."updatedAt" DESC
+         LIMIT ${limit} OFFSET ${offset}`,
+        ...values
+      );
+      const countRows = await prisma.$queryRawUnsafe<Array<{ count: number }>>(
+        `SELECT COUNT(1)::int AS "count"
+         FROM "OrderTicket" t
+         LEFT JOIN "Order" o ON o."id" = t."orderId"
+         LEFT JOIN "User" c ON c."id" = o."customerId"
+         ${whereSql}`,
+        ...values
+      );
+      const total = Number(countRows[0]?.count || 0);
+
+      const ticketIds = rows.map((row) => String(row.id || '')).filter(Boolean);
+      const previews = ticketIds.length
+        ? await prisma.$queryRawUnsafe<Array<{ ticketId: string; body: string }>>(
+            `SELECT DISTINCT ON ("ticketId") "ticketId","body"
+             FROM "OrderTicketMessage"
+             WHERE "ticketId" = ANY($1::text[])
+             ORDER BY "ticketId","createdAt" DESC`,
+            ticketIds
+          )
+        : [];
+      const previewMap = new Map(previews.map((row) => [String(row.ticketId || ''), String(row.body || '')]));
+
+      const assigneeIds = Array.from(new Set(rows.map((row) => String(row.assignedToUserId || '')).filter(Boolean)));
+      const assignees = assigneeIds.length
+        ? await prisma.user.findMany({
+            where: { id: { in: assigneeIds } },
+            select: { id: true, firstName: true, lastName: true },
+          })
+        : [];
+      const assigneeMap = new Map(assignees.map((row) => [String(row.id), fullName(row.firstName, row.lastName) || 'Assigned User']));
+
+      res.json({
+        success: true,
+        data: rows.map((row) => ({
+          id: String(row.id),
+          orderId: String(row.orderId),
+          orderNumber: String(row.orderNumber || ''),
+          orderStatus: String(row.orderStatus || ''),
+          subject: row.subject ? String(row.subject) : '',
+          status: String(row.status || 'OPEN').toUpperCase(),
+          assignedToRole: asRoleToken(row.assignedToRole) || null,
+          assignedToUserId: row.assignedToUserId ? String(row.assignedToUserId) : null,
+          assignedToUserName: row.assignedToUserId ? assigneeMap.get(String(row.assignedToUserId)) || '' : '',
+          customerName: String(row.customerName || '').trim() || 'Customer',
+          dueAt: row.dueAt ? new Date(row.dueAt).toISOString() : null,
+          escalatedAt: row.escalatedAt ? new Date(row.escalatedAt).toISOString() : null,
+          escalationStatus: String(row.escalationStatus || 'NONE').toUpperCase(),
+          isOverdue: Boolean(row.dueAt && new Date(row.dueAt).getTime() < Date.now() && !row.escalatedAt),
+          messageCount: Number(row.messageCount || 0),
+          lastMessagePreview: previewMap.get(String(row.id)) || '',
+          updatedAt: new Date(row.updatedAt || Date.now()).toISOString(),
+          createdAt: new Date(row.createdAt || Date.now()).toISOString(),
+        })),
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.max(1, Math.ceil(total / limit)),
+        },
+      });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      next(error);
+    }
+  }
+);
+
+router.patch(
+  '/admin/tickets/:ticketId/assign',
+  authorizePermissions(Permissions.ORDERS_MANAGE),
+  async (req, res, next) => {
+    try {
+      await ensureOrderTicketingSchema();
+      const payload = z
+        .object({
+          assignedToRole: z.string().trim().optional(),
+          assignedToUserId: z.string().trim().optional(),
+          dueAt: z.string().trim().optional(),
+        })
+        .strict()
+        .parse(req.body || {});
+      const ticketRows = await prisma.$queryRawUnsafe<
+        Array<{ id: string; orderId: string; assignedToRole: string | null }>
+      >(
+        `SELECT "id","orderId","assignedToRole"
+         FROM "OrderTicket"
+         WHERE "id" = $1
+         LIMIT 1`,
+        String(req.params.ticketId || '')
+      );
+      const ticket = ticketRows[0];
+      if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found.' });
+
+      const context = await resolveOrderAccessContext(String(ticket.orderId), {
+        id: req.user!.id,
+        role: req.user!.role,
+      });
+      const nextRole = payload.assignedToRole ? asRoleToken(payload.assignedToRole) : asRoleToken(ticket.assignedToRole);
+      const eligibleUsers = nextRole ? resolveUsersForTicketRole(nextRole, context.participantUsersByRole) : [];
+      const nextUserId = payload.assignedToUserId
+        ? String(payload.assignedToUserId)
+        : payload.assignedToRole
+          ? eligibleUsers[0]?.id || null
+          : undefined;
+      if (payload.assignedToUserId && nextRole && !eligibleUsers.some((entry) => String(entry.id) === String(payload.assignedToUserId))) {
+        return res.status(400).json({
+          success: false,
+          message: `Assigned user is not valid for role ${ORDER_TICKETING_ROLE_LABELS[nextRole]}.`,
+        });
+      }
+      const dueAtDate = payload.dueAt ? new Date(payload.dueAt) : null;
+      if (dueAtDate && !Number.isFinite(dueAtDate.getTime())) {
+        return res.status(400).json({ success: false, message: 'Invalid dueAt date value.' });
+      }
+      const dueAtIso = dueAtDate ? dueAtDate.toISOString() : null;
+      await prisma.$executeRawUnsafe(
+        `UPDATE "OrderTicket"
+         SET "assignedToRole" = COALESCE($2, "assignedToRole"),
+             "assignedToUserId" = CASE WHEN $3::text IS NULL THEN "assignedToUserId" ELSE $3 END,
+             "dueAt" = COALESCE($4::timestamp, "dueAt"),
+             "updatedAt" = NOW()
+         WHERE "id" = $1`,
+        String(ticket.id),
+        nextRole || null,
+        nextUserId === undefined ? null : nextUserId,
+        dueAtIso
+      );
+      const refreshed = await getLatestOrderTicket(String(ticket.orderId));
+      res.json({ success: true, data: refreshed, message: 'Ticket assignment updated.' });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      next(error);
+    }
+  }
+);
+
+router.get(
   '/:id/ticketing',
   authorizePermissions(Permissions.ORDERS_READ_SELF, Permissions.ORDERS_READ_ASSIGNED, Permissions.ORDERS_READ_ALL),
   async (req, res, next) => {
@@ -1044,6 +1490,7 @@ router.get(
         viewerId: user.id,
         viewerRole: userRole,
         orderContext: context,
+        settings,
       });
       const allowedRecipientRoles = resolveAllowedRecipientRoles(userRole, settings, context.participantUsersByRole);
       const canPost =
@@ -1072,6 +1519,11 @@ router.get(
             enabled: settings.enabled,
             defaultVisibleToCustomer: settings.defaultVisibleToCustomer,
             allowVendorToVendorDirect: settings.allowVendorToVendorDirect,
+            autoAssignEnabled: settings.autoAssignEnabled,
+            autoAssignRole: settings.autoAssignRole,
+            slaResponseHours: settings.slaResponseHours,
+            escalationRole: settings.escalationRole,
+            escalationNotifyRoles: settings.escalationNotifyRoles,
           },
         },
       });
@@ -1136,6 +1588,7 @@ router.post(
         orderContext: context,
         createIfMissing: true,
         ticketSubject: payload.subject,
+        settings,
       });
       const ticket = threadBefore.ticket;
       if (!ticket) {
@@ -1143,8 +1596,8 @@ router.post(
       }
       await prisma.$executeRawUnsafe(
         `INSERT INTO "OrderTicketMessage"
-          ("id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","visibleToCustomer","isInternal","createdAt")
-         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,NOW())`,
+          ("id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","visibleToCustomer","isInternal","attachments","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10::jsonb,NOW())`,
         randomUUID(),
         ticket.id,
         context.orderId,
@@ -1153,15 +1606,20 @@ router.post(
         payload.body.trim(),
         JSON.stringify(recipientRoles),
         visibleToCustomer,
-        !visibleToCustomer
+        !visibleToCustomer,
+        JSON.stringify(normalizeAttachmentUrls(payload.attachments || []))
       );
       await prisma.$executeRawUnsafe(
         `UPDATE "OrderTicket"
          SET "updatedAt" = NOW(),
-             "subject" = COALESCE("subject", $2)
+             "lastMessageAt" = NOW(),
+             "subject" = COALESCE("subject", $2),
+             "dueAt" = (NOW() + ($3 || ' hours')::interval),
+             "escalationStatus" = CASE WHEN "escalatedAt" IS NULL THEN "escalationStatus" ELSE 'RESPONDED' END
          WHERE "id" = $1`,
         ticket.id,
-        payload.subject ? String(payload.subject).trim().slice(0, 240) : null
+        payload.subject ? String(payload.subject).trim().slice(0, 240) : null,
+        String(Math.max(1, Number(settings.slaResponseHours || 24)))
       );
 
       const recipientUsers = recipientRoles.flatMap((role) => context.participantUsersByRole[role] || []);
@@ -1190,6 +1648,7 @@ router.post(
         viewerId: user.id,
         viewerRole: userRole,
         orderContext: context,
+        settings,
       });
       res.status(201).json({
         success: true,
@@ -1231,15 +1690,17 @@ router.patch(
       }
       await prisma.$executeRawUnsafe(
         `UPDATE "OrderTicket"
-         SET "status" = $2, "updatedAt" = NOW()
+         SET "status" = $2,
+             "updatedAt" = NOW(),
+             "escalationStatus" = CASE WHEN $2 IN ('RESOLVED','CLOSED') THEN 'RESOLVED' ELSE COALESCE("escalationStatus",'NONE') END
          WHERE "id" = $1`,
         ticket.id,
         payload.status
       );
       await prisma.$executeRawUnsafe(
         `INSERT INTO "OrderTicketMessage"
-          ("id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","visibleToCustomer","isInternal","createdAt")
-         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,NOW())`,
+          ("id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","visibleToCustomer","isInternal","attachments","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,'[]'::jsonb,NOW())`,
         randomUUID(),
         ticket.id,
         context.orderId,

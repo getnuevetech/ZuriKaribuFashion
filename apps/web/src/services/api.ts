@@ -4480,6 +4480,12 @@ const ordersApi = {
           status: 'OPEN' | 'PENDING' | 'RESOLVED' | 'CLOSED';
           createdById: string;
           isLocked: boolean;
+          assignedToUserId?: string | null;
+          assignedToRole?: 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR' | null;
+          dueAt?: string | null;
+          escalatedAt?: string | null;
+          escalationStatus?: string;
+          lastMessageAt?: string | null;
           createdAt: string;
           updatedAt: string;
         } | null;
@@ -4492,6 +4498,7 @@ const ordersApi = {
           senderDisplayName: string;
           body: string;
           recipientRoles: Array<'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR'>;
+          attachments?: string[];
           visibleToCustomer: boolean;
           isInternal: boolean;
           createdAt: string;
@@ -4511,6 +4518,11 @@ const ordersApi = {
           enabled: boolean;
           defaultVisibleToCustomer: boolean;
           allowVendorToVendorDirect: boolean;
+          autoAssignEnabled?: boolean;
+          autoAssignRole?: 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR';
+          slaResponseHours?: number;
+          escalationRole?: 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR';
+          escalationNotifyRoles?: Array<'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR'>;
         };
       };
     }>(`/orders/${orderId}/ticketing`),
@@ -4520,6 +4532,7 @@ const ordersApi = {
     data: {
       body: string;
       recipientRoles?: Array<'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR'>;
+      attachments?: string[];
       visibleToCustomer?: boolean;
       subject?: string;
     }
@@ -4528,6 +4541,21 @@ const ordersApi = {
 
   updateOrderTicketStatus: (orderId: string, status: 'OPEN' | 'PENDING' | 'RESOLVED' | 'CLOSED') =>
     apiService.patch<{ success: boolean; data: any; message?: string }>(`/orders/${orderId}/ticketing/status`, { status }),
+
+  listAdminTickets: (params?: {
+    search?: string;
+    status?: string;
+    assignedRole?: string;
+    escalated?: boolean;
+    page?: number;
+    limit?: number;
+  }) =>
+    apiService.get<{ success: boolean; data: any[]; pagination?: any }>('/orders/admin/tickets', { params }),
+
+  assignAdminTicket: (
+    ticketId: string,
+    data: { assignedToRole?: string; assignedToUserId?: string; dueAt?: string }
+  ) => apiService.patch<{ success: boolean; data: any; message?: string }>(`/orders/admin/tickets/${ticketId}/assign`, data),
 
   createOrder: (data: any) =>
     createOrderWithFallback<{ success: boolean; data: any }>(customDesignOrderCreatePaths, data),
@@ -6427,6 +6455,11 @@ const adminApi = {
         allowCustomerToVendorDirect: boolean;
         allowQaToVendorMessaging: boolean;
         allowQaToCustomerMessaging: boolean;
+        autoAssignEnabled: boolean;
+        autoAssignRole: string;
+        slaResponseHours: number;
+        escalationRole: string;
+        escalationNotifyRoles: string[];
         recipientMatrix: Record<string, string[]>;
       };
     }>('/orders/admin/ticketing/settings'),
@@ -6439,6 +6472,11 @@ const adminApi = {
     allowCustomerToVendorDirect?: boolean;
     allowQaToVendorMessaging?: boolean;
     allowQaToCustomerMessaging?: boolean;
+    autoAssignEnabled?: boolean;
+    autoAssignRole?: string;
+    slaResponseHours?: number;
+    escalationRole?: string;
+    escalationNotifyRoles?: string[];
     recipientMatrix?: Record<string, string[]>;
   }) =>
     apiService.patch<{ success: boolean; data: any; message?: string }>('/orders/admin/ticketing/settings', data),

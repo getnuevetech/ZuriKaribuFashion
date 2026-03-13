@@ -30,6 +30,26 @@ interface Order {
   createdAt: string;
 }
 
+interface AdminTicketRow {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  orderStatus: string;
+  subject: string;
+  status: 'OPEN' | 'PENDING' | 'RESOLVED' | 'CLOSED';
+  assignedToRole: string | null;
+  assignedToUserId: string | null;
+  assignedToUserName: string;
+  customerName: string;
+  dueAt: string | null;
+  escalatedAt: string | null;
+  escalationStatus: string;
+  isOverdue: boolean;
+  messageCount: number;
+  lastMessagePreview: string;
+  updatedAt: string;
+}
+
 export default function AdminOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,12 +64,28 @@ export default function AdminOrders() {
   const [savingTicketing, setSavingTicketing] = useState(false);
   const [supportOrderId, setSupportOrderId] = useState<string | null>(null);
   const [supportInitialTab, setSupportInitialTab] = useState<'details' | 'ticket'>('ticket');
+  const [tickets, setTickets] = useState<AdminTicketRow[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [ticketSearch, setTicketSearch] = useState('');
+  const [ticketStatusFilter, setTicketStatusFilter] = useState('');
+  const [ticketEscalatedFilter, setTicketEscalatedFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [ticketAssignedRoleFilter, setTicketAssignedRoleFilter] = useState('');
+  const [ticketPage, setTicketPage] = useState(1);
+  const [ticketPages, setTicketPages] = useState(1);
 
   useEffect(() => {
     fetchOrders();
     fetchWorkflowSettings();
     fetchTicketingSettings();
   }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void fetchTickets();
+    }, 250);
+    return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticketSearch, ticketStatusFilter, ticketEscalatedFilter, ticketAssignedRoleFilter, ticketPage]);
 
   const fetchOrders = async () => {
     try {
@@ -84,6 +120,28 @@ export default function AdminOrders() {
       if (response.success) setTicketingSettings(response.data || null);
     } catch (error) {
       console.error('Failed to load ticketing settings:', error);
+    }
+  };
+
+  const fetchTickets = async () => {
+    try {
+      setTicketsLoading(true);
+      const response = await api.orders.listAdminTickets({
+        search: ticketSearch || undefined,
+        status: ticketStatusFilter || undefined,
+        assignedRole: ticketAssignedRoleFilter || undefined,
+        escalated: ticketEscalatedFilter === 'all' ? undefined : ticketEscalatedFilter === 'yes',
+        page: ticketPage,
+        limit: 8,
+      });
+      if (response.success) {
+        setTickets(Array.isArray(response.data) ? (response.data as AdminTicketRow[]) : []);
+        setTicketPages(Math.max(1, Number((response as any)?.pagination?.pages || 1)));
+      }
+    } catch (error) {
+      console.error('Failed to load tickets:', error);
+    } finally {
+      setTicketsLoading(false);
     }
   };
 
@@ -128,15 +186,6 @@ export default function AdminOrders() {
       setWorkflowMessage(error?.response?.data?.message || 'Failed to save order ticketing settings.');
     } finally {
       setSavingTicketing(false);
-    }
-  };
-
-  const handleAssignQA = async (orderId: string, qaId: string) => {
-    try {
-      await api.admin.assignQA(orderId, qaId);
-      fetchOrders();
-    } catch (error) {
-      console.error('Failed to assign QA:', error);
     }
   };
 
@@ -404,8 +453,213 @@ export default function AdminOrders() {
               Allow QA ↔ Vendor messaging
             </label>
           </div>
+          <div className="grid gap-3 md:grid-cols-4">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={ticketingSettings.autoAssignEnabled !== false}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), autoAssignEnabled: event.target.checked }))
+                }
+              />
+              Auto-assign new tickets
+            </label>
+            <label className="text-sm text-gray-700">
+              Auto-assign role
+              <select
+                value={String(ticketingSettings.autoAssignRole || 'QA_TEAM')}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), autoAssignRole: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              >
+                <option value="QA_TEAM">QA</option>
+                <option value="ADMINISTRATOR">Admin</option>
+                <option value="FABRIC_SELLER">Seller</option>
+                <option value="FASHION_DESIGNER">Designer</option>
+              </select>
+            </label>
+            <label className="text-sm text-gray-700">
+              Ticket response SLA (hours)
+              <input
+                type="number"
+                min={1}
+                max={720}
+                value={Number(ticketingSettings.slaResponseHours || 24)}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({
+                    ...(prev || {}),
+                    slaResponseHours: Number(event.target.value || 24),
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </label>
+            <label className="text-sm text-gray-700">
+              Escalation role
+              <select
+                value={String(ticketingSettings.escalationRole || 'ADMINISTRATOR')}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), escalationRole: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              >
+                <option value="ADMINISTRATOR">Admin</option>
+                <option value="QA_TEAM">QA</option>
+                <option value="FABRIC_SELLER">Seller</option>
+                <option value="FASHION_DESIGNER">Designer</option>
+              </select>
+            </label>
+          </div>
         </div>
       ) : null}
+
+      <div className="bg-white rounded-xl border p-4 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-gray-900">Ticket Queue</h2>
+          <Button variant="outline" onClick={() => void fetchTickets()} disabled={ticketsLoading}>
+            Refresh Tickets
+          </Button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-4">
+          <input
+            value={ticketSearch}
+            onChange={(event) => {
+              setTicketPage(1);
+              setTicketSearch(event.target.value);
+            }}
+            placeholder="Search order #, subject, customer"
+            className="rounded-lg border px-3 py-2 text-sm"
+          />
+          <select
+            value={ticketStatusFilter}
+            onChange={(event) => {
+              setTicketPage(1);
+              setTicketStatusFilter(event.target.value);
+            }}
+            className="rounded-lg border px-3 py-2 text-sm"
+          >
+            <option value="">All statuses</option>
+            <option value="OPEN">OPEN</option>
+            <option value="PENDING">PENDING</option>
+            <option value="RESOLVED">RESOLVED</option>
+            <option value="CLOSED">CLOSED</option>
+          </select>
+          <select
+            value={ticketAssignedRoleFilter}
+            onChange={(event) => {
+              setTicketPage(1);
+              setTicketAssignedRoleFilter(event.target.value);
+            }}
+            className="rounded-lg border px-3 py-2 text-sm"
+          >
+            <option value="">All assignees</option>
+            <option value="ADMINISTRATOR">Admin</option>
+            <option value="QA_TEAM">QA</option>
+            <option value="FABRIC_SELLER">Seller</option>
+            <option value="FASHION_DESIGNER">Designer</option>
+          </select>
+          <select
+            value={ticketEscalatedFilter}
+            onChange={(event) => {
+              setTicketPage(1);
+              setTicketEscalatedFilter(event.target.value as 'all' | 'yes' | 'no');
+            }}
+            className="rounded-lg border px-3 py-2 text-sm"
+          >
+            <option value="all">Escalation: all</option>
+            <option value="yes">Escalated only</option>
+            <option value="no">Not escalated</option>
+          </select>
+        </div>
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Order</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Ticket</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Assignee</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Due</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Messages</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ticketsLoading ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-gray-500">
+                    Loading tickets...
+                  </td>
+                </tr>
+              ) : tickets.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-gray-500">
+                    No tickets found.
+                  </td>
+                </tr>
+              ) : (
+                tickets.map((ticket) => (
+                  <tr key={ticket.id} className="border-t">
+                    <td className="px-3 py-2">
+                      <p className="font-medium text-gray-900">{ticket.orderNumber}</p>
+                      <p className="text-xs text-gray-500">{ticket.customerName}</p>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{ticket.status}</Badge>
+                        {ticket.escalatedAt ? <Badge variant="red">Escalated</Badge> : null}
+                      </div>
+                      <p className="mt-1 max-w-[300px] truncate text-xs text-gray-600">
+                        {ticket.subject || ticket.lastMessagePreview || 'No subject'}
+                      </p>
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-700">
+                      {ticket.assignedToUserName || ticket.assignedToRole || 'Unassigned'}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-700">
+                      {ticket.dueAt ? new Date(ticket.dueAt).toLocaleString() : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-700">{ticket.messageCount}</td>
+                    <td className="px-3 py-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSupportInitialTab('ticket');
+                          setSupportOrderId(ticket.orderId);
+                        }}
+                      >
+                        Open
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={ticketPage <= 1}
+            onClick={() => setTicketPage((previous) => Math.max(1, previous - 1))}
+          >
+            Prev
+          </Button>
+          <span className="text-xs text-gray-500">
+            Page {ticketPage} / {ticketPages}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={ticketPage >= ticketPages}
+            onClick={() => setTicketPage((previous) => Math.min(ticketPages, previous + 1))}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
 
       {/* Orders Table */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
