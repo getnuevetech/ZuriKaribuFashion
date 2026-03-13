@@ -91,7 +91,17 @@ const parseJsonObject = (value: unknown): Record<string, unknown> => {
 };
 
 const parseProductEntries = (value: unknown): RequestedProductEntry[] => {
-  const rows = Array.isArray(value) ? value : [];
+  let rows: unknown[] = [];
+  if (Array.isArray(value)) {
+    rows = value;
+  } else if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      rows = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      rows = [];
+    }
+  }
   const normalized: RequestedProductEntry[] = [];
   for (const entry of rows as any[]) {
       const productId = String(entry?.productId || '').trim();
@@ -161,6 +171,69 @@ async function ensureFeaturedRequestSchema() {
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "FeaturedProductRequest_pkey" PRIMARY KEY ("id")
     )`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "requesterUserId" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "requesterRole" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "requestStatus" TEXT NOT NULL DEFAULT 'PENDING'`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "productEntries" JSONB NOT NULL DEFAULT '[]'::jsonb`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "requestedDurationValue" INT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "requestedDurationUnit" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "requestNotes" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "reviewNotes" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "approvedDurationValue" INT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "approvedDurationUnit" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "approvedPriceUsd" DECIMAL(10,2)`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'UNPAID'`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "paymentProviderKey" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "paymentReference" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "approvedByUserId" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMP(3)`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "paidAt" TIMESTAMP(3)`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "activationStartedAt" TIMESTAMP(3)`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "activationEndsAt" TIMESTAMP(3)`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
   );
   await prisma.$executeRawUnsafe(
     `CREATE INDEX IF NOT EXISTS "FeaturedProductRequest_requester_idx" ON "FeaturedProductRequest"("requesterUserId","createdAt")`

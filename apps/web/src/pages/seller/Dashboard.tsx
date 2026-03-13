@@ -368,7 +368,7 @@ export default function SellerDashboard() {
   const [profileForm, setProfileForm] = useState<Record<string, string>>({});
   const [submittingProfile, setSubmittingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
-  const [governanceDebug, setGovernanceDebug] = useState<GovernanceDebugInfo | null>(null);
+  const [, setGovernanceDebug] = useState<GovernanceDebugInfo | null>(null);
   const [dashboardGovernance, setDashboardGovernance] = useState<SellerDashboardGovernance>(
     DEFAULT_SELLER_DASHBOARD_GOVERNANCE
   );
@@ -1329,21 +1329,6 @@ export default function SellerDashboard() {
           )}
 
           {profileMessage ? <p className="text-sm text-amber-900">{profileMessage}</p> : null}
-          {governanceDebug ? (
-            <div className="rounded-lg border border-amber-300 bg-amber-100/60 p-3 text-xs text-amber-950">
-              <p className="font-semibold">Governance debug (temporary)</p>
-              <p>dashboard: {governanceDebug.dashboardCall}</p>
-              <p>fabrics: {governanceDebug.fabricsCall}</p>
-              <p>orders: {governanceDebug.ordersCall}</p>
-              <p>profile-completion: {governanceDebug.profileCompletionCall}</p>
-              <p>profile-fields: {governanceDebug.profileFieldsCall}</p>
-              <p>completion fields: {governanceDebug.completionFieldCount}</p>
-              <p>governance fields: {governanceDebug.governanceFieldCount}</p>
-              <p>effective fields used: {governanceDebug.effectiveFieldCount}</p>
-              <p>sample keys: {governanceDebug.sampleFieldKeys.join(', ') || 'none'}</p>
-              {governanceDebug.error ? <p>error: {governanceDebug.error}</p> : null}
-            </div>
-          ) : null}
           <div>
             <Button
               size="sm"

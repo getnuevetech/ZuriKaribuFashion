@@ -2371,7 +2371,14 @@ router.put('/vendor-dashboard-governance', async (req, res, next) => {
       message: 'Vendor dashboard governance updated successfully.',
       data: settings,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        issues: error.issues,
+      });
+    }
     next(error);
   }
 });
