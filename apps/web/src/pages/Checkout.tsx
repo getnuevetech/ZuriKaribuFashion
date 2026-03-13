@@ -69,6 +69,16 @@ interface PromoPreviewResult {
   eligibleSubtotalUsd: number;
 }
 
+interface CheckoutDeliveryStage {
+  id: string;
+  step: number;
+  stageKey: string;
+  stageLabel: string;
+  description: string | null;
+  isFinal: boolean;
+  sortOrder: number;
+}
+
 interface PaymentSessionDebugInfo {
   routePath: string;
   mode: 'PRIMARY' | 'COMPATIBILITY' | 'LEGACY_INTENT' | 'LEGACY_INTENT_FORCED';
@@ -79,6 +89,44 @@ interface PaymentSessionDebugInfo {
 }
 
 const CHECKOUT_PROMO_STORAGE_KEY_PREFIX = 'af_checkout_promo_state_v1';
+const DEFAULT_CHECKOUT_DELIVERY_STAGES: CheckoutDeliveryStage[] = [
+  {
+    id: 'checkout-stage-order-received',
+    step: 1,
+    stageKey: 'ORDER_RECEIVED',
+    stageLabel: 'Order Received',
+    description: 'Order has been received and queued for processing.',
+    isFinal: false,
+    sortOrder: 0,
+  },
+  {
+    id: 'checkout-stage-production',
+    step: 2,
+    stageKey: 'PRODUCTION',
+    stageLabel: 'Production',
+    description: 'Your order goes through preparation and quality checks.',
+    isFinal: false,
+    sortOrder: 1,
+  },
+  {
+    id: 'checkout-stage-shipped',
+    step: 3,
+    stageKey: 'SHIPPED',
+    stageLabel: 'Shipped',
+    description: 'Shipment is dispatched with your selected carrier.',
+    isFinal: false,
+    sortOrder: 2,
+  },
+  {
+    id: 'checkout-stage-delivered',
+    step: 4,
+    stageKey: 'DELIVERED',
+    stageLabel: 'Delivered',
+    description: 'Order arrives at your delivery address.',
+    isFinal: true,
+    sortOrder: 3,
+  },
+];
 
 const toFiniteMoney = (value: unknown, fallback = 0) => {
   const parsed = Number(value);
@@ -228,6 +276,8 @@ export default function Checkout() {
   const [shippingQuotes, setShippingQuotes] = useState<ShippingQuoteOption[]>([]);
   const [selectedShippingQuoteId, setSelectedShippingQuoteId] = useState<string>('');
   const [shippingQuotesLoading, setShippingQuotesLoading] = useState(false);
+  const [deliveryStages, setDeliveryStages] = useState<CheckoutDeliveryStage[]>(DEFAULT_CHECKOUT_DELIVERY_STAGES);
+  const [deliveryStagesProviderKey, setDeliveryStagesProviderKey] = useState('LOCAL_DEFAULT');
   const [promoCode, setPromoCode] = useState('');
   const [promoPreview, setPromoPreview] = useState<PromoPreviewResult | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
@@ -471,6 +521,46 @@ export default function Checkout() {
       cancelled = true;
     };
   }, [shippingAddress.country, shippingAddress.city, shippingCountryCode, totalPrice]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.shipping
+      .getCheckoutDeliveryInfo({
+        providerKey: selectedShippingQuote?.providerKey || 'LOCAL_DEFAULT',
+      })
+      .then((response) => {
+        if (cancelled) return;
+        const providerKey = String(response.data?.providerKey || selectedShippingQuote?.providerKey || 'LOCAL_DEFAULT')
+          .trim()
+          .toUpperCase();
+        const rows = Array.isArray(response.data?.stages) ? response.data.stages : [];
+        const normalized: CheckoutDeliveryStage[] = rows
+          .map((entry: any, index: number) => ({
+            id: String(entry?.id || `${providerKey}-${index + 1}`),
+            step: Math.max(1, Number(entry?.step || index + 1)),
+            stageKey: String(entry?.stageKey || `STEP_${index + 1}`).trim().toUpperCase(),
+            stageLabel: String(entry?.stageLabel || entry?.stageKey || `Step ${index + 1}`).trim(),
+            description: entry?.description ? String(entry.description).trim() : null,
+            isFinal: Boolean(entry?.isFinal),
+            sortOrder: Number(entry?.sortOrder ?? index),
+          }))
+          .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))
+          .map((entry, index) => ({
+            ...entry,
+            step: index + 1,
+          }));
+        setDeliveryStages(normalized.length > 0 ? normalized : DEFAULT_CHECKOUT_DELIVERY_STAGES);
+        setDeliveryStagesProviderKey(providerKey || 'LOCAL_DEFAULT');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDeliveryStages(DEFAULT_CHECKOUT_DELIVERY_STAGES);
+        setDeliveryStagesProviderKey('LOCAL_DEFAULT');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedShippingQuote?.providerKey]);
 
   useEffect(() => {
     const kindCount = items.reduce(
@@ -1692,45 +1782,37 @@ export default function Checkout() {
                 <h3 className="font-semibold">Delivery Information</h3>
               </div>
               <div className="space-y-3 text-sm">
-                <div className="flex items-start gap-3">
-                  <Badge variant="outline" className="mt-0.5">1</Badge>
-                  <div>
-                    <p className="font-medium">Design Phase</p>
-                    <p className="text-gray-500">3-5 business days</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Badge variant="outline" className="mt-0.5">2</Badge>
-                  <div>
-                    <p className="font-medium">Fabric Preparation</p>
-                    <p className="text-gray-500">1-2 business days</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Badge variant="outline" className="mt-0.5">3</Badge>
-                  <div>
-                    <p className="font-medium">Production & QA</p>
-                    <p className="text-gray-500">7-14 business days</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Badge variant="outline" className="mt-0.5">4</Badge>
-                  <div>
-                    <p className="font-medium">Shipping</p>
-                    <p className="text-gray-500">
-                      {selectedShippingQuote
+                {deliveryStages.map((stage) => {
+                  const normalizedKey = String(stage.stageKey || '').toUpperCase();
+                  const isShippingWindowStage =
+                    normalizedKey.includes('SHIP') ||
+                    normalizedKey.includes('DELIVER') ||
+                    normalizedKey.includes('TRANSIT');
+                  const stageDescription = stage.description
+                    ? stage.description
+                    : isShippingWindowStage
+                      ? selectedShippingQuote
                         ? `${selectedShippingQuote.etaMinDays}-${selectedShippingQuote.etaMaxDays} business days`
-                        : '5-10 business days'}
-                    </p>
-                  </div>
-                </div>
+                        : 'Shipping ETA appears after selecting shipping method.'
+                      : 'Timeline configured by admin in Shipping settings.';
+                  return (
+                    <div key={stage.id} className="flex items-start gap-3">
+                      <Badge variant="outline" className="mt-0.5">
+                        {stage.step}
+                      </Badge>
+                      <div>
+                        <p className="font-medium">{stage.stageLabel}</p>
+                        <p className="text-gray-500">{stageDescription}</p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <p className="text-xs text-gray-500 mt-4">
-                Estimated delivery: {new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toLocaleDateString()} -{' '}
-                {new Date(
-                  Date.now() +
-                    ((selectedShippingQuote?.etaMaxDays || 10) + 21) * 24 * 60 * 60 * 1000
-                ).toLocaleDateString()}
+                Admin-managed delivery flow provider: {deliveryStagesProviderKey}.
+                {selectedShippingQuote
+                  ? ` Shipping window: ${selectedShippingQuote.etaMinDays}-${selectedShippingQuote.etaMaxDays} business days after production.`
+                  : ' Select a shipping method to view ETA window.'}
               </p>
             </div>
 

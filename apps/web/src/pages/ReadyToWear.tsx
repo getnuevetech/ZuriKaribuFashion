@@ -517,8 +517,8 @@ export default function ReadyToWear() {
                           className="absolute left-3 top-3 h-6 w-9 rounded-sm object-cover shadow"
                         />
                       ) : null}
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/45 p-4 text-white">
-                        <div className="max-w-[92%] text-center">
+                      <div className="absolute inset-0 flex items-center p-4 md:p-5">
+                        <div className="max-w-[92%] bg-black/55 px-4 py-3 text-left text-white md:max-w-[80%]">
                           <h2
                             className="font-semibold leading-tight"
                             style={{

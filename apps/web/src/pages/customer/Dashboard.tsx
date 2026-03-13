@@ -145,6 +145,61 @@ const resolveDashboardTab = (value: unknown): DashboardTab => {
   return 'overview';
 };
 
+const toFiniteNumber = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const normalizeMonthlySpending = (value: unknown): Array<{ label: string; value: number }> => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry, index) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const row = entry as any;
+      return {
+        label: String(row.label || row.month || row.name || `M${index + 1}`),
+        value: toFiniteNumber(row.value ?? row.amount ?? row.total ?? 0, 0),
+      };
+    })
+    .filter((entry): entry is { label: string; value: number } => Boolean(entry));
+};
+
+const normalizeWishlistItems = (value: unknown): WishlistItem[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry: any, index) => ({
+      id: String(entry?.id || entry?.productId || `wishlist-${index + 1}`),
+      name: String(entry?.name || entry?.title || entry?.productName || 'Saved item'),
+      price: toFiniteNumber(entry?.price ?? entry?.priceUsd ?? entry?.basePrice ?? 0, 0),
+      image: String(entry?.image || entry?.images?.[0] || entry?.product?.images?.[0] || '/images/placeholder.jpg'),
+      designer: String(entry?.designer || entry?.ownerName || entry?.designerName || 'Designer'),
+    }))
+    .filter((entry) => entry.id.length > 0);
+};
+
+const normalizeCustomerStats = (value: unknown, fallbackWishlistCount: number): CustomerStats => {
+  const row = value && typeof value === 'object' ? (value as any) : {};
+  return {
+    totalOrders: Math.max(0, Math.floor(toFiniteNumber(row.totalOrders, 0))),
+    totalSpent: toFiniteNumber(row.totalSpent, 0),
+    pendingOrders: Math.max(0, Math.floor(toFiniteNumber(row.pendingOrders, 0))),
+    deliveredOrders: Math.max(0, Math.floor(toFiniteNumber(row.deliveredOrders, 0))),
+    wishlistCount: Math.max(0, Math.floor(toFiniteNumber(row.wishlistCount, fallbackWishlistCount))),
+    savedMeasurements: Math.max(0, Math.floor(toFiniteNumber(row.savedMeasurements, 0))),
+    monthlySpending: normalizeMonthlySpending(row.monthlySpending),
+  };
+};
+
+const buildStatsFromOrders = (rows: Order[], wishlistCount: number): CustomerStats => ({
+  totalOrders: rows.length,
+  totalSpent: rows.reduce((sum, row) => sum + toFiniteNumber(row.totalAmount, 0), 0),
+  pendingOrders: rows.filter((row) => ['PENDING', 'CONFIRMED', 'IN_PRODUCTION', 'QA_REVIEW'].includes(String(row.status))).length,
+  deliveredOrders: rows.filter((row) => String(row.status) === 'DELIVERED').length,
+  wishlistCount,
+  savedMeasurements: 0,
+  monthlySpending: [],
+});
+
 const statusConfig: Record<string, { icon: any; color: string; label: string; bgColor: string }> = {
   PENDING: { icon: Clock, color: 'text-yellow-600', label: 'Pending', bgColor: 'bg-yellow-50' },
   CONFIRMED: { icon: CheckCircle, color: 'text-blue-600', label: 'Confirmed', bgColor: 'bg-blue-50' },
@@ -236,14 +291,39 @@ export default function CustomerDashboard() {
         api.payments.getOptions(),
       ]);
       
+      let normalizedOrders: Order[] = [];
+      let normalizedWishlist: WishlistItem[] = [];
+      let normalizedStats: CustomerStats | null = null;
+
       if (statsRes.status === 'fulfilled' && statsRes.value.success) {
-        setStats(statsRes.value.data.stats);
-        setWishlist(statsRes.value.data.wishlist || []);
+        const profilePayload =
+          statsRes.value.data && typeof statsRes.value.data === 'object' ? (statsRes.value.data as any) : {};
+        normalizedWishlist = normalizeWishlistItems(
+          profilePayload?.wishlist ?? profilePayload?.wishlists ?? profilePayload?.savedItems ?? []
+        );
+        normalizedStats = normalizeCustomerStats(
+          profilePayload?.stats ?? profilePayload?.dashboardStats ?? profilePayload?.customerStats ?? {},
+          normalizedWishlist.length
+        );
       }
       if (ordersRes.status === 'fulfilled' && ordersRes.value.success) {
         const rows = Array.isArray(ordersRes.value.data?.orders) ? ordersRes.value.data.orders : [];
-        setOrders(rows.map((row: any) => normalizeCustomerOrder(row)));
+        normalizedOrders = rows.map((row: any) => normalizeCustomerOrder(row));
+        setOrders(normalizedOrders);
+      } else {
+        setOrders([]);
       }
+      if (!normalizedStats) {
+        normalizedStats = buildStatsFromOrders(normalizedOrders, normalizedWishlist.length);
+      } else if (normalizedOrders.length > 0 && normalizedStats.totalOrders <= 0) {
+        normalizedStats = {
+          ...normalizedStats,
+          ...buildStatsFromOrders(normalizedOrders, normalizedWishlist.length),
+          monthlySpending: normalizedStats.monthlySpending,
+        };
+      }
+      setStats(normalizedStats);
+      setWishlist(normalizedWishlist);
       if (tryOnSummaryRes.status === 'fulfilled' && tryOnSummaryRes.value.success) {
         setTryOnSummary(tryOnSummaryRes.value.data || null);
         const measurementSeed = tryOnSummaryRes.value.data?.measurements;

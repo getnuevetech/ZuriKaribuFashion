@@ -2901,6 +2901,49 @@ async function readShippingTrackingWithFallback<T>(data: { providerKey: string; 
   }
 }
 
+async function readShippingCheckoutDeliveryInfoWithFallback<T>(params?: { providerKey?: string }) {
+  const attempts = ['/shipping/delivery-info', '/shipping/checkout-delivery-info'];
+  let lastError: unknown = null;
+  for (const path of attempts) {
+    try {
+      return await apiService.get<T>(path, {
+        params: params?.providerKey ? { providerKey: params.providerKey } : undefined,
+      });
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (isRetryableRouteError(lastError)) {
+    const preferredProviderKey = normalizeShippingProviderKey(params?.providerKey || 'LOCAL_DEFAULT');
+    const rows = readShippingFallbackStageTemplates()
+      .filter((entry: any) => Boolean(entry?.isActive))
+      .filter((entry: any) => {
+        const providerKey = normalizeShippingProviderKey(entry?.providerKey || 'LOCAL_DEFAULT');
+        return providerKey === preferredProviderKey || providerKey === 'LOCAL_DEFAULT';
+      })
+      .sort((a: any, b: any) => Number(a?.sortOrder || 0) - Number(b?.sortOrder || 0))
+      .map((entry: any, index: number) => ({
+        id: String(entry?.id || `${preferredProviderKey}-${index + 1}`),
+        step: index + 1,
+        stageKey: String(entry?.stageKey || '').toUpperCase(),
+        stageLabel: String(entry?.stageLabel || entry?.stageKey || `Step ${index + 1}`),
+        description: entry?.description ? String(entry.description) : null,
+        isFinal: Boolean(entry?.isFinal),
+        sortOrder: Number(entry?.sortOrder || index),
+      }));
+    return {
+      success: true,
+      data: {
+        providerKey: preferredProviderKey,
+        stages: rows,
+      },
+    } as T;
+  }
+  throw lastError ?? new Error('Checkout delivery info route not found.');
+}
+
 type TopStripPayload = {
   messages: string[];
   separator: string;
@@ -6837,6 +6880,23 @@ const shippingApi = {
         events: Array<{ status: string; location?: string; timestamp: string; notes?: string }>;
       };
     }>(data),
+
+  getCheckoutDeliveryInfo: (params?: { providerKey?: string }) =>
+    readShippingCheckoutDeliveryInfoWithFallback<{
+      success: boolean;
+      data: {
+        providerKey: string;
+        stages: Array<{
+          id: string;
+          step: number;
+          stageKey: string;
+          stageLabel: string;
+          description: string | null;
+          isFinal: boolean;
+          sortOrder: number;
+        }>;
+      };
+    }>(params),
 };
 
 // Banners API (public)

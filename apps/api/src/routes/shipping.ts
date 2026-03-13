@@ -1018,6 +1018,37 @@ async function readShippingStageTemplates(params?: {
   })) as ShippingStageTemplateRow[];
 }
 
+async function resolveCheckoutDeliveryInfo(providerKey?: string) {
+  const normalizedProviderKey = normalizeProviderKey(providerKey || '');
+  const preferredKey = normalizedProviderKey || 'LOCAL_DEFAULT';
+  const preferredStages = await readShippingStageTemplates({
+    providerKey: preferredKey,
+    activeOnly: true,
+  });
+  const fallbackStages =
+    preferredStages.length > 0
+      ? preferredStages
+      : await readShippingStageTemplates({
+          providerKey: 'LOCAL_DEFAULT',
+          activeOnly: true,
+        });
+  return {
+    providerKey: preferredStages.length > 0 ? preferredKey : 'LOCAL_DEFAULT',
+    stages: fallbackStages
+      .slice()
+      .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))
+      .map((row, index) => ({
+        id: row.id,
+        step: index + 1,
+        stageKey: row.stageKey,
+        stageLabel: row.stageLabel,
+        description: row.description,
+        isFinal: row.isFinal,
+        sortOrder: row.sortOrder,
+      })),
+  };
+}
+
 async function readOrderShippingStageEvents(orderId: string) {
   await ensureShippingSchema();
   const rows = await prisma.$queryRawUnsafe<Array<any>>(
@@ -1686,6 +1717,21 @@ router.post(
   } catch (error) {
     next(error);
   }
+  }
+);
+
+router.get(
+  '/delivery-info',
+  authenticate,
+  authorizePermissions(Permissions.ORDERS_CREATE, Permissions.SHIPPING_MANAGE),
+  async (req, res, next) => {
+    try {
+      const providerKey = String(req.query.providerKey || '').trim();
+      const data = await resolveCheckoutDeliveryInfo(providerKey || undefined);
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
   }
 );
 
