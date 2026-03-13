@@ -380,7 +380,6 @@ export default function SellerDashboard() {
   const [supportOrderId, setSupportOrderId] = useState<string | null>(null);
   const [supportInitialTab, setSupportInitialTab] = useState<'details' | 'ticket'>('ticket');
   const [featuredRequests, setFeaturedRequests] = useState<FeaturedRequest[]>([]);
-  const [featuredRequestProductIds, setFeaturedRequestProductIds] = useState<string[]>([]);
   const [featuredRequestDurationValue, setFeaturedRequestDurationValue] = useState(2);
   const [featuredRequestDurationUnit, setFeaturedRequestDurationUnit] = useState<'DAYS' | 'WEEKS' | 'MONTHS'>('WEEKS');
   const [featuredRequestNotes, setFeaturedRequestNotes] = useState('');
@@ -873,6 +872,7 @@ export default function SellerDashboard() {
     setSelectedFabric(null);
     setIsEditMode(false);
     setProductError(null);
+    setFeaturedRequestNotes('');
   };
 
   const openCreateProductModal = () => {
@@ -899,6 +899,11 @@ export default function SellerDashboard() {
     });
     setShowProductModal(true);
     setProductImageUrlInput('');
+    setFeaturedRequestNotes('');
+    setFeaturedRequestDurationValue(Math.max(1, Number(featuredSettings?.defaultDurationValue || 2)));
+    setFeaturedRequestDurationUnit(
+      String(featuredSettings?.defaultDurationUnit || 'WEEKS').toUpperCase() as 'DAYS' | 'WEEKS' | 'MONTHS'
+    );
   };
 
   const parseImageInputs = (value: string) =>
@@ -1070,26 +1075,13 @@ export default function SellerDashboard() {
     }
   };
 
-  const toggleFeaturedRequestProduct = (productId: string) => {
-    setFeaturedRequestProductIds((prev) =>
-      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
-    );
-  };
-
-  const handleSubmitFeaturedRequest = async () => {
-    if (featuredRequestProductIds.length === 0) {
-      setDashboardLoadError('Select at least one approved fabric for featured request.');
-      return;
-    }
+  const handleSubmitFeaturedRequestForProduct = async (productId: string) => {
+    if (!productId) return;
     try {
       setSubmittingFeaturedRequest(true);
       setDashboardLoadError(null);
       const response = await api.featuredRequests.createRequest({
-        products: featuredRequestProductIds.map((productId) => ({
-          productId,
-          productType: 'FABRIC',
-          section: 'FEATURED_FABRICS',
-        })),
+        products: [{ productId, productType: 'FABRIC', section: 'FEATURED_FABRICS' }],
         requestedDurationValue: featuredRequestDurationValue,
         requestedDurationUnit: featuredRequestDurationUnit,
         requestNotes: featuredRequestNotes || undefined,
@@ -1098,7 +1090,6 @@ export default function SellerDashboard() {
         setDashboardLoadError(response.message || 'Unable to submit featured request.');
         return;
       }
-      setFeaturedRequestProductIds([]);
       setFeaturedRequestNotes('');
       await fetchDashboardData();
     } catch (error: any) {
@@ -1127,7 +1118,6 @@ export default function SellerDashboard() {
 
   const lowStockFabrics = fabrics.filter(f => f.stockMeters < 20);
   const featuredFabrics = fabrics.filter((fabric) => fabric.isFeatured);
-  const approvedFabrics = fabrics.filter((fabric) => String(fabric.status || '').toUpperCase() === 'APPROVED');
   const pendingOrders = orders.filter(o => o.status === 'CONFIRMED');
   const filteredFabrics = useMemo(() => {
     const normalizedSearch = fabricSearch.trim().toLowerCase();
@@ -1180,6 +1170,16 @@ export default function SellerDashboard() {
   const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false;
   const canSubmitProfile = dashboardGovernance.actions.submitProfile !== false;
   const hasNoDashboardTabs = visibleTabs.length === 0;
+  const activeFeaturedRequestForSelectedFabric =
+    selectedFabric?.id
+      ? featuredRequests.find((request) => {
+          const status = String(request.requestStatus || '').toUpperCase();
+          if (status === 'REJECTED' || status === 'EXPIRED' || status === 'CANCELLED') return false;
+          return Array.isArray(request.productEntries)
+            ? request.productEntries.some((entry) => String(entry.productId || '') === String(selectedFabric.id))
+            : false;
+        })
+      : null;
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -1796,10 +1796,10 @@ export default function SellerDashboard() {
 
       {activeTab === 'featured' && (
         <div className="space-y-6">
-          <div className="rounded-xl border bg-white p-5 space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Request Featured Placement</h2>
+          <div className="rounded-xl border bg-white p-5 space-y-3">
+            <h2 className="text-lg font-semibold text-gray-900">Featured Request Workflow</h2>
             <p className="text-sm text-gray-600">
-              Submit one request for one or more approved fabrics. Admin sets final duration and pricing before payment.
+              Create a featured request from the Fabric upload/edit popup for each product. This page is now dedicated to request history and approvals.
             </p>
             <div className="text-xs text-gray-600">
               Base price (USD): Fabric ${Number(featuredSettings?.basePriceUsdByType?.FABRIC || 0).toFixed(2)}
@@ -1809,61 +1809,11 @@ export default function SellerDashboard() {
                 Featured requests are currently disabled by admin.
               </div>
             ) : null}
-            <div className="grid gap-2 md:grid-cols-2">
-              {approvedFabrics.map((fabric) => (
-                <label key={fabric.id} className="flex items-center gap-2 rounded border px-3 py-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={featuredRequestProductIds.includes(fabric.id)}
-                    onChange={() => toggleFeaturedRequestProduct(fabric.id)}
-                  />
-                  <span className="font-medium text-gray-900">{fabric.name}</span>
-                </label>
-              ))}
-              {approvedFabrics.length === 0 ? (
-                <div className="text-sm text-gray-500">No approved fabrics available for request.</div>
-              ) : null}
+            <div>
+              <Button variant="outline" size="sm" onClick={() => syncTabWithUrl('fabrics')}>
+                Open Product List
+              </Button>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="flex flex-col gap-1 text-sm text-gray-700">
-                <span>Duration value</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={Number(featuredSettings?.maxDurationValue || 36)}
-                  className="rounded border px-3 py-2"
-                  value={featuredRequestDurationValue}
-                  disabled={featuredSettings?.allowVendorRequestedDuration === false}
-                  onChange={(e) => setFeaturedRequestDurationValue(Math.max(1, Number(e.target.value || 1)))}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-gray-700">
-                <span>Duration unit</span>
-                <select
-                  className="rounded border px-3 py-2"
-                  value={featuredRequestDurationUnit}
-                  disabled={featuredSettings?.allowVendorRequestedDuration === false}
-                  onChange={(e) => setFeaturedRequestDurationUnit(e.target.value as 'DAYS' | 'WEEKS' | 'MONTHS')}
-                >
-                  <option value="DAYS">Days</option>
-                  <option value="WEEKS">Weeks</option>
-                  <option value="MONTHS">Months</option>
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-gray-700 sm:col-span-1">
-                <span>Request note (optional)</span>
-                <input
-                  type="text"
-                  className="rounded border px-3 py-2"
-                  value={featuredRequestNotes}
-                  onChange={(e) => setFeaturedRequestNotes(e.target.value)}
-                  placeholder="Add context for admin"
-                />
-              </label>
-            </div>
-            <Button onClick={handleSubmitFeaturedRequest} disabled={submittingFeaturedRequest || !featuredSettings?.enabled}>
-              {submittingFeaturedRequest ? 'Submitting...' : 'Submit Featured Request'}
-            </Button>
           </div>
 
           <div className="rounded-xl border bg-white p-5">
@@ -2240,6 +2190,90 @@ export default function SellerDashboard() {
                 </div>
               ) : null}
             </div>
+
+            {isEditMode && selectedFabric ? (
+              <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                <h4 className="text-sm font-semibold text-gray-900">Featured Request</h4>
+                <p className="text-xs text-gray-600">
+                  Submit featured placement for this product from this popup. Admin approval and payment are required before activation.
+                </p>
+                {String(selectedFabric.status || '').toUpperCase() !== 'APPROVED' ? (
+                  <div className="rounded border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+                    This product is not approved yet. Featured requests are available only after admin approval.
+                  </div>
+                ) : !featuredSettings?.enabled ? (
+                  <div className="rounded border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+                    Featured requests are currently disabled by admin.
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <label className="flex flex-col gap-1 text-xs text-gray-700">
+                        <span>Duration value</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={Number(featuredSettings?.maxDurationValue || 36)}
+                          className="rounded border px-3 py-2 text-sm"
+                          value={featuredRequestDurationValue}
+                          disabled={featuredSettings?.allowVendorRequestedDuration === false}
+                          onChange={(e) => setFeaturedRequestDurationValue(Math.max(1, Number(e.target.value || 1)))}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs text-gray-700">
+                        <span>Duration unit</span>
+                        <select
+                          className="rounded border px-3 py-2 text-sm"
+                          value={featuredRequestDurationUnit}
+                          disabled={featuredSettings?.allowVendorRequestedDuration === false}
+                          onChange={(e) => setFeaturedRequestDurationUnit(e.target.value as 'DAYS' | 'WEEKS' | 'MONTHS')}
+                        >
+                          <option value="DAYS">Days</option>
+                          <option value="WEEKS">Weeks</option>
+                          <option value="MONTHS">Months</option>
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs text-gray-700">
+                        <span>Request note</span>
+                        <input
+                          type="text"
+                          className="rounded border px-3 py-2 text-sm"
+                          value={featuredRequestNotes}
+                          onChange={(e) => setFeaturedRequestNotes(e.target.value)}
+                          placeholder="Optional note"
+                        />
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleSubmitFeaturedRequestForProduct(selectedFabric.id)}
+                        disabled={submittingFeaturedRequest}
+                      >
+                        {submittingFeaturedRequest ? 'Submitting...' : 'Submit Featured Request'}
+                      </Button>
+                      <span className="text-xs text-gray-600">
+                        Base price: ${Number(featuredSettings?.basePriceUsdByType?.FABRIC || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {activeFeaturedRequestForSelectedFabric ? (
+                  <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                    Existing request status: {activeFeaturedRequestForSelectedFabric.requestStatus}
+                    {activeFeaturedRequestForSelectedFabric.requestStatus === 'APPROVED_AWAITING_PAYMENT' ? (
+                      <button
+                        type="button"
+                        className="ml-2 underline"
+                        onClick={() => handlePayFeaturedRequest(activeFeaturedRequestForSelectedFabric.id)}
+                      >
+                        Pay & Activate
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {productError ? (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">

@@ -22,7 +22,6 @@ import {
   Upload,
   X,
   Sparkles,
-  MessageSquare
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
@@ -590,7 +589,6 @@ export default function DesignerDashboard() {
   const [supportInitialTab, setSupportInitialTab] = useState<'details' | 'ticket'>('ticket');
   const [tryOnInsights, setTryOnInsights] = useState<any>(null);
   const [featuredRequests, setFeaturedRequests] = useState<FeaturedRequest[]>([]);
-  const [featuredRequestProducts, setFeaturedRequestProducts] = useState<Array<{ productId: string; productType: 'DESIGN' | 'READY_TO_WEAR' }>>([]);
   const [featuredRequestDurationValue, setFeaturedRequestDurationValue] = useState(2);
   const [featuredRequestDurationUnit, setFeaturedRequestDurationUnit] = useState<'DAYS' | 'WEEKS' | 'MONTHS'>('WEEKS');
   const [featuredRequestNotes, setFeaturedRequestNotes] = useState('');
@@ -1205,6 +1203,7 @@ export default function DesignerDashboard() {
     setDesignError(null);
     setDesignImageUrlInput('');
     setDesignSelectedFabricOptionId('');
+    setFeaturedRequestNotes('');
   };
 
   const openCreateDesignModal = () => {
@@ -1228,6 +1227,7 @@ export default function DesignerDashboard() {
     setSelectedReadyForEdit(null);
     setReadyError(null);
     setReadyImageUrlInput('');
+    setFeaturedRequestNotes('');
   };
 
   const openCreateReadyModal = () => {
@@ -1279,6 +1279,11 @@ export default function DesignerDashboard() {
     });
     setDesignSelectedFabricOptionId('');
     setDesignImageUrlInput('');
+    setFeaturedRequestNotes('');
+    setFeaturedRequestDurationValue(Math.max(1, Number(featuredSettings?.defaultDurationValue || 2)));
+    setFeaturedRequestDurationUnit(
+      String(featuredSettings?.defaultDurationUnit || 'WEEKS').toUpperCase() as 'DAYS' | 'WEEKS' | 'MONTHS'
+    );
     setShowDesignModal(true);
   };
 
@@ -1310,6 +1315,11 @@ export default function DesignerDashboard() {
       priceCurrencyCode: String(product.listingCurrencyCode || currencyOptions.defaultCurrency || 'USD'),
       variants: mappedVariants,
     });
+    setFeaturedRequestNotes('');
+    setFeaturedRequestDurationValue(Math.max(1, Number(featuredSettings?.defaultDurationValue || 2)));
+    setFeaturedRequestDurationUnit(
+      String(featuredSettings?.defaultDurationUnit || 'WEEKS').toUpperCase() as 'DAYS' | 'WEEKS' | 'MONTHS'
+    );
     setShowReadyModal(true);
   };
 
@@ -1920,29 +1930,22 @@ export default function DesignerDashboard() {
     }
   };
 
-  const toggleFeaturedRequestProduct = (productId: string, productType: 'DESIGN' | 'READY_TO_WEAR') => {
-    const key = `${productType}:${productId}`;
-    setFeaturedRequestProducts((prev) => {
-      const exists = prev.some((entry) => `${entry.productType}:${entry.productId}` === key);
-      if (exists) return prev.filter((entry) => `${entry.productType}:${entry.productId}` !== key);
-      return [...prev, { productId, productType }];
-    });
-  };
-
-  const handleSubmitFeaturedRequest = async () => {
-    if (featuredRequestProducts.length === 0) {
-      setDashboardLoadError('Select at least one approved product for featured request.');
-      return;
-    }
+  const handleSubmitFeaturedRequestForProduct = async (
+    productId: string,
+    productType: 'DESIGN' | 'READY_TO_WEAR'
+  ) => {
+    if (!productId) return;
     try {
       setSubmittingFeaturedRequest(true);
       setDashboardLoadError(null);
       const response = await api.featuredRequests.createRequest({
-        products: featuredRequestProducts.map((entry) => ({
-          productId: entry.productId,
-          productType: entry.productType,
-          section: entry.productType === 'READY_TO_WEAR' ? 'FEATURED_READY_TO_WEAR' : 'FEATURED_DESIGNS',
-        })),
+        products: [
+          {
+            productId,
+            productType,
+            section: productType === 'READY_TO_WEAR' ? 'FEATURED_READY_TO_WEAR' : 'FEATURED_DESIGNS',
+          },
+        ],
         requestedDurationValue: featuredRequestDurationValue,
         requestedDurationUnit: featuredRequestDurationUnit,
         requestNotes: featuredRequestNotes || undefined,
@@ -1951,7 +1954,6 @@ export default function DesignerDashboard() {
         setDashboardLoadError(response.message || 'Unable to submit featured request.');
         return;
       }
-      setFeaturedRequestProducts([]);
       setFeaturedRequestNotes('');
       await fetchDashboardData();
     } catch (error: any) {
@@ -1981,14 +1983,6 @@ export default function DesignerDashboard() {
   const productRows = [
     ...designs.map((item) => ({ ...item, productType: 'CUSTOM_TO_WEAR' as const })),
     ...readyProducts.map((item) => ({ ...item, productType: 'READY_TO_WEAR' as const })),
-  ];
-  const approvedRequestRows = [
-    ...designs
-      .filter((item) => String(item.status || '').toUpperCase() === 'APPROVED')
-      .map((item) => ({ id: item.id, name: item.name, productType: 'DESIGN' as const })),
-    ...readyProducts
-      .filter((item) => String(item.status || '').toUpperCase() === 'APPROVED')
-      .map((item) => ({ id: item.id, name: item.name, productType: 'READY_TO_WEAR' as const })),
   ];
   const filteredProductRows = useMemo(() => {
     const normalizedSearch = productSearch.trim().toLowerCase();
@@ -2057,6 +2051,34 @@ export default function DesignerDashboard() {
   const canRequestFabricCountryAccess = dashboardGovernance.actions.requestFabricCountryAccess !== false;
   const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false;
   const hasNoDashboardTabs = visibleTabs.length === 0;
+  const activeFeaturedRequestForSelectedDesign =
+    selectedDesign?.id
+      ? featuredRequests.find((request) => {
+          const status = String(request.requestStatus || '').toUpperCase();
+          if (status === 'REJECTED' || status === 'EXPIRED' || status === 'CANCELLED') return false;
+          return Array.isArray(request.productEntries)
+            ? request.productEntries.some(
+                (entry) =>
+                  String(entry.productId || '') === String(selectedDesign.id) &&
+                  String(entry.productType || '').toUpperCase() === 'DESIGN'
+              )
+            : false;
+        })
+      : null;
+  const activeFeaturedRequestForSelectedReady =
+    selectedReadyForEdit?.id
+      ? featuredRequests.find((request) => {
+          const status = String(request.requestStatus || '').toUpperCase();
+          if (status === 'REJECTED' || status === 'EXPIRED' || status === 'CANCELLED') return false;
+          return Array.isArray(request.productEntries)
+            ? request.productEntries.some(
+                (entry) =>
+                  String(entry.productId || '') === String(selectedReadyForEdit.id) &&
+                  String(entry.productType || '').toUpperCase() === 'READY_TO_WEAR'
+              )
+            : false;
+        })
+      : null;
   const fabricOptionById = useMemo(() => {
     const map = new Map<string, FabricOption>();
     for (const option of Object.values(designFabricCache)) {
@@ -2724,9 +2746,9 @@ export default function DesignerDashboard() {
       {activeTab === 'featured' && (
         <div className="space-y-6">
           <div className="rounded-xl border bg-white p-5 space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Request Featured Placement</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Featured Request Workflow</h2>
             <p className="text-sm text-gray-600">
-              Submit one request for one or more approved products. Admin approval sets final payment and timeline.
+              Create featured requests from each Design/Ready-to-Wear upload or edit popup. This page is now dedicated to request history and approvals.
             </p>
             <div className="text-xs text-gray-600">
               Base price (USD): Design ${Number(featuredSettings?.basePriceUsdByType?.DESIGN || 0).toFixed(2)} · Ready-to-Wear $
@@ -2737,62 +2759,11 @@ export default function DesignerDashboard() {
                 Featured requests are currently disabled by admin.
               </div>
             ) : null}
-            <div className="grid gap-2 md:grid-cols-2">
-              {approvedRequestRows.map((row) => {
-                const key = `${row.productType}:${row.id}`;
-                const checked = featuredRequestProducts.some((entry) => `${entry.productType}:${entry.productId}` === key);
-                return (
-                  <label key={key} className="flex items-center gap-2 rounded border px-3 py-2 text-sm">
-                    <input type="checkbox" checked={checked} onChange={() => toggleFeaturedRequestProduct(row.id, row.productType)} />
-                    <span className="font-medium text-gray-900">{row.name}</span>
-                    <Badge variant="gray">{row.productType === 'READY_TO_WEAR' ? 'READY' : 'CUSTOM'}</Badge>
-                  </label>
-                );
-              })}
-              {approvedRequestRows.length === 0 ? (
-                <div className="text-sm text-gray-500">No approved products available for request.</div>
-              ) : null}
+            <div>
+              <Button variant="outline" size="sm" onClick={() => syncTabWithUrl('designs')}>
+                Open Product List
+              </Button>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="flex flex-col gap-1 text-sm text-gray-700">
-                <span>Duration value</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={Number(featuredSettings?.maxDurationValue || 36)}
-                  className="rounded border px-3 py-2"
-                  value={featuredRequestDurationValue}
-                  disabled={featuredSettings?.allowVendorRequestedDuration === false}
-                  onChange={(e) => setFeaturedRequestDurationValue(Math.max(1, Number(e.target.value || 1)))}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-gray-700">
-                <span>Duration unit</span>
-                <select
-                  className="rounded border px-3 py-2"
-                  value={featuredRequestDurationUnit}
-                  disabled={featuredSettings?.allowVendorRequestedDuration === false}
-                  onChange={(e) => setFeaturedRequestDurationUnit(e.target.value as 'DAYS' | 'WEEKS' | 'MONTHS')}
-                >
-                  <option value="DAYS">Days</option>
-                  <option value="WEEKS">Weeks</option>
-                  <option value="MONTHS">Months</option>
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-gray-700">
-                <span>Request note (optional)</span>
-                <input
-                  type="text"
-                  className="rounded border px-3 py-2"
-                  value={featuredRequestNotes}
-                  onChange={(e) => setFeaturedRequestNotes(e.target.value)}
-                  placeholder="Add context for admin"
-                />
-              </label>
-            </div>
-            <Button onClick={handleSubmitFeaturedRequest} disabled={submittingFeaturedRequest || !featuredSettings?.enabled}>
-              {submittingFeaturedRequest ? 'Submitting...' : 'Submit Featured Request'}
-            </Button>
           </div>
 
           <div className="rounded-xl border bg-white p-5">
@@ -3234,6 +3205,90 @@ export default function DesignerDashboard() {
               ) : null}
             </div>
 
+            {isReadyEditMode && selectedReadyForEdit ? (
+              <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                <h4 className="text-sm font-semibold text-gray-900">Featured Request</h4>
+                <p className="text-xs text-gray-600">
+                  Submit featured placement for this ready-to-wear product from this popup.
+                </p>
+                {String(selectedReadyForEdit.status || '').toUpperCase() !== 'APPROVED' ? (
+                  <div className="rounded border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+                    This product is not approved yet. Featured requests are available only after admin approval.
+                  </div>
+                ) : !featuredSettings?.enabled ? (
+                  <div className="rounded border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+                    Featured requests are currently disabled by admin.
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <label className="flex flex-col gap-1 text-xs text-gray-700">
+                        <span>Duration value</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={Number(featuredSettings?.maxDurationValue || 36)}
+                          className="rounded border px-3 py-2 text-sm"
+                          value={featuredRequestDurationValue}
+                          disabled={featuredSettings?.allowVendorRequestedDuration === false}
+                          onChange={(e) => setFeaturedRequestDurationValue(Math.max(1, Number(e.target.value || 1)))}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs text-gray-700">
+                        <span>Duration unit</span>
+                        <select
+                          className="rounded border px-3 py-2 text-sm"
+                          value={featuredRequestDurationUnit}
+                          disabled={featuredSettings?.allowVendorRequestedDuration === false}
+                          onChange={(e) => setFeaturedRequestDurationUnit(e.target.value as 'DAYS' | 'WEEKS' | 'MONTHS')}
+                        >
+                          <option value="DAYS">Days</option>
+                          <option value="WEEKS">Weeks</option>
+                          <option value="MONTHS">Months</option>
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs text-gray-700">
+                        <span>Request note</span>
+                        <input
+                          type="text"
+                          className="rounded border px-3 py-2 text-sm"
+                          value={featuredRequestNotes}
+                          onChange={(e) => setFeaturedRequestNotes(e.target.value)}
+                          placeholder="Optional note"
+                        />
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleSubmitFeaturedRequestForProduct(selectedReadyForEdit.id, 'READY_TO_WEAR')}
+                        disabled={submittingFeaturedRequest}
+                      >
+                        {submittingFeaturedRequest ? 'Submitting...' : 'Submit Featured Request'}
+                      </Button>
+                      <span className="text-xs text-gray-600">
+                        Base price: ${Number(featuredSettings?.basePriceUsdByType?.READY_TO_WEAR || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {activeFeaturedRequestForSelectedReady ? (
+                  <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                    Existing request status: {activeFeaturedRequestForSelectedReady.requestStatus}
+                    {activeFeaturedRequestForSelectedReady.requestStatus === 'APPROVED_AWAITING_PAYMENT' ? (
+                      <button
+                        type="button"
+                        className="ml-2 underline"
+                        onClick={() => handlePayFeaturedRequest(activeFeaturedRequestForSelectedReady.id)}
+                      >
+                        Pay & Activate
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             {readyError ? (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 {readyError}
@@ -3643,6 +3698,90 @@ export default function DesignerDashboard() {
                 </div>
               ) : null}
             </div>
+
+            {isEditMode && selectedDesign ? (
+              <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                <h4 className="text-sm font-semibold text-gray-900">Featured Request</h4>
+                <p className="text-xs text-gray-600">
+                  Submit featured placement for this custom design from this popup.
+                </p>
+                {String(selectedDesign.status || '').toUpperCase() !== 'APPROVED' ? (
+                  <div className="rounded border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+                    This design is not approved yet. Featured requests are available only after admin approval.
+                  </div>
+                ) : !featuredSettings?.enabled ? (
+                  <div className="rounded border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+                    Featured requests are currently disabled by admin.
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <label className="flex flex-col gap-1 text-xs text-gray-700">
+                        <span>Duration value</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={Number(featuredSettings?.maxDurationValue || 36)}
+                          className="rounded border px-3 py-2 text-sm"
+                          value={featuredRequestDurationValue}
+                          disabled={featuredSettings?.allowVendorRequestedDuration === false}
+                          onChange={(e) => setFeaturedRequestDurationValue(Math.max(1, Number(e.target.value || 1)))}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs text-gray-700">
+                        <span>Duration unit</span>
+                        <select
+                          className="rounded border px-3 py-2 text-sm"
+                          value={featuredRequestDurationUnit}
+                          disabled={featuredSettings?.allowVendorRequestedDuration === false}
+                          onChange={(e) => setFeaturedRequestDurationUnit(e.target.value as 'DAYS' | 'WEEKS' | 'MONTHS')}
+                        >
+                          <option value="DAYS">Days</option>
+                          <option value="WEEKS">Weeks</option>
+                          <option value="MONTHS">Months</option>
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs text-gray-700">
+                        <span>Request note</span>
+                        <input
+                          type="text"
+                          className="rounded border px-3 py-2 text-sm"
+                          value={featuredRequestNotes}
+                          onChange={(e) => setFeaturedRequestNotes(e.target.value)}
+                          placeholder="Optional note"
+                        />
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleSubmitFeaturedRequestForProduct(selectedDesign.id, 'DESIGN')}
+                        disabled={submittingFeaturedRequest}
+                      >
+                        {submittingFeaturedRequest ? 'Submitting...' : 'Submit Featured Request'}
+                      </Button>
+                      <span className="text-xs text-gray-600">
+                        Base price: ${Number(featuredSettings?.basePriceUsdByType?.DESIGN || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {activeFeaturedRequestForSelectedDesign ? (
+                  <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                    Existing request status: {activeFeaturedRequestForSelectedDesign.requestStatus}
+                    {activeFeaturedRequestForSelectedDesign.requestStatus === 'APPROVED_AWAITING_PAYMENT' ? (
+                      <button
+                        type="button"
+                        className="ml-2 underline"
+                        onClick={() => handlePayFeaturedRequest(activeFeaturedRequestForSelectedDesign.id)}
+                      >
+                        Pay & Activate
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {designError ? (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
