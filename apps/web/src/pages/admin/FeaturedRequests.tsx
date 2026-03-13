@@ -28,7 +28,7 @@ export default function AdminFeaturedRequests() {
       setMessage('');
       const [settingsRes, requestsRes] = await Promise.all([
         api.featuredRequests.getSettings(),
-        api.featuredRequests.listAdminRequests({ search: search || undefined, status: statusFilter || undefined, limit: 120 }),
+        api.featuredRequests.listAdminRequests({ search: search || undefined, status: statusFilter || undefined, limit: 100 }),
       ]);
       if (settingsRes.success) {
         setSettings(settingsRes.data || settings);
