@@ -643,7 +643,7 @@ export default function AdminVendorProfiles() {
                   >
                     {FIELD_TYPES.map((type) => (
                       <option key={type} value={type}>
-                        {type}
+                        {type === 'IMAGE_DOCUMENT' ? 'IMAGE/DOCUMENT' : type}
                       </option>
                     ))}
                   </select>
