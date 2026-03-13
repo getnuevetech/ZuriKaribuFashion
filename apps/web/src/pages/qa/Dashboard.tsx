@@ -27,6 +27,7 @@ import DataTable from '../../components/dashboard/DataTable';
 import { BarChart, PieChart } from '../../components/dashboard/SimpleChart';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import OrderSupportModal from '../../components/orders/OrderSupportModal';
 
 interface QAStats {
   pendingReviews: number;
@@ -85,6 +86,8 @@ export default function QADashboard() {
   const [showShipModal, setShowShipModal] = useState(false);
   const [tryOnInsights, setTryOnInsights] = useState<any>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [supportOrderId, setSupportOrderId] = useState<string | null>(null);
+  const [supportInitialTab, setSupportInitialTab] = useState<'details' | 'ticket'>('ticket');
 
   const syncTabWithUrl = (tab: 'overview' | 'pending' | 'history') => {
     setActiveTab(tab);
@@ -465,10 +468,23 @@ export default function QADashboard() {
           searchable
           searchKeys={['designName', 'designerName', 'customerName', 'orderNumber']}
           actions={(item) => (
-            <Button size="sm" onClick={() => openReviewModal(item)}>
-              <Eye className="w-4 h-4 mr-1" />
-              Review
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => openReviewModal(item)}>
+                <Eye className="w-4 h-4 mr-1" />
+                Review
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setSupportInitialTab('ticket');
+                  setSupportOrderId(item.id);
+                }}
+              >
+                <MessageSquare className="w-4 h-4 mr-1" />
+                Ticket
+              </Button>
+            </div>
           )}
         />
       )}
@@ -647,6 +663,12 @@ export default function QADashboard() {
           </div>
         </div>
       )}
+      <OrderSupportModal
+        isOpen={Boolean(supportOrderId)}
+        orderId={supportOrderId}
+        initialTab={supportInitialTab}
+        onClose={() => setSupportOrderId(null)}
+      />
     </div>
   );
 }

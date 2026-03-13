@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma, UserRole, OrderType, OrderStatus, PaymentStatus, ProductStatus } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
@@ -14,6 +15,492 @@ import {
 import { emitPartnerOrderEvent } from '../utils/partner-api';
 
 const router = Router();
+
+const ORDER_TICKETING_SETTINGS_KEY = 'order_ticketing_settings_v1';
+const ORDER_TICKET_STATUSES = ['OPEN', 'PENDING', 'RESOLVED', 'CLOSED'] as const;
+type OrderTicketStatus = (typeof ORDER_TICKET_STATUSES)[number];
+const ORDER_TICKETING_ROLES = [
+  UserRole.CUSTOMER,
+  UserRole.FABRIC_SELLER,
+  UserRole.FASHION_DESIGNER,
+  UserRole.QA_TEAM,
+  UserRole.ADMINISTRATOR,
+] as const;
+type OrderTicketingRole = (typeof ORDER_TICKETING_ROLES)[number];
+const ORDER_TICKETING_ROLE_LABELS: Record<OrderTicketingRole, string> = {
+  [UserRole.CUSTOMER]: 'Customer',
+  [UserRole.FABRIC_SELLER]: 'Seller',
+  [UserRole.FASHION_DESIGNER]: 'Designer',
+  [UserRole.QA_TEAM]: 'QA',
+  [UserRole.ADMINISTRATOR]: 'Admin',
+};
+type OrderTicketingSettings = {
+  enabled: boolean;
+  defaultVisibleToCustomer: boolean;
+  allowVendorToVendorDirect: boolean;
+  allowVendorToCustomerDirect: boolean;
+  allowCustomerToVendorDirect: boolean;
+  allowQaToVendorMessaging: boolean;
+  allowQaToCustomerMessaging: boolean;
+  recipientMatrix: Record<OrderTicketingRole, OrderTicketingRole[]>;
+};
+const DEFAULT_ORDER_TICKETING_SETTINGS: OrderTicketingSettings = {
+  enabled: true,
+  defaultVisibleToCustomer: false,
+  allowVendorToVendorDirect: false,
+  allowVendorToCustomerDirect: false,
+  allowCustomerToVendorDirect: false,
+  allowQaToVendorMessaging: true,
+  allowQaToCustomerMessaging: true,
+  recipientMatrix: {
+    [UserRole.CUSTOMER]: [UserRole.ADMINISTRATOR, UserRole.QA_TEAM],
+    [UserRole.FABRIC_SELLER]: [UserRole.ADMINISTRATOR, UserRole.QA_TEAM],
+    [UserRole.FASHION_DESIGNER]: [UserRole.ADMINISTRATOR, UserRole.QA_TEAM],
+    [UserRole.QA_TEAM]: [
+      UserRole.ADMINISTRATOR,
+      UserRole.CUSTOMER,
+      UserRole.FABRIC_SELLER,
+      UserRole.FASHION_DESIGNER,
+      UserRole.QA_TEAM,
+    ],
+    [UserRole.ADMINISTRATOR]: [
+      UserRole.ADMINISTRATOR,
+      UserRole.QA_TEAM,
+      UserRole.CUSTOMER,
+      UserRole.FABRIC_SELLER,
+      UserRole.FASHION_DESIGNER,
+    ],
+  },
+};
+
+const parseJsonObject = (value: unknown): Record<string, unknown> => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+};
+const asRoleToken = (value: unknown): OrderTicketingRole | null => {
+  const token = String(value || '').trim().toUpperCase();
+  return ORDER_TICKETING_ROLES.includes(token as OrderTicketingRole) ? (token as OrderTicketingRole) : null;
+};
+const parseRoleArray = (value: unknown): unknown[] => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  if (value && typeof value === 'object') {
+    const objectValue = value as Record<string, unknown>;
+    if (Array.isArray(objectValue.roles)) return objectValue.roles;
+  }
+  return [];
+};
+const dedupeRoleTokens = (input: unknown): OrderTicketingRole[] => {
+  const rows = parseRoleArray(input);
+  return Array.from(new Set(rows.map((entry) => asRoleToken(entry)).filter((entry): entry is OrderTicketingRole => Boolean(entry))));
+};
+const normalizeOrderTicketingSettings = (value: unknown): OrderTicketingSettings => {
+  const source = parseJsonObject(value);
+  const matrixSource = parseJsonObject(source.recipientMatrix);
+  const normalized: OrderTicketingSettings = {
+    enabled: source.enabled !== false,
+    defaultVisibleToCustomer: Boolean(source.defaultVisibleToCustomer),
+    allowVendorToVendorDirect: Boolean(source.allowVendorToVendorDirect),
+    allowVendorToCustomerDirect: Boolean(source.allowVendorToCustomerDirect),
+    allowCustomerToVendorDirect: Boolean(source.allowCustomerToVendorDirect),
+    allowQaToVendorMessaging: source.allowQaToVendorMessaging !== false,
+    allowQaToCustomerMessaging: source.allowQaToCustomerMessaging !== false,
+    recipientMatrix: {
+      [UserRole.CUSTOMER]:
+        dedupeRoleTokens(matrixSource[UserRole.CUSTOMER]).length > 0
+          ? dedupeRoleTokens(matrixSource[UserRole.CUSTOMER])
+          : DEFAULT_ORDER_TICKETING_SETTINGS.recipientMatrix[UserRole.CUSTOMER],
+      [UserRole.FABRIC_SELLER]:
+        dedupeRoleTokens(matrixSource[UserRole.FABRIC_SELLER]).length > 0
+          ? dedupeRoleTokens(matrixSource[UserRole.FABRIC_SELLER])
+          : DEFAULT_ORDER_TICKETING_SETTINGS.recipientMatrix[UserRole.FABRIC_SELLER],
+      [UserRole.FASHION_DESIGNER]:
+        dedupeRoleTokens(matrixSource[UserRole.FASHION_DESIGNER]).length > 0
+          ? dedupeRoleTokens(matrixSource[UserRole.FASHION_DESIGNER])
+          : DEFAULT_ORDER_TICKETING_SETTINGS.recipientMatrix[UserRole.FASHION_DESIGNER],
+      [UserRole.QA_TEAM]:
+        dedupeRoleTokens(matrixSource[UserRole.QA_TEAM]).length > 0
+          ? dedupeRoleTokens(matrixSource[UserRole.QA_TEAM])
+          : DEFAULT_ORDER_TICKETING_SETTINGS.recipientMatrix[UserRole.QA_TEAM],
+      [UserRole.ADMINISTRATOR]:
+        dedupeRoleTokens(matrixSource[UserRole.ADMINISTRATOR]).length > 0
+          ? dedupeRoleTokens(matrixSource[UserRole.ADMINISTRATOR])
+          : DEFAULT_ORDER_TICKETING_SETTINGS.recipientMatrix[UserRole.ADMINISTRATOR],
+    },
+  };
+
+  if (!normalized.allowVendorToVendorDirect) {
+    normalized.recipientMatrix[UserRole.FABRIC_SELLER] = normalized.recipientMatrix[UserRole.FABRIC_SELLER].filter(
+      (role) => role !== UserRole.FASHION_DESIGNER
+    );
+    normalized.recipientMatrix[UserRole.FASHION_DESIGNER] = normalized.recipientMatrix[UserRole.FASHION_DESIGNER].filter(
+      (role) => role !== UserRole.FABRIC_SELLER
+    );
+  } else {
+    if (!normalized.recipientMatrix[UserRole.FABRIC_SELLER].includes(UserRole.FASHION_DESIGNER)) {
+      normalized.recipientMatrix[UserRole.FABRIC_SELLER].push(UserRole.FASHION_DESIGNER);
+    }
+    if (!normalized.recipientMatrix[UserRole.FASHION_DESIGNER].includes(UserRole.FABRIC_SELLER)) {
+      normalized.recipientMatrix[UserRole.FASHION_DESIGNER].push(UserRole.FABRIC_SELLER);
+    }
+  }
+  if (!normalized.allowVendorToCustomerDirect) {
+    normalized.recipientMatrix[UserRole.FABRIC_SELLER] = normalized.recipientMatrix[UserRole.FABRIC_SELLER].filter(
+      (role) => role !== UserRole.CUSTOMER
+    );
+    normalized.recipientMatrix[UserRole.FASHION_DESIGNER] = normalized.recipientMatrix[UserRole.FASHION_DESIGNER].filter(
+      (role) => role !== UserRole.CUSTOMER
+    );
+  } else {
+    if (!normalized.recipientMatrix[UserRole.FABRIC_SELLER].includes(UserRole.CUSTOMER)) {
+      normalized.recipientMatrix[UserRole.FABRIC_SELLER].push(UserRole.CUSTOMER);
+    }
+    if (!normalized.recipientMatrix[UserRole.FASHION_DESIGNER].includes(UserRole.CUSTOMER)) {
+      normalized.recipientMatrix[UserRole.FASHION_DESIGNER].push(UserRole.CUSTOMER);
+    }
+  }
+  if (!normalized.allowCustomerToVendorDirect) {
+    normalized.recipientMatrix[UserRole.CUSTOMER] = normalized.recipientMatrix[UserRole.CUSTOMER].filter(
+      (role) => role !== UserRole.FABRIC_SELLER && role !== UserRole.FASHION_DESIGNER
+    );
+  } else {
+    if (!normalized.recipientMatrix[UserRole.CUSTOMER].includes(UserRole.FABRIC_SELLER)) {
+      normalized.recipientMatrix[UserRole.CUSTOMER].push(UserRole.FABRIC_SELLER);
+    }
+    if (!normalized.recipientMatrix[UserRole.CUSTOMER].includes(UserRole.FASHION_DESIGNER)) {
+      normalized.recipientMatrix[UserRole.CUSTOMER].push(UserRole.FASHION_DESIGNER);
+    }
+  }
+  if (!normalized.allowQaToVendorMessaging) {
+    normalized.recipientMatrix[UserRole.QA_TEAM] = normalized.recipientMatrix[UserRole.QA_TEAM].filter(
+      (role) => role !== UserRole.FABRIC_SELLER && role !== UserRole.FASHION_DESIGNER
+    );
+  }
+  if (!normalized.allowQaToCustomerMessaging) {
+    normalized.recipientMatrix[UserRole.QA_TEAM] = normalized.recipientMatrix[UserRole.QA_TEAM].filter(
+      (role) => role !== UserRole.CUSTOMER
+    );
+  }
+  return normalized;
+};
+async function ensureOrderTicketingSchema() {
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "HomepageSectionSetting" (
+      "id" TEXT NOT NULL,
+      "key" TEXT NOT NULL,
+      "value" JSONB NOT NULL DEFAULT '{}'::jsonb,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "HomepageSectionSetting_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "HomepageSectionSetting_key_key" ON "HomepageSectionSetting"("key")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "OrderTicket" (
+      "id" TEXT NOT NULL,
+      "orderId" TEXT NOT NULL,
+      "subject" TEXT,
+      "status" TEXT NOT NULL DEFAULT 'OPEN',
+      "createdById" TEXT NOT NULL,
+      "isLocked" BOOLEAN NOT NULL DEFAULT false,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "OrderTicket_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "OrderTicket_orderId_idx" ON "OrderTicket"("orderId","updatedAt")`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "subject" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "isLocked" BOOLEAN NOT NULL DEFAULT false`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "OrderTicketMessage" (
+      "id" TEXT NOT NULL,
+      "ticketId" TEXT NOT NULL,
+      "orderId" TEXT NOT NULL,
+      "senderUserId" TEXT NOT NULL,
+      "senderRole" TEXT NOT NULL,
+      "body" TEXT NOT NULL,
+      "recipientRoles" JSONB NOT NULL DEFAULT '[]'::jsonb,
+      "visibleToCustomer" BOOLEAN NOT NULL DEFAULT false,
+      "isInternal" BOOLEAN NOT NULL DEFAULT true,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "OrderTicketMessage_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "OrderTicketMessage_ticketId_idx" ON "OrderTicketMessage"("ticketId","createdAt")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "OrderTicketMessage_orderId_idx" ON "OrderTicketMessage"("orderId","createdAt")`
+  );
+}
+async function readOrderTicketingSettings(): Promise<OrderTicketingSettings> {
+  await ensureOrderTicketingSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<{ value: unknown }>>(
+    `SELECT "value" FROM "HomepageSectionSetting" WHERE "key" = $1 LIMIT 1`,
+    ORDER_TICKETING_SETTINGS_KEY
+  );
+  return rows[0] ? normalizeOrderTicketingSettings(rows[0].value) : DEFAULT_ORDER_TICKETING_SETTINGS;
+}
+async function writeOrderTicketingSettings(payload: Partial<OrderTicketingSettings>, merge = true) {
+  await ensureOrderTicketingSchema();
+  const current = await readOrderTicketingSettings();
+  const normalized = normalizeOrderTicketingSettings(merge ? { ...current, ...(payload || {}) } : payload || {});
+  const existingRows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `SELECT "id" FROM "HomepageSectionSetting" WHERE "key" = $1 LIMIT 1`,
+    ORDER_TICKETING_SETTINGS_KEY
+  );
+  if (existingRows[0]?.id) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting" SET "value" = $1::jsonb, "updatedAt" = NOW() WHERE "id" = $2`,
+      JSON.stringify(normalized),
+      String(existingRows[0].id)
+    );
+  } else {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "HomepageSectionSetting" ("id","key","value","createdAt","updatedAt")
+       VALUES ($1,$2,$3::jsonb,NOW(),NOW())`,
+      randomUUID(),
+      ORDER_TICKETING_SETTINGS_KEY,
+      JSON.stringify(normalized)
+    );
+  }
+  return normalized;
+}
+type OrderAccessContext = {
+  orderId: string;
+  orderNumber: string;
+  customerUser: { id: string; firstName: string; lastName: string; email: string } | null;
+  sellerUsers: Array<{ id: string; name: string }>;
+  designerUsers: Array<{ id: string; name: string }>;
+  qaUsers: Array<{ id: string; name: string }>;
+  adminUsers: Array<{ id: string; name: string }>;
+  participantUsersByRole: Record<OrderTicketingRole, Array<{ id: string; name: string }>>;
+};
+const fullName = (first?: unknown, last?: unknown) => [String(first || '').trim(), String(last || '').trim()].filter(Boolean).join(' ').trim();
+async function resolveOrderAccessContext(orderId: string, user: { id: string; role: UserRole }): Promise<OrderAccessContext> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      customer: { select: { id: true, firstName: true, lastName: true, email: true } },
+      fabricOrder: {
+        include: {
+          seller: {
+            select: {
+              id: true,
+              userId: true,
+              businessName: true,
+              user: { select: { id: true, firstName: true, lastName: true } },
+            },
+          },
+        },
+      },
+      designOrder: {
+        include: {
+          designer: {
+            select: {
+              id: true,
+              userId: true,
+              businessName: true,
+              user: { select: { id: true, firstName: true, lastName: true } },
+            },
+          },
+        },
+      },
+      readyToWearItems: {
+        include: {
+          readyToWear: {
+            include: {
+              designer: {
+                select: {
+                  id: true,
+                  userId: true,
+                  businessName: true,
+                  user: { select: { id: true, firstName: true, lastName: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+      qa: {
+        include: {
+          user: { select: { id: true, firstName: true, lastName: true } },
+        },
+      },
+    },
+  });
+  if (!order) {
+    throw Object.assign(new Error('Order not found.'), { status: 404 });
+  }
+  const sellerUsers = order.fabricOrder?.seller?.user
+    ? [
+        {
+          id: String(order.fabricOrder.seller.user.id),
+          name:
+            String(order.fabricOrder.seller.businessName || '').trim() ||
+            fullName(order.fabricOrder.seller.user.firstName, order.fabricOrder.seller.user.lastName) ||
+            'Seller',
+        },
+      ]
+    : [];
+  const designersMap = new Map<string, { id: string; name: string }>();
+  if (order.designOrder?.designer?.user) {
+    designersMap.set(String(order.designOrder.designer.user.id), {
+      id: String(order.designOrder.designer.user.id),
+      name:
+        String(order.designOrder.designer.businessName || '').trim() ||
+        fullName(order.designOrder.designer.user.firstName, order.designOrder.designer.user.lastName) ||
+        'Designer',
+    });
+  }
+  for (const item of order.readyToWearItems || []) {
+    const readyDesigner = item.readyToWear?.designer;
+    if (!readyDesigner?.user?.id) continue;
+    const readyDesignerId = String(readyDesigner.user.id);
+    if (!designersMap.has(readyDesignerId)) {
+      designersMap.set(readyDesignerId, {
+        id: readyDesignerId,
+        name:
+          String(readyDesigner.businessName || '').trim() ||
+          fullName(readyDesigner.user.firstName, readyDesigner.user.lastName) ||
+          'Designer',
+      });
+    }
+  }
+  const designerUsers = Array.from(designersMap.values());
+  const qaAssigned = order.qa?.user
+    ? [{ id: String(order.qa.user.id), name: fullName(order.qa.user.firstName, order.qa.user.lastName) || 'QA' }]
+    : [];
+  const [adminUsersRaw, qaUsersRaw] = await Promise.all([
+    prisma.user.findMany({
+      where: { role: UserRole.ADMINISTRATOR, status: 'ACTIVE' },
+      select: { id: true, firstName: true, lastName: true },
+    }),
+    prisma.user.findMany({
+      where: { role: UserRole.QA_TEAM, status: 'ACTIVE' },
+      select: { id: true, firstName: true, lastName: true },
+    }),
+  ]);
+  const adminUsers = adminUsersRaw.map((row) => ({
+    id: String(row.id),
+    name: fullName(row.firstName, row.lastName) || 'Admin',
+  }));
+  const qaUsers = qaAssigned.length > 0
+    ? qaAssigned
+    : qaUsersRaw.map((row) => ({ id: String(row.id), name: fullName(row.firstName, row.lastName) || 'QA' }));
+
+  const hasAccess =
+    user.role === UserRole.ADMINISTRATOR ||
+    (user.role === UserRole.CUSTOMER && String(order.customerId || '') === String(user.id)) ||
+    (user.role === UserRole.FABRIC_SELLER && sellerUsers.some((entry) => entry.id === String(user.id))) ||
+    (user.role === UserRole.FASHION_DESIGNER && designerUsers.some((entry) => entry.id === String(user.id))) ||
+    (user.role === UserRole.QA_TEAM && qaUsers.some((entry) => entry.id === String(user.id)));
+  if (!hasAccess) {
+    throw Object.assign(new Error('You do not have permission to access this order ticket.'), { status: 403 });
+  }
+
+  const customerUser = order.customer
+    ? {
+        id: String(order.customer.id),
+        firstName: String(order.customer.firstName || '').trim(),
+        lastName: String(order.customer.lastName || '').trim(),
+        email: String(order.customer.email || '').trim(),
+      }
+    : null;
+  return {
+    orderId: String(order.id),
+    orderNumber: String(order.orderNumber || ''),
+    customerUser,
+    sellerUsers,
+    designerUsers,
+    qaUsers,
+    adminUsers,
+    participantUsersByRole: {
+      [UserRole.CUSTOMER]:
+        customerUser
+          ? [{ id: customerUser.id, name: fullName(customerUser.firstName, customerUser.lastName) || 'Customer' }]
+          : [],
+      [UserRole.FABRIC_SELLER]: sellerUsers,
+      [UserRole.FASHION_DESIGNER]: designerUsers,
+      [UserRole.QA_TEAM]: qaUsers,
+      [UserRole.ADMINISTRATOR]: adminUsers,
+    },
+  };
+}
+const resolveAllowedRecipientRoles = (
+  senderRole: OrderTicketingRole,
+  settings: OrderTicketingSettings,
+  participants: Record<OrderTicketingRole, Array<{ id: string; name: string }>>
+) => {
+  const base = Array.from(new Set(settings.recipientMatrix[senderRole] || []));
+  const filtered = base.filter((role) => (participants[role] || []).length > 0);
+  if (!settings.allowVendorToVendorDirect && senderRole === UserRole.FABRIC_SELLER) {
+    return filtered.filter((role) => role !== UserRole.FASHION_DESIGNER);
+  }
+  if (!settings.allowVendorToVendorDirect && senderRole === UserRole.FASHION_DESIGNER) {
+    return filtered.filter((role) => role !== UserRole.FABRIC_SELLER);
+  }
+  if (!settings.allowVendorToCustomerDirect && (senderRole === UserRole.FABRIC_SELLER || senderRole === UserRole.FASHION_DESIGNER)) {
+    return filtered.filter((role) => role !== UserRole.CUSTOMER);
+  }
+  if (!settings.allowCustomerToVendorDirect && senderRole === UserRole.CUSTOMER) {
+    return filtered.filter((role) => role !== UserRole.FABRIC_SELLER && role !== UserRole.FASHION_DESIGNER);
+  }
+  if (!settings.allowQaToVendorMessaging && senderRole === UserRole.QA_TEAM) {
+    return filtered.filter((role) => role !== UserRole.FABRIC_SELLER && role !== UserRole.FASHION_DESIGNER);
+  }
+  if (!settings.allowQaToCustomerMessaging && senderRole === UserRole.QA_TEAM) {
+    return filtered.filter((role) => role !== UserRole.CUSTOMER);
+  }
+  return filtered;
+};
+const defaultRecipientRolesForSender = (senderRole: OrderTicketingRole, allowed: OrderTicketingRole[]) => {
+  const preferred: OrderTicketingRole[] =
+    senderRole === UserRole.CUSTOMER
+      ? [UserRole.ADMINISTRATOR, UserRole.QA_TEAM]
+      : senderRole === UserRole.FABRIC_SELLER || senderRole === UserRole.FASHION_DESIGNER
+        ? [UserRole.ADMINISTRATOR, UserRole.QA_TEAM]
+        : [UserRole.ADMINISTRATOR, UserRole.QA_TEAM];
+  const selected = preferred.filter((role) => allowed.includes(role));
+  return selected.length > 0 ? selected : allowed.slice(0, 1);
+};
+const canViewerSeeTicketMessage = (
+  message: {
+    senderUserId: string;
+    recipientRoles: OrderTicketingRole[];
+    visibleToCustomer: boolean;
+  },
+  viewerRole: OrderTicketingRole,
+  viewerUserId: string
+) => {
+  if (viewerRole === UserRole.ADMINISTRATOR || viewerRole === UserRole.QA_TEAM) return true;
+  if (String(message.senderUserId) === String(viewerUserId)) return true;
+  if (viewerRole === UserRole.CUSTOMER) return message.visibleToCustomer;
+  return message.recipientRoles.includes(viewerRole);
+};
 
 // Compatibility aliases for legacy order-create route variants.
 router.use((req, _res, next) => {
@@ -326,6 +813,457 @@ function canAutoProcessOrder(params: {
   return true;
 }
 
+const orderTicketingSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    defaultVisibleToCustomer: z.boolean().optional(),
+    allowVendorToVendorDirect: z.boolean().optional(),
+    allowVendorToCustomerDirect: z.boolean().optional(),
+    allowCustomerToVendorDirect: z.boolean().optional(),
+    allowQaToVendorMessaging: z.boolean().optional(),
+    allowQaToCustomerMessaging: z.boolean().optional(),
+    recipientMatrix: z.record(z.array(z.string())).optional(),
+  })
+  .strict();
+
+const orderTicketMessageSchema = z
+  .object({
+    body: z.string().trim().min(1).max(4000),
+    recipientRoles: z.array(z.string()).max(8).optional(),
+    visibleToCustomer: z.boolean().optional(),
+    subject: z.string().trim().max(240).optional(),
+  })
+  .strict();
+
+const ticketStatusUpdateSchema = z
+  .object({
+    status: z.enum(ORDER_TICKET_STATUSES),
+  })
+  .strict();
+
+async function getLatestOrderTicket(orderId: string) {
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{ id: string; orderId: string; subject: string | null; status: string; createdById: string; isLocked: boolean; createdAt: Date; updatedAt: Date }>
+  >(
+    `SELECT "id","orderId","subject","status","createdById","isLocked","createdAt","updatedAt"
+     FROM "OrderTicket"
+     WHERE "orderId" = $1
+     ORDER BY "updatedAt" DESC, "createdAt" DESC
+     LIMIT 1`,
+    orderId
+  );
+  if (!rows[0]) return null;
+  return {
+    id: String(rows[0].id),
+    orderId: String(rows[0].orderId),
+    subject: rows[0].subject ? String(rows[0].subject) : null,
+    status: ORDER_TICKET_STATUSES.includes(String(rows[0].status || '').toUpperCase() as OrderTicketStatus)
+      ? (String(rows[0].status || '').toUpperCase() as OrderTicketStatus)
+      : 'OPEN',
+    createdById: String(rows[0].createdById),
+    isLocked: Boolean(rows[0].isLocked),
+    createdAt: new Date(rows[0].createdAt || Date.now()).toISOString(),
+    updatedAt: new Date(rows[0].updatedAt || Date.now()).toISOString(),
+  };
+}
+
+async function createOrderTicket(orderId: string, createdById: string, subject?: string) {
+  const id = randomUUID();
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "OrderTicket" ("id","orderId","subject","status","createdById","isLocked","createdAt","updatedAt")
+     VALUES ($1,$2,$3,'OPEN',$4,false,NOW(),NOW())`,
+    id,
+    orderId,
+    subject ? String(subject).slice(0, 240) : null,
+    createdById
+  );
+  return getLatestOrderTicket(orderId);
+}
+
+async function readOrderTicketThread(params: {
+  orderId: string;
+  viewerId: string;
+  viewerRole: OrderTicketingRole;
+  createIfMissing?: boolean;
+  ticketSubject?: string;
+  orderContext: OrderAccessContext;
+}) {
+  await ensureOrderTicketingSchema();
+  let ticket = await getLatestOrderTicket(params.orderId);
+  if (!ticket && params.createIfMissing) {
+    ticket = await createOrderTicket(params.orderId, params.viewerId, params.ticketSubject);
+  }
+  if (!ticket) {
+    return {
+      ticket: null,
+      messages: [] as any[],
+    };
+  }
+
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{
+      id: string;
+      ticketId: string;
+      orderId: string;
+      senderUserId: string;
+      senderRole: string;
+      body: string;
+      recipientRoles: unknown;
+      visibleToCustomer: boolean;
+      isInternal: boolean;
+      createdAt: Date;
+    }>
+  >(
+    `SELECT "id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","visibleToCustomer","isInternal","createdAt"
+     FROM "OrderTicketMessage"
+     WHERE "ticketId" = $1
+     ORDER BY "createdAt" ASC`,
+    ticket.id
+  );
+  const senderIds = Array.from(new Set(rows.map((entry) => String(entry.senderUserId || '')).filter(Boolean)));
+  const senderUsers = senderIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: senderIds } },
+        select: { id: true, firstName: true, lastName: true, role: true },
+      })
+    : [];
+  const senderMap = new Map(
+    senderUsers.map((row) => [
+      String(row.id),
+      {
+        role: asRoleToken(row.role) || UserRole.ADMINISTRATOR,
+        displayName: fullName(row.firstName, row.lastName) || ORDER_TICKETING_ROLE_LABELS[(asRoleToken(row.role) || UserRole.ADMINISTRATOR) as OrderTicketingRole],
+      },
+    ])
+  );
+  const customerDisplayName =
+    params.orderContext.customerUser
+      ? fullName(params.orderContext.customerUser.firstName, params.orderContext.customerUser.lastName) || 'Customer'
+      : 'Customer';
+  const messages = rows
+    .map((entry) => {
+      const senderRole = asRoleToken(entry.senderRole) || UserRole.ADMINISTRATOR;
+      const recipientRoles = dedupeRoleTokens(entry.recipientRoles);
+      const sender = senderMap.get(String(entry.senderUserId || ''));
+      const displayName =
+        senderRole === UserRole.CUSTOMER
+          ? customerDisplayName
+          : sender?.displayName || ORDER_TICKETING_ROLE_LABELS[senderRole];
+      return {
+        id: String(entry.id),
+        ticketId: String(entry.ticketId),
+        orderId: String(entry.orderId),
+        senderUserId: String(entry.senderUserId),
+        senderRole,
+        senderDisplayName: displayName,
+        body: String(entry.body || ''),
+        recipientRoles,
+        visibleToCustomer: Boolean(entry.visibleToCustomer),
+        isInternal: Boolean(entry.isInternal),
+        createdAt: new Date(entry.createdAt || Date.now()).toISOString(),
+      };
+    })
+    .filter((entry) =>
+      canViewerSeeTicketMessage(
+        {
+          senderUserId: entry.senderUserId,
+          recipientRoles: entry.recipientRoles,
+          visibleToCustomer: entry.visibleToCustomer,
+        },
+        params.viewerRole,
+        params.viewerId
+      )
+    );
+  return {
+    ticket,
+    messages,
+  };
+}
+
+router.get(
+  '/admin/ticketing/settings',
+  authorizePermissions(Permissions.ORDERS_MANAGE),
+  async (_req, res, next) => {
+    try {
+      const settings = await readOrderTicketingSettings();
+      res.json({ success: true, data: settings });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.put(
+  '/admin/ticketing/settings',
+  authorizePermissions(Permissions.ORDERS_MANAGE),
+  async (req, res, next) => {
+    try {
+      const payload = orderTicketingSettingsSchema.parse(req.body || {});
+      const settings = await writeOrderTicketingSettings(payload as any, false);
+      res.json({ success: true, data: settings, message: 'Order ticketing settings updated.' });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      next(error);
+    }
+  }
+);
+
+router.patch(
+  '/admin/ticketing/settings',
+  authorizePermissions(Permissions.ORDERS_MANAGE),
+  async (req, res, next) => {
+    try {
+      const payload = orderTicketingSettingsSchema.parse(req.body || {});
+      const settings = await writeOrderTicketingSettings(payload as any, true);
+      res.json({ success: true, data: settings, message: 'Order ticketing settings saved.' });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      next(error);
+    }
+  }
+);
+
+router.get(
+  '/:id/ticketing',
+  authorizePermissions(Permissions.ORDERS_READ_SELF, Permissions.ORDERS_READ_ASSIGNED, Permissions.ORDERS_READ_ALL),
+  async (req, res, next) => {
+    try {
+      const user = req.user!;
+      const userRole = asRoleToken(user.role);
+      if (!userRole) {
+        return res.status(403).json({ success: false, message: 'Unsupported role for ticketing.' });
+      }
+      const settings = await readOrderTicketingSettings();
+      const context = await resolveOrderAccessContext(String(req.params.id || ''), { id: user.id, role: user.role });
+      const thread = await readOrderTicketThread({
+        orderId: context.orderId,
+        viewerId: user.id,
+        viewerRole: userRole,
+        orderContext: context,
+      });
+      const allowedRecipientRoles = resolveAllowedRecipientRoles(userRole, settings, context.participantUsersByRole);
+      const canPost =
+        settings.enabled &&
+        (userRole !== UserRole.CUSTOMER || settings.allowCustomerToVendorDirect || settings.recipientMatrix[UserRole.CUSTOMER].length > 0);
+      const participants = Object.entries(context.participantUsersByRole).map(([role, users]) => ({
+        role,
+        label: ORDER_TICKETING_ROLE_LABELS[role as OrderTicketingRole],
+        users: (users || []).map((entry) => ({ id: entry.id, name: entry.name })),
+      }));
+      res.json({
+        success: true,
+        data: {
+          orderId: context.orderId,
+          orderNumber: context.orderNumber,
+          ticket: thread.ticket,
+          messages: thread.messages,
+          participants,
+          permissions: {
+            canPost,
+            canManageTicket: userRole === UserRole.ADMINISTRATOR || userRole === UserRole.QA_TEAM,
+            canControlCustomerVisibility: userRole === UserRole.ADMINISTRATOR || userRole === UserRole.QA_TEAM,
+            allowedRecipientRoles,
+          },
+          settings: {
+            enabled: settings.enabled,
+            defaultVisibleToCustomer: settings.defaultVisibleToCustomer,
+            allowVendorToVendorDirect: settings.allowVendorToVendorDirect,
+          },
+        },
+      });
+    } catch (error: any) {
+      if (error?.status) {
+        return res.status(error.status).json({ success: false, message: error.message || 'Unable to load order ticket.' });
+      }
+      next(error);
+    }
+  }
+);
+
+router.post(
+  '/:id/ticketing/messages',
+  authorizePermissions(Permissions.ORDERS_READ_SELF, Permissions.ORDERS_READ_ASSIGNED, Permissions.ORDERS_READ_ALL),
+  async (req, res, next) => {
+    try {
+      const user = req.user!;
+      const userRole = asRoleToken(user.role);
+      if (!userRole) return res.status(403).json({ success: false, message: 'Unsupported role for ticketing.' });
+      const payload = orderTicketMessageSchema.parse(req.body || {});
+      const settings = await readOrderTicketingSettings();
+      if (!settings.enabled) {
+        return res.status(403).json({ success: false, message: 'Order ticketing is currently disabled by admin.' });
+      }
+      const context = await resolveOrderAccessContext(String(req.params.id || ''), { id: user.id, role: user.role });
+      const allowedRecipientRoles = resolveAllowedRecipientRoles(userRole, settings, context.participantUsersByRole);
+      if (allowedRecipientRoles.length === 0) {
+        return res.status(403).json({ success: false, message: 'No valid recipients are available for this order.' });
+      }
+      const requestedRecipientRoles = dedupeRoleTokens(payload.recipientRoles || []);
+      const recipientRoles =
+        requestedRecipientRoles.length > 0
+          ? requestedRecipientRoles.filter((role) => allowedRecipientRoles.includes(role))
+          : defaultRecipientRolesForSender(userRole, allowedRecipientRoles);
+      if (recipientRoles.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: `No valid recipients selected. Allowed recipients: ${allowedRecipientRoles.map((role) => ORDER_TICKETING_ROLE_LABELS[role]).join(', ')}`,
+        });
+      }
+
+      let visibleToCustomer = userRole === UserRole.CUSTOMER;
+      if (userRole === UserRole.ADMINISTRATOR || userRole === UserRole.QA_TEAM) {
+        visibleToCustomer =
+          payload.visibleToCustomer === undefined ? settings.defaultVisibleToCustomer : Boolean(payload.visibleToCustomer);
+      } else if (
+        (userRole === UserRole.FABRIC_SELLER || userRole === UserRole.FASHION_DESIGNER) &&
+        settings.allowVendorToCustomerDirect &&
+        recipientRoles.includes(UserRole.CUSTOMER)
+      ) {
+        visibleToCustomer = true;
+      }
+      if (visibleToCustomer && !recipientRoles.includes(UserRole.CUSTOMER) && (context.participantUsersByRole[UserRole.CUSTOMER] || []).length > 0) {
+        recipientRoles.push(UserRole.CUSTOMER);
+      }
+
+      const threadBefore = await readOrderTicketThread({
+        orderId: context.orderId,
+        viewerId: user.id,
+        viewerRole: userRole,
+        orderContext: context,
+        createIfMissing: true,
+        ticketSubject: payload.subject,
+      });
+      const ticket = threadBefore.ticket;
+      if (!ticket) {
+        return res.status(500).json({ success: false, message: 'Unable to initialize order ticket.' });
+      }
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "OrderTicketMessage"
+          ("id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","visibleToCustomer","isInternal","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,NOW())`,
+        randomUUID(),
+        ticket.id,
+        context.orderId,
+        user.id,
+        userRole,
+        payload.body.trim(),
+        JSON.stringify(recipientRoles),
+        visibleToCustomer,
+        !visibleToCustomer
+      );
+      await prisma.$executeRawUnsafe(
+        `UPDATE "OrderTicket"
+         SET "updatedAt" = NOW(),
+             "subject" = COALESCE("subject", $2)
+         WHERE "id" = $1`,
+        ticket.id,
+        payload.subject ? String(payload.subject).trim().slice(0, 240) : null
+      );
+
+      const recipientUsers = recipientRoles.flatMap((role) => context.participantUsersByRole[role] || []);
+      const uniqueRecipientIds = Array.from(
+        new Set(recipientUsers.map((entry) => String(entry.id || '')).filter((id) => id && id !== String(user.id)))
+      );
+      await Promise.all(
+        uniqueRecipientIds.map((targetUserId) =>
+          prisma.notification
+            .create({
+              data: {
+                userId: targetUserId,
+                type: 'NEW_MESSAGE' as any,
+                title: `Order Ticket • ${context.orderNumber}`,
+                message: payload.body.trim().slice(0, 240),
+                relatedId: context.orderId,
+                relatedType: 'ORDER',
+              },
+            })
+            .catch(() => undefined)
+        )
+      );
+
+      const threadAfter = await readOrderTicketThread({
+        orderId: context.orderId,
+        viewerId: user.id,
+        viewerRole: userRole,
+        orderContext: context,
+      });
+      res.status(201).json({
+        success: true,
+        message: 'Ticket message sent.',
+        data: {
+          orderId: context.orderId,
+          orderNumber: context.orderNumber,
+          ticket: threadAfter.ticket,
+          messages: threadAfter.messages,
+        },
+      });
+    } catch (error: any) {
+      if (error?.status) {
+        return res.status(error.status).json({ success: false, message: error.message || 'Unable to send ticket message.' });
+      }
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      next(error);
+    }
+  }
+);
+
+router.patch(
+  '/:id/ticketing/status',
+  authorizePermissions(Permissions.ORDERS_READ_ASSIGNED, Permissions.ORDERS_READ_ALL, Permissions.ORDERS_UPDATE_ASSIGNED, Permissions.ORDERS_UPDATE_ALL),
+  async (req, res, next) => {
+    try {
+      const user = req.user!;
+      const roleToken = asRoleToken(user.role);
+      if (!roleToken || (roleToken !== UserRole.ADMINISTRATOR && roleToken !== UserRole.QA_TEAM)) {
+        return res.status(403).json({ success: false, message: 'Only Admin/QA can update ticket status.' });
+      }
+      const payload = ticketStatusUpdateSchema.parse(req.body || {});
+      const context = await resolveOrderAccessContext(String(req.params.id || ''), { id: user.id, role: user.role });
+      const ticket = await getLatestOrderTicket(context.orderId);
+      if (!ticket) {
+        return res.status(404).json({ success: false, message: 'Order ticket not found.' });
+      }
+      await prisma.$executeRawUnsafe(
+        `UPDATE "OrderTicket"
+         SET "status" = $2, "updatedAt" = NOW()
+         WHERE "id" = $1`,
+        ticket.id,
+        payload.status
+      );
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "OrderTicketMessage"
+          ("id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","visibleToCustomer","isInternal","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,NOW())`,
+        randomUUID(),
+        ticket.id,
+        context.orderId,
+        user.id,
+        roleToken,
+        `Ticket status changed to ${payload.status}.`,
+        JSON.stringify([UserRole.ADMINISTRATOR, UserRole.QA_TEAM]),
+        false,
+        true
+      );
+      const updatedTicket = await getLatestOrderTicket(context.orderId);
+      res.json({ success: true, data: updatedTicket, message: 'Ticket status updated.' });
+    } catch (error: any) {
+      if (error?.status) {
+        return res.status(error.status).json({ success: false, message: error.message || 'Unable to update ticket status.' });
+      }
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      next(error);
+    }
+  }
+);
+
 // Get order by ID (with role-based access)
 router.get('/:id', authorizePermissions(Permissions.ORDERS_READ_SELF, Permissions.ORDERS_READ_ASSIGNED, Permissions.ORDERS_READ_ALL), async (req, res, next) => {
   try {
@@ -446,8 +1384,8 @@ router.get('/:id', authorizePermissions(Permissions.ORDERS_READ_SELF, Permission
         ? {
             ...order,
             customer: {
-              firstName: 'Customer',
-              lastName: '',
+              firstName: String(order.customer?.firstName || ''),
+              lastName: String(order.customer?.lastName || ''),
               email: '',
             },
             shippingAddress: redactShippingAddressForVendor(order.shippingAddress),

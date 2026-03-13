@@ -14,6 +14,7 @@ import { api } from '../../services/api';
 import { useCurrencyStore } from '../../store/currencyStore';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import OrderSupportModal from '../../components/orders/OrderSupportModal';
 
 interface Order {
   id: string;
@@ -66,6 +67,8 @@ export default function CustomerOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [ticketOrderId, setTicketOrderId] = useState<string | null>(null);
+  const [ticketInitialTab, setTicketInitialTab] = useState<'details' | 'ticket'>('details');
   const { formatFromUsd } = useCurrencyStore();
 
   useEffect(() => {
@@ -238,11 +241,25 @@ export default function CustomerOrders() {
                         Review
                       </Button>
                     )}
-                    <Button variant="outline" size="sm">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setTicketInitialTab('ticket');
+                        setTicketOrderId(order.id);
+                      }}
+                    >
                       <MessageSquare className="w-4 h-4 mr-2" />
                       Contact
                     </Button>
-                    <Button variant="ghost" size="sm">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setTicketInitialTab('details');
+                        setTicketOrderId(order.id);
+                      }}
+                    >
                       Details
                       <ChevronRight className="w-4 h-4 ml-1" />
                     </Button>
@@ -253,6 +270,12 @@ export default function CustomerOrders() {
           })}
         </div>
       )}
+      <OrderSupportModal
+        isOpen={Boolean(ticketOrderId)}
+        orderId={ticketOrderId}
+        initialTab={ticketInitialTab}
+        onClose={() => setTicketOrderId(null)}
+      />
     </div>
   );
 }

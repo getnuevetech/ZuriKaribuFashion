@@ -21,7 +21,8 @@ import {
   Filter,
   Upload,
   X,
-  Sparkles
+  Sparkles,
+  MessageSquare
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
@@ -31,6 +32,7 @@ import DataTable from '../../components/dashboard/DataTable';
 import { BarChart, LineChart } from '../../components/dashboard/SimpleChart';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import OrderSupportModal from '../../components/orders/OrderSupportModal';
 import { getCityOptionsByCountryCode, getCountryOptions, resolveCountryCode, resolveCountryName } from '../../data/locationOptions';
 
 interface DesignerStats {
@@ -553,6 +555,8 @@ export default function DesignerDashboard() {
   const [readyStockDraft, setReadyStockDraft] = useState<Array<{ size: string; color: string; stock: string }>>([]);
   const [readyStockSaving, setReadyStockSaving] = useState(false);
   const [readyStockError, setReadyStockError] = useState<string | null>(null);
+  const [supportOrderId, setSupportOrderId] = useState<string | null>(null);
+  const [supportInitialTab, setSupportInitialTab] = useState<'details' | 'ticket'>('ticket');
   const [tryOnInsights, setTryOnInsights] = useState<any>(null);
 
   const visibleTabs = useMemo(
@@ -3433,7 +3437,25 @@ export default function DesignerDashboard() {
                   Complete
                 </Button>
               )}
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSupportInitialTab('ticket');
+                  setSupportOrderId(item.orderId);
+                }}
+              >
+                <MessageSquare className="w-4 h-4 mr-1" />
+                Contact
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSupportInitialTab('details');
+                  setSupportOrderId(item.orderId);
+                }}
+              >
                 <Eye className="w-4 h-4" />
               </Button>
             </div>
@@ -3445,6 +3467,12 @@ export default function DesignerDashboard() {
           </div>
         )
       )}
+      <OrderSupportModal
+        isOpen={Boolean(supportOrderId)}
+        orderId={supportOrderId}
+        initialTab={supportInitialTab}
+        onClose={() => setSupportOrderId(null)}
+      />
     </div>
   );
 }

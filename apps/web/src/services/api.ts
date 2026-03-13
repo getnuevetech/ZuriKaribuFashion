@@ -4467,6 +4467,68 @@ const ordersApi = {
   getOrder: (id: string) =>
     apiService.get<{ success: boolean; data: any }>(`/orders/${id}`),
 
+  getOrderTicketThread: (orderId: string) =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        orderId: string;
+        orderNumber: string;
+        ticket: {
+          id: string;
+          orderId: string;
+          subject?: string | null;
+          status: 'OPEN' | 'PENDING' | 'RESOLVED' | 'CLOSED';
+          createdById: string;
+          isLocked: boolean;
+          createdAt: string;
+          updatedAt: string;
+        } | null;
+        messages: Array<{
+          id: string;
+          ticketId: string;
+          orderId: string;
+          senderUserId: string;
+          senderRole: 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR';
+          senderDisplayName: string;
+          body: string;
+          recipientRoles: Array<'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR'>;
+          visibleToCustomer: boolean;
+          isInternal: boolean;
+          createdAt: string;
+        }>;
+        participants: Array<{
+          role: 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR';
+          label: string;
+          users: Array<{ id: string; name: string }>;
+        }>;
+        permissions: {
+          canPost: boolean;
+          canManageTicket: boolean;
+          canControlCustomerVisibility: boolean;
+          allowedRecipientRoles: Array<'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR'>;
+        };
+        settings: {
+          enabled: boolean;
+          defaultVisibleToCustomer: boolean;
+          allowVendorToVendorDirect: boolean;
+        };
+      };
+    }>(`/orders/${orderId}/ticketing`),
+
+  sendOrderTicketMessage: (
+    orderId: string,
+    data: {
+      body: string;
+      recipientRoles?: Array<'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR'>;
+      visibleToCustomer?: boolean;
+      subject?: string;
+    }
+  ) =>
+    apiService.post<{ success: boolean; data: any; message?: string }>(`/orders/${orderId}/ticketing/messages`, data),
+
+  updateOrderTicketStatus: (orderId: string, status: 'OPEN' | 'PENDING' | 'RESOLVED' | 'CLOSED') =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>(`/orders/${orderId}/ticketing/status`, { status }),
+
   createOrder: (data: any) =>
     createOrderWithFallback<{ success: boolean; data: any }>(customDesignOrderCreatePaths, data),
 
@@ -6353,6 +6415,33 @@ const adminApi = {
     apiService.post<{ success: boolean; data: { closedCount: number }; message?: string }>(
       '/admin/order-workflow/auto-close-overdue'
     ),
+
+  getOrderTicketingSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        enabled: boolean;
+        defaultVisibleToCustomer: boolean;
+        allowVendorToVendorDirect: boolean;
+        allowVendorToCustomerDirect: boolean;
+        allowCustomerToVendorDirect: boolean;
+        allowQaToVendorMessaging: boolean;
+        allowQaToCustomerMessaging: boolean;
+        recipientMatrix: Record<string, string[]>;
+      };
+    }>('/orders/admin/ticketing/settings'),
+
+  updateOrderTicketingSettings: (data: {
+    enabled?: boolean;
+    defaultVisibleToCustomer?: boolean;
+    allowVendorToVendorDirect?: boolean;
+    allowVendorToCustomerDirect?: boolean;
+    allowCustomerToVendorDirect?: boolean;
+    allowQaToVendorMessaging?: boolean;
+    allowQaToCustomerMessaging?: boolean;
+    recipientMatrix?: Record<string, string[]>;
+  }) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>('/orders/admin/ticketing/settings', data),
 
   getCategoryPageSettings: (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR') =>
     readAdminCategoryPageSettingsWithFallback<{

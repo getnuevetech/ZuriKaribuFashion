@@ -7,11 +7,13 @@ import {
   CheckCircle,
   XCircle,
   UserCheck,
-  Package
+  Package,
+  MessageSquare
 } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import OrderSupportModal from '../../components/orders/OrderSupportModal';
 
 interface Order {
   id: string;
@@ -38,10 +40,15 @@ export default function AdminOrders() {
   const [workflowSettings, setWorkflowSettings] = useState<any | null>(null);
   const [savingWorkflow, setSavingWorkflow] = useState(false);
   const [workflowMessage, setWorkflowMessage] = useState('');
+  const [ticketingSettings, setTicketingSettings] = useState<any | null>(null);
+  const [savingTicketing, setSavingTicketing] = useState(false);
+  const [supportOrderId, setSupportOrderId] = useState<string | null>(null);
+  const [supportInitialTab, setSupportInitialTab] = useState<'details' | 'ticket'>('ticket');
 
   useEffect(() => {
     fetchOrders();
     fetchWorkflowSettings();
+    fetchTicketingSettings();
   }, []);
 
   const fetchOrders = async () => {
@@ -71,6 +78,15 @@ export default function AdminOrders() {
     }
   };
 
+  const fetchTicketingSettings = async () => {
+    try {
+      const response = await api.admin.getOrderTicketingSettings();
+      if (response.success) setTicketingSettings(response.data || null);
+    } catch (error) {
+      console.error('Failed to load ticketing settings:', error);
+    }
+  };
+
   const handleSaveWorkflowSettings = async () => {
     if (!workflowSettings) return;
     try {
@@ -95,6 +111,23 @@ export default function AdminOrders() {
       fetchOrders();
     } catch (error: any) {
       setWorkflowMessage(error?.response?.data?.message || 'Auto-close failed.');
+    }
+  };
+
+  const handleSaveTicketingSettings = async () => {
+    if (!ticketingSettings) return;
+    try {
+      setSavingTicketing(true);
+      setWorkflowMessage('');
+      const response = await api.admin.updateOrderTicketingSettings(ticketingSettings);
+      if (response.success) {
+        setTicketingSettings(response.data || ticketingSettings);
+        setWorkflowMessage('Order ticketing settings saved.');
+      }
+    } catch (error: any) {
+      setWorkflowMessage(error?.response?.data?.message || 'Failed to save order ticketing settings.');
+    } finally {
+      setSavingTicketing(false);
     }
   };
 
@@ -301,6 +334,79 @@ export default function AdminOrders() {
         </div>
       ) : null}
 
+      {ticketingSettings ? (
+        <div className="bg-white rounded-xl border p-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-gray-900">Order Ticketing Workflow Controls</h2>
+            <Button onClick={handleSaveTicketingSettings} disabled={savingTicketing}>
+              {savingTicketing ? 'Saving...' : 'Save Ticketing Settings'}
+            </Button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={ticketingSettings.enabled !== false}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), enabled: event.target.checked }))
+                }
+              />
+              Enable ticketing on orders
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={Boolean(ticketingSettings.defaultVisibleToCustomer)}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), defaultVisibleToCustomer: event.target.checked }))
+                }
+              />
+              Internal team messages visible to customer by default
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={Boolean(ticketingSettings.allowVendorToVendorDirect)}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), allowVendorToVendorDirect: event.target.checked }))
+                }
+              />
+              Allow Seller ↔ Designer messaging
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={Boolean(ticketingSettings.allowVendorToCustomerDirect)}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), allowVendorToCustomerDirect: event.target.checked }))
+                }
+              />
+              Allow Vendor → Customer messaging
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={Boolean(ticketingSettings.allowCustomerToVendorDirect)}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), allowCustomerToVendorDirect: event.target.checked }))
+                }
+              />
+              Allow Customer → Vendor messaging
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={ticketingSettings.allowQaToVendorMessaging !== false}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), allowQaToVendorMessaging: event.target.checked }))
+                }
+              />
+              Allow QA ↔ Vendor messaging
+            </label>
+          </div>
+        </div>
+      ) : null}
+
       {/* Orders Table */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <div className="overflow-x-auto">
@@ -355,15 +461,28 @@ export default function AdminOrders() {
                     {new Date(order.createdAt).toLocaleDateString()}
                   </td>
                   <td className="py-3 px-4">
-                    <button 
-                      onClick={() => {
-                        setSelectedOrder(order);
-                        setShowDetailModal(true);
-                      }}
-                      className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedOrder(order);
+                          setShowDetailModal(true);
+                        }}
+                        className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg"
+                        title="View details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSupportInitialTab('ticket');
+                          setSupportOrderId(order.id);
+                        }}
+                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                        title="Open ticket console"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -459,11 +578,28 @@ export default function AdminOrders() {
                   <CheckCircle className="w-4 h-4 mr-2" />
                   Mark Complete
                 </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setSupportInitialTab('ticket');
+                    setSupportOrderId(selectedOrder.id);
+                  }}
+                >
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Ticket Console
+                </Button>
               </div>
             </div>
           </div>
         </div>
       )}
+      <OrderSupportModal
+        isOpen={Boolean(supportOrderId)}
+        orderId={supportOrderId}
+        initialTab={supportInitialTab}
+        onClose={() => setSupportOrderId(null)}
+      />
     </div>
   );
 }

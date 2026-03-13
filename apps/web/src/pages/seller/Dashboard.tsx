@@ -19,7 +19,8 @@ import {
   Filter,
   Upload,
   X,
-  Sparkles
+  Sparkles,
+  MessageSquare
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
@@ -29,6 +30,7 @@ import DataTable from '../../components/dashboard/DataTable';
 import { BarChart, LineChart } from '../../components/dashboard/SimpleChart';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import OrderSupportModal from '../../components/orders/OrderSupportModal';
 import { getCityOptionsByCountryCode, getCountryOptions, resolveCountryCode, resolveCountryName } from '../../data/locationOptions';
 
 interface SellerStats {
@@ -342,6 +344,8 @@ export default function SellerDashboard() {
   const [fabricSearch, setFabricSearch] = useState('');
   const [fabricStatusFilter, setFabricStatusFilter] = useState('');
   const [fabricMaterialFilter, setFabricMaterialFilter] = useState('');
+  const [supportOrderId, setSupportOrderId] = useState<string | null>(null);
+  const [supportInitialTab, setSupportInitialTab] = useState<'details' | 'ticket'>('ticket');
 
   const visibleTabs = useMemo(
     () =>
@@ -1745,6 +1749,17 @@ export default function SellerDashboard() {
                   Ship
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setSupportInitialTab('ticket');
+                  setSupportOrderId(item.orderId);
+                }}
+              >
+                <MessageSquare className="w-4 h-4 mr-1" />
+                Contact
+              </Button>
             </div>
           )}
         />
@@ -1980,6 +1995,12 @@ export default function SellerDashboard() {
           </div>
         </div>
       )}
+      <OrderSupportModal
+        isOpen={Boolean(supportOrderId)}
+        orderId={supportOrderId}
+        initialTab={supportInitialTab}
+        onClose={() => setSupportOrderId(null)}
+      />
     </div>
   );
 }

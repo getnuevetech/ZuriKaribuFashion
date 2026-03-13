@@ -13,7 +13,8 @@ import {
   ArrowRight,
   Calendar,
   AlertCircle,
-  Sparkles
+  Sparkles,
+  MessageSquare
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
@@ -24,6 +25,7 @@ import DataTable from '../../components/dashboard/DataTable';
 import { LineChart } from '../../components/dashboard/SimpleChart';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import OrderSupportModal from '../../components/orders/OrderSupportModal';
 
 interface CustomerStats {
   totalOrders: number;
@@ -254,6 +256,8 @@ export default function CustomerDashboard() {
     providerKey: string;
     verificationReference: string;
   } | null>(null);
+  const [ticketOrderId, setTicketOrderId] = useState<string | null>(null);
+  const [ticketInitialTab, setTicketInitialTab] = useState<'details' | 'ticket'>('details');
 
   useEffect(() => {
     fetchDashboardData();
@@ -878,7 +882,25 @@ export default function CustomerDashboard() {
                         Track
                       </Button>
                     )}
-                    <Button variant="ghost" size="sm">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setTicketInitialTab('ticket');
+                        setTicketOrderId(order.id);
+                      }}
+                    >
+                      <MessageSquare className="w-4 h-4 mr-2" />
+                      Contact
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setTicketInitialTab('details');
+                        setTicketOrderId(order.id);
+                      }}
+                    >
                       Details
                       <ArrowRight className="w-4 h-4 ml-1" />
                     </Button>
@@ -1083,6 +1105,12 @@ export default function CustomerDashboard() {
           </div>
         </div>
       )}
+      <OrderSupportModal
+        isOpen={Boolean(ticketOrderId)}
+        orderId={ticketOrderId}
+        initialTab={ticketInitialTab}
+        onClose={() => setTicketOrderId(null)}
+      />
     </div>
   );
 }
