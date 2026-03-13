@@ -291,7 +291,7 @@ export default function DesignDetail() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600"></div>
+        <div className="animate-spin h-12 w-12 border-b-2 border-black"></div>
       </div>
     );
   }
@@ -325,7 +325,7 @@ export default function DesignDetail() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <button 
             onClick={() => navigate('/designs')}
-            className="flex items-center text-gray-600 hover:text-amber-600 transition-colors"
+            className="flex items-center text-gray-600 hover:text-black transition-colors"
           >
             <ChevronLeft className="w-4 h-4 mr-1" />
             Back to Designs
@@ -347,13 +347,13 @@ export default function DesignDetail() {
                 <>
                   <button
                     onClick={() => setSelectedImage(prev => prev === 0 ? design.images.length - 1 : prev - 1)}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white bg-opacity-90 rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-colors"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white bg-opacity-90 flex items-center justify-center shadow-lg hover:bg-white transition-colors"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => setSelectedImage(prev => prev === design.images.length - 1 ? 0 : prev + 1)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white bg-opacity-90 rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-colors"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white bg-opacity-90 flex items-center justify-center shadow-lg hover:bg-white transition-colors"
                   >
                     <ChevronRight className="w-5 h-5" />
                   </button>
@@ -361,7 +361,7 @@ export default function DesignDetail() {
               )}
               <button
                 onClick={handleToggleLike}
-                className="absolute top-4 right-4 w-10 h-10 bg-white bg-opacity-90 rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-colors"
+                className="absolute top-4 right-4 w-10 h-10 bg-white bg-opacity-90 flex items-center justify-center shadow-lg hover:bg-white transition-colors"
               >
                 <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
               </button>
@@ -378,7 +378,7 @@ export default function DesignDetail() {
                     key={idx}
                     onClick={() => setSelectedImage(idx)}
                     className={`flex-shrink-0 w-20 h-20 overflow-hidden border-2 transition-colors ${
-                      selectedImage === idx ? 'border-amber-600' : 'border-transparent'
+                      selectedImage === idx ? 'border-black' : 'border-transparent'
                     }`}
                   >
                     <img src={img} alt="" className="w-full h-full object-cover" />
@@ -395,7 +395,7 @@ export default function DesignDetail() {
               <div className="flex items-start justify-between mb-2">
                 <Badge variant="secondary">{design.category.name}</Badge>
                 <div className="flex items-center gap-2">
-                  <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                  <button className="p-2 hover:bg-gray-100 transition-colors">
                     <Share2 className="w-5 h-5 text-gray-600" />
                   </button>
                 </div>
@@ -403,7 +403,7 @@ export default function DesignDetail() {
               <h1 className="text-3xl font-bold text-gray-900 mb-2">{design.name}</h1>
               <div className="flex items-center gap-4 text-sm">
                 <div className="flex items-center gap-1">
-                  <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                   <span className="font-medium">{reviewAverage > 0 ? reviewAverage.toFixed(1) : Number(design.rating || 0).toFixed(1)}</span>
                   <span className="text-gray-500">({reviewCount || Number(design.reviewCount || 0)} reviews)</span>
                 </div>
@@ -413,8 +413,8 @@ export default function DesignDetail() {
             </div>
 
             {/* Designer Info */}
-            <div className="flex items-center gap-4 p-4 bg-white rounded-xl border">
-              <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center overflow-hidden">
+            <div className="flex items-center gap-4 border bg-white p-4">
+              <div className="flex h-14 w-14 items-center justify-center overflow-hidden bg-gray-100">
                 {designerFlagCode ? (
                   <img
                     src={`https://flagcdn.com/w80/${designerFlagCode.toLowerCase()}.png`}
@@ -422,7 +422,7 @@ export default function DesignDetail() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <span className="text-xl font-bold text-amber-700">
+                  <span className="text-xl font-bold text-black">
                     {design.designer.businessName.charAt(0)}
                   </span>
                 )}
@@ -436,17 +436,17 @@ export default function DesignDetail() {
               </div>
               {storefrontPath ? (
                 <Link to={storefrontPath}>
-                  <Button variant="outline" size="sm">View Storefront</Button>
+                  <Button variant="ghost" size="sm" className="rounded-none border-0 bg-black text-white hover:bg-gray-800">View Storefront</Button>
                 </Link>
               ) : (
-                <Button variant="outline" size="sm">View Profile</Button>
+                <Button variant="ghost" size="sm" className="rounded-none border-0 bg-black text-white hover:bg-gray-800">View Profile</Button>
               )}
             </div>
 
             {/* Price */}
-            <div className="p-4 bg-amber-50 rounded-xl">
+            <div className="bg-gray-100 p-4">
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-amber-700">
+                <span className="text-3xl font-bold text-black">
                   {formatFromUsd(calculateTotal())}
                 </span>
                 <span className="text-gray-500">total price</span>
@@ -464,12 +464,12 @@ export default function DesignDetail() {
                     key={tab}
                     onClick={() => setActiveTab(tab)}
                     className={`pb-3 text-sm font-medium capitalize transition-colors relative ${
-                      activeTab === tab ? 'text-amber-600' : 'text-gray-500 hover:text-gray-700'
+                      activeTab === tab ? 'text-black' : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
                     {tab}
                     {activeTab === tab && (
-                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-600" />
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
                     )}
                   </button>
                 ))}
@@ -483,14 +483,14 @@ export default function DesignDetail() {
                   <p className="text-gray-600 leading-relaxed">{design.description}</p>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
-                      <Shirt className="w-5 h-5 text-amber-600" />
+                      <Shirt className="w-5 h-5 text-black" />
                       <div>
                         <p className="text-sm font-medium">Custom Made</p>
                         <p className="text-xs text-gray-500">To your measurements</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
-                      <Ruler className="w-5 h-5 text-amber-600" />
+                      <Ruler className="w-5 h-5 text-black" />
                       <div>
                         <p className="text-sm font-medium">Perfect Fit</p>
                         <p className="text-xs text-gray-500">Guaranteed fit policy</p>
@@ -502,15 +502,15 @@ export default function DesignDetail() {
 
               {activeTab === 'fabrics' && (
                 <div className="space-y-4">
-                  <div className="rounded-xl border bg-gray-50 p-3">
+                  <div className="border bg-gray-50 p-3">
                     <p className="mb-2 text-sm font-semibold text-gray-900">Fabric selection option</p>
                     <div className="grid gap-2 md:grid-cols-2">
                       <button
                         type="button"
                         onClick={() => setFabricSelectionMode('CUSTOMER_SELECTED')}
-                        className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                        className={`border px-3 py-2 text-left text-sm ${
                           fabricSelectionMode === 'CUSTOMER_SELECTED'
-                            ? 'border-amber-600 bg-amber-50 text-amber-800'
+                            ? 'border-black bg-black text-white'
                             : 'border-gray-200 bg-white text-gray-700'
                         }`}
                       >
@@ -519,9 +519,9 @@ export default function DesignDetail() {
                       <button
                         type="button"
                         onClick={() => setFabricSelectionMode('DESIGNER_DECIDES')}
-                        className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                        className={`border px-3 py-2 text-left text-sm ${
                           fabricSelectionMode === 'DESIGNER_DECIDES'
-                            ? 'border-amber-600 bg-amber-50 text-amber-800'
+                            ? 'border-black bg-black text-white'
                             : 'border-gray-200 bg-white text-gray-700'
                         }`}
                       >
@@ -533,7 +533,7 @@ export default function DesignDetail() {
                         value={fabricPreferenceNotes}
                         onChange={(event) => setFabricPreferenceNotes(event.target.value)}
                         placeholder="Optional: Share your preferred fabric style, texture, or color."
-                        className="mt-3 h-20 w-full rounded-lg border px-3 py-2 text-sm"
+                        className="mt-3 h-20 w-full border px-3 py-2 text-sm"
                       />
                     ) : null}
                   </div>
@@ -545,17 +545,17 @@ export default function DesignDetail() {
                       <div
                         key={fabric.id}
                         onClick={() => setSelectedFabric(fabric.id)}
-                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        className={`border-2 p-4 cursor-pointer transition-all ${
                           selectedFabric === fabric.id && fabricSelectionMode === 'CUSTOMER_SELECTED'
-                            ? 'border-amber-600 bg-amber-50' 
-                            : 'border-gray-200 hover:border-amber-300'
+                            ? 'border-black bg-gray-50' 
+                            : 'border-gray-200 hover:border-black'
                         }`}
                       >
                         <div className="flex gap-4">
                           <img
                             src={fabric.images[0]}
                             alt={fabric.name}
-                            className="w-20 h-20 object-cover rounded-lg"
+                            className="h-20 w-20 object-cover"
                           />
                           <div className="flex-1">
                             <div className="flex items-start justify-between">
@@ -565,7 +565,7 @@ export default function DesignDetail() {
                                 <p className="text-sm text-gray-500">{fabric.seller.country}</p>
                               </div>
                               <div className="text-right">
-                                <p className="font-semibold text-amber-700">
+                                <p className="font-semibold text-black">
                                   {formatFromUsd(fabric.pricePerMeter)}/meter
                                 </p>
                                 <p className="text-xs text-gray-500">
@@ -574,7 +574,7 @@ export default function DesignDetail() {
                               </div>
                             </div>
                             {selectedFabric === fabric.id && (
-                              <div className="mt-3 pt-3 border-t border-amber-200">
+                              <div className="mt-3 border-t border-gray-200 pt-3">
                                 <label className="text-sm font-medium text-gray-700">
                                   Meters: {fabricMeters[fabric.id]}
                                 </label>
@@ -608,7 +608,7 @@ export default function DesignDetail() {
                     </p>
                     <button
                       onClick={() => setShowMeasurementModal(true)}
-                      className="text-sm text-amber-600 hover:text-amber-700 font-medium"
+                      className="text-sm font-medium text-black hover:text-gray-700"
                     >
                       How to measure?
                     </button>
@@ -627,7 +627,7 @@ export default function DesignDetail() {
                             value={measurements[measurement.name] || ''}
                             onChange={(e) => handleMeasurementChange(measurement.name, parseFloat(e.target.value))}
                             placeholder={measurement.description}
-                            className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                            className="w-full border px-3 py-2 text-sm focus:border-black focus:ring-2 focus:ring-black/20"
                           />
                           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
                             {measurement.unit}
@@ -642,17 +642,16 @@ export default function DesignDetail() {
 
             {/* Actions */}
             <div className="flex gap-3 pt-4 border-t">
-              <Button
-                variant="outline"
-                className="flex-1"
+                <Button
+                  className="flex-1 rounded-none"
                 onClick={handleTryOn}
                 disabled={design.suitableFabrics.length === 0}
               >
                 <Eye className="w-4 h-4 mr-2" />
                 Virtual Try-On
               </Button>
-              <Button
-                className="flex-1"
+                <Button
+                  className="flex-1 rounded-none"
                 onClick={handleAddToCart}
                 disabled={!areAllRequiredMeasurementsFilled() || (fabricSelectionMode === 'CUSTOMER_SELECTED' && !selectedFabric)}
               >
@@ -662,12 +661,12 @@ export default function DesignDetail() {
             </div>
 
             {fabricSelectionMode === 'CUSTOMER_SELECTED' && !selectedFabric && (
-              <p className="text-sm text-amber-600 text-center">
+              <p className="text-sm text-gray-700 text-center">
                 Please select a fabric to continue
               </p>
             )}
             {!areAllRequiredMeasurementsFilled() ? (
-              <p className="text-sm text-amber-600 text-center">
+              <p className="text-sm text-gray-700 text-center">
                 Complete required measurements before adding to cart.
               </p>
             ) : null}
@@ -692,7 +691,7 @@ export default function DesignDetail() {
               <select
                 value={reviewRating}
                 onChange={(event) => setReviewRating(Number(event.target.value))}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
+                className="w-full border px-3 py-2 text-sm"
               >
                 {[5, 4, 3, 2, 1].map((value) => (
                   <option key={value} value={value}>
@@ -703,7 +702,7 @@ export default function DesignDetail() {
               <textarea
                 value={reviewComment}
                 onChange={(event) => setReviewComment(event.target.value)}
-                className="h-24 w-full rounded-lg border px-3 py-2 text-sm"
+                className="h-24 w-full border px-3 py-2 text-sm"
                 placeholder="Share your experience with this design..."
               />
               <Button onClick={handleSubmitReview} disabled={reviewSubmitting || !reviewComment.trim()} className="w-full">
@@ -715,12 +714,12 @@ export default function DesignDetail() {
                 <p className="text-sm text-gray-500">No reviews yet. Be the first to review this product.</p>
               ) : (
                 reviews.map((review) => (
-                  <div key={review.id} className="rounded-lg border p-3">
+                  <div key={review.id} className="border p-3">
                     <div className="mb-1 flex items-center justify-between">
                       <p className="text-sm font-semibold text-gray-900">{review.customer?.name || 'Customer'}</p>
                       <p className="text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</p>
                     </div>
-                    <p className="text-xs font-medium text-amber-600">{'★'.repeat(Math.max(1, Math.min(5, Number(review.rating || 0))))}</p>
+                    <p className="text-xs font-medium text-gray-700">{'★'.repeat(Math.max(1, Math.min(5, Number(review.rating || 0))))}</p>
                     <p className="mt-1 text-sm text-gray-700">{review.comment}</p>
                   </div>
                 ))
@@ -743,7 +742,7 @@ export default function DesignDetail() {
                       ? `/fabrics/${entry.id}`
                       : `/ready-to-wear/${entry.id}`;
                 return (
-                  <Link key={`${entry.productType}-${entry.id}`} to={href} className="group overflow-hidden rounded-lg border bg-white">
+                  <Link key={`${entry.productType}-${entry.id}`} to={href} className="group overflow-hidden border bg-white">
                     <div className="relative aspect-[3/4] overflow-hidden bg-gray-100">
                       <img
                         src={entry.image || '/images/placeholder.jpg'}
@@ -757,7 +756,7 @@ export default function DesignDetail() {
                     <div className="p-3">
                       <p className="line-clamp-1 text-sm font-semibold text-gray-900">{entry.name}</p>
                       <p className="line-clamp-1 text-xs text-gray-500">{entry.ownerName}</p>
-                      <p className="mt-1 text-sm font-semibold text-amber-700">{formatFromUsd(Number(entry.priceUsd || 0))}</p>
+                      <p className="mt-1 text-sm font-semibold text-black">{formatFromUsd(Number(entry.priceUsd || 0))}</p>
                     </div>
                   </Link>
                 );
@@ -770,23 +769,23 @@ export default function DesignDetail() {
       {/* Measurement Guide Modal */}
       {showMeasurementModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
-          <div className="mx-auto w-full max-w-2xl rounded-2xl bg-white max-h-[92vh] overflow-y-auto">
+          <div className="mx-auto w-full max-w-2xl bg-white max-h-[92vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-bold">How to Measure</h3>
                 <button 
                   onClick={() => setShowMeasurementModal(false)}
-                  className="p-2 hover:bg-gray-100 rounded-full"
+                  className="p-2 hover:bg-gray-100"
                 >
                   ×
                 </button>
               </div>
               <div className="space-y-4">
                 {design.measurements.map((m) => (
-                  <div key={m.name} className="p-4 bg-gray-50 rounded-lg">
+                  <div key={m.name} className="bg-gray-50 p-4">
                     <h4 className="font-semibold mb-1">{m.name}</h4>
                     <p className="text-sm text-gray-600">{m.description}</p>
-                    <p className="text-sm text-amber-600 mt-1">Unit: {m.unit}</p>
+                    <p className="mt-1 text-sm text-gray-700">Unit: {m.unit}</p>
                   </div>
                 ))}
               </div>

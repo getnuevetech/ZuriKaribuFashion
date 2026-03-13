@@ -134,7 +134,7 @@ export default function FabricDetail() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-coral-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-black" />
       </div>
     );
   }
@@ -144,7 +144,7 @@ export default function FabricDetail() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-500 mb-4">{error || 'Fabric not found'}</p>
-          <Link to="/fabrics" className="text-coral-500 hover:underline">
+          <Link to="/fabrics" className="text-black hover:underline">
             Back to Fabrics
           </Link>
         </div>
@@ -227,7 +227,7 @@ export default function FabricDetail() {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
         {/* Breadcrumb */}
-        <Link to="/fabrics" className="inline-flex items-center text-gray-500 hover:text-coral-500 mb-6">
+        <Link to="/fabrics" className="mb-6 inline-flex items-center text-gray-500 hover:text-black">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Fabrics
         </Link>
@@ -235,7 +235,7 @@ export default function FabricDetail() {
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Images */}
           <div className="space-y-4">
-            <div className="aspect-square bg-gray-100 rounded-xl overflow-hidden relative">
+            <div className="relative aspect-square overflow-hidden bg-gray-100">
               <img
                 src={fabric.images?.[selectedImage]?.url || '/images/placeholder.jpg'}
                 alt={fabric.name}
@@ -258,8 +258,8 @@ export default function FabricDetail() {
                   <button
                     key={idx}
                     onClick={() => setSelectedImage(idx)}
-                    className={`w-20 h-20 overflow-hidden border-2 ${
-                      selectedImage === idx ? 'border-coral-500' : 'border-transparent'
+                    className={`h-20 w-20 overflow-hidden border-2 ${
+                      selectedImage === idx ? 'border-black' : 'border-transparent'
                     }`}
                   >
                     <img src={img.url} alt="" className="w-full h-full object-cover" />
@@ -288,7 +288,7 @@ export default function FabricDetail() {
               </div>
             </div>
 
-            <p className="text-3xl font-bold text-coral-500">
+            <p className="text-3xl font-bold text-black">
               {formatFromUsd(fabric.pricePerMeter)}<span className="text-lg text-gray-500 font-normal">/yard</span>
             </p>
 
@@ -297,7 +297,7 @@ export default function FabricDetail() {
             {/* Quantity Selector */}
             <div className="flex items-center gap-4">
               <span className="font-medium">Quantity (yards):</span>
-              <div className="flex items-center border rounded-lg">
+              <div className="flex items-center border">
                 <button
                   onClick={() => setQuantity(Math.max(fabric.minOrderMeters || 1, quantity - 1))}
                   className="px-4 py-2 hover:bg-gray-100"
@@ -316,23 +316,23 @@ export default function FabricDetail() {
             </div>
 
             {/* Total */}
-            <div className="bg-gray-100 p-4 rounded-lg">
+            <div className="bg-gray-100 p-4">
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Total:</span>
-                <span className="text-2xl font-bold text-coral-500">{formatFromUsd(fabric.pricePerMeter * quantity)}</span>
+                <span className="text-2xl font-bold text-black">{formatFromUsd(fabric.pricePerMeter * quantity)}</span>
               </div>
             </div>
 
             {/* Actions */}
             <div className="flex gap-4">
-              <Button className="flex-1 py-4" onClick={handleAddToCart}>
+              <Button className="flex-1 rounded-none py-4" onClick={handleAddToCart}>
                 <ShoppingCart className="w-5 h-5 mr-2" />
                 Add to Cart
               </Button>
               <Button
-                variant="outline"
+                variant="ghost"
                 onClick={handleToggleLike}
-                className={`px-4 ${isWishlisted ? 'text-red-500 border-red-500' : ''}`}
+                className={`border-0 bg-black px-4 text-white hover:bg-gray-800 ${isWishlisted ? 'bg-gray-800' : ''}`}
               >
                 <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-current' : ''}`} />
                 <span className="ml-2 text-sm">{likeCount}</span>
@@ -344,7 +344,7 @@ export default function FabricDetail() {
             <div className="border-t pt-6">
               <h3 className="font-semibold mb-3">Sold by</h3>
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-coral-100 rounded-full flex items-center justify-center overflow-hidden">
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden bg-gray-100">
                   {flagCode ? (
                     <img
                       src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
@@ -358,7 +358,7 @@ export default function FabricDetail() {
                   <p className="text-sm text-gray-500">{fabric.seller?.country || 'Unknown'}</p>
                 </div>
                 {storefrontPath ? (
-                  <Link to={storefrontPath} className="ml-auto text-sm font-medium text-coral-600 hover:underline">
+                  <Link to={storefrontPath} className="ml-auto text-sm font-medium text-black hover:underline">
                     Visit Storefront
                   </Link>
                 ) : null}
@@ -403,7 +403,7 @@ export default function FabricDetail() {
               <select
                 value={reviewRating}
                 onChange={(event) => setReviewRating(Number(event.target.value))}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
+                className="w-full border px-3 py-2 text-sm"
               >
                 {[5, 4, 3, 2, 1].map((value) => (
                   <option key={value} value={value}>
@@ -414,7 +414,7 @@ export default function FabricDetail() {
               <textarea
                 value={reviewComment}
                 onChange={(event) => setReviewComment(event.target.value)}
-                className="h-24 w-full rounded-lg border px-3 py-2 text-sm"
+                className="h-24 w-full border px-3 py-2 text-sm"
                 placeholder="Share your experience with this fabric..."
               />
               <Button onClick={handleSubmitReview} disabled={reviewSubmitting || !reviewComment.trim()} className="w-full">
@@ -426,12 +426,12 @@ export default function FabricDetail() {
                 <p className="text-sm text-gray-500">No reviews yet. Be the first to review this product.</p>
               ) : (
                 reviews.map((review) => (
-                  <div key={review.id} className="rounded-lg border p-3">
+                  <div key={review.id} className="border p-3">
                     <div className="mb-1 flex items-center justify-between">
                       <p className="text-sm font-semibold text-gray-900">{review.customer?.name || 'Customer'}</p>
                       <p className="text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</p>
                     </div>
-                    <p className="text-xs font-medium text-amber-600">{'★'.repeat(Math.max(1, Math.min(5, Number(review.rating || 0))))}</p>
+                    <p className="text-xs font-medium text-gray-700">{'★'.repeat(Math.max(1, Math.min(5, Number(review.rating || 0))))}</p>
                     <p className="mt-1 text-sm text-gray-700">{review.comment}</p>
                   </div>
                 ))
@@ -454,7 +454,7 @@ export default function FabricDetail() {
                       ? `/fabrics/${entry.id}`
                       : `/ready-to-wear/${entry.id}`;
                 return (
-                  <Link key={`${entry.productType}-${entry.id}`} to={href} className="group overflow-hidden rounded-lg border bg-white">
+                  <Link key={`${entry.productType}-${entry.id}`} to={href} className="group overflow-hidden border bg-white">
                     <div className="relative aspect-[3/4] overflow-hidden bg-gray-100">
                       <img
                         src={entry.image || '/images/placeholder.jpg'}
@@ -468,7 +468,7 @@ export default function FabricDetail() {
                     <div className="p-3">
                       <p className="line-clamp-1 text-sm font-semibold text-gray-900">{entry.name}</p>
                       <p className="line-clamp-1 text-xs text-gray-500">{entry.ownerName}</p>
-                      <p className="mt-1 text-sm font-semibold text-coral-600">{formatFromUsd(Number(entry.priceUsd || 0))}</p>
+                      <p className="mt-1 text-sm font-semibold text-black">{formatFromUsd(Number(entry.priceUsd || 0))}</p>
                     </div>
                   </Link>
                 );

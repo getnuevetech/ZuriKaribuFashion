@@ -196,7 +196,7 @@ export default function ReadyToWearDetail() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-coral-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-black" />
       </div>
     );
   }
@@ -206,7 +206,7 @@ export default function ReadyToWearDetail() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-500 mb-4">{error || 'Product not found'}</p>
-          <Link to="/ready-to-wear" className="text-coral-500 hover:underline">
+          <Link to="/ready-to-wear" className="text-black hover:underline">
             Back to Ready To Wear
           </Link>
         </div>
@@ -366,11 +366,11 @@ export default function ReadyToWearDetail() {
     <div className="min-h-screen bg-gray-50 pb-28 pt-28 md:pb-8 md:pt-32">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-          <Link to="/" className="hover:text-coral-600">
+          <Link to="/" className="hover:text-black">
             Home
           </Link>
           <span>&gt;</span>
-          <Link to="/ready-to-wear" className="hover:text-coral-600">
+          <Link to="/ready-to-wear" className="hover:text-black">
             Shop
           </Link>
           <span>&gt;</span>
@@ -379,7 +379,7 @@ export default function ReadyToWearDetail() {
           <span className="font-medium text-gray-800">{product.name}</span>
         </div>
 
-        <Link to="/ready-to-wear" className="mb-5 inline-flex items-center text-sm text-gray-500 hover:text-coral-500">
+        <Link to="/ready-to-wear" className="mb-5 inline-flex items-center text-sm text-gray-500 hover:text-black">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Ready to Wear
         </Link>
@@ -399,14 +399,14 @@ export default function ReadyToWearDetail() {
                     <button
                       type="button"
                       onClick={() => canGoPrevImage && setSelectedImage((prev) => Math.max(0, prev - 1))}
-                      className="absolute left-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-700 shadow hover:bg-white"
+                      className="absolute left-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center bg-white/90 text-gray-700 shadow hover:bg-white"
                     >
                       ‹
                     </button>
                     <button
                       type="button"
                       onClick={() => canGoNextImage && setSelectedImage((prev) => Math.min((product.images?.length || 1) - 1, prev + 1))}
-                      className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-700 shadow hover:bg-white"
+                      className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center bg-white/90 text-gray-700 shadow hover:bg-white"
                     >
                       ›
                     </button>
@@ -421,8 +421,8 @@ export default function ReadyToWearDetail() {
                       key={`${image.url}-${idx}`}
                       type="button"
                       onClick={() => setSelectedImage(idx)}
-                      className={`h-2.5 w-2.5 rounded-full border transition ${
-                        selectedImage === idx ? 'border-coral-500 bg-coral-500' : 'border-gray-300 bg-white'
+                      className={`h-2.5 w-2.5 border transition ${
+                        selectedImage === idx ? 'border-black bg-black' : 'border-gray-300 bg-white'
                       }`}
                     />
                   ))}
@@ -436,8 +436,8 @@ export default function ReadyToWearDetail() {
                       key={`thumb-${img.url}-${idx}`}
                       type="button"
                       onClick={() => setSelectedImage(idx)}
-                      className={`overflow-hidden rounded-md border ${
-                        selectedImage === idx ? 'border-coral-500' : 'border-gray-200'
+                      className={`overflow-hidden border ${
+                        selectedImage === idx ? 'border-black' : 'border-gray-200'
                       }`}
                     >
                       <img src={img.url} alt="" className="h-20 w-full object-cover" />
@@ -465,7 +465,7 @@ export default function ReadyToWearDetail() {
                 <p className="mt-1 text-xl italic text-gray-700">
                   by{' '}
                   {storefrontPath ? (
-                    <Link to={storefrontPath} className="underline hover:text-coral-600">
+                    <Link to={storefrontPath} className="underline hover:text-black">
                       {product.designer?.businessName || 'Designer'}
                     </Link>
                   ) : (
@@ -479,7 +479,7 @@ export default function ReadyToWearDetail() {
                 onClick={() => setActiveInfoTab('REVIEWS')}
                 className="inline-flex items-center gap-2 text-left"
               >
-                <div className="flex items-center gap-0.5 text-amber-500">
+                <div className="flex items-center gap-0.5 text-yellow-500">
                   {Array.from({ length: 5 }).map((_, idx) => {
                     const value = reviewAverage > 0 ? reviewAverage : Number(product.designer?.rating || 0);
                     return (
@@ -490,7 +490,7 @@ export default function ReadyToWearDetail() {
                     );
                   })}
                 </div>
-                <span className="text-sm text-coral-600 underline">
+                <span className="text-sm text-black underline">
                   {reviewCount || Number(product.designer?.reviewCount || 0)} reviews
                 </span>
               </button>
@@ -507,10 +507,10 @@ export default function ReadyToWearDetail() {
                           key={size}
                           type="button"
                           onClick={() => setSelectedSize(size)}
-                          className={`inline-flex h-9 min-w-9 items-center justify-center rounded-full border px-3 text-sm ${
+                          className={`inline-flex h-9 min-w-9 items-center justify-center rounded-none border px-3 text-sm ${
                             effectiveSelectedSize === size
-                              ? 'border-coral-500 bg-coral-50 text-coral-700'
-                              : 'border-gray-300 bg-white text-gray-700 hover:border-coral-300'
+                              ? 'border-black bg-black text-white'
+                              : 'border-gray-300 bg-white text-gray-700 hover:border-black'
                           }`}
                         >
                           {size}
@@ -518,7 +518,7 @@ export default function ReadyToWearDetail() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-amber-700">No sizes currently available.</p>
+                    <p className="text-sm text-gray-700">No sizes currently available.</p>
                   )}
                 </div>
 
@@ -528,7 +528,7 @@ export default function ReadyToWearDetail() {
                     <button
                       type="button"
                       onClick={() => setShowSizeGuideModal(true)}
-                      className="inline-flex items-center gap-1 text-xs text-coral-600 hover:underline"
+                      className="inline-flex items-center gap-1 text-xs text-black hover:underline"
                     >
                       <Ruler className="h-3.5 w-3.5" />
                       Size Guide
@@ -541,8 +541,8 @@ export default function ReadyToWearDetail() {
                         type="button"
                         onClick={() => setSelectedColor(color)}
                         title={color === DEFAULT_VARIANT_COLOR ? 'Default' : color}
-                        className={`h-8 w-8 rounded-full border-2 ${
-                          effectiveSelectedColor === color ? 'border-coral-500' : 'border-gray-300'
+                        className={`h-8 w-8 rounded-none border-2 ${
+                          effectiveSelectedColor === color ? 'border-black' : 'border-gray-300'
                         }`}
                         style={{
                           background:
@@ -562,7 +562,7 @@ export default function ReadyToWearDetail() {
                 </div>
               </div>
 
-              <p className={`text-sm font-medium ${isSelectedVariantInStock ? 'text-amber-700' : 'text-red-600'}`}>
+              <p className={`text-sm font-medium ${isSelectedVariantInStock ? 'text-gray-700' : 'text-red-600'}`}>
                 {isSelectedVariantInStock
                   ? `Only ${selectedVariantStock} left in stock`
                   : 'Selected variant is currently out of stock'}
@@ -576,11 +576,11 @@ export default function ReadyToWearDetail() {
                     <p className="text-sm text-gray-400 line-through">{formatFromUsd(Number(product.originalPrice || 0))}</p>
                   ) : null}
                 </div>
-                <div className="flex items-center gap-2 rounded-md border border-gray-300 bg-white px-2 py-1">
+                <div className="flex items-center gap-2 border border-gray-300 bg-white px-2 py-1">
                   <button
                     type="button"
                     onClick={() => setQuantity((prev) => Math.max(1, prev - 1))}
-                    className="h-8 w-8 text-xl text-gray-700 hover:text-coral-600"
+                    className="h-8 w-8 text-xl text-gray-700 hover:text-black"
                   >
                     −
                   </button>
@@ -588,7 +588,7 @@ export default function ReadyToWearDetail() {
                   <button
                     type="button"
                     onClick={() => setQuantity((prev) => prev + 1)}
-                    className="h-8 w-8 text-xl text-gray-700 hover:text-coral-600"
+                    className="h-8 w-8 text-xl text-gray-700 hover:text-black"
                   >
                     +
                   </button>
@@ -596,33 +596,33 @@ export default function ReadyToWearDetail() {
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">
-                <Button className="w-full py-3" onClick={handleAddToCart} disabled={!effectiveSelectedSize || !isSelectedVariantInStock}>
+                <Button className="w-full rounded-none py-3" onClick={handleAddToCart} disabled={!effectiveSelectedSize || !isSelectedVariantInStock}>
                   <ShoppingCart className="mr-2 h-4 w-4" />
                   Add to Cart
                 </Button>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   onClick={handleToggleLike}
-                  className={`w-full py-3 ${isWishlisted ? 'border-red-500 text-red-500' : ''}`}
+                  className={`w-full rounded-none border-0 bg-black py-3 text-white hover:bg-gray-800 ${isWishlisted ? 'bg-gray-800' : ''}`}
                 >
                   <Heart className={`mr-2 h-4 w-4 ${isWishlisted ? 'fill-current' : ''}`} />
                   {isWishlisted ? 'Saved' : 'Save to Wishlist'}
                 </Button>
               </div>
 
-              <Button variant="outline" className="w-full py-2.5 text-sm" onClick={openTryOnModal}>
+              <Button variant="ghost" className="w-full rounded-none border-0 bg-black py-2.5 text-sm text-white hover:bg-gray-800" onClick={openTryOnModal}>
                 <Sparkles className="mr-1.5 h-4 w-4" />
                 Virtual Try-On
               </Button>
 
-              <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              <div className="flex items-center gap-2 bg-gray-100 px-3 py-2 text-sm text-gray-700">
                 <Check className="h-4 w-4" />
                 Free shipping on orders over $250
               </div>
 
-              <div className="rounded-xl border border-gray-200 bg-white p-3">
+              <div className="border border-gray-200 bg-white p-3">
                 <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 overflow-hidden rounded-full bg-gray-100">
+                  <div className="h-12 w-12 overflow-hidden bg-gray-100">
                     {flagCode ? (
                       <img
                         src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
@@ -639,7 +639,7 @@ export default function ReadyToWearDetail() {
                   </div>
                 </div>
                 {storefrontPath ? (
-                  <Link to={storefrontPath} className="mt-2 inline-flex text-xs font-medium text-coral-600 hover:underline">
+                  <Link to={storefrontPath} className="mt-2 inline-flex text-xs font-medium text-black hover:underline">
                     View Profile
                   </Link>
                 ) : null}
@@ -666,7 +666,7 @@ export default function ReadyToWearDetail() {
                 onClick={() => setActiveInfoTab(tab.key)}
                 className={`mr-6 py-3 text-sm font-medium transition ${
                   activeInfoTab === tab.key
-                    ? 'border-b-2 border-coral-500 text-coral-600'
+                    ? 'border-b-2 border-black text-black'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -704,7 +704,7 @@ export default function ReadyToWearDetail() {
                   <Truck className="mt-0.5 h-4 w-4 text-gray-500" />
                   <p>{product.shippingInfo || 'Shipping options are calculated at checkout based on destination.'}</p>
                 </div>
-                <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-700">
+                <p className="bg-gray-100 px-3 py-2 text-gray-700">
                   Free shipping automatically applies when your order subtotal is above $250.
                 </p>
               </div>
@@ -745,7 +745,7 @@ export default function ReadyToWearDetail() {
                           <p className="text-sm font-semibold text-gray-900">{review.customer?.name || 'Customer'}</p>
                           <p className="text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</p>
                         </div>
-                        <p className="text-xs font-medium text-amber-600">{'★'.repeat(Math.max(1, Math.min(5, Number(review.rating || 0))))}</p>
+                        <p className="text-xs font-medium text-gray-700">{'★'.repeat(Math.max(1, Math.min(5, Number(review.rating || 0))))}</p>
                         <p className="mt-1 text-sm text-gray-700">{review.comment}</p>
                       </div>
                     ))
@@ -792,7 +792,7 @@ export default function ReadyToWearDetail() {
 
       {showTryOnModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
-          <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl">
+          <div className="w-full max-w-2xl bg-white shadow-xl">
             <div className="flex items-start justify-between border-b px-5 py-4">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Virtual Try-On</h3>
@@ -803,13 +803,13 @@ export default function ReadyToWearDetail() {
               <button
                 type="button"
                 onClick={() => setShowTryOnModal(false)}
-                className="rounded p-1 text-gray-500 hover:bg-gray-100"
+                className="p-1 text-gray-500 hover:bg-gray-100"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="space-y-4 px-5 py-4">
-              <p className="rounded-lg border border-coral-100 bg-coral-50 px-3 py-2 text-xs text-coral-700">
+              <p className="border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
                 Use the same measurement profile format as Custom-to-Wear Try-On flow.
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -831,25 +831,25 @@ export default function ReadyToWearDetail() {
                         setTryOnMeasurements((previous) => ({ ...previous, [key]: value }));
                         setTryOnPreviewReady(false);
                       }}
-                      className="w-full rounded-lg border px-3 py-2 text-sm"
+                      className="w-full border px-3 py-2 text-sm"
                     />
                   </label>
                 ))}
               </div>
-              <div className="rounded-lg border bg-gray-50 p-3 text-sm text-gray-700">
+              <div className="border bg-gray-50 p-3 text-sm text-gray-700">
                 {tryOnPreviewReady
                   ? 'Preview profile generated successfully. Continue shopping and add your selected size to cart.'
                   : 'Generate your preview profile before closing this popup.'}
               </div>
             </div>
             <div className="flex flex-wrap justify-end gap-2 border-t px-5 py-4">
-              <Button variant="outline" onClick={handleGenerateTryOnPreview}>
+              <Button variant="ghost" className="rounded-none border-0 bg-black text-white hover:bg-gray-800" onClick={handleGenerateTryOnPreview}>
                 Generate Preview
               </Button>
-              <Button onClick={handleContinueToTryOnPage} disabled={!tryOnPreviewReady}>
+              <Button className="rounded-none" onClick={handleContinueToTryOnPage} disabled={!tryOnPreviewReady}>
                 Continue to Full Try-On
               </Button>
-              <Button variant="outline" onClick={() => setShowTryOnModal(false)}>
+              <Button variant="ghost" className="rounded-none border-0 bg-black text-white hover:bg-gray-800" onClick={() => setShowTryOnModal(false)}>
                 Close
               </Button>
             </div>
@@ -859,16 +859,16 @@ export default function ReadyToWearDetail() {
 
       {showSizeGuideModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
-          <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl">
+          <div className="w-full max-w-2xl bg-white shadow-xl">
             <div className="flex items-start justify-between border-b px-5 py-4">
               <div className="inline-flex items-center gap-2">
-                <Ruler className="h-5 w-5 text-coral-600" />
+                <Ruler className="h-5 w-5 text-black" />
                 <h3 className="text-lg font-semibold text-gray-900">{sizeGuide.title || 'Size Guide'}</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowSizeGuideModal(false)}
-                className="rounded p-1 text-gray-500 hover:bg-gray-100"
+                className="p-1 text-gray-500 hover:bg-gray-100"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -879,7 +879,7 @@ export default function ReadyToWearDetail() {
               </p>
             </div>
             <div className="border-t px-5 py-4 text-right">
-              <Button onClick={() => setShowSizeGuideModal(false)}>Close</Button>
+              <Button className="rounded-none" onClick={() => setShowSizeGuideModal(false)}>Close</Button>
             </div>
           </div>
         </div>
@@ -888,16 +888,16 @@ export default function ReadyToWearDetail() {
       <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 p-3 shadow-lg backdrop-blur md:hidden">
         <div className="mx-auto flex max-w-7xl items-center gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] text-coral-700">
+            <p className="text-[11px] text-gray-700">
               Size: <span className="font-semibold">{effectiveSelectedSize || 'Not selected'}</span>
             </p>
             <p className="text-xs text-gray-500">Total</p>
-            <p className="text-lg font-bold text-coral-600">{formatFromUsd(selectedUnitPrice * quantity)}</p>
+            <p className="text-lg font-bold text-black">{formatFromUsd(selectedUnitPrice * quantity)}</p>
           </div>
-          <Button variant="outline" className="flex-1 text-xs" onClick={openTryOnModal}>
+          <Button variant="ghost" className="flex-1 rounded-none border-0 bg-black text-xs text-white hover:bg-gray-800" onClick={openTryOnModal}>
             Try On
           </Button>
-          <Button className="flex-1 text-xs" onClick={handleAddToCart}>
+          <Button className="flex-1 rounded-none text-xs" onClick={handleAddToCart}>
             Add to Bag
           </Button>
         </div>
