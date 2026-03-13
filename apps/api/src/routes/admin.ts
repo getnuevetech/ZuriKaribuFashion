@@ -1971,14 +1971,52 @@ const normalizeVendorProfileStatus = (value: unknown): VendorProfileStatus => {
   return 'SUBMITTED';
 };
 
+const readTableColumns = async (tableName: string): Promise<Set<string>> => {
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
+      `SELECT "column_name"
+       FROM information_schema.columns
+       WHERE table_schema = current_schema()
+         AND table_name = $1`,
+      tableName
+    );
+    return new Set((Array.isArray(rows) ? rows : []).map((row) => String(row.column_name || '').toLowerCase()));
+  } catch {
+    return new Set();
+  }
+};
+
 const getVendorProfileFields = async (role: VendorRole) => {
-  const rows = await prisma.$queryRawUnsafe<Array<any>>(
-    `SELECT "id","role","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive"
-     FROM "VendorProfileField"
-     WHERE "role" = $1
-     ORDER BY "sortOrder" ASC, "createdAt" ASC`,
-    role
-  );
+  const columns = await readTableColumns('VendorProfileField');
+  if (!columns.has('id') || !columns.has('role') || !columns.has('key') || !columns.has('label') || !columns.has('fieldtype')) {
+    return [];
+  }
+  const optionalSelects = [
+    columns.has('placeholder') ? `"placeholder"` : `NULL AS "placeholder"`,
+    columns.has('helptext') ? `"helpText"` : `NULL AS "helpText"`,
+    columns.has('required') ? `"required"` : `false AS "required"`,
+    columns.has('options') ? `"options"` : `NULL AS "options"`,
+    columns.has('sortorder') ? `"sortOrder"` : `0 AS "sortOrder"`,
+    columns.has('isactive') ? `"isActive"` : `true AS "isActive"`,
+  ];
+  const orderBy = [
+    columns.has('sortorder') ? `"sortOrder" ASC` : null,
+    columns.has('createdat') ? `"createdAt" ASC` : `"key" ASC`,
+  ]
+    .filter(Boolean)
+    .join(', ');
+  let rows: any[] = [];
+  try {
+    rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT "id","role","key","label","fieldType",${optionalSelects.join(', ')}
+       FROM "VendorProfileField"
+       WHERE "role" = $1
+       ORDER BY ${orderBy}`,
+      role
+    );
+  } catch {
+    rows = [];
+  }
   return rows.map((row) => ({
     ...row,
     required: Boolean(row.required),
@@ -2000,10 +2038,31 @@ const getVendorProfileFields = async (role: VendorRole) => {
 };
 
 const getVendorSubmissionRows = async () => {
-  const rows = await prisma.$queryRawUnsafe<Array<any>>(
-    `SELECT "id","role","userId","businessName","profileStatus","profileData","profileSubmittedAt","profileReviewedAt","profileReviewNotes","updatedAt"
-     FROM "VendorProfileSubmission"`
-  );
+  const columns = await readTableColumns('VendorProfileSubmission');
+  if (!columns.has('id') || !columns.has('role') || !columns.has('userid')) {
+    return new Map<string, any>();
+  }
+  const selectParts = [
+    `"id"`,
+    `"role"`,
+    `"userId"`,
+    columns.has('businessname') ? `"businessName"` : `NULL AS "businessName"`,
+    columns.has('profilestatus') ? `"profileStatus"` : `'INCOMPLETE' AS "profileStatus"`,
+    columns.has('profiledata') ? `"profileData"` : `NULL AS "profileData"`,
+    columns.has('profilesubmittedat') ? `"profileSubmittedAt"` : `NULL AS "profileSubmittedAt"`,
+    columns.has('profilereviewedat') ? `"profileReviewedAt"` : `NULL AS "profileReviewedAt"`,
+    columns.has('profilereviewnotes') ? `"profileReviewNotes"` : `NULL AS "profileReviewNotes"`,
+    columns.has('updatedat') ? `"updatedAt"` : `NOW() AS "updatedAt"`,
+  ];
+  let rows: any[] = [];
+  try {
+    rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT ${selectParts.join(', ')}
+       FROM "VendorProfileSubmission"`
+    );
+  } catch {
+    rows = [];
+  }
   return new Map(rows.map((row) => [`${row.role}:${row.userId}`, row]));
 };
 
@@ -2295,8 +2354,18 @@ router.get('/vendor-profile/fields', async (req, res, next) => {
         fields,
       },
     });
-  } catch (error) {
-    next(error);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        issues: error.issues,
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Failed to load vendor profile fields.',
+    });
   }
 });
 
@@ -2361,7 +2430,10 @@ router.put('/vendor-profile/fields', async (req, res, next) => {
         message: error.message || 'Failed to save vendor profile fields.',
       });
     }
-    next(error);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Failed to save vendor profile fields.',
+    });
   }
 });
 

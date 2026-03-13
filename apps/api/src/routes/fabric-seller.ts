@@ -19,6 +19,27 @@ import { readFabricPredominantColorMap, writeFabricPredominantColor } from '../u
 
 const router = Router();
 let sellerGovernanceSchemaEnsured = false;
+const executeBestEffort = async (sql: string) => {
+  try {
+    await prisma.$executeRawUnsafe(sql);
+  } catch {
+    // Keep compatibility with restricted deployments.
+  }
+};
+const readTableColumns = async (tableName: string): Promise<Set<string>> => {
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
+      `SELECT "column_name"
+       FROM information_schema.columns
+       WHERE table_schema = current_schema()
+         AND table_name = $1`,
+      tableName
+    );
+    return new Set((Array.isArray(rows) ? rows : []).map((row) => String(row.column_name || '').toLowerCase()));
+  } catch {
+    return new Set();
+  }
+};
 
 router.use(authenticate);
 router.use(authorizePermissions(Permissions.SELLER_ACCESS));
@@ -57,7 +78,7 @@ async function resolveSellerProfile(userId: string) {
 
 async function ensureSellerGovernanceSchema() {
   if (sellerGovernanceSchemaEnsured) return;
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `CREATE TABLE IF NOT EXISTS "VendorProfileField" (
       "id" TEXT NOT NULL,
       "role" TEXT NOT NULL,
@@ -75,7 +96,7 @@ async function ensureSellerGovernanceSchema() {
       CONSTRAINT "VendorProfileField_pkey" PRIMARY KEY ("id")
     )`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `CREATE TABLE IF NOT EXISTS "VendorProfileSubmission" (
       "id" TEXT NOT NULL,
       "role" TEXT NOT NULL,
@@ -91,40 +112,40 @@ async function ensureSellerGovernanceSchema() {
       CONSTRAINT "VendorProfileSubmission_pkey" PRIMARY KEY ("id")
     )`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `CREATE UNIQUE INDEX IF NOT EXISTS "VendorProfileSubmission_role_userId_key" ON "VendorProfileSubmission"("role","userId")`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "VendorProfileField" ADD COLUMN IF NOT EXISTS "createdById" TEXT`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "VendorProfileField" ADD COLUMN IF NOT EXISTS "updatedById" TEXT`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "VendorProfileField" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "VendorProfileField" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "VendorProfileField" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "VendorProfileField" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `UPDATE "VendorProfileField" SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `UPDATE "VendorProfileSubmission" SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `CREATE UNIQUE INDEX IF NOT EXISTS "VendorProfileField_role_key_key" ON "VendorProfileField"("role","key")`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `CREATE INDEX IF NOT EXISTS "VendorProfileField_role_sortOrder_idx" ON "VendorProfileField"("role","sortOrder")`
   );
   sellerGovernanceSchemaEnsured = true;
@@ -234,15 +255,31 @@ const writeAliasValue = (
 };
 
 async function readSellerSubmission(userId: string) {
-  await ensureSellerGovernanceSchema();
-  const rows = await prisma.$queryRawUnsafe<Array<any>>(
-    `SELECT "id","profileStatus","profileData","profileSubmittedAt","profileReviewedAt","profileReviewNotes"
-     FROM "VendorProfileSubmission"
-     WHERE "role" = 'FABRIC_SELLER' AND "userId" = $1
-     LIMIT 1`,
-    userId
-  );
-  return rows[0] || null;
+  try {
+    await ensureSellerGovernanceSchema();
+    const columns = await readTableColumns('VendorProfileSubmission');
+    if (!columns.has('id') || !columns.has('role') || !columns.has('userid')) return null;
+    const selectParts = [
+      `"id"`,
+      columns.has('profilestatus') ? `"profileStatus"` : `'INCOMPLETE' AS "profileStatus"`,
+      columns.has('profiledata') ? `"profileData"` : `NULL AS "profileData"`,
+      columns.has('profilesubmittedat') ? `"profileSubmittedAt"` : `NULL AS "profileSubmittedAt"`,
+      columns.has('profilereviewedat') ? `"profileReviewedAt"` : `NULL AS "profileReviewedAt"`,
+      columns.has('profilereviewnotes') ? `"profileReviewNotes"` : `NULL AS "profileReviewNotes"`,
+    ];
+    const orderBy = columns.has('updatedat') ? `"updatedAt" DESC` : columns.has('profilesubmittedat') ? `"profileSubmittedAt" DESC` : `"id" ASC`;
+    const rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT ${selectParts.join(', ')}
+       FROM "VendorProfileSubmission"
+       WHERE "role" = 'FABRIC_SELLER' AND "userId" = $1
+       ORDER BY ${orderBy}
+       LIMIT 1`,
+      userId
+    );
+    return rows[0] || null;
+  } catch {
+    return null;
+  }
 }
 
 async function readSellerProfileFields() {
