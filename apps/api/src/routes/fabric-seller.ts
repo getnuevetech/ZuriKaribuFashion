@@ -16,7 +16,6 @@ import { readTryOnInsights } from '../utils/try-on-insights';
 import { readTryOnSettings } from '../utils/try-on-settings';
 import { readVendorDashboardGovernanceSettings } from '../utils/vendor-dashboard-governance';
 import { readFabricPredominantColorMap, writeFabricPredominantColor } from '../utils/fabric-attributes';
-import { getDefaultVendorProfileFields } from '../utils/vendor-profile-default-fields';
 
 const router = Router();
 let sellerGovernanceSchemaEnsured = false;
@@ -315,20 +314,9 @@ async function readSellerProfileFields() {
               })()
             : [],
     }));
-    if (mapped.length > 0) {
-      return mapped;
-    }
-    return getDefaultVendorProfileFields('FABRIC_SELLER').map((field, index) => ({
-      id: `default-fabric-seller-${index + 1}`,
-      role: 'FABRIC_SELLER',
-      ...field,
-    }));
+    return mapped;
   } catch {
-    return getDefaultVendorProfileFields('FABRIC_SELLER').map((field, index) => ({
-      id: `default-fabric-seller-${index + 1}`,
-      role: 'FABRIC_SELLER',
-      ...field,
-    }));
+    return [];
   }
 }
 

@@ -639,16 +639,10 @@ export default function SellerDashboard() {
         }
       }
       const completionPayload = dashboardCompletion || (profileRes?.success ? profileRes.data : null);
-      const profileFieldsFromEndpoint =
+      const configuredProfileFields =
         profileFieldsRes?.success && Array.isArray(profileFieldsRes.data?.fields)
           ? profileFieldsRes.data.fields.filter((entry: any) => entry?.isActive !== false)
           : [];
-      const profileFieldsFromCompletion =
-        completionPayload && Array.isArray((completionPayload as any)?.fields)
-          ? (completionPayload as any).fields.filter((entry: any) => entry?.isActive !== false)
-          : [];
-      const configuredProfileFields =
-        profileFieldsFromEndpoint.length > 0 ? profileFieldsFromEndpoint : profileFieldsFromCompletion;
       const completionFieldCount = completionPayload && Array.isArray((completionPayload as any)?.fields)
         ? (completionPayload as any).fields.filter((entry: any) => entry?.isActive !== false).length
         : 0;
@@ -669,7 +663,7 @@ export default function SellerDashboard() {
             ? completion.fields.filter(
                 (entry: any) =>
                   entry?.isActive !== false &&
-                  (configuredKeys.size === 0 || configuredKeys.has(String(entry?.key || '')))
+                  configuredKeys.has(String(entry?.key || ''))
               )
             : [];
         const effectiveFields = completionFields.length > 0 ? completionFields : configuredProfileFields;

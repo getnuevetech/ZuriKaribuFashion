@@ -21,7 +21,6 @@ import {
 import { readTryOnInsights } from '../utils/try-on-insights';
 import { readTryOnSettings } from '../utils/try-on-settings';
 import { readVendorDashboardGovernanceSettings } from '../utils/vendor-dashboard-governance';
-import { getDefaultVendorProfileFields } from '../utils/vendor-profile-default-fields';
 
 const router = Router();
 let designerGovernanceSchemaEnsured = false;
@@ -545,20 +544,9 @@ async function readDesignerProfileFields() {
               })()
             : [],
     }));
-    if (mapped.length > 0) {
-      return mapped;
-    }
-    return getDefaultVendorProfileFields('FASHION_DESIGNER').map((field, index) => ({
-      id: `default-fashion-designer-${index + 1}`,
-      role: 'FASHION_DESIGNER',
-      ...field,
-    }));
+    return mapped;
   } catch {
-    return getDefaultVendorProfileFields('FASHION_DESIGNER').map((field, index) => ({
-      id: `default-fashion-designer-${index + 1}`,
-      role: 'FASHION_DESIGNER',
-      ...field,
-    }));
+    return [];
   }
 }
 
