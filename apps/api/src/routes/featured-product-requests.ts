@@ -154,6 +154,20 @@ const readTableColumns = async (tableName: string): Promise<Set<string>> => {
   }
 };
 
+const readFeaturedProductColumns = async (): Promise<Set<string>> => {
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
+      `SELECT "column_name"
+       FROM information_schema.columns
+       WHERE table_schema = current_schema()
+         AND table_name = 'FeaturedProduct'`
+    );
+    return new Set((Array.isArray(rows) ? rows : []).map((row) => String(row.column_name || '').toLowerCase()));
+  } catch {
+    return new Set();
+  }
+};
+
 async function ensureFeaturedRequestSchema() {
   await executeBestEffort(
     `CREATE TABLE IF NOT EXISTS "HomepageSectionSetting" (
@@ -404,54 +418,87 @@ async function assertVendorOwnsProducts(userId: string, role: UserRole, entries:
 }
 
 async function upsertFeaturedProducts(entries: RequestedProductEntry[]) {
+  const columns = await readFeaturedProductColumns();
+  if (!columns.has('id') || !columns.has('productid') || !columns.has('producttype') || !columns.has('section')) {
+    return;
+  }
   for (const entry of entries) {
     const section = normalizeSectionForType(entry.productType, entry.section);
-    const existing = await prisma.featuredProduct.findFirst({
-      where: {
-        productId: entry.productId,
-        productType: entry.productType,
-        section: section as any,
-      },
-      select: { id: true },
-    });
-    if (existing?.id) {
-      await prisma.featuredProduct
-        .update({
-          where: { id: existing.id },
-          data: { isActive: true },
-        })
-        .catch(() => undefined);
-    } else {
-      await prisma.featuredProduct
-        .create({
-          data: {
-            productId: entry.productId,
-            productType: entry.productType,
-            section: section as any,
-            isActive: true,
-            displayOrder: 0,
-          },
-        })
-        .catch(() => undefined);
+    const existingRows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT "id"
+       FROM "FeaturedProduct"
+       WHERE "productId" = $1
+         AND "productType"::text = $2
+         AND "section"::text = $3
+       LIMIT 1`,
+      entry.productId,
+      String(entry.productType),
+      section
+    );
+    const existingId = existingRows[0]?.id ? String(existingRows[0].id) : null;
+    if (existingId) {
+      const assignments: string[] = [];
+      const params: unknown[] = [existingId];
+      if (columns.has('isactive')) {
+        params.push(true);
+        assignments.push(`"isActive" = $${params.length}`);
+      }
+      if (columns.has('updatedat')) assignments.push(`"updatedAt" = NOW()`);
+      if (assignments.length === 0) continue;
+      await prisma.$executeRawUnsafe(
+        `UPDATE "FeaturedProduct"
+         SET ${assignments.join(', ')}
+         WHERE "id" = $1`,
+        ...params
+      ).catch(() => undefined);
+      continue;
     }
+    const insertColumns = ['"id"', '"productId"', '"productType"', '"section"'];
+    const insertValues = ['$1', '$2', '$3', '$4'];
+    const insertParams: unknown[] = [randomUUID(), entry.productId, String(entry.productType), section];
+    if (columns.has('isactive')) {
+      insertColumns.push('"isActive"');
+      insertParams.push(true);
+      insertValues.push(`$${insertParams.length}`);
+    }
+    if (columns.has('displayorder')) {
+      insertColumns.push('"displayOrder"');
+      insertParams.push(0);
+      insertValues.push(`$${insertParams.length}`);
+    }
+    if (columns.has('createdat')) {
+      insertColumns.push('"createdAt"');
+      insertValues.push('NOW()');
+    }
+    if (columns.has('updatedat')) {
+      insertColumns.push('"updatedAt"');
+      insertValues.push('NOW()');
+    }
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "FeaturedProduct" (${insertColumns.join(', ')})
+       VALUES (${insertValues.join(', ')})`,
+      ...insertParams
+    ).catch(() => undefined);
   }
 }
 
 async function deactivateFeaturedProducts(entries: RequestedProductEntry[]) {
-  await Promise.all(
-    entries.map((entry) =>
-      prisma.featuredProduct
-        .updateMany({
-          where: {
-            productId: entry.productId,
-            productType: entry.productType,
-            section: normalizeSectionForType(entry.productType, entry.section) as any,
-          },
-          data: { isActive: false },
-        })
-        .catch(() => undefined)
-    )
-  );
+  const columns = await readFeaturedProductColumns();
+  if (!columns.has('productid') || !columns.has('producttype') || !columns.has('section') || !columns.has('isactive')) {
+    return;
+  }
+  for (const entry of entries) {
+    const params: unknown[] = [false, entry.productId, String(entry.productType), normalizeSectionForType(entry.productType, entry.section)];
+    const updatedAtClause = columns.has('updatedat') ? `, "updatedAt" = NOW()` : '';
+    await prisma.$executeRawUnsafe(
+      `UPDATE "FeaturedProduct"
+       SET "isActive" = $1${updatedAtClause}
+       WHERE "productId" = $2
+         AND "productType"::text = $3
+         AND "section"::text = $4`,
+      ...params
+    ).catch(() => undefined);
+  }
 }
 
 async function expireOverdueRequests() {
