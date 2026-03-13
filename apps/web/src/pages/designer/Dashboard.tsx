@@ -109,6 +109,20 @@ interface DesignOrder {
   priority: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
+interface FeaturedRequest {
+  id: string;
+  requestStatus: string;
+  paymentStatus: string;
+  productEntries: Array<{ productId: string; productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; section?: string | null }>;
+  requestedDurationValue?: number | null;
+  requestedDurationUnit?: 'DAYS' | 'WEEKS' | 'MONTHS' | null;
+  approvedDurationValue?: number | null;
+  approvedDurationUnit?: 'DAYS' | 'WEEKS' | 'MONTHS' | null;
+  approvedPriceUsd?: number | null;
+  activationEndsAt?: string | null;
+  createdAt: string;
+}
+
 interface Activity {
   id: string;
   type: 'order' | 'review' | 'system';
@@ -575,6 +589,20 @@ export default function DesignerDashboard() {
   const [supportOrderId, setSupportOrderId] = useState<string | null>(null);
   const [supportInitialTab, setSupportInitialTab] = useState<'details' | 'ticket'>('ticket');
   const [tryOnInsights, setTryOnInsights] = useState<any>(null);
+  const [featuredRequests, setFeaturedRequests] = useState<FeaturedRequest[]>([]);
+  const [featuredRequestProducts, setFeaturedRequestProducts] = useState<Array<{ productId: string; productType: 'DESIGN' | 'READY_TO_WEAR' }>>([]);
+  const [featuredRequestDurationValue, setFeaturedRequestDurationValue] = useState(2);
+  const [featuredRequestDurationUnit, setFeaturedRequestDurationUnit] = useState<'DAYS' | 'WEEKS' | 'MONTHS'>('WEEKS');
+  const [featuredRequestNotes, setFeaturedRequestNotes] = useState('');
+  const [featuredSettings, setFeaturedSettings] = useState<any>({
+    enabled: true,
+    defaultDurationValue: 2,
+    defaultDurationUnit: 'WEEKS',
+    allowVendorRequestedDuration: true,
+    maxDurationValue: 12,
+    basePriceUsdByType: { FABRIC: 0, DESIGN: 0, READY_TO_WEAR: 0 },
+  });
+  const [submittingFeaturedRequest, setSubmittingFeaturedRequest] = useState(false);
 
   const visibleTabs = useMemo(
     () =>
@@ -641,6 +669,8 @@ export default function DesignerDashboard() {
         readySizeOptionsResult,
         governanceResult,
         tryOnInsightsResult,
+        featuredRequestsResult,
+        featuredSettingsResult,
       ] = await Promise.allSettled([
         api.designer.getDashboard(),
         api.designer.getDesigns(),
@@ -653,6 +683,8 @@ export default function DesignerDashboard() {
         api.designer.getReadyToWearSizeOptions(),
         api.designer.getDashboardGovernance(),
         api.designer.getTryOnInsights(),
+        api.featuredRequests.listMyRequests(),
+        api.featuredRequests.getSettings(),
       ]);
       const statsRes = statsResult.status === 'fulfilled' ? statsResult.value : null;
       const designsRes = designsResult.status === 'fulfilled' ? designsResult.value : null;
@@ -666,6 +698,8 @@ export default function DesignerDashboard() {
       const readySizeOptionsRes = readySizeOptionsResult.status === 'fulfilled' ? readySizeOptionsResult.value : null;
       const governanceRes = governanceResult.status === 'fulfilled' ? governanceResult.value : null;
       const tryOnInsightsRes = tryOnInsightsResult.status === 'fulfilled' ? tryOnInsightsResult.value : null;
+      const featuredRequestsRes = featuredRequestsResult.status === 'fulfilled' ? featuredRequestsResult.value : null;
+      const featuredSettingsRes = featuredSettingsResult.status === 'fulfilled' ? featuredSettingsResult.value : null;
       const settledCallStatus = (result: PromiseSettledResult<any>) => {
         if (result.status === 'fulfilled') {
           return result.value?.success
@@ -914,6 +948,32 @@ export default function DesignerDashboard() {
       }
       if (tryOnInsightsRes?.success) {
         setTryOnInsights(tryOnInsightsRes.data || null);
+      }
+      if (featuredRequestsRes?.success && Array.isArray(featuredRequestsRes.data)) {
+        setFeaturedRequests(
+          featuredRequestsRes.data.map((row: any) => ({
+            id: String(row.id),
+            requestStatus: String(row.requestStatus || 'PENDING'),
+            paymentStatus: String(row.paymentStatus || 'UNPAID'),
+            productEntries: Array.isArray(row.productEntries) ? row.productEntries : [],
+            requestedDurationValue: row.requestedDurationValue != null ? Number(row.requestedDurationValue) : null,
+            requestedDurationUnit: row.requestedDurationUnit || null,
+            approvedDurationValue: row.approvedDurationValue != null ? Number(row.approvedDurationValue) : null,
+            approvedDurationUnit: row.approvedDurationUnit || null,
+            approvedPriceUsd: row.approvedPriceUsd != null ? Number(row.approvedPriceUsd) : null,
+            activationEndsAt: row.activationEndsAt || null,
+            createdAt: String(row.createdAt || new Date().toISOString()),
+          }))
+        );
+      }
+      if (featuredSettingsRes?.success && featuredSettingsRes.data) {
+        setFeaturedSettings(featuredSettingsRes.data);
+        if (featuredSettingsRes.data.defaultDurationValue) {
+          setFeaturedRequestDurationValue(Math.max(1, Number(featuredSettingsRes.data.defaultDurationValue)));
+        }
+        if (featuredSettingsRes.data.defaultDurationUnit) {
+          setFeaturedRequestDurationUnit(String(featuredSettingsRes.data.defaultDurationUnit).toUpperCase() as any);
+        }
       }
       const completionPayload = dashboardCompletion || (profileRes?.success ? profileRes.data : null);
       const dashboardGovernanceFields = statsRes?.success && Array.isArray(statsRes.data?.governanceFields)
@@ -1860,9 +1920,75 @@ export default function DesignerDashboard() {
     }
   };
 
+  const toggleFeaturedRequestProduct = (productId: string, productType: 'DESIGN' | 'READY_TO_WEAR') => {
+    const key = `${productType}:${productId}`;
+    setFeaturedRequestProducts((prev) => {
+      const exists = prev.some((entry) => `${entry.productType}:${entry.productId}` === key);
+      if (exists) return prev.filter((entry) => `${entry.productType}:${entry.productId}` !== key);
+      return [...prev, { productId, productType }];
+    });
+  };
+
+  const handleSubmitFeaturedRequest = async () => {
+    if (featuredRequestProducts.length === 0) {
+      setDashboardLoadError('Select at least one approved product for featured request.');
+      return;
+    }
+    try {
+      setSubmittingFeaturedRequest(true);
+      setDashboardLoadError(null);
+      const response = await api.featuredRequests.createRequest({
+        products: featuredRequestProducts.map((entry) => ({
+          productId: entry.productId,
+          productType: entry.productType,
+          section: entry.productType === 'READY_TO_WEAR' ? 'FEATURED_READY_TO_WEAR' : 'FEATURED_DESIGNS',
+        })),
+        requestedDurationValue: featuredRequestDurationValue,
+        requestedDurationUnit: featuredRequestDurationUnit,
+        requestNotes: featuredRequestNotes || undefined,
+      });
+      if (!response.success) {
+        setDashboardLoadError(response.message || 'Unable to submit featured request.');
+        return;
+      }
+      setFeaturedRequestProducts([]);
+      setFeaturedRequestNotes('');
+      await fetchDashboardData();
+    } catch (error: any) {
+      setDashboardLoadError(error?.response?.data?.message || error?.message || 'Unable to submit featured request.');
+    } finally {
+      setSubmittingFeaturedRequest(false);
+    }
+  };
+
+  const handlePayFeaturedRequest = async (requestId: string) => {
+    try {
+      setDashboardLoadError(null);
+      const response = await api.featuredRequests.payRequest(requestId, {
+        providerKey: 'MANUAL',
+        paymentReference: `DESIGNER-${Date.now()}`,
+      });
+      if (!response.success) {
+        setDashboardLoadError(response.message || 'Unable to confirm featured request payment.');
+        return;
+      }
+      await fetchDashboardData();
+    } catch (error: any) {
+      setDashboardLoadError(error?.response?.data?.message || error?.message || 'Unable to confirm payment.');
+    }
+  };
+
   const productRows = [
     ...designs.map((item) => ({ ...item, productType: 'CUSTOM_TO_WEAR' as const })),
     ...readyProducts.map((item) => ({ ...item, productType: 'READY_TO_WEAR' as const })),
+  ];
+  const approvedRequestRows = [
+    ...designs
+      .filter((item) => String(item.status || '').toUpperCase() === 'APPROVED')
+      .map((item) => ({ id: item.id, name: item.name, productType: 'DESIGN' as const })),
+    ...readyProducts
+      .filter((item) => String(item.status || '').toUpperCase() === 'APPROVED')
+      .map((item) => ({ id: item.id, name: item.name, productType: 'READY_TO_WEAR' as const })),
   ];
   const filteredProductRows = useMemo(() => {
     const normalizedSearch = productSearch.trim().toLowerCase();
@@ -2596,67 +2722,202 @@ export default function DesignerDashboard() {
       )}
 
       {activeTab === 'featured' && (
-        dashboardGovernance.sections.featuredTable !== false ? (
-        <DataTable
-          title="Featured Products"
-          columns={[
-            {
-              key: 'name',
-              header: 'Product',
-              render: (item) => (
-                <div className="flex items-center gap-3">
-                  <img src={item.images?.[0] || '/images/placeholder.jpg'} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
-                  <div>
-                    <p className="font-medium text-gray-900">{item.name}</p>
-                    <p className="text-xs text-gray-500">
-                      {item.productType === 'READY_TO_WEAR' ? 'Ready To Wear' : 'Custom To Wear'}
-                    </p>
-                  </div>
-                </div>
-              ),
-            },
-            {
-              key: 'basePrice',
-              header: 'Price',
-              render: (item) => {
-                const code = String(item.listingCurrencyCode || 'USD').toUpperCase();
-                const local = Number(item.listingLocalPrice || item.basePrice || 0);
-                const usd = Number(item.listingUsdPrice || item.basePrice || 0);
-                if (code === 'USD') return `$${usd.toFixed(2)}`;
-                return `${code} ${local.toFixed(2)} · USD ${usd.toFixed(2)}`;
-              },
-            },
-            {
-              key: 'featuredSections',
-              header: 'Homepage Sections',
-              render: (item) => (
-                <span className="text-xs text-gray-600">{(item.featuredSections || []).join(', ') || 'Featured'}</span>
-              ),
-            },
-            {
-              key: 'status',
-              header: 'Status',
-              render: (item) => <Badge variant={item.status === 'ACTIVE' ? 'green' : 'gray'}>{item.status}</Badge>,
-            },
-          ]}
-          data={featuredRows}
-          keyExtractor={(item) => `${item.productType}-${item.id}`}
-          searchable
-          searchKeys={['name', 'productType']}
-          emptyMessage="No featured products yet. Ask admin to feature one of your products."
-          actions={(item) => (
-            <Button variant="outline" size="sm" asChild>
-              <Link to={item.productType === 'READY_TO_WEAR' ? `/ready-to-wear/${item.id}` : `/designs/${item.id}`}>
-                <Eye className="w-4 h-4" />
-              </Link>
+        <div className="space-y-6">
+          <div className="rounded-xl border bg-white p-5 space-y-4">
+            <h2 className="text-lg font-semibold text-gray-900">Request Featured Placement</h2>
+            <p className="text-sm text-gray-600">
+              Submit one request for one or more approved products. Admin approval sets final payment and timeline.
+            </p>
+            <div className="text-xs text-gray-600">
+              Base price (USD): Design ${Number(featuredSettings?.basePriceUsdByType?.DESIGN || 0).toFixed(2)} · Ready-to-Wear $
+              {Number(featuredSettings?.basePriceUsdByType?.READY_TO_WEAR || 0).toFixed(2)}
+            </div>
+            {!featuredSettings?.enabled ? (
+              <div className="rounded border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
+                Featured requests are currently disabled by admin.
+              </div>
+            ) : null}
+            <div className="grid gap-2 md:grid-cols-2">
+              {approvedRequestRows.map((row) => {
+                const key = `${row.productType}:${row.id}`;
+                const checked = featuredRequestProducts.some((entry) => `${entry.productType}:${entry.productId}` === key);
+                return (
+                  <label key={key} className="flex items-center gap-2 rounded border px-3 py-2 text-sm">
+                    <input type="checkbox" checked={checked} onChange={() => toggleFeaturedRequestProduct(row.id, row.productType)} />
+                    <span className="font-medium text-gray-900">{row.name}</span>
+                    <Badge variant="gray">{row.productType === 'READY_TO_WEAR' ? 'READY' : 'CUSTOM'}</Badge>
+                  </label>
+                );
+              })}
+              {approvedRequestRows.length === 0 ? (
+                <div className="text-sm text-gray-500">No approved products available for request.</div>
+              ) : null}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="flex flex-col gap-1 text-sm text-gray-700">
+                <span>Duration value</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={Number(featuredSettings?.maxDurationValue || 36)}
+                  className="rounded border px-3 py-2"
+                  value={featuredRequestDurationValue}
+                  disabled={featuredSettings?.allowVendorRequestedDuration === false}
+                  onChange={(e) => setFeaturedRequestDurationValue(Math.max(1, Number(e.target.value || 1)))}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-gray-700">
+                <span>Duration unit</span>
+                <select
+                  className="rounded border px-3 py-2"
+                  value={featuredRequestDurationUnit}
+                  disabled={featuredSettings?.allowVendorRequestedDuration === false}
+                  onChange={(e) => setFeaturedRequestDurationUnit(e.target.value as 'DAYS' | 'WEEKS' | 'MONTHS')}
+                >
+                  <option value="DAYS">Days</option>
+                  <option value="WEEKS">Weeks</option>
+                  <option value="MONTHS">Months</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-gray-700">
+                <span>Request note (optional)</span>
+                <input
+                  type="text"
+                  className="rounded border px-3 py-2"
+                  value={featuredRequestNotes}
+                  onChange={(e) => setFeaturedRequestNotes(e.target.value)}
+                  placeholder="Add context for admin"
+                />
+              </label>
+            </div>
+            <Button onClick={handleSubmitFeaturedRequest} disabled={submittingFeaturedRequest || !featuredSettings?.enabled}>
+              {submittingFeaturedRequest ? 'Submitting...' : 'Submit Featured Request'}
             </Button>
-          )}
-        />
-        ) : (
-          <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
-            Featured table is disabled by admin governance.
           </div>
-        )
+
+          <div className="rounded-xl border bg-white p-5">
+            <h3 className="text-base font-semibold text-gray-900 mb-3">My Featured Requests</h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-gray-600 font-medium">Created</th>
+                    <th className="px-3 py-2 text-left text-gray-600 font-medium">Products</th>
+                    <th className="px-3 py-2 text-left text-gray-600 font-medium">Status</th>
+                    <th className="px-3 py-2 text-left text-gray-600 font-medium">Price</th>
+                    <th className="px-3 py-2 text-left text-gray-600 font-medium">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {featuredRequests.map((request) => (
+                    <tr key={request.id}>
+                      <td className="px-3 py-2">{new Date(request.createdAt).toLocaleDateString()}</td>
+                      <td className="px-3 py-2">{Array.isArray(request.productEntries) ? request.productEntries.length : 0}</td>
+                      <td className="px-3 py-2">
+                        <Badge
+                          variant={
+                            request.requestStatus === 'ACTIVE'
+                              ? 'green'
+                              : request.requestStatus === 'APPROVED_AWAITING_PAYMENT'
+                              ? 'blue'
+                              : request.requestStatus === 'REJECTED'
+                              ? 'red'
+                              : 'yellow'
+                          }
+                        >
+                          {request.requestStatus}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2">${Number(request.approvedPriceUsd || 0).toFixed(2)}</td>
+                      <td className="px-3 py-2">
+                        {request.requestStatus === 'APPROVED_AWAITING_PAYMENT' ? (
+                          <Button size="sm" onClick={() => handlePayFeaturedRequest(request.id)}>
+                            Pay & Activate
+                          </Button>
+                        ) : request.requestStatus === 'ACTIVE' ? (
+                          <span className="text-xs text-gray-600">
+                            Active until {request.activationEndsAt ? new Date(request.activationEndsAt).toLocaleDateString() : '-'}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-500">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {featuredRequests.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-8 text-center text-gray-500">
+                        No featured requests yet.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {dashboardGovernance.sections.featuredTable !== false ? (
+            <DataTable
+              title="Featured Products"
+              columns={[
+                {
+                  key: 'name',
+                  header: 'Product',
+                  render: (item) => (
+                    <div className="flex items-center gap-3">
+                      <img src={item.images?.[0] || '/images/placeholder.jpg'} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
+                      <div>
+                        <p className="font-medium text-gray-900">{item.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {item.productType === 'READY_TO_WEAR' ? 'Ready To Wear' : 'Custom To Wear'}
+                        </p>
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'basePrice',
+                  header: 'Price',
+                  render: (item) => {
+                    const code = String(item.listingCurrencyCode || 'USD').toUpperCase();
+                    const local = Number(item.listingLocalPrice || item.basePrice || 0);
+                    const usd = Number(item.listingUsdPrice || item.basePrice || 0);
+                    if (code === 'USD') return `$${usd.toFixed(2)}`;
+                    return `${code} ${local.toFixed(2)} · USD ${usd.toFixed(2)}`;
+                  },
+                },
+                {
+                  key: 'featuredSections',
+                  header: 'Homepage Sections',
+                  render: (item) => (
+                    <span className="text-xs text-gray-600">{(item.featuredSections || []).join(', ') || 'Featured'}</span>
+                  ),
+                },
+                {
+                  key: 'status',
+                  header: 'Status',
+                  render: (item) => <Badge variant={item.status === 'ACTIVE' ? 'green' : 'gray'}>{item.status}</Badge>,
+                },
+              ]}
+              data={featuredRows}
+              keyExtractor={(item) => `${item.productType}-${item.id}`}
+              searchable
+              searchKeys={['name', 'productType']}
+              emptyMessage="No featured products yet. Ask admin to feature one of your products."
+              actions={(item) => (
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={item.productType === 'READY_TO_WEAR' ? `/ready-to-wear/${item.id}` : `/designs/${item.id}`}>
+                    <Eye className="w-4 h-4" />
+                  </Link>
+                </Button>
+              )}
+            />
+          ) : (
+            <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+              Featured table is disabled by admin governance.
+            </div>
+          )}
+        </div>
       )}
 
       {showReadyStockModal && selectedReadyProduct && canManageReadyStock && dashboardGovernance.sections.readyStockModal !== false ? (

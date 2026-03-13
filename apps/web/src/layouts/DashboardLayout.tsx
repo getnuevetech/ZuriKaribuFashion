@@ -22,6 +22,7 @@ import {
   CreditCard,
   Truck,
   Sparkles,
+  Star,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -59,6 +60,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Payments', href: '/admin/payments', icon: CreditCard },
     { label: 'Shipping', href: '/admin/shipping', icon: Truck },
     { label: '3D TryON', href: '/admin/try-on', icon: Sparkles },
+    { label: 'Featured Requests', href: '/admin/featured-requests', icon: Star },
     { label: 'Partner API', href: '/admin/partners', icon: Settings },
     { label: 'API Diagnostics', href: '/admin/api-diagnostics', icon: Settings },
     { label: 'Order Management', href: '/admin/orders', icon: ShoppingBag },
@@ -136,6 +138,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/payments': ['payments:manage'],
       '/admin/shipping': ['shipping:manage'],
       '/admin/try-on': ['products:manage'],
+      '/admin/featured-requests': ['products:manage'],
       '/admin/partners': ['users:manage'],
       '/admin/orders': ['orders:manage'],
       '/admin/banners': ['banners:manage'],

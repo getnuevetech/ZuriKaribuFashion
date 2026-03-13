@@ -56,6 +56,7 @@ import AdminShipping from './pages/admin/Shipping';
 import AdminPartnerIntegrations from './pages/admin/PartnerIntegrations';
 import AdminTryOnSettings from './pages/admin/TryOnSettings';
 import AdminApiRouteDiagnostics from './pages/admin/ApiRouteDiagnostics';
+import AdminFeaturedRequests from './pages/admin/FeaturedRequests';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -263,6 +264,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['products:manage']}>
                       <AdminTryOnSettings />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/featured-requests"
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminFeaturedRequests />
                     </AdminPermissionGuard>
                   }
                 />

@@ -37,6 +37,7 @@ import adminPartnerRoutes from './routes/admin-partners';
 import partnerRoutes from './routes/partner';
 import categoryPageSettingsRoutes from './routes/category-page-settings';
 import adminDesignerFabricCountryAccessRoutes from './routes/admin-designer-fabric-country-access';
+import featuredProductRequestsRoutes from './routes/featured-product-requests';
 import { runStartupRepairs } from './bootstrap';
 
 const app = express();
@@ -214,6 +215,8 @@ app.use('/api/admin/order-workflow', orderWorkflowRoutes);
 app.use('/api/admin/partners', adminPartnerRoutes);
 app.use('/api/partner', partnerRoutes);
 app.use('/api/category-page-settings', categoryPageSettingsRoutes);
+app.use('/api/featured-requests', featuredProductRequestsRoutes);
+app.use('/api/featured-product-requests', featuredProductRequestsRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

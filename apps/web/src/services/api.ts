@@ -7984,6 +7984,61 @@ const promotionsApi = {
   }) => previewPromotionWithFallback<{ success: boolean; data?: any; message?: string }>(payload),
 };
 
+const featuredRequestsApi = {
+  getSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        enabled: boolean;
+        defaultDurationValue: number;
+        defaultDurationUnit: 'DAYS' | 'WEEKS' | 'MONTHS';
+        basePriceUsdByType: { FABRIC: number; DESIGN: number; READY_TO_WEAR: number };
+        allowVendorRequestedDuration: boolean;
+        maxDurationValue: number;
+      };
+    }>('/featured-requests/settings'),
+
+  updateSettings: (data: {
+    enabled?: boolean;
+    defaultDurationValue?: number;
+    defaultDurationUnit?: 'DAYS' | 'WEEKS' | 'MONTHS';
+    basePriceUsdByType?: { FABRIC?: number; DESIGN?: number; READY_TO_WEAR?: number };
+    allowVendorRequestedDuration?: boolean;
+    maxDurationValue?: number;
+  }) => apiService.patch<{ success: boolean; data: any; message?: string }>('/featured-requests/settings', data),
+
+  createRequest: (data: {
+    products: Array<{ productId: string; productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; section?: string }>;
+    requestedDurationValue?: number;
+    requestedDurationUnit?: 'DAYS' | 'WEEKS' | 'MONTHS';
+    requestNotes?: string;
+  }) => apiService.post<{ success: boolean; data: any; message?: string }>('/featured-requests/requests', data),
+
+  listMyRequests: () => apiService.get<{ success: boolean; data: any[] }>('/featured-requests/requests/my'),
+
+  payRequest: (requestId: string, data: { providerKey?: string; paymentReference: string }) =>
+    apiService.post<{ success: boolean; data: any; message?: string }>(`/featured-requests/requests/${requestId}/pay`, data),
+
+  listAdminRequests: (params?: {
+    status?: string;
+    paymentStatus?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) => apiService.get<{ success: boolean; data: any[]; pagination?: any }>('/featured-requests/admin/requests', { params }),
+
+  reviewAdminRequest: (
+    requestId: string,
+    data: {
+      decision: 'APPROVE' | 'REJECT';
+      reviewNotes?: string;
+      approvedDurationValue?: number;
+      approvedDurationUnit?: 'DAYS' | 'WEEKS' | 'MONTHS';
+      approvedPriceUsd?: number;
+    }
+  ) => apiService.patch<{ success: boolean; data?: any; message?: string }>(`/featured-requests/admin/requests/${requestId}/review`, data),
+};
+
 // Export combined API
 export const api = {
   auth: authApi,
@@ -8003,6 +8058,7 @@ export const api = {
   homepageSections: homepageSectionsApi,
   blogs: blogsApi,
   promotions: promotionsApi,
+  featuredRequests: featuredRequestsApi,
 };
 
 // Named exports for direct import
@@ -8024,6 +8080,7 @@ export {
   homepageSectionsApi,
   blogsApi,
   promotionsApi,
+  featuredRequestsApi,
   apiService,
   httpClient,
 };
