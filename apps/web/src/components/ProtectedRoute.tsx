@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import type { UserRole } from '../types';
 import { getHomeRouteForRole, normalizeRole } from '../auth/rbac';
@@ -9,15 +9,16 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   const { isAuthenticated, user } = useAuthStore();
+  const location = useLocation();
   const normalizedRole = normalizeRole(user?.role);
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   if (allowedRoles) {
     if (!normalizedRole) {
-      return <Navigate to="/login" replace />;
+      return <Navigate to="/login" replace state={{ from: location }} />;
     }
 
     if (!allowedRoles.includes(normalizedRole)) {

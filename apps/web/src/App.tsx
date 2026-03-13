@@ -118,9 +118,7 @@ function App() {
             </Route>
 
             {/* Auth Routes */}
-            <Route path="/login" element={
-              isAuthenticated ? <Navigate to={authenticatedHomeRoute} replace /> : <Login />
-            } />
+            <Route path="/login" element={<Login />} />
             <Route path="/register" element={
               isAuthenticated ? <Navigate to={authenticatedHomeRoute} replace /> : <Register />
             } />

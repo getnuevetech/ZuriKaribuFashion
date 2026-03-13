@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { api } from '../services/api';
@@ -9,7 +9,8 @@ import { getHomeRouteForUser } from '../auth/rbac';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login } = useAuthStore();
+  const location = useLocation();
+  const { login, isAuthenticated, user } = useAuthStore();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -21,6 +22,30 @@ export default function Login() {
     import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || ''
   ).trim();
 
+  const resolveRedirectFromLocation = (fallbackRoute: string) => {
+    const stateFrom = (location.state as any)?.from;
+    const statePath =
+      stateFrom && typeof stateFrom === 'object' && typeof stateFrom.pathname === 'string'
+        ? `${stateFrom.pathname || ''}${stateFrom.search || ''}${stateFrom.hash || ''}`
+        : '';
+    const queryReturnTo = new URLSearchParams(location.search).get('returnTo') || '';
+    const candidate = String(statePath || queryReturnTo || '').trim();
+    if (!candidate || !candidate.startsWith('/')) return fallbackRoute;
+    if (candidate.startsWith('/login') || candidate.startsWith('/register')) return fallbackRoute;
+    return candidate;
+  };
+
+  const resolvePostLoginRoute = (nextUser: any) => {
+    const fallbackRoute = getHomeRouteForUser(nextUser);
+    return resolveRedirectFromLocation(fallbackRoute);
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const targetRoute = resolvePostLoginRoute(user);
+    navigate(targetRoute, { replace: true });
+  }, [isAuthenticated, navigate, user, location.state, location.search]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -30,7 +55,7 @@ export default function Login() {
       const response = await api.auth.login(formData.email, formData.password);
       if (response.success) {
         login(response.data.user, response.data.token);
-        const targetRoute = getHomeRouteForUser(response.data.user);
+        const targetRoute = resolvePostLoginRoute(response.data.user);
         navigate(targetRoute, { replace: true });
         window.setTimeout(() => {
           if (window.location.pathname === '/login') {
@@ -57,7 +82,7 @@ export default function Login() {
       const response = await api.auth.loginWithGoogle(credential);
       if (response.success && response.data?.token) {
         login(response.data.user, response.data.token);
-        const targetRoute = getHomeRouteForUser(response.data.user);
+        const targetRoute = resolvePostLoginRoute(response.data.user);
         navigate(targetRoute, { replace: true });
         window.setTimeout(() => {
           if (window.location.pathname === '/login') {
