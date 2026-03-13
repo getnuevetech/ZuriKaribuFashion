@@ -7982,6 +7982,18 @@ const promotionsApi = {
     country?: string;
     city?: string;
   }) => previewPromotionWithFallback<{ success: boolean; data?: any; message?: string }>(payload),
+  getPostCheckoutOffers: () =>
+    apiService.get<{
+      success: boolean;
+      data: Array<{
+        code: string;
+        name: string;
+        description?: string;
+        discountType: 'PERCENTAGE' | 'FIXED';
+        discountValue: number;
+        maxDiscountUsd?: number | null;
+      }>;
+    }>('/promotions/post-checkout-offers'),
 };
 
 const featuredRequestsApi = {

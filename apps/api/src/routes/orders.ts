@@ -27,6 +27,8 @@ const ORDER_TICKETING_ROLES = [
   UserRole.ADMINISTRATOR,
 ] as const;
 type OrderTicketingRole = (typeof ORDER_TICKETING_ROLES)[number];
+const ADMIN_ROLE_TOKEN_PREFIX = 'ADMIN_ROLE:';
+type TicketAssignmentRoleToken = string;
 const ORDER_TICKETING_ROLE_LABELS: Record<OrderTicketingRole, string> = {
   [UserRole.CUSTOMER]: 'Customer',
   [UserRole.FABRIC_SELLER]: 'Seller',
@@ -43,9 +45,9 @@ type OrderTicketingSettings = {
   allowQaToVendorMessaging: boolean;
   allowQaToCustomerMessaging: boolean;
   autoAssignEnabled: boolean;
-  autoAssignRole: OrderTicketingRole;
+  autoAssignRole: TicketAssignmentRoleToken;
   slaResponseHours: number;
-  escalationRole: OrderTicketingRole;
+  escalationRole: TicketAssignmentRoleToken;
   escalationNotifyRoles: OrderTicketingRole[];
   recipientMatrix: Record<OrderTicketingRole, OrderTicketingRole[]>;
 };
@@ -99,6 +101,25 @@ const asRoleToken = (value: unknown): OrderTicketingRole | null => {
   const token = String(value || '').trim().toUpperCase();
   return ORDER_TICKETING_ROLES.includes(token as OrderTicketingRole) ? (token as OrderTicketingRole) : null;
 };
+const normalizeAdminRoleAssignmentToken = (value: unknown): string | null => {
+  const raw = String(value || '').trim();
+  const match = /^ADMIN_ROLE:([0-9a-f-]{36})$/i.exec(raw);
+  if (!match) return null;
+  return `${ADMIN_ROLE_TOKEN_PREFIX}${String(match[1]).toLowerCase()}`;
+};
+const normalizeAssignmentRoleToken = (
+  value: unknown,
+  fallback: TicketAssignmentRoleToken
+): TicketAssignmentRoleToken => {
+  const standardRole = asRoleToken(value);
+  if (standardRole) return standardRole;
+  return normalizeAdminRoleAssignmentToken(value) || fallback;
+};
+const parseStoredAssignmentRoleToken = (value: unknown): TicketAssignmentRoleToken | null => {
+  const standardRole = asRoleToken(value);
+  if (standardRole) return standardRole;
+  return normalizeAdminRoleAssignmentToken(value);
+};
 const parseJsonArray = (value: unknown): unknown[] => {
   if (Array.isArray(value)) return value;
   if (typeof value === 'string') {
@@ -136,9 +157,15 @@ const normalizeOrderTicketingSettings = (value: unknown): OrderTicketingSettings
     allowQaToVendorMessaging: source.allowQaToVendorMessaging !== false,
     allowQaToCustomerMessaging: source.allowQaToCustomerMessaging !== false,
     autoAssignEnabled: source.autoAssignEnabled !== false,
-    autoAssignRole: asRoleToken(source.autoAssignRole) || DEFAULT_ORDER_TICKETING_SETTINGS.autoAssignRole,
+    autoAssignRole: normalizeAssignmentRoleToken(
+      source.autoAssignRole,
+      DEFAULT_ORDER_TICKETING_SETTINGS.autoAssignRole
+    ),
     slaResponseHours: Math.max(1, Math.min(24 * 30, Number(source.slaResponseHours || DEFAULT_ORDER_TICKETING_SETTINGS.slaResponseHours))),
-    escalationRole: asRoleToken(source.escalationRole) || DEFAULT_ORDER_TICKETING_SETTINGS.escalationRole,
+    escalationRole: normalizeAssignmentRoleToken(
+      source.escalationRole,
+      DEFAULT_ORDER_TICKETING_SETTINGS.escalationRole
+    ),
     escalationNotifyRoles:
       dedupeRoleTokens(source.escalationNotifyRoles).length > 0
         ? dedupeRoleTokens(source.escalationNotifyRoles)
@@ -352,6 +379,41 @@ const pickDefaultAssignee = (
   const pool = resolveUsersForTicketRole(role, participants);
   return pool.length > 0 ? pool[0] : null;
 };
+const resolveUsersForAssignmentRoleToken = (
+  roleToken: TicketAssignmentRoleToken,
+  context: Pick<OrderAccessContext, 'participantUsersByRole' | 'adminUsersByAdminRoleToken'>
+) => {
+  const standardRole = asRoleToken(roleToken);
+  if (standardRole) {
+    return resolveUsersForTicketRole(standardRole, context.participantUsersByRole);
+  }
+  const adminRoleToken = normalizeAdminRoleAssignmentToken(roleToken);
+  if (!adminRoleToken) return [];
+  const scopedAdmins = context.adminUsersByAdminRoleToken.get(adminRoleToken) || [];
+  if (scopedAdmins.length > 0) return scopedAdmins;
+  return context.participantUsersByRole[UserRole.ADMINISTRATOR] || [];
+};
+const pickDefaultAssigneeForRoleToken = (
+  roleToken: TicketAssignmentRoleToken,
+  context: Pick<OrderAccessContext, 'participantUsersByRole' | 'adminUsersByAdminRoleToken'>
+) => {
+  const users = resolveUsersForAssignmentRoleToken(roleToken, context);
+  return users.length > 0 ? users[0] : null;
+};
+
+const roleLabelForToken = (
+  roleToken: TicketAssignmentRoleToken,
+  adminRoleNameByToken?: Map<string, string>
+) => {
+  const standardRole = asRoleToken(roleToken);
+  if (standardRole) return ORDER_TICKETING_ROLE_LABELS[standardRole];
+  const normalizedAdminRoleToken = normalizeAdminRoleAssignmentToken(roleToken);
+  if (normalizedAdminRoleToken) {
+    const adminRoleName = adminRoleNameByToken?.get(normalizedAdminRoleToken);
+    return adminRoleName ? `Admin Role (${adminRoleName})` : 'Admin Role';
+  }
+  return 'Assigned Role';
+};
 
 const isTicketStatusActive = (status: unknown) => {
   const token = String(status || '').trim().toUpperCase();
@@ -373,6 +435,8 @@ type OrderAccessContext = {
   designerUsers: Array<{ id: string; name: string }>;
   qaUsers: Array<{ id: string; name: string }>;
   adminUsers: Array<{ id: string; name: string }>;
+  adminUsersByAdminRoleToken: Map<string, Array<{ id: string; name: string }>>;
+  adminRoleNameByToken: Map<string, string>;
   participantUsersByRole: Record<OrderTicketingRole, Array<{ id: string; name: string }>>;
 };
 const fullName = (first?: unknown, last?: unknown) => [String(first || '').trim(), String(last || '').trim()].filter(Boolean).join(' ').trim();
@@ -470,20 +534,74 @@ async function resolveOrderAccessContext(orderId: string, user: { id: string; ro
   const qaAssigned = order.qa?.user
     ? [{ id: String(order.qa.user.id), name: fullName(order.qa.user.firstName, order.qa.user.lastName) || 'QA' }]
     : [];
-  const [adminUsersRaw, qaUsersRaw] = await Promise.all([
-    prisma.user.findMany({
+  const qaUsersRaw = await prisma.user.findMany({
+    where: { role: UserRole.QA_TEAM, status: 'ACTIVE' },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  let adminUsersDetailed: Array<{
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    adminRoleId: string | null;
+    adminRoleName: string | null;
+  }> = [];
+  try {
+    adminUsersDetailed = await prisma.$queryRawUnsafe<
+      Array<{
+        id: string;
+        firstName: string | null;
+        lastName: string | null;
+        adminRoleId: string | null;
+        adminRoleName: string | null;
+      }>
+    >(
+      `SELECT u."id",
+              u."firstName",
+              u."lastName",
+              ap."adminRoleId",
+              ar."name" AS "adminRoleName"
+       FROM "User" u
+       LEFT JOIN "AdminProfile" ap ON ap."userId" = u."id"
+       LEFT JOIN "AdminRole" ar ON ar."id" = ap."adminRoleId"
+       WHERE u."role" = $1
+         AND u."status" = $2`,
+      UserRole.ADMINISTRATOR,
+      'ACTIVE'
+    );
+  } catch {
+    const fallbackAdmins = await prisma.user.findMany({
       where: { role: UserRole.ADMINISTRATOR, status: 'ACTIVE' },
       select: { id: true, firstName: true, lastName: true },
-    }),
-    prisma.user.findMany({
-      where: { role: UserRole.QA_TEAM, status: 'ACTIVE' },
-      select: { id: true, firstName: true, lastName: true },
-    }),
-  ]);
-  const adminUsers = adminUsersRaw.map((row) => ({
+    });
+    adminUsersDetailed = fallbackAdmins.map((row) => ({
+      id: String(row.id),
+      firstName: row.firstName ?? null,
+      lastName: row.lastName ?? null,
+      adminRoleId: null,
+      adminRoleName: null,
+    }));
+  }
+  const adminUsers = adminUsersDetailed.map((row) => ({
     id: String(row.id),
     name: fullName(row.firstName, row.lastName) || 'Admin',
   }));
+  const adminUsersByAdminRoleToken = new Map<string, Array<{ id: string; name: string }>>();
+  const adminRoleNameByToken = new Map<string, string>();
+  for (const row of adminUsersDetailed) {
+    const token = normalizeAdminRoleAssignmentToken(
+      row.adminRoleId ? `${ADMIN_ROLE_TOKEN_PREFIX}${row.adminRoleId}` : null
+    );
+    if (!token) continue;
+    const bucket = adminUsersByAdminRoleToken.get(token) || [];
+    bucket.push({
+      id: String(row.id),
+      name: fullName(row.firstName, row.lastName) || 'Admin',
+    });
+    adminUsersByAdminRoleToken.set(token, bucket);
+    if (row.adminRoleName) {
+      adminRoleNameByToken.set(token, String(row.adminRoleName));
+    }
+  }
   const qaUsers = qaAssigned.length > 0
     ? qaAssigned
     : qaUsersRaw.map((row) => ({ id: String(row.id), name: fullName(row.firstName, row.lastName) || 'QA' }));
@@ -514,6 +632,8 @@ async function resolveOrderAccessContext(orderId: string, user: { id: string; ro
     designerUsers,
     qaUsers,
     adminUsers,
+    adminUsersByAdminRoleToken,
+    adminRoleNameByToken,
     participantUsersByRole: {
       [UserRole.CUSTOMER]:
         customerUser
@@ -657,12 +777,50 @@ function getOrderMailer(): nodemailer.Transporter | null {
   return cachedTransporter;
 }
 
+async function getPostCheckoutOfferLines(limit = 3) {
+  try {
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{
+        code: string;
+        name: string;
+        discountType: string;
+        discountValue: number;
+        maxDiscountUsd: number | null;
+      }>
+    >(
+      `SELECT "code","name","discountType","discountValue","maxDiscountUsd"
+       FROM "PromotionCode"
+       WHERE "isActive" = true
+         AND ("startsAt" IS NULL OR "startsAt" <= NOW())
+         AND ("endsAt" IS NULL OR "endsAt" >= NOW())
+       ORDER BY "updatedAt" DESC, "createdAt" DESC
+       LIMIT ${Math.max(1, Math.min(5, Number(limit || 3)))}`
+    );
+    return rows.map((row) => {
+      const discountText =
+        String(row.discountType || '').toUpperCase() === 'FIXED'
+          ? `$${Number(row.discountValue || 0).toFixed(2)} off`
+          : `${Number(row.discountValue || 0)}% off`;
+      const capText = row.maxDiscountUsd != null ? ` (up to $${Number(row.maxDiscountUsd).toFixed(2)})` : '';
+      return `${String(row.code || '').toUpperCase()} — ${String(row.name || '').trim() || 'Special Offer'}: ${discountText}${capText}`;
+    });
+  } catch {
+    return [] as string[];
+  }
+}
+
 async function sendOrderConfirmationEmail(params: {
   to: string;
   orderNumber: string;
   orderType: string;
   total: number;
   itemCount: number;
+  paymentMethod?: string | null;
+  shippingAddress?: string | null;
+  promoCode?: string | null;
+  discountUsd?: number | null;
+  shippingCostUsd?: number | null;
+  itemLines?: string[];
 }) {
   const transporter = getOrderMailer();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
@@ -670,17 +828,47 @@ async function sendOrderConfirmationEmail(params: {
     return;
   }
   const totalText = Number(params.total || 0).toFixed(2);
+  const postCheckoutOfferLines = await getPostCheckoutOfferLines(3);
+  const safeItemLines = Array.isArray(params.itemLines)
+    ? params.itemLines
+        .map((line) => String(line || '').trim())
+        .filter(Boolean)
+        .slice(0, 12)
+    : [];
+  const discountText =
+    Number(params.discountUsd || 0) > 0
+      ? `\nPromo Discount: -$${Number(params.discountUsd || 0).toFixed(2)}${
+          params.promoCode ? ` (${String(params.promoCode).toUpperCase()})` : ''
+        }`
+      : '';
+  const shippingText =
+    Number(params.shippingCostUsd || 0) > 0
+      ? `\nShipping: $${Number(params.shippingCostUsd || 0).toFixed(2)}`
+      : Number(params.shippingCostUsd || 0) === 0
+        ? '\nShipping: FREE'
+        : '';
+  const paymentMethodText = params.paymentMethod ? `\nPayment Method: ${String(params.paymentMethod)}` : '';
+  const shippingAddressText = params.shippingAddress ? `\nShipping Address: ${String(params.shippingAddress)}` : '';
+  const itemListText = safeItemLines.length > 0 ? `\nItems:\n- ${safeItemLines.join('\n- ')}` : '';
+  const offerListText =
+    postCheckoutOfferLines.length > 0 ? `\n\nNext-order offers:\n- ${postCheckoutOfferLines.join('\n- ')}` : '';
   await transporter.sendMail({
     from,
     to: params.to,
     subject: `Order Confirmation: ${params.orderNumber}`,
-    text: `Thank you for your order!\n\nOrder Number: ${params.orderNumber}\nOrder Type: ${params.orderType}\nItems: ${params.itemCount}\nTotal: $${totalText}\n\nYour order has been received and is now being processed.`,
+    text: `Thank you for your order!\n\nOrder Number: ${params.orderNumber}\nOrder Type: ${params.orderType}\nItems: ${params.itemCount}\nTotal: $${totalText}${discountText}${shippingText}${paymentMethodText}${shippingAddressText}${itemListText}${offerListText}\n\nYour order has been received and is now being processed.`,
     html: `
       <p>Thank you for your order.</p>
       <p><strong>Order Number:</strong> ${params.orderNumber}</p>
       <p><strong>Order Type:</strong> ${params.orderType}</p>
       <p><strong>Items:</strong> ${params.itemCount}</p>
       <p><strong>Total:</strong> $${totalText}</p>
+      ${Number(params.discountUsd || 0) > 0 ? `<p><strong>Promo Discount:</strong> -$${Number(params.discountUsd || 0).toFixed(2)}${params.promoCode ? ` (${String(params.promoCode).toUpperCase()})` : ''}</p>` : ''}
+      ${Number(params.shippingCostUsd || 0) > 0 || Number(params.shippingCostUsd || 0) === 0 ? `<p><strong>Shipping:</strong> ${Number(params.shippingCostUsd || 0) === 0 ? 'FREE' : `$${Number(params.shippingCostUsd || 0).toFixed(2)}`}</p>` : ''}
+      ${params.paymentMethod ? `<p><strong>Payment Method:</strong> ${String(params.paymentMethod)}</p>` : ''}
+      ${params.shippingAddress ? `<p><strong>Shipping Address:</strong> ${String(params.shippingAddress)}</p>` : ''}
+      ${safeItemLines.length > 0 ? `<p><strong>Items:</strong></p><ul>${safeItemLines.map((line) => `<li>${line}</li>`).join('')}</ul>` : ''}
+      ${postCheckoutOfferLines.length > 0 ? `<p><strong>Next-order offers:</strong></p><ul>${postCheckoutOfferLines.map((line) => `<li>${line}</li>`).join('')}</ul>` : ''}
       <p>Your order has been received and is now being processed.</p>
     `,
   });
@@ -960,7 +1148,7 @@ async function getLatestOrderTicket(orderId: string) {
     createdById: String(rows[0].createdById),
     isLocked: Boolean(rows[0].isLocked),
     assignedToUserId: rows[0].assignedToUserId ? String(rows[0].assignedToUserId) : null,
-    assignedToRole: asRoleToken(rows[0].assignedToRole) || null,
+    assignedToRole: parseStoredAssignmentRoleToken(rows[0].assignedToRole),
     dueAt: rows[0].dueAt ? new Date(rows[0].dueAt).toISOString() : null,
     escalatedAt: rows[0].escalatedAt ? new Date(rows[0].escalatedAt).toISOString() : null,
     escalationStatus: String(rows[0].escalationStatus || 'NONE').toUpperCase(),
@@ -978,7 +1166,12 @@ async function createOrderTicket(params: {
   orderContext: OrderAccessContext;
 }) {
   const autoAssignRole = params.settings.autoAssignEnabled ? params.settings.autoAssignRole : null;
-  const assignee = autoAssignRole ? pickDefaultAssignee(autoAssignRole, params.orderContext.participantUsersByRole) : null;
+  const assignee = autoAssignRole
+    ? pickDefaultAssigneeForRoleToken(autoAssignRole, {
+        participantUsersByRole: params.orderContext.participantUsersByRole,
+        adminUsersByAdminRoleToken: params.orderContext.adminUsersByAdminRoleToken,
+      })
+    : null;
   const dueAtIso = new Date(Date.now() + Number(params.settings.slaResponseHours || 24) * 60 * 60 * 1000).toISOString();
   const id = randomUUID();
   await prisma.$executeRawUnsafe(
@@ -1015,7 +1208,10 @@ async function runTicketEscalationIfDue(params: {
   if (ticket.escalatedAt || Date.now() <= dueAtMs) return ticket;
 
   const escalationRole = params.settings.escalationRole || UserRole.ADMINISTRATOR;
-  const assignee = pickDefaultAssignee(escalationRole, params.orderContext.participantUsersByRole);
+  const assignee = pickDefaultAssigneeForRoleToken(escalationRole, {
+    participantUsersByRole: params.orderContext.participantUsersByRole,
+    adminUsersByAdminRoleToken: params.orderContext.adminUsersByAdminRoleToken,
+  });
   await prisma.$executeRawUnsafe(
     `UPDATE "OrderTicket"
      SET "escalatedAt" = NOW(),
@@ -1037,7 +1233,10 @@ async function runTicketEscalationIfDue(params: {
     params.orderContext.orderId,
     assignee?.id || params.orderContext.adminUsers[0]?.id || params.orderContext.qaUsers[0]?.id || ticket.createdById,
     UserRole.ADMINISTRATOR,
-    `Ticket escalated after SLA deadline. Routed to ${ORDER_TICKETING_ROLE_LABELS[escalationRole]}.`,
+    `Ticket escalated after SLA deadline. Routed to ${roleLabelForToken(
+      escalationRole,
+      params.orderContext.adminRoleNameByToken
+    )}.`,
     JSON.stringify([UserRole.ADMINISTRATOR, UserRole.QA_TEAM])
   );
 
@@ -1246,7 +1445,7 @@ router.get(
         .object({
           search: z.string().trim().max(120).optional(),
           status: z.string().trim().max(30).optional(),
-          assignedRole: z.string().trim().max(40).optional(),
+          assignedRole: z.string().trim().max(96).optional(),
           escalated: z.union([z.literal('true'), z.literal('false'), z.literal('1'), z.literal('0')]).optional(),
           page: z.coerce.number().int().min(1).max(500).optional(),
           limit: z.coerce.number().int().min(1).max(100).optional(),
@@ -1257,7 +1456,10 @@ router.get(
       const offset = (page - 1) * limit;
       const search = String(query.search || '').trim().toLowerCase();
       const statusFilter = String(query.status || '').trim().toUpperCase();
-      const assignedRoleFilter = asRoleToken(query.assignedRole);
+      const assignedRoleFilterRaw = String(query.assignedRole || '').trim();
+      const assignedRoleFilter = assignedRoleFilterRaw
+        ? normalizeAssignmentRoleToken(assignedRoleFilterRaw, assignedRoleFilterRaw)
+        : null;
       const escalatedFilter =
         query.escalated === 'true' || query.escalated === '1'
           ? true
@@ -1281,7 +1483,7 @@ router.get(
       }
       if (assignedRoleFilter) {
         values.push(assignedRoleFilter);
-        whereClauses.push(`UPPER(COALESCE(t."assignedToRole", '')) = $${values.length}`);
+        whereClauses.push(`COALESCE(t."assignedToRole", '') = $${values.length}`);
       }
       if (escalatedFilter !== null) {
         whereClauses.push(escalatedFilter ? `t."escalatedAt" IS NOT NULL` : `t."escalatedAt" IS NULL`);
@@ -1373,7 +1575,7 @@ router.get(
           orderStatus: String(row.orderStatus || ''),
           subject: row.subject ? String(row.subject) : '',
           status: String(row.status || 'OPEN').toUpperCase(),
-          assignedToRole: asRoleToken(row.assignedToRole) || null,
+          assignedToRole: parseStoredAssignmentRoleToken(row.assignedToRole),
           assignedToUserId: row.assignedToUserId ? String(row.assignedToUserId) : null,
           assignedToUserName: row.assignedToUserId ? assigneeMap.get(String(row.assignedToUserId)) || '' : '',
           customerName: String(row.customerName || '').trim() || 'Customer',
@@ -1432,8 +1634,19 @@ router.patch(
         id: req.user!.id,
         role: req.user!.role,
       });
-      const nextRole = payload.assignedToRole ? asRoleToken(payload.assignedToRole) : asRoleToken(ticket.assignedToRole);
-      const eligibleUsers = nextRole ? resolveUsersForTicketRole(nextRole, context.participantUsersByRole) : [];
+      const currentRoleToken = parseStoredAssignmentRoleToken(ticket.assignedToRole);
+      const nextRole = payload.assignedToRole
+        ? normalizeAssignmentRoleToken(
+            payload.assignedToRole,
+            currentRoleToken || DEFAULT_ORDER_TICKETING_SETTINGS.autoAssignRole
+          )
+        : currentRoleToken;
+      const eligibleUsers = nextRole
+        ? resolveUsersForAssignmentRoleToken(nextRole, {
+            participantUsersByRole: context.participantUsersByRole,
+            adminUsersByAdminRoleToken: context.adminUsersByAdminRoleToken,
+          })
+        : [];
       const nextUserId = payload.assignedToUserId
         ? String(payload.assignedToUserId)
         : payload.assignedToRole
@@ -1442,7 +1655,7 @@ router.patch(
       if (payload.assignedToUserId && nextRole && !eligibleUsers.some((entry) => String(entry.id) === String(payload.assignedToUserId))) {
         return res.status(400).json({
           success: false,
-          message: `Assigned user is not valid for role ${ORDER_TICKETING_ROLE_LABELS[nextRole]}.`,
+          message: `Assigned user is not valid for role ${roleLabelForToken(nextRole, context.adminRoleNameByToken)}.`,
         });
       }
       const dueAtDate = payload.dueAt ? new Date(payload.dueAt) : null;
@@ -2117,6 +2330,17 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       orderType: 'Custom Design',
       total,
       itemCount: 1,
+      paymentMethod: data.paymentMethod,
+      shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
+      promoCode: data.promoCode || undefined,
+      discountUsd,
+      shippingCostUsd: shippingCost,
+      itemLines: [
+        `Design: ${design.name}`,
+        wantsDesignerToChooseFabric
+          ? 'Fabric: Designer decides'
+          : `Fabric: ${fabric?.name || 'Selected fabric'} (${selectedYards} yards)`,
+      ],
     }).catch((error) => {
       console.error('Failed to send custom-design order confirmation email:', error);
     });
@@ -2194,6 +2418,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
     // Validate items and calculate total
     let subtotal = 0;
     const validatedItems: ValidatedReadyToWearItem[] = [];
+    const readyItemLines: string[] = [];
 
     for (const item of data.items) {
       const requestedSize = normalizeReadyToWearSize(item.size);
@@ -2279,6 +2504,11 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
         price: Number(sizeVar.price),
         sizeVariationId: sizeVar.id,
       });
+      readyItemLines.push(
+        `${product.name} — ${selectedVariant.size}${
+          selectedVariant.color !== DEFAULT_READY_TO_WEAR_COLOR ? ` / ${selectedVariant.color}` : ''
+        } × ${item.quantity}`
+      );
     }
 
     // Get shipping address
@@ -2403,6 +2633,12 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       orderType: 'Ready To Wear',
       total,
       itemCount: validatedItems.reduce((count, item) => count + Number(item.quantity || 0), 0),
+      paymentMethod: data.paymentMethod,
+      shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
+      promoCode: data.promoCode || undefined,
+      discountUsd,
+      shippingCostUsd: shippingCost,
+      itemLines: readyItemLines,
     }).catch((error) => {
       console.error('Failed to send ready-to-wear order confirmation email:', error);
     });
@@ -2592,6 +2828,12 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
       orderType: 'Fabric To Buy',
       total,
       itemCount: data.yards,
+      paymentMethod: data.paymentMethod,
+      shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
+      promoCode: data.promoCode || undefined,
+      discountUsd,
+      shippingCostUsd: shippingCost,
+      itemLines: [`Fabric: ${fabric.name} (${data.yards} yards)`],
     }).catch((error) => {
       console.error('Failed to send fabric-only order confirmation email:', error);
     });

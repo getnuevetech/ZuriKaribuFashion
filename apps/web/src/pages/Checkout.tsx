@@ -88,6 +88,28 @@ interface PaymentSessionDebugInfo {
   timestamp: string;
 }
 
+interface CompletedCheckoutSummary {
+  createdAt: string;
+  orderNumbers: string[];
+  items: any[];
+  shippingAddress: ShippingAddress;
+  shippingQuote: ShippingQuoteOption | null;
+  paymentMethod: string;
+  subtotalUsd: number;
+  promoCode?: string;
+  promoDiscountUsd: number;
+  shippingUsd: number;
+  totalUsd: number;
+}
+interface PostCheckoutOffer {
+  code: string;
+  name: string;
+  description?: string;
+  discountType: 'PERCENTAGE' | 'FIXED';
+  discountValue: number;
+  maxDiscountUsd?: number | null;
+}
+
 const CHECKOUT_PROMO_STORAGE_KEY_PREFIX = 'af_checkout_promo_state_v1';
 const DEFAULT_CHECKOUT_DELIVERY_STAGES: CheckoutDeliveryStage[] = [
   {
@@ -285,6 +307,8 @@ export default function Checkout() {
   const [paymentDebugInfo, setPaymentDebugInfo] = useState<PaymentSessionDebugInfo | null>(null);
   const [runtimeStripeReloading, setRuntimeStripeReloading] = useState(false);
   const [validatedShippingAddressId, setValidatedShippingAddressId] = useState('');
+  const [completedCheckout, setCompletedCheckout] = useState<CompletedCheckoutSummary | null>(null);
+  const [postCheckoutOffers, setPostCheckoutOffers] = useState<PostCheckoutOffer[]>([]);
   const checkoutPromoStorageKey = `${CHECKOUT_PROMO_STORAGE_KEY_PREFIX}:${String(user?.id || 'guest')}`;
   
   const fullName = user?.firstName && user?.lastName 
@@ -325,6 +349,28 @@ export default function Checkout() {
       : step === 'payment'
         ? 'Step 2 of 3: Secure payment'
         : 'Step 3 of 3: Confirmation';
+  const summaryItems = step === 'review' && completedCheckout ? completedCheckout.items : items;
+  const summarySubtotal = step === 'review' && completedCheckout ? Number(completedCheckout.subtotalUsd || 0) : totalPrice;
+  const summaryPromoDiscount = step === 'review' && completedCheckout ? Number(completedCheckout.promoDiscountUsd || 0) : promoDiscount;
+  const summaryShipping = step === 'review' && completedCheckout ? Number(completedCheckout.shippingUsd || 0) : shipping;
+  const summaryTotal = step === 'review' && completedCheckout ? Number(completedCheckout.totalUsd || 0) : finalTotal;
+
+  useEffect(() => {
+    if (step !== 'review') return;
+    let cancelled = false;
+    api.promotions
+      .getPostCheckoutOffers()
+      .then((response) => {
+        if (cancelled || !response.success) return;
+        setPostCheckoutOffers(Array.isArray(response.data) ? (response.data as PostCheckoutOffer[]) : []);
+      })
+      .catch(() => {
+        if (!cancelled) setPostCheckoutOffers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step]);
 
   useEffect(() => {
     api.payments
@@ -1023,15 +1069,30 @@ export default function Checkout() {
       }
 
       setOrderNumbers(createdOrderNumbers);
+      setCompletedCheckout({
+        createdAt: new Date().toISOString(),
+        orderNumbers: createdOrderNumbers,
+        items: items.map((item) => ({ ...item })),
+        shippingAddress: { ...shippingAddress },
+        shippingQuote: shippingQuote
+          ? {
+              ...shippingQuote,
+            }
+          : null,
+        paymentMethod,
+        subtotalUsd: Number(totalPrice || 0),
+        promoCode: promoPreview?.code || undefined,
+        promoDiscountUsd: Number(promoPreview?.discountUsd || 0),
+        shippingUsd: Number(shippingPayload.shippingCostUsd || 0),
+        totalUsd: Number(
+          Math.max(0, Number(totalPrice || 0) - Number(promoPreview?.discountUsd || 0) + Number(shippingPayload.shippingCostUsd || 0))
+        ),
+      });
       if (typeof window !== 'undefined') {
         window.sessionStorage.removeItem(checkoutPromoStorageKey);
       }
       clearCart();
-      const orderParams = new URLSearchParams({ success: 'true' });
-      if (createdOrderNumbers.length > 0) {
-        orderParams.set('orders', createdOrderNumbers.join(','));
-      }
-      navigate(`/orders?${orderParams.toString()}`);
+      setStep('review');
     } catch (err) {
       console.error('Failed to create orders:', err);
       const details = String((err as any)?.response?.data?.message || (err as any)?.message || '').trim();
@@ -1634,24 +1695,84 @@ export default function Checkout() {
             )}
 
             {step === 'review' && (
-              <div className="bg-white rounded-xl p-6 shadow-sm border text-center">
+              <div className="bg-white rounded-xl p-6 shadow-sm border">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Check className="w-8 h-8 text-green-600" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">Order Confirmed!</h2>
-                <p className="text-gray-600 mb-4">
-                  Your payment was successful. We are processing your order now.
+                <h2 className="text-xl font-semibold text-gray-900 mb-2 text-center">Order Confirmed!</h2>
+                <p className="text-gray-600 mb-4 text-center">
+                  Payment is complete. Review your invoice details below.
                 </p>
-                {orderNumbers.length > 0 ? (
-                  <p className="text-sm text-gray-700 mb-3">
-                    Order No: <span className="font-semibold">{orderNumbers.join(', ')}</span>
-                  </p>
-                ) : null}
-                <p className="text-xs text-gray-500 mb-3">
-                  A confirmation email is sent when email delivery is enabled on the server.
+                <div className="rounded-lg border bg-gray-50 p-4 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p>
+                      <span className="text-gray-500">Invoice Date:</span>{' '}
+                      <span className="font-medium">
+                        {new Date(completedCheckout?.createdAt || Date.now()).toLocaleString()}
+                      </span>
+                    </p>
+                    <p>
+                      <span className="text-gray-500">Order No:</span>{' '}
+                      <span className="font-semibold">{(completedCheckout?.orderNumbers || orderNumbers).join(', ') || 'N/A'}</span>
+                    </p>
+                  </div>
+                  <div className="mt-3 border-t pt-3">
+                    <p className="font-medium text-gray-900">Delivery to</p>
+                    <p className="text-gray-700">{completedCheckout?.shippingAddress.fullName || shippingAddress.fullName}</p>
+                    <p className="text-gray-600">
+                      {[completedCheckout?.shippingAddress.addressLine1, completedCheckout?.shippingAddress.addressLine2]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </p>
+                    <p className="text-gray-600">
+                      {[completedCheckout?.shippingAddress.city, completedCheckout?.shippingAddress.state, completedCheckout?.shippingAddress.postalCode]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </p>
+                    <p className="text-gray-600">{completedCheckout?.shippingAddress.country || shippingAddress.country}</p>
+                  </div>
+                  <div className="mt-3 border-t pt-3">
+                    <p className="font-medium text-gray-900 mb-2">Payment & Totals</p>
+                    <div className="space-y-1 text-gray-700">
+                      <p>Payment Method: {completedCheckout?.paymentMethod || selectedPaymentProvider}</p>
+                      <p>Subtotal: {formatFromUsd(summarySubtotal)}</p>
+                      {summaryPromoDiscount > 0 ? <p>Discount: -{formatFromUsd(summaryPromoDiscount)}</p> : null}
+                      <p>Shipping: {summaryShipping === 0 ? 'FREE' : formatFromUsd(summaryShipping)}</p>
+                      <p className="font-semibold text-gray-900">Grand Total: {formatFromUsd(summaryTotal)}</p>
+                    </div>
+                  </div>
+                  {postCheckoutOffers.length > 0 ? (
+                    <div className="mt-3 border-t pt-3">
+                      <p className="font-medium text-gray-900 mb-2">Exclusive Next-Order Discounts</p>
+                      <div className="space-y-2">
+                        {postCheckoutOffers.map((offer) => (
+                          <div key={offer.code} className="rounded border bg-white px-3 py-2">
+                            <p className="text-sm font-semibold text-gray-900">
+                              {offer.code} · {offer.name}
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              {offer.discountType === 'PERCENTAGE'
+                                ? `${Number(offer.discountValue || 0)}% off`
+                                : `$${Number(offer.discountValue || 0).toFixed(2)} off`}
+                              {offer.maxDiscountUsd ? ` (up to $${Number(offer.maxDiscountUsd).toFixed(2)})` : ''}
+                            </p>
+                            {offer.description ? <p className="text-xs text-gray-500">{offer.description}</p> : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                <p className="mt-4 text-xs text-gray-500 text-center">
+                  A confirmation email with order details is sent when email delivery is enabled on the server.
                 </p>
-                <div className="animate-pulse">
-                  <p className="text-sm text-gray-500">Redirecting to your orders...</p>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  <Button variant="outline" onClick={() => navigate('/orders')}>
+                    View Orders
+                  </Button>
+                  <Button onClick={() => navigate('/dashboard')}>
+                    Go to Dashboard
+                  </Button>
                 </div>
               </div>
             )}
@@ -1663,7 +1784,7 @@ export default function Checkout() {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Order Summary</h2>
               
               <div className="space-y-4 mb-4">
-                {items.map((item, index) => (
+                {summaryItems.map((item, index) => (
                   <div key={index} className="flex gap-3">
                     <img
                       src={
@@ -1730,7 +1851,7 @@ export default function Checkout() {
               <div className="space-y-2 py-4 border-t">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Subtotal</span>
-                  <span className="font-medium">{formatFromUsd(totalPrice)}</span>
+                  <span className="font-medium">{formatFromUsd(summarySubtotal)}</span>
                 </div>
                 <div className="rounded-lg border bg-gray-50 p-3">
                   <p className="mb-2 text-xs font-medium text-gray-700">Promo Code</p>
@@ -1751,16 +1872,17 @@ export default function Checkout() {
                     placeholder="Optional card hint (BIN/last digits)"
                     className="mt-2 w-full rounded-lg border px-3 py-2 text-xs"
                   />
-                  {promoPreview ? (
+                  {(step === 'review' ? completedCheckout?.promoCode : promoPreview?.code) ? (
                     <p className="mt-2 text-xs text-emerald-700">
-                      Applied {promoPreview.code}: -{formatFromUsd(Number(promoPreview.discountUsd || 0))}
+                      Applied {step === 'review' ? completedCheckout?.promoCode : promoPreview?.code}:{' '}
+                      -{formatFromUsd(summaryPromoDiscount)}
                     </p>
                   ) : null}
                 </div>
-                {promoDiscount > 0 ? (
+                {summaryPromoDiscount > 0 ? (
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Promo Discount</span>
-                    <span className="font-medium text-emerald-700">-{formatFromUsd(promoDiscount)}</span>
+                    <span className="font-medium text-emerald-700">-{formatFromUsd(summaryPromoDiscount)}</span>
                   </div>
                 ) : null}
                 <div className="flex justify-between text-sm">
@@ -1768,8 +1890,8 @@ export default function Checkout() {
                     Shipping
                     {selectedShippingQuote ? ` (${selectedShippingQuote.providerName})` : ''}
                   </span>
-                  <span className={shipping === 0 ? 'text-green-600' : ''}>
-                    {shipping === 0 ? 'FREE' : formatFromUsd(shipping)}
+                  <span className={summaryShipping === 0 ? 'text-green-600' : ''}>
+                    {summaryShipping === 0 ? 'FREE' : formatFromUsd(summaryShipping)}
                   </span>
                 </div>
               </div>
@@ -1777,7 +1899,7 @@ export default function Checkout() {
               <div className="flex justify-between items-center pt-4 border-t">
                 <span className="text-lg font-semibold">Total</span>
                 <span className="text-2xl font-bold text-amber-700">
-                  {formatFromUsd(finalTotal)}
+                  {formatFromUsd(summaryTotal)}
                 </span>
               </div>
               {selectedCurrency !== 'USD' ? (

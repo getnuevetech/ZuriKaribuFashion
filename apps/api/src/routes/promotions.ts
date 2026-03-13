@@ -256,6 +256,47 @@ function matchesPromotionCriteria(
 
 router.use(authenticate);
 
+router.get('/post-checkout-offers', authorizePermissions(Permissions.ORDERS_CREATE), async (_req, res, next) => {
+  try {
+    await ensurePromotionCodeTable();
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{
+        code: string;
+        name: string;
+        description: string | null;
+        discountType: string;
+        discountValue: number;
+        maxDiscountUsd: number | null;
+      }>
+    >(
+      `SELECT "code","name","description","discountType","discountValue","maxDiscountUsd"
+       FROM "PromotionCode"
+       WHERE "isActive" = true
+         AND ("startsAt" IS NULL OR "startsAt" <= NOW())
+         AND ("endsAt" IS NULL OR "endsAt" >= NOW())
+       ORDER BY "updatedAt" DESC, "createdAt" DESC
+       LIMIT 3`
+    );
+    res.json({
+      success: true,
+      data: rows.map((row) => ({
+        code: String(row.code || '').toUpperCase(),
+        name: String(row.name || '').trim() || String(row.code || '').toUpperCase(),
+        description: row.description ? String(row.description) : '',
+        discountType: String(row.discountType || '').toUpperCase() === 'FIXED' ? 'FIXED' : 'PERCENTAGE',
+        discountValue: Number(row.discountValue || 0),
+        maxDiscountUsd: row.maxDiscountUsd != null ? Number(row.maxDiscountUsd) : null,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+router.get('/offers/post-checkout', authorizePermissions(Permissions.ORDERS_CREATE), async (req, res, next) => {
+  req.url = req.url.replace('/offers/post-checkout', '/post-checkout-offers');
+  next();
+});
+
 router.get('/admin', authorizePermissions(Permissions.PRICING_MANAGE), async (_req, res, next) => {
   try {
     await ensurePromotionCodeTable();

@@ -25,10 +25,18 @@ interface User {
   country?: string;
   createdAt: string;
   orderCount?: number;
+  adminRoleId?: string | null;
+}
+
+interface AdminRoleOption {
+  id: string;
+  name: string;
+  isActive: boolean;
 }
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<User[]>([]);
+  const [adminRoles, setAdminRoles] = useState<AdminRoleOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
@@ -50,6 +58,7 @@ export default function AdminUsers() {
     role: 'CUSTOMER',
     status: 'ACTIVE',
     phone: '',
+    adminRoleId: '',
   });
   const [editForm, setEditForm] = useState({
     id: '',
@@ -59,11 +68,31 @@ export default function AdminUsers() {
     phone: '',
     role: 'CUSTOMER',
     status: 'ACTIVE',
+    adminRoleId: '',
   });
 
   useEffect(() => {
-    fetchUsers();
+    void Promise.all([fetchUsers(), fetchAdminRoles()]);
   }, []);
+
+  const fetchAdminRoles = async () => {
+    try {
+      const response = await api.admin.getAdminRoles();
+      if (response.success) {
+        const rows = Array.isArray(response.data) ? response.data : [];
+        setAdminRoles(
+          rows.map((row: any) => ({
+            id: String(row.id || ''),
+            name: String(row.name || ''),
+            isActive: row.isActive !== false,
+          }))
+        );
+      }
+    } catch (error) {
+      console.error('Failed to fetch admin roles:', error);
+      setAdminRoles([]);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -86,6 +115,7 @@ export default function AdminUsers() {
           country: '-',
           createdAt: user.createdAt,
           orderCount: 0,
+          adminRoleId: user?.adminProfile?.adminRoleId ? String(user.adminProfile.adminRoleId) : null,
         }));
         setUsers(mappedUsers);
       }
@@ -126,7 +156,7 @@ export default function AdminUsers() {
     try {
       setCreating(true);
       setCreateError('');
-      await api.admin.createUser({
+      const createdResponse = await api.admin.createUser({
         email: createForm.email.trim(),
         firstName: createForm.firstName.trim(),
         lastName: createForm.lastName.trim(),
@@ -135,6 +165,15 @@ export default function AdminUsers() {
         status: createForm.status,
         phone: createForm.phone.trim() || undefined,
       });
+      if (
+        createdResponse?.success &&
+        createdResponse?.data?.id &&
+        createForm.role === 'ADMINISTRATOR'
+      ) {
+        await api.admin.updateAdminUserAccess(String(createdResponse.data.id), {
+          adminRoleId: createForm.adminRoleId || null,
+        });
+      }
       setShowCreateModal(false);
       setCreateForm({
         email: '',
@@ -144,6 +183,7 @@ export default function AdminUsers() {
         role: 'CUSTOMER',
         status: 'ACTIVE',
         phone: '',
+        adminRoleId: '',
       });
       await fetchUsers();
     } catch (error: any) {
@@ -164,6 +204,7 @@ export default function AdminUsers() {
       phone: user.phone || '',
       role: user.role,
       status: user.status,
+      adminRoleId: user.adminRoleId || '',
     });
     setShowEditModal(true);
   };
@@ -181,6 +222,11 @@ export default function AdminUsers() {
         role: editForm.role,
         status: editForm.status,
       });
+      if (editForm.role === 'ADMINISTRATOR') {
+        await api.admin.updateAdminUserAccess(editForm.id, {
+          adminRoleId: editForm.adminRoleId || null,
+        });
+      }
       setShowEditModal(false);
       await fetchUsers();
     } catch (error: any) {
@@ -440,7 +486,13 @@ export default function AdminUsers() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <select
                   value={createForm.role}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, role: e.target.value }))}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({
+                      ...prev,
+                      role: e.target.value,
+                      adminRoleId: e.target.value === 'ADMINISTRATOR' ? prev.adminRoleId : '',
+                    }))
+                  }
                   className="px-3 py-2 border rounded-lg"
                 >
                   <option value="CUSTOMER">Customer</option>
@@ -460,6 +512,22 @@ export default function AdminUsers() {
                   <option value="REJECTED">Rejected</option>
                 </select>
               </div>
+              {createForm.role === 'ADMINISTRATOR' ? (
+                <select
+                  value={createForm.adminRoleId}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, adminRoleId: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="">No specific admin role</option>
+                  {adminRoles
+                    .filter((row) => row.isActive)
+                    .map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
+                      </option>
+                    ))}
+                </select>
+              ) : null}
               <input
                 type="text"
                 value={createForm.phone}
@@ -528,7 +596,13 @@ export default function AdminUsers() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <select
                   value={editForm.role}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, role: e.target.value }))}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      role: e.target.value,
+                      adminRoleId: e.target.value === 'ADMINISTRATOR' ? prev.adminRoleId : '',
+                    }))
+                  }
                   className="px-3 py-2 border rounded-lg"
                 >
                   <option value="CUSTOMER">Customer</option>
@@ -548,6 +622,22 @@ export default function AdminUsers() {
                   <option value="REJECTED">Rejected</option>
                 </select>
               </div>
+              {editForm.role === 'ADMINISTRATOR' ? (
+                <select
+                  value={editForm.adminRoleId}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, adminRoleId: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="">No specific admin role</option>
+                  {adminRoles
+                    .filter((row) => row.isActive)
+                    .map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
+                      </option>
+                    ))}
+                </select>
+              ) : null}
               </div>
               <div className="sticky bottom-0 flex gap-3 border-t bg-white pt-3">
                 <Button type="button" variant="outline" className="flex-1" onClick={() => setShowEditModal(false)}>

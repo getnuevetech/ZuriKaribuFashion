@@ -126,16 +126,33 @@ export default function AdminOrders() {
   const [ticketAssignedRoleFilter, setTicketAssignedRoleFilter] = useState('');
   const [ticketPage, setTicketPage] = useState(1);
   const [ticketPages, setTicketPages] = useState(1);
+  const [adminRoleOptions, setAdminRoleOptions] = useState<Array<{ id: string; name: string }>>([]);
   const activeManagementTab = resolveOrderManagementTab(searchParams.get('tab'));
   const showOrderList = activeManagementTab === 'all' || activeManagementTab === 'list';
   const showTicketQueue = activeManagementTab === 'all' || activeManagementTab === 'ticket-queue';
   const showTicketingWorkflow = activeManagementTab === 'all' || activeManagementTab === 'ticketing-workflow';
   const showProcessingWorkflow = activeManagementTab === 'all' || activeManagementTab === 'processing-workflow';
+  const formatTicketRoleLabel = (value: unknown) => {
+    const token = String(value || '').trim();
+    if (!token) return '';
+    if (token.startsWith('ADMIN_ROLE:')) {
+      const roleId = token.slice('ADMIN_ROLE:'.length);
+      const matched = adminRoleOptions.find((row) => row.id === roleId);
+      return matched ? `Admin Role: ${matched.name}` : 'Admin Role';
+    }
+    if (token === 'ADMINISTRATOR') return 'Admin';
+    if (token === 'QA_TEAM') return 'QA';
+    if (token === 'FABRIC_SELLER') return 'Seller';
+    if (token === 'FASHION_DESIGNER') return 'Designer';
+    if (token === 'CUSTOMER') return 'Customer';
+    return token;
+  };
 
   useEffect(() => {
     fetchOrders();
     fetchWorkflowSettings();
     fetchTicketingSettings();
+    void fetchAdminRoles();
   }, []);
 
   useEffect(() => {
@@ -180,6 +197,24 @@ export default function AdminOrders() {
       if (response.success) setTicketingSettings(response.data || null);
     } catch (error) {
       console.error('Failed to load ticketing settings:', error);
+    }
+  };
+
+  const fetchAdminRoles = async () => {
+    try {
+      const response = await api.admin.getAdminRoles();
+      if (response.success) {
+        const rows = Array.isArray(response.data) ? response.data : [];
+        setAdminRoleOptions(
+          rows
+            .filter((row: any) => row?.isActive !== false)
+            .map((row: any) => ({ id: String(row.id || ''), name: String(row.name || '') }))
+            .filter((row) => row.id && row.name)
+        );
+      }
+    } catch (error) {
+      console.error('Failed to load admin roles for ticketing controls:', error);
+      setAdminRoleOptions([]);
     }
   };
 
@@ -541,6 +576,11 @@ export default function AdminOrders() {
                 <option value="ADMINISTRATOR">Admin</option>
                 <option value="FABRIC_SELLER">Seller</option>
                 <option value="FASHION_DESIGNER">Designer</option>
+                {adminRoleOptions.map((role) => (
+                  <option key={`auto-${role.id}`} value={`ADMIN_ROLE:${role.id}`}>
+                    Admin Role: {role.name}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="text-sm text-gray-700">
@@ -572,6 +612,11 @@ export default function AdminOrders() {
                 <option value="QA_TEAM">QA</option>
                 <option value="FABRIC_SELLER">Seller</option>
                 <option value="FASHION_DESIGNER">Designer</option>
+                {adminRoleOptions.map((role) => (
+                  <option key={`esc-${role.id}`} value={`ADMIN_ROLE:${role.id}`}>
+                    Admin Role: {role.name}
+                  </option>
+                ))}
               </select>
             </label>
           </div>
@@ -623,6 +668,11 @@ export default function AdminOrders() {
             <option value="QA_TEAM">QA</option>
             <option value="FABRIC_SELLER">Seller</option>
             <option value="FASHION_DESIGNER">Designer</option>
+            {adminRoleOptions.map((role) => (
+              <option key={`filter-${role.id}`} value={`ADMIN_ROLE:${role.id}`}>
+                Admin Role: {role.name}
+              </option>
+            ))}
           </select>
           <select
             value={ticketEscalatedFilter}
@@ -679,7 +729,7 @@ export default function AdminOrders() {
                       </p>
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-700">
-                      {ticket.assignedToUserName || ticket.assignedToRole || 'Unassigned'}
+                      {ticket.assignedToUserName || formatTicketRoleLabel(ticket.assignedToRole) || 'Unassigned'}
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-700">
                       {ticket.dueAt ? new Date(ticket.dueAt).toLocaleString() : '—'}
