@@ -102,6 +102,10 @@ export default function ReadyToWearDetail() {
   });
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [id]);
+
+  useEffect(() => {
     const fetchProduct = async () => {
       if (!id) return;
       

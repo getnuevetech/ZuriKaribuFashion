@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Filter, Plus, Edit, Package, Scissors, Upload, Star, CheckCircle, XCircle } from 'lucide-react';
+import { Search, Filter, Plus, Edit, Upload, Star, CheckCircle, XCircle } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -1690,18 +1690,11 @@ export default function AdminProducts() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        product.type === 'FABRIC' ? 'bg-blue-100' :
-                        product.type === 'DESIGN' ? 'bg-purple-100' : 'bg-green-100'
-                      }`}>
-                        {product.type === 'FABRIC' ? (
-                          <Package className="w-5 h-5 text-blue-600" />
-                        ) : product.type === 'DESIGN' ? (
-                          <Scissors className="w-5 h-5 text-purple-600" />
-                        ) : (
-                          <Package className="w-5 h-5 text-green-600" />
-                        )}
-                      </div>
+                      <img
+                        src={String(product.image || product.images?.[0] || '/images/placeholder.jpg')}
+                        alt={product.name}
+                        className="h-10 w-10 rounded-lg object-cover border"
+                      />
                       <div>
                         <p className="font-medium text-gray-900">
                           {product.name}

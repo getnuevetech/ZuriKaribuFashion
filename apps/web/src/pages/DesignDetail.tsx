@@ -110,6 +110,10 @@ export default function DesignDetail() {
   const [activeTab, setActiveTab] = useState<'details' | 'fabrics' | 'measurements'>('details');
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [id]);
+
+  useEffect(() => {
     fetchDesign();
   }, [id]);
 
@@ -655,7 +659,7 @@ export default function DesignDetail() {
                 disabled={!areAllRequiredMeasurementsFilled() || (fabricSelectionMode === 'CUSTOMER_SELECTED' && !selectedFabric)}
               >
                 <ShoppingBag className="w-4 h-4 mr-2" />
-                Add to Cart
+                Make Your Own Design
               </Button>
             </div>
 
@@ -728,7 +732,7 @@ export default function DesignDetail() {
         </section>
 
         <section className="mt-8 pb-4">
-          <h2 className="mb-4 text-xl font-semibold text-gray-900">Discover More by Country</h2>
+          <h2 className="mb-4 text-xl font-semibold text-gray-900">You May Also Like</h2>
           {discoverProducts.length === 0 ? (
             <p className="text-sm text-gray-500">No recommendations available yet.</p>
           ) : (

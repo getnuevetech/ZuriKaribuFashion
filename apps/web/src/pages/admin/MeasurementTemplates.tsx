@@ -16,6 +16,7 @@ const EMPTY_ROW: MeasurementTemplate = {
   isRequired: true,
   instructions: '',
 };
+const MEASUREMENT_UNIT_OPTIONS = ['cm', 'inch', 'mm', 'm'];
 const DEFAULT_READY_TO_WEAR_SIZE_OPTIONS = ['S', 'M', 'L', 'XL'];
 const normalizeReadyToWearSizes = (input: unknown): string[] => {
   const raw = Array.isArray(input) ? input : [];
@@ -89,7 +90,9 @@ export default function AdminMeasurementTemplates() {
         .map((row) => ({
           ...row,
           name: row.name.trim(),
-          unit: row.unit.trim() || 'cm',
+          unit: MEASUREMENT_UNIT_OPTIONS.includes(String(row.unit || '').trim().toLowerCase())
+            ? String(row.unit || '').trim().toLowerCase()
+            : 'cm',
           instructions: row.instructions?.trim() || '',
         }))
         .filter((row) => row.name.length > 0);
@@ -273,14 +276,19 @@ export default function AdminMeasurementTemplates() {
               placeholder="Measurement name"
               className="rounded-lg border px-3 py-2"
             />
-            <input
-              value={row.unit}
+            <select
+              value={MEASUREMENT_UNIT_OPTIONS.includes(String(row.unit || '').toLowerCase()) ? row.unit : 'cm'}
               onChange={(e) =>
                 setRows((prev) => prev.map((item, i) => (i === idx ? { ...item, unit: e.target.value } : item)))
               }
-              placeholder="Unit (cm/inch)"
               className="rounded-lg border px-3 py-2"
-            />
+            >
+              {MEASUREMENT_UNIT_OPTIONS.map((unit) => (
+                <option key={unit} value={unit}>
+                  {unit}
+                </option>
+              ))}
+            </select>
             <input
               value={row.instructions || ''}
               onChange={(e) =>

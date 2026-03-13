@@ -10,6 +10,7 @@ import {
   Menu,
   X,
   ChevronRight,
+  ChevronDown,
   Scissors,
   Shirt,
   ClipboardCheck,
@@ -64,10 +65,6 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Partner API', href: '/admin/partners', icon: Settings },
     { label: 'API Diagnostics', href: '/admin/api-diagnostics', icon: Settings },
     { label: 'Order Management', href: '/admin/orders', icon: ShoppingBag },
-    { label: '• Order List', href: '/admin/orders?tab=list', icon: ChevronRight },
-    { label: '• Ticket Queue', href: '/admin/orders?tab=ticket-queue', icon: ChevronRight },
-    { label: '• Ticket Workflow', href: '/admin/orders?tab=ticketing-workflow', icon: ChevronRight },
-    { label: '• Processing Workflow', href: '/admin/orders?tab=processing-workflow', icon: ChevronRight },
     { label: 'Banners', href: '/admin/banners', icon: ImageIcon },
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
     { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: Eye },
@@ -114,6 +111,7 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isOrderMenuOpen, setIsOrderMenuOpen] = useState(true);
   const { user, logout } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -155,6 +153,12 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const visibleItems = items.filter((item) => canAccessAdminNav(item.href));
   const roleLabel = roleLabels[userType] || 'User';
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
+  const orderManagementSubmenu = [
+    { label: 'Order List', href: '/admin/orders?tab=list', icon: ChevronRight },
+    { label: 'Ticket Queue', href: '/admin/orders?tab=ticket-queue', icon: ChevronRight },
+    { label: 'Ticket Workflow', href: '/admin/orders?tab=ticketing-workflow', icon: ChevronRight },
+    { label: 'Processing Workflow', href: '/admin/orders?tab=processing-workflow', icon: ChevronRight },
+  ];
 
   const handleLogout = () => {
     logout();
@@ -187,6 +191,59 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                 location.pathname === hrefUrl.pathname &&
                 (hrefTab ? currentTab === hrefTab : !currentTab);
               const Icon = item.icon;
+
+              if (userType === 'admin' && item.href === '/admin/orders') {
+                const orderMenuActive = location.pathname === '/admin/orders';
+                return (
+                  <div key={item.href} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsOrderMenuOpen((prev) => !prev)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
+                        orderMenuActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {isSidebarOpen ? (
+                        <>
+                          <span className="text-sm font-medium">Order Management</span>
+                          <span className="ml-auto">
+                            {isOrderMenuOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </span>
+                        </>
+                      ) : null}
+                    </button>
+                    {isOrderMenuOpen && isSidebarOpen ? (
+                      <div className="ml-7 space-y-1">
+                        {orderManagementSubmenu.map((subItem) => {
+                          const subUrl = new URL(subItem.href, window.location.origin);
+                          const subTab = subUrl.searchParams.get('tab');
+                          const subActive =
+                            location.pathname === subUrl.pathname &&
+                            (subTab ? currentTab === subTab : !currentTab);
+                          const SubIcon = subItem.icon;
+                          return (
+                            <Link
+                              key={subItem.href}
+                              to={subItem.href}
+                              className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
+                                subActive
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <SubIcon className="h-4 w-4" />
+                              <span>{subItem.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
 
               return (
                 <Link

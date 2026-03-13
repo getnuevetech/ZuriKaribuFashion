@@ -72,6 +72,10 @@ export default function FabricDetail() {
   const { formatFromUsd } = useCurrencyStore();
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [id]);
+
+  useEffect(() => {
     const fetchFabric = async () => {
       if (!id) return;
       
@@ -449,7 +453,7 @@ export default function FabricDetail() {
         </section>
 
         <section className="mt-8">
-          <h2 className="mb-4 text-xl font-semibold text-gray-900">Discover More by Country</h2>
+          <h2 className="mb-4 text-xl font-semibold text-gray-900">You May Also Like</h2>
           {discoverProducts.length === 0 ? (
             <p className="text-sm text-gray-500">No recommendations available yet.</p>
           ) : (
