@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Search, 
   Filter, 
@@ -91,7 +92,19 @@ interface AdminTicketRow {
   updatedAt: string;
 }
 
+type OrderManagementTab = 'all' | 'list' | 'ticket-queue' | 'ticketing-workflow' | 'processing-workflow';
+
+const resolveOrderManagementTab = (value: unknown): OrderManagementTab => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'list') return 'list';
+  if (normalized === 'ticket-queue') return 'ticket-queue';
+  if (normalized === 'ticketing-workflow') return 'ticketing-workflow';
+  if (normalized === 'processing-workflow') return 'processing-workflow';
+  return 'all';
+};
+
 export default function AdminOrders() {
+  const [searchParams] = useSearchParams();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -113,6 +126,11 @@ export default function AdminOrders() {
   const [ticketAssignedRoleFilter, setTicketAssignedRoleFilter] = useState('');
   const [ticketPage, setTicketPage] = useState(1);
   const [ticketPages, setTicketPages] = useState(1);
+  const activeManagementTab = resolveOrderManagementTab(searchParams.get('tab'));
+  const showOrderList = activeManagementTab === 'all' || activeManagementTab === 'list';
+  const showTicketQueue = activeManagementTab === 'all' || activeManagementTab === 'ticket-queue';
+  const showTicketingWorkflow = activeManagementTab === 'all' || activeManagementTab === 'ticketing-workflow';
+  const showProcessingWorkflow = activeManagementTab === 'all' || activeManagementTab === 'processing-workflow';
 
   useEffect(() => {
     fetchOrders();
@@ -259,6 +277,7 @@ export default function AdminOrders() {
       </div>
 
       {/* Filters */}
+      {showOrderList ? (
       <div className="flex flex-wrap gap-4">
         <div className="flex-1 min-w-[200px]">
           <div className="relative">
@@ -300,8 +319,9 @@ export default function AdminOrders() {
           Filter
         </Button>
       </div>
+      ) : null}
 
-      {workflowSettings ? (
+      {showProcessingWorkflow && workflowSettings ? (
         <div className="bg-white rounded-xl border p-4 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-gray-900">Order Processing Workflow</h2>
@@ -427,7 +447,7 @@ export default function AdminOrders() {
         </div>
       ) : null}
 
-      {ticketingSettings ? (
+      {showTicketingWorkflow && ticketingSettings ? (
         <div className="bg-white rounded-xl border p-4 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-gray-900">Order Ticketing Workflow Controls</h2>
@@ -558,6 +578,7 @@ export default function AdminOrders() {
         </div>
       ) : null}
 
+      {showTicketQueue ? (
       <div className="bg-white rounded-xl border p-4 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-gray-900">Ticket Queue</h2>
@@ -704,8 +725,10 @@ export default function AdminOrders() {
           </Button>
         </div>
       </div>
+      ) : null}
 
       {/* Orders Table */}
+      {showOrderList ? (
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -788,6 +811,7 @@ export default function AdminOrders() {
           </table>
         </div>
       </div>
+      ) : null}
 
       {/* Order Detail Modal */}
       {showDetailModal && selectedOrder && (

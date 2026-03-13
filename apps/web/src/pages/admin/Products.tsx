@@ -1668,6 +1668,7 @@ export default function AdminProducts() {
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Type</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Price</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Status</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Publish State</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Seller/Designer</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Orders</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Actions</th>
@@ -1724,6 +1725,11 @@ export default function AdminProducts() {
                       }
                     >
                       {statusLabel(product)}
+                    </Badge>
+                  </td>
+                  <td className="py-3 px-4">
+                    <Badge variant={product.status === 'APPROVED' && product.isAvailable ? 'green' : 'gray'}>
+                      {product.status === 'APPROVED' && product.isAvailable ? 'PUBLISHED' : 'UNPUBLISHED'}
                     </Badge>
                   </td>
                   <td className="py-3 px-4 text-gray-600">
