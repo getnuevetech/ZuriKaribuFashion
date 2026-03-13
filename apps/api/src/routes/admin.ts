@@ -1962,6 +1962,8 @@ const parseStoredPermissions = (value: unknown) => {
 
 type VendorRole = z.infer<typeof vendorRoleSchema>;
 type VendorProfileStatus = z.infer<typeof vendorProfileStatusSchema>;
+const vendorRoleSqlLiteral = (role: VendorRole) =>
+  role === 'FABRIC_SELLER' ? 'FABRIC_SELLER' : 'FASHION_DESIGNER';
 
 const normalizeVendorProfileStatus = (value: unknown): VendorProfileStatus => {
   const normalized = String(value || '').toUpperCase();
@@ -2010,7 +2012,7 @@ const getVendorProfileFields = async (role: VendorRole) => {
     rows = await prisma.$queryRawUnsafe<Array<any>>(
       `SELECT "id","role","key","label","fieldType",${optionalSelects.join(', ')}
        FROM "VendorProfileField"
-       WHERE "role" = $1
+       WHERE "role"::text = $1
        ORDER BY ${orderBy}`,
       role
     );
@@ -2376,12 +2378,12 @@ router.put('/vendor-profile/fields', async (req, res, next) => {
       fields: z.array(vendorProfileFieldSchema).min(1),
     });
     const payload = schema.parse(req.body);
-    await prisma.$executeRawUnsafe(`DELETE FROM "VendorProfileField" WHERE "role" = $1`, payload.role);
+    await prisma.$executeRawUnsafe(`DELETE FROM "VendorProfileField" WHERE "role"::text = $1`, payload.role);
     for (let index = 0; index < payload.fields.length; index += 1) {
       const field = payload.fields[index];
+      const roleLiteral = vendorRoleSqlLiteral(payload.role);
       const params = [
         randomUUID(),
-        payload.role,
         String(field.key).trim(),
         String(field.label).trim(),
         field.fieldType,
@@ -2398,14 +2400,14 @@ router.put('/vendor-profile/fields', async (req, res, next) => {
         await prisma.$executeRawUnsafe(
           `INSERT INTO "VendorProfileField"
             ("id","role","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive","createdById","updatedById","createdAt","updatedAt")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,NOW(),NOW())`,
+           VALUES ($1,'${roleLiteral}',$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,NOW(),NOW())`,
           ...params
         );
       } catch {
         await prisma.$executeRawUnsafe(
           `INSERT INTO "VendorProfileField"
             ("id","role","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive","createdById","updatedById","createdAt","updatedAt")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW())`,
+           VALUES ($1,'${roleLiteral}',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW())`,
           ...params
         );
       }
@@ -2692,7 +2694,7 @@ router.get('/vendor-profiles/:role/:userId', async (req, res, next) => {
       prisma.$queryRawUnsafe<Array<any>>(
         `SELECT "id","role","userId","businessName","profileStatus","profileData","profileSubmittedAt","profileReviewedAt","profileReviewNotes"
          FROM "VendorProfileSubmission"
-         WHERE "role" = $1 AND "userId" = $2
+         WHERE "role"::text = $1 AND "userId" = $2
          LIMIT 1`,
         role,
         userId
@@ -2767,10 +2769,11 @@ router.patch('/vendor-profiles/:role/:userId/review', async (req, res, next) => 
       .parse(req.body);
 
     const now = new Date();
+    const roleLiteral = vendorRoleSqlLiteral(role);
     await prisma.$executeRawUnsafe(
       `INSERT INTO "VendorProfileSubmission"
         ("id","role","userId","profileStatus","profileReviewNotes","profileReviewedAt","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,NOW())
+       VALUES ($1,'${roleLiteral}',$2,$3,$4,$5,NOW())
        ON CONFLICT ("role","userId")
        DO UPDATE SET
          "profileStatus" = EXCLUDED."profileStatus",
@@ -2778,7 +2781,6 @@ router.patch('/vendor-profiles/:role/:userId/review', async (req, res, next) => 
          "profileReviewedAt" = EXCLUDED."profileReviewedAt",
          "updatedAt" = NOW()`,
       randomUUID(),
-      role,
       userId,
       payload.status,
       payload.notes || null,
