@@ -1224,7 +1224,7 @@ export default function AdminProducts() {
       setSuccess(product.isFeatured ? 'Removed from featured.' : 'Marked as featured.');
     } catch (featureError) {
       console.error('Failed to toggle featured:', featureError);
-      setError('Failed to update featured status.');
+      setError(formatApiError(featureError, 'Failed to update featured status.'));
     } finally {
       setSubmitting(false);
     }

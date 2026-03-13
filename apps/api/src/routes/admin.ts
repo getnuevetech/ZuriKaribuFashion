@@ -3527,7 +3527,28 @@ router.get('/products', async (req, res, next) => {
           },
         });
       } catch (featuredError) {
-        console.warn('[admin/products] Skipping featuredProduct lookup:', featuredError);
+        console.warn('[admin/products] Prisma featuredProduct lookup failed, trying SQL fallback:', featuredError);
+        try {
+          const fallbackRows = await prisma.$queryRawUnsafe<Array<{
+            productId: string;
+            productType: string;
+            section: string;
+            isActive: boolean;
+          }>>(
+            `SELECT "productId", "productType", "section", "isActive"
+             FROM "FeaturedProduct"
+             WHERE "productId" = ANY($1::text[])`,
+            rows.map((row) => row.id)
+          );
+          featuredRows = (Array.isArray(fallbackRows) ? fallbackRows : []).map((row) => ({
+            productId: String(row.productId || ''),
+            productType: String(row.productType || '').toUpperCase() as ProductType,
+            section: String(row.section || ''),
+            isActive: Boolean(row.isActive),
+          }));
+        } catch (fallbackError) {
+          console.warn('[admin/products] SQL featuredProduct fallback also failed:', fallbackError);
+        }
       }
     }
 
@@ -4125,20 +4146,61 @@ router.patch('/products/:type/:id/featured', async (req, res, next) => {
           data: featured,
         });
       } catch (featuredError) {
-        console.warn('[admin/products/featured] Featured upsert fallback failed:', featuredError);
-        return res.json({
-          success: true,
-          message: 'Product updated, but featured settings are unavailable on this deployment.',
-          data: {
-            productId: id,
-            productType,
-            section,
-            isFeatured: false,
-            warning: isSchemaDriftError(featuredError)
-              ? 'FEATURED_SETTINGS_UNAVAILABLE'
-              : 'FEATURED_SETTINGS_WRITE_FAILED',
-          },
-        });
+        console.warn('[admin/products/featured] Prisma featured write failed, trying SQL fallback:', featuredError);
+        try {
+          const nextDisplayOrder = payload.displayOrder ?? 0;
+          const updated = await prisma.$executeRawUnsafe(
+            `UPDATE "FeaturedProduct"
+             SET "isActive" = TRUE,
+                 "displayOrder" = $1,
+                 "updatedAt" = NOW()
+             WHERE "productId" = $2
+               AND "productType" = $3
+               AND "section" = $4`,
+            nextDisplayOrder,
+            id,
+            String(productType),
+            section
+          );
+          if (Number(updated || 0) === 0) {
+            await prisma.$executeRawUnsafe(
+              `INSERT INTO "FeaturedProduct"
+                ("id", "productId", "productType", "section", "displayOrder", "isActive", "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), NOW())`,
+              randomUUID(),
+              id,
+              String(productType),
+              section,
+              nextDisplayOrder
+            );
+          }
+          return res.json({
+            success: true,
+            message: 'Product marked as featured.',
+            data: {
+              productId: id,
+              productType,
+              section,
+              isFeatured: true,
+              displayOrder: nextDisplayOrder,
+            },
+          });
+        } catch (fallbackError) {
+          console.error('[admin/products/featured] SQL featured write fallback failed:', fallbackError);
+          return res.status(503).json({
+            success: false,
+            message: 'Featured settings are unavailable on this deployment. Please run latest API database migrations.',
+            data: {
+              productId: id,
+              productType,
+              section,
+              isFeatured: false,
+              warning: isSchemaDriftError(fallbackError)
+                ? 'FEATURED_SETTINGS_UNAVAILABLE'
+                : 'FEATURED_SETTINGS_WRITE_FAILED',
+            },
+          });
+        }
       }
     }
 
@@ -4151,19 +4213,32 @@ router.patch('/products/:type/:id/featured', async (req, res, next) => {
         },
       });
     } catch (featuredError) {
-      console.warn('[admin/products/featured] Featured delete failed:', featuredError);
-      return res.json({
-        success: true,
-        message: 'Product updated, but featured settings are unavailable on this deployment.',
-        data: {
-          productId: id,
-          productType,
-          isFeatured: false,
-          warning: isSchemaDriftError(featuredError)
-            ? 'FEATURED_SETTINGS_UNAVAILABLE'
-            : 'FEATURED_SETTINGS_WRITE_FAILED',
-        },
-      });
+      console.warn('[admin/products/featured] Prisma featured delete failed, trying SQL fallback:', featuredError);
+      try {
+        await prisma.$executeRawUnsafe(
+          `DELETE FROM "FeaturedProduct"
+           WHERE "productId" = $1
+             AND "productType" = $2
+             ${payload.section ? `AND "section" = $3` : ''}`,
+          ...(payload.section
+            ? [id, String(productType), String(payload.section)]
+            : [id, String(productType)])
+        );
+      } catch (fallbackError) {
+        console.error('[admin/products/featured] SQL featured delete fallback failed:', fallbackError);
+        return res.status(503).json({
+          success: false,
+          message: 'Featured settings are unavailable on this deployment. Please run latest API database migrations.',
+          data: {
+            productId: id,
+            productType,
+            isFeatured: false,
+            warning: isSchemaDriftError(fallbackError)
+              ? 'FEATURED_SETTINGS_UNAVAILABLE'
+              : 'FEATURED_SETTINGS_WRITE_FAILED',
+          },
+        });
+      }
     }
 
     return res.json({
