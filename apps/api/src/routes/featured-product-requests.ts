@@ -838,7 +838,7 @@ router.post('/requests/:id/pay', async (req, res, next) => {
     if (requestColumns.has('activationstartedat')) assignments.push(`"activationStartedAt" = NOW()`);
     if (requestColumns.has('activationendsat')) {
       params.push(endsAt.toISOString());
-      assignments.push(`"activationEndsAt" = $${params.length}`);
+      assignments.push(`"activationEndsAt" = $${params.length}::timestamp`);
     }
     if (requestColumns.has('updatedat')) assignments.push(`"updatedAt" = NOW()`);
     if (assignments.length === 0) {
