@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { prisma, ProductStatus } from '../db';
 import { authenticate, optionalAuth } from '../middleware/auth';
 import { z } from 'zod';
+import { readFabricPredominantColorMap } from '../utils/fabric-attributes';
 
 const router = Router();
 const HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE';
@@ -429,9 +430,11 @@ router.get('/fabrics', async (req, res, next) => {
       }),
       prisma.fabric.count({ where }),
     ]);
+    const colorMap = await readFabricPredominantColorMap(fabrics.map((item) => item.id));
     const labelSettings = await readProductLabelSettings();
     const withLabels = fabrics.map((item) => ({
       ...item,
+      predominantColor: colorMap[item.id] || null,
       productLabels: buildProductLabels({
         productType: 'FABRIC',
         productId: item.id,
@@ -498,11 +501,13 @@ router.get('/fabrics/:id', async (req, res, next) => {
       });
     }
     const labelSettings = await readProductLabelSettings();
+    const colorMap = await readFabricPredominantColorMap([fabric.id]);
 
     res.json({
       success: true,
       data: {
         ...fabric,
+        predominantColor: colorMap[fabric.id] || null,
         productLabels: buildProductLabels({
           productType: 'FABRIC',
           productId: fabric.id,

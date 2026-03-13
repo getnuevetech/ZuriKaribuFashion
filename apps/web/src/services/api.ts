@@ -4103,7 +4103,7 @@ const normalizeFabricDetailPayload = (raw: any) => {
     raw?.pricePerMeter,
     raw?.price
   );
-  const minOrderMeters = toFiniteNumber(raw?.minOrderMeters, raw?.minYards, 1);
+  const minOrderMeters = Math.max(3, toFiniteNumber(raw?.minOrderMeters, raw?.minYards, 3));
   const stockMeters = toFiniteNumber(raw?.stockMeters, raw?.stockYards, 0);
   return {
     ...(raw || {}),
@@ -4460,6 +4460,27 @@ async function probeOrderCreateRoute(paths: string[]) {
       message: String((error as AxiosError)?.response?.data?.message || (error as Error)?.message || ''),
     };
   }
+}
+
+async function updateOrderStatusWithFallback<T>(
+  orderId: string,
+  status: string,
+  extraPaths: string[] = []
+) {
+  const normalizedOrderId = String(orderId || '').trim();
+  const normalizedStatus = String(status || '').trim().toUpperCase();
+  const basePaths = [`/orders/${normalizedOrderId}/status`, `/order/${normalizedOrderId}/status`, ...extraPaths];
+  let lastError: unknown = null;
+  for (const path of basePaths) {
+    try {
+      return await apiService.patch<T>(path, { status: normalizedStatus });
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError ?? new Error('Order status update route not found.');
 }
 
 // Orders API
@@ -6687,7 +6708,10 @@ const sellerApi = {
     apiService.patch(`/fabric-seller/fabrics/${fabricId}/stock`, { stock }),
 
   updateOrderStatus: (orderId: string, status: string) =>
-    apiService.patch(`/orders/${orderId}/status`, { status }),
+    updateOrderStatusWithFallback(orderId, status, [
+      `/fabric-seller/orders/${orderId}/status`,
+      `/seller/orders/${orderId}/status`,
+    ]),
 };
 
 // Designer API
@@ -6827,7 +6851,10 @@ const designerApi = {
   },
 
   updateOrderStatus: (orderId: string, status: string) =>
-    apiService.patch(`/orders/${orderId}/status`, { status }),
+    updateOrderStatusWithFallback(orderId, status, [
+      `/designer/orders/${orderId}/status`,
+      `/fashion-designer/orders/${orderId}/status`,
+    ]),
 };
 
 // QA API

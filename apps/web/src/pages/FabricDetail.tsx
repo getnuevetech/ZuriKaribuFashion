@@ -12,6 +12,7 @@ interface Fabric {
   id: string;
   name: string;
   description: string;
+  predominantColor?: string;
   pricePerMeter: number;
   minOrderMeters: number;
   stockMeters: number;
@@ -57,7 +58,7 @@ export default function FabricDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState(0);
-  const [quantity, setQuantity] = useState(2);
+  const [quantity, setQuantity] = useState(3);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [reviews, setReviews] = useState<ProductReview[]>([]);
@@ -79,7 +80,7 @@ export default function FabricDetail() {
         const response = await api.products.getFabric(id);
         if (response.success) {
           setFabric(response.data);
-          setQuantity(response.data.minOrderMeters || 2);
+          setQuantity(Math.max(3, Number(response.data.minOrderMeters || 3)));
         } else {
           setError('Failed to load fabric details');
         }
@@ -168,7 +169,7 @@ export default function FabricDetail() {
       fabricId: fabric.id,
       fabricName: fabric.name,
       fabricImage: fabric.images?.[selectedImage]?.url || fabric.images?.[0]?.url || '/images/placeholder.jpg',
-      yards: Math.max(1, Number(quantity || 1)),
+      yards: Math.max(3, Number(quantity || 3)),
       pricePerYard: Number(fabric.pricePerMeter || 0),
       sellerName: fabric.seller?.businessName || 'Seller',
     });
@@ -277,6 +278,12 @@ export default function FabricDetail() {
                 {fabric.seller?.country || 'Unknown'}
                 <span className="mx-2">•</span>
                 <span>{fabric.materialType?.name || 'Unknown Material'}</span>
+                {fabric.predominantColor ? (
+                  <>
+                    <span className="mx-2">•</span>
+                    <span>{String(fabric.predominantColor).toUpperCase()}</span>
+                  </>
+                ) : null}
               </div>
               <h1 className="text-3xl font-bold text-gray-900">{fabric.name}</h1>
               <div className="flex items-center gap-4 mt-3">
@@ -299,7 +306,7 @@ export default function FabricDetail() {
               <span className="font-medium">Quantity (yards):</span>
               <div className="flex items-center border">
                 <button
-                  onClick={() => setQuantity(Math.max(fabric.minOrderMeters || 1, quantity - 1))}
+                  onClick={() => setQuantity(Math.max(Math.max(3, Number(fabric.minOrderMeters || 3)), quantity - 1))}
                   className="px-4 py-2 hover:bg-gray-100"
                 >
                   -
@@ -312,7 +319,7 @@ export default function FabricDetail() {
                   +
                 </button>
               </div>
-              <span className="text-sm text-gray-500">Min: {fabric.minOrderMeters || 1} yd</span>
+              <span className="text-sm text-gray-500">Min: {Math.max(3, Number(fabric.minOrderMeters || 3))} yd</span>
             </div>
 
             {/* Total */}
@@ -354,14 +361,15 @@ export default function FabricDetail() {
                   ) : null}
                 </div>
                 <div>
-                  <p className="font-medium">{fabric.seller?.businessName || 'Unknown Seller'}</p>
+                  {storefrontPath ? (
+                    <Link to={storefrontPath} className="font-medium text-black hover:underline">
+                      {fabric.seller?.businessName || 'Unknown Seller'}
+                    </Link>
+                  ) : (
+                    <p className="font-medium">{fabric.seller?.businessName || 'Unknown Seller'}</p>
+                  )}
                   <p className="text-sm text-gray-500">{fabric.seller?.country || 'Unknown'}</p>
                 </div>
-                {storefrontPath ? (
-                  <Link to={storefrontPath} className="ml-auto text-sm font-medium text-black hover:underline">
-                    Visit Storefront
-                  </Link>
-                ) : null}
               </div>
             </div>
 

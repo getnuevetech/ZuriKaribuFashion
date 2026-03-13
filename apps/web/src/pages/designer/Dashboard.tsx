@@ -415,6 +415,23 @@ const decodeReadyVariant = (sizeValue: unknown, colorValue?: unknown) => {
   const color = normalizeReadyVariantColor(rawColor || DEFAULT_READY_TO_WEAR_COLOR);
   return { size, color, variantKey: encodeReadyVariantKey(size, color) };
 };
+
+const READY_COLOR_OPTIONS = [
+  'DEFAULT',
+  'BLACK',
+  'BLUE',
+  'BROWN',
+  'GOLD',
+  'GREEN',
+  'GREY',
+  'MULTI',
+  'ORANGE',
+  'PINK',
+  'PURPLE',
+  'RED',
+  'WHITE',
+  'YELLOW',
+];
 const normalizeImageUrlList = (input: unknown): string[] =>
   (Array.isArray(input) ? input : [])
     .map((entry) => {
@@ -1095,7 +1112,9 @@ export default function DesignerDashboard() {
     try {
       await api.designer.updateOrderStatus(orderId, status);
       fetchDashboardData();
-    } catch (error) {
+    } catch (error: any) {
+      const message = String(error?.response?.data?.message || error?.message || 'Failed to update order status.');
+      setDashboardLoadError(message);
       console.error('Failed to update order status:', error);
     }
   };
@@ -2876,8 +2895,7 @@ export default function DesignerDashboard() {
                       </div>
                       <div className="md:col-span-3">
                         <label className="mb-1 block text-xs font-medium text-gray-600">Color</label>
-                        <input
-                          type="text"
+                        <select
                           value={row.color}
                           onChange={(event) =>
                             setReadyForm((prev) => ({
@@ -2887,10 +2905,18 @@ export default function DesignerDashboard() {
                               ),
                             }))
                           }
-                          placeholder="e.g. Black"
                           className="w-full rounded-lg border px-3 py-2 text-sm"
                           disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants)}
-                        />
+                        >
+                          {!READY_COLOR_OPTIONS.includes(String(row.color || '').toUpperCase()) && row.color ? (
+                            <option value={row.color}>{String(row.color).toUpperCase()}</option>
+                          ) : null}
+                          {READY_COLOR_OPTIONS.map((color) => (
+                            <option key={color} value={color}>
+                              {color}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div className="md:col-span-2">
                         <label className="mb-1 block text-xs font-medium text-gray-600">Price</label>
@@ -3421,7 +3447,10 @@ export default function DesignerDashboard() {
           searchKeys={['orderNumber', 'designName', 'customerName']}
           actions={(item) => (
             <div className="flex gap-2">
-              {canUpdateOrderStatus && ['PENDING', 'PAYMENT_CONFIRMED', 'FABRIC_RECEIVED'].includes(item.status) && (
+              {canUpdateOrderStatus &&
+                ['PENDING', 'CONFIRMED', 'PAYMENT_CONFIRMED', 'FABRIC_CONFIRMED', 'FABRIC_RECEIVED'].includes(
+                  String(item.status || '').toUpperCase()
+                ) && (
                 <Button 
                   size="sm"
                   onClick={() => handleUpdateOrderStatus(item.orderId, 'IN_PRODUCTION')}

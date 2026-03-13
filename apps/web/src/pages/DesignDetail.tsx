@@ -428,19 +428,18 @@ export default function DesignDetail() {
                 )}
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-gray-900">{design.designer.businessName}</h3>
+                {storefrontPath ? (
+                  <Link to={storefrontPath} className="font-semibold text-gray-900 hover:underline">
+                    {design.designer.businessName}
+                  </Link>
+                ) : (
+                  <h3 className="font-semibold text-gray-900">{design.designer.businessName}</h3>
+                )}
                 <div className="flex items-center gap-1 text-sm text-gray-500">
                   <MapPin className="w-4 h-4" />
                   {design.designer.city}, {design.designer.country}
                 </div>
               </div>
-              {storefrontPath ? (
-                <Link to={storefrontPath}>
-                  <Button variant="ghost" size="sm" className="rounded-none border-0 bg-black text-white hover:bg-gray-800">View Storefront</Button>
-                </Link>
-              ) : (
-                <Button variant="ghost" size="sm" className="rounded-none border-0 bg-black text-white hover:bg-gray-800">View Profile</Button>
-              )}
             </div>
 
             {/* Price */}

@@ -2168,6 +2168,16 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
 
     const data = schema.parse(req.body);
     const customerId = req.user!.id;
+    const totalReadyToWearUnits = (Array.isArray(data.items) ? data.items : []).reduce(
+      (sum: number, item: { quantity: number }) => sum + Math.max(0, Number(item.quantity || 0)),
+      0
+    );
+    if (totalReadyToWearUnits > 3) {
+      return res.status(400).json({
+        success: false,
+        message: 'A maximum of 3 products is allowed per order.',
+      });
+    }
 
     const customerProfile = await prisma.customerProfile.findUnique({
       where: { userId: customerId },
@@ -2412,7 +2422,7 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
   try {
     const schema = z.object({
       fabricId: z.string().uuid(),
-      yards: z.number().int().min(1),
+      yards: z.number().int().min(3),
       shippingAddressId: z.string().uuid(),
       paymentMethod: z.string(),
       paymentIntentId: z.string().min(1).optional(),
@@ -2461,6 +2471,13 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
     }
     if (!address) {
       return res.status(404).json({ success: false, message: 'Shipping address not found.' });
+    }
+    const effectiveMinYards = Math.max(3, Number(fabric.minYards || 3));
+    if (Number(data.yards || 0) < effectiveMinYards) {
+      return res.status(400).json({
+        success: false,
+        message: `Minimum order for this fabric is ${effectiveMinYards} yards.`,
+      });
     }
     if (fabric.stockYards < data.yards) {
       return res.status(400).json({

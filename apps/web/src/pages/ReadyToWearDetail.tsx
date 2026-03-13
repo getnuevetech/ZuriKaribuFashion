@@ -632,17 +632,18 @@ export default function ReadyToWearDetail() {
                     ) : null}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-gray-900">{product.designer?.businessName || 'Designer'}</p>
+                    {storefrontPath ? (
+                      <Link to={storefrontPath} className="truncate font-semibold text-gray-900 hover:underline">
+                        {product.designer?.businessName || 'Designer'}
+                      </Link>
+                    ) : (
+                      <p className="truncate font-semibold text-gray-900">{product.designer?.businessName || 'Designer'}</p>
+                    )}
                     <p className="line-clamp-2 text-xs text-gray-500">
                       Innovative designs crafted with African heritage and modern luxury style.
                     </p>
                   </div>
                 </div>
-                {storefrontPath ? (
-                  <Link to={storefrontPath} className="mt-2 inline-flex text-xs font-medium text-black hover:underline">
-                    View Profile
-                  </Link>
-                ) : null}
               </div>
 
               {addToCartMessage ? (

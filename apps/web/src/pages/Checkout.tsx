@@ -679,6 +679,16 @@ export default function Checkout() {
           )}. Please deploy latest API routes before charging payment.`
         );
       }
+      const totalProductUnits = items.reduce((sum, entry: any) => {
+        if (!entry) return sum;
+        if (entry.kind === 'READY_TO_WEAR') {
+          return sum + Math.max(1, Number(entry.quantity || 1));
+        }
+        return sum + 1;
+      }, 0);
+      if (totalProductUnits > 3) {
+        throw new Error('A maximum of 3 products is allowed in a single order. Please reduce cart quantity.');
+      }
       if (shippingQuotes.length > 0 && !selectedShippingQuote) {
         throw new Error('Please select a shipping option to continue.');
       }

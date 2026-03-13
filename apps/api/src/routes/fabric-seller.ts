@@ -15,6 +15,7 @@ import {
 import { readTryOnInsights } from '../utils/try-on-insights';
 import { readTryOnSettings } from '../utils/try-on-settings';
 import { readVendorDashboardGovernanceSettings } from '../utils/vendor-dashboard-governance';
+import { readFabricPredominantColorMap, writeFabricPredominantColor } from '../utils/fabric-attributes';
 
 const router = Router();
 let sellerGovernanceSchemaEnsured = false;
@@ -495,6 +496,7 @@ router.get('/fabrics', async (req, res, next) => {
       fabrics.map(async (item) => [item.id, await getProductCurrencyMetadata('FABRIC', item.id)] as const)
     );
     const metadataByFabricId = new Map<string, any>(metadataRows);
+    const colorMap = await readFabricPredominantColorMap(fabrics.map((item) => item.id));
 
     res.json({
       success: true,
@@ -509,6 +511,7 @@ router.get('/fabrics', async (req, res, next) => {
           listingLocalPrice: Number(currencyMeta?.localPrice || item.sellerPrice || 0),
           listingUsdPrice: Number(currencyMeta?.usdPrice || item.sellerPrice || 0),
           listingExchangeRate: Number(currencyMeta?.exchangeRate || 1),
+          predominantColor: colorMap[item.id] || null,
         };
       }),
     });
@@ -740,9 +743,10 @@ router.post('/fabrics', async (req, res, next) => {
       name: z.string().min(2),
       description: z.string().min(10),
       materialTypeId: z.string().uuid(),
+      predominantColor: z.string().trim().min(2).max(40).optional(),
       sellerPrice: z.number().positive(),
       priceCurrencyCode: z.string().min(3).max(8).optional(),
-      minYards: z.number().min(1),
+      minYards: z.number().min(3),
       stockYards: z.number().min(0),
       images: z.array(z.object({
         url: z.string().url(),
@@ -772,7 +776,7 @@ router.post('/fabrics', async (req, res, next) => {
         materialTypeId: data.materialTypeId,
         sellerPrice: pricing.usdPrice,
         finalPrice,
-        minYards: data.minYards,
+        minYards: Math.max(3, Number(data.minYards || 3)),
         stockYards: data.stockYards,
         status: ProductStatus.PENDING_REVIEW,
         images: {
@@ -803,11 +807,15 @@ router.post('/fabrics', async (req, res, next) => {
       usdPrice: pricing.usdPrice,
       exchangeRate: pricing.usdPerUnit,
     });
+    await writeFabricPredominantColor(fabric.id, data.predominantColor || null);
 
     res.status(201).json({
       success: true,
       message: 'Fabric submitted for review.',
-      data: fabric,
+      data: {
+        ...fabric,
+        predominantColor: data.predominantColor ? String(data.predominantColor).trim().toUpperCase() : null,
+      },
     });
   } catch (error) {
     next(error);
@@ -822,9 +830,10 @@ router.patch('/fabrics/:id', async (req, res, next) => {
       name: z.string().min(2).optional(),
       description: z.string().min(10).optional(),
       materialTypeId: z.string().uuid().optional(),
+      predominantColor: z.string().trim().min(2).max(40).optional(),
       sellerPrice: z.number().positive().optional(),
       priceCurrencyCode: z.string().min(3).max(8).optional(),
-      minYards: z.number().min(1).optional(),
+      minYards: z.number().min(3).optional(),
       stockYards: z.number().min(0).optional(),
       images: z
         .array(
@@ -879,7 +888,7 @@ router.patch('/fabrics/:id', async (req, res, next) => {
         ...(data.description !== undefined ? { description: data.description } : {}),
         ...(data.materialTypeId !== undefined ? { materialTypeId: data.materialTypeId } : {}),
         ...(data.sellerPrice !== undefined ? { sellerPrice: nextSellerPriceUsd } : {}),
-        ...(data.minYards !== undefined ? { minYards: data.minYards } : {}),
+        ...(data.minYards !== undefined ? { minYards: Math.max(3, Number(data.minYards || 3)) } : {}),
         ...(data.stockYards !== undefined ? { stockYards: data.stockYards } : {}),
         finalPrice: nextFinalPrice,
         status: ProductStatus.PENDING_REVIEW,
@@ -914,10 +923,17 @@ router.patch('/fabrics/:id', async (req, res, next) => {
         exchangeRate: pricing.usdPerUnit,
       });
     }
+    if (data.predominantColor !== undefined) {
+      await writeFabricPredominantColor(id, data.predominantColor);
+    }
+    const colorMap = await readFabricPredominantColorMap([id]);
     res.json({
       success: true,
       message: 'Fabric updated successfully.',
-      data: updated,
+      data: {
+        ...updated,
+        predominantColor: colorMap[id] || null,
+      },
     });
   } catch (error) {
     next(error);

@@ -50,6 +50,7 @@ interface Fabric {
   name: string;
   description: string;
   materialTypeId?: string;
+  predominantColor?: string;
   pricePerMeter: number;
   stockMeters: number;
   images: string[];
@@ -94,12 +95,29 @@ interface FabricFormState {
   name: string;
   description: string;
   materialTypeId: string;
+  predominantColor: string;
   sellerPrice: string;
   minYards: string;
   stockYards: string;
   imageUrls: string;
   priceCurrencyCode: string;
 }
+
+const FABRIC_COLOR_OPTIONS = [
+  'BLACK',
+  'BLUE',
+  'BROWN',
+  'GOLD',
+  'GREEN',
+  'GREY',
+  'MULTI',
+  'ORANGE',
+  'PINK',
+  'PURPLE',
+  'RED',
+  'WHITE',
+  'YELLOW',
+];
 
 interface VendorProfileField {
   key: string;
@@ -316,8 +334,9 @@ export default function SellerDashboard() {
     name: '',
     description: '',
     materialTypeId: '',
+    predominantColor: 'MULTI',
     sellerPrice: '',
-    minYards: '1',
+    minYards: '3',
     stockYards: '0',
     imageUrls: '',
     priceCurrencyCode: 'USD',
@@ -490,6 +509,7 @@ export default function SellerDashboard() {
           name: item.name || 'Fabric',
           description: item.description || '',
           materialTypeId: item.materialTypeId || item.materialType?.id || '',
+          predominantColor: String(item.predominantColor || 'MULTI').toUpperCase(),
           pricePerMeter: Number(item.finalPrice ?? item.sellerPrice ?? 0),
           stockMeters: Number(item.stockYards ?? 0),
           images: Array.isArray(item.images)
@@ -498,7 +518,7 @@ export default function SellerDashboard() {
           orderCount: Number(item?._count?.orderItems ?? 0),
           status: item.status || 'DRAFT',
           materialType: item.materialType || { name: 'Material' },
-          minOrderMeters: Number(item.minYards ?? 1),
+          minOrderMeters: Math.max(3, Number(item.minYards ?? 3)),
           isFeatured: Boolean(item.isFeatured),
           featuredSections: Array.isArray(item.featuredSections) ? item.featuredSections : [],
           listingCurrencyCode: String(item.listingCurrencyCode || 'USD'),
@@ -531,7 +551,7 @@ export default function SellerDashboard() {
         const mappedOrders = (ordersRes.data || []).map((item: any) => {
           return {
             id: String(item.id),
-            orderId: String(item.orderId || ''),
+            orderId: String(item.orderId || item.order?.id || item.id || ''),
             orderNumber: item.order?.orderNumber || 'N/A',
             fabricName: item.fabric?.name || 'Fabric',
             meters: Number(item.yards || 0),
@@ -755,7 +775,9 @@ export default function SellerDashboard() {
     try {
       await api.seller.updateOrderStatus(orderId, status);
       fetchDashboardData();
-    } catch (error) {
+    } catch (error: any) {
+      const message = String(error?.response?.data?.message || error?.message || 'Failed to update order status.');
+      setDashboardLoadError(message);
       console.error('Failed to update order status:', error);
     }
   };
@@ -772,8 +794,9 @@ export default function SellerDashboard() {
       name: '',
       description: '',
       materialTypeId: materialOptions[0]?.id || '',
+      predominantColor: 'MULTI',
       sellerPrice: '',
-      minYards: '1',
+      minYards: '3',
       stockYards: '0',
       imageUrls: '',
       priceCurrencyCode: currencyOptions.defaultCurrency || 'USD',
@@ -799,8 +822,9 @@ export default function SellerDashboard() {
       name: fabric.name,
       description: fabric.description || '',
       materialTypeId: fabric.materialTypeId || materialOptions[0]?.id || '',
+      predominantColor: String(fabric.predominantColor || 'MULTI').toUpperCase(),
       sellerPrice: String(fabric.listingLocalPrice || fabric.pricePerMeter || ''),
-      minYards: String(fabric.minOrderMeters || 1),
+      minYards: String(Math.max(3, Number(fabric.minOrderMeters || 3))),
       stockYards: String(fabric.stockMeters || 0),
       imageUrls: (fabric.images || []).join('\n'),
       priceCurrencyCode: String(fabric.listingCurrencyCode || currencyOptions.defaultCurrency || 'USD'),
@@ -887,8 +911,8 @@ export default function SellerDashboard() {
       setProductError('Seller price must be greater than zero.');
       return;
     }
-    if (Number(productForm.minYards || 0) < 1) {
-      setProductError('Minimum yards must be at least 1.');
+    if (Number(productForm.minYards || 0) < 3) {
+      setProductError('Minimum yards must be at least 3.');
       return;
     }
     if (Number(productForm.stockYards || 0) < 0) {
@@ -906,9 +930,10 @@ export default function SellerDashboard() {
         name: productForm.name.trim(),
         description: productForm.description.trim(),
         materialTypeId: productForm.materialTypeId,
+        predominantColor: String(productForm.predominantColor || 'MULTI').toUpperCase(),
         sellerPrice: Number(productForm.sellerPrice || 0),
         priceCurrencyCode: productForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD',
-        minYards: Number(productForm.minYards || 1),
+        minYards: Math.max(3, Number(productForm.minYards || 3)),
         stockYards: Number(productForm.stockYards || 0),
         images,
       };
@@ -1740,7 +1765,8 @@ export default function SellerDashboard() {
           searchKeys={['orderNumber', 'fabricName', 'designerCountry']}
           actions={(item) => (
             <div className="flex gap-2">
-              {canUpdateOrderStatus && item.status === 'CONFIRMED' && (
+              {canUpdateOrderStatus &&
+                ['CONFIRMED', 'FABRIC_CONFIRMED', 'PAYMENT_CONFIRMED'].includes(String(item.status || '').toUpperCase()) && (
                 <Button 
                   size="sm"
                   onClick={() => handleUpdateOrderStatus(item.orderId, 'SHIPPED_TO_DESIGNER')}
@@ -1749,6 +1775,17 @@ export default function SellerDashboard() {
                   Ship
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setSupportInitialTab('details');
+                  setSupportOrderId(item.orderId);
+                }}
+              >
+                <Eye className="w-4 h-4 mr-1" />
+                Details
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
@@ -1819,6 +1856,21 @@ export default function SellerDashboard() {
                   ))}
                 </select>
               </div>
+              <div className={isFieldHidden(dashboardGovernance.fields.materialType) ? 'hidden' : ''}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Predominant Fabric Color</label>
+                <select
+                  value={productForm.predominantColor}
+                  onChange={(e) => setProductForm((prev) => ({ ...prev, predominantColor: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.materialType)}
+                >
+                  {FABRIC_COLOR_OPTIONS.map((color) => (
+                    <option key={color} value={color}>
+                      {color}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className={isFieldHidden(dashboardGovernance.fields.sellerPrice) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Seller Price ({selectedListingCurrency})
@@ -1856,7 +1908,7 @@ export default function SellerDashboard() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Yards</label>
                 <input
                   type="number"
-                  min="1"
+                  min="3"
                   step="1"
                   value={productForm.minYards}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, minYards: e.target.value }))}
