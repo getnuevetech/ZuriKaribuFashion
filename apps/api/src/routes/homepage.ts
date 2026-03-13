@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
@@ -42,6 +43,176 @@ const HOW_IT_WORKS_STYLE_DEFAULTS: HowItWorksStyleSettings = {
   enabled: false,
   iconColor: '#111827',
   iconHoverColor: '#ffffff',
+};
+
+type FeaturedProductRow = {
+  id: string;
+  productId: string;
+  productType: string;
+  section: string;
+  displayOrder: number;
+  isActive: boolean;
+  customTitle?: string | null;
+  customDescription?: string | null;
+};
+
+const isSchemaDriftError = (error: unknown) =>
+  error instanceof Prisma.PrismaClientKnownRequestError &&
+  (error.code === 'P2021' || error.code === 'P2022');
+
+const readFeaturedRowsWithFallback = async (section: string | null, take: number) => {
+  try {
+    const rows = await prisma.featuredProduct.findMany({
+      where: {
+        ...(section ? { section: section as any } : {}),
+        isActive: true,
+      },
+      orderBy: { displayOrder: 'asc' },
+      take,
+    });
+    return rows.map((row) => ({
+      id: String(row.id),
+      productId: String(row.productId),
+      productType: String(row.productType || '').toUpperCase(),
+      section: String(row.section || ''),
+      displayOrder: Number(row.displayOrder || 0),
+      isActive: Boolean(row.isActive),
+      customTitle: row.customTitle ?? null,
+      customDescription: row.customDescription ?? null,
+    })) as FeaturedProductRow[];
+  } catch (error) {
+    if (!isSchemaDriftError(error)) {
+      console.warn('[homepage/featured] Prisma featured query failed, trying SQL fallback:', error);
+    }
+    try {
+      const rows = section
+        ? await prisma.$queryRawUnsafe<any[]>(
+            `SELECT "id", "productId", "productType", "section", "displayOrder", "isActive"
+             FROM "FeaturedProduct"
+             WHERE "isActive" = TRUE
+               AND "section" = $1
+             ORDER BY "displayOrder" ASC
+             LIMIT $2`,
+            section,
+            take
+          )
+        : await prisma.$queryRawUnsafe<any[]>(
+            `SELECT "id", "productId", "productType", "section", "displayOrder", "isActive"
+             FROM "FeaturedProduct"
+             WHERE "isActive" = TRUE
+             ORDER BY "displayOrder" ASC
+             LIMIT $1`,
+            take
+          );
+      return (Array.isArray(rows) ? rows : []).map((row) => ({
+        id: String(row?.id || ''),
+        productId: String(row?.productId || ''),
+        productType: String(row?.productType || '').toUpperCase(),
+        section: String(row?.section || ''),
+        displayOrder: Number(row?.displayOrder || 0),
+        isActive: Boolean(row?.isActive),
+        customTitle: null,
+        customDescription: null,
+      }));
+    } catch (fallbackError) {
+      console.error('[homepage/featured] SQL featured fallback failed:', fallbackError);
+      return [] as FeaturedProductRow[];
+    }
+  }
+};
+
+const hydrateFeaturedProduct = async (fp: FeaturedProductRow) => {
+  if (fp.productType === 'DESIGN') {
+    const product = await prisma.design.findUnique({
+      where: { id: fp.productId },
+      include: {
+        designer: {
+          select: {
+            businessName: true,
+            country: true,
+          },
+        },
+        images: {
+          take: 1,
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!product) return null;
+    return {
+      id: product.id,
+      name: fp.customTitle || product.name,
+      description: fp.customDescription || product.description,
+      price: Number(product.finalPrice ?? product.basePrice ?? 0),
+      image: Array.isArray(product.images) ? product.images[0]?.url || '/images/placeholder.jpg' : '/images/placeholder.jpg',
+      designer: product.designer?.businessName || 'Designer',
+      country: product.designer?.country || '',
+      productType: fp.productType,
+    };
+  }
+
+  if (fp.productType === 'FABRIC') {
+    const product = await prisma.fabric.findUnique({
+      where: { id: fp.productId },
+      include: {
+        seller: {
+          select: {
+            businessName: true,
+            country: true,
+          },
+        },
+        images: {
+          take: 1,
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!product) return null;
+    return {
+      id: product.id,
+      name: fp.customTitle || product.name,
+      description: fp.customDescription || product.description,
+      price: Number(product.finalPrice ?? product.sellerPrice ?? 0),
+      image: Array.isArray(product.images) ? product.images[0]?.url || '/images/placeholder.jpg' : '/images/placeholder.jpg',
+      designer: product.seller?.businessName || 'Fabric Seller',
+      country: product.seller?.country || '',
+      productType: fp.productType,
+    };
+  }
+
+  if (fp.productType === 'READY_TO_WEAR') {
+    const product = await prisma.readyToWear.findUnique({
+      where: { id: fp.productId },
+      include: {
+        designer: {
+          select: {
+            businessName: true,
+            country: true,
+          },
+        },
+        images: {
+          take: 1,
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!product) return null;
+    return {
+      id: product.id,
+      name: fp.customTitle || product.name,
+      description: fp.customDescription || product.description,
+      price: Number(product.basePrice || 0),
+      image: Array.isArray(product.images) ? product.images[0]?.url || '/images/placeholder.jpg' : '/images/placeholder.jpg',
+      designer: product.designer?.businessName || 'Designer',
+      country: product.designer?.country || '',
+      productType: fp.productType,
+    };
+  }
+
+  return null;
 };
 
 let homepageSettingsSchemaEnsured = false;
@@ -307,112 +478,8 @@ router.get('/hero-slides', async (req, res) => {
 router.get('/featured/:section', async (req, res) => {
   try {
     const { section } = req.params;
-
-    const featuredProducts = await prisma.featuredProduct.findMany({
-      where: {
-        section: section as any,
-        isActive: true,
-      },
-      orderBy: { displayOrder: 'asc' },
-      take: 12,
-    });
-
-    // Fetch full product details based on productType
-    const productsWithDetails = await Promise.all(
-      featuredProducts.map(async (fp) => {
-        if (fp.productType === 'DESIGN') {
-          const product = await prisma.design.findUnique({
-            where: { id: fp.productId },
-            include: {
-              designer: {
-                select: {
-                  businessName: true,
-                  country: true,
-                },
-              },
-              images: {
-                take: 1,
-                orderBy: { sortOrder: 'asc' },
-              },
-            },
-          });
-
-          if (!product) return null;
-          return {
-            id: product.id,
-            name: fp.customTitle || product.name,
-            description: fp.customDescription || product.description,
-            price: Number(product.finalPrice),
-            image: product.images[0]?.url || '/images/placeholder.jpg',
-            designer: product.designer.businessName,
-            country: product.designer.country,
-            productType: fp.productType,
-          };
-        }
-
-        if (fp.productType === 'FABRIC') {
-          const product = await prisma.fabric.findUnique({
-            where: { id: fp.productId },
-            include: {
-              seller: {
-                select: {
-                  businessName: true,
-                  country: true,
-                },
-              },
-              images: {
-                take: 1,
-                orderBy: { sortOrder: 'asc' },
-              },
-            },
-          });
-
-          if (!product) return null;
-          return {
-            id: product.id,
-            name: fp.customTitle || product.name,
-            description: fp.customDescription || product.description,
-            price: Number(product.finalPrice),
-            image: product.images[0]?.url || '/images/placeholder.jpg',
-            designer: product.seller.businessName,
-            country: product.seller.country,
-            productType: fp.productType,
-          };
-        }
-
-        if (fp.productType === 'READY_TO_WEAR') {
-          const product = await prisma.readyToWear.findUnique({
-            where: { id: fp.productId },
-            include: {
-              designer: {
-                select: {
-                  businessName: true,
-                  country: true,
-                },
-              },
-              images: {
-                take: 1,
-                orderBy: { sortOrder: 'asc' },
-              },
-            },
-          });
-
-          if (!product) return null;
-          return {
-            id: product.id,
-            name: fp.customTitle || product.name,
-            description: fp.customDescription || product.description,
-            price: Number(product.basePrice),
-            image: product.images[0]?.url || '/images/placeholder.jpg',
-            designer: product.designer.businessName,
-            country: product.designer.country,
-            productType: fp.productType,
-          };
-        }
-
-        return null;
-      })
-    );
+    const featuredProducts = await readFeaturedRowsWithFallback(String(section || '').trim(), 12);
+    const productsWithDetails = await Promise.all(featuredProducts.map((fp) => hydrateFeaturedProduct(fp)));
 
     // Filter out nulls (products that no longer exist)
     const validProducts = productsWithDetails.filter((p) => p !== null);
@@ -437,110 +504,8 @@ router.get('/featured', async (req, res) => {
     const result: Record<string, any[]> = {};
 
     for (const section of sections) {
-      const featuredProducts = await prisma.featuredProduct.findMany({
-        where: {
-          section: section as any,
-          isActive: true,
-        },
-        orderBy: { displayOrder: 'asc' },
-        take: 6,
-      });
-
-      const productsWithDetails = await Promise.all(
-        featuredProducts.map(async (fp) => {
-          if (fp.productType === 'DESIGN') {
-            const product = await prisma.design.findUnique({
-              where: { id: fp.productId },
-              include: {
-                designer: {
-                  select: {
-                    businessName: true,
-                    country: true,
-                  },
-                },
-                images: {
-                  take: 1,
-                  orderBy: { sortOrder: 'asc' },
-                },
-              },
-            });
-
-            if (!product) return null;
-            return {
-              id: product.id,
-              name: fp.customTitle || product.name,
-              description: fp.customDescription || product.description,
-              price: Number(product.finalPrice),
-              image: product.images[0]?.url || '/images/placeholder.jpg',
-              designer: product.designer.businessName,
-              country: product.designer.country,
-              productType: fp.productType,
-            };
-          }
-
-          if (fp.productType === 'FABRIC') {
-            const product = await prisma.fabric.findUnique({
-              where: { id: fp.productId },
-              include: {
-                seller: {
-                  select: {
-                    businessName: true,
-                    country: true,
-                  },
-                },
-                images: {
-                  take: 1,
-                  orderBy: { sortOrder: 'asc' },
-                },
-              },
-            });
-
-            if (!product) return null;
-            return {
-              id: product.id,
-              name: fp.customTitle || product.name,
-              description: fp.customDescription || product.description,
-              price: Number(product.finalPrice),
-              image: product.images[0]?.url || '/images/placeholder.jpg',
-              designer: product.seller.businessName,
-              country: product.seller.country,
-              productType: fp.productType,
-            };
-          }
-
-          if (fp.productType === 'READY_TO_WEAR') {
-            const product = await prisma.readyToWear.findUnique({
-              where: { id: fp.productId },
-              include: {
-                designer: {
-                  select: {
-                    businessName: true,
-                    country: true,
-                  },
-                },
-                images: {
-                  take: 1,
-                  orderBy: { sortOrder: 'asc' },
-                },
-              },
-            });
-
-            if (!product) return null;
-            return {
-              id: product.id,
-              name: fp.customTitle || product.name,
-              description: fp.customDescription || product.description,
-              price: Number(product.basePrice),
-              image: product.images[0]?.url || '/images/placeholder.jpg',
-              designer: product.designer.businessName,
-              country: product.designer.country,
-              productType: fp.productType,
-            };
-          }
-
-          return null;
-        })
-      );
+      const featuredProducts = await readFeaturedRowsWithFallback(section, 6);
+      const productsWithDetails = await Promise.all(featuredProducts.map((fp) => hydrateFeaturedProduct(fp)));
 
       result[section] = productsWithDetails.filter((p) => p !== null);
     }
