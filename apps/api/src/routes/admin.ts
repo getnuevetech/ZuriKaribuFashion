@@ -18,6 +18,7 @@ import {
 } from '../utils/vendor-dashboard-governance';
 import { readTryOnInsights } from '../utils/try-on-insights';
 import { readTryOnSettings, saveTryOnSettings } from '../utils/try-on-settings';
+import { getDefaultVendorProfileFields } from '../utils/vendor-profile-default-fields';
 
 const router = Router();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
@@ -2019,7 +2020,7 @@ const getVendorProfileFields = async (role: VendorRole) => {
   } catch {
     rows = [];
   }
-  return rows.map((row) => ({
+  const mappedRows = rows.map((row) => ({
     ...row,
     required: Boolean(row.required),
     isActive: row.isActive !== false,
@@ -2036,6 +2037,15 @@ const getVendorProfileFields = async (role: VendorRole) => {
               }
             })()
           : [],
+  }));
+  if (mappedRows.length > 0) {
+    return mappedRows;
+  }
+  const defaults = getDefaultVendorProfileFields(role);
+  return defaults.map((field, index) => ({
+    id: `default-${role.toLowerCase()}-${index + 1}`,
+    role,
+    ...field,
   }));
 };
 

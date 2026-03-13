@@ -1077,8 +1077,8 @@ export default function DesignerDashboard() {
       } else if (profileRoutesMissing && statsRes?.success) {
         const fallbackProfile = statsRes.data?.profile || {};
         setProfileCompletion({
-          canUpload: true,
-          profileStatus: 'APPROVED',
+          canUpload: false,
+          profileStatus: 'INCOMPLETE',
           profile: {
             businessName: String(fallbackProfile?.businessName || ''),
             businessEmail: String(fallbackProfile?.businessEmail || ''),
@@ -2052,12 +2052,13 @@ export default function DesignerDashboard() {
     !isFieldHidden(dashboardGovernance.fields.readyVariants);
   const showProfileGovernance = dashboardGovernance.sections.profileGovernance !== false;
   const showStats = dashboardGovernance.sections.stats !== false;
+  const canUploadByProfile = Boolean(profileCompletion?.canUpload);
   const canSubmitProfile = dashboardGovernance.actions.submitProfile !== false;
-  const canAddDesignProduct = dashboardGovernance.actions.addDesignProduct !== false && canUseDesignForm;
-  const canAddReadyProduct = dashboardGovernance.actions.addReadyToWearProduct !== false && canUseReadyForm;
-  const canEditDesignProduct = dashboardGovernance.actions.editDesignProduct !== false && canUseDesignForm;
-  const canEditReadyProduct = dashboardGovernance.actions.editReadyToWearProduct !== false && canUseReadyForm;
-  const canManageReadyStock = dashboardGovernance.actions.manageReadyStock !== false;
+  const canAddDesignProduct = dashboardGovernance.actions.addDesignProduct !== false && canUseDesignForm && canUploadByProfile;
+  const canAddReadyProduct = dashboardGovernance.actions.addReadyToWearProduct !== false && canUseReadyForm && canUploadByProfile;
+  const canEditDesignProduct = dashboardGovernance.actions.editDesignProduct !== false && canUseDesignForm && canUploadByProfile;
+  const canEditReadyProduct = dashboardGovernance.actions.editReadyToWearProduct !== false && canUseReadyForm && canUploadByProfile;
+  const canManageReadyStock = dashboardGovernance.actions.manageReadyStock !== false && canUploadByProfile;
   const canRequestFabricCountryAccess = dashboardGovernance.actions.requestFabricCountryAccess !== false;
   const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false;
   const hasNoDashboardTabs = visibleTabs.length === 0;
@@ -2156,7 +2157,7 @@ export default function DesignerDashboard() {
           <div>
             <h2 className="text-lg font-semibold text-amber-900">Vendor governance profile</h2>
             <p className="text-sm text-amber-800 mt-1">
-              Status: <span className="font-semibold">{profileCompletion?.profileStatus || 'INCOMPLETE'}</span>. Upload restriction is temporarily disabled while governance fields are validated.
+              Status: <span className="font-semibold">{profileCompletion?.profileStatus || 'INCOMPLETE'}</span>. Product upload access is controlled by admin approval.
             </p>
             {profileCompletion?.profileReviewNotes ? (
               <p className="text-sm text-amber-900 mt-1">Admin note: {profileCompletion.profileReviewNotes}</p>

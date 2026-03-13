@@ -738,8 +738,8 @@ export default function SellerDashboard() {
       } else if (profileRoutesMissing && dashboardRes?.success) {
         const fallbackProfile = dashboardRes.data?.profile || {};
         setProfileCompletion({
-          canUpload: true,
-          profileStatus: 'APPROVED',
+          canUpload: false,
+          profileStatus: 'INCOMPLETE',
           profile: {
             businessName: String(fallbackProfile?.businessName || ''),
             businessEmail: String(fallbackProfile?.businessEmail || ''),
@@ -1166,6 +1166,7 @@ export default function SellerDashboard() {
       : Number((localPricePreview * selectedUsdPerUnit).toFixed(2));
   const showProfileGovernance = dashboardGovernance.sections.profileGovernance !== false;
   const showStats = dashboardGovernance.sections.stats !== false;
+  const canUploadByProfile = Boolean(profileCompletion?.canUpload);
   const isFieldHidden = (mode: 'ENABLED' | 'READ_ONLY' | 'HIDDEN') => mode === 'HIDDEN';
   const isFieldReadOnly = (mode: 'ENABLED' | 'READ_ONLY' | 'HIDDEN') => mode === 'READ_ONLY';
   const canUseProductForm =
@@ -1174,9 +1175,9 @@ export default function SellerDashboard() {
     !isFieldHidden(dashboardGovernance.fields.materialType) &&
     !isFieldHidden(dashboardGovernance.fields.sellerPrice) &&
     !isFieldHidden(dashboardGovernance.fields.productImages);
-  const canAddProduct = dashboardGovernance.actions.addProduct !== false && canUseProductForm;
-  const canEditProduct = dashboardGovernance.actions.editProduct !== false && canUseProductForm;
-  const canUpdateStock = dashboardGovernance.actions.updateStock !== false;
+  const canAddProduct = dashboardGovernance.actions.addProduct !== false && canUseProductForm && canUploadByProfile;
+  const canEditProduct = dashboardGovernance.actions.editProduct !== false && canUseProductForm && canUploadByProfile;
+  const canUpdateStock = dashboardGovernance.actions.updateStock !== false && canUploadByProfile;
   const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false;
   const canSubmitProfile = dashboardGovernance.actions.submitProfile !== false;
   const hasNoDashboardTabs = visibleTabs.length === 0;
@@ -1235,7 +1236,7 @@ export default function SellerDashboard() {
           <div>
             <h2 className="text-lg font-semibold text-amber-900">Vendor governance profile</h2>
             <p className="text-sm text-amber-800 mt-1">
-              Status: <span className="font-semibold">{profileCompletion?.profileStatus || 'INCOMPLETE'}</span>. Upload restriction is temporarily disabled while governance fields are validated.
+              Status: <span className="font-semibold">{profileCompletion?.profileStatus || 'INCOMPLETE'}</span>. Product upload access is controlled by admin approval.
             </p>
             {profileCompletion?.profileReviewNotes ? (
               <p className="text-sm text-amber-900 mt-1">Admin note: {profileCompletion.profileReviewNotes}</p>

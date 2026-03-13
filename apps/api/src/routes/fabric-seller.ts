@@ -16,6 +16,7 @@ import { readTryOnInsights } from '../utils/try-on-insights';
 import { readTryOnSettings } from '../utils/try-on-settings';
 import { readVendorDashboardGovernanceSettings } from '../utils/vendor-dashboard-governance';
 import { readFabricPredominantColorMap, writeFabricPredominantColor } from '../utils/fabric-attributes';
+import { getDefaultVendorProfileFields } from '../utils/vendor-profile-default-fields';
 
 const router = Router();
 let sellerGovernanceSchemaEnsured = false;
@@ -296,7 +297,7 @@ async function readSellerProfileFields() {
         .replace(/[^A-Z]/g, '');
     const allowedRoles = new Set(['FABRICSELLER', 'SELLER']);
     const sourceRows = rows.filter((row) => allowedRoles.has(normalizeRoleToken(row.role)));
-    return sourceRows.map((row) => ({
+    const mapped = sourceRows.map((row) => ({
       ...row,
       required: Boolean(row.required),
       isActive: row.isActive !== false,
@@ -314,8 +315,20 @@ async function readSellerProfileFields() {
               })()
             : [],
     }));
+    if (mapped.length > 0) {
+      return mapped;
+    }
+    return getDefaultVendorProfileFields('FABRIC_SELLER').map((field, index) => ({
+      id: `default-fabric-seller-${index + 1}`,
+      role: 'FABRIC_SELLER',
+      ...field,
+    }));
   } catch {
-    return [];
+    return getDefaultVendorProfileFields('FABRIC_SELLER').map((field, index) => ({
+      id: `default-fabric-seller-${index + 1}`,
+      role: 'FABRIC_SELLER',
+      ...field,
+    }));
   }
 }
 
@@ -365,6 +378,21 @@ async function getSellerProfileCompletion(userId: string) {
     profileReviewNotes: submission?.profileReviewNotes || null,
     fields,
   };
+}
+
+async function assertSellerCanManageCatalog(userId: string, action: string) {
+  const completion = await getSellerProfileCompletion(userId);
+  if (!completion) {
+    throw Object.assign(new Error('Seller profile not found.'), { status: 404 });
+  }
+  if (!completion.canUpload) {
+    throw Object.assign(
+      new Error(
+        `Profile approval is required before you can ${action}. Complete and submit your vendor governance profile for admin approval.`
+      ),
+      { status: 403 }
+    );
+  }
 }
 
 async function computeFinalFabricPrice(baseSellerPrice: number, sellerCountry: string) {
@@ -436,7 +464,10 @@ router.get('/dashboard', async (req, res, next) => {
         },
       },
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.status) {
+      return res.status(error.status).json({ success: false, message: error.message || 'Request failed.' });
+    }
     next(error);
   }
 });
@@ -448,7 +479,10 @@ router.get('/dashboard-governance', async (_req, res, next) => {
       success: true,
       data: payload.settings.seller,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.status) {
+      return res.status(error.status).json({ success: false, message: error.message || 'Request failed.' });
+    }
     next(error);
   }
 });
@@ -737,6 +771,7 @@ router.patch('/fabrics/:id/stock', async (req, res, next) => {
     });
     const { stock } = schema.parse(req.body);
 
+    await assertSellerCanManageCatalog(req.user!.id, 'update stock');
     const profile = await resolveSellerProfile(req.user!.id);
 
     if (!profile) {
@@ -792,6 +827,7 @@ router.post('/fabrics', async (req, res, next) => {
     });
 
     const data = schema.parse(req.body);
+    await assertSellerCanManageCatalog(req.user!.id, 'upload products');
     const profile = await resolveSellerProfile(req.user!.id);
     if (!profile) {
       return res.status(404).json({ success: false, message: 'Seller profile not found.' });
@@ -884,6 +920,7 @@ router.patch('/fabrics/:id', async (req, res, next) => {
         .optional(),
     });
     const data = schema.parse(req.body);
+    await assertSellerCanManageCatalog(req.user!.id, 'edit products');
 
     const profile = await resolveSellerProfile(req.user!.id);
     if (!profile) {
@@ -972,7 +1009,10 @@ router.patch('/fabrics/:id', async (req, res, next) => {
         predominantColor: colorMap[id] || null,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.status) {
+      return res.status(error.status).json({ success: false, message: error.message || 'Request failed.' });
+    }
     next(error);
   }
 });

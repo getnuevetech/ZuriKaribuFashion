@@ -271,6 +271,17 @@ export default function AdminVendorProfiles() {
   const [vendorAccounts, setVendorAccounts] = useState<any[]>([]);
   const [vendorAccountSearch, setVendorAccountSearch] = useState('');
   const [vendorAccountStatusFilter, setVendorAccountStatusFilter] = useState('');
+  const [showVendorAccountModal, setShowVendorAccountModal] = useState(false);
+  const [savingVendorAccount, setSavingVendorAccount] = useState(false);
+  const [vendorAccountForm, setVendorAccountForm] = useState({
+    id: '',
+    role: 'FABRIC_SELLER' as VendorRole,
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    status: 'ACTIVE',
+  });
   const [showAddVendorModal, setShowAddVendorModal] = useState(false);
   const [creatingVendor, setCreatingVendor] = useState(false);
   const [newVendor, setNewVendor] = useState({
@@ -405,6 +416,43 @@ export default function AdminVendorProfiles() {
         isActive: true,
       },
     ]);
+  };
+
+  const openVendorAccountModal = (account: any) => {
+    const roleValue = String(account?.role || '').toUpperCase() === 'FABRIC_SELLER' ? 'FABRIC_SELLER' : 'FASHION_DESIGNER';
+    setVendorAccountForm({
+      id: String(account?.id || ''),
+      role: roleValue,
+      firstName: String(account?.firstName || ''),
+      lastName: String(account?.lastName || ''),
+      email: String(account?.email || ''),
+      phone: String(account?.phone || ''),
+      status: String(account?.status || 'ACTIVE').toUpperCase(),
+    });
+    setShowVendorAccountModal(true);
+  };
+
+  const saveVendorAccount = async () => {
+    if (!vendorAccountForm.id) return;
+    setSavingVendorAccount(true);
+    setError('');
+    try {
+      await api.admin.updateUser(vendorAccountForm.id, {
+        firstName: vendorAccountForm.firstName.trim(),
+        lastName: vendorAccountForm.lastName.trim(),
+        email: vendorAccountForm.email.trim(),
+        phone: vendorAccountForm.phone.trim() || null,
+        role: vendorAccountForm.role,
+        status: vendorAccountForm.status,
+      });
+      setSuccess('Vendor account updated successfully.');
+      setShowVendorAccountModal(false);
+      await loadVendorAccounts();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to update vendor account.');
+    } finally {
+      setSavingVendorAccount(false);
+    }
   };
 
   const removeField = (index: number) => {
@@ -823,6 +871,7 @@ export default function AdminVendorProfiles() {
                   <th className="py-2 pr-3">Type</th>
                   <th className="py-2 pr-3">Status</th>
                   <th className="py-2 pr-3">Joined</th>
+                  <th className="py-2">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -855,11 +904,16 @@ export default function AdminVendorProfiles() {
                     <td className="py-2 pr-3">
                       {account.createdAt ? new Date(account.createdAt).toLocaleString() : '-'}
                     </td>
+                    <td className="py-2">
+                      <Button size="sm" variant="outline" onClick={() => openVendorAccountModal(account)}>
+                        Edit
+                      </Button>
+                    </td>
                   </tr>
                 ))}
                 {vendorAccounts.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-gray-500">
+                    <td colSpan={5} className="py-8 text-center text-gray-500">
                       No vendor accounts found.
                     </td>
                   </tr>
@@ -869,6 +923,72 @@ export default function AdminVendorProfiles() {
           </div>
         </div>
       )}
+
+      {showVendorAccountModal ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-2xl rounded-xl bg-white p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-gray-900">Edit Vendor Account</h3>
+              <Button size="sm" variant="outline" onClick={() => setShowVendorAccountModal(false)}>
+                Close
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <input
+                value={vendorAccountForm.firstName}
+                onChange={(e) => setVendorAccountForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                placeholder="First name"
+                className="rounded border px-3 py-2 text-sm"
+              />
+              <input
+                value={vendorAccountForm.lastName}
+                onChange={(e) => setVendorAccountForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                placeholder="Last name"
+                className="rounded border px-3 py-2 text-sm"
+              />
+              <input
+                type="email"
+                value={vendorAccountForm.email}
+                onChange={(e) => setVendorAccountForm((prev) => ({ ...prev, email: e.target.value }))}
+                placeholder="Email"
+                className="rounded border px-3 py-2 text-sm md:col-span-2"
+              />
+              <input
+                value={vendorAccountForm.phone}
+                onChange={(e) => setVendorAccountForm((prev) => ({ ...prev, phone: e.target.value }))}
+                placeholder="Phone"
+                className="rounded border px-3 py-2 text-sm"
+              />
+              <select
+                value={vendorAccountForm.role}
+                onChange={(e) => setVendorAccountForm((prev) => ({ ...prev, role: e.target.value as VendorRole }))}
+                className="rounded border px-3 py-2 text-sm"
+              >
+                <option value="FABRIC_SELLER">Fabric Seller</option>
+                <option value="FASHION_DESIGNER">Fashion Designer</option>
+              </select>
+              <select
+                value={vendorAccountForm.status}
+                onChange={(e) => setVendorAccountForm((prev) => ({ ...prev, status: e.target.value }))}
+                className="rounded border px-3 py-2 text-sm md:col-span-2"
+              >
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="PENDING">PENDING</option>
+                <option value="SUSPENDED">SUSPENDED</option>
+                <option value="REJECTED">REJECTED</option>
+              </select>
+            </div>
+            <div className="mt-5 flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setShowVendorAccountModal(false)}>
+                Cancel
+              </Button>
+              <Button className="flex-1" onClick={saveVendorAccount} disabled={savingVendorAccount}>
+                {savingVendorAccount ? 'Saving...' : 'Save Vendor Account'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {selectedProfile && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">

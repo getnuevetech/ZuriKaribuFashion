@@ -21,6 +21,7 @@ import {
 import { readTryOnInsights } from '../utils/try-on-insights';
 import { readTryOnSettings } from '../utils/try-on-settings';
 import { readVendorDashboardGovernanceSettings } from '../utils/vendor-dashboard-governance';
+import { getDefaultVendorProfileFields } from '../utils/vendor-profile-default-fields';
 
 const router = Router();
 let designerGovernanceSchemaEnsured = false;
@@ -526,7 +527,7 @@ async function readDesignerProfileFields() {
         .replace(/[^A-Z]/g, '');
     const allowedRoles = new Set(['FASHIONDESIGNER', 'DESIGNER']);
     const sourceRows = rows.filter((row) => allowedRoles.has(normalizeRoleToken(row.role)));
-    return sourceRows.map((row) => ({
+    const mapped = sourceRows.map((row) => ({
       ...row,
       required: Boolean(row.required),
       isActive: row.isActive !== false,
@@ -544,8 +545,20 @@ async function readDesignerProfileFields() {
               })()
             : [],
     }));
+    if (mapped.length > 0) {
+      return mapped;
+    }
+    return getDefaultVendorProfileFields('FASHION_DESIGNER').map((field, index) => ({
+      id: `default-fashion-designer-${index + 1}`,
+      role: 'FASHION_DESIGNER',
+      ...field,
+    }));
   } catch {
-    return [];
+    return getDefaultVendorProfileFields('FASHION_DESIGNER').map((field, index) => ({
+      id: `default-fashion-designer-${index + 1}`,
+      role: 'FASHION_DESIGNER',
+      ...field,
+    }));
   }
 }
 
@@ -596,6 +609,21 @@ async function getDesignerProfileCompletion(userId: string) {
     profileReviewNotes: submission?.profileReviewNotes || null,
     fields,
   };
+}
+
+async function assertDesignerCanManageCatalog(userId: string, action: string) {
+  const completion = await getDesignerProfileCompletion(userId);
+  if (!completion) {
+    throw Object.assign(new Error('Designer profile not found.'), { status: 404 });
+  }
+  if (!completion.canUpload) {
+    throw Object.assign(
+      new Error(
+        `Profile approval is required before you can ${action}. Complete and submit your vendor governance profile for admin approval.`
+      ),
+      { status: 403 }
+    );
+  }
 }
 
 async function computeFinalDesignPrice(basePrice: number, designerCountry: string) {
@@ -1321,6 +1349,7 @@ router.post('/designs', async (req, res, next) => {
     });
 
     const data = schema.parse(req.body);
+    await assertDesignerCanManageCatalog(req.user!.id, 'upload products');
     const profile = await resolveDesignerProfile(req.user!.id);
     if (!profile) {
       return res.status(404).json({ success: false, message: 'Designer profile not found.' });
@@ -1479,7 +1508,10 @@ router.post('/designs', async (req, res, next) => {
       message: 'Design submitted for review.',
       data: design,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.status) {
+      return res.status(error.status).json({ success: false, message: error.message || 'Request failed.' });
+    }
     next(error);
   }
 });
@@ -1524,6 +1556,7 @@ router.patch('/designs/:id', async (req, res, next) => {
         .optional(),
     });
     const data = schema.parse(req.body);
+    await assertDesignerCanManageCatalog(req.user!.id, 'edit products');
 
     const profile = await resolveDesignerProfile(req.user!.id);
     if (!profile) {
@@ -1738,7 +1771,10 @@ router.patch('/designs/:id', async (req, res, next) => {
       message: 'Design updated successfully.',
       data: updated,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.status) {
+      return res.status(error.status).json({ success: false, message: error.message || 'Request failed.' });
+    }
     next(error);
   }
 });
@@ -1871,6 +1907,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
     });
 
     const data = schema.parse(req.body);
+    await assertDesignerCanManageCatalog(req.user!.id, 'upload products');
     const allowedSizes = await readAllowedReadyToWearSizes();
     const normalizedSizes = data.sizes.map((row) => ({
       ...row,
@@ -1959,7 +1996,10 @@ router.post('/ready-to-wear', async (req, res, next) => {
           : [],
       },
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.status) {
+      return res.status(error.status).json({ success: false, message: error.message || 'Request failed.' });
+    }
     next(error);
   }
 });
@@ -1998,6 +2038,7 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         .optional(),
     });
     const data = schema.parse(req.body);
+    await assertDesignerCanManageCatalog(req.user!.id, 'edit products');
     const allowedSizes = await readAllowedReadyToWearSizes();
     const normalizedSizes = data.sizes
       ? data.sizes.map((row) => ({
@@ -2132,13 +2173,17 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
           : [],
       },
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.status) {
+      return res.status(error.status).json({ success: false, message: error.message || 'Request failed.' });
+    }
     next(error);
   }
 });
 
 const handleReadyToWearSizeStockUpdate = async (req: any, res: any, next: any) => {
   try {
+    await assertDesignerCanManageCatalog(req.user!.id, 'update stock');
     const { id } = req.params;
     const schema = z.object({
       sizes: z
@@ -2236,7 +2281,10 @@ const handleReadyToWearSizeStockUpdate = async (req: any, res: any, next: any) =
           : [],
       },
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.status) {
+      return res.status(error.status).json({ success: false, message: error.message || 'Request failed.' });
+    }
     next(error);
   }
 };
