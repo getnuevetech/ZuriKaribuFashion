@@ -131,8 +131,31 @@ const normalizeSettings = (value: unknown): FeaturedRequestSettings => {
   };
 };
 
+const executeBestEffort = async (sql: string) => {
+  try {
+    await prisma.$executeRawUnsafe(sql);
+  } catch {
+    // Keep compatibility with restricted production DB users.
+  }
+};
+
+const readTableColumns = async (tableName: string): Promise<Set<string>> => {
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
+      `SELECT "column_name"
+       FROM information_schema.columns
+       WHERE table_schema = current_schema()
+         AND table_name = $1`,
+      tableName
+    );
+    return new Set((Array.isArray(rows) ? rows : []).map((row) => String(row.column_name || '').toLowerCase()));
+  } catch {
+    return new Set();
+  }
+};
+
 async function ensureFeaturedRequestSchema() {
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `CREATE TABLE IF NOT EXISTS "HomepageSectionSetting" (
       "id" TEXT NOT NULL,
       "key" TEXT NOT NULL,
@@ -142,10 +165,10 @@ async function ensureFeaturedRequestSchema() {
       CONSTRAINT "HomepageSectionSetting_pkey" PRIMARY KEY ("id")
     )`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `CREATE UNIQUE INDEX IF NOT EXISTS "HomepageSectionSetting_key_key" ON "HomepageSectionSetting"("key")`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `CREATE TABLE IF NOT EXISTS "FeaturedProductRequest" (
       "id" TEXT NOT NULL,
       "requesterUserId" TEXT NOT NULL,
@@ -172,73 +195,73 @@ async function ensureFeaturedRequestSchema() {
       CONSTRAINT "FeaturedProductRequest_pkey" PRIMARY KEY ("id")
     )`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "requesterUserId" TEXT`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "requesterRole" TEXT`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "requestStatus" TEXT NOT NULL DEFAULT 'PENDING'`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "productEntries" JSONB NOT NULL DEFAULT '[]'::jsonb`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "requestedDurationValue" INT`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "requestedDurationUnit" TEXT`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "requestNotes" TEXT`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "reviewNotes" TEXT`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "approvedDurationValue" INT`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "approvedDurationUnit" TEXT`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "approvedPriceUsd" DECIMAL(10,2)`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'UNPAID'`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "paymentProviderKey" TEXT`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "paymentReference" TEXT`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "approvedByUserId" TEXT`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMP(3)`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "paidAt" TIMESTAMP(3)`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "activationStartedAt" TIMESTAMP(3)`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "activationEndsAt" TIMESTAMP(3)`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `ALTER TABLE "FeaturedProductRequest" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `CREATE INDEX IF NOT EXISTS "FeaturedProductRequest_requester_idx" ON "FeaturedProductRequest"("requesterUserId","createdAt")`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `CREATE INDEX IF NOT EXISTS "FeaturedProductRequest_status_idx" ON "FeaturedProductRequest"("requestStatus","paymentStatus","updatedAt")`
   );
 }
@@ -798,23 +821,36 @@ router.post('/requests/:id/pay', async (req, res, next) => {
     const now = new Date();
     const endsAt = addDuration(now, durationValue, durationUnit);
     const entries = parseProductEntries(current.productEntries);
-    await upsertFeaturedProducts(entries);
+    const requestColumns = await readTableColumns('FeaturedProductRequest');
+    const assignments: string[] = [];
+    const params: unknown[] = [String(current.id)];
+    if (requestColumns.has('paymentstatus')) assignments.push(`"paymentStatus" = 'PAID'`);
+    if (requestColumns.has('paymentproviderkey')) {
+      params.push(String(payload.providerKey || 'MANUAL').toUpperCase());
+      assignments.push(`"paymentProviderKey" = $${params.length}`);
+    }
+    if (requestColumns.has('paymentreference')) {
+      params.push(String(payload.paymentReference).trim());
+      assignments.push(`"paymentReference" = $${params.length}`);
+    }
+    if (requestColumns.has('paidat')) assignments.push(`"paidAt" = NOW()`);
+    if (requestColumns.has('requeststatus')) assignments.push(`"requestStatus" = 'ACTIVE'`);
+    if (requestColumns.has('activationstartedat')) assignments.push(`"activationStartedAt" = NOW()`);
+    if (requestColumns.has('activationendsat')) {
+      params.push(endsAt.toISOString());
+      assignments.push(`"activationEndsAt" = $${params.length}`);
+    }
+    if (requestColumns.has('updatedat')) assignments.push(`"updatedAt" = NOW()`);
+    if (assignments.length === 0) {
+      throw Object.assign(new Error('Featured request table is missing required payment columns.'), { status: 500 });
+    }
     await prisma.$executeRawUnsafe(
       `UPDATE "FeaturedProductRequest"
-       SET "paymentStatus" = 'PAID',
-           "paymentProviderKey" = $2,
-           "paymentReference" = $3,
-           "paidAt" = NOW(),
-           "requestStatus" = 'ACTIVE',
-           "activationStartedAt" = NOW(),
-           "activationEndsAt" = $4::timestamp,
-           "updatedAt" = NOW()
+       SET ${assignments.join(', ')}
        WHERE "id" = $1`,
-      String(current.id),
-      String(payload.providerKey || 'MANUAL').toUpperCase(),
-      String(payload.paymentReference).trim(),
-      endsAt.toISOString()
+      ...params
     );
+    await upsertFeaturedProducts(entries);
     res.json({
       success: true,
       message: 'Featured request payment confirmed and products activated.',
@@ -830,7 +866,10 @@ router.post('/requests/:id/pay', async (req, res, next) => {
     if (error?.status) {
       return res.status(error.status).json({ success: false, message: error.message || 'Request failed.' });
     }
-    next(error);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Featured request payment failed on this deployment.',
+    });
   }
 });
 

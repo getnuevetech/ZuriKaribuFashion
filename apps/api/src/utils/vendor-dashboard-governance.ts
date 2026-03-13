@@ -170,9 +170,33 @@ export const vendorDashboardGovernanceSchema = z.object({
 });
 
 let homepageSectionSchemaEnsured = false;
+const executeBestEffort = async (sql: string) => {
+  try {
+    await prisma.$executeRawUnsafe(sql);
+  } catch {
+    // Keep runtime compatible with deployments that disallow DDL.
+  }
+};
+
+const readHomepageSectionSettingColumns = async (): Promise<Map<string, string>> => {
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<{ column_name: string; udt_name: string }>>(
+      `SELECT "column_name","udt_name"
+       FROM information_schema.columns
+       WHERE table_schema = current_schema()
+         AND table_name = 'HomepageSectionSetting'`
+    );
+    return new Map(
+      (Array.isArray(rows) ? rows : []).map((row) => [String(row.column_name || '').toLowerCase(), String(row.udt_name || '')])
+    );
+  } catch {
+    return new Map();
+  }
+};
+
 const ensureHomepageSectionSettingTable = async () => {
   if (homepageSectionSchemaEnsured) return;
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `CREATE TABLE IF NOT EXISTS "HomepageSectionSetting" (
       "id" TEXT NOT NULL,
       "key" TEXT NOT NULL,
@@ -182,7 +206,7 @@ const ensureHomepageSectionSettingTable = async () => {
       CONSTRAINT "HomepageSectionSetting_pkey" PRIMARY KEY ("id")
     )`
   );
-  await prisma.$executeRawUnsafe(
+  await executeBestEffort(
     `CREATE UNIQUE INDEX IF NOT EXISTS "HomepageSectionSetting_key_key" ON "HomepageSectionSetting"("key")`
   );
   homepageSectionSchemaEnsured = true;
@@ -238,13 +262,29 @@ export const normalizeVendorDashboardGovernanceSettings = (input: unknown): Vend
 
 export const readVendorDashboardGovernanceSettings = async () => {
   await ensureHomepageSectionSettingTable();
-  const rows = await prisma.$queryRawUnsafe<Array<{ id: string; value: unknown; updatedAt: Date | string }>>(
-    `SELECT "id","value","updatedAt"
-     FROM "HomepageSectionSetting"
-     WHERE "key" = $1
-     LIMIT 1`,
-    VENDOR_DASHBOARD_GOVERNANCE_SETTINGS_KEY
-  );
+  const columns = await readHomepageSectionSettingColumns();
+  if (!columns.has('id') || !columns.has('key') || !columns.has('value')) {
+    return {
+      rowId: null as string | null,
+      source: 'DEFAULT' as const,
+      updatedAt: null as string | null,
+      settings: { ...VENDOR_DASHBOARD_GOVERNANCE_DEFAULTS },
+    };
+  }
+  const hasUpdatedAt = columns.has('updatedat');
+  const selectUpdatedAt = hasUpdatedAt ? `, "updatedAt"` : '';
+  let rows: Array<{ id: string; value: unknown; updatedAt?: Date | string }> = [];
+  try {
+    rows = await prisma.$queryRawUnsafe<Array<{ id: string; value: unknown; updatedAt?: Date | string }>>(
+      `SELECT "id","value"${selectUpdatedAt}
+       FROM "HomepageSectionSetting"
+       WHERE "key" = $1
+       LIMIT 1`,
+      VENDOR_DASHBOARD_GOVERNANCE_SETTINGS_KEY
+    );
+  } catch {
+    rows = [];
+  }
   const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
   if (!row) {
     return {
@@ -281,43 +321,90 @@ export const saveVendorDashboardGovernanceSettings = async (input: unknown) => {
   const normalized = normalizeVendorDashboardGovernanceSettings(input);
   const parsed = vendorDashboardGovernanceSchema.parse(normalized);
   const payload = JSON.stringify(parsed);
+  const columns = await readHomepageSectionSettingColumns();
+  const valueType = columns.get('value');
+  const updateValueExpression = valueType === 'jsonb' ? '$1::jsonb' : '$1';
+  const hasCreatedAt = columns.has('createdat');
+  const hasUpdatedAt = columns.has('updatedat');
   const existing = await readVendorDashboardGovernanceSettings();
+  if (columns.size === 0) {
+    if (existing.rowId) {
+      try {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "HomepageSectionSetting"
+           SET "value" = $1::jsonb, "updatedAt" = NOW()
+           WHERE "id" = $2`,
+          payload,
+          existing.rowId
+        );
+      } catch {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "HomepageSectionSetting"
+           SET "value" = $1, "updatedAt" = NOW()
+           WHERE "id" = $2`,
+          payload,
+          existing.rowId
+        );
+      }
+    } else {
+      try {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3::jsonb, NOW(), NOW())`,
+          randomUUID(),
+          VENDOR_DASHBOARD_GOVERNANCE_SETTINGS_KEY,
+          payload
+        );
+      } catch {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, NOW(), NOW())`,
+          randomUUID(),
+          VENDOR_DASHBOARD_GOVERNANCE_SETTINGS_KEY,
+          payload
+        );
+      }
+    }
+    const latest = await readVendorDashboardGovernanceSettings();
+    return latest.settings;
+  }
   if (existing.rowId) {
-    try {
-      await prisma.$executeRawUnsafe(
-        `UPDATE "HomepageSectionSetting"
-         SET "value" = $1::jsonb, "updatedAt" = NOW()
-         WHERE "id" = $2`,
-        payload,
-        existing.rowId
-      );
-    } catch {
-      await prisma.$executeRawUnsafe(
-        `UPDATE "HomepageSectionSetting"
-         SET "value" = $1, "updatedAt" = NOW()
-         WHERE "id" = $2`,
-        payload,
-        existing.rowId
-      );
+    if (!columns.has('id') || !columns.has('value')) {
+      throw Object.assign(new Error('Homepage settings table is missing required columns.'), { status: 500 });
     }
+    const setClauses = [`"value" = ${updateValueExpression}`];
+    const params: unknown[] = [payload];
+    if (hasUpdatedAt) {
+      setClauses.push(`"updatedAt" = NOW()`);
+    }
+    params.push(existing.rowId);
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET ${setClauses.join(', ')}
+       WHERE "id" = $${params.length}`,
+      ...params
+    );
   } else {
-    try {
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3::jsonb, NOW(), NOW())`,
-        randomUUID(),
-        VENDOR_DASHBOARD_GOVERNANCE_SETTINGS_KEY,
-        payload
-      );
-    } catch {
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, NOW(), NOW())`,
-        randomUUID(),
-        VENDOR_DASHBOARD_GOVERNANCE_SETTINGS_KEY,
-        payload
-      );
+    if (!columns.has('id') || !columns.has('key') || !columns.has('value')) {
+      throw Object.assign(new Error('Homepage settings table is missing required columns.'), { status: 500 });
     }
+    const insertColumns = ['"id"', '"key"', '"value"'];
+    const insertValueExpression = valueType === 'jsonb' ? '$3::jsonb' : '$3';
+    const insertValues = ['$1', '$2', insertValueExpression];
+    const params: unknown[] = [randomUUID(), VENDOR_DASHBOARD_GOVERNANCE_SETTINGS_KEY, payload];
+    if (hasCreatedAt) {
+      insertColumns.push('"createdAt"');
+      insertValues.push('NOW()');
+    }
+    if (hasUpdatedAt) {
+      insertColumns.push('"updatedAt"');
+      insertValues.push('NOW()');
+    }
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "HomepageSectionSetting" (${insertColumns.join(', ')})
+       VALUES (${insertValues.join(', ')})`,
+      ...params
+    );
   }
   const latest = await readVendorDashboardGovernanceSettings();
   return latest.settings;

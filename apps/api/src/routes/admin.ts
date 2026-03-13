@@ -2379,7 +2379,16 @@ router.put('/vendor-dashboard-governance', async (req, res, next) => {
         issues: error.issues,
       });
     }
-    next(error);
+    if (error?.status) {
+      return res.status(error.status).json({
+        success: false,
+        message: error.message || 'Failed to update vendor dashboard governance settings.',
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Failed to update vendor dashboard governance settings.',
+    });
   }
 });
 
