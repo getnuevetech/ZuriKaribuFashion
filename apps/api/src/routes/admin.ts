@@ -4091,26 +4091,33 @@ router.patch('/products/:type/:id/featured', async (req, res, next) => {
     if (payload.isFeatured) {
       const section = payload.section || getDefaultFeaturedSectionForType(productType);
       try {
-        const featured = await prisma.featuredProduct.upsert({
+        // Avoid strict upsert ON CONFLICT requirement so deployments missing the
+        // composite unique index can still toggle featured records.
+        const existing = await prisma.featuredProduct.findFirst({
           where: {
-            productId_productType_section: {
-              productId: id,
-              productType,
-              section,
-            },
-          },
-          update: {
-            isActive: true,
-            displayOrder: payload.displayOrder ?? 0,
-          },
-          create: {
             productId: id,
             productType,
             section,
-            displayOrder: payload.displayOrder ?? 0,
-            isActive: true,
           },
+          select: { id: true },
         });
+        const featured = existing
+          ? await prisma.featuredProduct.update({
+              where: { id: existing.id },
+              data: {
+                isActive: true,
+                displayOrder: payload.displayOrder ?? 0,
+              },
+            })
+          : await prisma.featuredProduct.create({
+              data: {
+                productId: id,
+                productType,
+                section,
+                displayOrder: payload.displayOrder ?? 0,
+                isActive: true,
+              },
+            });
 
         return res.json({
           success: true,
@@ -4118,8 +4125,7 @@ router.patch('/products/:type/:id/featured', async (req, res, next) => {
           data: featured,
         });
       } catch (featuredError) {
-        if (!isSchemaDriftError(featuredError)) throw featuredError;
-        console.warn('[admin/products/featured] Skipping featured upsert due to schema drift:', featuredError);
+        console.warn('[admin/products/featured] Featured upsert fallback failed:', featuredError);
         return res.json({
           success: true,
           message: 'Product updated, but featured settings are unavailable on this deployment.',
@@ -4128,7 +4134,9 @@ router.patch('/products/:type/:id/featured', async (req, res, next) => {
             productType,
             section,
             isFeatured: false,
-            warning: 'FEATURED_SETTINGS_UNAVAILABLE',
+            warning: isSchemaDriftError(featuredError)
+              ? 'FEATURED_SETTINGS_UNAVAILABLE'
+              : 'FEATURED_SETTINGS_WRITE_FAILED',
           },
         });
       }
@@ -4143,8 +4151,7 @@ router.patch('/products/:type/:id/featured', async (req, res, next) => {
         },
       });
     } catch (featuredError) {
-      if (!isSchemaDriftError(featuredError)) throw featuredError;
-      console.warn('[admin/products/featured] Skipping featured delete due to schema drift:', featuredError);
+      console.warn('[admin/products/featured] Featured delete failed:', featuredError);
       return res.json({
         success: true,
         message: 'Product updated, but featured settings are unavailable on this deployment.',
@@ -4152,7 +4159,9 @@ router.patch('/products/:type/:id/featured', async (req, res, next) => {
           productId: id,
           productType,
           isFeatured: false,
-          warning: 'FEATURED_SETTINGS_UNAVAILABLE',
+          warning: isSchemaDriftError(featuredError)
+            ? 'FEATURED_SETTINGS_UNAVAILABLE'
+            : 'FEATURED_SETTINGS_WRITE_FAILED',
         },
       });
     }
