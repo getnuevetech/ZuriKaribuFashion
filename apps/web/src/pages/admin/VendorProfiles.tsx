@@ -17,7 +17,8 @@ type FieldType =
   | 'PHONE'
   | 'URL'
   | 'DOCUMENT'
-  | 'IMAGE';
+  | 'IMAGE'
+  | 'IMAGE_DOCUMENT';
 
 const FIELD_TYPES: FieldType[] = [
   'TEXT',
@@ -31,6 +32,7 @@ const FIELD_TYPES: FieldType[] = [
   'URL',
   'DOCUMENT',
   'IMAGE',
+  'IMAGE_DOCUMENT',
 ];
 
 type DashboardToggleMap = Record<string, boolean>;

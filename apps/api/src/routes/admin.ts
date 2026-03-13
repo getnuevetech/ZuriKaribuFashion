@@ -1183,6 +1183,7 @@ const vendorProfileFieldSchema = z.object({
     'URL',
     'DOCUMENT',
     'IMAGE',
+    'IMAGE_DOCUMENT',
   ]),
   required: z.boolean().optional().default(false),
   placeholder: z.string().optional(),

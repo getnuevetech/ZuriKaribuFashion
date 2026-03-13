@@ -7121,6 +7121,40 @@ const uploadApi = {
           : payload?.data,
       };
     }),
+  document: (formData: FormData) =>
+    httpClient.post<{ success: boolean; data: { url: string } }>('/upload/document', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }).then((res) => {
+      const payload = res.data;
+      return {
+        ...payload,
+        data: payload?.data
+          ? {
+              ...payload.data,
+              url: resolveApiAssetUrl(payload.data.url),
+            }
+          : payload?.data,
+      };
+    }),
+  file: (formData: FormData) =>
+    httpClient.post<{ success: boolean; data: { url: string } }>('/upload/file', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }).then((res) => {
+      const payload = res.data;
+      return {
+        ...payload,
+        data: payload?.data
+          ? {
+              ...payload.data,
+              url: resolveApiAssetUrl(payload.data.url),
+            }
+          : payload?.data,
+      };
+    }),
 };
 
 // Homepage API

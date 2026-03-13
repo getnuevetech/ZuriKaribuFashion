@@ -326,6 +326,68 @@ const getSellerProfilePrefillValue = (profile: SellerProfileCompletion['profile'
   return '';
 };
 
+const normalizeVendorFieldType = (fieldType: string) => {
+  const normalized = String(fieldType || '').trim().toUpperCase().replace(/\s+/g, '_');
+  if (
+    normalized === 'IMAGE/DOCUMENT' ||
+    normalized === 'DOCUMENT/IMAGE' ||
+    normalized === 'IMAGE_DOCUMENT' ||
+    normalized === 'DOCUMENT_IMAGE'
+  ) {
+    return 'IMAGE_DOCUMENT';
+  }
+  return normalized;
+};
+
+const isImageFile = (file: File) => {
+  if (String(file.type || '').toLowerCase().startsWith('image/')) return true;
+  const name = String(file.name || '').toLowerCase();
+  return ['.jpg', '.jpeg', '.png', '.webp'].some((ext) => name.endsWith(ext));
+};
+
+const isDocumentFile = (file: File) => {
+  const mime = String(file.type || '').toLowerCase();
+  if (
+    [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'application/rtf',
+      'application/vnd.oasis.opendocument.text',
+    ].includes(mime)
+  ) {
+    return true;
+  }
+  const name = String(file.name || '').toLowerCase();
+  return ['.pdf', '.doc', '.docx', '.txt', '.rtf', '.odt'].some((ext) => name.endsWith(ext));
+};
+
+const parseProfileFileValue = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry || '').trim()).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map((entry) => String(entry || '').trim()).filter(Boolean);
+        }
+      } catch {
+        // no-op
+      }
+    }
+    return trimmed
+      .split(/\n|,/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
 export default function SellerDashboard() {
   const [stats, setStats] = useState<SellerStats | null>(null);
   const [fabrics, setFabrics] = useState<Fabric[]>([]);
@@ -366,6 +428,8 @@ export default function SellerDashboard() {
   });
   const [profileCompletion, setProfileCompletion] = useState<SellerProfileCompletion | null>(null);
   const [profileForm, setProfileForm] = useState<Record<string, string>>({});
+  const [profileFileValues, setProfileFileValues] = useState<Record<string, string[]>>({});
+  const [uploadingProfileField, setUploadingProfileField] = useState<string | null>(null);
   const [submittingProfile, setSubmittingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [, setGovernanceDebug] = useState<GovernanceDebugInfo | null>(null);
@@ -673,11 +737,22 @@ export default function SellerDashboard() {
           fields: effectiveFields,
         });
         const nextProfileForm: Record<string, string> = {};
+        const nextProfileFileValues: Record<string, string[]> = {};
         const dynamicData = completion?.profileData && typeof completion.profileData === 'object'
           ? completion.profileData
           : {};
         for (const field of effectiveFields) {
           const rawValue = (dynamicData as Record<string, unknown>)[field.key];
+          const normalizedFieldType = normalizeVendorFieldType(field.fieldType);
+          if (
+            normalizedFieldType === 'IMAGE' ||
+            normalizedFieldType === 'DOCUMENT' ||
+            normalizedFieldType === 'IMAGE_DOCUMENT'
+          ) {
+            nextProfileFileValues[field.key] = parseProfileFileValue(rawValue);
+            nextProfileForm[field.key] = '';
+            continue;
+          }
           nextProfileForm[field.key] = Array.isArray(rawValue)
             ? rawValue.join(', ')
             : rawValue === undefined || rawValue === null
@@ -685,6 +760,7 @@ export default function SellerDashboard() {
               : String(rawValue);
         }
         setProfileForm(nextProfileForm);
+        setProfileFileValues(nextProfileFileValues);
         if (effectiveFields.length === 0) {
           setProfileMessage('Vendor profile form is not configured yet. Admin must define Fabric Seller fields first.');
         }
@@ -722,10 +798,22 @@ export default function SellerDashboard() {
         };
         setProfileCompletion(syntheticCompletion);
         const nextProfileForm: Record<string, string> = {};
+        const nextProfileFileValues: Record<string, string[]> = {};
         for (const field of configuredProfileFields) {
-          nextProfileForm[field.key] = getSellerProfilePrefillValue(syntheticCompletion.profile, field.key);
+          const normalizedFieldType = normalizeVendorFieldType(String(field.fieldType || ''));
+          if (
+            normalizedFieldType === 'IMAGE' ||
+            normalizedFieldType === 'DOCUMENT' ||
+            normalizedFieldType === 'IMAGE_DOCUMENT'
+          ) {
+            nextProfileFileValues[field.key] = [];
+            nextProfileForm[field.key] = '';
+          } else {
+            nextProfileForm[field.key] = getSellerProfilePrefillValue(syntheticCompletion.profile, field.key);
+          }
         }
         setProfileForm(nextProfileForm);
+        setProfileFileValues(nextProfileFileValues);
         setProfileMessage('Vendor profile form loaded from admin configuration. Complete and submit for admin approval.');
         setGovernanceDebug({
           dashboardCall: settledCallStatus(dashboardResult),
@@ -760,6 +848,7 @@ export default function SellerDashboard() {
           fields: [],
         });
         setProfileForm({});
+        setProfileFileValues({});
         setProfileMessage('Vendor profile form is unavailable because admin profile-field routes are missing on this deployment.');
         setGovernanceDebug({
           dashboardCall: settledCallStatus(dashboardResult),
@@ -775,6 +864,7 @@ export default function SellerDashboard() {
         });
       } else {
         setProfileMessage('Vendor profile form is not configured yet. Please ask admin to define profile fields.');
+        setProfileFileValues({});
         setGovernanceDebug({
           dashboardCall: settledCallStatus(dashboardResult),
           fabricsCall: settledCallStatus(fabricsResult),
@@ -1042,6 +1132,66 @@ export default function SellerDashboard() {
     }
   };
 
+  const handleProfileFieldFileUpload = async (field: VendorProfileField, files: FileList | null) => {
+    const selectedFiles = Array.from(files || []);
+    if (!field?.key || selectedFiles.length === 0) return;
+    const normalizedFieldType = normalizeVendorFieldType(field.fieldType);
+    const invalidFile = selectedFiles.find((file) => {
+      if (normalizedFieldType === 'IMAGE') return !isImageFile(file);
+      if (normalizedFieldType === 'DOCUMENT') return !isDocumentFile(file);
+      if (normalizedFieldType === 'IMAGE_DOCUMENT') return !isImageFile(file) && !isDocumentFile(file);
+      return true;
+    });
+    if (invalidFile) {
+      setProfileMessage(
+        normalizedFieldType === 'IMAGE'
+          ? 'Only image files are allowed for this field.'
+          : normalizedFieldType === 'DOCUMENT'
+            ? 'Only document files are allowed for this field.'
+            : 'Only image or document files are allowed for this field.'
+      );
+      return;
+    }
+    try {
+      setProfileMessage(null);
+      setUploadingProfileField(field.key);
+      const uploadResults = await Promise.all(
+        selectedFiles.map(async (file) => {
+          if (isImageFile(file)) {
+            const data = new FormData();
+            data.append('image', file);
+            const response = await api.upload.image(data);
+            return response.success && response.data?.url ? response.data.url : null;
+          }
+          const data = new FormData();
+          data.append('document', file);
+          const response = await api.upload.document(data);
+          return response.success && response.data?.url ? response.data.url : null;
+        })
+      );
+      const uploadedUrls = uploadResults.filter((url): url is string => Boolean(url));
+      if (uploadedUrls.length === 0) {
+        setProfileMessage('File upload failed. Please try again.');
+        return;
+      }
+      setProfileFileValues((prev) => ({
+        ...prev,
+        [field.key]: Array.from(new Set([...(prev[field.key] || []), ...uploadedUrls])),
+      }));
+    } catch (error: any) {
+      setProfileMessage(error?.response?.data?.message || error?.message || 'Unable to upload file.');
+    } finally {
+      setUploadingProfileField(null);
+    }
+  };
+
+  const handleRemoveProfileFile = (fieldKey: string, fileUrl: string) => {
+    setProfileFileValues((prev) => ({
+      ...prev,
+      [fieldKey]: (prev[fieldKey] || []).filter((entry) => entry !== fileUrl),
+    }));
+  };
+
   const handleSubmitProfile = async () => {
     if (!profileCompletion || !canSubmitProfile) return;
     setProfileMessage(null);
@@ -1050,15 +1200,24 @@ export default function SellerDashboard() {
       const dynamicPayload: Record<string, string | number | boolean | string[]> = {};
       for (const field of activeProfileFields) {
         if (!field?.key) continue;
+        const normalizedFieldType = normalizeVendorFieldType(field.fieldType);
+        if (
+          normalizedFieldType === 'IMAGE' ||
+          normalizedFieldType === 'DOCUMENT' ||
+          normalizedFieldType === 'IMAGE_DOCUMENT'
+        ) {
+          dynamicPayload[field.key] = profileFileValues[field.key] || [];
+          continue;
+        }
         const raw = String(profileForm[field.key] ?? '').trim();
-        if (field.fieldType === 'NUMBER') {
+        if (normalizedFieldType === 'NUMBER') {
           if (!raw) {
             dynamicPayload[field.key] = '';
           } else {
             const parsed = Number(raw);
             dynamicPayload[field.key] = Number.isFinite(parsed) ? parsed : raw;
           }
-        } else if (field.fieldType === 'MULTI_SELECT') {
+        } else if (normalizedFieldType === 'MULTI_SELECT') {
           dynamicPayload[field.key] = raw
             ? raw
                 .split(',')
@@ -1252,9 +1411,20 @@ export default function SellerDashboard() {
           {activeProfileFields.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {activeProfileFields.map((field) => {
-                  const value = profileForm[field.key] || '';
-                  const isTextArea = field.fieldType === 'TEXTAREA';
-                  const isSelect = field.fieldType === 'SELECT' && Array.isArray(field.options) && field.options.length > 0;
+                  const normalizedFieldType = normalizeVendorFieldType(field.fieldType);
+                  const value = String(profileForm[field.key] || '');
+                  const isTextArea = normalizedFieldType === 'TEXTAREA';
+                  const isSelect = normalizedFieldType === 'SELECT' && Array.isArray(field.options) && field.options.length > 0;
+                  const isImageUploadField = normalizedFieldType === 'IMAGE';
+                  const isDocumentUploadField = normalizedFieldType === 'DOCUMENT';
+                  const isMixedUploadField = normalizedFieldType === 'IMAGE_DOCUMENT';
+                  const isUploadField = isImageUploadField || isDocumentUploadField || isMixedUploadField;
+                  const uploadAccept = isImageUploadField
+                    ? '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp'
+                    : isDocumentUploadField
+                      ? '.pdf,.doc,.docx,.txt,.rtf,.odt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.oasis.opendocument.text'
+                      : '.jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.txt,.rtf,.odt,image/jpeg,image/png,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.oasis.opendocument.text';
+                  const uploadedFiles = profileFileValues[field.key] || [];
                   const isCountryField = isCountryGovernanceField(field);
                   const isCityField = isCityGovernanceField(field);
                   return (
@@ -1325,9 +1495,55 @@ export default function SellerDashboard() {
                           onChange={(event) => setProfileForm((prev) => ({ ...prev, [field.key]: event.target.value }))}
                           className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm min-h-[90px]"
                         />
+                      ) : isUploadField ? (
+                        <div className="space-y-2">
+                          <input
+                            type="file"
+                            multiple
+                            accept={uploadAccept}
+                            onChange={(event) => {
+                              handleProfileFieldFileUpload(field, event.target.files);
+                              event.target.value = '';
+                            }}
+                            className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm bg-white"
+                            disabled={uploadingProfileField === field.key}
+                          />
+                          {uploadedFiles.length > 0 ? (
+                            <div className="space-y-1">
+                              {uploadedFiles.map((fileUrl) => (
+                                <div
+                                  key={fileUrl}
+                                  className="flex items-center justify-between gap-2 rounded border border-amber-200 bg-white px-2 py-1"
+                                >
+                                  <a
+                                    href={fileUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="truncate text-xs text-amber-800 hover:underline"
+                                  >
+                                    {fileUrl}
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveProfileFile(field.key, fileUrl)}
+                                    className="text-xs font-medium text-red-600 hover:text-red-700"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-amber-700">
+                              {uploadingProfileField === field.key
+                                ? 'Uploading files...'
+                                : 'No files uploaded yet.'}
+                            </p>
+                          )}
+                        </div>
                       ) : (
                         <input
-                          type={field.fieldType === 'NUMBER' ? 'number' : 'text'}
+                          type={normalizedFieldType === 'NUMBER' ? 'number' : 'text'}
                           value={value}
                           onChange={(event) => setProfileForm((prev) => ({ ...prev, [field.key]: event.target.value }))}
                           placeholder={field.placeholder || ''}
@@ -1350,7 +1566,7 @@ export default function SellerDashboard() {
             <Button
               size="sm"
               onClick={handleSubmitProfile}
-              disabled={submittingProfile || activeProfileFields.length === 0 || !canSubmitProfile}
+              disabled={submittingProfile || Boolean(uploadingProfileField) || activeProfileFields.length === 0 || !canSubmitProfile}
             >
               {submittingProfile ? 'Submitting...' : 'Submit for Admin Approval'}
             </Button>
