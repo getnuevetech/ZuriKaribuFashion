@@ -252,7 +252,7 @@ const normalizeDashboardGovernance = (input: any): DashboardGovernanceSettings =
 });
 
 export default function AdminVendorProfiles() {
-  const [tab, setTab] = useState<'fields' | 'reviews' | 'dashboard'>('fields');
+  const [tab, setTab] = useState<'fields' | 'reviews' | 'dashboard' | 'accounts'>('fields');
   const [role, setRole] = useState<VendorRole>('FABRIC_SELLER');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -268,6 +268,9 @@ export default function AdminVendorProfiles() {
     DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS
   );
   const [savingDashboardGovernance, setSavingDashboardGovernance] = useState(false);
+  const [vendorAccounts, setVendorAccounts] = useState<any[]>([]);
+  const [vendorAccountSearch, setVendorAccountSearch] = useState('');
+  const [vendorAccountStatusFilter, setVendorAccountStatusFilter] = useState('');
   const [showAddVendorModal, setShowAddVendorModal] = useState(false);
   const [creatingVendor, setCreatingVendor] = useState(false);
   const [newVendor, setNewVendor] = useState({
@@ -338,15 +341,41 @@ export default function AdminVendorProfiles() {
     }
   };
 
+  const loadVendorAccounts = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const response = await api.admin.getUsers({
+        search: vendorAccountSearch || undefined,
+        status: vendorAccountStatusFilter || undefined,
+        page: 1,
+        limit: 200,
+      });
+      const rows = Array.isArray(response?.data?.users) ? response.data.users : [];
+      const filtered = rows.filter((user: any) => {
+        const roleValue = String(user?.role || '').toUpperCase();
+        return roleValue === 'FABRIC_SELLER' || roleValue === 'FASHION_DESIGNER';
+      });
+      setVendorAccounts(filtered);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to load vendor accounts.');
+      setVendorAccounts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (tab === 'fields') {
       void loadFields();
     } else if (tab === 'reviews') {
       void loadProfiles();
-    } else {
+    } else if (tab === 'dashboard') {
       void loadDashboardGovernance();
+    } else {
+      void loadVendorAccounts();
     }
-  }, [tab, role, statusFilter]);
+  }, [tab, role, statusFilter, vendorAccountSearch, vendorAccountStatusFilter]);
 
   const saveDashboardGovernance = async () => {
     setSavingDashboardGovernance(true);
@@ -497,6 +526,12 @@ export default function AdminVendorProfiles() {
             className={`pb-3 text-sm font-medium ${tab === 'dashboard' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-500'}`}
           >
             Dashboard Controls
+          </button>
+          <button
+            onClick={() => setTab('accounts')}
+            className={`pb-3 text-sm font-medium ${tab === 'accounts' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-500'}`}
+          >
+            Vendor Accounts
           </button>
         </div>
       </div>
@@ -756,6 +791,85 @@ export default function AdminVendorProfiles() {
         </div>
       )}
 
+      {!loading && tab === 'accounts' && (
+        <div className="space-y-4 rounded-xl border bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-gray-600">All Fabric Seller and Fashion Designer accounts are managed here.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={vendorAccountSearch}
+                onChange={(e) => setVendorAccountSearch(e.target.value)}
+                placeholder="Search vendor accounts..."
+                className="rounded border px-3 py-2 text-sm"
+              />
+              <select
+                value={vendorAccountStatusFilter}
+                onChange={(e) => setVendorAccountStatusFilter(e.target.value)}
+                className="rounded border px-3 py-2 text-sm"
+              >
+                <option value="">All statuses</option>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="PENDING">PENDING</option>
+                <option value="SUSPENDED">SUSPENDED</option>
+                <option value="REJECTED">REJECTED</option>
+              </select>
+            </div>
+          </div>
+          <div className="overflow-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500">
+                  <th className="py-2 pr-3">Account</th>
+                  <th className="py-2 pr-3">Type</th>
+                  <th className="py-2 pr-3">Status</th>
+                  <th className="py-2 pr-3">Joined</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vendorAccounts.map((account) => (
+                  <tr key={String(account.id)} className="border-t">
+                    <td className="py-2 pr-3">
+                      <p className="font-medium text-gray-900">
+                        {`${account.firstName || ''} ${account.lastName || ''}`.trim() || account.email}
+                      </p>
+                      <p className="text-xs text-gray-500">{account.email}</p>
+                    </td>
+                    <td className="py-2 pr-3">
+                      {String(account.role || '').toUpperCase() === 'FABRIC_SELLER' ? 'Fabric Seller' : 'Fashion Designer'}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <Badge
+                        variant={
+                          String(account.status || '').toUpperCase() === 'ACTIVE'
+                            ? 'green'
+                            : String(account.status || '').toUpperCase() === 'SUSPENDED'
+                              ? 'red'
+                              : String(account.status || '').toUpperCase() === 'REJECTED'
+                                ? 'gray'
+                                : 'yellow'
+                        }
+                      >
+                        {String(account.status || 'PENDING').toUpperCase()}
+                      </Badge>
+                    </td>
+                    <td className="py-2 pr-3">
+                      {account.createdAt ? new Date(account.createdAt).toLocaleString() : '-'}
+                    </td>
+                  </tr>
+                ))}
+                {vendorAccounts.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-gray-500">
+                      No vendor accounts found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {selectedProfile && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
           <div className="mx-auto w-full max-w-4xl rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
@@ -878,6 +992,8 @@ export default function AdminVendorProfiles() {
                   });
                   if (tab === 'reviews') {
                     await loadProfiles();
+                  } else if (tab === 'accounts') {
+                    await loadVendorAccounts();
                   }
                 } catch (err: any) {
                   setError(err?.response?.data?.message || 'Failed to create vendor.');

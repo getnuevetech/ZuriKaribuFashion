@@ -47,8 +47,8 @@ interface NavItem {
 const navItems: Record<DashboardType, NavItem[]> = {
   admin: [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-    { label: 'Users', href: '/admin/users', icon: Users },
-    { label: 'Role Management', href: '/admin/roles', icon: Settings },
+    { label: 'Customer Accounts', href: '/admin/customer-accounts', icon: Users },
+    { label: 'Administrator Accounts', href: '/admin/administrator-accounts', icon: User },
     { label: 'Vendor Profiles', href: '/admin/vendor-profiles', icon: Tag },
     { label: 'Session Audit', href: '/admin/session-audit', icon: ClipboardCheck },
     { label: 'Traffic Report', href: '/admin/traffic', icon: Layers },
@@ -112,6 +112,7 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isOrderMenuOpen, setIsOrderMenuOpen] = useState(true);
+  const [isAdminAccountsMenuOpen, setIsAdminAccountsMenuOpen] = useState(true);
   const { user, logout } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -123,6 +124,9 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     if (!userPermissions || userPermissions.length === 0 || userPermissions.includes('*')) return true;
     const permissionByHref: Record<string, string[]> = {
       '/admin/users': ['users:read'],
+      '/admin/customer-accounts': ['users:read'],
+      '/admin/administrator-accounts': ['users:read'],
+      '/admin/administrators': ['users:read'],
       '/admin/roles': ['admin:roles:manage', 'users:read'],
       '/admin/vendor-profiles': ['vendor_profiles:read'],
       '/admin/session-audit': ['session_audit:read'],
@@ -158,6 +162,10 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Ticket Queue', href: '/admin/orders?tab=ticket-queue', icon: ChevronRight },
     { label: 'Ticket Workflow', href: '/admin/orders?tab=ticketing-workflow', icon: ChevronRight },
     { label: 'Processing Workflow', href: '/admin/orders?tab=processing-workflow', icon: ChevronRight },
+  ];
+  const adminAccountsSubmenu = [
+    { label: 'Administrator', href: '/admin/administrators', icon: ChevronRight },
+    { label: 'Role Management', href: '/admin/roles', icon: ChevronRight },
   ];
 
   const handleLogout = () => {
@@ -218,6 +226,70 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                     {isOrderMenuOpen && isSidebarOpen ? (
                       <div className="ml-7 space-y-1">
                         {orderManagementSubmenu.map((subItem) => {
+                          const subUrl = new URL(subItem.href, window.location.origin);
+                          const subTab = subUrl.searchParams.get('tab');
+                          const subActive =
+                            location.pathname === subUrl.pathname &&
+                            (subTab ? currentTab === subTab : !currentTab);
+                          const SubIcon = subItem.icon;
+                          return (
+                            <Link
+                              key={subItem.href}
+                              to={subItem.href}
+                              className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
+                                subActive
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <SubIcon className="h-4 w-4" />
+                              <span>{subItem.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+
+              if (userType === 'admin' && item.href === '/admin/administrator-accounts') {
+                const adminAccountsMenuActive =
+                  location.pathname === '/admin/administrators' || location.pathname === '/admin/roles';
+                const visibleAdminAccountSubmenu = adminAccountsSubmenu.filter((subItem) =>
+                  canAccessAdminNav(subItem.href)
+                );
+                if (visibleAdminAccountSubmenu.length === 0) {
+                  return null;
+                }
+                return (
+                  <div key={item.href} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsAdminAccountsMenuOpen((prev) => !prev)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
+                        adminAccountsMenuActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {isSidebarOpen ? (
+                        <>
+                          <span className="text-sm font-medium">Administrator Accounts</span>
+                          <span className="ml-auto">
+                            {isAdminAccountsMenuOpen ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </span>
+                        </>
+                      ) : null}
+                    </button>
+                    {isAdminAccountsMenuOpen && isSidebarOpen ? (
+                      <div className="ml-7 space-y-1">
+                        {visibleAdminAccountSubmenu.map((subItem) => {
                           const subUrl = new URL(subItem.href, window.location.origin);
                           const subTab = subUrl.searchParams.get('tab');
                           const subActive =

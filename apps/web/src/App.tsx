@@ -146,7 +146,17 @@ function App() {
                   element={<AdminDashboard />}
                 />
                 <Route
-                  path="/admin/users"
+                  path="/admin/customer-accounts"
+                  element={
+                    <AdminPermissionGuard required={['users:read']}>
+                      <AdminUsers />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route path="/admin/users" element={<Navigate to="/admin/customer-accounts" replace />} />
+                <Route path="/admin/administrator-accounts" element={<Navigate to="/admin/administrators" replace />} />
+                <Route
+                  path="/admin/administrators"
                   element={
                     <AdminPermissionGuard required={['users:read']}>
                       <AdminUsers />

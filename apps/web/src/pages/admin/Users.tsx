@@ -1,14 +1,6 @@
-import { useState, useEffect } from 'react';
-import { 
-  Search, 
-  Filter, 
-  XCircle,
-  UserCheck,
-  UserX,
-  Mail,
-  Plus,
-  Edit
-} from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
+import { Search, Filter, XCircle, UserCheck, UserX, Mail, Plus, Edit } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -35,11 +27,15 @@ interface AdminRoleOption {
 }
 
 export default function AdminUsers() {
+  const location = useLocation();
+  const isAdministratorMode = location.pathname.includes('/admin/administrators');
+  const pageTitle = isAdministratorMode ? 'Administrator Accounts' : 'Customer Accounts';
+  const addCtaLabel = isAdministratorMode ? 'Add Administrator' : 'Add Customer';
+  const modalEntityLabel = isAdministratorMode ? 'Administrator' : 'Customer';
   const [users, setUsers] = useState<User[]>([]);
   const [adminRoles, setAdminRoles] = useState<AdminRoleOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showActionModal, setShowActionModal] = useState(false);
@@ -55,7 +51,6 @@ export default function AdminUsers() {
     firstName: '',
     lastName: '',
     password: '',
-    role: 'CUSTOMER',
     status: 'ACTIVE',
     phone: '',
     adminRoleId: '',
@@ -66,14 +61,17 @@ export default function AdminUsers() {
     lastName: '',
     email: '',
     phone: '',
-    role: 'CUSTOMER',
     status: 'ACTIVE',
     adminRoleId: '',
   });
 
   useEffect(() => {
-    void Promise.all([fetchUsers(), fetchAdminRoles()]);
+    void fetchAdminRoles();
   }, []);
+
+  useEffect(() => {
+    void fetchUsers();
+  }, [isAdministratorMode]);
 
   const fetchAdminRoles = async () => {
     try {
@@ -99,11 +97,12 @@ export default function AdminUsers() {
       setLoading(true);
       const response = await api.admin.getUsers({
         search: search || undefined,
-        role: roleFilter || undefined,
+        role: isAdministratorMode ? undefined : 'CUSTOMER',
         status: statusFilter || undefined,
       });
       if (response.success) {
-        const mappedUsers: User[] = response.data.users.map((user: any) => ({
+        const mappedUsers: User[] = response.data.users
+          .map((user: any) => ({
           id: user.id,
           firstName: user.firstName || '',
           lastName: user.lastName || '',
@@ -116,7 +115,12 @@ export default function AdminUsers() {
           createdAt: user.createdAt,
           orderCount: 0,
           adminRoleId: user?.adminProfile?.adminRoleId ? String(user.adminProfile.adminRoleId) : null,
-        }));
+          }))
+          .filter((user) =>
+            isAdministratorMode
+              ? user.role === 'ADMINISTRATOR' || Boolean(user.adminRoleId)
+              : user.role === 'CUSTOMER'
+          );
         setUsers(mappedUsers);
       }
     } catch (error) {
@@ -161,14 +165,14 @@ export default function AdminUsers() {
         firstName: createForm.firstName.trim(),
         lastName: createForm.lastName.trim(),
         password: createForm.password,
-        role: createForm.role,
+        role: isAdministratorMode ? 'ADMINISTRATOR' : 'CUSTOMER',
         status: createForm.status,
         phone: createForm.phone.trim() || undefined,
       });
       if (
         createdResponse?.success &&
         createdResponse?.data?.id &&
-        createForm.role === 'ADMINISTRATOR'
+        isAdministratorMode
       ) {
         await api.admin.updateAdminUserAccess(String(createdResponse.data.id), {
           adminRoleId: createForm.adminRoleId || null,
@@ -180,7 +184,6 @@ export default function AdminUsers() {
         firstName: '',
         lastName: '',
         password: '',
-        role: 'CUSTOMER',
         status: 'ACTIVE',
         phone: '',
         adminRoleId: '',
@@ -202,7 +205,6 @@ export default function AdminUsers() {
       lastName: user.lastName || '',
       email: user.email,
       phone: user.phone || '',
-      role: user.role,
       status: user.status,
       adminRoleId: user.adminRoleId || '',
     });
@@ -219,10 +221,9 @@ export default function AdminUsers() {
         lastName: editForm.lastName.trim(),
         email: editForm.email.trim(),
         phone: editForm.phone.trim() || null,
-        role: editForm.role,
         status: editForm.status,
       });
-      if (editForm.role === 'ADMINISTRATOR') {
+      if (isAdministratorMode) {
         await api.admin.updateAdminUserAccess(editForm.id, {
           adminRoleId: editForm.adminRoleId || null,
         });
@@ -237,12 +238,22 @@ export default function AdminUsers() {
     }
   };
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.fullName.toLowerCase().includes(search.toLowerCase()) ||
-                         user.email.toLowerCase().includes(search.toLowerCase());
-    const matchesRole = !roleFilter || user.role === roleFilter;
+  const adminRoleNameById = useMemo(
+    () =>
+      new Map(
+        adminRoles
+          .filter((item) => item.id)
+          .map((item) => [item.id, item.name])
+      ),
+    [adminRoles]
+  );
+
+  const filteredUsers = users.filter((user) => {
+    const matchesSearch =
+      user.fullName.toLowerCase().includes(search.toLowerCase()) ||
+      user.email.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = !statusFilter || user.status === statusFilter;
-    return matchesSearch && matchesRole && matchesStatus;
+    return matchesSearch && matchesStatus;
   });
 
   if (loading) {
@@ -256,11 +267,11 @@ export default function AdminUsers() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{pageTitle}</h1>
         <div className="flex items-center gap-2">
           <Button onClick={() => setShowCreateModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
-            Add User
+            {addCtaLabel}
           </Button>
           <Button variant="outline">
             <Mail className="w-4 h-4 mr-2" />
@@ -276,25 +287,13 @@ export default function AdminUsers() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Search users..."
+              placeholder={`Search ${isAdministratorMode ? 'administrators' : 'customers'}...`}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border rounded-lg"
             />
           </div>
         </div>
-        <select
-          value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value)}
-          className="px-4 py-2 border rounded-lg"
-        >
-          <option value="">All Roles</option>
-          <option value="CUSTOMER">Customer</option>
-          <option value="FABRIC_SELLER">Fabric Seller</option>
-          <option value="FASHION_DESIGNER">Designer</option>
-          <option value="QA_TEAM">QA Team</option>
-          <option value="ADMINISTRATOR">Administrator</option>
-        </select>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -318,8 +317,12 @@ export default function AdminUsers() {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">User</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Role</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                  {isAdministratorMode ? 'Administrator' : 'Customer'}
+                </th>
+                {isAdministratorMode ? (
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Assigned Admin Role</th>
+                ) : null}
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Status</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Country</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Orders</th>
@@ -343,9 +346,13 @@ export default function AdminUsers() {
                       </div>
                     </div>
                   </td>
-                  <td className="py-3 px-4">
-                    <Badge variant="secondary">{user.role}</Badge>
-                  </td>
+                  {isAdministratorMode ? (
+                    <td className="py-3 px-4">
+                      <Badge variant="secondary">
+                        {user.adminRoleId ? adminRoleNameById.get(user.adminRoleId) || 'Assigned Role' : 'No role assigned'}
+                      </Badge>
+                    </td>
+                  ) : null}
                   <td className="py-3 px-4">
                     <Badge 
                       variant={
@@ -389,7 +396,7 @@ export default function AdminUsers() {
                           <UserX className="w-4 h-4" />
                         </button>
                       )}
-                      {user.status !== 'REJECTED' && user.status !== 'ACTIVE' && user.role !== 'CUSTOMER' && (
+                      {user.status !== 'REJECTED' && user.status !== 'ACTIVE' && isAdministratorMode && (
                         <button
                           onClick={() => openActionModal(user, 'reject')}
                           className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
@@ -441,7 +448,7 @@ export default function AdminUsers() {
       {showCreateModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
           <div className="mx-auto w-full max-w-2xl rounded-2xl bg-white p-6 max-h-[92vh] overflow-hidden">
-            <h3 className="text-xl font-bold mb-4">Add User</h3>
+            <h3 className="text-xl font-bold mb-4">Add {modalEntityLabel}</h3>
             <form onSubmit={handleCreateUser} className="flex h-[calc(92vh-110px)] flex-col">
               <div className="space-y-4 overflow-y-auto pr-1">
               {createError ? (
@@ -485,26 +492,9 @@ export default function AdminUsers() {
               />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <select
-                  value={createForm.role}
-                  onChange={(e) =>
-                    setCreateForm((prev) => ({
-                      ...prev,
-                      role: e.target.value,
-                      adminRoleId: e.target.value === 'ADMINISTRATOR' ? prev.adminRoleId : '',
-                    }))
-                  }
-                  className="px-3 py-2 border rounded-lg"
-                >
-                  <option value="CUSTOMER">Customer</option>
-                  <option value="FABRIC_SELLER">Fabric Seller</option>
-                  <option value="FASHION_DESIGNER">Designer</option>
-                  <option value="QA_TEAM">QA Team</option>
-                  <option value="ADMINISTRATOR">Administrator</option>
-                </select>
-                <select
                   value={createForm.status}
                   onChange={(e) => setCreateForm((prev) => ({ ...prev, status: e.target.value }))}
-                  className="px-3 py-2 border rounded-lg"
+                  className={`px-3 py-2 border rounded-lg ${isAdministratorMode ? '' : 'md:col-span-2'}`}
                 >
                   <option value="ACTIVE">Active</option>
                   <option value="PENDING">Pending</option>
@@ -512,7 +502,7 @@ export default function AdminUsers() {
                   <option value="REJECTED">Rejected</option>
                 </select>
               </div>
-              {createForm.role === 'ADMINISTRATOR' ? (
+              {isAdministratorMode ? (
                 <select
                   value={createForm.adminRoleId}
                   onChange={(e) => setCreateForm((prev) => ({ ...prev, adminRoleId: e.target.value }))}
@@ -541,7 +531,7 @@ export default function AdminUsers() {
                   Cancel
                 </Button>
                 <Button type="submit" className="flex-1" disabled={creating}>
-                  {creating ? 'Creating...' : 'Create User'}
+                  {creating ? 'Creating...' : `Create ${modalEntityLabel}`}
                 </Button>
               </div>
             </form>
@@ -552,7 +542,7 @@ export default function AdminUsers() {
       {showEditModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
           <div className="mx-auto w-full max-w-2xl rounded-2xl bg-white p-6 max-h-[92vh] overflow-hidden">
-            <h3 className="text-xl font-bold mb-4">Edit User Profile</h3>
+            <h3 className="text-xl font-bold mb-4">Edit {modalEntityLabel} Profile</h3>
             <form onSubmit={handleEditUser} className="flex h-[calc(92vh-110px)] flex-col">
               <div className="space-y-4 overflow-y-auto pr-1">
               {editError ? (
@@ -595,26 +585,9 @@ export default function AdminUsers() {
               />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <select
-                  value={editForm.role}
-                  onChange={(e) =>
-                    setEditForm((prev) => ({
-                      ...prev,
-                      role: e.target.value,
-                      adminRoleId: e.target.value === 'ADMINISTRATOR' ? prev.adminRoleId : '',
-                    }))
-                  }
-                  className="px-3 py-2 border rounded-lg"
-                >
-                  <option value="CUSTOMER">Customer</option>
-                  <option value="FABRIC_SELLER">Fabric Seller</option>
-                  <option value="FASHION_DESIGNER">Designer</option>
-                  <option value="QA_TEAM">QA Team</option>
-                  <option value="ADMINISTRATOR">Administrator</option>
-                </select>
-                <select
                   value={editForm.status}
                   onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value }))}
-                  className="px-3 py-2 border rounded-lg"
+                  className={`px-3 py-2 border rounded-lg ${isAdministratorMode ? '' : 'md:col-span-2'}`}
                 >
                   <option value="ACTIVE">Active</option>
                   <option value="PENDING">Pending</option>
@@ -622,7 +595,7 @@ export default function AdminUsers() {
                   <option value="REJECTED">Rejected</option>
                 </select>
               </div>
-              {editForm.role === 'ADMINISTRATOR' ? (
+              {isAdministratorMode ? (
                 <select
                   value={editForm.adminRoleId}
                   onChange={(e) => setEditForm((prev) => ({ ...prev, adminRoleId: e.target.value }))}
