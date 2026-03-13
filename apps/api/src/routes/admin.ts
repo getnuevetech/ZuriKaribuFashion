@@ -2310,10 +2310,7 @@ router.put('/vendor-profile/fields', async (req, res, next) => {
     await prisma.$executeRawUnsafe(`DELETE FROM "VendorProfileField" WHERE "role" = $1`, payload.role);
     for (let index = 0; index < payload.fields.length; index += 1) {
       const field = payload.fields[index];
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO "VendorProfileField"
-          ("id","role","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive","createdById","updatedById","createdAt","updatedAt")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,NOW(),NOW())`,
+      const params = [
         randomUUID(),
         payload.role,
         String(field.key).trim(),
@@ -2326,8 +2323,23 @@ router.put('/vendor-profile/fields', async (req, res, next) => {
         field.sortOrder ?? index + 1,
         field.isActive !== false,
         req.user?.id || null,
-        req.user?.id || null
-      );
+        req.user?.id || null,
+      ];
+      try {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO "VendorProfileField"
+            ("id","role","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive","createdById","updatedById","createdAt","updatedAt")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,NOW(),NOW())`,
+          ...params
+        );
+      } catch {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO "VendorProfileField"
+            ("id","role","key","label","fieldType","placeholder","helpText","required","options","sortOrder","isActive","createdById","updatedById","createdAt","updatedAt")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW())`,
+          ...params
+        );
+      }
     }
     const fields = await getVendorProfileFields(payload.role);
     res.json({
@@ -2335,7 +2347,20 @@ router.put('/vendor-profile/fields', async (req, res, next) => {
       message: 'Vendor profile fields updated successfully.',
       data: { role: payload.role, fields },
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        issues: error.issues,
+      });
+    }
+    if (error?.status) {
+      return res.status(error.status).json({
+        success: false,
+        message: error.message || 'Failed to save vendor profile fields.',
+      });
+    }
     next(error);
   }
 });

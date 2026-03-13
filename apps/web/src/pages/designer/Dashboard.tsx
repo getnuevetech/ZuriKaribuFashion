@@ -974,27 +974,31 @@ export default function DesignerDashboard() {
         }
       }
       const completionPayload = dashboardCompletion || (profileRes?.success ? profileRes.data : null);
-      const dashboardGovernanceFields = statsRes?.success && Array.isArray(statsRes.data?.governanceFields)
-        ? statsRes.data.governanceFields.filter((entry: any) => entry?.isActive !== false)
-        : [];
-      const governanceFields = profileFieldsRes?.success && Array.isArray(profileFieldsRes.data?.fields)
-        ? profileFieldsRes.data.fields.filter((entry: any) => entry?.isActive !== false)
-        : dashboardGovernanceFields;
+      const configuredProfileFields =
+        profileFieldsRes?.success && Array.isArray(profileFieldsRes.data?.fields)
+          ? profileFieldsRes.data.fields.filter((entry: any) => entry?.isActive !== false)
+          : [];
       const completionFieldCount = completionPayload && Array.isArray((completionPayload as any)?.fields)
         ? (completionPayload as any).fields.filter((entry: any) => entry?.isActive !== false).length
         : 0;
       const profileRoutesMissing =
         !dashboardCompletion &&
         completionFieldCount === 0 &&
-        governanceFields.length === 0 &&
+        configuredProfileFields.length === 0 &&
         String(profileCompletionCallStatus).toLowerCase().includes('route not found') &&
         String(profileFieldsCallStatus).toLowerCase().includes('route not found');
       if (completionPayload) {
         const completion = completionPayload as DesignerProfileCompletion;
-        const completionFields = Array.isArray(completion?.fields)
-          ? completion.fields.filter((entry: any) => entry?.isActive !== false)
-          : [];
-        const effectiveFields = completionFields.length > 0 ? completionFields : governanceFields;
+        const configuredKeys = new Set(
+          configuredProfileFields.map((field: any) => String(field?.key || '')).filter(Boolean)
+        );
+        const completionFields =
+          Array.isArray(completion?.fields) && configuredKeys.size > 0
+            ? completion.fields.filter(
+                (entry: any) => entry?.isActive !== false && configuredKeys.has(String(entry?.key || ''))
+              )
+            : [];
+        const effectiveFields = completionFields.length > 0 ? completionFields : configuredProfileFields;
         setProfileMessage(null);
         setProfileCompletion({
           ...completion,
@@ -1014,7 +1018,7 @@ export default function DesignerDashboard() {
         }
         setProfileForm(nextProfileForm);
         if (effectiveFields.length === 0) {
-          setProfileMessage('Vendor governance fields are empty for Fashion Designer. Please verify API deployment and re-save Vendor Profile Governance fields.');
+          setProfileMessage('Vendor profile form is not configured yet. Admin must define Fashion Designer fields first.');
         }
         setGovernanceDebug({
           dashboardCall: settledCallStatus(statsResult),
@@ -1023,11 +1027,14 @@ export default function DesignerDashboard() {
           profileCompletionCall: profileCompletionCallStatus,
           profileFieldsCall: profileFieldsCallStatus,
           completionFieldCount,
-          governanceFieldCount: governanceFields.length,
+          governanceFieldCount: configuredProfileFields.length,
           effectiveFieldCount: effectiveFields.length,
-          sampleFieldKeys: governanceFields.slice(0, 5).map((field: any) => String(field?.key || '')).filter(Boolean),
+          sampleFieldKeys: configuredProfileFields
+            .slice(0, 5)
+            .map((field: any) => String(field?.key || ''))
+            .filter(Boolean),
         });
-      } else if (governanceFields.length > 0) {
+      } else if (configuredProfileFields.length > 0) {
         const fallbackProfile = (statsRes?.success ? statsRes.data?.profile : null) || {};
         const syntheticCompletion: DesignerProfileCompletion = {
           canUpload: false,
@@ -1044,15 +1051,15 @@ export default function DesignerDashboard() {
             storefrontPath: String(fallbackProfile?.storefrontPath || ''),
           },
           profileData: {},
-          fields: governanceFields,
+          fields: configuredProfileFields,
         };
         setProfileCompletion(syntheticCompletion);
         const nextProfileForm: Record<string, string> = {};
-        for (const field of governanceFields) {
+        for (const field of configuredProfileFields) {
           nextProfileForm[field.key] = getDesignerProfilePrefillValue(syntheticCompletion.profile, field.key);
         }
         setProfileForm(nextProfileForm);
-        setProfileMessage('Vendor profile governance loaded directly. Complete and submit for admin approval.');
+        setProfileMessage('Vendor profile form loaded from admin configuration. Complete and submit for admin approval.');
         setGovernanceDebug({
           dashboardCall: settledCallStatus(statsResult),
           designsCall: settledCallStatus(designsResult),
@@ -1060,9 +1067,12 @@ export default function DesignerDashboard() {
           profileCompletionCall: profileCompletionCallStatus,
           profileFieldsCall: profileFieldsCallStatus,
           completionFieldCount,
-          governanceFieldCount: governanceFields.length,
-          effectiveFieldCount: governanceFields.length,
-          sampleFieldKeys: governanceFields.slice(0, 5).map((field: any) => String(field?.key || '')).filter(Boolean),
+          governanceFieldCount: configuredProfileFields.length,
+          effectiveFieldCount: configuredProfileFields.length,
+          sampleFieldKeys: configuredProfileFields
+            .slice(0, 5)
+            .map((field: any) => String(field?.key || ''))
+            .filter(Boolean),
         });
       } else if (profileRoutesMissing && statsRes?.success) {
         const fallbackProfile = statsRes.data?.profile || {};
@@ -1084,7 +1094,7 @@ export default function DesignerDashboard() {
           fields: [],
         });
         setProfileForm({});
-        setProfileMessage(null);
+        setProfileMessage('Vendor profile form is unavailable because admin profile-field routes are missing on this deployment.');
         setGovernanceDebug({
           dashboardCall: settledCallStatus(statsResult),
           designsCall: settledCallStatus(designsResult),
@@ -1092,13 +1102,13 @@ export default function DesignerDashboard() {
           profileCompletionCall: `${profileCompletionCallStatus} (isolated)`,
           profileFieldsCall: `${profileFieldsCallStatus} (isolated)`,
           completionFieldCount,
-          governanceFieldCount: governanceFields.length,
+          governanceFieldCount: configuredProfileFields.length,
           effectiveFieldCount: 0,
           sampleFieldKeys: [],
           error: 'Governance endpoints missing in deployment; compatibility mode enabled.',
         });
       } else {
-        setProfileMessage('Unable to load vendor application fields right now. Please refresh the page.');
+        setProfileMessage('Vendor profile form is not configured yet. Please ask admin to define profile fields.');
         setGovernanceDebug({
           dashboardCall: settledCallStatus(statsResult),
           designsCall: settledCallStatus(designsResult),
@@ -1106,7 +1116,7 @@ export default function DesignerDashboard() {
           profileCompletionCall: profileCompletionCallStatus,
           profileFieldsCall: profileFieldsCallStatus,
           completionFieldCount,
-          governanceFieldCount: governanceFields.length,
+          governanceFieldCount: configuredProfileFields.length,
           effectiveFieldCount: 0,
           sampleFieldKeys: [],
         });
@@ -2245,7 +2255,7 @@ export default function DesignerDashboard() {
             </div>
           ) : (
             <p className="text-sm text-amber-900">
-              Vendor application fields are unavailable right now. Please refresh, or ask admin to re-save Vendor Profile Governance fields.
+              Vendor application form is not configured yet. Admin must create Fashion Designer profile fields first.
             </p>
           )}
 
