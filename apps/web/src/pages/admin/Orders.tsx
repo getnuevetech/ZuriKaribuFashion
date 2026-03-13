@@ -30,6 +30,47 @@ interface Order {
   createdAt: string;
 }
 
+const toFiniteNumber = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const normalizeOrderRow = (input: any): Order => {
+  const customerFirst = String(input?.customer?.firstName || '').trim();
+  const customerLast = String(input?.customer?.lastName || '').trim();
+  const customerName =
+    String(input?.customerName || '').trim() ||
+    [customerFirst, customerLast].filter(Boolean).join(' ').trim() ||
+    'Customer';
+  const designName =
+    String(input?.designName || '').trim() ||
+    String(input?.designOrder?.design?.name || '').trim() ||
+    'N/A';
+  const designerName =
+    String(input?.designerName || '').trim() ||
+    String(input?.designOrder?.design?.designer?.businessName || '').trim() ||
+    'Designer';
+  const fabricSellerName =
+    String(input?.fabricSellerName || '').trim() ||
+    String(input?.fabricOrder?.fabric?.seller?.businessName || '').trim() ||
+    'Seller';
+
+  return {
+    id: String(input?.id || ''),
+    orderNumber: String(input?.orderNumber || '').trim() || 'ORDER',
+    customerName,
+    designName,
+    designerName,
+    fabricSellerName,
+    totalAmount: toFiniteNumber(input?.totalAmount ?? input?.total ?? 0, 0),
+    status: String(input?.status || 'PENDING').toUpperCase(),
+    designStatus: String(input?.designStatus || 'N/A'),
+    fabricStatus: String(input?.fabricStatus || 'N/A'),
+    qaStatus: String(input?.qaStatus || 'N/A'),
+    createdAt: String(input?.createdAt || new Date().toISOString()),
+  };
+};
+
 interface AdminTicketRow {
   id: string;
   orderId: string;
@@ -94,7 +135,8 @@ export default function AdminOrders() {
         status: statusFilter || undefined,
       });
       if (response.success) {
-        setOrders(response.data.orders);
+        const rows = Array.isArray((response.data as any)?.orders) ? (response.data as any).orders : [];
+        setOrders(rows.map((row: any) => normalizeOrderRow(row)));
       }
     } catch (error) {
       console.error('Failed to fetch orders:', error);
@@ -190,10 +232,12 @@ export default function AdminOrders() {
   };
 
   const filteredOrders = orders.filter(order => {
+    const orderNumber = String(order?.orderNumber || '').toLowerCase();
+    const customerName = String(order?.customerName || '').toLowerCase();
     const matchesSearch = 
-      order.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
-      order.customerName.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = !statusFilter || order.status === statusFilter;
+      orderNumber.includes(search.toLowerCase()) ||
+      customerName.includes(search.toLowerCase());
+    const matchesStatus = !statusFilter || String(order?.status || '') === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
