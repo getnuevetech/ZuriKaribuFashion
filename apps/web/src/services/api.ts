@@ -6,6 +6,21 @@ const defaultApiUrl = import.meta.env.DEV
   ? 'http://localhost:3001/api'
   : `${window.location.origin}/api`;
 const API_URL = import.meta.env.VITE_API_URL || defaultApiUrl;
+const resolveApiAssetUrl = (value: unknown): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
+  const normalizedPath = raw.startsWith('/') ? raw : `/${raw}`;
+  const isUploadPath = normalizedPath.startsWith('/uploads/');
+  if (!isUploadPath) return raw;
+  try {
+    const fallbackBase = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
+    const apiBase = new URL(API_URL, fallbackBase);
+    return `${apiBase.origin}${normalizedPath}`;
+  } catch {
+    return normalizedPath;
+  }
+};
 
 // Create axios instance
 const httpClient = axios.create({
@@ -1209,6 +1224,17 @@ const defaultCategoryPageSettings = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY'
   rotatingTitleSize: 32,
 });
 
+const normalizeCategoryPageSettingsPayload = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR', input: any) => {
+  const merged = {
+    ...defaultCategoryPageSettings(pageType),
+    ...(input && typeof input === 'object' ? input : {}),
+  } as any;
+  return {
+    ...merged,
+    bannerImage: resolveApiAssetUrl(merged.bannerImage),
+  };
+};
+
 const resolveActiveFeaturedIdsFromSettings = (settings: any) => {
   if (Array.isArray(settings?.featuredSlots)) {
     return settings.featuredSlots
@@ -1235,7 +1261,7 @@ const optionToPreview = (
   id: String(option?.id || ''),
   name: String(option?.name || '').trim() || 'Product',
   description: String(option?.description || '').trim() || undefined,
-  image: String(option?.image || '').trim(),
+  image: resolveApiAssetUrl(option?.image),
   priceUsd: Number(option?.priceUsd || 0),
   country: String(option?.country || '').trim(),
   ownerName: String(option?.ownerName || '').trim() || 'Seller',
@@ -1366,7 +1392,17 @@ async function readAdminCategoryPageSettingsWithFallback<T>(pageType: 'READY_TO_
   for (const path of [`/category-page-settings/admin/${pageType}`, `/category-page-settings/${pageType}`]) {
     try {
       const response = await apiService.get<any>(path, noCacheRequestConfig());
-      if (response?.data?.settings) writeCategoryPageSettingsFallback(pageType, response.data.settings);
+      if (response?.data?.settings) {
+        const normalizedSettings = normalizeCategoryPageSettingsPayload(pageType, response.data.settings);
+        writeCategoryPageSettingsFallback(pageType, normalizedSettings);
+        return {
+          ...(response || {}),
+          data: {
+            ...(response?.data || {}),
+            settings: normalizedSettings,
+          },
+        } as T;
+      }
       return response as T;
     } catch (error) {
       lastError = error;
@@ -1375,10 +1411,7 @@ async function readAdminCategoryPageSettingsWithFallback<T>(pageType: 'READY_TO_
     }
   }
   if (!isRetryableRouteError(lastError)) throw lastError;
-  const fallbackSettings = {
-    ...defaultCategoryPageSettings(pageType),
-    ...(readCategoryPageSettingsFallback(pageType) || {}),
-  };
+  const fallbackSettings = normalizeCategoryPageSettingsPayload(pageType, readCategoryPageSettingsFallback(pageType) || {});
   return {
     success: true,
     data: {
@@ -1401,7 +1434,17 @@ async function writeAdminCategoryPageSettingsWithFallback<T>(
         method === 'patch'
           ? await apiService.patch<any>(`/category-page-settings/admin/${pageType}`, data)
           : await apiService.put<any>(`/category-page-settings/admin/${pageType}`, data);
-      if (response?.data?.settings) writeCategoryPageSettingsFallback(pageType, response.data.settings);
+      if (response?.data?.settings) {
+        const normalizedSettings = normalizeCategoryPageSettingsPayload(pageType, response.data.settings);
+        writeCategoryPageSettingsFallback(pageType, normalizedSettings);
+        return {
+          ...(response || {}),
+          data: {
+            ...(response?.data || {}),
+            settings: normalizedSettings,
+          },
+        } as T;
+      }
       return response as T;
     } catch (error) {
       lastError = error;
@@ -1409,11 +1452,8 @@ async function writeAdminCategoryPageSettingsWithFallback<T>(
     }
   }
   if (!isRetryableRouteError(lastError)) throw lastError;
-  const current = {
-    ...defaultCategoryPageSettings(pageType),
-    ...(readCategoryPageSettingsFallback(pageType) || {}),
-  };
-  const settings = { ...current, ...(data || {}) };
+  const current = normalizeCategoryPageSettingsPayload(pageType, readCategoryPageSettingsFallback(pageType) || {});
+  const settings = normalizeCategoryPageSettingsPayload(pageType, { ...current, ...(data || {}) });
   writeCategoryPageSettingsFallback(pageType, settings);
   return {
     success: true,
@@ -1509,7 +1549,7 @@ async function readPublicCategoryPageSettingsWithFallback<T>(
   for (const path of [`/category-page-settings/${pageType}`, `/category-page-settings/admin/${pageType}`]) {
     try {
       const response = await apiService.get<any>(path, noCacheRequestConfig());
-      const settings = { ...defaultCategoryPageSettings(pageType), ...(response?.data?.settings || {}) };
+      const settings = normalizeCategoryPageSettingsPayload(pageType, response?.data?.settings || {});
       writeCategoryPageSettingsFallback(pageType, settings);
 
       let featuredProducts = Array.isArray(response?.data?.featuredProducts) ? response.data.featuredProducts : [];
@@ -1557,10 +1597,7 @@ async function readPublicCategoryPageSettingsWithFallback<T>(
     }
   }
   if (!isRetryableRouteError(lastError)) throw lastError;
-  const settings = {
-    ...defaultCategoryPageSettings(pageType),
-    ...(readCategoryPageSettingsFallback(pageType) || {}),
-  };
+  const settings = normalizeCategoryPageSettingsPayload(pageType, readCategoryPageSettingsFallback(pageType) || {});
   let featuredProducts: any[] = [];
   let rotatingProducts: any[] = [];
   try {
@@ -4052,7 +4089,7 @@ const toFiniteNumber = (...values: any[]) => {
 
 const normalizeImageUrls = (images: any): string[] =>
   (Array.isArray(images) ? images : [])
-    .map((entry) => String(entry?.url || entry || '').trim())
+    .map((entry) => resolveApiAssetUrl(entry?.url || entry))
     .filter(Boolean);
 
 const normalizeImageObjects = (images: any): Array<{ url: string }> =>
@@ -6918,7 +6955,18 @@ const uploadApi = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-    }).then((res) => res.data),
+    }).then((res) => {
+      const payload = res.data;
+      return {
+        ...payload,
+        data: payload?.data
+          ? {
+              ...payload.data,
+              url: resolveApiAssetUrl(payload.data.url),
+            }
+          : payload?.data,
+      };
+    }),
 };
 
 // Homepage API
