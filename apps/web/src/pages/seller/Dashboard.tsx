@@ -528,6 +528,10 @@ export default function SellerDashboard() {
         profileFieldsRes = profileFieldsResult.status === 'fulfilled' ? profileFieldsResult.value : null;
         profileCompletionCallStatus = settledCallStatus(profileResult);
         profileFieldsCallStatus = settledCallStatus(profileFieldsResult);
+      } else {
+        const profileFieldsResult = await Promise.allSettled([api.seller.getProfileFields()]);
+        profileFieldsRes = profileFieldsResult[0]?.status === 'fulfilled' ? profileFieldsResult[0].value : null;
+        profileFieldsCallStatus = settledCallStatus(profileFieldsResult[0] as PromiseSettledResult<any>);
       }
 
       if (dashboardRes?.success) {
@@ -635,10 +639,16 @@ export default function SellerDashboard() {
         }
       }
       const completionPayload = dashboardCompletion || (profileRes?.success ? profileRes.data : null);
-      const configuredProfileFields =
+      const profileFieldsFromEndpoint =
         profileFieldsRes?.success && Array.isArray(profileFieldsRes.data?.fields)
           ? profileFieldsRes.data.fields.filter((entry: any) => entry?.isActive !== false)
           : [];
+      const profileFieldsFromCompletion =
+        completionPayload && Array.isArray((completionPayload as any)?.fields)
+          ? (completionPayload as any).fields.filter((entry: any) => entry?.isActive !== false)
+          : [];
+      const configuredProfileFields =
+        profileFieldsFromEndpoint.length > 0 ? profileFieldsFromEndpoint : profileFieldsFromCompletion;
       const completionFieldCount = completionPayload && Array.isArray((completionPayload as any)?.fields)
         ? (completionPayload as any).fields.filter((entry: any) => entry?.isActive !== false).length
         : 0;
@@ -655,9 +665,11 @@ export default function SellerDashboard() {
           configuredProfileFields.map((field: any) => String(field?.key || '')).filter(Boolean)
         );
         const completionFields =
-          Array.isArray(completion?.fields) && configuredKeys.size > 0
+          Array.isArray(completion?.fields)
             ? completion.fields.filter(
-                (entry: any) => entry?.isActive !== false && configuredKeys.has(String(entry?.key || ''))
+                (entry: any) =>
+                  entry?.isActive !== false &&
+                  (configuredKeys.size === 0 || configuredKeys.has(String(entry?.key || '')))
               )
             : [];
         const effectiveFields = completionFields.length > 0 ? completionFields : configuredProfileFields;
