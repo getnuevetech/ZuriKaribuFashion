@@ -2,7 +2,7 @@ import { Clock, User, ShoppingBag, Package, CheckCircle, AlertCircle } from 'luc
 
 interface Activity {
   id: string;
-  type: 'order' | 'user' | 'product' | 'review' | 'inventory' | 'system';
+  type: 'order' | 'shipping' | 'user' | 'product' | 'review' | 'inventory' | 'system';
   title: string;
   description: string;
   timestamp: string;
@@ -20,6 +20,7 @@ interface ActivityFeedProps {
 
 const typeConfig = {
   order: { icon: ShoppingBag, color: 'bg-blue-100 text-blue-600' },
+  shipping: { icon: Package, color: 'bg-indigo-100 text-indigo-600' },
   user: { icon: User, color: 'bg-green-100 text-green-600' },
   product: { icon: Package, color: 'bg-purple-100 text-purple-600' },
   review: { icon: CheckCircle, color: 'bg-amber-100 text-amber-600' },
@@ -50,7 +51,7 @@ export default function ActivityFeed({ activities, title = 'Recent Activity', ma
       <div className="p-4">
         <div className="space-y-4">
           {displayActivities.map((activity) => {
-            const config = typeConfig[activity.type];
+            const config = typeConfig[activity.type] || typeConfig.system;
             const Icon = config.icon;
             
             return (
