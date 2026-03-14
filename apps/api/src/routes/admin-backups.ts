@@ -15,7 +15,10 @@ const execFileAsync = promisify(execFile);
 const router = Router();
 
 const BACKUP_SETTINGS_KEY = 'admin_backup_center_settings_v1';
-const BACKUP_DIRECTORY = path.resolve(process.cwd(), 'secure-backups');
+const DEFAULT_BACKUP_DIRECTORY = path.resolve(process.cwd(), 'secure-backups');
+const PUBLIC_UPLOADS_DIRECTORY = path.resolve(process.cwd(), 'uploads');
+const TMP_BACKUP_DIRECTORY = path.resolve('/tmp', 'african-fashion-secure-backups');
+let resolvedBackupDirectoryCache: string | null = null;
 const BACKUP_TYPES = ['DATABASE_FULL', 'SYSTEM_FULL', 'CUSTOMER_FULL', 'SELLER_FULL', 'DESIGNER_FULL'] as const;
 type BackupType = (typeof BACKUP_TYPES)[number];
 
@@ -107,6 +110,48 @@ const parseObject = (value: unknown): Record<string, unknown> => {
   }
   return {};
 };
+
+const isPathInside = (candidatePath: string, parentPath: string) => {
+  const relative = path.relative(path.resolve(parentPath), path.resolve(candidatePath));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+};
+
+const resolveConfiguredBackupDirectory = (input: unknown) => {
+  const raw = String(input || '').trim();
+  if (!raw) return '';
+  return path.isAbsolute(raw) ? path.resolve(raw) : path.resolve(process.cwd(), raw);
+};
+
+const canUseBackupDirectory = async (dirPath: string) => {
+  try {
+    const resolved = path.resolve(dirPath);
+    if (isPathInside(resolved, PUBLIC_UPLOADS_DIRECTORY)) return false;
+    await fsp.mkdir(resolved, { recursive: true, mode: 0o700 });
+    await fsp.access(resolved, fs.constants.R_OK | fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+async function resolveBackupDirectory() {
+  if (resolvedBackupDirectoryCache) return resolvedBackupDirectoryCache;
+  const configured = resolveConfiguredBackupDirectory(
+    process.env.BACKUP_DIRECTORY || process.env.BACKUP_STORAGE_DIR || process.env.SECURE_BACKUP_DIRECTORY
+  );
+  const candidates = [configured, DEFAULT_BACKUP_DIRECTORY, path.resolve(process.cwd(), 'var', 'secure-backups'), TMP_BACKUP_DIRECTORY]
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean);
+  for (const candidate of candidates) {
+    if (await canUseBackupDirectory(candidate)) {
+      resolvedBackupDirectoryCache = path.resolve(candidate);
+      return resolvedBackupDirectoryCache;
+    }
+  }
+  throw new Error(
+    'No writable secure backup directory found. Set BACKUP_DIRECTORY to a writable path outside /uploads.'
+  );
+}
 
 const jsonWithBigIntReplacer = (_key: string, value: unknown) =>
   typeof value === 'bigint' ? value.toString() : value;
@@ -238,7 +283,9 @@ async function writeBackupSettings(payload: unknown, merge = true): Promise<Back
 }
 
 async function ensureBackupDirectory() {
-  await fsp.mkdir(BACKUP_DIRECTORY, { recursive: true });
+  const backupDirectory = await resolveBackupDirectory();
+  await fsp.mkdir(backupDirectory, { recursive: true, mode: 0o700 });
+  return backupDirectory;
 }
 
 function buildTimestampLabel(date = new Date()) {
@@ -581,15 +628,19 @@ async function runDatabaseBackupFile(targetFilePath: string) {
   }
 }
 
-async function runSystemBackupFile(targetFilePath: string) {
+async function runSystemBackupFile(targetFilePath: string, backupDirectory: string) {
   const sourceRoot = resolveSystemRootDir();
+  const excludeArgs = ['--exclude=node_modules', '--exclude=.git', '--exclude=dist'];
+  const relativeBackupPath = path.relative(sourceRoot, backupDirectory);
+  if (relativeBackupPath && !relativeBackupPath.startsWith('..') && !path.isAbsolute(relativeBackupPath)) {
+    excludeArgs.unshift(`--exclude=${relativeBackupPath}`);
+  } else {
+    excludeArgs.unshift('--exclude=secure-backups');
+  }
   await execFileAsync('tar', [
     '-czf',
     targetFilePath,
-    '--exclude=secure-backups',
-    '--exclude=node_modules',
-    '--exclude=.git',
-    '--exclude=dist',
+    ...excludeArgs,
     '-C',
     sourceRoot,
     '.',
@@ -627,6 +678,7 @@ async function uploadArtifactToS3(params: {
 }
 
 async function cleanupExpiredArtifacts(retainDays: number) {
+  const backupDirectory = await resolveBackupDirectory();
   const cutoff = new Date(Date.now() - Math.max(1, retainDays) * 24 * 60 * 60 * 1000);
   const rows = await prisma.$queryRawUnsafe<Array<{ id: string; localPath: string | null }>>(
     `SELECT "id","localPath"
@@ -638,7 +690,7 @@ async function cleanupExpiredArtifacts(retainDays: number) {
     const localPath = String(row.localPath || '').trim();
     if (localPath) {
       const resolved = path.resolve(localPath);
-      if (resolved.startsWith(BACKUP_DIRECTORY)) {
+      if (isPathInside(resolved, backupDirectory)) {
         await fsp.unlink(resolved).catch(() => undefined);
       }
     }
@@ -652,19 +704,19 @@ async function runSingleBackup(params: {
   reason?: string;
   forceS3Upload?: boolean;
 }) {
-  await ensureBackupDirectory();
+  const backupDirectory = await ensureBackupDirectory();
   const timestamp = buildTimestampLabel();
   const outputBaseName = `${params.type.toLowerCase()}-${timestamp}`;
   const extension =
     params.type === 'SYSTEM_FULL' ? 'tar.gz' : params.type === 'DATABASE_FULL' ? 'sql' : 'json';
   const fileName = `${outputBaseName}.${extension}`;
-  const localPath = path.join(BACKUP_DIRECTORY, fileName);
+  const localPath = path.join(backupDirectory, fileName);
   const artifactId = await createBackupJob(params.type, params.createdById, params.reason);
   try {
     if (params.type === 'DATABASE_FULL') {
       await runDatabaseBackupFile(localPath);
     } else if (params.type === 'SYSTEM_FULL') {
-      await runSystemBackupFile(localPath);
+      await runSystemBackupFile(localPath, backupDirectory);
     } else if (params.type === 'CUSTOMER_FULL') {
       await buildCustomerSnapshot(localPath);
     } else if (params.type === 'SELLER_FULL') {
@@ -785,6 +837,7 @@ router.get('/settings', async (_req, res, next) => {
   try {
     const settings = await readBackupSettings();
     const storage = resolveEffectiveStorageConfig(settings);
+    const backupDirectory = await resolveBackupDirectory();
     res.json({
       success: true,
       data: {
@@ -800,6 +853,7 @@ router.get('/settings', async (_req, res, next) => {
               process.env.BACKUP_S3_SECRET_ACCESS_KEY ||
               process.env.AWS_SECRET_ACCESS_KEY
           ),
+          directory: backupDirectory,
         },
       },
     });
@@ -870,6 +924,7 @@ router.get('/jobs', async (req, res, next) => {
 
 router.get('/jobs/:id/download', async (req, res, next) => {
   try {
+    const backupDirectory = await resolveBackupDirectory();
     const id = String(req.params.id || '').trim();
     const rows = await prisma.$queryRawUnsafe<any[]>(
       `SELECT "id","fileName","localPath","status"
@@ -886,7 +941,7 @@ router.get('/jobs/:id/download', async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Backup artifact is not ready for download.' });
     }
     const filePath = path.resolve(String(row.localPath || ''));
-    if (!filePath.startsWith(BACKUP_DIRECTORY)) {
+    if (isPathInside(filePath, PUBLIC_UPLOADS_DIRECTORY) || !isPathInside(filePath, backupDirectory)) {
       return res.status(403).json({ success: false, message: 'Invalid backup file path.' });
     }
     if (!fs.existsSync(filePath)) {
