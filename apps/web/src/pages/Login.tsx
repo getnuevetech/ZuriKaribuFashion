@@ -6,11 +6,13 @@ import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import Button from '../components/ui/Button';
 import { getHomeRouteForUser } from '../auth/rbac';
+import { useAuthPageSettings } from '../hooks/useAuthPageSettings';
 
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, isAuthenticated, user } = useAuthStore();
+  const { settings: authPageSettings } = useAuthPageSettings();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -105,114 +107,120 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900">Welcome back</h2>
-          <p className="mt-2 text-gray-600">Sign in to your African Fashion account</p>
+    <div className="min-h-screen bg-gray-100 px-4 py-8 md:py-12">
+      <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-2">
+        <div className="relative min-h-[360px] overflow-hidden border border-gray-200 bg-black shadow-sm md:min-h-[640px]">
+          <img
+            src={authPageSettings.loginHeroImage}
+            alt={`${authPageSettings.brandName} login`}
+            className="h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-black/20" />
+          <p className="absolute left-6 top-5 text-3xl font-bold text-white md:text-4xl">
+            {authPageSettings.brandName}
+          </p>
+          <p className="absolute bottom-6 left-6 pr-6 text-2xl font-medium italic text-white md:text-4xl">
+            {authPageSettings.loginHeroCaption}
+          </p>
         </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
-            {error}
-          </div>
-        )}
-
-        <div className="rounded-lg border bg-white p-4">
-          <p className="mb-3 text-center text-sm text-gray-600">Sign in with Google</p>
-          {googleClientId ? (
-            <div className="flex justify-center">
-              <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google login was cancelled or failed.')} />
+        <div className="border border-gray-200 bg-white px-5 py-8 shadow-sm sm:px-8 md:py-10">
+          <div className="mx-auto w-full max-w-md space-y-5">
+            <div className="text-center">
+              <p className="text-4xl font-bold text-black">{authPageSettings.brandName}</p>
+              <h2 className="mt-6 text-4xl font-bold text-gray-900">{authPageSettings.loginTitle}</h2>
+              <p className="mt-2 text-sm text-gray-600">{authPageSettings.loginSubtitle}</p>
             </div>
-          ) : (
-            <p className="text-center text-xs text-amber-700">
-              Google login is currently unavailable. Missing frontend environment variable:
-              {' '}
-              <span className="font-semibold">VITE_GOOGLE_CLIENT_ID</span>.
-            </p>
-          )}
-        </div>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="email"
-                  required
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                  placeholder="you@example.com"
-                />
+            {error ? (
+              <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {error}
               </div>
-            </div>
+            ) : null}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="remember"
-                className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
-              />
-              <label htmlFor="remember" className="ml-2 text-sm text-gray-600">
-                Remember me
-              </label>
-            </div>
-            <Link to="/forgot-password" className="text-sm text-amber-600 hover:text-amber-700">
-              Forgot password?
-            </Link>
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={loading}
-          >
-            {loading ? 'Signing in...' : (
+            {authPageSettings.showGoogleOnLogin ? (
               <>
-                Sign In
-                <ArrowRight className="w-4 h-4 ml-2" />
+                {googleClientId ? (
+                  <div className="flex justify-center">
+                    <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google login was cancelled or failed.')} />
+                  </div>
+                ) : (
+                  <p className="text-center text-xs text-amber-700">
+                    Google login is currently unavailable. Missing frontend environment variable:
+                    {' '}
+                    <span className="font-semibold">VITE_GOOGLE_CLIENT_ID</span>.
+                  </p>
+                )}
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <span className="h-px flex-1 bg-gray-200" />
+                  <span>or</span>
+                  <span className="h-px flex-1 bg-gray-200" />
+                </div>
               </>
-            )}
-          </Button>
-        </form>
+            ) : null}
 
-        <p className="text-center text-sm text-gray-600">
-          Don't have an account?{' '}
-          <Link to="/register" className="text-amber-600 hover:text-amber-700 font-medium">
-            Sign up
-          </Link>
-        </p>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-3">
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="h-11 w-full border border-gray-300 pl-10 pr-3 text-sm focus:border-black focus:outline-none"
+                    placeholder="Email Address"
+                  />
+                </div>
+
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="h-11 w-full border border-gray-300 pl-10 pr-10 text-sm focus:border-black focus:outline-none"
+                    placeholder="Password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-sm">
+                <label htmlFor="remember" className="inline-flex items-center gap-2 text-gray-600">
+                  <input
+                    type="checkbox"
+                    id="remember"
+                    className="h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  Remember me
+                </label>
+                <Link to="/forgot-password" className="text-amber-700 hover:text-amber-800">
+                  Forgot password?
+                </Link>
+              </div>
+
+              <Button type="submit" className="h-11 w-full text-sm" disabled={loading}>
+                {loading ? 'Signing in...' : authPageSettings.loginSubmitLabel}
+                {!loading ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
+              </Button>
+            </form>
+
+            <p className="text-center text-sm text-gray-600">
+              Don&apos;t have an account?{' '}
+              <Link to="/register" className="font-medium text-amber-700 hover:text-amber-800">
+                Sign up
+              </Link>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -7298,6 +7298,167 @@ const homepageApi = {
     apiService.get<{ success: boolean; data: any[] }>('/homepage/admin/products-for-featured', { params: type ? { type } : undefined }),
 };
 
+type AuthPageSettingsPayload = {
+  brandName: string;
+  loginHeroImage: string;
+  registerHeroImage: string;
+  forgotPasswordHeroImage: string;
+  loginHeroCaption: string;
+  registerHeroCaption: string;
+  forgotPasswordHeroCaption: string;
+  loginTitle: string;
+  loginSubtitle: string;
+  registerTitle: string;
+  registerSubtitle: string;
+  forgotPasswordTitle: string;
+  forgotPasswordSubtitle: string;
+  loginSubmitLabel: string;
+  registerSubmitLabel: string;
+  forgotPasswordSubmitLabel: string;
+  showGoogleOnLogin: boolean;
+  showGoogleOnRegister: boolean;
+};
+
+const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettingsPayload = {
+  brandName: 'ZuriKaribu',
+  loginHeroImage:
+    'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+  registerHeroImage:
+    'https://images.unsplash.com/photo-1485230895905-ec40ba36b9bc?auto=format&fit=crop&w=1200&q=80',
+  forgotPasswordHeroImage:
+    'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+  loginHeroCaption: 'Wear the Story of Africa',
+  registerHeroCaption: 'Wear the Story of Africa',
+  forgotPasswordHeroCaption: 'Secure your African fashion account',
+  loginTitle: 'Welcome Back',
+  loginSubtitle: 'Sign in to continue your African fashion journey',
+  registerTitle: 'Create Account',
+  registerSubtitle: 'Join African fashion marketplace',
+  forgotPasswordTitle: 'Forgot Password',
+  forgotPasswordSubtitle: 'Enter your email to receive a secure reset link.',
+  loginSubmitLabel: 'Sign In',
+  registerSubmitLabel: 'Create Account',
+  forgotPasswordSubmitLabel: 'Send Reset Link',
+  showGoogleOnLogin: true,
+  showGoogleOnRegister: true,
+};
+
+const normalizeAuthPageSettingsPayload = (raw: unknown): AuthPageSettingsPayload => {
+  if (!raw || typeof raw !== 'object') return { ...AUTH_PAGE_SETTINGS_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const readText = (key: keyof AuthPageSettingsPayload, maxLength: number, fallback: string) =>
+    String(row[key] ?? '').trim().slice(0, maxLength) || fallback;
+  const readImage = (key: keyof AuthPageSettingsPayload, fallback: string) => {
+    const rawValue = String(row[key] ?? '').trim();
+    return resolveApiAssetUrl(rawValue || fallback);
+  };
+  return {
+    brandName: readText('brandName', 80, AUTH_PAGE_SETTINGS_DEFAULTS.brandName),
+    loginHeroImage: readImage('loginHeroImage', AUTH_PAGE_SETTINGS_DEFAULTS.loginHeroImage),
+    registerHeroImage: readImage('registerHeroImage', AUTH_PAGE_SETTINGS_DEFAULTS.registerHeroImage),
+    forgotPasswordHeroImage: readImage('forgotPasswordHeroImage', AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordHeroImage),
+    loginHeroCaption: readText('loginHeroCaption', 200, AUTH_PAGE_SETTINGS_DEFAULTS.loginHeroCaption),
+    registerHeroCaption: readText('registerHeroCaption', 200, AUTH_PAGE_SETTINGS_DEFAULTS.registerHeroCaption),
+    forgotPasswordHeroCaption: readText(
+      'forgotPasswordHeroCaption',
+      200,
+      AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordHeroCaption
+    ),
+    loginTitle: readText('loginTitle', 120, AUTH_PAGE_SETTINGS_DEFAULTS.loginTitle),
+    loginSubtitle: readText('loginSubtitle', 240, AUTH_PAGE_SETTINGS_DEFAULTS.loginSubtitle),
+    registerTitle: readText('registerTitle', 120, AUTH_PAGE_SETTINGS_DEFAULTS.registerTitle),
+    registerSubtitle: readText('registerSubtitle', 240, AUTH_PAGE_SETTINGS_DEFAULTS.registerSubtitle),
+    forgotPasswordTitle: readText('forgotPasswordTitle', 120, AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordTitle),
+    forgotPasswordSubtitle: readText(
+      'forgotPasswordSubtitle',
+      240,
+      AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordSubtitle
+    ),
+    loginSubmitLabel: readText('loginSubmitLabel', 60, AUTH_PAGE_SETTINGS_DEFAULTS.loginSubmitLabel),
+    registerSubmitLabel: readText('registerSubmitLabel', 60, AUTH_PAGE_SETTINGS_DEFAULTS.registerSubmitLabel),
+    forgotPasswordSubmitLabel: readText(
+      'forgotPasswordSubmitLabel',
+      80,
+      AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordSubmitLabel
+    ),
+    showGoogleOnLogin:
+      typeof row.showGoogleOnLogin === 'boolean'
+        ? row.showGoogleOnLogin
+        : AUTH_PAGE_SETTINGS_DEFAULTS.showGoogleOnLogin,
+    showGoogleOnRegister:
+      typeof row.showGoogleOnRegister === 'boolean'
+        ? row.showGoogleOnRegister
+        : AUTH_PAGE_SETTINGS_DEFAULTS.showGoogleOnRegister,
+  };
+};
+
+const authPageSettingsReadPathsPublic = [
+  '/homepage-sections/auth-page-settings',
+  '/homepage/auth-page-settings',
+];
+const authPageSettingsReadPathsAdmin = [
+  '/homepage-sections/admin/auth-page-settings',
+  '/homepage/admin/auth-page-settings',
+  '/admin/auth-page-settings',
+  '/admin/homepage/auth-page-settings',
+  '/admin/homepage-sections/auth-page-settings',
+];
+const authPageSettingsWritePaths = [
+  '/homepage-sections/admin/auth-page-settings',
+  '/homepage/admin/auth-page-settings',
+  '/admin/auth-page-settings',
+  '/admin/homepage/auth-page-settings',
+  '/admin/homepage-sections/auth-page-settings',
+];
+
+async function readAuthPageSettingsWithFallback<T>(mode: 'admin' | 'public') {
+  let lastError: unknown = null;
+  const readPaths = mode === 'admin'
+    ? [...authPageSettingsReadPathsAdmin, ...authPageSettingsReadPathsPublic]
+    : [...authPageSettingsReadPathsPublic];
+  for (const path of readPaths) {
+    try {
+      const response = await apiService.get<T>(path);
+      const normalized = normalizeAuthPageSettingsPayload((response as any)?.data);
+      return {
+        ...(response as any),
+        data: normalized,
+      } as T;
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (mode === 'public') {
+    return {
+      success: true,
+      data: { ...AUTH_PAGE_SETTINGS_DEFAULTS },
+    } as T;
+  }
+  throw lastError ?? new Error('Auth page settings route not found.');
+}
+
+async function writeAuthPageSettingsWithFallback<T>(data: unknown) {
+  const normalized = normalizeAuthPageSettingsPayload(data);
+  let lastError: unknown = null;
+  for (const path of authPageSettingsWritePaths) {
+    try {
+      return await apiService.put<T>(path, normalized);
+    } catch (putError) {
+      lastError = putError;
+      if (!isRetryableRouteError(putError)) throw putError;
+    }
+    try {
+      return await apiService.patch<T>(path, normalized);
+    } catch (patchError) {
+      lastError = patchError;
+      if (!isRetryableRouteError(patchError)) throw patchError;
+    }
+  }
+  throw lastError ?? new Error('Auth page settings route not found.');
+}
+
 // Homepage Sections API (new dynamic sections)
 const homepageSectionsApi = {
   // Public endpoints
@@ -7340,6 +7501,11 @@ const homepageSectionsApi = {
     readFeaturedProductDescriptionSettingsWithFallback<{
       success: boolean;
       data: { wordLimit: number };
+    }>('public'),
+  getAuthPageSettings: () =>
+    readAuthPageSettingsWithFallback<{
+      success: boolean;
+      data: AuthPageSettingsPayload;
     }>('public'),
 
   getCountries: () =>
@@ -7441,6 +7607,16 @@ const homepageSectionsApi = {
       success: boolean;
       data: { wordLimit: number; source?: 'DATABASE' | 'DEFAULT'; updatedAt?: string | null };
     }>('admin'),
+  getAdminAuthPageSettings: () =>
+    readAuthPageSettingsWithFallback<{
+      success: boolean;
+      data: AuthPageSettingsPayload & { source?: 'DATABASE' | 'DEFAULT'; updatedAt?: string | null };
+    }>('admin'),
+  updateAdminAuthPageSettings: (data: Partial<AuthPageSettingsPayload>) =>
+    writeAuthPageSettingsWithFallback<{
+      success: boolean;
+      data: AuthPageSettingsPayload;
+    }>(data),
 
   getAdminCountryImageGeneration: () =>
     readCountryImageGenerationWithFallback<{

@@ -14,6 +14,7 @@ const HOMEPAGE_STATS_STRIP_SETTINGS_KEY = 'HOMEPAGE_STATS_STRIP';
 const HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY = 'HOMEPAGE_COUNTRY_IMAGE_GENERATION';
 const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
 const HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY = 'HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION';
+const AUTH_PAGE_SETTINGS_KEY = 'AUTH_PAGE_SETTINGS';
 const SPOTLIGHT_LINK_MODES = ['DEFAULT_STORE', 'CUSTOM_URL', 'BLOG'] as const;
 type SpotlightLinkMode = (typeof SPOTLIGHT_LINK_MODES)[number];
 const HOMEPAGE_SECTION_VISIBILITY_META = [
@@ -529,6 +530,26 @@ const howItWorksStyleUpdateSchema = z.object({
   iconColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
   iconHoverColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
 });
+const authPageSettingsUpdateSchema = z.object({
+  brandName: z.string().trim().min(1).max(80).optional(),
+  loginHeroImage: z.string().trim().max(2000).optional(),
+  registerHeroImage: z.string().trim().max(2000).optional(),
+  forgotPasswordHeroImage: z.string().trim().max(2000).optional(),
+  loginHeroCaption: z.string().trim().max(200).optional(),
+  registerHeroCaption: z.string().trim().max(200).optional(),
+  forgotPasswordHeroCaption: z.string().trim().max(200).optional(),
+  loginTitle: z.string().trim().max(120).optional(),
+  loginSubtitle: z.string().trim().max(240).optional(),
+  registerTitle: z.string().trim().max(120).optional(),
+  registerSubtitle: z.string().trim().max(240).optional(),
+  forgotPasswordTitle: z.string().trim().max(120).optional(),
+  forgotPasswordSubtitle: z.string().trim().max(240).optional(),
+  loginSubmitLabel: z.string().trim().max(60).optional(),
+  registerSubmitLabel: z.string().trim().max(60).optional(),
+  forgotPasswordSubmitLabel: z.string().trim().max(80).optional(),
+  showGoogleOnLogin: z.boolean().optional(),
+  showGoogleOnRegister: z.boolean().optional(),
+});
 
 type TopStripSettings = {
   messages: string[];
@@ -567,6 +588,26 @@ type HowItWorksStyleSettings = {
   iconColor: string;
   iconHoverColor: string;
 };
+type AuthPageSettings = {
+  brandName: string;
+  loginHeroImage: string;
+  registerHeroImage: string;
+  forgotPasswordHeroImage: string;
+  loginHeroCaption: string;
+  registerHeroCaption: string;
+  forgotPasswordHeroCaption: string;
+  loginTitle: string;
+  loginSubtitle: string;
+  registerTitle: string;
+  registerSubtitle: string;
+  forgotPasswordTitle: string;
+  forgotPasswordSubtitle: string;
+  loginSubmitLabel: string;
+  registerSubmitLabel: string;
+  forgotPasswordSubmitLabel: string;
+  showGoogleOnLogin: boolean;
+  showGoogleOnRegister: boolean;
+};
 
 const TOP_STRIP_DEFAULTS: TopStripSettings = {
   messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
@@ -602,6 +643,29 @@ const HOW_IT_WORKS_STYLE_DEFAULTS: HowItWorksStyleSettings = {
   enabled: false,
   iconColor: '#111827',
   iconHoverColor: '#ffffff',
+};
+const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettings = {
+  brandName: 'ZuriKaribu',
+  loginHeroImage:
+    'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+  registerHeroImage:
+    'https://images.unsplash.com/photo-1485230895905-ec40ba36b9bc?auto=format&fit=crop&w=1200&q=80',
+  forgotPasswordHeroImage:
+    'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+  loginHeroCaption: 'Wear the Story of Africa',
+  registerHeroCaption: 'Wear the Story of Africa',
+  forgotPasswordHeroCaption: 'Secure your African fashion account',
+  loginTitle: 'Welcome Back',
+  loginSubtitle: 'Sign in to continue your African fashion journey',
+  registerTitle: 'Create Account',
+  registerSubtitle: 'Join African fashion marketplace',
+  forgotPasswordTitle: 'Forgot Password',
+  forgotPasswordSubtitle: 'Enter your email to receive a secure reset link.',
+  loginSubmitLabel: 'Sign In',
+  registerSubmitLabel: 'Create Account',
+  forgotPasswordSubmitLabel: 'Send Reset Link',
+  showGoogleOnLogin: true,
+  showGoogleOnRegister: true,
 };
 
 const normalizeHexColor = (value: unknown, fallback: string) => {
@@ -692,6 +756,35 @@ const normalizeHowItWorksStyleSettings = (raw: unknown): HowItWorksStyleSettings
     enabled: getBoolean(row.enabled) ?? HOW_IT_WORKS_STYLE_DEFAULTS.enabled,
     iconColor: normalizeHexColor(row.iconColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconColor),
     iconHoverColor: normalizeHexColor(row.iconHoverColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconHoverColor),
+  };
+};
+const normalizeAuthPageSettings = (raw: unknown): AuthPageSettings => {
+  if (!raw || typeof raw !== 'object') return { ...AUTH_PAGE_SETTINGS_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  return {
+    brandName: getString(row.brandName) || AUTH_PAGE_SETTINGS_DEFAULTS.brandName,
+    loginHeroImage: getString(row.loginHeroImage) || AUTH_PAGE_SETTINGS_DEFAULTS.loginHeroImage,
+    registerHeroImage: getString(row.registerHeroImage) || AUTH_PAGE_SETTINGS_DEFAULTS.registerHeroImage,
+    forgotPasswordHeroImage:
+      getString(row.forgotPasswordHeroImage) || AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordHeroImage,
+    loginHeroCaption: getString(row.loginHeroCaption) || AUTH_PAGE_SETTINGS_DEFAULTS.loginHeroCaption,
+    registerHeroCaption: getString(row.registerHeroCaption) || AUTH_PAGE_SETTINGS_DEFAULTS.registerHeroCaption,
+    forgotPasswordHeroCaption:
+      getString(row.forgotPasswordHeroCaption) || AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordHeroCaption,
+    loginTitle: getString(row.loginTitle) || AUTH_PAGE_SETTINGS_DEFAULTS.loginTitle,
+    loginSubtitle: getString(row.loginSubtitle) || AUTH_PAGE_SETTINGS_DEFAULTS.loginSubtitle,
+    registerTitle: getString(row.registerTitle) || AUTH_PAGE_SETTINGS_DEFAULTS.registerTitle,
+    registerSubtitle: getString(row.registerSubtitle) || AUTH_PAGE_SETTINGS_DEFAULTS.registerSubtitle,
+    forgotPasswordTitle: getString(row.forgotPasswordTitle) || AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordTitle,
+    forgotPasswordSubtitle:
+      getString(row.forgotPasswordSubtitle) || AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordSubtitle,
+    loginSubmitLabel: getString(row.loginSubmitLabel) || AUTH_PAGE_SETTINGS_DEFAULTS.loginSubmitLabel,
+    registerSubmitLabel: getString(row.registerSubmitLabel) || AUTH_PAGE_SETTINGS_DEFAULTS.registerSubmitLabel,
+    forgotPasswordSubmitLabel:
+      getString(row.forgotPasswordSubmitLabel) || AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordSubmitLabel,
+    showGoogleOnLogin: getBoolean(row.showGoogleOnLogin) ?? AUTH_PAGE_SETTINGS_DEFAULTS.showGoogleOnLogin,
+    showGoogleOnRegister:
+      getBoolean(row.showGoogleOnRegister) ?? AUTH_PAGE_SETTINGS_DEFAULTS.showGoogleOnRegister,
   };
 };
 
@@ -1075,6 +1168,64 @@ const saveHowItWorksStyleSettings = async (next: Partial<HowItWorksStyleSettings
   return merged;
 };
 
+const readAuthPageSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    AUTH_PAGE_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: { ...AUTH_PAGE_SETTINGS_DEFAULTS },
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  let parsed = { ...AUTH_PAGE_SETTINGS_DEFAULTS };
+  try {
+    parsed = normalizeAuthPageSettings(JSON.parse(String(row.value || '{}')));
+  } catch {
+    parsed = { ...AUTH_PAGE_SETTINGS_DEFAULTS };
+  }
+  return {
+    rowId: String(row.id),
+    settings: parsed,
+    source: 'DATABASE' as const,
+    updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+  };
+};
+
+const saveAuthPageSettings = async (next: Partial<AuthPageSettings>) => {
+  const existing = await readAuthPageSettings();
+  const merged = normalizeAuthPageSettings({
+    ...existing.settings,
+    ...next,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    AUTH_PAGE_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+
 const readCountryImageGenerationSettings = async () => {
   const rows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT "id", "value", "updatedAt"
@@ -1423,6 +1574,15 @@ router.get('/how-it-works-style', async (_req, res) => {
   } catch (error) {
     console.error('Error fetching how it works style settings:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch how it works style settings.' });
+  }
+});
+router.get('/auth-page-settings', async (_req, res) => {
+  try {
+    const { settings } = await readAuthPageSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching auth page settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch auth page settings.' });
   }
 });
 
@@ -1882,6 +2042,56 @@ router.patch('/admin/how-it-works-style', authenticate, authorizePermissions(Per
     res.status(500).json({ success: false, message: 'Failed to update how it works style settings.' });
   }
 });
+
+router.get('/admin/auth-page-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings, source, updatedAt } = await readAuthPageSettings();
+    res.json({
+      success: true,
+      data: {
+        ...settings,
+        source,
+        updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching admin auth page settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch auth page settings.' });
+  }
+});
+
+router.put('/admin/auth-page-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = authPageSettingsUpdateSchema.parse(req.body);
+    const settings = await saveAuthPageSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating auth page settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update auth page settings.' });
+  }
+});
+
+router.patch(
+  '/admin/auth-page-settings',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (req, res) => {
+    try {
+      const payload = authPageSettingsUpdateSchema.parse(req.body);
+      const settings = await saveAuthPageSettings(payload);
+      res.json({ success: true, data: settings });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      console.error('Error updating auth page settings:', error);
+      res.status(500).json({ success: false, message: 'Failed to update auth page settings.' });
+    }
+  }
+);
 
 router.get(
   '/admin/country-image-generation',

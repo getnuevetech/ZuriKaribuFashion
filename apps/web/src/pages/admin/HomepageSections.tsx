@@ -191,6 +191,26 @@ interface CountryImageGenerationSettings {
 interface FeaturedProductDescriptionSettings {
   wordLimit: number;
 }
+interface AuthPageSettings {
+  brandName: string;
+  loginHeroImage: string;
+  registerHeroImage: string;
+  forgotPasswordHeroImage: string;
+  loginHeroCaption: string;
+  registerHeroCaption: string;
+  forgotPasswordHeroCaption: string;
+  loginTitle: string;
+  loginSubtitle: string;
+  registerTitle: string;
+  registerSubtitle: string;
+  forgotPasswordTitle: string;
+  forgotPasswordSubtitle: string;
+  loginSubmitLabel: string;
+  registerSubmitLabel: string;
+  forgotPasswordSubmitLabel: string;
+  showGoogleOnLogin: boolean;
+  showGoogleOnRegister: boolean;
+}
 
 const FEATURED_DESCRIPTION_PREVIEW_TEXT =
   'Hand-finished African fashion piece crafted with premium fabric for modern style and everyday comfort.';
@@ -470,6 +490,30 @@ export default function HomepageSections() {
     wordLimit: 12,
   });
   const [featuredProductDescriptionSaving, setFeaturedProductDescriptionSaving] = useState(false);
+  const [authPageSettings, setAuthPageSettings] = useState<AuthPageSettings>({
+    brandName: 'ZuriKaribu',
+    loginHeroImage: '',
+    registerHeroImage: '',
+    forgotPasswordHeroImage: '',
+    loginHeroCaption: 'Wear the Story of Africa',
+    registerHeroCaption: 'Wear the Story of Africa',
+    forgotPasswordHeroCaption: 'Secure your African fashion account',
+    loginTitle: 'Welcome Back',
+    loginSubtitle: 'Sign in to continue your African fashion journey',
+    registerTitle: 'Create Account',
+    registerSubtitle: 'Join African fashion marketplace',
+    forgotPasswordTitle: 'Forgot Password',
+    forgotPasswordSubtitle: 'Enter your email to receive a secure reset link.',
+    loginSubmitLabel: 'Sign In',
+    registerSubmitLabel: 'Create Account',
+    forgotPasswordSubmitLabel: 'Send Reset Link',
+    showGoogleOnLogin: true,
+    showGoogleOnRegister: true,
+  });
+  const [authPageSettingsSaving, setAuthPageSettingsSaving] = useState(false);
+  const [authPageImageUploadingField, setAuthPageImageUploadingField] = useState<
+    'loginHeroImage' | 'registerHeroImage' | 'forgotPasswordHeroImage' | ''
+  >('');
   const [howItWorksStyle, setHowItWorksStyle] = useState<HowItWorksStyleSettings>({
     enabled: false,
     iconColor: '#111827',
@@ -494,6 +538,9 @@ export default function HomepageSections() {
   }, []);
   useEffect(() => {
     fetchFeaturedProductDescriptionSettings();
+  }, []);
+  useEffect(() => {
+    fetchAuthPageSettings();
   }, []);
 
   useEffect(() => {
@@ -640,6 +687,19 @@ export default function HomepageSections() {
       console.error('Error fetching featured product description settings:', error);
     }
   };
+  const fetchAuthPageSettings = async () => {
+    try {
+      const response = await api.homepageSections.getAdminAuthPageSettings();
+      if (response.success && response.data) {
+        setAuthPageSettings((prev) => ({
+          ...prev,
+          ...response.data,
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching auth page settings:', error);
+    }
+  };
 
   const handleSaveHowItWorksStyleSettings = async () => {
     setHowItWorksStyleSaving(true);
@@ -701,6 +761,46 @@ export default function HomepageSections() {
       window.alert(error?.response?.data?.message || 'Failed to save featured product description settings.');
     } finally {
       setFeaturedProductDescriptionSaving(false);
+    }
+  };
+  const handleAuthPageImageUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    field: 'loginHeroImage' | 'registerHeroImage' | 'forgotPasswordHeroImage'
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAuthPageImageUploadingField(field);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const response = await api.upload.image(formData);
+      if (response.success && response.data?.url) {
+        setAuthPageSettings((prev) => ({ ...prev, [field]: response.data.url }));
+      }
+    } catch (error) {
+      console.error('Error uploading auth page image:', error);
+      window.alert('Failed to upload image.');
+    } finally {
+      setAuthPageImageUploadingField('');
+      e.target.value = '';
+    }
+  };
+  const handleSaveAuthPageSettings = async () => {
+    setAuthPageSettingsSaving(true);
+    try {
+      const response = await api.homepageSections.updateAdminAuthPageSettings(authPageSettings);
+      if (response.success && response.data) {
+        setAuthPageSettings((prev) => ({
+          ...prev,
+          ...response.data,
+        }));
+        window.alert('Authentication page settings saved.');
+      }
+    } catch (error: any) {
+      console.error('Error saving auth page settings:', error);
+      window.alert(error?.response?.data?.message || 'Failed to save authentication page settings.');
+    } finally {
+      setAuthPageSettingsSaving(false);
     }
   };
 
@@ -945,6 +1045,191 @@ export default function HomepageSections() {
         <div>
           <Button onClick={handleSaveFeaturedProductDescriptionSettings} disabled={featuredProductDescriptionSaving}>
             {featuredProductDescriptionSaving ? 'Saving...' : 'Save Description Word Limit'}
+          </Button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Authentication Page Design Settings</h2>
+          <p className="text-sm text-gray-500">
+            Manage design content for Login, Register, and Forgot Password pages from admin.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Brand Name</label>
+            <input
+              type="text"
+              value={authPageSettings.brandName}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, brandName: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 focus:border-amber-500 focus:outline-none"
+              placeholder="ZuriKaribu"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={authPageSettings.showGoogleOnLogin}
+                onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, showGoogleOnLogin: e.target.checked }))}
+                className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+              />
+              Show Google on Login
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={authPageSettings.showGoogleOnRegister}
+                onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, showGoogleOnRegister: e.target.checked }))}
+                className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+              />
+              Show Google on Register
+            </label>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {([
+            { field: 'loginHeroImage', label: 'Login Hero Image' },
+            { field: 'registerHeroImage', label: 'Register Hero Image' },
+            { field: 'forgotPasswordHeroImage', label: 'Forgot Password Hero Image' },
+          ] as const).map((entry) => (
+            <div key={entry.field} className="space-y-2 rounded border border-gray-200 p-3">
+              <p className="text-sm font-medium text-gray-800">{entry.label}</p>
+              <div className="h-40 overflow-hidden border border-gray-200 bg-gray-50">
+                {authPageSettings[entry.field] ? (
+                  <img
+                    src={authPageSettings[entry.field]}
+                    alt={entry.label}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-xs text-gray-400">No image</div>
+                )}
+              </div>
+              <input
+                type="text"
+                value={authPageSettings[entry.field]}
+                onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, [entry.field]: e.target.value }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                placeholder="https://..."
+              />
+              <label className="inline-flex cursor-pointer items-center gap-2 border border-black px-3 py-2 text-xs font-medium text-black hover:bg-gray-100">
+                <Upload className="h-3.5 w-3.5" />
+                {authPageImageUploadingField === entry.field ? 'Uploading...' : 'Upload Image'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleAuthPageImageUpload(e, entry.field)}
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-gray-900">Login Page</p>
+            <input
+              type="text"
+              value={authPageSettings.loginTitle}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, loginTitle: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Title"
+            />
+            <textarea
+              value={authPageSettings.loginSubtitle}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, loginSubtitle: e.target.value }))}
+              rows={2}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Subtitle"
+            />
+            <input
+              type="text"
+              value={authPageSettings.loginHeroCaption}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, loginHeroCaption: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Hero Caption"
+            />
+            <input
+              type="text"
+              value={authPageSettings.loginSubmitLabel}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, loginSubmitLabel: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Submit Button Label"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-gray-900">Register Page</p>
+            <input
+              type="text"
+              value={authPageSettings.registerTitle}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, registerTitle: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Title"
+            />
+            <textarea
+              value={authPageSettings.registerSubtitle}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, registerSubtitle: e.target.value }))}
+              rows={2}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Subtitle"
+            />
+            <input
+              type="text"
+              value={authPageSettings.registerHeroCaption}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, registerHeroCaption: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Hero Caption"
+            />
+            <input
+              type="text"
+              value={authPageSettings.registerSubmitLabel}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, registerSubmitLabel: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Submit Button Label"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-gray-900">Forgot Password Page</p>
+            <input
+              type="text"
+              value={authPageSettings.forgotPasswordTitle}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, forgotPasswordTitle: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Title"
+            />
+            <textarea
+              value={authPageSettings.forgotPasswordSubtitle}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, forgotPasswordSubtitle: e.target.value }))}
+              rows={2}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Subtitle"
+            />
+            <input
+              type="text"
+              value={authPageSettings.forgotPasswordHeroCaption}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, forgotPasswordHeroCaption: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Hero Caption"
+            />
+            <input
+              type="text"
+              value={authPageSettings.forgotPasswordSubmitLabel}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, forgotPasswordSubmitLabel: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Submit Button Label"
+            />
+          </div>
+        </div>
+
+        <div>
+          <Button onClick={handleSaveAuthPageSettings} disabled={authPageSettingsSaving}>
+            {authPageSettingsSaving ? 'Saving...' : 'Save Authentication Page Settings'}
           </Button>
         </div>
       </div>

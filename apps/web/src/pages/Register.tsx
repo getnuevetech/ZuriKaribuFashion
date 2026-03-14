@@ -14,6 +14,7 @@ import {
   resolveCountryName,
 } from '../data/locationOptions';
 import { normalizePhoneWithCountryPrefix } from '../utils/phone';
+import { useAuthPageSettings } from '../hooks/useAuthPageSettings';
 
 type UserRole = 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER';
 
@@ -48,7 +49,7 @@ const roleOptions: RoleOption[] = [
 export default function Register() {
   const navigate = useNavigate();
   const { login } = useAuthStore();
-  const [step, setStep] = useState(1);
+  const { settings: authPageSettings } = useAuthPageSettings();
   const [selectedRole, setSelectedRole] = useState<UserRole>('CUSTOMER');
   const [formData, setFormData] = useState({
     fullName: '',
@@ -135,18 +136,6 @@ export default function Register() {
     }
   };
 
-  const nextStep = () => {
-    if (step === 1) {
-      setStep(2);
-    }
-  };
-
-  const prevStep = () => {
-    if (step === 2) {
-      setStep(1);
-    }
-  };
-
   const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
     const credential = String(credentialResponse.credential || '').trim();
     if (!credential) {
@@ -182,190 +171,154 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900">Create Account</h2>
-          <p className="mt-2 text-gray-600">Join African Fashion marketplace</p>
+    <div className="min-h-screen bg-gray-100 px-4 py-8 md:py-12">
+      <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-2">
+        <div className="relative min-h-[360px] overflow-hidden border border-gray-200 bg-black shadow-sm md:min-h-[760px]">
+          <img
+            src={authPageSettings.registerHeroImage}
+            alt={`${authPageSettings.brandName} register`}
+            className="h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-black/20" />
+          <p className="absolute left-6 top-5 text-3xl font-bold text-white md:text-4xl">
+            {authPageSettings.brandName}
+          </p>
+          <p className="absolute bottom-6 left-6 pr-6 text-2xl font-medium italic text-white md:text-4xl">
+            {authPageSettings.registerHeroCaption}
+          </p>
         </div>
 
-        {/* Progress */}
-        <div className="flex items-center justify-center gap-4">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-            step >= 1 ? 'bg-amber-600 text-white' : 'bg-gray-200 text-gray-500'
-          }`}>
-            1
-          </div>
-          <div className={`w-16 h-1 ${step >= 2 ? 'bg-amber-600' : 'bg-gray-200'}`} />
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-            step >= 2 ? 'bg-amber-600 text-white' : 'bg-gray-200 text-gray-500'
-          }`}>
-            2
-          </div>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
-            {error}
-          </div>
-        )}
-
-        {notice && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-700 text-sm">
-            {notice}
-          </div>
-        )}
-
-        <div className="rounded-lg border bg-white p-4">
-          <p className="mb-2 text-center text-sm text-gray-600">Continue with Google (creates a customer account)</p>
-          {googleClientId ? (
-            <div className="flex justify-center">
-              <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google sign up was cancelled or failed.')} />
+        <div className="border border-gray-200 bg-white px-5 py-8 shadow-sm sm:px-8 md:py-10">
+          <div className="mx-auto w-full max-w-md space-y-5">
+            <div className="text-center">
+              <p className="text-4xl font-bold text-black">{authPageSettings.brandName}</p>
+              <h2 className="mt-6 text-4xl font-bold text-gray-900">{authPageSettings.registerTitle}</h2>
+              <p className="mt-2 text-sm text-gray-600">{authPageSettings.registerSubtitle}</p>
             </div>
-          ) : (
-            <p className="text-center text-xs text-amber-700">
-              Google sign up is currently unavailable. Missing frontend environment variable:
-              {' '}
-              <span className="font-semibold">VITE_GOOGLE_CLIENT_ID</span>.
-            </p>
-          )}
-        </div>
 
-        {step === 1 && (
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Select your role
-              </label>
-              <div className="space-y-3">
-                {roleOptions.map((role) => {
-                  const Icon = role.icon;
-                  return (
-                    <button
-                      key={role.value}
-                      onClick={() => setSelectedRole(role.value)}
-                      className={`w-full p-4 border-2 rounded-xl text-left transition-all ${
-                        selectedRole === role.value
-                          ? 'border-amber-600 bg-amber-50'
-                          : 'border-gray-200 hover:border-amber-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          selectedRole === role.value ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-600'
-                        }`}>
-                          <Icon className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">{role.label}</p>
-                          <p className="text-sm text-gray-500">{role.description}</p>
-                        </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {roleOptions.map((role) => {
+                const Icon = role.icon;
+                const isSelected = selectedRole === role.value;
+                return (
+                  <button
+                    key={role.value}
+                    type="button"
+                    onClick={() => setSelectedRole(role.value)}
+                    className={`border p-2 text-left transition-colors ${
+                      isSelected
+                        ? 'border-black bg-amber-50'
+                        : 'border-gray-300 bg-white hover:border-gray-500'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <Icon className="mt-0.5 h-4 w-4 text-gray-700" />
+                      <div>
+                        <p className="text-xs font-semibold text-gray-900">{role.label}</p>
+                        <p className="mt-0.5 line-clamp-2 text-[10px] text-gray-500">{role.description}</p>
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
-            <Button onClick={nextStep} className="w-full">
-              Continue
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </div>
-        )}
+            {error ? (
+              <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {error}
+              </div>
+            ) : null}
 
-        {step === 2 && (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Full Name *
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            {notice ? (
+              <div className="border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+                {notice}
+              </div>
+            ) : null}
+
+            {authPageSettings.showGoogleOnRegister ? (
+              <>
+                <p className="text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Social Signup</p>
+                {googleClientId ? (
+                  <div className="flex justify-center">
+                    <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google sign up was cancelled or failed.')} />
+                  </div>
+                ) : (
+                  <p className="text-center text-xs text-amber-700">
+                    Google sign up is currently unavailable. Missing frontend environment variable:
+                    {' '}
+                    <span className="font-semibold">VITE_GOOGLE_CLIENT_ID</span>.
+                  </p>
+                )}
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <span className="h-px flex-1 bg-gray-200" />
+                  <span>or</span>
+                  <span className="h-px flex-1 bg-gray-200" />
+                </div>
+              </>
+            ) : null}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="relative sm:col-span-2">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     type="text"
                     required
                     value={formData.fullName}
                     onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                    className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    placeholder="John Doe"
+                    className="h-11 w-full border border-gray-300 pl-10 pr-3 text-sm focus:border-black focus:outline-none"
+                    placeholder="Full Name"
                   />
                 </div>
-              </div>
 
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address *
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <div className="relative sm:col-span-2">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     type="email"
                     required
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    placeholder="you@example.com"
+                    className="h-11 w-full border border-gray-300 pl-10 pr-3 text-sm focus:border-black focus:outline-none"
+                    placeholder="Email Address"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password *
-                </label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    placeholder="••••••••"
+                    className="h-11 w-full border border-gray-300 pl-10 pr-10 text-sm focus:border-black focus:outline-none"
+                    placeholder="Password"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
                   >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirm Password *
-                </label>
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                  placeholder="••••••••"
+                  className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
+                  placeholder="Confirm Password"
                 />
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone
-                </label>
                 <input
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                  placeholder="+1 234 567 890"
+                  className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
+                  placeholder="Phone (optional)"
                 />
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Country *
-                </label>
                 <select
                   required
                   value={selectedCountryCode}
@@ -377,98 +330,79 @@ export default function Register() {
                       phone: normalizePhoneWithCountryPrefix(formData.phone, resolveCountryName(e.target.value)),
                     })
                   }
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
                 >
-                  <option value="">Select country</option>
+                  <option value="">Country</option>
                   {countryOptions.map((country) => (
                     <option key={country.code} value={country.code}>
                       {country.name}
                     </option>
                   ))}
                 </select>
+
+                {(selectedRole === 'FABRIC_SELLER' || selectedRole === 'FASHION_DESIGNER') ? (
+                  <>
+                    <input
+                      type="text"
+                      required
+                      value={formData.businessName}
+                      onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
+                      className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none sm:col-span-2"
+                      placeholder="Business Name"
+                    />
+
+                    <select
+                      required
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none sm:col-span-2"
+                      disabled={!formData.country}
+                    >
+                      <option value="">{formData.country ? 'Select City' : 'Select country first'}</option>
+                      {cityOptions.map((city) => (
+                        <option key={city} value={city}>
+                          {city}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                ) : null}
               </div>
 
-              {(selectedRole === 'FABRIC_SELLER' || selectedRole === 'FASHION_DESIGNER') && (
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Business Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.businessName}
-                    onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                    className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    placeholder="Your business name"
-                  />
-                </div>
-              )}
-
-              {(selectedRole === 'FABRIC_SELLER' || selectedRole === 'FASHION_DESIGNER') && (
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    City *
-                  </label>
-                  <select
-                    required
-                    value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    disabled={!formData.country}
-                  >
-                    <option value="">{formData.country ? 'Select city' : 'Select country first'}</option>
-                    {cityOptions.map((city) => (
-                      <option key={city} value={city}>
-                        {city}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="terms"
-                checked={formData.agreeTerms}
-                onChange={(e) => setFormData({ ...formData, agreeTerms: e.target.checked })}
-                className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
-              />
-              <label htmlFor="terms" className="text-sm text-gray-600">
-                I agree to the{' '}
-                <Link to="/terms" className="text-amber-600 hover:text-amber-700">
-                  Terms of Service
-                </Link>{' '}
-                and{' '}
-                <Link to="/privacy" className="text-amber-600 hover:text-amber-700">
-                  Privacy Policy
-                </Link>
+              <label htmlFor="terms" className="inline-flex items-start gap-2 text-sm text-gray-600">
+                <input
+                  type="checkbox"
+                  id="terms"
+                  checked={formData.agreeTerms}
+                  onChange={(e) => setFormData({ ...formData, agreeTerms: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-500"
+                />
+                <span>
+                  I agree to the{' '}
+                  <Link to="/terms" className="text-amber-700 hover:text-amber-800">
+                    Terms of Service
+                  </Link>{' '}
+                  and{' '}
+                  <Link to="/privacy" className="text-amber-700 hover:text-amber-800">
+                    Privacy Policy
+                  </Link>
+                </span>
               </label>
-            </div>
 
-            <div className="flex gap-3">
-              <Button type="button" variant="outline" onClick={prevStep} className="flex-1">
-                Back
+              <Button type="submit" className="h-11 w-full text-sm" disabled={loading}>
+                {loading ? 'Creating account...' : authPageSettings.registerSubmitLabel}
+                {!loading ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
               </Button>
-              <Button type="submit" className="flex-1" disabled={loading}>
-                {loading ? 'Creating account...' : (
-                  <>
-                    Create Account
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-        )}
+            </form>
 
-        <p className="text-center text-sm text-gray-600">
-          Already have an account?{' '}
-          <Link to="/login" className="text-amber-600 hover:text-amber-700 font-medium">
-            Sign in
-          </Link>
-        </p>
+            <p className="text-center text-sm text-gray-600">
+              Already have an account?{' '}
+              <Link to="/login" className="font-medium text-amber-700 hover:text-amber-800">
+                Sign in
+              </Link>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
