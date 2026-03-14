@@ -58,6 +58,7 @@ interface Design {
   rating: number;
   reviewCount: number;
   orderCount: number;
+  productLabels?: Array<{ id: string; name: string; textColor: string; backgroundColor: string }>;
 }
 
 interface ProductReview {
@@ -397,7 +398,21 @@ export default function DesignDetail() {
             {/* Header */}
             <div>
               <div className="flex items-start justify-between mb-2">
-                <Badge variant="secondary">{design.category.name}</Badge>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Badge variant="secondary">{design.category.name}</Badge>
+                  {(design.productLabels || []).map((label) => (
+                    <span
+                      key={`${design.id}-detail-label-${label.id}`}
+                      className="px-2 py-0.5 text-[11px] font-semibold"
+                      style={{
+                        backgroundColor: label.backgroundColor || '#111827',
+                        color: label.textColor || '#ffffff',
+                      }}
+                    >
+                      {label.name}
+                    </span>
+                  ))}
+                </div>
                 <div className="flex items-center gap-2">
                   <button className="p-2 hover:bg-gray-100 transition-colors">
                     <Share2 className="w-5 h-5 text-gray-600" />

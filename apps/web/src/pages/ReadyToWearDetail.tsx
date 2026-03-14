@@ -466,6 +466,22 @@ export default function ReadyToWearDetail() {
 
               <div>
                 <h1 className="text-3xl font-semibold text-gray-900">{product.name}</h1>
+                {(product.productLabels || []).length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {(product.productLabels || []).map((label) => (
+                      <span
+                        key={`${product.id}-detail-label-${label.id}`}
+                        className="px-2 py-0.5 text-[11px] font-semibold"
+                        style={{
+                          backgroundColor: label.backgroundColor || '#111827',
+                          color: label.textColor || '#ffffff',
+                        }}
+                      >
+                        {label.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
                 <p className="mt-1 text-xl italic text-gray-700">
                   by{' '}
                   {storefrontPath ? (

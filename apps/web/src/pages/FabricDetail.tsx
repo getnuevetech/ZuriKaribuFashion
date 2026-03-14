@@ -26,6 +26,7 @@ interface Fabric {
     storefrontPath?: string;
   };
   materialType: { id: string; name: string };
+  productLabels?: Array<{ id: string; name: string; textColor: string; backgroundColor: string }>;
   flag?: string;
   careInstructions?: string;
   shippingInfo?: string;
@@ -290,6 +291,22 @@ export default function FabricDetail() {
                 ) : null}
               </div>
               <h1 className="text-3xl font-bold text-gray-900">{fabric.name}</h1>
+              {(fabric.productLabels || []).length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {(fabric.productLabels || []).map((label) => (
+                    <span
+                      key={`${fabric.id}-detail-label-${label.id}`}
+                      className="px-2 py-0.5 text-[11px] font-semibold"
+                      style={{
+                        backgroundColor: label.backgroundColor || '#111827',
+                        color: label.textColor || '#ffffff',
+                      }}
+                    >
+                      {label.name}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <div className="flex items-center gap-4 mt-3">
                 <div className="flex items-center gap-1">
                   <Star className="w-5 h-5 text-yellow-400 fill-current" />

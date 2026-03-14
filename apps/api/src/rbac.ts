@@ -30,6 +30,7 @@ export const Permissions = {
   PAYMENTS_MANAGE: 'payments:manage',
   SHIPPING_MANAGE: 'shipping:manage',
   NOTIFICATIONS_MANAGE: 'notifications:manage',
+  BACKUPS_MANAGE: 'backups:manage',
   UPLOADS_CREATE: 'uploads:create',
   HOMEPAGE_MANAGE: 'homepage:manage',
   BANNERS_MANAGE: 'banners:manage',
@@ -134,6 +135,12 @@ export const PERMISSION_CATALOG: PermissionCatalogEntry[] = [
     label: 'Manage notification center',
     group: 'MARKETING',
     description: 'Configure and send platform email/push/in-app notifications.',
+  },
+  {
+    key: Permissions.BACKUPS_MANAGE,
+    label: 'Manage backup center',
+    group: 'SYSTEM',
+    description: 'Create, download, and configure system/database backups.',
   },
   {
     key: Permissions.TRAFFIC_READ,

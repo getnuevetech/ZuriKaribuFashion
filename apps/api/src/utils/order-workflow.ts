@@ -87,6 +87,19 @@ const workflowSettingsSchema = z.object({
       { key: 'material', label: 'Material and color match listing', required: true },
       { key: 'finishing', label: 'Finishing, packaging, and labeling complete', required: true },
     ]),
+  orderLimits: z
+    .object({
+      maxReadyToWearUnitsPerOrder: z.number().int().min(1).max(200).default(3),
+      maxCustomToWearItemsPerCheckout: z.number().int().min(1).max(200).default(3),
+      minFabricYardsPerOrder: z.number().int().min(1).max(500).default(3),
+      maxFabricYardsPerOrder: z.number().int().min(1).max(5000).default(200),
+    })
+    .default({
+      maxReadyToWearUnitsPerOrder: 3,
+      maxCustomToWearItemsPerCheckout: 3,
+      minFabricYardsPerOrder: 3,
+      maxFabricYardsPerOrder: 200,
+    }),
 });
 
 export type OrderWorkflowSettings = z.infer<typeof workflowSettingsSchema>;
@@ -107,6 +120,7 @@ type PartialWorkflowSettingsInput = Partial<{
   qaNotifyStatuses: OrderStatus[];
   adminNotifyStatuses: OrderStatus[];
   qaChecklistTemplate: Array<{ key: string; label: string; required?: boolean }>;
+  orderLimits: Partial<OrderWorkflowSettings['orderLimits']>;
 }>;
 
 const parseObject = (value: unknown): Record<string, unknown> => {
@@ -195,6 +209,32 @@ function normalizeOrderWorkflowSettings(input: unknown): OrderWorkflowSettings {
     qaNotifyStatuses: normalizeStatusList(row.qaNotifyStatuses, defaults.qaNotifyStatuses),
     adminNotifyStatuses: normalizeStatusList(row.adminNotifyStatuses, defaults.adminNotifyStatuses),
     qaChecklistTemplate: normalizeChecklistTemplate(row.qaChecklistTemplate, defaults.qaChecklistTemplate),
+    orderLimits: {
+      maxReadyToWearUnitsPerOrder: Math.max(
+        1,
+        Math.min(
+          200,
+          Number(parseObject(row.orderLimits).maxReadyToWearUnitsPerOrder || defaults.orderLimits.maxReadyToWearUnitsPerOrder)
+        )
+      ),
+      maxCustomToWearItemsPerCheckout: Math.max(
+        1,
+        Math.min(
+          200,
+          Number(
+            parseObject(row.orderLimits).maxCustomToWearItemsPerCheckout || defaults.orderLimits.maxCustomToWearItemsPerCheckout
+          )
+        )
+      ),
+      minFabricYardsPerOrder: Math.max(
+        1,
+        Math.min(500, Number(parseObject(row.orderLimits).minFabricYardsPerOrder || defaults.orderLimits.minFabricYardsPerOrder))
+      ),
+      maxFabricYardsPerOrder: Math.max(
+        1,
+        Math.min(5000, Number(parseObject(row.orderLimits).maxFabricYardsPerOrder || defaults.orderLimits.maxFabricYardsPerOrder))
+      ),
+    },
   };
 }
 
@@ -238,6 +278,10 @@ function mergeWorkflowSettings(current: OrderWorkflowSettings, patch: PartialWor
     slaHours: {
       ...current.slaHours,
       ...(patch.slaHours || {}),
+    },
+    orderLimits: {
+      ...current.orderLimits,
+      ...(patch.orderLimits || {}),
     },
   };
   return normalizeOrderWorkflowSettings(merged);

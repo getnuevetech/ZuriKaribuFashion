@@ -549,7 +549,7 @@ const normalizeAdminProductLabelSettings = (raw: unknown) => {
   const assignments = parsedAssignments
     .map((entry) => {
       const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
-      const labelId = String(item.labelId || '').trim().toLowerCase();
+      const labelId = String(item.labelId || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 64);
       const productTypeRaw = String(item.productType || '').trim().toUpperCase();
       if (!validLabelIds.has(labelId)) return null;
       if (productTypeRaw !== 'FABRIC' && productTypeRaw !== 'DESIGN' && productTypeRaw !== 'READY_TO_WEAR') {
@@ -1617,6 +1617,7 @@ const resolveAdminRoutePermissions = (method: string, path: string) => {
   if (path.startsWith('/measurement-templates')) return [Permissions.MEASUREMENT_TEMPLATES_MANAGE];
   if (path.startsWith('/pricing-rules')) return [Permissions.PRICING_MANAGE];
   if (path.startsWith('/notification-center')) return [Permissions.NOTIFICATIONS_MANAGE];
+  if (path.startsWith('/backups')) return [Permissions.BACKUPS_MANAGE];
   if (path.startsWith('/orders')) return [Permissions.ORDERS_MANAGE];
   return [];
 };

@@ -61,6 +61,7 @@ import AdminTryOnSettings from './pages/admin/TryOnSettings';
 import AdminApiRouteDiagnostics from './pages/admin/ApiRouteDiagnostics';
 import AdminFeaturedRequests from './pages/admin/FeaturedRequests';
 import AdminNotificationCenter from './pages/admin/NotificationCenter';
+import AdminBackups from './pages/admin/Backups';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -316,6 +317,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['notifications:manage']}>
                       <AdminNotificationCenter />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/backups"
+                  element={
+                    <AdminPermissionGuard required={['backups:manage']}>
+                      <AdminBackups />
                     </AdminPermissionGuard>
                   }
                 />

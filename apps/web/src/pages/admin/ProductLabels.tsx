@@ -158,7 +158,11 @@ export default function AdminProductLabels() {
       }
       const normalizedAssignments = assignments
         .map((entry) => ({
-          labelId: String(entry.labelId || '').trim().toLowerCase(),
+          labelId: String(entry.labelId || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9_-]/g, '')
+            .slice(0, 64),
           productType: entry.productType,
           productIds: Array.from(new Set((entry.productIds || []).map((id) => String(id || '').trim()).filter(Boolean))),
         }))

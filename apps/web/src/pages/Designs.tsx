@@ -20,6 +20,7 @@ interface Design {
     id: string;
     name: string;
   };
+  productLabels?: Array<{ id: string; name: string; textColor: string; backgroundColor: string }>;
 }
 
 interface Category {
@@ -471,6 +472,22 @@ export default function Designs() {
                         alt={design.name}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
+                      {(design.productLabels || []).length > 0 ? (
+                        <div className="absolute right-2 top-2 z-10 flex flex-wrap justify-end gap-1">
+                          {(design.productLabels || []).slice(0, 2).map((label) => (
+                            <span
+                              key={`${design.id}-label-${label.id}`}
+                              className="px-1.5 py-0.5 text-[10px] font-semibold"
+                              style={{
+                                backgroundColor: label.backgroundColor || '#111827',
+                                color: label.textColor || '#ffffff',
+                              }}
+                            >
+                              {label.name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
                       {flagCode ? (
                         <img
                           src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}

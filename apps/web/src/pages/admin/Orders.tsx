@@ -478,6 +478,90 @@ export default function AdminOrders() {
               />
             </label>
           </div>
+          <div className="rounded-lg border border-gray-200 p-3">
+            <h3 className="text-sm font-semibold text-gray-900">Order Limits by Category</h3>
+            <p className="mt-1 text-xs text-gray-600">
+              Configure maximum/minimum checkout limits for Ready To Wear, Custom To Wear, and Fabric To Buy.
+            </p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              <label className="text-sm text-gray-700">
+                RTW max units/order
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={Number(workflowSettings.orderLimits?.maxReadyToWearUnitsPerOrder || 3)}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderLimits: {
+                        ...(prev?.orderLimits || {}),
+                        maxReadyToWearUnitsPerOrder: Number(event.target.value || 3),
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                CTW max items/checkout
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={Number(workflowSettings.orderLimits?.maxCustomToWearItemsPerCheckout || 3)}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderLimits: {
+                        ...(prev?.orderLimits || {}),
+                        maxCustomToWearItemsPerCheckout: Number(event.target.value || 3),
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                FTB min yards/order
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={Number(workflowSettings.orderLimits?.minFabricYardsPerOrder || 3)}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderLimits: {
+                        ...(prev?.orderLimits || {}),
+                        minFabricYardsPerOrder: Number(event.target.value || 3),
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                FTB max yards/checkout
+                <input
+                  type="number"
+                  min={1}
+                  max={5000}
+                  value={Number(workflowSettings.orderLimits?.maxFabricYardsPerOrder || 200)}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderLimits: {
+                        ...(prev?.orderLimits || {}),
+                        maxFabricYardsPerOrder: Number(event.target.value || 200),
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+            </div>
+          </div>
           {workflowMessage ? <p className="text-xs text-emerald-700">{workflowMessage}</p> : null}
         </div>
       ) : null}

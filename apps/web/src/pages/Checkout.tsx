@@ -733,8 +733,43 @@ export default function Checkout() {
         }
         return sum + 1;
       }, 0);
-      if (totalProductUnits > 3) {
-        throw new Error('A maximum of 3 products is allowed in a single order. Please reduce cart quantity.');
+      const limitsResponse = await api.orders.getOrderLimits().catch(() => null);
+      const maxReadyToWearUnitsPerOrder = Math.max(
+        1,
+        Number((limitsResponse as any)?.data?.maxReadyToWearUnitsPerOrder || 3)
+      );
+      const maxCustomToWearItemsPerCheckout = Math.max(
+        1,
+        Number((limitsResponse as any)?.data?.maxCustomToWearItemsPerCheckout || 3)
+      );
+      const maxFabricYardsPerOrder = Math.max(
+        1,
+        Number((limitsResponse as any)?.data?.maxFabricYardsPerOrder || 200)
+      );
+      const readyToWearUnits = items
+        .filter((entry: any) => entry?.kind === 'READY_TO_WEAR')
+        .reduce((sum, entry: any) => sum + Math.max(1, Number(entry.quantity || 1)), 0);
+      const customToWearCount = items.filter((entry: any) => entry?.kind === 'CUSTOM_DESIGN').length;
+      const totalFabricYards = items
+        .filter((entry: any) => entry?.kind === 'FABRIC_ONLY')
+        .reduce((sum, entry: any) => sum + Math.max(0, Number(entry.yards || 0)), 0);
+      if (readyToWearUnits > maxReadyToWearUnitsPerOrder) {
+        throw new Error(
+          `A maximum of ${maxReadyToWearUnitsPerOrder} Ready To Wear unit(s) is allowed per checkout. Please reduce quantity.`
+        );
+      }
+      if (customToWearCount > maxCustomToWearItemsPerCheckout) {
+        throw new Error(
+          `A maximum of ${maxCustomToWearItemsPerCheckout} Custom To Wear item(s) is allowed per checkout. Please remove some items.`
+        );
+      }
+      if (totalFabricYards > maxFabricYardsPerOrder) {
+        throw new Error(
+          `A maximum of ${maxFabricYardsPerOrder} Fabric To Buy yard(s) is allowed per checkout. Please reduce yards.`
+        );
+      }
+      if (totalProductUnits <= 0) {
+        throw new Error('No valid products were found in this checkout.');
       }
       if (shippingQuotes.length > 0 && !selectedShippingQuote) {
         throw new Error('Please select a shipping option to continue.');

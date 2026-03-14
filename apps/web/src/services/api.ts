@@ -4499,6 +4499,17 @@ const ordersApi = {
   getOrder: (id: string) =>
     apiService.get<{ success: boolean; data: any }>(`/orders/${id}`),
 
+  getOrderLimits: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        maxReadyToWearUnitsPerOrder: number;
+        maxCustomToWearItemsPerCheckout: number;
+        minFabricYardsPerOrder: number;
+        maxFabricYardsPerOrder: number;
+      };
+    }>('/orders/limits'),
+
   getOrderTicketThread: (orderId: string) =>
     apiService.get<{
       success: boolean;
@@ -6545,6 +6556,65 @@ const adminApi = {
     apiService.post<{ success: boolean; data: { closedCount: number }; message?: string }>(
       '/admin/order-workflow/auto-close-overdue'
     ),
+
+  getBackupSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        storage: {
+          uploadToS3: boolean;
+          bucket: string;
+          region: string;
+          prefix: string;
+          credentialsConfigured?: boolean;
+        };
+        daily: {
+          enabled: boolean;
+          runAtUtc: string;
+          retainDays: number;
+          backupDatabase: boolean;
+          backupCustomerData: boolean;
+          backupSellerData: boolean;
+          backupDesignerData: boolean;
+          backupSystemFiles: boolean;
+        };
+      };
+    }>('/admin/backups/settings'),
+
+  updateBackupSettings: (data: {
+    storage?: {
+      uploadToS3?: boolean;
+      bucket?: string;
+      region?: string;
+      prefix?: string;
+    };
+    daily?: {
+      enabled?: boolean;
+      runAtUtc?: string;
+      retainDays?: number;
+      backupDatabase?: boolean;
+      backupCustomerData?: boolean;
+      backupSellerData?: boolean;
+      backupDesignerData?: boolean;
+      backupSystemFiles?: boolean;
+    };
+  }) => apiService.patch<{ success: boolean; data: any; message?: string }>('/admin/backups/settings', data),
+
+  runBackups: (data: {
+    types: Array<'DATABASE_FULL' | 'SYSTEM_FULL' | 'CUSTOMER_FULL' | 'SELLER_FULL' | 'DESIGNER_FULL'>;
+    uploadToS3?: boolean;
+    reason?: string;
+  }) => apiService.post<{ success: boolean; data: { jobs: Array<{ id: string }> }; message?: string }>('/admin/backups/run', data),
+
+  runDailyBackupsNow: () =>
+    apiService.post<{ success: boolean; data: { jobs: Array<{ id: string }> }; message?: string }>(
+      '/admin/backups/run-daily-now'
+    ),
+
+  listBackups: (params?: { limit?: number }) =>
+    apiService.get<{ success: boolean; data: any[]; message?: string }>('/admin/backups/jobs', { params }),
+
+  getBackupDownloadUrl: (backupId: string) => `${API_URL}/admin/backups/jobs/${encodeURIComponent(String(backupId || '').trim())}/download`,
 
   getOrderTicketingSettings: () =>
     apiService.get<{

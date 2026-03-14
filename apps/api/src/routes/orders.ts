@@ -754,6 +754,20 @@ const decodeReadyToWearVariantKey = (variantKey: unknown) => {
 
 router.use(authenticate);
 
+router.get('/limits', async (_req, res, next) => {
+  try {
+    const workflowSettings = await readOrderWorkflowSettings();
+    res.json({
+      success: true,
+      data: {
+        ...(workflowSettings.orderLimits || {}),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 let cachedTransporter: nodemailer.Transporter | null | undefined;
 
 function getOrderMailer(): nodemailer.Transporter | null {
@@ -2114,6 +2128,27 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       });
     }
 
+    const workflowSettings = await readOrderWorkflowSettings();
+    const maxCustomToWearItemsPerCheckout = Math.max(
+      1,
+      Number(workflowSettings.orderLimits?.maxCustomToWearItemsPerCheckout || 3)
+    );
+    if (data.paymentIntentId) {
+      const existingCount = await prisma.order.count({
+        where: {
+          customerId,
+          type: OrderType.CUSTOM_DESIGN,
+          paymentIntentId: data.paymentIntentId,
+        },
+      });
+      if (existingCount >= maxCustomToWearItemsPerCheckout) {
+        return res.status(400).json({
+          success: false,
+          message: `A maximum of ${maxCustomToWearItemsPerCheckout} Custom To Wear product(s) is allowed in one checkout.`,
+        });
+      }
+    }
+
     const wantsDesignerToChooseFabric =
       data.fabricSelectionMode === 'DESIGNER_DECIDES' || !data.fabricId;
     const hasCustomerSelectedFabric = !wantsDesignerToChooseFabric;
@@ -2200,7 +2235,6 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
     const tax = subtotal * 0.08; // 8% tax
     const total = subtotal + shippingCost + tax;
     const isPaymentConfirmed = Boolean(data.paymentIntentId);
-    const workflowSettings = await readOrderWorkflowSettings();
     const autoProcessingEligible = canAutoProcessOrder({
       processingMode: workflowSettings.processingMode,
       criteria: workflowSettings.autoProcessCriteria,
@@ -2392,14 +2426,19 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
 
     const data = schema.parse(req.body);
     const customerId = req.user!.id;
+    const workflowSettings = await readOrderWorkflowSettings();
+    const maxReadyToWearUnitsPerOrder = Math.max(
+      1,
+      Number(workflowSettings.orderLimits?.maxReadyToWearUnitsPerOrder || 3)
+    );
     const totalReadyToWearUnits = (Array.isArray(data.items) ? data.items : []).reduce(
       (sum: number, item: { quantity: number }) => sum + Math.max(0, Number(item.quantity || 0)),
       0
     );
-    if (totalReadyToWearUnits > 3) {
+    if (totalReadyToWearUnits > maxReadyToWearUnitsPerOrder) {
       return res.status(400).json({
         success: false,
-        message: 'A maximum of 3 products is allowed per order.',
+        message: `A maximum of ${maxReadyToWearUnitsPerOrder} Ready To Wear unit(s) is allowed per order.`,
       });
     }
 
@@ -2530,7 +2569,6 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
     const tax = subtotal * 0.08;
     const total = subtotal + shippingCost + tax;
     const isPaymentConfirmed = Boolean(data.paymentIntentId);
-    const workflowSettings = await readOrderWorkflowSettings();
     const autoProcessingEligible = canAutoProcessOrder({
       processingMode: workflowSettings.processingMode,
       criteria: workflowSettings.autoProcessCriteria,
@@ -2658,7 +2696,7 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
   try {
     const schema = z.object({
       fabricId: z.string().uuid(),
-      yards: z.number().int().min(3),
+      yards: z.number().int().min(1),
       shippingAddressId: z.string().uuid(),
       paymentMethod: z.string(),
       paymentIntentId: z.string().min(1).optional(),
@@ -2675,6 +2713,42 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
 
     const data = schema.parse(req.body);
     const customerId = req.user!.id;
+    const workflowSettings = await readOrderWorkflowSettings();
+    const minFabricYardsPerOrder = Math.max(1, Number(workflowSettings.orderLimits?.minFabricYardsPerOrder || 3));
+    const maxFabricYardsPerOrder = Math.max(
+      minFabricYardsPerOrder,
+      Number(workflowSettings.orderLimits?.maxFabricYardsPerOrder || 200)
+    );
+    if (Number(data.yards || 0) > maxFabricYardsPerOrder) {
+      return res.status(400).json({
+        success: false,
+        message: `Maximum Fabric To Buy order is ${maxFabricYardsPerOrder} yards.`,
+      });
+    }
+    if (data.paymentIntentId) {
+      const existingOrders = await prisma.order.findMany({
+        where: {
+          customerId,
+          type: OrderType.FABRIC_ONLY,
+          paymentIntentId: data.paymentIntentId,
+        },
+        include: {
+          fabricOrder: {
+            select: { yards: true },
+          },
+        },
+      });
+      const alreadyOrderedYards = existingOrders.reduce(
+        (sum, order) => sum + Math.max(0, Number(order.fabricOrder?.yards || 0)),
+        0
+      );
+      if (alreadyOrderedYards + Number(data.yards || 0) > maxFabricYardsPerOrder) {
+        return res.status(400).json({
+          success: false,
+          message: `Maximum Fabric To Buy yards per checkout is ${maxFabricYardsPerOrder}.`,
+        });
+      }
+    }
 
     const customerProfile = await prisma.customerProfile.findUnique({
       where: { userId: customerId },
@@ -2708,7 +2782,7 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
     if (!address) {
       return res.status(404).json({ success: false, message: 'Shipping address not found.' });
     }
-    const effectiveMinYards = Math.max(3, Number(fabric.minYards || 3));
+    const effectiveMinYards = Math.max(minFabricYardsPerOrder, Number(fabric.minYards || 3));
     if (Number(data.yards || 0) < effectiveMinYards) {
       return res.status(400).json({
         success: false,
@@ -2729,7 +2803,6 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
     const tax = subtotal * 0.08;
     const total = subtotal + shippingCost + tax;
     const isPaymentConfirmed = Boolean(data.paymentIntentId);
-    const workflowSettings = await readOrderWorkflowSettings();
     const autoProcessingEligible = canAutoProcessOrder({
       processingMode: workflowSettings.processingMode,
       criteria: workflowSettings.autoProcessCriteria,

@@ -25,6 +25,7 @@ import {
   Sparkles,
   Star,
   Bell,
+  Database,
   Search,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -70,6 +71,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: '3D TryON', href: '/admin/try-on', icon: Sparkles },
     { label: 'Featured Requests', href: '/admin/featured-requests', icon: Star },
     { label: 'Notifications', href: '/admin/notifications', icon: Bell },
+    { label: 'Backup Center', href: '/admin/backups', icon: Database },
     { label: 'Partner API', href: '/admin/partners', icon: Settings },
     { label: 'API Diagnostics', href: '/admin/api-diagnostics', icon: Settings },
     { label: 'Order Management', href: '/admin/orders', icon: ShoppingBag },
@@ -160,6 +162,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/try-on': ['products:manage'],
       '/admin/featured-requests': ['products:manage'],
       '/admin/notifications': ['notifications:manage'],
+      '/admin/backups': ['backups:manage'],
       '/admin/partners': ['users:manage'],
       '/admin/orders': ['orders:manage'],
       '/admin/banners': ['banners:manage'],

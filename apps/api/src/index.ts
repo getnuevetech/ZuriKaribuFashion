@@ -39,6 +39,7 @@ import categoryPageSettingsRoutes from './routes/category-page-settings';
 import adminDesignerFabricCountryAccessRoutes from './routes/admin-designer-fabric-country-access';
 import featuredProductRequestsRoutes from './routes/featured-product-requests';
 import enterpriseRoutes from './routes/enterprise';
+import adminBackupsRoutes from './routes/admin-backups';
 import { runStartupRepairs } from './bootstrap';
 
 const app = express();
@@ -187,6 +188,7 @@ app.get('/api/health/routes', (_req, res) => {
 app.use('/api/auth', authRoutes);
 // Legacy compatibility alias for older frontend auth paths (/api/google, /api/google-link, ...)
 app.use('/api', authRoutes);
+app.use('/api/backups', adminBackupsRoutes);
 app.use('/api/admin/designer-fabric-country-access', adminDesignerFabricCountryAccessRoutes);
 app.use('/api/admin/designer-fabric-access', adminDesignerFabricCountryAccessRoutes);
 app.use('/api/admin/designer/fabric-country-access', adminDesignerFabricCountryAccessRoutes);
@@ -220,6 +222,7 @@ app.use('/api/featured-requests', featuredProductRequestsRoutes);
 app.use('/api/featured-product-requests', featuredProductRequestsRoutes);
 app.use('/api/enterprise', enterpriseRoutes);
 app.use('/api/admin/enterprise', enterpriseRoutes);
+app.use('/api/admin/backups', adminBackupsRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
