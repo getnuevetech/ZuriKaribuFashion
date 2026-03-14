@@ -2318,14 +2318,14 @@ export default function DesignerDashboard() {
       ) : null}
 
       {showProfileGovernance && profileCompletion ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-4">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
           <div>
-            <h2 className="text-lg font-semibold text-amber-900">Vendor governance profile</h2>
-            <p className="text-sm text-amber-800 mt-1">
+            <h2 className="text-lg font-semibold text-gray-900">Vendor governance profile</h2>
+            <p className="text-sm text-gray-600 mt-1">
               Status: <span className="font-semibold">{profileCompletion?.profileStatus || 'INCOMPLETE'}</span>. Product upload access is controlled by admin approval.
             </p>
             {profileCompletion?.profileReviewNotes ? (
-              <p className="text-sm text-amber-900 mt-1">Admin note: {profileCompletion.profileReviewNotes}</p>
+              <p className="text-sm text-gray-700 mt-1">Admin note: {profileCompletion.profileReviewNotes}</p>
             ) : null}
           </div>
 
@@ -2346,11 +2346,14 @@ export default function DesignerDashboard() {
                       ? '.pdf,.doc,.docx,.txt,.rtf,.odt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.oasis.opendocument.text'
                       : '.jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.txt,.rtf,.odt,image/jpeg,image/png,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.oasis.opendocument.text';
                   const uploadedFiles = profileFileValues[field.key] || [];
+                  const uploadInputId = `designer-profile-upload-${String(field.key || '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9_-]/g, '-')}`;
                   const isCountryField = isCountryGovernanceField(field);
                   const isCityField = isCityGovernanceField(field);
                   return (
                     <div key={field.key} className={isTextArea ? 'md:col-span-2' : ''}>
-                      <label className="block text-xs font-semibold text-amber-900 mb-1">
+                      <label className="block text-xs font-semibold text-gray-900 mb-1">
                         {field.label}
                         {field.required ? <span className="text-red-600 ml-1">*</span> : null}
                       </label>
@@ -2368,7 +2371,7 @@ export default function DesignerDashboard() {
                               return next;
                             })
                           }
-                          className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
                         >
                           <option value="">Select country...</option>
                           {LOCATION_COUNTRIES.map((country) => (
@@ -2381,7 +2384,7 @@ export default function DesignerDashboard() {
                         <select
                           value={value}
                           onChange={(event) => setProfileForm((prev) => ({ ...prev, [field.key]: event.target.value }))}
-                          className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
                           disabled={!selectedProfileCountry}
                         >
                           <option value="">
@@ -2401,7 +2404,7 @@ export default function DesignerDashboard() {
                         <select
                           value={value}
                           onChange={(event) => setProfileForm((prev) => ({ ...prev, [field.key]: event.target.value }))}
-                          className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
                         >
                           <option value="">Select...</option>
                           {(field.options || []).map((option) => (
@@ -2414,11 +2417,12 @@ export default function DesignerDashboard() {
                         <textarea
                           value={value}
                           onChange={(event) => setProfileForm((prev) => ({ ...prev, [field.key]: event.target.value }))}
-                          className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm min-h-[90px]"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm min-h-[90px] text-gray-900"
                         />
                       ) : isUploadField ? (
                         <div className="space-y-2">
                           <input
+                            id={uploadInputId}
                             type="file"
                             multiple
                             accept={uploadAccept}
@@ -2426,21 +2430,39 @@ export default function DesignerDashboard() {
                               handleProfileFieldFileUpload(field, event.target.files);
                               event.target.value = '';
                             }}
-                            className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm bg-white"
+                            className="sr-only"
                             disabled={uploadingProfileField === field.key}
                           />
+                          <div className="flex items-center gap-2">
+                            <label
+                              htmlFor={uploadInputId}
+                              className={`inline-flex cursor-pointer items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900 transition-colors ${
+                                uploadingProfileField === field.key ? 'pointer-events-none opacity-60' : 'hover:bg-gray-100'
+                              }`}
+                            >
+                              <Upload className="mr-2 h-4 w-4" />
+                              {uploadingProfileField === field.key ? 'Uploading...' : 'Choose file(s)'}
+                            </label>
+                            <span className="text-xs text-gray-500">
+                              {isImageUploadField
+                                ? 'Images only'
+                                : isDocumentUploadField
+                                  ? 'Documents only'
+                                  : 'Images or documents'}
+                            </span>
+                          </div>
                           {uploadedFiles.length > 0 ? (
                             <div className="space-y-1">
                               {uploadedFiles.map((fileUrl) => (
                                 <div
                                   key={fileUrl}
-                                  className="flex items-center justify-between gap-2 rounded border border-amber-200 bg-white px-2 py-1"
+                                  className="flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1"
                                 >
                                   <a
                                     href={fileUrl}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="truncate text-xs text-amber-800 hover:underline"
+                                    className="truncate text-xs text-gray-700 hover:underline"
                                   >
                                     {fileUrl}
                                   </a>
@@ -2455,7 +2477,7 @@ export default function DesignerDashboard() {
                               ))}
                             </div>
                           ) : (
-                            <p className="text-xs text-amber-700">
+                            <p className="text-xs text-gray-500">
                               {uploadingProfileField === field.key
                                 ? 'Uploading files...'
                                 : 'No files uploaded yet.'}
@@ -2468,21 +2490,21 @@ export default function DesignerDashboard() {
                           value={value}
                           onChange={(event) => setProfileForm((prev) => ({ ...prev, [field.key]: event.target.value }))}
                           placeholder={field.placeholder || ''}
-                          className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
                         />
                       )}
-                      {field.helpText ? <p className="mt-1 text-xs text-amber-700">{field.helpText}</p> : null}
+                      {field.helpText ? <p className="mt-1 text-xs text-gray-500">{field.helpText}</p> : null}
                     </div>
                   );
                 })}
             </div>
           ) : (
-            <p className="text-sm text-amber-900">
+            <p className="text-sm text-gray-700">
               Vendor application form is not configured yet. Admin must create Fashion Designer profile fields first.
             </p>
           )}
 
-          {profileMessage ? <p className="text-sm text-amber-900">{profileMessage}</p> : null}
+          {profileMessage ? <p className="text-sm text-gray-700">{profileMessage}</p> : null}
           <div>
             <Button
               size="sm"
