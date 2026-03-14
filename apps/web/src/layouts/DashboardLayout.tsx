@@ -189,6 +189,10 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Role Management', href: '/admin/roles', icon: ChevronRight },
     { label: 'Backup Center', href: '/admin/backups', icon: Database },
   ];
+  const canRenderAdminAccountsSubItem = (href: string) => {
+    if (href === '/admin/backups') return true;
+    return canAccessAdminNav(href);
+  };
   const paymentSubmenu = [
     { label: 'Payment API', href: '/admin/payments', icon: ChevronRight },
     { label: 'Seller Earnings', href: '/admin/vendor-payments?tab=seller-earnings', icon: ChevronRight },
@@ -230,7 +234,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       addSearchEntries(
         entries,
         adminAccountsSubmenu
-          .filter((item) => canAccessAdminNav(item.href))
+          .filter((item) => canRenderAdminAccountsSubItem(item.href))
           .map((item) => ({ label: item.label, href: item.href, keywords: ['admin account', 'administrator'] })),
         { prefix: 'Administrator Accounts' }
       );
@@ -567,7 +571,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                   location.pathname === '/admin/roles' ||
                   location.pathname === '/admin/backups';
                 const visibleAdminAccountSubmenu = adminAccountsSubmenu.filter((subItem) =>
-                  canAccessAdminNav(subItem.href)
+                  canRenderAdminAccountsSubItem(subItem.href)
                 );
                 if (visibleAdminAccountSubmenu.length === 0) {
                   return null;
