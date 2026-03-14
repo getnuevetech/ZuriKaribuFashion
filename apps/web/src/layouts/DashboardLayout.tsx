@@ -71,7 +71,6 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: '3D TryON', href: '/admin/try-on', icon: Sparkles },
     { label: 'Featured Requests', href: '/admin/featured-requests', icon: Star },
     { label: 'Notifications', href: '/admin/notifications', icon: Bell },
-    { label: 'Backup Center', href: '/admin/backups', icon: Database },
     { label: 'Partner API', href: '/admin/partners', icon: Settings },
     { label: 'API Diagnostics', href: '/admin/api-diagnostics', icon: Settings },
     { label: 'Order Management', href: '/admin/orders', icon: ShoppingBag },
@@ -143,7 +142,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     const permissionByHref: Record<string, string[]> = {
       '/admin/users': ['users:read'],
       '/admin/customer-accounts': ['users:read'],
-      '/admin/administrator-accounts': ['users:read'],
+      '/admin/administrator-accounts': [],
       '/admin/administrators': ['users:read'],
       '/admin/roles': ['admin:roles:manage', 'users:read'],
       '/admin/vendor-profiles': ['vendor_profiles:read'],
@@ -188,6 +187,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const adminAccountsSubmenu = [
     { label: 'Administrator', href: '/admin/administrators', icon: ChevronRight },
     { label: 'Role Management', href: '/admin/roles', icon: ChevronRight },
+    { label: 'Backup Center', href: '/admin/backups', icon: Database },
   ];
   const paymentSubmenu = [
     { label: 'Payment API', href: '/admin/payments', icon: ChevronRight },
@@ -563,7 +563,9 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
 
               if (userType === 'admin' && item.href === '/admin/administrator-accounts') {
                 const adminAccountsMenuActive =
-                  location.pathname === '/admin/administrators' || location.pathname === '/admin/roles';
+                  location.pathname === '/admin/administrators' ||
+                  location.pathname === '/admin/roles' ||
+                  location.pathname === '/admin/backups';
                 const visibleAdminAccountSubmenu = adminAccountsSubmenu.filter((subItem) =>
                   canAccessAdminNav(subItem.href)
                 );
