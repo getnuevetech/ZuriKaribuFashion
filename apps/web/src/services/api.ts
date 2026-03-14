@@ -6277,6 +6277,32 @@ const adminApi = {
   deletePaymentIntegration: (providerKey: string) =>
     deleteAdminPaymentIntegrationWithFallback<{ success: boolean; message?: string }>(providerKey),
 
+  getVendorPaymentConfig: () =>
+    apiService.get<{ success: boolean; data: any }>('/payments/admin/vendor-config'),
+
+  updateVendorPaymentConfig: (data: {
+    releaseDelayDays?: number;
+    minimumWithdrawalUsd?: number;
+    slaHours?: number;
+    platformFeePercent?: number;
+    withdrawalOptions?: string[];
+    payoutIntegrationProviders?: string[];
+    notes?: string;
+  }) => apiService.put<{ success: boolean; data: any; message?: string }>('/payments/admin/vendor-config', data),
+
+  getVendorEarnings: (params?: { role?: 'FABRIC_SELLER' | 'FASHION_DESIGNER' }) =>
+    apiService.get<{ success: boolean; data: { seller: any[]; designer: any[] } }>('/payments/admin/vendor-earnings', {
+      params,
+    }),
+
+  getVendorWithdrawals: (params?: { role?: 'FABRIC_SELLER' | 'FASHION_DESIGNER'; status?: string }) =>
+    apiService.get<{ success: boolean; data: any[] }>('/payments/admin/vendor-withdrawals', { params }),
+
+  updateVendorWithdrawal: (
+    id: string,
+    data: { status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAID' | 'CANCELLED'; adminNotes?: string; payoutReference?: string }
+  ) => apiService.patch<{ success: boolean; message?: string }>(`/payments/admin/vendor-withdrawals/${id}`, data),
+
   getShippingIntegrations: () =>
     readAdminShippingIntegrationsWithFallback<{
       success: boolean;
@@ -7034,6 +7060,30 @@ const paymentsApi = {
 
   confirmPayment: (paymentIntentId: string) =>
     apiService.post<{ success: boolean; data: any }>('/payments/confirm', { paymentIntentId }),
+
+  getVendorConfig: () =>
+    apiService.get<{ success: boolean; data: any }>('/payments/vendor/config'),
+
+  getVendorEarnings: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/payments/vendor/earnings'),
+
+  getVendorWallet: () =>
+    apiService.get<{ success: boolean; data: any }>('/payments/vendor/wallet'),
+
+  getVendorWithdrawalMethods: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/payments/vendor/withdrawal-methods'),
+
+  createVendorWithdrawalMethod: (data: any) =>
+    apiService.post<{ success: boolean; data?: any; message?: string }>('/payments/vendor/withdrawal-methods', data),
+
+  updateVendorWithdrawalMethod: (id: string, data: any) =>
+    apiService.put<{ success: boolean; message?: string }>(`/payments/vendor/withdrawal-methods/${id}`, data),
+
+  getVendorWithdrawalRequests: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/payments/vendor/withdrawals'),
+
+  createVendorWithdrawalRequest: (data: { methodId: string; amountUsd: number; notes?: string }) =>
+    apiService.post<{ success: boolean; data?: any; message?: string }>('/payments/vendor/withdrawals', data),
 };
 
 // Shipping API

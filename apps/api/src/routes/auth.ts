@@ -39,6 +39,79 @@ const googleLoginSchema = z.object({
   idToken: z.string().min(1, 'Google ID token is required'),
 });
 
+const AFRICAN_COUNTRY_CODE_TO_NAME = new Map<string, string>([
+  ['DZ', 'Algeria'],
+  ['AO', 'Angola'],
+  ['BJ', 'Benin'],
+  ['BW', 'Botswana'],
+  ['BF', 'Burkina Faso'],
+  ['BI', 'Burundi'],
+  ['CM', 'Cameroon'],
+  ['CV', 'Cape Verde'],
+  ['CF', 'Central African Republic'],
+  ['TD', 'Chad'],
+  ['KM', 'Comoros'],
+  ['CG', 'Republic of the Congo'],
+  ['CD', 'Democratic Republic of the Congo'],
+  ['CI', "Cote d'Ivoire"],
+  ['DJ', 'Djibouti'],
+  ['EG', 'Egypt'],
+  ['GQ', 'Equatorial Guinea'],
+  ['ER', 'Eritrea'],
+  ['SZ', 'Eswatini'],
+  ['ET', 'Ethiopia'],
+  ['GA', 'Gabon'],
+  ['GM', 'Gambia'],
+  ['GH', 'Ghana'],
+  ['GN', 'Guinea'],
+  ['GW', 'Guinea-Bissau'],
+  ['KE', 'Kenya'],
+  ['LS', 'Lesotho'],
+  ['LR', 'Liberia'],
+  ['LY', 'Libya'],
+  ['MG', 'Madagascar'],
+  ['MW', 'Malawi'],
+  ['ML', 'Mali'],
+  ['MR', 'Mauritania'],
+  ['MU', 'Mauritius'],
+  ['MA', 'Morocco'],
+  ['MZ', 'Mozambique'],
+  ['NA', 'Namibia'],
+  ['NE', 'Niger'],
+  ['NG', 'Nigeria'],
+  ['RW', 'Rwanda'],
+  ['ST', 'Sao Tome and Principe'],
+  ['SN', 'Senegal'],
+  ['SC', 'Seychelles'],
+  ['SL', 'Sierra Leone'],
+  ['SO', 'Somalia'],
+  ['ZA', 'South Africa'],
+  ['SS', 'South Sudan'],
+  ['SD', 'Sudan'],
+  ['TZ', 'Tanzania'],
+  ['TG', 'Togo'],
+  ['TN', 'Tunisia'],
+  ['UG', 'Uganda'],
+  ['ZM', 'Zambia'],
+  ['ZW', 'Zimbabwe'],
+]);
+const AFRICAN_COUNTRY_NAME_SET = new Set(
+  Array.from(AFRICAN_COUNTRY_CODE_TO_NAME.values()).map((value) => value.toLowerCase())
+);
+
+const normalizeVendorRegistrationCountry = (countryInput: string | undefined | null) => {
+  const raw = String(countryInput || '').trim();
+  if (!raw) return null;
+  const code = raw.toUpperCase();
+  if (AFRICAN_COUNTRY_CODE_TO_NAME.has(code)) {
+    return AFRICAN_COUNTRY_CODE_TO_NAME.get(code) || null;
+  }
+  if (AFRICAN_COUNTRY_NAME_SET.has(raw.toLowerCase())) {
+    return raw;
+  }
+  return null;
+};
+
 const BCRYPT_PATTERN = /^\$2[aby]\$\d{2}\$/;
 const isSchemaDriftError = (error: unknown) =>
   error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -343,6 +416,17 @@ router.post('/register', async (req, res, next) => {
       status: UserStatus.ACTIVE,
     };
 
+    const normalizedVendorCountry =
+      data.role === 'FABRIC_SELLER' || data.role === 'FASHION_DESIGNER'
+        ? normalizeVendorRegistrationCountry(data.country)
+        : null;
+    if ((data.role === 'FABRIC_SELLER' || data.role === 'FASHION_DESIGNER') && !normalizedVendorCountry) {
+      return res.status(400).json({
+        success: false,
+        message: 'Seller/Designer registration is restricted to African countries only.',
+      });
+    }
+
     // Add role-specific profile
     if (data.role === 'CUSTOMER') {
       userData.customerProfile = {
@@ -360,7 +444,7 @@ router.post('/register', async (req, res, next) => {
           businessName: data.businessName,
           businessEmail: data.businessEmail || data.email,
           businessPhone: data.businessPhone || data.phone,
-          country: data.country,
+          country: normalizedVendorCountry || data.country,
           city: data.city,
           address: data.address || '',
         },
@@ -378,7 +462,7 @@ router.post('/register', async (req, res, next) => {
           businessEmail: data.businessEmail || data.email,
           businessPhone: data.businessPhone || data.phone,
           bio: data.bio,
-          country: data.country,
+          country: normalizedVendorCountry || data.country,
           city: data.city,
           address: data.address || '',
         },

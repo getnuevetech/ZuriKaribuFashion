@@ -52,6 +52,7 @@ import AdminTraffic from './pages/admin/Traffic';
 import AdminMeasurementTemplates from './pages/admin/MeasurementTemplates';
 import AdminCurrencyMatrix from './pages/admin/CurrencyMatrix';
 import AdminPayments from './pages/admin/Payments';
+import AdminVendorPayments from './pages/admin/VendorPayments';
 import AdminShipping from './pages/admin/Shipping';
 import AdminPartnerIntegrations from './pages/admin/PartnerIntegrations';
 import AdminTryOnSettings from './pages/admin/TryOnSettings';
@@ -60,9 +61,11 @@ import AdminFeaturedRequests from './pages/admin/FeaturedRequests';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
+import SellerPayments from './pages/seller/Payments';
 
 // Designer Pages
 import DesignerDashboard from './pages/designer/Dashboard';
+import DesignerPayments from './pages/designer/Payments';
 
 // QA Pages
 import QADashboard from './pages/qa/Dashboard';
@@ -260,6 +263,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/admin/vendor-payments"
+                  element={
+                    <AdminPermissionGuard required={['payments:manage']}>
+                      <AdminVendorPayments />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
                   path="/admin/shipping"
                   element={
                     <AdminPermissionGuard required={['shipping:manage']}>
@@ -350,6 +361,7 @@ function App() {
             <Route element={<ProtectedRoute allowedRoles={['FABRIC_SELLER']} />}>
               <Route element={<DashboardLayout userType="seller" />}>
                 <Route path="/seller" element={<SellerDashboard />} />
+                <Route path="/seller/payments" element={<SellerPayments />} />
               </Route>
             </Route>
 
@@ -357,6 +369,7 @@ function App() {
             <Route element={<ProtectedRoute allowedRoles={['FASHION_DESIGNER']} />}>
               <Route element={<DashboardLayout userType="designer" />}>
                 <Route path="/designer" element={<DesignerDashboard />} />
+                <Route path="/designer/payments" element={<DesignerPayments />} />
               </Route>
             </Route>
 

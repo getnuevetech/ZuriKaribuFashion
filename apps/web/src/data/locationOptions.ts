@@ -95,6 +95,12 @@ const COUNTRY_ROWS: CountryRow[] = [
   { code: 'MX', name: 'Mexico', cities: ['Mexico City', 'Guadalajara'] },
 ];
 
+const AFRICAN_COUNTRY_CODES = new Set<string>([
+  'DZ', 'AO', 'BJ', 'BW', 'BF', 'BI', 'CM', 'CV', 'CF', 'TD', 'KM', 'CG', 'CD', 'CI', 'DJ', 'EG', 'GQ', 'ER', 'SZ',
+  'ET', 'GA', 'GM', 'GH', 'GN', 'GW', 'KE', 'LS', 'LR', 'LY', 'MG', 'MW', 'ML', 'MR', 'MU', 'MA', 'MZ', 'NA', 'NE',
+  'NG', 'RW', 'ST', 'SN', 'SC', 'SL', 'SO', 'ZA', 'SS', 'SD', 'TZ', 'TG', 'TN', 'UG', 'ZM', 'ZW',
+]);
+
 const ALL_COUNTRIES: CountryOption[] = COUNTRY_ROWS.map((row) => ({ code: row.code, name: row.name })).sort((a, b) =>
   a.name.localeCompare(b.name)
 );
@@ -182,6 +188,10 @@ const STATE_CACHE = new Map<string, string[]>();
 
 export function getCountryOptions() {
   return ALL_COUNTRIES;
+}
+
+export function getAfricanCountryOptions() {
+  return ALL_COUNTRIES.filter((country) => AFRICAN_COUNTRY_CODES.has(country.code));
 }
 
 export function resolveCountryCode(value: string | null | undefined) {

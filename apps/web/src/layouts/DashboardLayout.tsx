@@ -77,12 +77,14 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Product Lists', href: '/seller?tab=fabrics', icon: Package },
     { label: '3D TryON', href: '/seller?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/seller?tab=orders', icon: ShoppingBag },
+    { label: 'Payment', href: '/seller/payments', icon: CreditCard },
   ],
   designer: [
     { label: 'Dashboard', href: '/designer', icon: LayoutDashboard },
     { label: 'Product Lists', href: '/designer?tab=designs', icon: Package },
     { label: '3D TryON', href: '/designer?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/designer?tab=orders', icon: ShoppingBag },
+    { label: 'Payment', href: '/designer/payments', icon: CreditCard },
   ],
   qa: [
     { label: 'Dashboard', href: '/qa', icon: LayoutDashboard },
@@ -112,6 +114,7 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isOrderMenuOpen, setIsOrderMenuOpen] = useState(true);
+  const [isPaymentMenuOpen, setIsPaymentMenuOpen] = useState(true);
   const [isAdminAccountsMenuOpen, setIsAdminAccountsMenuOpen] = useState(true);
   const { user, logout } = useAuthStore();
   const location = useLocation();
@@ -138,6 +141,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/pricing': ['pricing:manage'],
       '/admin/promo-codes': ['pricing:manage'],
       '/admin/payments': ['payments:manage'],
+      '/admin/vendor-payments': ['payments:manage'],
       '/admin/shipping': ['shipping:manage'],
       '/admin/try-on': ['products:manage'],
       '/admin/featured-requests': ['products:manage'],
@@ -166,6 +170,13 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const adminAccountsSubmenu = [
     { label: 'Administrator', href: '/admin/administrators', icon: ChevronRight },
     { label: 'Role Management', href: '/admin/roles', icon: ChevronRight },
+  ];
+  const paymentSubmenu = [
+    { label: 'Payment API', href: '/admin/payments', icon: ChevronRight },
+    { label: 'Seller Earnings', href: '/admin/vendor-payments?tab=seller-earnings', icon: ChevronRight },
+    { label: 'Designer Earnings', href: '/admin/vendor-payments?tab=designer-earnings', icon: ChevronRight },
+    { label: 'Vendor Payment Config', href: '/admin/vendor-payments?tab=vendor-config', icon: ChevronRight },
+    { label: 'Withdrawal Pay Integration', href: '/admin/vendor-payments?tab=withdrawal-integrations', icon: ChevronRight },
   ];
 
   const handleLogout = () => {
@@ -199,6 +210,63 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                 location.pathname === hrefUrl.pathname &&
                 (hrefTab ? currentTab === hrefTab : !currentTab);
               const Icon = item.icon;
+
+              if (userType === 'admin' && item.href === '/admin/payments') {
+                const paymentMenuActive = location.pathname === '/admin/payments' || location.pathname === '/admin/vendor-payments';
+                const visiblePaymentSubmenu = paymentSubmenu.filter((subItem) => canAccessAdminNav(subItem.href.split('?')[0]));
+                if (visiblePaymentSubmenu.length === 0) {
+                  return null;
+                }
+                return (
+                  <div key={item.href} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsPaymentMenuOpen((prev) => !prev)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
+                        paymentMenuActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {isSidebarOpen ? (
+                        <>
+                          <span className="text-sm font-medium">Payment</span>
+                          <span className="ml-auto">
+                            {isPaymentMenuOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </span>
+                        </>
+                      ) : null}
+                    </button>
+                    {isPaymentMenuOpen && isSidebarOpen ? (
+                      <div className="ml-7 space-y-1">
+                        {visiblePaymentSubmenu.map((subItem) => {
+                          const subUrl = new URL(subItem.href, window.location.origin);
+                          const subTab = subUrl.searchParams.get('tab');
+                          const subActive =
+                            location.pathname === subUrl.pathname &&
+                            (subTab ? currentTab === subTab : !currentTab);
+                          const SubIcon = subItem.icon;
+                          return (
+                            <Link
+                              key={subItem.href}
+                              to={subItem.href}
+                              className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
+                                subActive
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <SubIcon className="h-4 w-4" />
+                              <span>{subItem.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
 
               if (userType === 'admin' && item.href === '/admin/orders') {
                 const orderMenuActive = location.pathname === '/admin/orders';

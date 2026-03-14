@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Store, Scissors } from 'lucide-react';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
@@ -6,7 +6,13 @@ import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import Button from '../components/ui/Button';
 import { getHomeRouteForUser } from '../auth/rbac';
-import { getCityOptionsByCountryCode, getCountryOptions, resolveCountryCode, resolveCountryName } from '../data/locationOptions';
+import {
+  getAfricanCountryOptions,
+  getCityOptionsByCountryCode,
+  getCountryOptions,
+  resolveCountryCode,
+  resolveCountryName,
+} from '../data/locationOptions';
 
 type UserRole = 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER';
 
@@ -61,9 +67,22 @@ export default function Register() {
   const googleClientId = String(
     import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || ''
   ).trim();
-  const countryOptions = getCountryOptions();
+  const allCountryOptions = getCountryOptions();
+  const africanCountryOptions = getAfricanCountryOptions();
+  const countryOptions =
+    selectedRole === 'FABRIC_SELLER' || selectedRole === 'FASHION_DESIGNER'
+      ? africanCountryOptions
+      : allCountryOptions;
   const selectedCountryCode = resolveCountryCode(formData.country);
   const cityOptions = getCityOptionsByCountryCode(selectedCountryCode);
+
+  useEffect(() => {
+    if (selectedRole !== 'FABRIC_SELLER' && selectedRole !== 'FASHION_DESIGNER') return;
+    if (!selectedCountryCode) return;
+    const isAllowed = africanCountryOptions.some((entry) => entry.code === selectedCountryCode);
+    if (isAllowed) return;
+    setFormData((prev) => ({ ...prev, country: '', city: '' }));
+  }, [selectedRole, selectedCountryCode, africanCountryOptions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

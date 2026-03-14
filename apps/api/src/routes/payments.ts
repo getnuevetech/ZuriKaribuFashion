@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { Router } from 'express';
 import Stripe from 'stripe';
 import { z } from 'zod';
-import { prisma, PaymentStatus, OrderStatus } from '../db';
+import { prisma, PaymentStatus, OrderStatus, UserRole } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 
@@ -1357,6 +1357,801 @@ router.post('/confirm', authenticate, authorizePermissions(Permissions.PAYMENTS_
         updatedOrders: updated.count,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+type VendorRoleToken = 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+type VendorWithdrawalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAID' | 'CANCELLED';
+
+type VendorPaymentConfig = {
+  releaseDelayDays: number;
+  minimumWithdrawalUsd: number;
+  slaHours: number;
+  platformFeePercent: number;
+  withdrawalOptions: string[];
+  payoutIntegrationProviders: string[];
+  notes?: string;
+};
+
+let vendorPaymentSchemaEnsured = false;
+
+const DEFAULT_VENDOR_PAYMENT_CONFIG: VendorPaymentConfig = {
+  releaseDelayDays: 7,
+  minimumWithdrawalUsd: 25,
+  slaHours: 72,
+  platformFeePercent: 0,
+  withdrawalOptions: ['BANK_TRANSFER', 'MOBILE_MONEY', 'PAYPAL'],
+  payoutIntegrationProviders: ['BANK_TRANSFER'],
+  notes: '',
+};
+
+const getVendorRoleFromUser = (role: UserRole): VendorRoleToken | null => {
+  if (role === UserRole.FABRIC_SELLER) return 'FABRIC_SELLER';
+  if (role === UserRole.FASHION_DESIGNER) return 'FASHION_DESIGNER';
+  return null;
+};
+
+const normalizeVendorRoleToken = (value: unknown): VendorRoleToken | null => {
+  const token = String(value || '').trim().toUpperCase();
+  if (token === 'FABRIC_SELLER' || token === 'SELLER') return 'FABRIC_SELLER';
+  if (token === 'FASHION_DESIGNER' || token === 'DESIGNER') return 'FASHION_DESIGNER';
+  return null;
+};
+
+const normalizeWithdrawalStatus = (value: unknown): VendorWithdrawalStatus | null => {
+  const token = String(value || '').trim().toUpperCase();
+  if (token === 'PENDING') return 'PENDING';
+  if (token === 'APPROVED') return 'APPROVED';
+  if (token === 'REJECTED') return 'REJECTED';
+  if (token === 'PAID') return 'PAID';
+  if (token === 'CANCELLED') return 'CANCELLED';
+  return null;
+};
+
+const parsePositiveNumber = (value: unknown, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+};
+
+const normalizeVendorPaymentConfig = (value: unknown): VendorPaymentConfig => {
+  const objectValue = parseObject(value);
+  return {
+    releaseDelayDays: Math.max(0, Math.floor(parsePositiveNumber(objectValue.releaseDelayDays, DEFAULT_VENDOR_PAYMENT_CONFIG.releaseDelayDays))),
+    minimumWithdrawalUsd: Number(parsePositiveNumber(objectValue.minimumWithdrawalUsd, DEFAULT_VENDOR_PAYMENT_CONFIG.minimumWithdrawalUsd).toFixed(2)),
+    slaHours: Math.max(1, Math.floor(parsePositiveNumber(objectValue.slaHours, DEFAULT_VENDOR_PAYMENT_CONFIG.slaHours))),
+    platformFeePercent: Number(parsePositiveNumber(objectValue.platformFeePercent, DEFAULT_VENDOR_PAYMENT_CONFIG.platformFeePercent).toFixed(2)),
+    withdrawalOptions: parseArray(objectValue.withdrawalOptions)
+      .map((entry) => String(entry || '').trim().toUpperCase())
+      .filter(Boolean),
+    payoutIntegrationProviders: parseArray(objectValue.payoutIntegrationProviders)
+      .map((entry) => String(entry || '').trim().toUpperCase())
+      .filter(Boolean),
+    notes: objectValue.notes ? String(objectValue.notes) : '',
+  };
+};
+
+async function ensureVendorPaymentSchema() {
+  if (vendorPaymentSchemaEnsured) return;
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "VendorPaymentConfig" (
+      "id" TEXT NOT NULL,
+      "key" TEXT NOT NULL,
+      "value" JSONB NOT NULL DEFAULT '{}'::jsonb,
+      "updatedById" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "VendorPaymentConfig_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "VendorPaymentConfig_key_key" ON "VendorPaymentConfig"("key")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "VendorWithdrawalMethod" (
+      "id" TEXT NOT NULL,
+      "userId" TEXT NOT NULL,
+      "role" TEXT NOT NULL,
+      "methodType" TEXT NOT NULL,
+      "accountName" TEXT,
+      "accountNumber" TEXT,
+      "bankName" TEXT,
+      "routingNumber" TEXT,
+      "walletAddress" TEXT,
+      "providerName" TEXT,
+      "currencyCode" TEXT NOT NULL DEFAULT 'USD',
+      "metadata" JSONB NOT NULL DEFAULT '{}'::jsonb,
+      "isDefault" BOOLEAN NOT NULL DEFAULT false,
+      "isActive" BOOLEAN NOT NULL DEFAULT true,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "VendorWithdrawalMethod_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "VendorWithdrawalMethod_userId_idx" ON "VendorWithdrawalMethod"("userId")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "VendorWithdrawalRequest" (
+      "id" TEXT NOT NULL,
+      "userId" TEXT NOT NULL,
+      "role" TEXT NOT NULL,
+      "methodId" TEXT NOT NULL,
+      "amountUsd" DECIMAL(10,2) NOT NULL,
+      "status" TEXT NOT NULL DEFAULT 'PENDING',
+      "notes" TEXT,
+      "adminNotes" TEXT,
+      "payoutReference" TEXT,
+      "processedById" TEXT,
+      "requestedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "processedAt" TIMESTAMP(3),
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "VendorWithdrawalRequest_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "VendorWithdrawalRequest_userId_idx" ON "VendorWithdrawalRequest"("userId")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "VendorWithdrawalRequest_status_idx" ON "VendorWithdrawalRequest"("status")`
+  );
+  vendorPaymentSchemaEnsured = true;
+}
+
+async function readVendorPaymentConfig() {
+  await ensureVendorPaymentSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<{ value: unknown }>>(
+    `SELECT "value" FROM "VendorPaymentConfig" WHERE "key" = $1 LIMIT 1`,
+    'vendor_payment_config'
+  );
+  if (rows.length === 0) {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "VendorPaymentConfig" ("id","key","value","createdAt","updatedAt")
+       VALUES ($1,$2,$3::jsonb,NOW(),NOW())`,
+      randomUUID(),
+      'vendor_payment_config',
+      JSON.stringify(DEFAULT_VENDOR_PAYMENT_CONFIG)
+    );
+    return { ...DEFAULT_VENDOR_PAYMENT_CONFIG };
+  }
+  return normalizeVendorPaymentConfig(rows[0]?.value);
+}
+
+async function saveVendorPaymentConfig(config: VendorPaymentConfig, updatedById: string) {
+  await ensureVendorPaymentSchema();
+  const normalized = normalizeVendorPaymentConfig(config);
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "VendorPaymentConfig" ("id","key","value","updatedById","createdAt","updatedAt")
+     VALUES ($1,$2,$3::jsonb,$4,NOW(),NOW())
+     ON CONFLICT ("key")
+     DO UPDATE SET "value" = EXCLUDED."value", "updatedById" = EXCLUDED."updatedById", "updatedAt" = NOW()`,
+    randomUUID(),
+    'vendor_payment_config',
+    JSON.stringify(normalized),
+    updatedById
+  );
+  return normalized;
+}
+
+type VendorEarningRow = {
+  orderId: string;
+  orderNumber: string;
+  itemName: string;
+  grossAmountUsd: number;
+  paymentStatus: string;
+  orderStatus: string;
+  createdAt: string;
+  paidAt: string | null;
+  vendorUserId: string;
+  vendorName: string;
+  customerName: string;
+};
+
+async function readVendorEarnings(role: VendorRoleToken, options?: { userId?: string }) {
+  const values: unknown[] = [];
+  const addFilter = (sql: string, value: unknown) => {
+    values.push(value);
+    return sql.replace('?', String(values.length));
+  };
+
+  if (role === 'FABRIC_SELLER') {
+    const conditions = ['1=1'];
+    if (options?.userId) {
+      conditions.push(addFilter(`sp."userId" = $?`, options.userId));
+    }
+    const rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT
+        o."id" AS "orderId",
+        o."orderNumber",
+        o."paymentStatus",
+        o."status" AS "orderStatus",
+        o."createdAt",
+        o."paidAt",
+        f."name" AS "itemName",
+        (fo."totalPrice")::numeric::text AS "grossAmountUsd",
+        sellerUser."id" AS "vendorUserId",
+        CONCAT(COALESCE(sellerUser."firstName", ''), ' ', COALESCE(sellerUser."lastName", '')) AS "vendorName",
+        CONCAT(COALESCE(customer."firstName", ''), ' ', COALESCE(customer."lastName", '')) AS "customerName"
+      FROM "FabricOrderItem" fo
+      INNER JOIN "Order" o ON o."id" = fo."orderId"
+      INNER JOIN "Fabric" f ON f."id" = fo."fabricId"
+      INNER JOIN "FabricSellerProfile" sp ON sp."id" = f."sellerId"
+      INNER JOIN "User" sellerUser ON sellerUser."id" = sp."userId"
+      LEFT JOIN "User" customer ON customer."id" = o."customerId"
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY o."createdAt" DESC`,
+      ...values
+    );
+    return rows.map((row) => ({
+      orderId: String(row.orderId || ''),
+      orderNumber: String(row.orderNumber || ''),
+      itemName: String(row.itemName || 'Fabric Order'),
+      grossAmountUsd: Number(row.grossAmountUsd || 0),
+      paymentStatus: String(row.paymentStatus || ''),
+      orderStatus: String(row.orderStatus || ''),
+      createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString(),
+      paidAt: row.paidAt ? new Date(row.paidAt).toISOString() : null,
+      vendorUserId: String(row.vendorUserId || ''),
+      vendorName: String(row.vendorName || '').trim() || 'Seller',
+      customerName: String(row.customerName || '').trim() || 'Customer',
+    })) as VendorEarningRow[];
+  }
+
+  const conditions = ['1=1'];
+  if (options?.userId) {
+    conditions.push(addFilter(`dp."userId" = $?`, options.userId));
+  }
+  const rows = await prisma.$queryRawUnsafe<Array<any>>(
+    `SELECT * FROM (
+      SELECT
+        o."id" AS "orderId",
+        o."orderNumber",
+        o."paymentStatus",
+        o."status" AS "orderStatus",
+        o."createdAt",
+        o."paidAt",
+        d."name" AS "itemName",
+        (doi."price")::numeric::text AS "grossAmountUsd",
+        designerUser."id" AS "vendorUserId",
+        CONCAT(COALESCE(designerUser."firstName", ''), ' ', COALESCE(designerUser."lastName", '')) AS "vendorName",
+        CONCAT(COALESCE(customer."firstName", ''), ' ', COALESCE(customer."lastName", '')) AS "customerName"
+      FROM "DesignOrderItem" doi
+      INNER JOIN "Order" o ON o."id" = doi."orderId"
+      INNER JOIN "Design" d ON d."id" = doi."designId"
+      INNER JOIN "DesignerProfile" dp ON dp."id" = d."designerId"
+      INNER JOIN "User" designerUser ON designerUser."id" = dp."userId"
+      LEFT JOIN "User" customer ON customer."id" = o."customerId"
+      WHERE ${conditions.join(' AND ')}
+      UNION ALL
+      SELECT
+        o."id" AS "orderId",
+        o."orderNumber",
+        o."paymentStatus",
+        o."status" AS "orderStatus",
+        o."createdAt",
+        o."paidAt",
+        rt."name" AS "itemName",
+        (rti."price" * rti."quantity")::numeric::text AS "grossAmountUsd",
+        designerUser."id" AS "vendorUserId",
+        CONCAT(COALESCE(designerUser."firstName", ''), ' ', COALESCE(designerUser."lastName", '')) AS "vendorName",
+        CONCAT(COALESCE(customer."firstName", ''), ' ', COALESCE(customer."lastName", '')) AS "customerName"
+      FROM "ReadyToWearOrderItem" rti
+      INNER JOIN "Order" o ON o."id" = rti."orderId"
+      INNER JOIN "ReadyToWear" rt ON rt."id" = rti."readyToWearId"
+      INNER JOIN "DesignerProfile" dp ON dp."id" = rt."designerId"
+      INNER JOIN "User" designerUser ON designerUser."id" = dp."userId"
+      LEFT JOIN "User" customer ON customer."id" = o."customerId"
+      WHERE ${conditions.join(' AND ')}
+    ) earnings
+    ORDER BY "createdAt" DESC`,
+    ...values
+  );
+  return rows.map((row) => ({
+    orderId: String(row.orderId || ''),
+    orderNumber: String(row.orderNumber || ''),
+    itemName: String(row.itemName || 'Design Order'),
+    grossAmountUsd: Number(row.grossAmountUsd || 0),
+    paymentStatus: String(row.paymentStatus || ''),
+    orderStatus: String(row.orderStatus || ''),
+    createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString(),
+    paidAt: row.paidAt ? new Date(row.paidAt).toISOString() : null,
+    vendorUserId: String(row.vendorUserId || ''),
+    vendorName: String(row.vendorName || '').trim() || 'Designer',
+    customerName: String(row.customerName || '').trim() || 'Customer',
+  })) as VendorEarningRow[];
+}
+
+function applyEarningAvailability(rows: VendorEarningRow[], config: VendorPaymentConfig) {
+  const now = Date.now();
+  const lockedStatuses = new Set(['REFUNDED', 'REFUND_REQUESTED', 'CANCELLED']);
+  return rows.map((row) => {
+    const paymentCompleted = String(row.paymentStatus || '').toUpperCase() === 'COMPLETED';
+    const blocked = lockedStatuses.has(String(row.orderStatus || '').toUpperCase());
+    const settledAt = row.paidAt ? new Date(row.paidAt).getTime() : new Date(row.createdAt).getTime();
+    const availableAtMs = settledAt + config.releaseDelayDays * 24 * 60 * 60 * 1000;
+    const available = paymentCompleted && !blocked && now >= availableAtMs;
+    return {
+      ...row,
+      availableAt: new Date(availableAtMs).toISOString(),
+      isAvailableForWithdrawal: available,
+    };
+  });
+}
+
+async function readVendorWithdrawalRequests(options?: { userId?: string; role?: VendorRoleToken; status?: VendorWithdrawalStatus }) {
+  await ensureVendorPaymentSchema();
+  const filters: string[] = ['1=1'];
+  const values: unknown[] = [];
+  if (options?.userId) {
+    values.push(options.userId);
+    filters.push(`wr."userId" = $${values.length}`);
+  }
+  if (options?.role) {
+    values.push(options.role);
+    filters.push(`UPPER(wr."role") = $${values.length}`);
+  }
+  if (options?.status) {
+    values.push(options.status);
+    filters.push(`UPPER(wr."status") = $${values.length}`);
+  }
+  const rows = await prisma.$queryRawUnsafe<Array<any>>(
+    `SELECT
+      wr."id",
+      wr."userId",
+      wr."role",
+      wr."methodId",
+      wr."amountUsd"::numeric::text AS "amountUsd",
+      wr."status",
+      wr."notes",
+      wr."adminNotes",
+      wr."payoutReference",
+      wr."processedById",
+      wr."requestedAt",
+      wr."processedAt",
+      wr."createdAt",
+      wr."updatedAt",
+      wm."methodType",
+      wm."providerName",
+      wm."accountName",
+      wm."accountNumber",
+      u."firstName",
+      u."lastName",
+      u."email"
+     FROM "VendorWithdrawalRequest" wr
+     LEFT JOIN "VendorWithdrawalMethod" wm ON wm."id" = wr."methodId"
+     LEFT JOIN "User" u ON u."id" = wr."userId"
+     WHERE ${filters.join(' AND ')}
+     ORDER BY wr."requestedAt" DESC`,
+    ...values
+  );
+  return rows.map((row) => ({
+    id: String(row.id || ''),
+    userId: String(row.userId || ''),
+    role: normalizeVendorRoleToken(row.role) || 'FABRIC_SELLER',
+    methodId: String(row.methodId || ''),
+    methodType: String(row.methodType || ''),
+    providerName: String(row.providerName || ''),
+    accountName: String(row.accountName || ''),
+    accountNumber: String(row.accountNumber || ''),
+    amountUsd: Number(row.amountUsd || 0),
+    status: normalizeWithdrawalStatus(row.status) || 'PENDING',
+    notes: row.notes ? String(row.notes) : '',
+    adminNotes: row.adminNotes ? String(row.adminNotes) : '',
+    payoutReference: row.payoutReference ? String(row.payoutReference) : '',
+    processedById: row.processedById ? String(row.processedById) : '',
+    requestedAt: row.requestedAt ? new Date(row.requestedAt).toISOString() : new Date().toISOString(),
+    processedAt: row.processedAt ? new Date(row.processedAt).toISOString() : null,
+    createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString(),
+    updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : new Date().toISOString(),
+    vendorName: `${String(row.firstName || '').trim()} ${String(row.lastName || '').trim()}`.trim() || 'Vendor',
+    vendorEmail: String(row.email || ''),
+  }));
+}
+
+async function computeVendorWallet(userId: string, role: VendorRoleToken, config: VendorPaymentConfig) {
+  const earnings = applyEarningAvailability(await readVendorEarnings(role, { userId }), config);
+  const requests = await readVendorWithdrawalRequests({ userId, role });
+  const totalEarningsUsd = earnings.reduce((sum, row) => sum + Number(row.grossAmountUsd || 0), 0);
+  const availableEarningsUsd = earnings
+    .filter((row: any) => row.isAvailableForWithdrawal)
+    .reduce((sum, row) => sum + Number(row.grossAmountUsd || 0), 0);
+  const pendingWithdrawalUsd = requests
+    .filter((row) => ['PENDING', 'APPROVED'].includes(String(row.status || '').toUpperCase()))
+    .reduce((sum, row) => sum + Number(row.amountUsd || 0), 0);
+  const paidOutUsd = requests
+    .filter((row) => String(row.status || '').toUpperCase() === 'PAID')
+    .reduce((sum, row) => sum + Number(row.amountUsd || 0), 0);
+  const withdrawableUsd = Math.max(0, Number((availableEarningsUsd - pendingWithdrawalUsd - paidOutUsd).toFixed(2)));
+  return {
+    totalEarningsUsd: Number(totalEarningsUsd.toFixed(2)),
+    availableEarningsUsd: Number(availableEarningsUsd.toFixed(2)),
+    pendingWithdrawalUsd: Number(pendingWithdrawalUsd.toFixed(2)),
+    paidOutUsd: Number(paidOutUsd.toFixed(2)),
+    withdrawableUsd,
+    releaseDelayDays: config.releaseDelayDays,
+    minimumWithdrawalUsd: config.minimumWithdrawalUsd,
+    slaHours: config.slaHours,
+  };
+}
+
+router.get('/vendor/config', authenticate, async (req, res, next) => {
+  try {
+    const role = getVendorRoleFromUser(req.user!.role);
+    if (!role) {
+      return res.status(403).json({ success: false, message: 'Vendor account required.' });
+    }
+    const config = await readVendorPaymentConfig();
+    res.json({ success: true, data: config });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/vendor/earnings', authenticate, async (req, res, next) => {
+  try {
+    const role = getVendorRoleFromUser(req.user!.role);
+    if (!role) {
+      return res.status(403).json({ success: false, message: 'Vendor account required.' });
+    }
+    const config = await readVendorPaymentConfig();
+    const rows = applyEarningAvailability(await readVendorEarnings(role, { userId: req.user!.id }), config);
+    res.json({
+      success: true,
+      data: rows,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/vendor/wallet', authenticate, async (req, res, next) => {
+  try {
+    const role = getVendorRoleFromUser(req.user!.role);
+    if (!role) {
+      return res.status(403).json({ success: false, message: 'Vendor account required.' });
+    }
+    const config = await readVendorPaymentConfig();
+    const wallet = await computeVendorWallet(req.user!.id, role, config);
+    res.json({ success: true, data: wallet });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/vendor/withdrawal-methods', authenticate, async (req, res, next) => {
+  try {
+    const role = getVendorRoleFromUser(req.user!.role);
+    if (!role) {
+      return res.status(403).json({ success: false, message: 'Vendor account required.' });
+    }
+    await ensureVendorPaymentSchema();
+    const rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT
+        "id","userId","role","methodType","accountName","accountNumber","bankName","routingNumber","walletAddress","providerName",
+        "currencyCode","metadata","isDefault","isActive","createdAt","updatedAt"
+       FROM "VendorWithdrawalMethod"
+       WHERE "userId" = $1 AND UPPER("role") = $2
+       ORDER BY "isDefault" DESC, "createdAt" ASC`,
+      req.user!.id,
+      role
+    );
+    res.json({
+      success: true,
+      data: rows.map((row) => ({
+        id: String(row.id || ''),
+        userId: String(row.userId || ''),
+        role: normalizeVendorRoleToken(row.role) || role,
+        methodType: String(row.methodType || ''),
+        accountName: String(row.accountName || ''),
+        accountNumber: String(row.accountNumber || ''),
+        bankName: String(row.bankName || ''),
+        routingNumber: String(row.routingNumber || ''),
+        walletAddress: String(row.walletAddress || ''),
+        providerName: String(row.providerName || ''),
+        currencyCode: String(row.currencyCode || 'USD'),
+        metadata: parseObject(row.metadata),
+        isDefault: Boolean(row.isDefault),
+        isActive: Boolean(row.isActive),
+        createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString(),
+        updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : new Date().toISOString(),
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/vendor/withdrawal-methods', authenticate, async (req, res, next) => {
+  try {
+    const role = getVendorRoleFromUser(req.user!.role);
+    if (!role) {
+      return res.status(403).json({ success: false, message: 'Vendor account required.' });
+    }
+    await ensureVendorPaymentSchema();
+    const payload = z
+      .object({
+        methodType: z.string().min(2),
+        accountName: z.string().optional(),
+        accountNumber: z.string().optional(),
+        bankName: z.string().optional(),
+        routingNumber: z.string().optional(),
+        walletAddress: z.string().optional(),
+        providerName: z.string().optional(),
+        currencyCode: z.string().optional(),
+        metadata: z.record(z.any()).optional(),
+        isDefault: z.boolean().optional(),
+      })
+      .parse(req.body);
+
+    if (payload.isDefault) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "VendorWithdrawalMethod" SET "isDefault" = false, "updatedAt" = NOW()
+         WHERE "userId" = $1 AND UPPER("role") = $2`,
+        req.user!.id,
+        role
+      );
+    }
+
+    const id = randomUUID();
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "VendorWithdrawalMethod"
+       ("id","userId","role","methodType","accountName","accountNumber","bankName","routingNumber","walletAddress","providerName",
+        "currencyCode","metadata","isDefault","isActive","createdAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,true,NOW(),NOW())`,
+      id,
+      req.user!.id,
+      role,
+      String(payload.methodType || '').trim().toUpperCase(),
+      payload.accountName ? String(payload.accountName) : null,
+      payload.accountNumber ? String(payload.accountNumber) : null,
+      payload.bankName ? String(payload.bankName) : null,
+      payload.routingNumber ? String(payload.routingNumber) : null,
+      payload.walletAddress ? String(payload.walletAddress) : null,
+      payload.providerName ? String(payload.providerName) : null,
+      String(payload.currencyCode || 'USD').toUpperCase(),
+      JSON.stringify(payload.metadata || {}),
+      Boolean(payload.isDefault)
+    );
+    res.status(201).json({ success: true, data: { id }, message: 'Withdrawal method saved.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put('/vendor/withdrawal-methods/:id', authenticate, async (req, res, next) => {
+  try {
+    const role = getVendorRoleFromUser(req.user!.role);
+    if (!role) {
+      return res.status(403).json({ success: false, message: 'Vendor account required.' });
+    }
+    await ensureVendorPaymentSchema();
+    const payload = z
+      .object({
+        methodType: z.string().min(2).optional(),
+        accountName: z.string().optional(),
+        accountNumber: z.string().optional(),
+        bankName: z.string().optional(),
+        routingNumber: z.string().optional(),
+        walletAddress: z.string().optional(),
+        providerName: z.string().optional(),
+        currencyCode: z.string().optional(),
+        metadata: z.record(z.any()).optional(),
+        isDefault: z.boolean().optional(),
+        isActive: z.boolean().optional(),
+      })
+      .parse(req.body);
+    const methodId = String(req.params.id || '').trim();
+    if (!methodId) {
+      return res.status(400).json({ success: false, message: 'Method id is required.' });
+    }
+    if (payload.isDefault) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "VendorWithdrawalMethod" SET "isDefault" = false, "updatedAt" = NOW()
+         WHERE "userId" = $1 AND UPPER("role") = $2`,
+        req.user!.id,
+        role
+      );
+    }
+    await prisma.$executeRawUnsafe(
+      `UPDATE "VendorWithdrawalMethod"
+       SET "methodType" = COALESCE($1, "methodType"),
+           "accountName" = COALESCE($2, "accountName"),
+           "accountNumber" = COALESCE($3, "accountNumber"),
+           "bankName" = COALESCE($4, "bankName"),
+           "routingNumber" = COALESCE($5, "routingNumber"),
+           "walletAddress" = COALESCE($6, "walletAddress"),
+           "providerName" = COALESCE($7, "providerName"),
+           "currencyCode" = COALESCE($8, "currencyCode"),
+           "metadata" = COALESCE($9::jsonb, "metadata"),
+           "isDefault" = COALESCE($10, "isDefault"),
+           "isActive" = COALESCE($11, "isActive"),
+           "updatedAt" = NOW()
+       WHERE "id" = $12 AND "userId" = $13 AND UPPER("role") = $14`,
+      payload.methodType ? String(payload.methodType).trim().toUpperCase() : null,
+      payload.accountName ?? null,
+      payload.accountNumber ?? null,
+      payload.bankName ?? null,
+      payload.routingNumber ?? null,
+      payload.walletAddress ?? null,
+      payload.providerName ?? null,
+      payload.currencyCode ? String(payload.currencyCode).toUpperCase() : null,
+      payload.metadata ? JSON.stringify(payload.metadata) : null,
+      payload.isDefault ?? null,
+      payload.isActive ?? null,
+      methodId,
+      req.user!.id,
+      role
+    );
+    res.json({ success: true, message: 'Withdrawal method updated.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/vendor/withdrawals', authenticate, async (req, res, next) => {
+  try {
+    const role = getVendorRoleFromUser(req.user!.role);
+    if (!role) {
+      return res.status(403).json({ success: false, message: 'Vendor account required.' });
+    }
+    const rows = await readVendorWithdrawalRequests({ userId: req.user!.id, role });
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/vendor/withdrawals', authenticate, async (req, res, next) => {
+  try {
+    const role = getVendorRoleFromUser(req.user!.role);
+    if (!role) {
+      return res.status(403).json({ success: false, message: 'Vendor account required.' });
+    }
+    const payload = z
+      .object({
+        methodId: z.string().min(1),
+        amountUsd: z.number().positive(),
+        notes: z.string().optional(),
+      })
+      .parse(req.body);
+
+    const config = await readVendorPaymentConfig();
+    if (payload.amountUsd < config.minimumWithdrawalUsd) {
+      return res.status(400).json({
+        success: false,
+        message: `Minimum withdrawal is $${config.minimumWithdrawalUsd.toFixed(2)}.`,
+      });
+    }
+
+    const wallet = await computeVendorWallet(req.user!.id, role, config);
+    if (payload.amountUsd > wallet.withdrawableUsd) {
+      return res.status(400).json({
+        success: false,
+        message: `Requested amount exceeds withdrawable balance ($${wallet.withdrawableUsd.toFixed(2)}).`,
+      });
+    }
+
+    const methodRows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT "id" FROM "VendorWithdrawalMethod"
+       WHERE "id" = $1 AND "userId" = $2 AND UPPER("role") = $3 AND "isActive" = true
+       LIMIT 1`,
+      payload.methodId,
+      req.user!.id,
+      role
+    );
+    if (methodRows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Withdrawal method not found.' });
+    }
+
+    const requestId = randomUUID();
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "VendorWithdrawalRequest"
+       ("id","userId","role","methodId","amountUsd","status","notes","requestedAt","createdAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5::numeric,'PENDING',$6,NOW(),NOW(),NOW())`,
+      requestId,
+      req.user!.id,
+      role,
+      payload.methodId,
+      Number(payload.amountUsd.toFixed(2)),
+      payload.notes ? String(payload.notes) : null
+    );
+    res.status(201).json({ success: true, data: { id: requestId }, message: 'Withdrawal request submitted.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/admin/vendor-config', authenticate, authorizePermissions(Permissions.PAYMENTS_MANAGE), async (_req, res, next) => {
+  try {
+    const config = await readVendorPaymentConfig();
+    res.json({ success: true, data: config });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put('/admin/vendor-config', authenticate, authorizePermissions(Permissions.PAYMENTS_MANAGE), async (req, res, next) => {
+  try {
+    const payload = z
+      .object({
+        releaseDelayDays: z.number().int().min(0).optional(),
+        minimumWithdrawalUsd: z.number().min(0).optional(),
+        slaHours: z.number().int().min(1).optional(),
+        platformFeePercent: z.number().min(0).optional(),
+        withdrawalOptions: z.array(z.string()).optional(),
+        payoutIntegrationProviders: z.array(z.string()).optional(),
+        notes: z.string().optional(),
+      })
+      .parse(req.body);
+    const current = await readVendorPaymentConfig();
+    const saved = await saveVendorPaymentConfig({ ...current, ...payload }, req.user!.id);
+    res.json({ success: true, data: saved, message: 'Vendor payment configuration saved.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/admin/vendor-earnings', authenticate, authorizePermissions(Permissions.PAYMENTS_MANAGE), async (req, res, next) => {
+  try {
+    const role = normalizeVendorRoleToken(req.query.role);
+    const config = await readVendorPaymentConfig();
+    const sellerRows = role === 'FASHION_DESIGNER' ? [] : applyEarningAvailability(await readVendorEarnings('FABRIC_SELLER'), config);
+    const designerRows = role === 'FABRIC_SELLER' ? [] : applyEarningAvailability(await readVendorEarnings('FASHION_DESIGNER'), config);
+    res.json({
+      success: true,
+      data: {
+        seller: sellerRows,
+        designer: designerRows,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/admin/vendor-withdrawals', authenticate, authorizePermissions(Permissions.PAYMENTS_MANAGE), async (req, res, next) => {
+  try {
+    const role = normalizeVendorRoleToken(req.query.role);
+    const status = normalizeWithdrawalStatus(req.query.status);
+    const rows = await readVendorWithdrawalRequests({ role: role || undefined, status: status || undefined });
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/admin/vendor-withdrawals/:id', authenticate, authorizePermissions(Permissions.PAYMENTS_MANAGE), async (req, res, next) => {
+  try {
+    const payload = z
+      .object({
+        status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'PAID', 'CANCELLED']),
+        adminNotes: z.string().optional(),
+        payoutReference: z.string().optional(),
+      })
+      .parse(req.body);
+    const requestId = String(req.params.id || '').trim();
+    if (!requestId) {
+      return res.status(400).json({ success: false, message: 'Withdrawal request id is required.' });
+    }
+    await ensureVendorPaymentSchema();
+    await prisma.$executeRawUnsafe(
+      `UPDATE "VendorWithdrawalRequest"
+       SET "status" = $1,
+           "adminNotes" = COALESCE($2, "adminNotes"),
+           "payoutReference" = COALESCE($3, "payoutReference"),
+           "processedById" = $4,
+           "processedAt" = CASE WHEN $1 IN ('APPROVED','REJECTED','PAID','CANCELLED') THEN NOW() ELSE "processedAt" END,
+           "updatedAt" = NOW()
+       WHERE "id" = $5`,
+      payload.status,
+      payload.adminNotes ?? null,
+      payload.payoutReference ?? null,
+      req.user!.id,
+      requestId
+    );
+    res.json({ success: true, message: 'Withdrawal request updated.' });
   } catch (error) {
     next(error);
   }
