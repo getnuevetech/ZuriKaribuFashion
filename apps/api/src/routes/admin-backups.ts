@@ -108,6 +108,11 @@ const parseObject = (value: unknown): Record<string, unknown> => {
   return {};
 };
 
+const jsonWithBigIntReplacer = (_key: string, value: unknown) =>
+  typeof value === 'bigint' ? value.toString() : value;
+
+const stringifyJsonSafely = (value: unknown) => JSON.stringify(value, jsonWithBigIntReplacer);
+
 const normalizeBackupSettings = (value: unknown): BackupSettings => {
   const source = parseObject(value);
   const storage = parseObject(source.storage);
@@ -227,7 +232,7 @@ async function writeBackupSettings(payload: unknown, merge = true): Promise<Back
      ON CONFLICT ("key")
      DO UPDATE SET "value" = EXCLUDED."value", "updatedAt" = NOW()`,
     BACKUP_SETTINGS_KEY,
-    JSON.stringify(next)
+    stringifyJsonSafely(next)
   );
   return next;
 }
@@ -309,7 +314,7 @@ async function markBackupJobCompleted(
     input.s3Bucket || null,
     input.s3Key || null,
     input.s3Uri || null,
-    JSON.stringify(input.metadata || {})
+    stringifyJsonSafely(input.metadata || {})
   );
 }
 
@@ -363,7 +368,7 @@ async function dumpAllTablesAsJson(targetFilePath: string) {
     const tableRows = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "${tableName}"`);
     (payload.tables as Record<string, unknown>)[tableName] = tableRows;
   }
-  await fsp.writeFile(targetFilePath, JSON.stringify(payload), 'utf8');
+  await fsp.writeFile(targetFilePath, stringifyJsonSafely(payload), 'utf8');
 }
 
 async function buildCustomerSnapshot(targetFilePath: string) {
@@ -427,7 +432,7 @@ async function buildCustomerSnapshot(targetFilePath: string) {
     ticketMessages,
     notifications,
   };
-  await fsp.writeFile(targetFilePath, JSON.stringify(payload), 'utf8');
+  await fsp.writeFile(targetFilePath, stringifyJsonSafely(payload), 'utf8');
 }
 
 async function buildSellerSnapshot(targetFilePath: string) {
@@ -489,7 +494,7 @@ async function buildSellerSnapshot(targetFilePath: string) {
     vendorWithdrawalMethods,
     vendorWithdrawalRequests,
   };
-  await fsp.writeFile(targetFilePath, JSON.stringify(payload), 'utf8');
+  await fsp.writeFile(targetFilePath, stringifyJsonSafely(payload), 'utf8');
 }
 
 async function buildDesignerSnapshot(targetFilePath: string) {
@@ -553,7 +558,7 @@ async function buildDesignerSnapshot(targetFilePath: string) {
     vendorWithdrawalMethods,
     vendorWithdrawalRequests,
   };
-  await fsp.writeFile(targetFilePath, JSON.stringify(payload), 'utf8');
+  await fsp.writeFile(targetFilePath, stringifyJsonSafely(payload), 'utf8');
 }
 
 async function runDatabaseBackupFile(targetFilePath: string) {
