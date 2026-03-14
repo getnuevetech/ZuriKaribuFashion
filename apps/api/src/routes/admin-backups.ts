@@ -19,6 +19,7 @@ const DEFAULT_BACKUP_DIRECTORY = path.resolve(process.cwd(), 'secure-backups');
 const PUBLIC_UPLOADS_DIRECTORY = path.resolve(process.cwd(), 'uploads');
 const TMP_BACKUP_DIRECTORY = path.resolve('/tmp', 'african-fashion-secure-backups');
 let resolvedBackupDirectoryCache: string | null = null;
+const DIRECTORY_PERMISSION_ERROR_CODES = new Set(['EACCES', 'EPERM', 'EROFS']);
 const BACKUP_TYPES = ['DATABASE_FULL', 'SYSTEM_FULL', 'CUSTOMER_FULL', 'SELLER_FULL', 'DESIGNER_FULL'] as const;
 type BackupType = (typeof BACKUP_TYPES)[number];
 
@@ -134,8 +135,18 @@ const canUseBackupDirectory = async (dirPath: string) => {
   }
 };
 
-async function resolveBackupDirectory() {
-  if (resolvedBackupDirectoryCache) return resolvedBackupDirectoryCache;
+const isDirectoryPermissionError = (error: unknown) => {
+  const code = String((error as any)?.code || '').trim().toUpperCase();
+  if (DIRECTORY_PERMISSION_ERROR_CODES.has(code)) return true;
+  const message = String((error as any)?.message || '').toLowerCase();
+  return message.includes('permission denied') || message.includes('read-only file system');
+};
+
+async function resolveBackupDirectory(forceRefresh = false) {
+  if (!forceRefresh && resolvedBackupDirectoryCache) {
+    if (await canUseBackupDirectory(resolvedBackupDirectoryCache)) return resolvedBackupDirectoryCache;
+    resolvedBackupDirectoryCache = null;
+  }
   const configured = resolveConfiguredBackupDirectory(
     process.env.BACKUP_DIRECTORY || process.env.BACKUP_STORAGE_DIR || process.env.SECURE_BACKUP_DIRECTORY
   );
@@ -282,8 +293,8 @@ async function writeBackupSettings(payload: unknown, merge = true): Promise<Back
   return next;
 }
 
-async function ensureBackupDirectory() {
-  const backupDirectory = await resolveBackupDirectory();
+async function ensureBackupDirectory(forceRefresh = false) {
+  const backupDirectory = await resolveBackupDirectory(forceRefresh);
   await fsp.mkdir(backupDirectory, { recursive: true, mode: 0o700 });
   return backupDirectory;
 }
@@ -704,25 +715,38 @@ async function runSingleBackup(params: {
   reason?: string;
   forceS3Upload?: boolean;
 }) {
-  const backupDirectory = await ensureBackupDirectory();
+  let backupDirectory = await ensureBackupDirectory();
   const timestamp = buildTimestampLabel();
   const outputBaseName = `${params.type.toLowerCase()}-${timestamp}`;
   const extension =
     params.type === 'SYSTEM_FULL' ? 'tar.gz' : params.type === 'DATABASE_FULL' ? 'sql' : 'json';
   const fileName = `${outputBaseName}.${extension}`;
-  const localPath = path.join(backupDirectory, fileName);
   const artifactId = await createBackupJob(params.type, params.createdById, params.reason);
-  try {
+  const executeBackupAtPath = async (targetPath: string, targetDirectory: string) => {
     if (params.type === 'DATABASE_FULL') {
-      await runDatabaseBackupFile(localPath);
+      await runDatabaseBackupFile(targetPath);
     } else if (params.type === 'SYSTEM_FULL') {
-      await runSystemBackupFile(localPath, backupDirectory);
+      await runSystemBackupFile(targetPath, targetDirectory);
     } else if (params.type === 'CUSTOMER_FULL') {
-      await buildCustomerSnapshot(localPath);
+      await buildCustomerSnapshot(targetPath);
     } else if (params.type === 'SELLER_FULL') {
-      await buildSellerSnapshot(localPath);
+      await buildSellerSnapshot(targetPath);
     } else if (params.type === 'DESIGNER_FULL') {
-      await buildDesignerSnapshot(localPath);
+      await buildDesignerSnapshot(targetPath);
+    }
+  };
+  try {
+    let localPath = path.join(backupDirectory, fileName);
+    try {
+      await executeBackupAtPath(localPath, backupDirectory);
+    } catch (error) {
+      // If configured dir becomes unwritable at runtime, re-resolve and retry once.
+      if (!isDirectoryPermissionError(error)) throw error;
+      const previousDirectory = backupDirectory;
+      backupDirectory = await ensureBackupDirectory(true);
+      if (path.resolve(previousDirectory) === path.resolve(backupDirectory)) throw error;
+      localPath = path.join(backupDirectory, fileName);
+      await executeBackupAtPath(localPath, backupDirectory);
     }
 
     let effectivePath = localPath;
