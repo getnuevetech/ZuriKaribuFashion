@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -25,6 +25,7 @@ import {
   Sparkles,
   Star,
   Bell,
+  Search,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -43,6 +44,12 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
+}
+
+interface DashboardSearchEntry {
+  label: string;
+  href: string;
+  keywords: string[];
 }
 
 const navItems: Record<DashboardType, NavItem[]> = {
@@ -191,6 +198,157 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Product Configuration', href: '/admin/products/configuration', icon: ChevronRight },
     { label: 'Product Labels', href: '/admin/product-labels', icon: ChevronRight },
   ];
+  const [dashboardSearchQuery, setDashboardSearchQuery] = useState('');
+  const [isDashboardSearchOpen, setIsDashboardSearchOpen] = useState(false);
+  const [highlightedSearchResultIndex, setHighlightedSearchResultIndex] = useState(0);
+  const searchContainerRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const normalizeSearchToken = (value: string) => String(value || '').trim().toLowerCase();
+  const addSearchEntries = (
+    target: DashboardSearchEntry[],
+    rows: Array<{ label: string; href: string; keywords?: string[] }>,
+    options?: { prefix?: string }
+  ) => {
+    const prefix = options?.prefix ? `${options.prefix} ` : '';
+    for (const row of rows) {
+      target.push({
+        label: `${prefix}${row.label}`.trim(),
+        href: row.href,
+        keywords: Array.isArray(row.keywords) ? row.keywords : [],
+      });
+    }
+  };
+  const dashboardSearchEntries = useMemo(() => {
+    const entries: DashboardSearchEntry[] = [];
+    addSearchEntries(entries, visibleItems.map((item) => ({ label: item.label, href: item.href })));
+
+    if (userType === 'admin') {
+      addSearchEntries(
+        entries,
+        adminAccountsSubmenu
+          .filter((item) => canAccessAdminNav(item.href))
+          .map((item) => ({ label: item.label, href: item.href, keywords: ['admin account', 'administrator'] })),
+        { prefix: 'Administrator Accounts' }
+      );
+      addSearchEntries(
+        entries,
+        paymentSubmenu
+          .filter((item) => canAccessAdminNav(item.href.split('?')[0]))
+          .map((item) => ({ label: item.label, href: item.href, keywords: ['payment', 'earnings', 'withdrawal'] })),
+        { prefix: 'Payment' }
+      );
+      addSearchEntries(
+        entries,
+        orderManagementSubmenu
+          .filter((item) => canAccessAdminNav(item.href.split('?')[0]))
+          .map((item) => ({ label: item.label, href: item.href, keywords: ['order', 'ticket', 'workflow', 'queue'] })),
+        { prefix: 'Order Management' }
+      );
+      addSearchEntries(
+        entries,
+        productManagementSubmenu
+          .filter((item) => canAccessAdminNav(item.href.split('?')[0]))
+          .map((item) => ({ label: item.label, href: item.href, keywords: ['product', 'catalog', 'labels', 'configuration'] })),
+        { prefix: 'Product Management' }
+      );
+      addSearchEntries(
+        entries,
+        [
+          {
+            label: 'Taxonomy Management',
+            href: '/admin/products/configuration',
+            keywords: ['product taxonomy', 'style', 'material type', 'category'],
+          },
+          {
+            label: 'Designer Fabric Country Access',
+            href: '/admin/products/configuration',
+            keywords: ['designer fabric country access', 'country access', 'fabric access'],
+          },
+          {
+            label: 'Designer Country Access Requests',
+            href: '/admin/products/configuration',
+            keywords: ['country access requests', 'approve designer country'],
+          },
+        ],
+        { prefix: 'Product Configuration' }
+      );
+    }
+
+    const deduped = new Map<string, DashboardSearchEntry>();
+    for (const entry of entries) {
+      const key = `${entry.label}::${entry.href}`;
+      if (!deduped.has(key)) {
+        deduped.set(key, entry);
+      }
+    }
+    return Array.from(deduped.values());
+  }, [userType, visibleItems, userPermissions]);
+
+  const dashboardSearchResults = useMemo(() => {
+    const query = normalizeSearchToken(dashboardSearchQuery);
+    if (!query) return dashboardSearchEntries.slice(0, 10);
+    const tokens = query.split(/\s+/).filter(Boolean);
+    const scored = dashboardSearchEntries
+      .map((entry) => {
+        const haystack = normalizeSearchToken(`${entry.label} ${entry.href} ${entry.keywords.join(' ')}`);
+        const allMatch = tokens.every((token) => haystack.includes(token));
+        if (!allMatch) return null;
+        const exactLabel = normalizeSearchToken(entry.label) === query ? 3 : 0;
+        const startsWith = normalizeSearchToken(entry.label).startsWith(query) ? 2 : 0;
+        const includes = haystack.includes(query) ? 1 : 0;
+        return { entry, score: exactLabel + startsWith + includes };
+      })
+      .filter((row): row is { entry: DashboardSearchEntry; score: number } => Boolean(row))
+      .sort((a, b) => b.score - a.score)
+      .map((row) => row.entry);
+    return scored.slice(0, 10);
+  }, [dashboardSearchEntries, dashboardSearchQuery]);
+
+  useEffect(() => {
+    const onClickOutside = (event: MouseEvent) => {
+      if (!searchContainerRef.current) return;
+      if (searchContainerRef.current.contains(event.target as Node)) return;
+      setIsDashboardSearchOpen(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  useEffect(() => {
+    setHighlightedSearchResultIndex(0);
+  }, [dashboardSearchQuery, dashboardSearchResults.length]);
+
+  const handleDashboardSearchNavigate = (entry?: DashboardSearchEntry) => {
+    if (!entry) return;
+    navigate(entry.href);
+    setDashboardSearchQuery('');
+    setIsDashboardSearchOpen(false);
+  };
+
+  const handleDashboardSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setIsDashboardSearchOpen(true);
+      setHighlightedSearchResultIndex((prev) =>
+        Math.min(prev + 1, Math.max(0, dashboardSearchResults.length - 1))
+      );
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setHighlightedSearchResultIndex((prev) => Math.max(0, prev - 1));
+      return;
+    }
+    if (event.key === 'Escape') {
+      setIsDashboardSearchOpen(false);
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      handleDashboardSearchNavigate(dashboardSearchResults[highlightedSearchResultIndex] || dashboardSearchResults[0]);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -519,7 +677,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-8">
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center gap-3 px-4 lg:px-8">
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -527,10 +685,50 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
             <Menu className="w-5 h-5 text-gray-600" />
           </button>
 
+          <div ref={searchContainerRef} className="relative flex-1 max-w-2xl">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={dashboardSearchQuery}
+              onChange={(event) => {
+                setDashboardSearchQuery(event.target.value);
+                setIsDashboardSearchOpen(true);
+              }}
+              onFocus={() => setIsDashboardSearchOpen(true)}
+              onKeyDown={handleDashboardSearchKeyDown}
+              placeholder="Search dashboard functions (orders, products, payments, tickets...)"
+              className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-10 pr-3 text-sm text-gray-800 focus:border-amber-500 focus:outline-none"
+            />
+            {isDashboardSearchOpen ? (
+              <div className="absolute left-0 right-0 top-11 z-20 rounded-lg border border-gray-200 bg-white shadow-lg">
+                <div className="max-h-80 overflow-y-auto py-1">
+                  {dashboardSearchResults.length > 0 ? (
+                    dashboardSearchResults.map((entry, index) => (
+                      <button
+                        key={`${entry.label}-${entry.href}-${index}`}
+                        type="button"
+                        onClick={() => handleDashboardSearchNavigate(entry)}
+                        className={`flex w-full items-start justify-between gap-2 px-3 py-2 text-left text-sm ${
+                          index === highlightedSearchResultIndex ? 'bg-amber-50 text-amber-900' : 'text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="font-medium">{entry.label}</span>
+                        <span className="shrink-0 text-xs text-gray-400">{entry.href}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-3 text-sm text-gray-500">No dashboard functions found.</div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
           <div className="flex items-center gap-4">
             <Link
               to="/"
-              className="text-sm text-gray-600 hover:text-coral-500 transition-colors"
+              className="text-sm text-gray-600 hover:text-coral-500 transition-colors whitespace-nowrap"
             >
               View Store
             </Link>
