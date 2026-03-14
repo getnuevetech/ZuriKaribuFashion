@@ -21,6 +21,11 @@ if (!JWT_SECRET) {
 }
 
 const SECRET = JWT_SECRET || randomBytes(32).toString('hex');
+const SINGLE_SESSION_ROLES = new Set<UserRole>([
+  UserRole.ADMINISTRATOR,
+  UserRole.FABRIC_SELLER,
+  UserRole.FASHION_DESIGNER,
+]);
 
 const normalizeVendorRejectionType = (value: unknown): 'TEMPORARY' | 'PERMANENT' | null => {
   const normalized = String(value || '').toUpperCase();
@@ -69,18 +74,41 @@ declare global {
 }
 
 // Generate JWT token
-export function generateToken(user: { id: string; email: string; role: UserRole }) {
+export function generateToken(user: { id: string; email: string; role: UserRole; sessionIssuedAt?: number }) {
+  const sessionIssuedAt = Number(user.sessionIssuedAt) > 0 ? Number(user.sessionIssuedAt) : Date.now();
   return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    { id: user.id, email: user.email, role: user.role, sessionIssuedAt },
     SECRET,
     { expiresIn: '7d' }
   );
 }
 
 // Verify JWT token
-export function verifyToken(token: string): { id: string; email: string; role: UserRole } {
-  return jwt.verify(token, SECRET) as { id: string; email: string; role: UserRole };
+export function verifyToken(token: string): {
+  id: string;
+  email: string;
+  role: UserRole;
+  iat?: number;
+  exp?: number;
+  sessionIssuedAt?: number;
+} {
+  return jwt.verify(token, SECRET) as {
+    id: string;
+    email: string;
+    role: UserRole;
+    iat?: number;
+    exp?: number;
+    sessionIssuedAt?: number;
+  };
 }
+
+const getTokenIssuedAtMs = (decoded: { iat?: number; sessionIssuedAt?: number }) => {
+  const issuedAt = Number(decoded.sessionIssuedAt);
+  if (Number.isFinite(issuedAt) && issuedAt > 0) return issuedAt;
+  const iatMs = Number(decoded.iat) * 1000;
+  if (Number.isFinite(iatMs) && iatMs > 0) return iatMs;
+  return 0;
+};
 
 // Authentication middleware
 export async function authenticate(req: Request, res: Response, next: NextFunction) {
@@ -107,6 +135,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
         firstName: true,
         lastName: true,
         status: true,
+        lastLogin: true,
         adminProfile: {
           select: {
             permissions: true,
@@ -156,6 +185,21 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
         success: false,
         message: 'Account is not active. Please contact support.',
       });
+    }
+    if (SINGLE_SESSION_ROLES.has(user.role)) {
+      const tokenIssuedAtMs = getTokenIssuedAtMs(decoded);
+      const latestSessionMs = user.lastLogin ? new Date(user.lastLogin).getTime() : 0;
+      if (
+        tokenIssuedAtMs > 0 &&
+        latestSessionMs > 0 &&
+        tokenIssuedAtMs + 1000 < latestSessionMs
+      ) {
+        return res.status(401).json({
+          success: false,
+          message:
+            'You were signed out because your account logged in on another device.',
+        });
+      }
     }
 
     const rolePermissions = getRolePermissions(user.role) as string[];
@@ -251,6 +295,7 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
         firstName: true,
         lastName: true,
         status: true,
+        lastLogin: true,
         adminProfile: {
           select: {
             permissions: true,
@@ -260,6 +305,13 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
     });
 
     if (user && user.status === 'ACTIVE') {
+      if (SINGLE_SESSION_ROLES.has(user.role)) {
+        const tokenIssuedAtMs = getTokenIssuedAtMs(decoded);
+        const latestSessionMs = user.lastLogin ? new Date(user.lastLogin).getTime() : 0;
+        if (tokenIssuedAtMs > 0 && latestSessionMs > 0 && tokenIssuedAtMs + 1000 < latestSessionMs) {
+          return next();
+        }
+      }
       const rolePermissions = getRolePermissions(user.role) as string[];
       const adminUserPermissions =
         user.role === 'ADMINISTRATOR'

@@ -1433,6 +1433,113 @@ const ensureAdminRbacSchema = async () => {
       `CREATE INDEX IF NOT EXISTS "MeasurementTemplate_displayOrder_idx" ON "MeasurementTemplate"("displayOrder")`
     );
 
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "NotificationTemplate" (
+        "id" TEXT NOT NULL,
+        "key" TEXT NOT NULL,
+        "title" TEXT NOT NULL,
+        "subject" TEXT NOT NULL,
+        "bodyHtml" TEXT NOT NULL,
+        "bodyText" TEXT NOT NULL,
+        "audienceRole" TEXT NOT NULL DEFAULT 'ALL',
+        "channelEmail" BOOLEAN NOT NULL DEFAULT true,
+        "channelPush" BOOLEAN NOT NULL DEFAULT true,
+        "channelInApp" BOOLEAN NOT NULL DEFAULT true,
+        "isSystem" BOOLEAN NOT NULL DEFAULT false,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "createdById" TEXT,
+        "updatedById" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "NotificationTemplate_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "NotificationTemplate_key_key" ON "NotificationTemplate"("key")`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "NotificationTemplate_audienceRole_idx" ON "NotificationTemplate"("audienceRole")`
+    );
+
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "NotificationDispatch" (
+        "id" TEXT NOT NULL,
+        "templateKey" TEXT,
+        "title" TEXT NOT NULL,
+        "subject" TEXT NOT NULL,
+        "bodyHtml" TEXT NOT NULL,
+        "bodyText" TEXT NOT NULL,
+        "recipientRole" TEXT NOT NULL DEFAULT 'ALL',
+        "recipientUserId" TEXT,
+        "sentEmail" BOOLEAN NOT NULL DEFAULT false,
+        "sentPush" BOOLEAN NOT NULL DEFAULT false,
+        "sentInApp" BOOLEAN NOT NULL DEFAULT false,
+        "deliveryStatus" TEXT NOT NULL DEFAULT 'SENT',
+        "createdById" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "NotificationDispatch_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "NotificationDispatch_templateKey_idx" ON "NotificationDispatch"("templateKey")`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "NotificationDispatch_recipientRole_idx" ON "NotificationDispatch"("recipientRole")`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "NotificationDispatch_createdAt_idx" ON "NotificationDispatch"("createdAt")`
+    );
+
+    const defaultNotificationTemplates = [
+      {
+        key: 'PLATFORM_ANNOUNCEMENT',
+        title: 'Platform announcement',
+        subject: 'Important update from African Fashion',
+        bodyHtml: '<p>Hello,</p><p>This is an important update from African Fashion.</p>',
+        bodyText: 'Hello,\n\nThis is an important update from African Fashion.',
+        audienceRole: 'ALL',
+      },
+      {
+        key: 'PROMO_OFFER',
+        title: 'Promotional offer',
+        subject: 'Special offer just for you',
+        bodyHtml: '<p>Hello,</p><p>Enjoy our latest promotion now available on African Fashion.</p>',
+        bodyText: 'Hello,\n\nEnjoy our latest promotion now available on African Fashion.',
+        audienceRole: 'CUSTOMER',
+      },
+      {
+        key: 'VENDOR_POLICY_UPDATE',
+        title: 'Vendor policy update',
+        subject: 'Vendor policy update from African Fashion',
+        bodyHtml: '<p>Hello Vendor,</p><p>Please review the latest vendor policy update.</p>',
+        bodyText: 'Hello Vendor,\n\nPlease review the latest vendor policy update.',
+        audienceRole: 'VENDORS',
+      },
+      {
+        key: 'ORDER_NOTIFICATION',
+        title: 'Order notification',
+        subject: 'Order update from African Fashion',
+        bodyHtml: '<p>Hello,</p><p>There is an update on your order.</p>',
+        bodyText: 'Hello,\n\nThere is an update on your order.',
+        audienceRole: 'ALL',
+      },
+    ];
+    for (const template of defaultNotificationTemplates) {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "NotificationTemplate"
+          ("id","key","title","subject","bodyHtml","bodyText","audienceRole","channelEmail","channelPush","channelInApp","isSystem","isActive","createdAt","updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,true,true,true,true,true,NOW(),NOW())
+         ON CONFLICT ("key") DO NOTHING`,
+        randomUUID(),
+        template.key,
+        template.title,
+        template.subject,
+        template.bodyHtml,
+        template.bodyText,
+        template.audienceRole
+      );
+    }
+
     const allPermissions = JSON.stringify(getPermissionCatalog().map((entry) => entry.key));
     await prisma.$executeRawUnsafe(
       `INSERT INTO "AdminRole" ("id", "name", "description", "permissions", "isSystem", "isActive", "createdAt", "updatedAt")
@@ -1441,6 +1548,14 @@ const ensureAdminRbacSchema = async () => {
       randomUUID(),
       'Super Administrator',
       'Full administrative access across all system modules.',
+      allPermissions
+    );
+    await prisma.$executeRawUnsafe(
+      `UPDATE "AdminRole"
+       SET "permissions" = $2::jsonb,
+           "updatedAt" = NOW()
+       WHERE "name" = $1 AND "isSystem" = true`,
+      'Super Administrator',
       allPermissions
     );
 
@@ -1501,6 +1616,7 @@ const resolveAdminRoutePermissions = (method: string, path: string) => {
   if (path.startsWith('/product-labels')) return [Permissions.PRODUCTS_MANAGE];
   if (path.startsWith('/measurement-templates')) return [Permissions.MEASUREMENT_TEMPLATES_MANAGE];
   if (path.startsWith('/pricing-rules')) return [Permissions.PRICING_MANAGE];
+  if (path.startsWith('/notification-center')) return [Permissions.NOTIFICATIONS_MANAGE];
   if (path.startsWith('/orders')) return [Permissions.ORDERS_MANAGE];
   return [];
 };
@@ -2137,6 +2253,97 @@ const getVendorSubmissionRows = async () => {
     rows = [];
   }
   return new Map(rows.map((row) => [`${row.role}:${row.userId}`, row]));
+};
+
+type NotificationAudienceRole =
+  | 'ALL'
+  | 'CUSTOMER'
+  | 'FABRIC_SELLER'
+  | 'FASHION_DESIGNER'
+  | 'VENDORS'
+  | 'ADMINISTRATOR'
+  | 'QA_TEAM';
+const normalizeNotificationAudienceRole = (value: unknown): NotificationAudienceRole => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase();
+  if (
+    normalized === 'ALL' ||
+    normalized === 'CUSTOMER' ||
+    normalized === 'FABRIC_SELLER' ||
+    normalized === 'FASHION_DESIGNER' ||
+    normalized === 'VENDORS' ||
+    normalized === 'ADMINISTRATOR' ||
+    normalized === 'QA_TEAM'
+  ) {
+    return normalized;
+  }
+  return 'ALL';
+};
+const normalizeRecipientRoleToken = (value: unknown): UserRole | null => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase();
+  if (normalized === 'CUSTOMER') return UserRole.CUSTOMER;
+  if (normalized === 'FABRIC_SELLER') return UserRole.FABRIC_SELLER;
+  if (normalized === 'FASHION_DESIGNER') return UserRole.FASHION_DESIGNER;
+  if (normalized === 'ADMINISTRATOR') return UserRole.ADMINISTRATOR;
+  if (normalized === 'QA_TEAM') return UserRole.QA_TEAM;
+  return null;
+};
+const notificationTemplateSchema = z.object({
+  title: z.string().trim().min(2).max(180),
+  subject: z.string().trim().min(2).max(220),
+  bodyHtml: z.string().trim().min(4).max(20000),
+  bodyText: z.string().trim().min(4).max(8000),
+  audienceRole: z
+    .enum(['ALL', 'CUSTOMER', 'FABRIC_SELLER', 'FASHION_DESIGNER', 'VENDORS', 'ADMINISTRATOR', 'QA_TEAM'])
+    .default('ALL'),
+  channelEmail: z.boolean().default(true),
+  channelPush: z.boolean().default(true),
+  channelInApp: z.boolean().default(true),
+  isActive: z.boolean().default(true),
+});
+const notificationDispatchSchema = z.object({
+  templateKey: z.string().trim().max(120).optional(),
+  title: z.string().trim().min(2).max(180).optional(),
+  subject: z.string().trim().min(2).max(220).optional(),
+  bodyHtml: z.string().trim().min(4).max(20000).optional(),
+  bodyText: z.string().trim().min(4).max(8000).optional(),
+  audienceRole: z
+    .enum(['ALL', 'CUSTOMER', 'FABRIC_SELLER', 'FASHION_DESIGNER', 'VENDORS', 'ADMINISTRATOR', 'QA_TEAM'])
+    .default('ALL'),
+  recipientUserIds: z.array(z.string()).max(1000).default([]),
+  channelEmail: z.boolean().optional(),
+  channelPush: z.boolean().optional(),
+  channelInApp: z.boolean().optional(),
+});
+
+const getUsersForAudience = async (audienceRole: NotificationAudienceRole) => {
+  if (audienceRole === 'ALL') {
+    return prisma.user.findMany({
+      where: { status: UserStatus.ACTIVE },
+      select: { id: true, email: true, firstName: true, lastName: true, role: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+  if (audienceRole === 'VENDORS') {
+    return prisma.user.findMany({
+      where: {
+        status: UserStatus.ACTIVE,
+        role: { in: [UserRole.FABRIC_SELLER, UserRole.FASHION_DESIGNER] },
+      },
+      select: { id: true, email: true, firstName: true, lastName: true, role: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+  const roleToken = normalizeRecipientRoleToken(audienceRole);
+  if (!roleToken) return [];
+  return prisma.user.findMany({
+    where: { status: UserStatus.ACTIVE, role: roleToken },
+    select: { id: true, email: true, firstName: true, lastName: true, role: true },
+    orderBy: { createdAt: 'desc' },
+  });
 };
 
 // ==================== TRAFFIC / AUDIT / VENDOR GOVERNANCE ====================
@@ -3047,6 +3254,299 @@ router.patch('/vendor-profiles/:role/:userId/review', async (req, res, next) => 
     res.json({
       success: true,
       message: `Vendor profile ${payload.status.toLowerCase()} successfully.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/notification-center/templates', async (_req, res, next) => {
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT "id","key","title","subject","bodyHtml","bodyText","audienceRole","channelEmail","channelPush","channelInApp","isSystem","isActive","updatedAt"
+       FROM "NotificationTemplate"
+       ORDER BY "isSystem" DESC, "key" ASC`
+    );
+    return res.json({
+      success: true,
+      data: (Array.isArray(rows) ? rows : []).map((row) => ({
+        id: row.id,
+        key: row.key,
+        title: row.title,
+        subject: row.subject,
+        bodyHtml: row.bodyHtml,
+        bodyText: row.bodyText,
+        audienceRole: normalizeNotificationAudienceRole(row.audienceRole),
+        channelEmail: Boolean(row.channelEmail),
+        channelPush: Boolean(row.channelPush),
+        channelInApp: Boolean(row.channelInApp),
+        isSystem: Boolean(row.isSystem),
+        isActive: row.isActive !== false,
+        updatedAt: row.updatedAt,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/notification-center/templates/:key', async (req, res, next) => {
+  try {
+    const key = String(req.params.key || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9_]/g, '_');
+    const payload = notificationTemplateSchema.parse(req.body || {});
+    const existingRows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT "id","isSystem"
+       FROM "NotificationTemplate"
+       WHERE "key" = $1
+       LIMIT 1`,
+      key
+    );
+    const existing = Array.isArray(existingRows) && existingRows.length > 0 ? existingRows[0] : null;
+    if (!existing) {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "NotificationTemplate"
+          ("id","key","title","subject","bodyHtml","bodyText","audienceRole","channelEmail","channelPush","channelInApp","isSystem","isActive","createdById","updatedById","createdAt","updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,false,$11,$12,$12,NOW(),NOW())`,
+        randomUUID(),
+        key,
+        payload.title,
+        payload.subject,
+        payload.bodyHtml,
+        payload.bodyText,
+        normalizeNotificationAudienceRole(payload.audienceRole),
+        Boolean(payload.channelEmail),
+        Boolean(payload.channelPush),
+        Boolean(payload.channelInApp),
+        Boolean(payload.isActive),
+        req.user!.id
+      );
+    } else {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "NotificationTemplate"
+         SET "title" = $2,
+             "subject" = $3,
+             "bodyHtml" = $4,
+             "bodyText" = $5,
+             "audienceRole" = $6,
+             "channelEmail" = $7,
+             "channelPush" = $8,
+             "channelInApp" = $9,
+             "isActive" = $10,
+             "updatedById" = $11,
+             "updatedAt" = NOW()
+         WHERE "key" = $1`,
+        key,
+        payload.title,
+        payload.subject,
+        payload.bodyHtml,
+        payload.bodyText,
+        normalizeNotificationAudienceRole(payload.audienceRole),
+        Boolean(payload.channelEmail),
+        Boolean(payload.channelPush),
+        Boolean(payload.channelInApp),
+        Boolean(payload.isActive),
+        req.user!.id
+      );
+    }
+    return res.json({
+      success: true,
+      message: 'Notification template saved successfully.',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/notification-center/dispatches', async (req, res, next) => {
+  try {
+    const query = z
+      .object({
+        role: z.enum(['ALL', 'CUSTOMER', 'FABRIC_SELLER', 'FASHION_DESIGNER', 'VENDORS', 'ADMINISTRATOR', 'QA_TEAM']).optional(),
+        page: z.string().optional(),
+        limit: z.string().optional(),
+      })
+      .parse(req.query);
+    const pagination = parsePagination(query.page, query.limit, 20);
+    const clauses: string[] = [];
+    const values: any[] = [];
+    if (query.role) {
+      values.push(query.role);
+      clauses.push(`"recipientRole" = $${values.length}`);
+    }
+    const whereSql = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    const rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT "id","templateKey","title","subject","recipientRole","recipientUserId","sentEmail","sentPush","sentInApp","deliveryStatus","createdAt"
+       FROM "NotificationDispatch"
+       ${whereSql}
+       ORDER BY "createdAt" DESC
+       LIMIT ${pagination.limit}
+       OFFSET ${pagination.skip}`,
+      ...values
+    );
+    const countRows = await prisma.$queryRawUnsafe<Array<{ count: bigint | number }>>(
+      `SELECT COUNT(*)::bigint AS "count"
+       FROM "NotificationDispatch"
+       ${whereSql}`,
+      ...values
+    );
+    const total = Number(countRows?.[0]?.count || 0);
+    return res.json({
+      success: true,
+      data: {
+        dispatches: Array.isArray(rows) ? rows : [],
+        pagination: {
+          page: pagination.page,
+          limit: pagination.limit,
+          total,
+          pages: Math.max(1, Math.ceil(total / pagination.limit)),
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/notification-center/send', async (req, res, next) => {
+  try {
+    const payload = notificationDispatchSchema.parse(req.body || {});
+    let template: any = null;
+    if (payload.templateKey) {
+      const templateRows = await prisma.$queryRawUnsafe<Array<any>>(
+        `SELECT "id","key","title","subject","bodyHtml","bodyText","audienceRole","channelEmail","channelPush","channelInApp","isActive"
+         FROM "NotificationTemplate"
+         WHERE "key" = $1
+         LIMIT 1`,
+        String(payload.templateKey || '')
+          .trim()
+          .toUpperCase()
+      );
+      template = Array.isArray(templateRows) && templateRows.length > 0 ? templateRows[0] : null;
+      if (!template) {
+        return res.status(404).json({
+          success: false,
+          message: 'Notification template was not found.',
+        });
+      }
+      if (template.isActive === false) {
+        return res.status(400).json({
+          success: false,
+          message: 'Selected notification template is inactive.',
+        });
+      }
+    }
+
+    const finalAudience = normalizeNotificationAudienceRole(
+      payload.audienceRole || template?.audienceRole || 'ALL'
+    );
+    const finalTitle = String(payload.title || template?.title || '').trim();
+    const finalSubject = String(payload.subject || template?.subject || '').trim();
+    const finalBodyHtml = String(payload.bodyHtml || template?.bodyHtml || '').trim();
+    const finalBodyText = String(payload.bodyText || template?.bodyText || '').trim();
+    const channelEmail = payload.channelEmail ?? Boolean(template?.channelEmail ?? true);
+    const channelPush = payload.channelPush ?? Boolean(template?.channelPush ?? true);
+    const channelInApp = payload.channelInApp ?? Boolean(template?.channelInApp ?? true);
+
+    if (!finalTitle || !finalSubject || !finalBodyHtml || !finalBodyText) {
+      return res.status(400).json({
+        success: false,
+        message: 'Notification title, subject, and body are required.',
+      });
+    }
+
+    const users = await getUsersForAudience(finalAudience);
+    const explicitRecipientIds = new Set((payload.recipientUserIds || []).map((value) => String(value || '').trim()));
+    const recipients =
+      explicitRecipientIds.size > 0
+        ? users.filter((user) => explicitRecipientIds.has(String(user.id)))
+        : users;
+
+    if (recipients.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active recipients found for the selected audience.',
+      });
+    }
+
+    const dispatchPromises: Promise<unknown>[] = [];
+    const emailPromises: Promise<unknown>[] = [];
+    for (const recipient of recipients) {
+      const recipientName =
+        `${String(recipient.firstName || '').trim()} ${String(recipient.lastName || '').trim()}`.trim() ||
+        String(recipient.email || '').trim() ||
+        'User';
+      if (channelInApp || channelPush) {
+        dispatchPromises.push(
+          prisma.notification.create({
+            data: {
+              userId: recipient.id,
+              type: 'SYSTEM',
+              title: finalTitle,
+              message: finalBodyText,
+              relatedType: 'SYSTEM',
+              relatedId: String(template?.key || 'MANUAL'),
+            },
+          })
+        );
+      }
+      if (channelEmail && recipient.email) {
+        emailPromises.push(
+          sendEmail({
+            to: recipient.email,
+            subject: finalSubject,
+            text: finalBodyText,
+            html: `<p>Hello ${recipientName},</p>${finalBodyHtml}`,
+          })
+        );
+      }
+      dispatchPromises.push(
+        prisma.$executeRawUnsafe(
+          `INSERT INTO "NotificationDispatch"
+            ("id","templateKey","title","subject","bodyHtml","bodyText","recipientRole","recipientUserId","sentEmail","sentPush","sentInApp","deliveryStatus","createdById","createdAt")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'SENT',$12,NOW())`,
+          randomUUID(),
+          template?.key ? String(template.key) : null,
+          finalTitle,
+          finalSubject,
+          finalBodyHtml,
+          finalBodyText,
+          finalAudience,
+          recipient.id,
+          Boolean(channelEmail),
+          Boolean(channelPush),
+          Boolean(channelInApp),
+          req.user!.id
+        )
+      );
+    }
+
+    await Promise.all(dispatchPromises);
+    await Promise.allSettled(emailPromises);
+
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'ADMIN_NOTIFICATION_SENT',
+        details: {
+          templateKey: template?.key || null,
+          audienceRole: finalAudience,
+          recipientCount: recipients.length,
+          channelEmail,
+          channelPush,
+          channelInApp,
+        },
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: `Notification sent to ${recipients.length} recipient(s).`,
+      data: {
+        recipientCount: recipients.length,
+      },
     });
   } catch (error) {
     next(error);

@@ -29,6 +29,7 @@ export const Permissions = {
   PAYMENTS_CREATE: 'payments:create',
   PAYMENTS_MANAGE: 'payments:manage',
   SHIPPING_MANAGE: 'shipping:manage',
+  NOTIFICATIONS_MANAGE: 'notifications:manage',
   UPLOADS_CREATE: 'uploads:create',
   HOMEPAGE_MANAGE: 'homepage:manage',
   BANNERS_MANAGE: 'banners:manage',
@@ -127,6 +128,12 @@ export const PERMISSION_CATALOG: PermissionCatalogEntry[] = [
     label: 'Manage shipping integrations',
     group: 'OPERATIONS',
     description: 'Configure shipping providers, country/local options, and quote behavior.',
+  },
+  {
+    key: Permissions.NOTIFICATIONS_MANAGE,
+    label: 'Manage notification center',
+    group: 'MARKETING',
+    description: 'Configure and send platform email/push/in-app notifications.',
   },
   {
     key: Permissions.TRAFFIC_READ,

@@ -3,6 +3,7 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { api } from '../../services/api';
 import { getCityOptionsByCountryCode, getCountryOptions, resolveCountryCode, resolveCountryName } from '../../data/locationOptions';
+import { normalizePhoneWithCountryPrefix } from '../../utils/phone';
 
 type VendorRole = 'FABRIC_SELLER' | 'FASHION_DESIGNER';
 type VendorProfileStatus = 'INCOMPLETE' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
@@ -1280,6 +1281,7 @@ export default function AdminVendorProfiles() {
                       ...prev,
                       country: resolveCountryName(e.target.value),
                       city: '',
+                      phone: normalizePhoneWithCountryPrefix(prev.phone, resolveCountryName(e.target.value)),
                     }))
                   }
                   className="rounded border px-3 py-2 text-sm"
@@ -1306,7 +1308,12 @@ export default function AdminVendorProfiles() {
                 </select>
                 <input
                   value={newVendor.phone}
-                  onChange={(e) => setNewVendor((prev) => ({ ...prev, phone: e.target.value }))}
+                  onChange={(e) =>
+                    setNewVendor((prev) => ({
+                      ...prev,
+                      phone: normalizePhoneWithCountryPrefix(e.target.value, prev.country),
+                    }))
+                  }
                   placeholder="Phone (optional)"
                   className="rounded border px-3 py-2 text-sm"
                 />

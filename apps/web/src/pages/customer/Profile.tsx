@@ -15,6 +15,7 @@ import { useAuthStore } from '../../store/authStore';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { getCityOptionsByCountryCode, getCountryOptions, resolveCountryCode } from '../../data/locationOptions';
+import { normalizePhoneWithCountryPrefix } from '../../utils/phone';
 
 interface Address {
   id: string;
@@ -180,7 +181,7 @@ export default function CustomerProfile() {
       const payload = {
         label: newAddress.label.trim() || 'Home',
         fullName: newAddress.fullName.trim(),
-        phone: newAddress.phone.trim(),
+        phone: normalizePhoneWithCountryPrefix(newAddress.phone.trim(), newAddress.country),
         country: newAddress.country,
         city: newAddress.city.trim(),
         address: [newAddress.addressLine1, newAddress.addressLine2, newAddress.state]
@@ -548,6 +549,7 @@ export default function CustomerProfile() {
                     ...newAddress,
                     country: e.target.value,
                     city: '',
+                    phone: normalizePhoneWithCountryPrefix(newAddress.phone, e.target.value),
                   })
                 }
                 className="px-4 py-2 border rounded-lg"
@@ -565,7 +567,12 @@ export default function CustomerProfile() {
                   type="tel"
                   placeholder="Phone Number"
                   value={newAddress.phone}
-                  onChange={(e) => setNewAddress({ ...newAddress, phone: e.target.value })}
+                  onChange={(e) =>
+                    setNewAddress({
+                      ...newAddress,
+                      phone: normalizePhoneWithCountryPrefix(e.target.value, newAddress.country),
+                    })
+                  }
                   className="w-full px-4 py-2 border rounded-lg"
                   required
                 />

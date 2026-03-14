@@ -21,6 +21,8 @@ import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import StoryPage from './pages/Story';
 import SellerStorefront from './pages/storefront/SellerStorefront';
 import DesignerStorefront from './pages/storefront/DesignerStorefront';
@@ -58,14 +60,17 @@ import AdminPartnerIntegrations from './pages/admin/PartnerIntegrations';
 import AdminTryOnSettings from './pages/admin/TryOnSettings';
 import AdminApiRouteDiagnostics from './pages/admin/ApiRouteDiagnostics';
 import AdminFeaturedRequests from './pages/admin/FeaturedRequests';
+import AdminNotificationCenter from './pages/admin/NotificationCenter';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
 import SellerPayments from './pages/seller/Payments';
+import SellerProfilePage from './pages/seller/Profile';
 
 // Designer Pages
 import DesignerDashboard from './pages/designer/Dashboard';
 import DesignerPayments from './pages/designer/Payments';
+import DesignerProfilePage from './pages/designer/Profile';
 
 // QA Pages
 import QADashboard from './pages/qa/Dashboard';
@@ -122,6 +127,8 @@ function App() {
 
             {/* Auth Routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/register" element={
               isAuthenticated ? <Navigate to={authenticatedHomeRoute} replace /> : <Register />
             } />
@@ -295,6 +302,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/admin/notifications"
+                  element={
+                    <AdminPermissionGuard required={['notifications:manage']}>
+                      <AdminNotificationCenter />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
                   path="/admin/partners"
                   element={
                     <AdminPermissionGuard required={['users:manage']}>
@@ -362,6 +377,7 @@ function App() {
               <Route element={<DashboardLayout userType="seller" />}>
                 <Route path="/seller" element={<SellerDashboard />} />
                 <Route path="/seller/payments" element={<SellerPayments />} />
+                <Route path="/seller/profile" element={<SellerProfilePage />} />
               </Route>
             </Route>
 
@@ -370,6 +386,7 @@ function App() {
               <Route element={<DashboardLayout userType="designer" />}>
                 <Route path="/designer" element={<DesignerDashboard />} />
                 <Route path="/designer/payments" element={<DesignerPayments />} />
+                <Route path="/designer/profile" element={<DesignerProfilePage />} />
               </Route>
             </Route>
 

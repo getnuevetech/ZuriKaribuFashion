@@ -4008,6 +4008,12 @@ const authApi = {
   changePassword: (currentPassword: string, newPassword: string) =>
     apiService.post('/auth/change-password', { currentPassword, newPassword }),
 
+  requestPasswordReset: (email: string) =>
+    apiService.post<{ success: boolean; message: string }>('/auth/forgot-password', { email }),
+
+  resetPassword: (token: string, newPassword: string) =>
+    apiService.post<{ success: boolean; message: string }>('/auth/reset-password', { token, newPassword }),
+
   logout: () =>
     apiService.post('/auth/logout'),
 };
@@ -5819,6 +5825,43 @@ const adminApi = {
     page?: number;
     limit?: number;
   }) => apiService.get<{ success: boolean; data: any }>('/admin/security/session-audit', { params }),
+
+  getNotificationTemplates: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/admin/notification-center/templates'),
+
+  upsertNotificationTemplate: (
+    key: string,
+    payload: {
+      title: string;
+      subject: string;
+      bodyHtml: string;
+      bodyText: string;
+      audienceRole: 'ALL' | 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'VENDORS' | 'ADMINISTRATOR' | 'QA_TEAM';
+      channelEmail: boolean;
+      channelPush: boolean;
+      channelInApp: boolean;
+      isActive: boolean;
+    }
+  ) => apiService.patch<{ success: boolean; message?: string }>(`/admin/notification-center/templates/${key}`, payload),
+
+  getNotificationDispatches: (params?: {
+    role?: 'ALL' | 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'VENDORS' | 'ADMINISTRATOR' | 'QA_TEAM';
+    page?: number;
+    limit?: number;
+  }) => apiService.get<{ success: boolean; data: any }>('/admin/notification-center/dispatches', { params }),
+
+  sendNotificationDispatch: (payload: {
+    templateKey?: string;
+    title?: string;
+    subject?: string;
+    bodyHtml?: string;
+    bodyText?: string;
+    audienceRole: 'ALL' | 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'VENDORS' | 'ADMINISTRATOR' | 'QA_TEAM';
+    recipientUserIds?: string[];
+    channelEmail?: boolean;
+    channelPush?: boolean;
+    channelInApp?: boolean;
+  }) => apiService.post<{ success: boolean; message?: string; data?: any }>('/admin/notification-center/send', payload),
 
   getMeasurementTemplates: () =>
     readMeasurementTemplatesWithFallback<{

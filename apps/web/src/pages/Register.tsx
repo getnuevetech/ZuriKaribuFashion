@@ -13,6 +13,7 @@ import {
   resolveCountryCode,
   resolveCountryName,
 } from '../data/locationOptions';
+import { normalizePhoneWithCountryPrefix } from '../utils/phone';
 
 type UserRole = 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER';
 
@@ -104,11 +105,12 @@ export default function Register() {
     try {
       const [firstName = '', ...lastNameParts] = formData.fullName.trim().split(/\s+/);
       const lastName = lastNameParts.join(' ') || firstName;
+      const normalizedPhone = normalizePhoneWithCountryPrefix(formData.phone, formData.country);
 
       const response = await api.auth.register({
         email: formData.email,
         password: formData.password,
-        phone: formData.phone,
+        phone: normalizedPhone || formData.phone,
         country: formData.country,
         city: formData.city,
         businessName: formData.businessName,
@@ -372,6 +374,7 @@ export default function Register() {
                       ...formData,
                       country: resolveCountryName(e.target.value),
                       city: '',
+                      phone: normalizePhoneWithCountryPrefix(formData.phone, resolveCountryName(e.target.value)),
                     })
                   }
                   className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"

@@ -23,6 +23,7 @@ import {
   getStateOptionsByCountryCode,
   resolveCountryCode,
 } from '../data/locationOptions';
+import { normalizePhoneWithCountryPrefix } from '../utils/phone';
 import { api } from '../services/api';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -272,7 +273,7 @@ const mapSavedAddressToShipping = (address: SavedCustomerAddress): ShippingAddre
     state: parsed.state,
     postalCode: String(address.postalCode || ''),
     country: countryCode || String(address.country || ''),
-    phone: String(address.phone || ''),
+    phone: normalizePhoneWithCountryPrefix(String(address.phone || ''), countryCode || String(address.country || '')),
   };
 };
 
@@ -755,7 +756,7 @@ export default function Checkout() {
         const addressPayload = {
           label: 'Checkout Address',
           fullName: shippingAddress.fullName,
-          phone: shippingAddress.phone,
+          phone: normalizePhoneWithCountryPrefix(shippingAddress.phone, shippingAddress.country),
           country: shippingAddress.country,
           city: shippingAddress.city,
           address: [shippingAddress.addressLine1, shippingAddress.addressLine2, shippingAddress.state].filter(Boolean).join(', '),
@@ -797,7 +798,7 @@ export default function Checkout() {
         customer: {
           email: user?.email || undefined,
           name: shippingAddress.fullName || undefined,
-          phone: shippingAddress.phone || undefined,
+          phone: normalizePhoneWithCountryPrefix(shippingAddress.phone, shippingAddress.country) || undefined,
         },
       });
       const debugInfo = api.payments.getLastCreateSessionDebugInfo();
@@ -872,7 +873,7 @@ export default function Checkout() {
               postal_code: shippingAddress.postalCode,
               country: shippingAddress.country,
             },
-            phone: shippingAddress.phone,
+            phone: normalizePhoneWithCountryPrefix(shippingAddress.phone, shippingAddress.country),
           },
         },
       }
@@ -910,7 +911,7 @@ export default function Checkout() {
         const addressResponse = await api.customer.addAddress({
           label: 'Checkout Address',
           fullName: shippingAddress.fullName,
-          phone: shippingAddress.phone,
+          phone: normalizePhoneWithCountryPrefix(shippingAddress.phone, shippingAddress.country),
           country: shippingAddress.country,
           city: shippingAddress.city,
           address: [shippingAddress.addressLine1, shippingAddress.addressLine2, shippingAddress.state].filter(Boolean).join(', '),
@@ -941,7 +942,7 @@ export default function Checkout() {
         const addressResponse = await api.customer.addAddress({
           label: 'Checkout Address',
           fullName: shippingAddress.fullName,
-          phone: shippingAddress.phone,
+          phone: normalizePhoneWithCountryPrefix(shippingAddress.phone, shippingAddress.country),
           country: shippingAddress.country,
           city: shippingAddress.city,
           address: [shippingAddress.addressLine1, shippingAddress.addressLine2, shippingAddress.state].filter(Boolean).join(', '),
@@ -1483,6 +1484,7 @@ export default function Checkout() {
                             country: e.target.value,
                             state: '',
                             city: '',
+                            phone: normalizePhoneWithCountryPrefix(prev.phone, e.target.value),
                           }));
                         }
                       }
@@ -1632,7 +1634,10 @@ export default function Checkout() {
                       value={shippingAddress.phone}
                       onChange={(e) => {
                         setSelectedSavedAddressId('');
-                        setShippingAddress(prev => ({ ...prev, phone: e.target.value }));
+                        setShippingAddress((prev) => ({
+                          ...prev,
+                          phone: normalizePhoneWithCountryPrefix(e.target.value, prev.country),
+                        }));
                       }}
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     />

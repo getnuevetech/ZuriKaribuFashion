@@ -24,6 +24,7 @@ import {
   Truck,
   Sparkles,
   Star,
+  Bell,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -62,6 +63,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Shipping', href: '/admin/shipping', icon: Truck },
     { label: '3D TryON', href: '/admin/try-on', icon: Sparkles },
     { label: 'Featured Requests', href: '/admin/featured-requests', icon: Star },
+    { label: 'Notifications', href: '/admin/notifications', icon: Bell },
     { label: 'Partner API', href: '/admin/partners', icon: Settings },
     { label: 'API Diagnostics', href: '/admin/api-diagnostics', icon: Settings },
     { label: 'Order Management', href: '/admin/orders', icon: ShoppingBag },
@@ -78,6 +80,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: '3D TryON', href: '/seller?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/seller?tab=orders', icon: ShoppingBag },
     { label: 'Payment', href: '/seller/payments', icon: CreditCard },
+    { label: 'Profile', href: '/seller/profile', icon: User },
   ],
   designer: [
     { label: 'Dashboard', href: '/designer', icon: LayoutDashboard },
@@ -85,6 +88,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: '3D TryON', href: '/designer?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/designer?tab=orders', icon: ShoppingBag },
     { label: 'Payment', href: '/designer/payments', icon: CreditCard },
+    { label: 'Profile', href: '/designer/profile', icon: User },
   ],
   qa: [
     { label: 'Dashboard', href: '/qa', icon: LayoutDashboard },
@@ -145,6 +149,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/shipping': ['shipping:manage'],
       '/admin/try-on': ['products:manage'],
       '/admin/featured-requests': ['products:manage'],
+      '/admin/notifications': ['notifications:manage'],
       '/admin/partners': ['users:manage'],
       '/admin/orders': ['orders:manage'],
       '/admin/banners': ['banners:manage'],

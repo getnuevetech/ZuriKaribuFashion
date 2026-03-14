@@ -32,6 +32,7 @@ import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import OrderSupportModal from '../../components/orders/OrderSupportModal';
 import { getCityOptionsByCountryCode, getCountryOptions, resolveCountryCode, resolveCountryName } from '../../data/locationOptions';
+import { normalizePhoneWithCountryPrefix } from '../../utils/phone';
 
 interface SellerStats {
   totalFabrics: number;
@@ -296,6 +297,7 @@ const normalizeSellerDashboardGovernance = (input: any): SellerDashboardGovernan
 const LOCATION_COUNTRIES = getCountryOptions();
 const COUNTRY_FIELD_HINTS = ['country', 'businesscountry', 'vendorcountry'];
 const CITY_FIELD_HINTS = ['city', 'businesscity', 'vendorcity', 'town'];
+const PHONE_FIELD_HINTS = ['phone', 'phonenumber', 'businessphone', 'mobile', 'contactnumber'];
 
 const normalizeFieldKey = (value: unknown) =>
   String(value || '')
@@ -312,6 +314,11 @@ const isCityGovernanceField = (field: VendorProfileField) => {
   const key = normalizeFieldKey(field.key);
   const label = normalizeFieldKey(field.label);
   return CITY_FIELD_HINTS.some((hint) => key.includes(hint) || label.includes(hint));
+};
+const isPhoneGovernanceField = (field: VendorProfileField) => {
+  const key = normalizeFieldKey(field.key);
+  const label = normalizeFieldKey(field.label);
+  return PHONE_FIELD_HINTS.some((hint) => key.includes(hint) || label.includes(hint));
 };
 
 const getSellerProfilePrefillValue = (profile: SellerProfileCompletion['profile'] | undefined, key: string) => {
@@ -1343,6 +1350,8 @@ export default function SellerDashboard() {
   const showProfileGovernance = dashboardGovernance.sections.profileGovernance !== false;
   const showStats = dashboardGovernance.sections.stats !== false;
   const canUploadByProfile = Boolean(profileCompletion?.canUpload);
+  const profileStatus = String(profileCompletion?.profileStatus || 'INCOMPLETE').toUpperCase();
+  const canEditGovernanceProfile = profileStatus === 'INCOMPLETE' || profileStatus === 'REJECTED';
   const isFieldHidden = (mode: 'ENABLED' | 'READ_ONLY' | 'HIDDEN') => mode === 'HIDDEN';
   const isFieldReadOnly = (mode: 'ENABLED' | 'READ_ONLY' | 'HIDDEN') => mode === 'READ_ONLY';
   const canUseProductForm =
@@ -1356,7 +1365,9 @@ export default function SellerDashboard() {
   const canUpdateStock = dashboardGovernance.actions.updateStock !== false && canUploadByProfile;
   const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false && canUploadByProfile;
   const canSubmitProfile =
-    dashboardGovernance.actions.submitProfile !== false && profileCompletion?.canResubmitProfile !== false;
+    dashboardGovernance.actions.submitProfile !== false &&
+    profileCompletion?.canResubmitProfile !== false &&
+    canEditGovernanceProfile;
   const hasNoDashboardTabs = visibleTabs.length === 0;
   const activeFeaturedRequestForSelectedFabric =
     selectedFabric?.id
@@ -1437,9 +1448,11 @@ export default function SellerDashboard() {
             ) : null}
           </div>
 
-          {activeProfileFields.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {activeProfileFields.map((field) => {
+          {canEditGovernanceProfile ? (
+            <>
+              {activeProfileFields.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {activeProfileFields.map((field) => {
                   const normalizedFieldType = normalizeVendorFieldType(field.fieldType);
                   const value = String(profileForm[field.key] || '');
                   const isTextArea = normalizedFieldType === 'TEXTAREA';
@@ -1471,6 +1484,12 @@ export default function SellerDashboard() {
                               for (const entry of activeProfileFields) {
                                 if (entry.key !== field.key && isCityGovernanceField(entry)) {
                                   next[entry.key] = '';
+                                }
+                                if (isPhoneGovernanceField(entry) && String(next[entry.key] || '').trim()) {
+                                  next[entry.key] = normalizePhoneWithCountryPrefix(
+                                    String(next[entry.key] || ''),
+                                    resolveCountryName(event.target.value)
+                                  );
                                 }
                               }
                               return next;
@@ -1596,7 +1615,14 @@ export default function SellerDashboard() {
                         <input
                           type={normalizedFieldType === 'NUMBER' ? 'number' : 'text'}
                           value={value}
-                          onChange={(event) => setProfileForm((prev) => ({ ...prev, [field.key]: event.target.value }))}
+                          onChange={(event) =>
+                            setProfileForm((prev) => ({
+                              ...prev,
+                              [field.key]: isPhoneGovernanceField(field)
+                                ? normalizePhoneWithCountryPrefix(event.target.value, selectedProfileCountry)
+                                : event.target.value,
+                            }))
+                          }
                           placeholder={field.placeholder || ''}
                           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
                         />
@@ -1605,27 +1631,41 @@ export default function SellerDashboard() {
                     </div>
                   );
                 })}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-700">
+                  Vendor application form is not configured yet. Admin must create Fabric Seller profile fields first.
+                </p>
+              )}
+
+              {profileMessage ? <p className="text-sm text-gray-700">{profileMessage}</p> : null}
+              <div>
+                <Button
+                  size="sm"
+                  onClick={handleSubmitProfile}
+                  disabled={submittingProfile || Boolean(uploadingProfileField) || activeProfileFields.length === 0 || !canSubmitProfile}
+                >
+                  {submittingProfile
+                    ? 'Submitting...'
+                    : profileCompletion?.rejectionType === 'PERMANENT'
+                      ? 'Account Permanently Rejected'
+                      : 'Submit for Admin Approval'}
+                </Button>
+              </div>
+            </>
+          ) : profileStatus === 'SUBMITTED' ? (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-3 text-sm text-blue-800">
+              Your vendor profile is submitted and currently under admin review. The form is locked until a review decision is made.
+            </div>
+          ) : profileStatus === 'APPROVED' ? (
+            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-3 text-sm text-green-800">
+              Your vendor profile is approved and locked. To request any changes, contact the administrator.
             </div>
           ) : (
-            <p className="text-sm text-gray-700">
-              Vendor application form is not configured yet. Admin must create Fabric Seller profile fields first.
-            </p>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700">
+              This profile is currently not editable.
+            </div>
           )}
-
-          {profileMessage ? <p className="text-sm text-gray-700">{profileMessage}</p> : null}
-          <div>
-            <Button
-              size="sm"
-              onClick={handleSubmitProfile}
-              disabled={submittingProfile || Boolean(uploadingProfileField) || activeProfileFields.length === 0 || !canSubmitProfile}
-            >
-              {submittingProfile
-                ? 'Submitting...'
-                : profileCompletion?.rejectionType === 'PERMANENT'
-                  ? 'Account Permanently Rejected'
-                  : 'Submit for Admin Approval'}
-            </Button>
-          </div>
         </div>
       ) : null}
 

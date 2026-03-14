@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { OAuth2Client } from 'google-auth-library';
@@ -37,6 +38,13 @@ const loginSchema = z.object({
 
 const googleLoginSchema = z.object({
   idToken: z.string().min(1, 'Google ID token is required'),
+});
+const forgotPasswordSchema = z.object({
+  email: z.string().email('Invalid email address').transform((value) => value.toLowerCase().trim()),
+});
+const resetPasswordSchema = z.object({
+  token: z.string().min(10, 'Reset token is required'),
+  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 const AFRICAN_COUNTRY_CODE_TO_NAME = new Map<string, string>([
@@ -356,6 +364,53 @@ const GOOGLE_CLIENT_IDS = Array.from(
 const googleClient = new OAuth2Client();
 let googleAuthSchemaEnsured = false;
 let googleAuthSchemaPromise: Promise<void> | null = null;
+let passwordResetSchemaEnsured = false;
+let passwordResetSchemaPromise: Promise<void> | null = null;
+let cachedTransporter: nodemailer.Transporter | null | undefined;
+
+function getMailer(): nodemailer.Transporter | null {
+  if (cachedTransporter !== undefined) return cachedTransporter;
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!host || !user || !pass) {
+    cachedTransporter = null;
+    return null;
+  }
+  cachedTransporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+    auth: { user, pass },
+  });
+  return cachedTransporter;
+}
+
+async function sendEmail(input: { to: string; subject: string; text: string; html: string }) {
+  const transporter = getMailer();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  if (!transporter || !from || !input.to) return;
+  await transporter.sendMail({
+    from,
+    to: input.to,
+    subject: input.subject,
+    text: input.text,
+    html: input.html,
+  });
+}
+
+const appPublicBaseUrl = () =>
+  String(
+    process.env.APP_BASE_URL ||
+      process.env.FRONTEND_URL ||
+      process.env.WEB_BASE_URL ||
+      process.env.VITE_APP_URL ||
+      'https://african-fashion-zurikaribu.vercel.app'
+  )
+    .trim()
+    .replace(/\/+$/, '');
+const hashResetToken = (token: string) => crypto.createHash('sha256').update(String(token)).digest('hex');
 
 const parseNameFromGoogle = (payload: Record<string, unknown>) => {
   const givenName = String(payload.given_name || '').trim();
@@ -408,6 +463,47 @@ const ensureGoogleAuthSchema = async () => {
     await googleAuthSchemaPromise;
   } finally {
     googleAuthSchemaPromise = null;
+  }
+};
+
+const ensurePasswordResetSchema = async () => {
+  if (passwordResetSchemaEnsured) return;
+  if (!passwordResetSchemaPromise) {
+    passwordResetSchemaPromise = (async () => {
+      await prisma.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS "PasswordResetToken" (
+          "id" TEXT NOT NULL,
+          "userId" TEXT NOT NULL,
+          "tokenHash" TEXT NOT NULL,
+          "expiresAt" TIMESTAMP(3) NOT NULL,
+          "usedAt" TIMESTAMP(3),
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "PasswordResetToken_pkey" PRIMARY KEY ("id")
+        )`
+      );
+      await prisma.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS "PasswordResetToken_userId_idx" ON "PasswordResetToken"("userId")`
+      );
+      await prisma.$executeRawUnsafe(
+        `CREATE UNIQUE INDEX IF NOT EXISTS "PasswordResetToken_tokenHash_key" ON "PasswordResetToken"("tokenHash")`
+      );
+      await prisma.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS "PasswordResetToken_expiresAt_idx" ON "PasswordResetToken"("expiresAt")`
+      );
+      await prisma
+        .$executeRawUnsafe(
+          `ALTER TABLE "PasswordResetToken"
+           ADD CONSTRAINT "PasswordResetToken_userId_fkey"
+           FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`
+        )
+        .catch(() => undefined);
+      passwordResetSchemaEnsured = true;
+    })();
+  }
+  try {
+    await passwordResetSchemaPromise;
+  } finally {
+    passwordResetSchemaPromise = null;
   }
 };
 
@@ -782,11 +878,12 @@ router.post('/login', async (req, res, next) => {
     }
 
     const previousLastLoginAt = user.lastLogin;
+    const sessionIssuedAt = Date.now();
 
     // Update last login
     await prisma.user.update({
       where: { id: user.id },
-      data: { lastLogin: new Date() },
+      data: { lastLogin: new Date(sessionIssuedAt) },
     });
 
     if (user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER) {
@@ -799,7 +896,7 @@ router.post('/login', async (req, res, next) => {
           action: previousLastLoginAt ? 'VENDOR_SESSION_REPLACED' : 'VENDOR_SESSION_STARTED',
           details: {
             role: user.role,
-            sessionIssuedAt: Date.now(),
+            sessionIssuedAt,
             previousSessionAt: previousLastLoginAt ? previousLastLoginAt.toISOString() : null,
             deviceType: String(req.headers['sec-ch-ua-platform'] || req.headers['user-agent'] || '').slice(0, 120),
           },
@@ -814,6 +911,7 @@ router.post('/login', async (req, res, next) => {
       id: user.id,
       email: user.email,
       role: user.role,
+      sessionIssuedAt,
     });
 
     const effectivePermissions = await resolveEffectivePermissions(user.id, user.role);
@@ -837,6 +935,115 @@ router.post('/login', async (req, res, next) => {
           permissions: effectivePermissions,
         },
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const payload = forgotPasswordSchema.parse(req.body || {});
+    await ensurePasswordResetSchema();
+
+    const user = await prisma.user.findFirst({
+      where: {
+        email: { equals: payload.email, mode: 'insensitive' },
+      },
+      select: { id: true, email: true, firstName: true },
+    });
+    if (user) {
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = hashResetToken(resetToken);
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+      await prisma.$executeRawUnsafe(
+        `UPDATE "PasswordResetToken"
+         SET "usedAt" = NOW()
+         WHERE "userId" = $1 AND "usedAt" IS NULL`,
+        user.id
+      );
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "PasswordResetToken" ("id","userId","tokenHash","expiresAt")
+         VALUES ($1,$2,$3,$4)`,
+        crypto.randomUUID(),
+        user.id,
+        tokenHash,
+        expiresAt
+      );
+
+      const resetUrl = `${appPublicBaseUrl()}/reset-password?token=${encodeURIComponent(resetToken)}`;
+      const firstName = String(user.firstName || '').trim() || 'there';
+      void sendEmail({
+        to: user.email,
+        subject: 'Reset your African Fashion password',
+        text: `Hello ${firstName},\n\nUse this link to reset your password: ${resetUrl}\n\nThis link expires in 60 minutes.\n\nIf you did not request this, you can ignore this email.`,
+        html: `<p>Hello ${firstName},</p><p>Use the link below to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>This link expires in <strong>60 minutes</strong>.</p><p>If you did not request this, you can ignore this email.</p>`,
+      }).catch((error) => {
+        console.error('Failed to send forgot-password email:', error);
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'If your email exists in our system, a password reset link has been sent.',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const payload = resetPasswordSchema.parse(req.body || {});
+    await ensurePasswordResetSchema();
+    const tokenHash = hashResetToken(payload.token);
+    const now = new Date();
+    const rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT "id","userId","expiresAt","usedAt"
+       FROM "PasswordResetToken"
+       WHERE "tokenHash" = $1
+       LIMIT 1`,
+      tokenHash
+    );
+    const tokenRow = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+    if (!tokenRow) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reset link is invalid or has expired.',
+      });
+    }
+    if (tokenRow.usedAt || (tokenRow.expiresAt && new Date(tokenRow.expiresAt).getTime() <= now.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reset link is invalid or has expired.',
+      });
+    }
+    const userId = String(tokenRow.userId || '');
+    const hashedPassword = await bcrypt.hash(payload.newPassword, 10);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: { password: hashedPassword },
+      }),
+      prisma.$executeRawUnsafe(
+        `UPDATE "PasswordResetToken"
+         SET "usedAt" = NOW()
+         WHERE "id" = $1`,
+        String(tokenRow.id || '')
+      ),
+      prisma.$executeRawUnsafe(
+        `UPDATE "PasswordResetToken"
+         SET "usedAt" = NOW()
+         WHERE "userId" = $1 AND "usedAt" IS NULL`,
+        userId
+      ),
+    ]);
+
+    return res.json({
+      success: true,
+      message: 'Password reset successful. You can now sign in with your new password.',
     });
   } catch (error) {
     next(error);
@@ -964,10 +1171,11 @@ const handleGoogleLogin = async (req: any, res: any, next: any) => {
     }
 
     const previousLastLoginAt = user.lastLogin;
+    const sessionIssuedAt = Date.now();
     await prisma.user.update({
       where: { id: user.id },
       data: {
-        lastLogin: new Date(),
+        lastLogin: new Date(sessionIssuedAt),
         avatar: user.avatar || String(payload.picture || '').trim() || null,
       },
     });
@@ -982,7 +1190,7 @@ const handleGoogleLogin = async (req: any, res: any, next: any) => {
           action: previousLastLoginAt ? 'VENDOR_SESSION_REPLACED' : 'VENDOR_SESSION_STARTED',
           details: {
             role: user.role,
-            sessionIssuedAt: Date.now(),
+            sessionIssuedAt,
             previousSessionAt: previousLastLoginAt ? previousLastLoginAt.toISOString() : null,
             deviceType: String(req.headers['sec-ch-ua-platform'] || req.headers['user-agent'] || '').slice(0, 120),
             authProvider: 'google',
@@ -997,6 +1205,7 @@ const handleGoogleLogin = async (req: any, res: any, next: any) => {
       id: user.id,
       email: user.email,
       role: user.role,
+      sessionIssuedAt,
     });
     const effectivePermissions = await resolveEffectivePermissions(user.id, user.role);
 
