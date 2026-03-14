@@ -8098,6 +8098,71 @@ const blogsApi = {
 
   deleteAdminBlog: (id: string) =>
     adminBlogsApi.deleteAdminBlog(id),
+
+  getEnterpriseConfig: () =>
+    apiService.get<{ success: boolean; data: any }>('/admin/enterprise/config'),
+
+  updateEnterpriseConfig: (payload: {
+    sellerEnabled: boolean;
+    designerEnabled: boolean;
+    enforceSubscription: boolean;
+    defaultSeatLimit: number;
+    defaultYearlyFeeUsd: number;
+    levels: Array<{ key: string; name: string; seatLimit: number; yearlyFeeUsd: number }>;
+  }) => apiService.put<{ success: boolean; data: any; message?: string }>('/admin/enterprise/config', payload),
+
+  getEnterpriseAccounts: (params?: { role?: 'FABRIC_SELLER' | 'FASHION_DESIGNER'; status?: string; search?: string; page?: number; limit?: number }) =>
+    apiService.get<{ success: boolean; data: any }>('/admin/enterprise/accounts', { params }),
+
+  convertVendorToEnterprise: (
+    ownerUserId: string,
+    payload: {
+      isEnterprise: boolean;
+      status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+      seatLimit?: number;
+      yearlyFeeUsd?: number;
+      levelName?: string;
+      enforceSubscription?: boolean;
+    }
+  ) => apiService.patch<{ success: boolean; message?: string }>(`/admin/enterprise/accounts/${ownerUserId}/convert`, payload),
+
+  updateEnterpriseSubscription: (
+    ownerUserId: string,
+    payload: {
+      subscriptionStatus: 'INACTIVE' | 'PENDING_PAYMENT' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED';
+      years?: number;
+      seatLimit?: number;
+      yearlyFeeUsd?: number;
+      levelName?: string;
+    }
+  ) => apiService.patch<{ success: boolean; message?: string }>(`/admin/enterprise/accounts/${ownerUserId}/subscription`, payload),
+
+  getEnterpriseSubAccountsForOwner: (ownerUserId: string) =>
+    apiService.get<{ success: boolean; data: any[] }>(`/admin/enterprise/accounts/${ownerUserId}/subaccounts`),
+
+  getEnterpriseUpgradeRequests: (params?: {
+    status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+    role?: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+    page?: number;
+    limit?: number;
+  }) => apiService.get<{ success: boolean; data: any }>('/admin/enterprise/upgrade-requests', { params }),
+
+  reviewEnterpriseUpgradeRequest: (
+    requestId: string,
+    payload: {
+      status: 'APPROVED' | 'REJECTED';
+      reviewNote?: string;
+      approvedLevelName?: string;
+      approvedSeatLimit?: number;
+      approvedYearlyFeeUsd?: number;
+    }
+  ) =>
+    apiService.patch<{ success: boolean; message?: string }>(`/admin/enterprise/upgrade-requests/${requestId}/review`, payload),
+
+  setEnterpriseSubAccountStatus: (
+    subAccountId: string,
+    payload: { status: 'ACTIVE' | 'DISABLED' }
+  ) => apiService.patch<{ success: boolean; message?: string }>(`/admin/enterprise/subaccounts/${subAccountId}/status`, payload),
 };
 
 const promotionsApi = {
@@ -8185,6 +8250,67 @@ const featuredRequestsApi = {
   ) => apiService.patch<{ success: boolean; data?: any; message?: string }>(`/featured-requests/admin/requests/${requestId}/review`, data),
 };
 
+const enterpriseApi = {
+  getMe: () =>
+    apiService.get<{ success: boolean; data: any }>('/enterprise/me'),
+
+  getRoles: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/enterprise/roles'),
+
+  createRole: (payload: { key: string; name: string; permissions: string[] }) =>
+    apiService.post<{ success: boolean; message?: string }>('/enterprise/roles', payload),
+
+  updateRole: (
+    roleId: string,
+    payload: { name?: string; permissions?: string[]; isActive?: boolean }
+  ) => apiService.patch<{ success: boolean; message?: string }>(`/enterprise/roles/${roleId}`, payload),
+
+  getSubAccounts: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/enterprise/subaccounts'),
+
+  createSubAccount: (payload: {
+    roleId: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    password: string;
+    phone?: string;
+  }) => apiService.post<{ success: boolean; data?: any; message?: string }>('/enterprise/subaccounts', payload),
+
+  updateSubAccount: (
+    subAccountId: string,
+    payload: { status?: 'ACTIVE' | 'DISABLED'; roleId?: string }
+  ) => apiService.patch<{ success: boolean; message?: string }>(`/enterprise/subaccounts/${subAccountId}`, payload),
+
+  listMyUpgradeRequests: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/enterprise/upgrade-requests/my'),
+
+  createUpgradeRequest: (payload: {
+    requestedLevelKey?: string;
+    requestedSeatLimit?: number;
+    requestedYears?: number;
+    note?: string;
+  }) => apiService.post<{ success: boolean; message?: string }>('/enterprise/upgrade-requests', payload),
+
+  createUpgradePaymentSession: (
+    requestId: string,
+    payload: { providerKey: string; returnUrl?: string; cancelUrl?: string }
+  ) =>
+    apiService.post<{ success: boolean; data?: any; message?: string }>(
+      `/enterprise/upgrade-requests/${requestId}/payment-session`,
+      payload
+    ),
+
+  verifyUpgradePayment: (
+    requestId: string,
+    payload: { providerKey?: string; reference?: string; payerId?: string }
+  ) =>
+    apiService.post<{ success: boolean; data?: any; message?: string }>(
+      `/enterprise/upgrade-requests/${requestId}/payment-verify`,
+      payload
+    ),
+};
+
 // Export combined API
 export const api = {
   auth: authApi,
@@ -8205,6 +8331,7 @@ export const api = {
   blogs: blogsApi,
   promotions: promotionsApi,
   featuredRequests: featuredRequestsApi,
+  enterprise: enterpriseApi,
 };
 
 // Named exports for direct import
@@ -8227,6 +8354,7 @@ export {
   blogsApi,
   promotionsApi,
   featuredRequestsApi,
+  enterpriseApi,
   apiService,
   httpClient,
 };

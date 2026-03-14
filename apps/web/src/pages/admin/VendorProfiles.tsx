@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { api } from '../../services/api';
@@ -265,7 +265,7 @@ const normalizeDashboardGovernance = (input: any): DashboardGovernanceSettings =
 });
 
 export default function AdminVendorProfiles() {
-  const [tab, setTab] = useState<'fields' | 'reviews' | 'dashboard' | 'accounts'>('fields');
+  const [tab, setTab] = useState<'fields' | 'reviews' | 'dashboard' | 'accounts' | 'enterprise'>('fields');
   const [role, setRole] = useState<VendorRole>('FABRIC_SELLER');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -300,6 +300,25 @@ export default function AdminVendorProfiles() {
   });
   const [showAddVendorModal, setShowAddVendorModal] = useState(false);
   const [creatingVendor, setCreatingVendor] = useState(false);
+  const [enterpriseConfig, setEnterpriseConfig] = useState({
+    sellerEnabled: true,
+    designerEnabled: true,
+    enforceSubscription: true,
+    defaultSeatLimit: 5,
+    defaultYearlyFeeUsd: 99,
+    levels: [
+      { key: 'BASIC', name: 'Basic', seatLimit: 5, yearlyFeeUsd: 99 },
+      { key: 'GROWTH', name: 'Growth', seatLimit: 15, yearlyFeeUsd: 249 },
+      { key: 'PREMIUM', name: 'Premium', seatLimit: 50, yearlyFeeUsd: 699 },
+    ] as Array<{ key: string; name: string; seatLimit: number; yearlyFeeUsd: number }>,
+  });
+  const [enterpriseAccounts, setEnterpriseAccounts] = useState<any[]>([]);
+  const [enterpriseRequests, setEnterpriseRequests] = useState<any[]>([]);
+  const [enterpriseSubAccountsByOwner, setEnterpriseSubAccountsByOwner] = useState<Record<string, any[]>>({});
+  const [enterpriseReviewDrafts, setEnterpriseReviewDrafts] = useState<
+    Record<string, { approvedLevelName: string; approvedSeatLimit: number; approvedYearlyFeeUsd: number; reviewNote: string }>
+  >({});
+  const [savingEnterprise, setSavingEnterprise] = useState(false);
   const [newVendor, setNewVendor] = useState({
     role: 'FABRIC_SELLER' as VendorRole,
     email: '',
@@ -392,6 +411,36 @@ export default function AdminVendorProfiles() {
     }
   };
 
+  const loadEnterpriseData = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const [configResponse, accountsResponse, requestsResponse] = await Promise.all([
+        api.admin.getEnterpriseConfig(),
+        api.admin.getEnterpriseAccounts({ page: 1, limit: 200 }),
+        api.admin.getEnterpriseUpgradeRequests({ page: 1, limit: 200 }),
+      ]);
+      const nextConfig = configResponse?.data || {};
+      setEnterpriseConfig((prev) => ({
+        ...prev,
+        sellerEnabled: nextConfig.sellerEnabled !== false,
+        designerEnabled: nextConfig.designerEnabled !== false,
+        enforceSubscription: nextConfig.enforceSubscription !== false,
+        defaultSeatLimit: Math.max(1, Number(nextConfig.defaultSeatLimit || prev.defaultSeatLimit)),
+        defaultYearlyFeeUsd: Number(nextConfig.defaultYearlyFeeUsd || prev.defaultYearlyFeeUsd),
+        levels: Array.isArray(nextConfig.levels) && nextConfig.levels.length > 0 ? nextConfig.levels : prev.levels,
+      }));
+      setEnterpriseAccounts(Array.isArray(accountsResponse?.data?.accounts) ? accountsResponse.data.accounts : []);
+      setEnterpriseRequests(Array.isArray(requestsResponse?.data?.requests) ? requestsResponse.data.requests : []);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to load enterprise account settings.');
+      setEnterpriseAccounts([]);
+      setEnterpriseRequests([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (tab === 'fields') {
       void loadFields();
@@ -399,6 +448,8 @@ export default function AdminVendorProfiles() {
       void loadProfiles();
     } else if (tab === 'dashboard') {
       void loadDashboardGovernance();
+    } else if (tab === 'enterprise') {
+      void loadEnterpriseData();
     } else {
       void loadVendorAccounts();
     }
@@ -468,6 +519,136 @@ export default function AdminVendorProfiles() {
       setError(err?.response?.data?.message || 'Failed to update vendor account.');
     } finally {
       setSavingVendorAccount(false);
+    }
+  };
+
+  const saveEnterpriseConfig = async () => {
+    setSavingEnterprise(true);
+    setError('');
+    setSuccess('');
+    try {
+      await api.admin.updateEnterpriseConfig({
+        sellerEnabled: enterpriseConfig.sellerEnabled,
+        designerEnabled: enterpriseConfig.designerEnabled,
+        enforceSubscription: enterpriseConfig.enforceSubscription,
+        defaultSeatLimit: Number(enterpriseConfig.defaultSeatLimit || 1),
+        defaultYearlyFeeUsd: Number(enterpriseConfig.defaultYearlyFeeUsd || 0),
+        levels: enterpriseConfig.levels.map((level) => ({
+          key: String(level.key || '').toUpperCase().trim(),
+          name: String(level.name || '').trim(),
+          seatLimit: Math.max(1, Number(level.seatLimit || 1)),
+          yearlyFeeUsd: Number(level.yearlyFeeUsd || 0),
+        })),
+      });
+      setSuccess('Enterprise configuration updated successfully.');
+      await loadEnterpriseData();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to save enterprise configuration.');
+    } finally {
+      setSavingEnterprise(false);
+    }
+  };
+
+  const convertVendorEnterprise = async (ownerUserId: string, nextIsEnterprise: boolean) => {
+    setSavingEnterprise(true);
+    setError('');
+    try {
+      await api.admin.convertVendorToEnterprise(ownerUserId, {
+        isEnterprise: nextIsEnterprise,
+        status: nextIsEnterprise ? 'ACTIVE' : 'INACTIVE',
+      });
+      setSuccess(nextIsEnterprise ? 'Vendor converted to enterprise.' : 'Enterprise mode disabled.');
+      await loadEnterpriseData();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to update enterprise mode.');
+    } finally {
+      setSavingEnterprise(false);
+    }
+  };
+
+  const updateEnterpriseSubscription = async (
+    ownerUserId: string,
+    status: 'INACTIVE' | 'PENDING_PAYMENT' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED'
+  ) => {
+    setSavingEnterprise(true);
+    setError('');
+    try {
+      await api.admin.updateEnterpriseSubscription(ownerUserId, { subscriptionStatus: status, years: 1 });
+      setSuccess('Enterprise subscription updated.');
+      await loadEnterpriseData();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to update subscription.');
+    } finally {
+      setSavingEnterprise(false);
+    }
+  };
+
+  const reviewEnterpriseRequest = async (requestId: string, status: 'APPROVED' | 'REJECTED') => {
+    const draft = enterpriseReviewDrafts[requestId] || {
+      approvedLevelName: '',
+      approvedSeatLimit: 5,
+      approvedYearlyFeeUsd: 99,
+      reviewNote: '',
+    };
+    setSavingEnterprise(true);
+    setError('');
+    try {
+      await api.admin.reviewEnterpriseUpgradeRequest(requestId, {
+        status,
+        reviewNote: draft.reviewNote || undefined,
+        approvedLevelName: status === 'APPROVED' ? draft.approvedLevelName || undefined : undefined,
+        approvedSeatLimit: status === 'APPROVED' ? Number(draft.approvedSeatLimit || 1) : undefined,
+        approvedYearlyFeeUsd: status === 'APPROVED' ? Number(draft.approvedYearlyFeeUsd || 0) : undefined,
+      });
+      setSuccess(`Enterprise request ${status.toLowerCase()} successfully.`);
+      await loadEnterpriseData();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to review enterprise request.');
+    } finally {
+      setSavingEnterprise(false);
+    }
+  };
+
+  const loadOwnerSubAccounts = async (ownerUserId: string) => {
+    const current = enterpriseSubAccountsByOwner[ownerUserId];
+    if (Array.isArray(current) && current.length > 0) {
+      setEnterpriseSubAccountsByOwner((prev) => ({ ...prev, [ownerUserId]: [] }));
+      return;
+    }
+    setSavingEnterprise(true);
+    setError('');
+    try {
+      const response = await api.admin.getEnterpriseSubAccountsForOwner(ownerUserId);
+      setEnterpriseSubAccountsByOwner((prev) => ({
+        ...prev,
+        [ownerUserId]: Array.isArray(response.data) ? response.data : [],
+      }));
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to load enterprise sub-accounts.');
+    } finally {
+      setSavingEnterprise(false);
+    }
+  };
+
+  const updateSubAccountStatus = async (subAccountId: string, status: 'ACTIVE' | 'DISABLED') => {
+    setSavingEnterprise(true);
+    setError('');
+    try {
+      await api.admin.setEnterpriseSubAccountStatus(subAccountId, { status });
+      setSuccess('Sub-account status updated.');
+      const refreshed = Object.fromEntries(
+        await Promise.all(
+          Object.keys(enterpriseSubAccountsByOwner).map(async (ownerUserId) => {
+            const response = await api.admin.getEnterpriseSubAccountsForOwner(ownerUserId);
+            return [ownerUserId, Array.isArray(response.data) ? response.data : []];
+          })
+        )
+      );
+      setEnterpriseSubAccountsByOwner(refreshed as Record<string, any[]>);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to update sub-account status.');
+    } finally {
+      setSavingEnterprise(false);
     }
   };
 
@@ -623,6 +804,12 @@ export default function AdminVendorProfiles() {
             className={`pb-3 text-sm font-medium ${tab === 'accounts' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-500'}`}
           >
             Vendor Accounts
+          </button>
+          <button
+            onClick={() => setTab('enterprise')}
+            className={`pb-3 text-sm font-medium ${tab === 'enterprise' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-gray-500'}`}
+          >
+            Enterprise Accounts
           </button>
         </div>
       </div>
@@ -963,6 +1150,381 @@ export default function AdminVendorProfiles() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {!loading && tab === 'enterprise' && (
+        <div className="space-y-4">
+          <div className="rounded-xl border bg-white p-4 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Enterprise Upgrade Configuration</h3>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={enterpriseConfig.sellerEnabled}
+                  onChange={(e) => setEnterpriseConfig((prev) => ({ ...prev, sellerEnabled: e.target.checked }))}
+                />
+                Seller enabled
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={enterpriseConfig.designerEnabled}
+                  onChange={(e) => setEnterpriseConfig((prev) => ({ ...prev, designerEnabled: e.target.checked }))}
+                />
+                Designer enabled
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={enterpriseConfig.enforceSubscription}
+                  onChange={(e) => setEnterpriseConfig((prev) => ({ ...prev, enforceSubscription: e.target.checked }))}
+                />
+                Enforce paid yearly subscription
+              </label>
+              <div className="text-sm text-gray-600">
+                Admin controls levels, pricing, renewal, and sub-account limits globally.
+              </div>
+              <input
+                type="number"
+                min={1}
+                value={enterpriseConfig.defaultSeatLimit}
+                onChange={(e) =>
+                  setEnterpriseConfig((prev) => ({ ...prev, defaultSeatLimit: Math.max(1, Number(e.target.value || 1)) }))
+                }
+                className="rounded border px-3 py-2 text-sm"
+                placeholder="Default seats"
+              />
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={enterpriseConfig.defaultYearlyFeeUsd}
+                onChange={(e) =>
+                  setEnterpriseConfig((prev) => ({ ...prev, defaultYearlyFeeUsd: Math.max(0, Number(e.target.value || 0)) }))
+                }
+                className="rounded border px-3 py-2 text-sm"
+                placeholder="Default yearly fee (USD)"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-800">Enterprise levels</p>
+              {enterpriseConfig.levels.map((level, index) => (
+                <div key={`${level.key}-${index}`} className="grid grid-cols-1 gap-2 md:grid-cols-4">
+                  <input
+                    value={level.key}
+                    onChange={(e) =>
+                      setEnterpriseConfig((prev) => ({
+                        ...prev,
+                        levels: prev.levels.map((row, rowIndex) =>
+                          rowIndex === index ? { ...row, key: e.target.value.toUpperCase() } : row
+                        ),
+                      }))
+                    }
+                    className="rounded border px-3 py-2 text-sm"
+                    placeholder="Key"
+                  />
+                  <input
+                    value={level.name}
+                    onChange={(e) =>
+                      setEnterpriseConfig((prev) => ({
+                        ...prev,
+                        levels: prev.levels.map((row, rowIndex) =>
+                          rowIndex === index ? { ...row, name: e.target.value } : row
+                        ),
+                      }))
+                    }
+                    className="rounded border px-3 py-2 text-sm"
+                    placeholder="Level name"
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    value={level.seatLimit}
+                    onChange={(e) =>
+                      setEnterpriseConfig((prev) => ({
+                        ...prev,
+                        levels: prev.levels.map((row, rowIndex) =>
+                          rowIndex === index ? { ...row, seatLimit: Math.max(1, Number(e.target.value || 1)) } : row
+                        ),
+                      }))
+                    }
+                    className="rounded border px-3 py-2 text-sm"
+                    placeholder="Seat limit"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={level.yearlyFeeUsd}
+                    onChange={(e) =>
+                      setEnterpriseConfig((prev) => ({
+                        ...prev,
+                        levels: prev.levels.map((row, rowIndex) =>
+                          rowIndex === index ? { ...row, yearlyFeeUsd: Math.max(0, Number(e.target.value || 0)) } : row
+                        ),
+                      }))
+                    }
+                    className="rounded border px-3 py-2 text-sm"
+                    placeholder="Yearly fee (USD)"
+                  />
+                </div>
+              ))}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setEnterpriseConfig((prev) => ({
+                      ...prev,
+                      levels: [...prev.levels, { key: `LEVEL_${prev.levels.length + 1}`, name: 'New Level', seatLimit: 5, yearlyFeeUsd: 99 }],
+                    }))
+                  }
+                >
+                  Add Level
+                </Button>
+                <Button size="sm" onClick={saveEnterpriseConfig} disabled={savingEnterprise}>
+                  {savingEnterprise ? 'Saving...' : 'Save Enterprise Config'}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Enterprise Vendor Accounts</h3>
+            <div className="overflow-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500">
+                    <th className="py-2 pr-3">Vendor</th>
+                    <th className="py-2 pr-3">Type</th>
+                    <th className="py-2 pr-3">Enterprise</th>
+                    <th className="py-2 pr-3">Subscription</th>
+                    <th className="py-2 pr-3">Seats</th>
+                    <th className="py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {enterpriseAccounts.map((account) => {
+                    const ownerId = String(account.ownerUserId || '');
+                    const subRows = enterpriseSubAccountsByOwner[ownerId] || [];
+                    return (
+                      <Fragment key={ownerId}>
+                        <tr key={ownerId} className="border-t">
+                          <td className="py-2 pr-3">
+                            <p className="font-medium text-gray-900">
+                              {`${account.firstName || ''} ${account.lastName || ''}`.trim() || account.email}
+                            </p>
+                            <p className="text-xs text-gray-500">{account.email}</p>
+                          </td>
+                          <td className="py-2 pr-3">
+                            {String(account.role || '').toUpperCase() === 'FABRIC_SELLER' ? 'Fabric Seller' : 'Fashion Designer'}
+                          </td>
+                          <td className="py-2 pr-3">{account.isEnterprise ? 'Yes' : 'No'}</td>
+                          <td className="py-2 pr-3">
+                            {account.subscriptionStatus}
+                            {account.subscriptionEndsAt ? (
+                              <p className="text-xs text-gray-500">{new Date(account.subscriptionEndsAt).toLocaleDateString()}</p>
+                            ) : null}
+                          </td>
+                          <td className="py-2 pr-3">
+                            {Number(account.activeSubAccounts || 0)} / {Number(account.seatLimit || 1)}
+                          </td>
+                          <td className="py-2">
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => convertVendorEnterprise(ownerId, !Boolean(account.isEnterprise))}
+                                disabled={savingEnterprise}
+                              >
+                                {account.isEnterprise ? 'Disable Enterprise' : 'Convert to Enterprise'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  updateEnterpriseSubscription(
+                                    ownerId,
+                                    String(account.subscriptionStatus || '').toUpperCase() === 'ACTIVE' ? 'EXPIRED' : 'ACTIVE'
+                                  )
+                                }
+                                disabled={savingEnterprise}
+                              >
+                                {String(account.subscriptionStatus || '').toUpperCase() === 'ACTIVE' ? 'Mark Expired' : 'Activate 1 Year'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => loadOwnerSubAccounts(ownerId)}
+                                disabled={savingEnterprise}
+                              >
+                                {subRows.length > 0 ? 'Hide Sub-Accounts' : 'View Sub-Accounts'}
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                        {subRows.length > 0 ? (
+                          <tr key={`${ownerId}-subs`} className="border-t bg-gray-50/60">
+                            <td colSpan={6} className="py-3 px-2">
+                              <p className="mb-2 text-xs font-semibold text-gray-600">Sub-accounts</p>
+                              <div className="space-y-2">
+                                {subRows.map((subAccount: any) => (
+                                  <div key={subAccount.id} className="flex items-center justify-between rounded border bg-white px-3 py-2 text-xs">
+                                    <div>
+                                      <p className="font-medium text-gray-900">
+                                        {[subAccount.firstName, subAccount.lastName].filter(Boolean).join(' ') || subAccount.email}
+                                      </p>
+                                      <p className="text-gray-500">
+                                        {subAccount.email} • {subAccount.roleName || subAccount.roleKey || '-'} • {subAccount.status}
+                                      </p>
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant={String(subAccount.status || '').toUpperCase() === 'DISABLED' ? 'outline' : 'ghost'}
+                                      onClick={() =>
+                                        updateSubAccountStatus(
+                                          String(subAccount.id || ''),
+                                          String(subAccount.status || '').toUpperCase() === 'DISABLED' ? 'ACTIVE' : 'DISABLED'
+                                        )
+                                      }
+                                      disabled={savingEnterprise}
+                                    >
+                                      {String(subAccount.status || '').toUpperCase() === 'DISABLED' ? 'Enable' : 'Disable'}
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
+                  {enterpriseAccounts.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-gray-500">
+                        No enterprise-eligible vendor accounts found.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Enterprise Upgrade Requests</h3>
+            <div className="overflow-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500">
+                    <th className="py-2 pr-3">Vendor</th>
+                    <th className="py-2 pr-3">Requested</th>
+                    <th className="py-2 pr-3">Status</th>
+                    <th className="py-2 pr-3">Payment</th>
+                    <th className="py-2">Review</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {enterpriseRequests.map((request) => {
+                    const draft = enterpriseReviewDrafts[String(request.id)] || {
+                      approvedLevelName: String(request.approvedLevelName || request.requestedLevelKey || ''),
+                      approvedSeatLimit: Number(request.approvedSeatLimit || request.requestedSeatLimit || 5),
+                      approvedYearlyFeeUsd: Number(request.approvedYearlyFeeUsd || 99),
+                      reviewNote: '',
+                    };
+                    return (
+                      <tr key={request.id} className="border-t">
+                        <td className="py-2 pr-3">
+                          <p className="font-medium text-gray-900">
+                            {`${request.ownerFirstName || ''} ${request.ownerLastName || ''}`.trim() || request.ownerEmail}
+                          </p>
+                          <p className="text-xs text-gray-500">{request.ownerEmail}</p>
+                        </td>
+                        <td className="py-2 pr-3">
+                          <p>Level: {request.requestedLevelKey || '-'}</p>
+                          <p>Seats: {request.requestedSeatLimit || '-'}</p>
+                          <p>Years: {request.requestedYears || 1}</p>
+                        </td>
+                        <td className="py-2 pr-3">{request.status}</td>
+                        <td className="py-2 pr-3">{request.paymentStatus}</td>
+                        <td className="py-2">
+                          <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+                            <input
+                              value={draft.approvedLevelName}
+                              onChange={(e) =>
+                                setEnterpriseReviewDrafts((prev) => ({
+                                  ...prev,
+                                  [request.id]: { ...draft, approvedLevelName: e.target.value },
+                                }))
+                              }
+                              placeholder="Approved level"
+                              className="rounded border px-2 py-1 text-xs"
+                            />
+                            <input
+                              type="number"
+                              min={1}
+                              value={draft.approvedSeatLimit}
+                              onChange={(e) =>
+                                setEnterpriseReviewDrafts((prev) => ({
+                                  ...prev,
+                                  [request.id]: { ...draft, approvedSeatLimit: Math.max(1, Number(e.target.value || 1)) },
+                                }))
+                              }
+                              placeholder="Seats"
+                              className="rounded border px-2 py-1 text-xs"
+                            />
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={draft.approvedYearlyFeeUsd}
+                              onChange={(e) =>
+                                setEnterpriseReviewDrafts((prev) => ({
+                                  ...prev,
+                                  [request.id]: { ...draft, approvedYearlyFeeUsd: Math.max(0, Number(e.target.value || 0)) },
+                                }))
+                              }
+                              placeholder="Yearly USD"
+                              className="rounded border px-2 py-1 text-xs"
+                            />
+                            <input
+                              value={draft.reviewNote}
+                              onChange={(e) =>
+                                setEnterpriseReviewDrafts((prev) => ({
+                                  ...prev,
+                                  [request.id]: { ...draft, reviewNote: e.target.value },
+                                }))
+                              }
+                              placeholder="Review note"
+                              className="rounded border px-2 py-1 text-xs"
+                            />
+                          </div>
+                          <div className="mt-2 flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => reviewEnterpriseRequest(String(request.id), 'REJECTED')} disabled={savingEnterprise}>
+                              Reject
+                            </Button>
+                            <Button size="sm" onClick={() => reviewEnterpriseRequest(String(request.id), 'APPROVED')} disabled={savingEnterprise}>
+                              Approve
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {enterpriseRequests.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-gray-500">
+                        No enterprise upgrade requests found.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

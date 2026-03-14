@@ -80,6 +80,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: '3D TryON', href: '/seller?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/seller?tab=orders', icon: ShoppingBag },
     { label: 'Payment', href: '/seller/payments', icon: CreditCard },
+    { label: 'Enterprise', href: '/seller/enterprise', icon: Users },
     { label: 'Profile', href: '/seller/profile', icon: User },
   ],
   designer: [
@@ -88,6 +89,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: '3D TryON', href: '/designer?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/designer?tab=orders', icon: ShoppingBag },
     { label: 'Payment', href: '/designer/payments', icon: CreditCard },
+    { label: 'Enterprise', href: '/designer/enterprise', icon: Users },
     { label: 'Profile', href: '/designer/profile', icon: User },
   ],
   qa: [

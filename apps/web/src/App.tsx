@@ -66,11 +66,13 @@ import AdminNotificationCenter from './pages/admin/NotificationCenter';
 import SellerDashboard from './pages/seller/Dashboard';
 import SellerPayments from './pages/seller/Payments';
 import SellerProfilePage from './pages/seller/Profile';
+import SellerEnterprisePage from './pages/seller/Enterprise';
 
 // Designer Pages
 import DesignerDashboard from './pages/designer/Dashboard';
 import DesignerPayments from './pages/designer/Payments';
 import DesignerProfilePage from './pages/designer/Profile';
+import DesignerEnterprisePage from './pages/designer/Enterprise';
 
 // QA Pages
 import QADashboard from './pages/qa/Dashboard';
@@ -378,6 +380,7 @@ function App() {
                 <Route path="/seller" element={<SellerDashboard />} />
                 <Route path="/seller/payments" element={<SellerPayments />} />
                 <Route path="/seller/profile" element={<SellerProfilePage />} />
+                <Route path="/seller/enterprise" element={<SellerEnterprisePage />} />
               </Route>
             </Route>
 
@@ -387,6 +390,7 @@ function App() {
                 <Route path="/designer" element={<DesignerDashboard />} />
                 <Route path="/designer/payments" element={<DesignerPayments />} />
                 <Route path="/designer/profile" element={<DesignerProfilePage />} />
+                <Route path="/designer/enterprise" element={<DesignerEnterprisePage />} />
               </Route>
             </Route>
 

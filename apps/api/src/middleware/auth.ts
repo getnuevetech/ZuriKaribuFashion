@@ -9,6 +9,7 @@ import {
   hasAnyPermissionFromGrants,
   sanitizePermissionGrants,
 } from '../rbac';
+import { isEnterpriseSubscriptionActive, readEnterpriseActorContext } from '../utils/enterprise';
 
 // JWT Secret - must be set in production
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -68,6 +69,10 @@ declare global {
         firstName: string;
         lastName: string;
         permissions?: string[];
+        actorUserId?: string;
+        enterpriseOwnerUserId?: string;
+        enterpriseSubAccountId?: string;
+        enterprisePermissions?: string[];
       };
     }
   }
@@ -108,6 +113,61 @@ const getTokenIssuedAtMs = (decoded: { iat?: number; sessionIssuedAt?: number })
   const iatMs = Number(decoded.iat) * 1000;
   if (Number.isFinite(iatMs) && iatMs > 0) return iatMs;
   return 0;
+};
+
+const hasEnterpriseCapability = (permissions: string[] | undefined, capability: string) => {
+  if (!Array.isArray(permissions) || permissions.length === 0) return false;
+  return (
+    permissions.includes('*') ||
+    permissions.includes('ALL') ||
+    permissions.includes('all') ||
+    permissions.includes(capability)
+  );
+};
+
+const resolveRequiredEnterpriseCapability = (req: Request, role: UserRole): string | null => {
+  const path = String(req.originalUrl || req.url || '')
+    .split('?')[0]
+    .toLowerCase();
+  const method = String(req.method || 'GET').toUpperCase();
+  if (path.startsWith('/api/enterprise') || path.startsWith('/api/admin/enterprise') || path.startsWith('/api/auth')) {
+    return null;
+  }
+  if (path.startsWith('/api/upload')) return 'products:manage';
+  if (path.startsWith('/api/payments/vendor')) {
+    return method === 'GET' ? 'payments:view' : 'payments:manage';
+  }
+  if (path.startsWith('/api/orders')) {
+    if (path.includes('/status') && method !== 'GET') return 'orders:update';
+    return method === 'GET' ? 'orders:view' : null;
+  }
+  const isSellerOrDesignerRoute =
+    path.startsWith('/api/fabric-seller') || path.startsWith('/api/seller') || path.startsWith('/api/designer');
+  if (!isSellerOrDesignerRoute) return null;
+
+  if (path.includes('/try-on')) return 'tryon:view';
+  if (path.includes('/dashboard') || path.includes('/profile-completion')) {
+    if (path.includes('/profile-completion') && method !== 'GET') return 'governance:submit';
+    return 'dashboard:view';
+  }
+  if (path.includes('/featured')) return 'featured:manage';
+  if (path.includes('/orders')) {
+    if (method === 'GET') return 'orders:view';
+    return 'orders:update';
+  }
+  if (
+    path.includes('/fabrics') ||
+    path.includes('/designs') ||
+    path.includes('/ready-to-wear') ||
+    path.includes('/products')
+  ) {
+    if (method === 'GET') return 'products:view';
+    return 'products:manage';
+  }
+  if (role === UserRole.FABRIC_SELLER || role === UserRole.FASHION_DESIGNER) {
+    if (method === 'GET') return 'dashboard:view';
+  }
+  return null;
 };
 
 // Authentication middleware
@@ -209,13 +269,64 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
         : [];
     const effectivePermissions = adminUserPermissions.length > 0 ? adminUserPermissions : rolePermissions;
 
+    let actorUserId = user.id;
+    let effectiveUserId = user.id;
+    let enterpriseOwnerUserId: string | undefined;
+    let enterpriseSubAccountId: string | undefined;
+    let enterprisePermissions: string[] | undefined;
+
+    if (user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER) {
+      const enterpriseContext = await readEnterpriseActorContext(user.id, user.role);
+      if (enterpriseContext?.enterpriseAccount && enterpriseContext.enterpriseAccount.isEnterprise) {
+        const lowerUrl = String(req.originalUrl || req.url || '').toLowerCase();
+        const isEnterpriseManagementPath =
+          lowerUrl.startsWith('/api/enterprise') || lowerUrl.startsWith('/api/admin/enterprise');
+        const subscriptionActive = isEnterpriseSubscriptionActive(enterpriseContext.enterpriseAccount);
+        if (!subscriptionActive && !isEnterpriseManagementPath) {
+          return res.status(403).json({
+            success: false,
+            message:
+              'Your enterprise subscription is inactive or expired. Renew your enterprise plan to continue.',
+          });
+        }
+        if (enterpriseContext.isSubAccount) {
+          enterprisePermissions = Array.isArray(enterpriseContext.permissions)
+            ? enterpriseContext.permissions
+            : [];
+          enterpriseOwnerUserId = enterpriseContext.ownerUserId || undefined;
+          enterpriseSubAccountId = enterpriseContext.subAccountId || undefined;
+          const requiredCapability = resolveRequiredEnterpriseCapability(req, user.role);
+          if (requiredCapability && !hasEnterpriseCapability(enterprisePermissions, requiredCapability)) {
+            return res.status(403).json({
+              success: false,
+              message:
+                'Your enterprise sub-account role does not have permission for this action.',
+            });
+          }
+          const shouldScopeToOwner =
+            !lowerUrl.startsWith('/api/auth') &&
+            !lowerUrl.startsWith('/api/enterprise') &&
+            !lowerUrl.startsWith('/api/admin/enterprise');
+          if (shouldScopeToOwner && enterpriseContext.ownerUserId) {
+            effectiveUserId = enterpriseContext.ownerUserId;
+          }
+        } else {
+          enterprisePermissions = ['*'];
+        }
+      }
+    }
+
     req.user = {
-      id: user.id,
+      id: effectiveUserId,
       email: user.email,
       role: user.role,
       firstName: user.firstName,
       lastName: user.lastName,
       permissions: effectivePermissions,
+      actorUserId,
+      enterpriseOwnerUserId,
+      enterpriseSubAccountId,
+      enterprisePermissions,
     };
     next();
   } catch (error) {
