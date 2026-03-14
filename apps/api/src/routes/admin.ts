@@ -213,6 +213,11 @@ const ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS = {
 };
 const ADMIN_PRODUCT_LABEL_DEFAULTS = {
   newTagDays: 14,
+  appearance: {
+    sizePercent: 120,
+    fontSizePx: 12,
+    isBold: true,
+  },
   labels: [
     {
       id: 'new',
@@ -285,6 +290,13 @@ const adminReadyToWearSizeGuideUpdateSchema = z.object({
 });
 const adminProductLabelUpdateSchema = z.object({
   newTagDays: z.coerce.number().int().min(1).max(120),
+  appearance: z
+    .object({
+      sizePercent: z.coerce.number().int().min(60).max(300),
+      fontSizePx: z.coerce.number().int().min(8).max(36),
+      isBold: z.boolean(),
+    })
+    .optional(),
   labels: z
     .array(
       z.object({
@@ -478,6 +490,22 @@ const normalizeAdminProductLabelSettings = (raw: unknown) => {
   if (!raw || typeof raw !== 'object') return fallback;
   const row = raw as Record<string, unknown>;
   const newTagDaysRaw = Number(row.newTagDays);
+  const appearanceRow =
+    row.appearance && typeof row.appearance === 'object' && !Array.isArray(row.appearance)
+      ? (row.appearance as Record<string, unknown>)
+      : {};
+  const appearance = {
+    sizePercent: Number.isFinite(Number(appearanceRow.sizePercent))
+      ? Math.max(60, Math.min(300, Math.round(Number(appearanceRow.sizePercent))))
+      : fallback.appearance.sizePercent,
+    fontSizePx: Number.isFinite(Number(appearanceRow.fontSizePx))
+      ? Math.max(8, Math.min(36, Math.round(Number(appearanceRow.fontSizePx))))
+      : fallback.appearance.fontSizePx,
+    isBold:
+      typeof appearanceRow.isBold === 'boolean'
+        ? appearanceRow.isBold
+        : fallback.appearance.isBold,
+  };
   const parsedLabels = Array.isArray(row.labels) ? row.labels : [];
   const labels = Array.from(
     new Map(
@@ -573,6 +601,7 @@ const normalizeAdminProductLabelSettings = (raw: unknown) => {
 
   return {
     newTagDays: Number.isFinite(newTagDaysRaw) ? Math.max(1, Math.min(120, Math.round(newTagDaysRaw))) : fallback.newTagDays,
+    appearance,
     labels: withSystemLabels.slice(0, 24),
     assignments,
   };

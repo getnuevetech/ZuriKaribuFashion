@@ -21,6 +21,12 @@ type ProductLabelAssignmentRow = {
   productIds: string[];
 };
 
+type LabelAppearance = {
+  sizePercent: number;
+  fontSizePx: number;
+  isBold: boolean;
+};
+
 const DEFAULT_LABELS: ProductLabelRow[] = [
   { id: 'new', name: 'NEW', mode: 'AUTO_NEW', textColor: '#ffffff', backgroundColor: '#111827', isActive: true },
   { id: 'sale', name: 'SALE', mode: 'AUTO_SALE', textColor: '#ffffff', backgroundColor: '#dc2626', isActive: true },
@@ -32,6 +38,11 @@ export default function AdminProductLabels() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [newTagDays, setNewTagDays] = useState(14);
+  const [appearance, setAppearance] = useState<LabelAppearance>({
+    sizePercent: 120,
+    fontSizePx: 12,
+    isBold: true,
+  });
   const [labels, setLabels] = useState<ProductLabelRow[]>(DEFAULT_LABELS);
   const [assignments, setAssignments] = useState<ProductLabelAssignmentRow[]>([]);
   const [catalog, setCatalog] = useState<Record<ProductType, Array<{ id: string; name: string }>>>({
@@ -79,6 +90,11 @@ export default function AdminProductLabels() {
       if (settingsResult.status === 'fulfilled' && settingsResult.value.success) {
         const payload = settingsResult.value.data || {};
         setNewTagDays(Math.max(1, Number(payload.newTagDays || 14)));
+        setAppearance({
+          sizePercent: Math.max(60, Math.min(300, Number(payload.appearance?.sizePercent || 120))),
+          fontSizePx: Math.max(8, Math.min(36, Number(payload.appearance?.fontSizePx || 12))),
+          isBold: payload.appearance?.isBold !== false,
+        });
         const nextLabels = Array.isArray(payload.labels) && payload.labels.length > 0
           ? payload.labels.map((entry: any) => ({
               id: String(entry.id || '').trim().toLowerCase(),
@@ -169,6 +185,11 @@ export default function AdminProductLabels() {
         .filter((entry) => entry.labelId && entry.productIds.length > 0);
       await api.admin.updateProductLabelsSettings({
         newTagDays: Math.max(1, Math.min(120, Number(newTagDays || 14))),
+        appearance: {
+          sizePercent: Math.max(60, Math.min(300, Number(appearance.sizePercent || 120))),
+          fontSizePx: Math.max(8, Math.min(36, Number(appearance.fontSizePx || 12))),
+          isBold: appearance.isBold !== false,
+        },
         labels: normalizedLabels,
         assignments: normalizedAssignments,
       });
@@ -205,15 +226,59 @@ export default function AdminProductLabels() {
       {success ? <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{success}</div> : null}
 
       <div className="rounded-xl border bg-white p-4">
-        <label className="block text-sm font-medium text-gray-700">Auto-NEW duration (days)</label>
-        <input
-          type="number"
-          min={1}
-          max={120}
-          value={newTagDays}
-          onChange={(event) => setNewTagDays(Math.max(1, Math.min(120, Number(event.target.value || 14))))}
-          className="mt-2 w-40 rounded-lg border px-3 py-2 text-sm"
-        />
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <label className="block text-sm font-medium text-gray-700">
+            Auto-NEW duration (days)
+            <input
+              type="number"
+              min={1}
+              max={120}
+              value={newTagDays}
+              onChange={(event) => setNewTagDays(Math.max(1, Math.min(120, Number(event.target.value || 14))))}
+              className="mt-2 w-full rounded-lg border px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-sm font-medium text-gray-700">
+            Label size (%)
+            <input
+              type="number"
+              min={60}
+              max={300}
+              value={appearance.sizePercent}
+              onChange={(event) =>
+                setAppearance((prev) => ({
+                  ...prev,
+                  sizePercent: Math.max(60, Math.min(300, Number(event.target.value || 120))),
+                }))
+              }
+              className="mt-2 w-full rounded-lg border px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-sm font-medium text-gray-700">
+            Font size (px)
+            <input
+              type="number"
+              min={8}
+              max={36}
+              value={appearance.fontSizePx}
+              onChange={(event) =>
+                setAppearance((prev) => ({
+                  ...prev,
+                  fontSizePx: Math.max(8, Math.min(36, Number(event.target.value || 12))),
+                }))
+              }
+              className="mt-2 w-full rounded-lg border px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 pt-8">
+            <input
+              type="checkbox"
+              checked={appearance.isBold}
+              onChange={(event) => setAppearance((prev) => ({ ...prev, isBold: event.target.checked }))}
+            />
+            Label text bold
+          </label>
+        </div>
       </div>
 
       <div className="rounded-xl border bg-white p-4 space-y-3">

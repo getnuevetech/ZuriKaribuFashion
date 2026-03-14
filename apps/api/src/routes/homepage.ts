@@ -12,6 +12,11 @@ const HOMEPAGE_PRODUCT_LABEL_SETTINGS_KEY = 'HOMEPAGE_PRODUCT_LABELS';
 
 const DEFAULT_PRODUCT_LABEL_SETTINGS = {
   newTagDays: 14,
+  appearance: {
+    sizePercent: 120,
+    fontSizePx: 12,
+    isBold: true,
+  },
   labels: [
     {
       id: 'new',
@@ -41,6 +46,9 @@ type ProductLabelDisplay = {
   name: string;
   textColor: string;
   backgroundColor: string;
+  sizePercent: number;
+  fontSizePx: number;
+  isBold: boolean;
 };
 
 type TopStripSettings = {
@@ -163,6 +171,22 @@ function normalizeProductLabelSettings(raw: unknown) {
   };
   if (!raw || typeof raw !== 'object') return fallback;
   const row = raw as Record<string, unknown>;
+  const appearanceRow =
+    row.appearance && typeof row.appearance === 'object' && !Array.isArray(row.appearance)
+      ? (row.appearance as Record<string, unknown>)
+      : {};
+  const appearance = {
+    sizePercent: Number.isFinite(Number(appearanceRow.sizePercent))
+      ? Math.max(60, Math.min(300, Math.round(Number(appearanceRow.sizePercent))))
+      : fallback.appearance.sizePercent,
+    fontSizePx: Number.isFinite(Number(appearanceRow.fontSizePx))
+      ? Math.max(8, Math.min(36, Math.round(Number(appearanceRow.fontSizePx))))
+      : fallback.appearance.fontSizePx,
+    isBold:
+      typeof appearanceRow.isBold === 'boolean'
+        ? appearanceRow.isBold
+        : fallback.appearance.isBold,
+  };
   const labelsRaw = Array.isArray(row.labels) ? row.labels : [];
   const labels = Array.from(
     new Map(
@@ -241,6 +265,7 @@ function normalizeProductLabelSettings(raw: unknown) {
     newTagDays: Number.isFinite(newTagDaysRaw)
       ? Math.max(1, Math.min(120, Math.round(newTagDaysRaw)))
       : fallback.newTagDays,
+    appearance,
     labels: labelsWithDefaults,
     assignments,
   };
@@ -279,6 +304,9 @@ function buildProductLabels(params: {
       name: row.name,
       textColor: row.textColor,
       backgroundColor: row.backgroundColor,
+      sizePercent: params.settings.appearance.sizePercent,
+      fontSizePx: params.settings.appearance.fontSizePx,
+      isBold: params.settings.appearance.isBold,
     });
   };
   const now = Date.now();

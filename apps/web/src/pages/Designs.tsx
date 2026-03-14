@@ -20,7 +20,15 @@ interface Design {
     id: string;
     name: string;
   };
-  productLabels?: Array<{ id: string; name: string; textColor: string; backgroundColor: string }>;
+  productLabels?: Array<{
+    id: string;
+    name: string;
+    textColor: string;
+    backgroundColor: string;
+    sizePercent?: number;
+    fontSizePx?: number;
+    isBold?: boolean;
+  }>;
 }
 
 interface Category {
@@ -477,10 +485,15 @@ export default function Designs() {
                           {(design.productLabels || []).slice(0, 2).map((label) => (
                             <span
                               key={`${design.id}-label-${label.id}`}
-                              className="px-1.5 py-0.5 text-[10px] font-semibold"
+                              className="inline-flex items-center"
                               style={{
                                 backgroundColor: label.backgroundColor || '#111827',
                                 color: label.textColor || '#ffffff',
+                                fontSize: `${Math.max(8, Math.min(36, Number(label.fontSizePx || 12)))}px`,
+                                fontWeight: label.isBold === false ? 500 : 700,
+                                padding: `${0.125 * (Math.max(60, Math.min(300, Number(label.sizePercent || 120))) / 100)}rem ${
+                                  0.375 * (Math.max(60, Math.min(300, Number(label.sizePercent || 120))) / 100)
+                                }rem`,
                               }}
                             >
                               {label.name}

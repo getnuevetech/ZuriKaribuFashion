@@ -58,7 +58,15 @@ interface Design {
   rating: number;
   reviewCount: number;
   orderCount: number;
-  productLabels?: Array<{ id: string; name: string; textColor: string; backgroundColor: string }>;
+  productLabels?: Array<{
+    id: string;
+    name: string;
+    textColor: string;
+    backgroundColor: string;
+    sizePercent?: number;
+    fontSizePx?: number;
+    isBold?: boolean;
+  }>;
 }
 
 interface ProductReview {
@@ -403,10 +411,15 @@ export default function DesignDetail() {
                   {(design.productLabels || []).map((label) => (
                     <span
                       key={`${design.id}-detail-label-${label.id}`}
-                      className="px-2 py-0.5 text-[11px] font-semibold"
+                      className="inline-flex items-center"
                       style={{
                         backgroundColor: label.backgroundColor || '#111827',
                         color: label.textColor || '#ffffff',
+                        fontSize: `${Math.max(8, Math.min(36, Number(label.fontSizePx || 12)))}px`,
+                        fontWeight: label.isBold === false ? 500 : 700,
+                        padding: `${0.125 * (Math.max(60, Math.min(300, Number(label.sizePercent || 120))) / 100)}rem ${
+                          0.5 * (Math.max(60, Math.min(300, Number(label.sizePercent || 120))) / 100)
+                        }rem`,
                       }}
                     >
                       {label.name}

@@ -5945,6 +5945,11 @@ const adminApi = {
       success: boolean;
       data: {
         newTagDays: number;
+        appearance: {
+          sizePercent: number;
+          fontSizePx: number;
+          isBold: boolean;
+        };
         labels: Array<{
           id: string;
           name: string;
@@ -5963,6 +5968,11 @@ const adminApi = {
 
   updateProductLabelsSettings: (payload: {
     newTagDays: number;
+    appearance?: {
+      sizePercent: number;
+      fontSizePx: number;
+      isBold: boolean;
+    };
     labels: Array<{
       id: string;
       name: string;
