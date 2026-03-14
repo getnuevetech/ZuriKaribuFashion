@@ -684,7 +684,6 @@ export default function DesignDetail() {
                 <Button
                   className="flex-1 rounded-none"
                 onClick={handleAddToCart}
-                disabled={!areAllRequiredMeasurementsFilled() || (fabricSelectionMode === 'CUSTOMER_SELECTED' && !selectedFabric)}
               >
                 <ShoppingBag className="w-4 h-4 mr-2" />
                 Make Your Own Design
