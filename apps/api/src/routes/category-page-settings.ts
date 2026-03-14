@@ -36,6 +36,11 @@ const updateCategoryPageSettingsSchema = z
     rotatingColumns: z.number().int().min(1).max(6).optional(),
     rotatingRows: z.number().int().min(1).max(6).optional(),
     rotatingTitleSize: z.number().int().min(16).max(64).optional(),
+    recommendationProductIds: z.array(z.string().trim().min(1)).max(120).optional(),
+    recommendationDisplayCount: z.number().int().min(1).max(24).optional(),
+    recommendationConfiguredOnly: z.boolean().optional(),
+    recommendationPreferSameCountry: z.boolean().optional(),
+    recommendationPreferDifferentSeller: z.boolean().optional(),
   })
   .strict();
 

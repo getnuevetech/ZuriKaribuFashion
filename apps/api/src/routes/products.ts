@@ -4,6 +4,7 @@ import { prisma, ProductStatus } from '../db';
 import { authenticate, optionalAuth } from '../middleware/auth';
 import { z } from 'zod';
 import { readFabricPredominantColorMap } from '../utils/fabric-attributes';
+import { readCategoryPageSettings, type CategoryPageType } from '../utils/category-page-settings';
 
 const router = Router();
 const HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE';
@@ -87,6 +88,19 @@ type ProductLabelDisplay = {
 
 type CanonicalProductType = 'DESIGN' | 'FABRIC' | 'READY_TO_WEAR';
 
+type DiscoverCandidate = {
+  id: string;
+  name: string;
+  image: string;
+  priceUsd: number;
+  country: string;
+  ownerName: string;
+  productType: CanonicalProductType;
+  sellerToken: string;
+  sameTaxonomy: boolean;
+  sameCountry: boolean;
+};
+
 const PRODUCT_TYPE_BY_TOKEN: Record<string, CanonicalProductType> = {
   DESIGN: 'DESIGN',
   DESIGNS: 'DESIGN',
@@ -106,6 +120,77 @@ function normalizeProductTypeToken(value: unknown): CanonicalProductType | null 
   if (!token) return null;
   return PRODUCT_TYPE_BY_TOKEN[token] || null;
 }
+
+const DISCOVER_PAGE_TYPE_BY_PRODUCT_TYPE: Record<CanonicalProductType, CategoryPageType> = {
+  DESIGN: 'CUSTOM_TO_WEAR',
+  FABRIC: 'FABRIC_TO_BUY',
+  READY_TO_WEAR: 'READY_TO_WEAR',
+};
+
+const dedupeDiscoverCandidates = (rows: DiscoverCandidate[]) => {
+  const seen = new Set<string>();
+  const output: DiscoverCandidate[] = [];
+  for (const row of rows) {
+    if (!row?.id || seen.has(row.id)) continue;
+    seen.add(row.id);
+    output.push(row);
+  }
+  return output;
+};
+
+const rankDiscoverCandidates = (
+  rows: DiscoverCandidate[],
+  input: {
+    currentSellerToken: string;
+    preferSameCountry: boolean;
+    preferDifferentSeller: boolean;
+  }
+) =>
+  [...rows].sort((left, right) => {
+    const score = (row: DiscoverCandidate) => {
+      const sameSeller = row.sellerToken && row.sellerToken === input.currentSellerToken;
+      let total = 0;
+      if (row.sameTaxonomy) total += 60;
+      if (input.preferSameCountry) {
+        total += row.sameCountry ? 28 : -6;
+      } else if (row.sameCountry) {
+        total += 12;
+      }
+      if (input.preferDifferentSeller) {
+        total += sameSeller ? -10 : 18;
+      } else {
+        total += sameSeller ? 6 : 8;
+      }
+      total += Math.random() * 10;
+      return total;
+    };
+    return score(right) - score(left);
+  });
+
+const selectDiscoverCandidates = (
+  rows: DiscoverCandidate[],
+  limit: number,
+  input: { preferDifferentSeller: boolean }
+) => {
+  const target = Math.max(1, Math.min(30, Math.round(Number(limit || 12))));
+  if (rows.length <= target) return rows.slice(0, target);
+  if (!input.preferDifferentSeller) return rows.slice(0, target);
+
+  const picked: DiscoverCandidate[] = [];
+  const usedSellers = new Set<string>();
+  for (const row of rows) {
+    if (!row.sellerToken || usedSellers.has(row.sellerToken)) continue;
+    picked.push(row);
+    usedSellers.add(row.sellerToken);
+    if (picked.length >= target) return picked;
+  }
+  for (const row of rows) {
+    if (picked.some((entry) => entry.id === row.id)) continue;
+    picked.push(row);
+    if (picked.length >= target) break;
+  }
+  return picked.slice(0, target);
+};
 
 let ensureProductEngagementSchemaPromise: Promise<void> | null = null;
 
@@ -1171,27 +1256,54 @@ router.get('/:productType/:id/discover', async (req, res, next) => {
     }
     const productId = String(req.params.id || '');
     const limitRaw = Number.parseInt(String(req.query.limit ?? '12'), 10) || 12;
-    const limit = Math.min(30, Math.max(1, limitRaw));
+    const pageType = DISCOVER_PAGE_TYPE_BY_PRODUCT_TYPE[productType];
+    const pageSettingsSnapshot = await readCategoryPageSettings(pageType);
+    const recommendationProductIds = Array.from(
+      new Set(
+        (pageSettingsSnapshot.settings.recommendationProductIds || [])
+          .map((entry) => String(entry || '').trim())
+          .filter(Boolean)
+      )
+    ).slice(0, 120);
+    const targetLimit = Math.min(
+      30,
+      Math.max(
+        1,
+        Number(pageSettingsSnapshot.settings.recommendationDisplayCount || 0) > 0
+          ? Number(pageSettingsSnapshot.settings.recommendationDisplayCount)
+          : limitRaw
+      )
+    );
+    const preferSameCountry = pageSettingsSnapshot.settings.recommendationPreferSameCountry !== false;
+    const preferDifferentSeller = pageSettingsSnapshot.settings.recommendationPreferDifferentSeller !== false;
+    const configuredOnly = pageSettingsSnapshot.settings.recommendationConfiguredOnly === true;
 
     if (productType === 'DESIGN') {
-      const current = await prisma.design.findUnique({ where: { id: productId }, select: { id: true, categoryId: true } });
-      if (!current) return res.status(404).json({ success: false, message: 'Product not found.' });
-      const primary = await prisma.design.findMany({
-        where: {
-          id: { not: productId },
-          status: ProductStatus.APPROVED,
-          isAvailable: true,
-          ...(current.categoryId ? { categoryId: current.categoryId } : {}),
-        },
-        include: {
-          images: { take: 1 },
-          designer: { select: { country: true, businessName: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 150,
+      const current = await prisma.design.findUnique({
+        where: { id: productId },
+        select: { id: true, categoryId: true, designerId: true, designer: { select: { country: true } } },
       });
-      const fallback =
-        primary.length < limit
+      if (!current) return res.status(404).json({ success: false, message: 'Product not found.' });
+      const currentCountry = String(current.designer?.country || '').trim();
+
+      const configuredRows =
+        recommendationProductIds.length > 0
+          ? await prisma.design.findMany({
+              where: {
+                id: { in: recommendationProductIds, not: productId },
+                status: ProductStatus.APPROVED,
+                isAvailable: true,
+              },
+              include: {
+                images: { take: 1, orderBy: { sortOrder: 'asc' } },
+                designer: { select: { country: true, businessName: true } },
+              },
+              take: 180,
+            })
+          : [];
+
+      const dynamicRows =
+        !configuredOnly || configuredRows.length < targetLimit
           ? await prisma.design.findMany({
               where: {
                 id: { not: productId },
@@ -1199,53 +1311,80 @@ router.get('/:productType/:id/discover', async (req, res, next) => {
                 isAvailable: true,
               },
               include: {
-                images: { take: 1 },
+                images: { take: 1, orderBy: { sortOrder: 'asc' } },
                 designer: { select: { country: true, businessName: true } },
               },
               orderBy: { createdAt: 'desc' },
-              take: 150,
+              take: 240,
             })
           : [];
-      const merged = [...primary, ...fallback];
-      const seenCountries = new Set<string>();
-      const items: any[] = [];
-      for (const row of merged) {
-        const country = String(row.designer?.country || '').trim() || 'Unknown';
-        if (seenCountries.has(country)) continue;
-        seenCountries.add(country);
-        items.push({
-          id: row.id,
-          name: row.name,
-          image: row.images?.[0]?.url || '',
-          priceUsd: Number(row.finalPrice || row.basePrice || 0),
-          country,
-          ownerName: row.designer?.businessName || 'Designer',
-          productType: 'DESIGN',
-        });
-        if (items.length >= limit) break;
-      }
-      return res.json({ success: true, data: items });
+
+      const candidates = dedupeDiscoverCandidates(
+        [...configuredRows, ...dynamicRows]
+          .map((row) => {
+            const country = String(row.designer?.country || '').trim();
+            return {
+              id: row.id,
+              name: row.name,
+              image: row.images?.[0]?.url || '',
+              priceUsd: Number(row.finalPrice || row.basePrice || 0),
+              country: country || 'Unknown',
+              ownerName: row.designer?.businessName || 'Designer',
+              productType: 'DESIGN' as const,
+              sellerToken: String(row.designerId || ''),
+              sameTaxonomy: Boolean(current.categoryId) && row.categoryId === current.categoryId,
+              sameCountry: Boolean(currentCountry) && country === currentCountry,
+            } satisfies DiscoverCandidate;
+          })
+          .filter((entry) => entry.id !== productId)
+      );
+
+      const ranked = rankDiscoverCandidates(candidates, {
+        currentSellerToken: String(current.designerId || ''),
+        preferSameCountry,
+        preferDifferentSeller,
+      });
+      const selected = selectDiscoverCandidates(ranked, targetLimit, { preferDifferentSeller });
+      return res.json({
+        success: true,
+        data: selected.map((item) => ({
+          id: item.id,
+          name: item.name,
+          image: item.image,
+          priceUsd: item.priceUsd,
+          country: item.country,
+          ownerName: item.ownerName,
+          productType: item.productType,
+        })),
+      });
     }
 
     if (productType === 'FABRIC') {
-      const current = await prisma.fabric.findUnique({ where: { id: productId }, select: { id: true, materialTypeId: true } });
-      if (!current) return res.status(404).json({ success: false, message: 'Product not found.' });
-      const primary = await prisma.fabric.findMany({
-        where: {
-          id: { not: productId },
-          status: ProductStatus.APPROVED,
-          isAvailable: true,
-          ...(current.materialTypeId ? { materialTypeId: current.materialTypeId } : {}),
-        },
-        include: {
-          images: { take: 1 },
-          seller: { select: { country: true, businessName: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 150,
+      const current = await prisma.fabric.findUnique({
+        where: { id: productId },
+        select: { id: true, materialTypeId: true, sellerId: true, seller: { select: { country: true } } },
       });
-      const fallback =
-        primary.length < limit
+      if (!current) return res.status(404).json({ success: false, message: 'Product not found.' });
+      const currentCountry = String(current.seller?.country || '').trim();
+
+      const configuredRows =
+        recommendationProductIds.length > 0
+          ? await prisma.fabric.findMany({
+              where: {
+                id: { in: recommendationProductIds, not: productId },
+                status: ProductStatus.APPROVED,
+                isAvailable: true,
+              },
+              include: {
+                images: { take: 1, orderBy: { sortOrder: 'asc' } },
+                seller: { select: { country: true, businessName: true } },
+              },
+              take: 180,
+            })
+          : [];
+
+      const dynamicRows =
+        !configuredOnly || configuredRows.length < targetLimit
           ? await prisma.fabric.findMany({
               where: {
                 id: { not: productId },
@@ -1253,52 +1392,80 @@ router.get('/:productType/:id/discover', async (req, res, next) => {
                 isAvailable: true,
               },
               include: {
-                images: { take: 1 },
+                images: { take: 1, orderBy: { sortOrder: 'asc' } },
                 seller: { select: { country: true, businessName: true } },
               },
               orderBy: { createdAt: 'desc' },
-              take: 150,
+              take: 240,
             })
           : [];
-      const merged = [...primary, ...fallback];
-      const seenCountries = new Set<string>();
-      const items: any[] = [];
-      for (const row of merged) {
-        const country = String(row.seller?.country || '').trim() || 'Unknown';
-        if (seenCountries.has(country)) continue;
-        seenCountries.add(country);
-        items.push({
-          id: row.id,
-          name: row.name,
-          image: row.images?.[0]?.url || '',
-          priceUsd: Number(row.finalPrice || 0),
-          country,
-          ownerName: row.seller?.businessName || 'Seller',
-          productType: 'FABRIC',
-        });
-        if (items.length >= limit) break;
-      }
-      return res.json({ success: true, data: items });
+
+      const candidates = dedupeDiscoverCandidates(
+        [...configuredRows, ...dynamicRows]
+          .map((row) => {
+            const country = String(row.seller?.country || '').trim();
+            return {
+              id: row.id,
+              name: row.name,
+              image: row.images?.[0]?.url || '',
+              priceUsd: Number(row.finalPrice || row.sellerPrice || 0),
+              country: country || 'Unknown',
+              ownerName: row.seller?.businessName || 'Seller',
+              productType: 'FABRIC' as const,
+              sellerToken: String(row.sellerId || ''),
+              sameTaxonomy: Boolean(current.materialTypeId) && row.materialTypeId === current.materialTypeId,
+              sameCountry: Boolean(currentCountry) && country === currentCountry,
+            } satisfies DiscoverCandidate;
+          })
+          .filter((entry) => entry.id !== productId)
+      );
+
+      const ranked = rankDiscoverCandidates(candidates, {
+        currentSellerToken: String(current.sellerId || ''),
+        preferSameCountry,
+        preferDifferentSeller,
+      });
+      const selected = selectDiscoverCandidates(ranked, targetLimit, { preferDifferentSeller });
+      return res.json({
+        success: true,
+        data: selected.map((item) => ({
+          id: item.id,
+          name: item.name,
+          image: item.image,
+          priceUsd: item.priceUsd,
+          country: item.country,
+          ownerName: item.ownerName,
+          productType: item.productType,
+        })),
+      });
     }
 
-    const current = await prisma.readyToWear.findUnique({ where: { id: productId }, select: { id: true, categoryId: true } });
-    if (!current) return res.status(404).json({ success: false, message: 'Product not found.' });
-    const primary = await prisma.readyToWear.findMany({
-      where: {
-        id: { not: productId },
-        status: ProductStatus.APPROVED,
-        isAvailable: true,
-        ...(current.categoryId ? { categoryId: current.categoryId } : {}),
-      },
-      include: {
-        images: { take: 1 },
-        designer: { select: { country: true, businessName: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 150,
+    const current = await prisma.readyToWear.findUnique({
+      where: { id: productId },
+      select: { id: true, categoryId: true, designerId: true, designer: { select: { country: true } } },
     });
-    const fallback =
-      primary.length < limit
+    if (!current) return res.status(404).json({ success: false, message: 'Product not found.' });
+    const currentCountry = String(current.designer?.country || '').trim();
+
+    const configuredRows =
+      recommendationProductIds.length > 0
+        ? await prisma.readyToWear.findMany({
+            where: {
+              id: { in: recommendationProductIds, not: productId },
+              status: ProductStatus.APPROVED,
+              isAvailable: true,
+            },
+            include: {
+              images: { take: 1, orderBy: { sortOrder: 'asc' } },
+              designer: { select: { country: true, businessName: true } },
+              sizeVariations: { where: { stock: { gt: 0 } }, select: { price: true } },
+            },
+            take: 180,
+          })
+        : [];
+
+    const dynamicRows =
+      !configuredOnly || configuredRows.length < targetLimit
         ? await prisma.readyToWear.findMany({
             where: {
               id: { not: productId },
@@ -1306,32 +1473,57 @@ router.get('/:productType/:id/discover', async (req, res, next) => {
               isAvailable: true,
             },
             include: {
-              images: { take: 1 },
+              images: { take: 1, orderBy: { sortOrder: 'asc' } },
               designer: { select: { country: true, businessName: true } },
+              sizeVariations: { where: { stock: { gt: 0 } }, select: { price: true } },
             },
             orderBy: { createdAt: 'desc' },
-            take: 150,
+            take: 240,
           })
         : [];
-    const merged = [...primary, ...fallback];
-    const seenCountries = new Set<string>();
-    const items: any[] = [];
-    for (const row of merged) {
-      const country = String(row.designer?.country || '').trim() || 'Unknown';
-      if (seenCountries.has(country)) continue;
-      seenCountries.add(country);
-      items.push({
-        id: row.id,
-        name: row.name,
-        image: row.images?.[0]?.url || '',
-        priceUsd: Number(row.basePrice || 0),
-        country,
-        ownerName: row.designer?.businessName || 'Designer',
-        productType: 'READY_TO_WEAR',
-      });
-      if (items.length >= limit) break;
-    }
-    res.json({ success: true, data: items });
+
+    const candidates = dedupeDiscoverCandidates(
+      [...configuredRows, ...dynamicRows]
+        .map((row) => {
+          const country = String(row.designer?.country || '').trim();
+          const variationPrices = (row.sizeVariations || [])
+            .map((entry) => Number(entry.price || 0))
+            .filter((value) => Number.isFinite(value) && value > 0);
+          const priceUsd = variationPrices.length > 0 ? Math.min(...variationPrices) : Number(row.basePrice || 0);
+          return {
+            id: row.id,
+            name: row.name,
+            image: row.images?.[0]?.url || '',
+            priceUsd,
+            country: country || 'Unknown',
+            ownerName: row.designer?.businessName || 'Designer',
+            productType: 'READY_TO_WEAR' as const,
+            sellerToken: String(row.designerId || ''),
+            sameTaxonomy: Boolean(current.categoryId) && row.categoryId === current.categoryId,
+            sameCountry: Boolean(currentCountry) && country === currentCountry,
+          } satisfies DiscoverCandidate;
+        })
+        .filter((entry) => entry.id !== productId)
+    );
+
+    const ranked = rankDiscoverCandidates(candidates, {
+      currentSellerToken: String(current.designerId || ''),
+      preferSameCountry,
+      preferDifferentSeller,
+    });
+    const selected = selectDiscoverCandidates(ranked, targetLimit, { preferDifferentSeller });
+    res.json({
+      success: true,
+      data: selected.map((item) => ({
+        id: item.id,
+        name: item.name,
+        image: item.image,
+        priceUsd: item.priceUsd,
+        country: item.country,
+        ownerName: item.ownerName,
+        productType: item.productType,
+      })),
+    });
   } catch (error) {
     next(error);
   }

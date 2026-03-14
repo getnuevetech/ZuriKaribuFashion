@@ -105,6 +105,19 @@ const mdGridByColumns: Record<number, string> = {
   6: 'md:grid-cols-3',
 };
 
+function buildFiltersFromParams(searchParams: URLSearchParams) {
+  return {
+    search: searchParams.get('search') || '',
+    categoryId: searchParams.get('category') || '',
+    country: searchParams.get('country') || '',
+    size: searchParams.get('size') || '',
+    color: searchParams.get('color') || '',
+    materialTypeId: searchParams.get('material') || '',
+    designerId: searchParams.get('designerId') || '',
+    page: parseInt(searchParams.get('page') || '1', 10),
+  };
+}
+
 export default function Designs() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [designs, setDesigns] = useState<Design[]>([]);
@@ -117,16 +130,8 @@ export default function Designs() {
   const [error, setError] = useState<string | null>(null);
   const { formatFromUsd } = useCurrencyStore();
 
-  const [filters, setFilters] = useState({
-    search: searchParams.get('search') || '',
-    categoryId: searchParams.get('category') || '',
-    country: searchParams.get('country') || '',
-    size: searchParams.get('size') || '',
-    color: searchParams.get('color') || '',
-    materialTypeId: searchParams.get('material') || '',
-    designerId: searchParams.get('designerId') || '',
-    page: parseInt(searchParams.get('page') || '1', 10),
-  });
+  const [filters, setFilters] = useState(() => buildFiltersFromParams(searchParams));
+  const [appliedFilters, setAppliedFilters] = useState(() => buildFiltersFromParams(searchParams));
 
   const countryOptions = useMemo(
     () =>
@@ -152,10 +157,10 @@ export default function Designs() {
   }, [featuredProducts.length]);
 
   const selectedCategoryLabel = useMemo(() => {
-    if (!filters.categoryId) return 'All';
-    const matched = categories.find((row) => row.id === filters.categoryId);
-    return matched?.name || filters.categoryId;
-  }, [categories, filters.categoryId]);
+    if (!appliedFilters.categoryId) return 'All';
+    const matched = categories.find((row) => row.id === appliedFilters.categoryId);
+    return matched?.name || appliedFilters.categoryId;
+  }, [appliedFilters.categoryId, categories]);
 
   useEffect(() => {
     const loadPageSettings = async () => {
@@ -180,6 +185,12 @@ export default function Designs() {
     };
     void loadPageSettings();
   }, []);
+
+  useEffect(() => {
+    const next = buildFiltersFromParams(searchParams);
+    setFilters(next);
+    setAppliedFilters(next);
+  }, [searchParams]);
 
   useEffect(() => {
     const loadTaxonomy = async () => {
@@ -207,14 +218,14 @@ export default function Designs() {
       setError(null);
       try {
         const response = await api.products.getDesigns({
-          search: filters.search || undefined,
-          categoryId: filters.categoryId || undefined,
-          country: filters.country || undefined,
-          size: filters.size || undefined,
-          color: filters.color || undefined,
-          materialTypeId: filters.materialTypeId || undefined,
-          designerId: filters.designerId || undefined,
-          page: filters.page,
+          search: appliedFilters.search || undefined,
+          categoryId: appliedFilters.categoryId || undefined,
+          country: appliedFilters.country || undefined,
+          size: appliedFilters.size || undefined,
+          color: appliedFilters.color || undefined,
+          materialTypeId: appliedFilters.materialTypeId || undefined,
+          designerId: appliedFilters.designerId || undefined,
+          page: appliedFilters.page,
           limit: settings.pageSize,
         });
         if (!response.success) {
@@ -235,7 +246,7 @@ export default function Designs() {
       }
     };
     void loadDesigns();
-  }, [filters, settings.pageSize]);
+  }, [appliedFilters, settings.pageSize]);
 
   const updateURLParams = (newFilters: typeof filters) => {
     const params = new URLSearchParams();
@@ -251,7 +262,22 @@ export default function Designs() {
   };
 
   const updateFilter = (key: keyof typeof filters, value: string | number) => {
-    const next = { ...filters, [key]: value, page: key === 'page' ? Number(value) : 1 };
+    setFilters((prev) => ({ ...prev, [key]: value, page: key === 'page' ? Number(value) : 1 }));
+  };
+
+  const applyFilters = (next: typeof filters) => {
+    setAppliedFilters(next);
+    setFilters(next);
+    updateURLParams(next);
+  };
+
+  const handleSearch = () => {
+    applyFilters({ ...filters, page: 1 });
+  };
+
+  const handlePageChange = (page: number) => {
+    const next = { ...appliedFilters, page };
+    setAppliedFilters(next);
     setFilters(next);
     updateURLParams(next);
   };
@@ -288,6 +314,12 @@ export default function Designs() {
               type="text"
               value={filters.search}
               onChange={(event) => updateFilter('search', event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleSearch();
+                }
+              }}
               placeholder="Search custom designs..."
               className="w-full pl-9 pr-3 py-2 border rounded-md"
             />
@@ -352,6 +384,13 @@ export default function Designs() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={handleSearch}
+            className="bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-900"
+          >
+            Search
+          </button>
           {(filters.search || filters.categoryId || filters.country || filters.size || filters.color || filters.materialTypeId) ? (
             <button
               type="button"
@@ -366,8 +405,7 @@ export default function Designs() {
                   designerId: '',
                   page: 1,
                 };
-                setFilters(next);
-                updateURLParams(next);
+                applyFilters(next);
               }}
               className="border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
             >
@@ -456,8 +494,8 @@ export default function Designs() {
               <div className="flex justify-center items-center mt-6 gap-2">
                 <button
                   type="button"
-                  onClick={() => updateFilter('page', Math.max(1, filters.page - 1))}
-                  disabled={filters.page <= 1}
+                  onClick={() => handlePageChange(Math.max(1, appliedFilters.page - 1))}
+                  disabled={appliedFilters.page <= 1}
                   className="p-2 border bg-white disabled:opacity-50"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -465,17 +503,17 @@ export default function Designs() {
                 {Array.from({ length: Math.min(7, pagination.pages) }, (_, index) => {
                   let pageNumber = index + 1;
                   if (pagination.pages > 7) {
-                    if (filters.page <= 4) pageNumber = index + 1;
-                    else if (filters.page >= pagination.pages - 3) pageNumber = pagination.pages - 6 + index;
-                    else pageNumber = filters.page - 3 + index;
+                    if (appliedFilters.page <= 4) pageNumber = index + 1;
+                    else if (appliedFilters.page >= pagination.pages - 3) pageNumber = pagination.pages - 6 + index;
+                    else pageNumber = appliedFilters.page - 3 + index;
                   }
                   return (
                     <button
                       key={pageNumber}
                       type="button"
-                      onClick={() => updateFilter('page', pageNumber)}
+                      onClick={() => handlePageChange(pageNumber)}
                       className={`h-9 min-w-9 px-2 border text-sm ${
-                        filters.page === pageNumber ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-300'
+                        appliedFilters.page === pageNumber ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-300'
                       }`}
                     >
                       {pageNumber}
@@ -484,8 +522,8 @@ export default function Designs() {
                 })}
                 <button
                   type="button"
-                  onClick={() => updateFilter('page', Math.min(pagination.pages, filters.page + 1))}
-                  disabled={filters.page >= pagination.pages}
+                  onClick={() => handlePageChange(Math.min(pagination.pages, appliedFilters.page + 1))}
+                  disabled={appliedFilters.page >= pagination.pages}
                   className="p-2 border bg-white disabled:opacity-50"
                 >
                   <ChevronRight className="w-4 h-4" />

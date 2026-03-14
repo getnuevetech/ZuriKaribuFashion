@@ -47,6 +47,11 @@ const categoryPageSettingsSchema = z.object({
   rotatingColumns: z.number().int().min(1).max(6),
   rotatingRows: z.number().int().min(1).max(6),
   rotatingTitleSize: z.number().int().min(16).max(64),
+  recommendationProductIds: z.array(z.string().trim().min(1)).max(120),
+  recommendationDisplayCount: z.number().int().min(1).max(24),
+  recommendationConfiguredOnly: z.boolean(),
+  recommendationPreferSameCountry: z.boolean(),
+  recommendationPreferDifferentSeller: z.boolean(),
 });
 
 const categoryPageSettingsPatchSchema = categoryPageSettingsSchema.partial();
@@ -72,6 +77,11 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     rotatingColumns: 2,
     rotatingRows: 1,
     rotatingTitleSize: 32,
+    recommendationProductIds: [],
+    recommendationDisplayCount: 12,
+    recommendationConfiguredOnly: false,
+    recommendationPreferSameCountry: true,
+    recommendationPreferDifferentSeller: true,
   },
   FABRIC_TO_BUY: {
     bannerTitle: 'Fabrics To Buy',
@@ -91,6 +101,11 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     rotatingColumns: 2,
     rotatingRows: 1,
     rotatingTitleSize: 32,
+    recommendationProductIds: [],
+    recommendationDisplayCount: 12,
+    recommendationConfiguredOnly: false,
+    recommendationPreferSameCountry: true,
+    recommendationPreferDifferentSeller: true,
   },
   CUSTOM_TO_WEAR: {
     bannerTitle: 'Custom To Wear',
@@ -110,6 +125,11 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     rotatingColumns: 2,
     rotatingRows: 1,
     rotatingTitleSize: 32,
+    recommendationProductIds: [],
+    recommendationDisplayCount: 12,
+    recommendationConfiguredOnly: false,
+    recommendationPreferSameCountry: true,
+    recommendationPreferDifferentSeller: true,
   },
 };
 
@@ -178,6 +198,16 @@ const normalizeCategoryPageSettings = (pageType: CategoryPageType, raw: unknown)
         )
       )
     : fallback.rotatingProductIds;
+  const recommendationProductIds = Array.isArray(row.recommendationProductIds)
+    ? Array.from(
+        new Set(
+          row.recommendationProductIds
+            .map((entry) => String(entry || '').trim())
+            .filter(Boolean)
+            .slice(0, 120)
+        )
+      )
+    : fallback.recommendationProductIds;
   const parsed = categoryPageSettingsSchema.safeParse({
     bannerTitle: String(row.bannerTitle ?? fallback.bannerTitle).trim().slice(0, 120),
     bannerSubtitle: String(row.bannerSubtitle ?? fallback.bannerSubtitle).trim().slice(0, 320),
@@ -204,6 +234,22 @@ const normalizeCategoryPageSettings = (pageType: CategoryPageType, raw: unknown)
     rotatingTitleSize: Number.isFinite(Number(row.rotatingTitleSize))
       ? Math.max(16, Math.min(64, Math.round(Number(row.rotatingTitleSize))))
       : fallback.rotatingTitleSize,
+    recommendationProductIds,
+    recommendationDisplayCount: Number.isFinite(Number(row.recommendationDisplayCount))
+      ? Math.max(1, Math.min(24, Math.round(Number(row.recommendationDisplayCount))))
+      : fallback.recommendationDisplayCount,
+    recommendationConfiguredOnly:
+      typeof row.recommendationConfiguredOnly === 'boolean'
+        ? row.recommendationConfiguredOnly
+        : fallback.recommendationConfiguredOnly,
+    recommendationPreferSameCountry:
+      typeof row.recommendationPreferSameCountry === 'boolean'
+        ? row.recommendationPreferSameCountry
+        : fallback.recommendationPreferSameCountry,
+    recommendationPreferDifferentSeller:
+      typeof row.recommendationPreferDifferentSeller === 'boolean'
+        ? row.recommendationPreferDifferentSeller
+        : fallback.recommendationPreferDifferentSeller,
   });
   return parsed.success ? parsed.data : { ...fallback };
 };

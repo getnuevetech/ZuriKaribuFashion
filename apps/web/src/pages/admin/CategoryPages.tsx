@@ -18,6 +18,11 @@ type CategoryPageSettingsForm = {
   rotatingColumns: number;
   rotatingRows: number;
   rotatingTitleSize: number;
+  recommendationProductIds: string[];
+  recommendationDisplayCount: number;
+  recommendationConfiguredOnly: boolean;
+  recommendationPreferSameCountry: boolean;
+  recommendationPreferDifferentSeller: boolean;
 };
 
 type ProductOption = {
@@ -52,6 +57,11 @@ const emptySettings: CategoryPageSettingsForm = {
   rotatingColumns: 2,
   rotatingRows: 1,
   rotatingTitleSize: 32,
+  recommendationProductIds: [],
+  recommendationDisplayCount: 12,
+  recommendationConfiguredOnly: false,
+  recommendationPreferSameCountry: true,
+  recommendationPreferDifferentSeller: true,
 };
 const normalizeFeaturedSlots = (input: unknown) => {
   const rows = Array.isArray(input) ? input : [];
@@ -86,6 +96,7 @@ export default function AdminCategoryPages() {
   const [isRefreshingOptions, setIsRefreshingOptions] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [selectedRotatingProductId, setSelectedRotatingProductId] = useState('');
+  const [selectedRecommendationProductId, setSelectedRecommendationProductId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
 
   const selectedPageMeta = useMemo(
@@ -143,6 +154,15 @@ export default function AdminCategoryPages() {
           rotatingColumns: Number(nextSettings.rotatingColumns || 2),
           rotatingRows: Number(nextSettings.rotatingRows || 1),
           rotatingTitleSize: Number(nextSettings.rotatingTitleSize || 32),
+          recommendationProductIds: Array.isArray(nextSettings.recommendationProductIds)
+            ? Array.from(
+                new Set(nextSettings.recommendationProductIds.map((entry: any) => String(entry || '').trim()).filter(Boolean))
+              ).slice(0, 120)
+            : [],
+          recommendationDisplayCount: Number(nextSettings.recommendationDisplayCount || 12),
+          recommendationConfiguredOnly: Boolean(nextSettings.recommendationConfiguredOnly),
+          recommendationPreferSameCountry: nextSettings.recommendationPreferSameCountry !== false,
+          recommendationPreferDifferentSeller: nextSettings.recommendationPreferDifferentSeller !== false,
         });
       }
       await loadOptions(optionSearch);
@@ -179,6 +199,13 @@ export default function AdminCategoryPages() {
         rotatingColumns: Math.max(1, Math.min(6, Math.round(Number(settings.rotatingColumns || 2)))),
         rotatingRows: Math.max(1, Math.min(6, Math.round(Number(settings.rotatingRows || 1)))),
         rotatingTitleSize: Math.max(16, Math.min(64, Math.round(Number(settings.rotatingTitleSize || 32)))),
+        recommendationProductIds: Array.from(
+          new Set((settings.recommendationProductIds || []).map((entry) => String(entry || '').trim()).filter(Boolean))
+        ).slice(0, 120),
+        recommendationDisplayCount: Math.max(1, Math.min(24, Math.round(Number(settings.recommendationDisplayCount || 12)))),
+        recommendationConfiguredOnly: Boolean(settings.recommendationConfiguredOnly),
+        recommendationPreferSameCountry: Boolean(settings.recommendationPreferSameCountry),
+        recommendationPreferDifferentSeller: Boolean(settings.recommendationPreferDifferentSeller),
       });
       if (response.success && response.data?.settings) {
         setSettings({
@@ -204,6 +231,19 @@ export default function AdminCategoryPages() {
           rotatingColumns: Number(response.data.settings.rotatingColumns || 2),
           rotatingRows: Number(response.data.settings.rotatingRows || 1),
           rotatingTitleSize: Number(response.data.settings.rotatingTitleSize || 32),
+          recommendationProductIds: Array.isArray(response.data.settings.recommendationProductIds)
+            ? Array.from(
+                new Set(
+                  response.data.settings.recommendationProductIds
+                    .map((entry: any) => String(entry || '').trim())
+                    .filter(Boolean)
+                )
+              ).slice(0, 120)
+            : [],
+          recommendationDisplayCount: Number(response.data.settings.recommendationDisplayCount || 12),
+          recommendationConfiguredOnly: Boolean(response.data.settings.recommendationConfiguredOnly),
+          recommendationPreferSameCountry: response.data.settings.recommendationPreferSameCountry !== false,
+          recommendationPreferDifferentSeller: response.data.settings.recommendationPreferDifferentSeller !== false,
         });
       }
       setMessage('Category page settings saved.');
@@ -229,6 +269,23 @@ export default function AdminCategoryPages() {
     setSettings((prev) => ({
       ...prev,
       rotatingProductIds: (prev.rotatingProductIds || []).filter((entry) => entry !== productId),
+    }));
+  };
+
+  const addRecommendationProduct = () => {
+    const productId = String(selectedRecommendationProductId || '').trim();
+    if (!productId) return;
+    setSettings((prev) => ({
+      ...prev,
+      recommendationProductIds: Array.from(new Set([...(prev.recommendationProductIds || []), productId])).slice(0, 120),
+    }));
+    setSelectedRecommendationProductId('');
+  };
+
+  const removeRecommendationProduct = (productId: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      recommendationProductIds: (prev.recommendationProductIds || []).filter((entry) => entry !== productId),
     }));
   };
 
@@ -462,6 +519,103 @@ export default function AdminCategoryPages() {
                   No products found from this route. Try Refresh list or type search text; fallback loading is enabled.
                 </p>
               ) : null}
+            </div>
+
+            <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-800">You May Also Like recommendation matrix</h3>
+              <p className="text-xs text-gray-600">
+                Control random/related products shown on product detail pages for this category type.
+              </p>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="text-sm space-y-1">
+                  <span className="text-gray-700">Display count</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={24}
+                    value={settings.recommendationDisplayCount}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        recommendationDisplayCount: Number.parseInt(event.target.value || '12', 10) || 12,
+                      }))
+                    }
+                    className="w-full rounded-md border px-3 py-2"
+                  />
+                </label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:col-span-1">
+                  <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={settings.recommendationConfiguredOnly}
+                      onChange={(event) =>
+                        setSettings((prev) => ({ ...prev, recommendationConfiguredOnly: event.target.checked }))
+                      }
+                    />
+                    Use only configured products
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={settings.recommendationPreferSameCountry}
+                      onChange={(event) =>
+                        setSettings((prev) => ({ ...prev, recommendationPreferSameCountry: event.target.checked }))
+                      }
+                    />
+                    Prioritize same country
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-xs text-gray-700 sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={settings.recommendationPreferDifferentSeller}
+                      onChange={(event) =>
+                        setSettings((prev) => ({ ...prev, recommendationPreferDifferentSeller: event.target.checked }))
+                      }
+                    />
+                    Prioritize different sellers/designers
+                  </label>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={selectedRecommendationProductId}
+                  onChange={(event) => setSelectedRecommendationProductId(event.target.value)}
+                  className="min-w-[280px] flex-1 rounded-md border px-3 py-2 text-sm"
+                >
+                  <option value="">Select product to add to recommendation pool</option>
+                  {productOptions.map((option) => (
+                    <option key={`recommendation-option-${option.id}`} value={option.id}>
+                      {option.name} · {option.ownerName} · ${Number(option.priceUsd || 0).toFixed(2)}
+                    </option>
+                  ))}
+                </select>
+                <Button type="button" size="sm" variant="outline" onClick={addRecommendationProduct}>
+                  Add product
+                </Button>
+              </div>
+              {settings.recommendationProductIds.length > 0 ? (
+                <div className="space-y-2">
+                  {settings.recommendationProductIds.map((productId) => {
+                    const option = optionById.get(productId);
+                    return (
+                      <div key={`recommendation-${productId}`} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
+                        <span className="truncate">{option ? `${option.name} · ${option.ownerName}` : productId}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeRecommendationProduct(productId)}
+                          className="ml-3 shrink-0 text-xs font-medium text-red-600 hover:text-red-700"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">
+                  No recommendation products configured. If empty, dynamic product matching will still run.
+                </p>
+              )}
             </div>
 
             {activePage === 'READY_TO_WEAR' ? (

@@ -4310,6 +4310,11 @@ const productsApi = {
           rotatingColumns: number;
           rotatingRows: number;
           rotatingTitleSize: number;
+          recommendationProductIds: string[];
+          recommendationDisplayCount: number;
+          recommendationConfiguredOnly: boolean;
+          recommendationPreferSameCountry: boolean;
+          recommendationPreferDifferentSeller: boolean;
         };
         featuredProducts: Array<{
           id: string;
@@ -6599,6 +6604,11 @@ const adminApi = {
           rotatingColumns: number;
           rotatingRows: number;
           rotatingTitleSize: number;
+          recommendationProductIds: string[];
+          recommendationDisplayCount: number;
+          recommendationConfiguredOnly: boolean;
+          recommendationPreferSameCountry: boolean;
+          recommendationPreferDifferentSeller: boolean;
         };
         featuredProducts: Array<{
           id: string;
@@ -6640,6 +6650,11 @@ const adminApi = {
       rotatingColumns: number;
       rotatingRows: number;
       rotatingTitleSize: number;
+      recommendationProductIds: string[];
+      recommendationDisplayCount: number;
+      recommendationConfiguredOnly: boolean;
+      recommendationPreferSameCountry: boolean;
+      recommendationPreferDifferentSeller: boolean;
     }>
   ) =>
     writeAdminCategoryPageSettingsWithFallback<{
@@ -6660,6 +6675,11 @@ const adminApi = {
           rotatingColumns: number;
           rotatingRows: number;
           rotatingTitleSize: number;
+          recommendationProductIds: string[];
+          recommendationDisplayCount: number;
+          recommendationConfiguredOnly: boolean;
+          recommendationPreferSameCountry: boolean;
+          recommendationPreferDifferentSeller: boolean;
         };
         featuredProducts: Array<{
           id: string;

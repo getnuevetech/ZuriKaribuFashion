@@ -152,6 +152,18 @@ function pickRandomProducts(rows: FeaturedProduct[], count: number) {
   return copy.slice(0, Math.max(0, count));
 }
 
+function buildFiltersFromParams(searchParams: URLSearchParams) {
+  return {
+    search: searchParams.get('search') || '',
+    country: searchParams.get('country') || '',
+    category: searchParams.get('category') || '',
+    size: searchParams.get('size') || '',
+    color: searchParams.get('color') || '',
+    material: searchParams.get('material') || '',
+    page: Number.parseInt(searchParams.get('page') || '1', 10) || 1,
+  };
+}
+
 export default function ReadyToWear() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<ReadyToWearProduct[]>([]);
@@ -165,32 +177,25 @@ export default function ReadyToWear() {
   const [settings, setSettings] = useState<CategoryPageSettings>(DEFAULT_SETTINGS);
   const { formatFromUsd } = useCurrencyStore();
 
-  const [filters, setFilters] = useState({
-    search: searchParams.get('search') || '',
-    country: searchParams.get('country') || '',
-    category: searchParams.get('category') || '',
-    size: searchParams.get('size') || '',
-    color: searchParams.get('color') || '',
-    material: searchParams.get('material') || '',
-    page: Number.parseInt(searchParams.get('page') || '1', 10) || 1,
-  });
+  const [filters, setFilters] = useState(() => buildFiltersFromParams(searchParams));
+  const [appliedFilters, setAppliedFilters] = useState(() => buildFiltersFromParams(searchParams));
 
   const selectedCategoryId = useMemo(
-    () => resolveCategoryIdFromQuery(filters.category, categories),
-    [filters.category, categories]
+    () => resolveCategoryIdFromQuery(appliedFilters.category, categories),
+    [appliedFilters.category, categories]
   );
 
   const selectedCategoryLabel = useMemo(() => {
-    if (!filters.category) return 'All';
-    const normalized = filters.category.toLowerCase();
+    if (!appliedFilters.category) return 'All';
+    const normalized = appliedFilters.category.toLowerCase();
     const matched = categories.find(
       (category) =>
         category.id.toLowerCase() === normalized ||
         (category.slug || '').toLowerCase() === normalized ||
         category.name.toLowerCase() === normalized
     );
-    return matched?.name || filters.category;
-  }, [categories, filters.category]);
+    return matched?.name || appliedFilters.category;
+  }, [appliedFilters.category, categories]);
 
   const productGridClass = useMemo(() => {
     const columns = Math.max(2, Math.min(6, Math.round(Number(settings.columns || 4))));
@@ -266,6 +271,12 @@ export default function ReadyToWear() {
   }, []);
 
   useEffect(() => {
+    const next = buildFiltersFromParams(searchParams);
+    setFilters(next);
+    setAppliedFilters(next);
+  }, [searchParams]);
+
+  useEffect(() => {
     const loadPageSettings = async () => {
       try {
         const response = await api.products.getCategoryPageSettings('READY_TO_WEAR');
@@ -306,13 +317,13 @@ export default function ReadyToWear() {
       setError(null);
       try {
         const response = await api.products.getReadyToWear({
-          search: filters.search || undefined,
-          country: filters.country || undefined,
+          search: appliedFilters.search || undefined,
+          country: appliedFilters.country || undefined,
           categoryId: selectedCategoryId,
-          size: filters.size || undefined,
-          color: filters.color || undefined,
-          material: filters.material || undefined,
-          page: filters.page,
+          size: appliedFilters.size || undefined,
+          color: appliedFilters.color || undefined,
+          material: appliedFilters.material || undefined,
+          page: appliedFilters.page,
           limit: settings.pageSize,
         });
         if (!response.success) {
@@ -333,7 +344,16 @@ export default function ReadyToWear() {
       }
     };
     void loadProducts();
-  }, [filters.color, filters.country, filters.material, filters.page, filters.search, filters.size, selectedCategoryId, settings.pageSize]);
+  }, [
+    appliedFilters.color,
+    appliedFilters.country,
+    appliedFilters.material,
+    appliedFilters.page,
+    appliedFilters.search,
+    appliedFilters.size,
+    selectedCategoryId,
+    settings.pageSize,
+  ]);
 
   const updateUrl = (next: typeof filters) => {
     const params = new URLSearchParams();
@@ -348,11 +368,26 @@ export default function ReadyToWear() {
   };
 
   const updateFilter = (key: keyof typeof filters, value: string | number) => {
-    const next = {
-      ...filters,
+    setFilters((prev) => ({
+      ...prev,
       [key]: value,
       page: key === 'page' ? Number(value) : 1,
-    };
+    }));
+  };
+
+  const applyFilters = (next: typeof filters) => {
+    setAppliedFilters(next);
+    setFilters(next);
+    updateUrl(next);
+  };
+
+  const handleSearch = () => {
+    applyFilters({ ...filters, page: 1 });
+  };
+
+  const handlePageChange = (page: number) => {
+    const next = { ...appliedFilters, page };
+    setAppliedFilters(next);
     setFilters(next);
     updateUrl(next);
   };
@@ -403,6 +438,12 @@ export default function ReadyToWear() {
               type="text"
               value={filters.search}
               onChange={(event) => updateFilter('search', event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleSearch();
+                }
+              }}
               placeholder="Search Ready To Wear..."
               className="w-full pl-9 pr-3 py-2 border rounded-md"
             />
@@ -467,6 +508,13 @@ export default function ReadyToWear() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={handleSearch}
+            className="bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-900"
+          >
+            Search
+          </button>
           {(filters.search || filters.country || filters.category || filters.size || filters.color || filters.material) ? (
             <button
               type="button"
@@ -480,8 +528,7 @@ export default function ReadyToWear() {
                   material: '',
                   page: 1,
                 };
-                setFilters(next);
-                updateUrl(next);
+                applyFilters(next);
               }}
               className="border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
             >
@@ -627,8 +674,8 @@ export default function ReadyToWear() {
               <div className="flex justify-center items-center mt-6 gap-2">
                 <button
                   type="button"
-                  onClick={() => updateFilter('page', Math.max(1, filters.page - 1))}
-                  disabled={filters.page <= 1}
+                  onClick={() => handlePageChange(Math.max(1, appliedFilters.page - 1))}
+                  disabled={appliedFilters.page <= 1}
                   className="p-2 border bg-white disabled:opacity-50"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -636,17 +683,17 @@ export default function ReadyToWear() {
                 {Array.from({ length: Math.min(7, pagination.pages) }, (_, index) => {
                   let pageNumber = index + 1;
                   if (pagination.pages > 7) {
-                    if (filters.page <= 4) pageNumber = index + 1;
-                    else if (filters.page >= pagination.pages - 3) pageNumber = pagination.pages - 6 + index;
-                    else pageNumber = filters.page - 3 + index;
+                    if (appliedFilters.page <= 4) pageNumber = index + 1;
+                    else if (appliedFilters.page >= pagination.pages - 3) pageNumber = pagination.pages - 6 + index;
+                    else pageNumber = appliedFilters.page - 3 + index;
                   }
                   return (
                     <button
                       key={pageNumber}
                       type="button"
-                      onClick={() => updateFilter('page', pageNumber)}
+                      onClick={() => handlePageChange(pageNumber)}
                       className={`h-9 min-w-9 px-2 border text-sm ${
-                        filters.page === pageNumber ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-300'
+                        appliedFilters.page === pageNumber ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-300'
                       }`}
                     >
                       {pageNumber}
@@ -655,8 +702,8 @@ export default function ReadyToWear() {
                 })}
                 <button
                   type="button"
-                  onClick={() => updateFilter('page', Math.min(pagination.pages, filters.page + 1))}
-                  disabled={filters.page >= pagination.pages}
+                  onClick={() => handlePageChange(Math.min(pagination.pages, appliedFilters.page + 1))}
+                  disabled={appliedFilters.page >= pagination.pages}
                   className="p-2 border bg-white disabled:opacity-50"
                 >
                   <ChevronRight className="w-4 h-4" />

@@ -106,6 +106,16 @@ function resolveMaterialId(queryValue: string, materials: Material[]) {
   return matched?.id;
 }
 
+function buildFiltersFromParams(searchParams: URLSearchParams) {
+  return {
+    search: searchParams.get('search') || '',
+    material: searchParams.get('material') || '',
+    country: searchParams.get('country') || '',
+    color: searchParams.get('color') || '',
+    page: Number.parseInt(searchParams.get('page') || '1', 10) || 1,
+  };
+}
+
 export default function Fabrics() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [fabrics, setFabrics] = useState<Fabric[]>([]);
@@ -116,15 +126,13 @@ export default function Fabrics() {
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<CategoryPageSettings>(DEFAULT_SETTINGS);
   const { formatFromUsd } = useCurrencyStore();
-  const [filters, setFilters] = useState({
-    search: searchParams.get('search') || '',
-    material: searchParams.get('material') || '',
-    country: searchParams.get('country') || '',
-    color: searchParams.get('color') || '',
-    page: Number.parseInt(searchParams.get('page') || '1', 10) || 1,
-  });
+  const [filters, setFilters] = useState(() => buildFiltersFromParams(searchParams));
+  const [appliedFilters, setAppliedFilters] = useState(() => buildFiltersFromParams(searchParams));
 
-  const selectedMaterialId = useMemo(() => resolveMaterialId(filters.material, materials), [filters.material, materials]);
+  const selectedMaterialId = useMemo(
+    () => resolveMaterialId(appliedFilters.material, materials),
+    [appliedFilters.material, materials]
+  );
 
   const countryOptions = useMemo(
     () =>
@@ -174,6 +182,12 @@ export default function Fabrics() {
   }, []);
 
   useEffect(() => {
+    const next = buildFiltersFromParams(searchParams);
+    setFilters(next);
+    setAppliedFilters(next);
+  }, [searchParams]);
+
+  useEffect(() => {
     const loadMaterials = async () => {
       try {
         const response = await api.products.getMaterials();
@@ -192,11 +206,11 @@ export default function Fabrics() {
       setError(null);
       try {
         const response = await api.products.getFabrics({
-          search: filters.search || undefined,
+          search: appliedFilters.search || undefined,
           materialTypeId: selectedMaterialId,
-          country: filters.country || undefined,
-          color: filters.color || undefined,
-          page: filters.page,
+          country: appliedFilters.country || undefined,
+          color: appliedFilters.color || undefined,
+          page: appliedFilters.page,
           limit: settings.pageSize,
         });
         if (!response.success) {
@@ -217,7 +231,14 @@ export default function Fabrics() {
       }
     };
     void loadFabrics();
-  }, [filters.color, filters.country, filters.page, filters.search, selectedMaterialId, settings.pageSize]);
+  }, [
+    appliedFilters.color,
+    appliedFilters.country,
+    appliedFilters.page,
+    appliedFilters.search,
+    selectedMaterialId,
+    settings.pageSize,
+  ]);
 
   const updateUrl = (next: typeof filters) => {
     const params = new URLSearchParams();
@@ -230,11 +251,26 @@ export default function Fabrics() {
   };
 
   const updateFilter = (key: keyof typeof filters, value: string | number) => {
-    const next = {
-      ...filters,
+    setFilters((prev) => ({
+      ...prev,
       [key]: value,
       page: key === 'page' ? Number(value) : 1,
-    };
+    }));
+  };
+
+  const applyFilters = (next: typeof filters) => {
+    setAppliedFilters(next);
+    setFilters(next);
+    updateUrl(next);
+  };
+
+  const handleSearch = () => {
+    applyFilters({ ...filters, page: 1 });
+  };
+
+  const handlePageChange = (page: number) => {
+    const next = { ...appliedFilters, page };
+    setAppliedFilters(next);
     setFilters(next);
     updateUrl(next);
   };
@@ -271,6 +307,12 @@ export default function Fabrics() {
               type="text"
               value={filters.search}
               onChange={(event) => updateFilter('search', event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleSearch();
+                }
+              }}
               placeholder="Search fabrics..."
               className="w-full pl-9 pr-3 py-2 border rounded-md"
             />
@@ -311,13 +353,19 @@ export default function Fabrics() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={handleSearch}
+            className="bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-900"
+          >
+            Search
+          </button>
           {(filters.search || filters.material || filters.country || filters.color) ? (
             <button
               type="button"
               onClick={() => {
                 const next = { search: '', material: '', country: '', color: '', page: 1 };
-                setFilters(next);
-                updateUrl(next);
+                applyFilters(next);
               }}
               className="border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
             >
@@ -406,8 +454,8 @@ export default function Fabrics() {
               <div className="flex justify-center items-center mt-6 gap-2">
                 <button
                   type="button"
-                  onClick={() => updateFilter('page', Math.max(1, filters.page - 1))}
-                  disabled={filters.page <= 1}
+                  onClick={() => handlePageChange(Math.max(1, appliedFilters.page - 1))}
+                  disabled={appliedFilters.page <= 1}
                   className="p-2 border bg-white disabled:opacity-50"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -415,17 +463,17 @@ export default function Fabrics() {
                 {Array.from({ length: Math.min(7, pagination.pages) }, (_, index) => {
                   let pageNumber = index + 1;
                   if (pagination.pages > 7) {
-                    if (filters.page <= 4) pageNumber = index + 1;
-                    else if (filters.page >= pagination.pages - 3) pageNumber = pagination.pages - 6 + index;
-                    else pageNumber = filters.page - 3 + index;
+                    if (appliedFilters.page <= 4) pageNumber = index + 1;
+                    else if (appliedFilters.page >= pagination.pages - 3) pageNumber = pagination.pages - 6 + index;
+                    else pageNumber = appliedFilters.page - 3 + index;
                   }
                   return (
                     <button
                       key={pageNumber}
                       type="button"
-                      onClick={() => updateFilter('page', pageNumber)}
+                      onClick={() => handlePageChange(pageNumber)}
                       className={`h-9 min-w-9 px-2 border text-sm ${
-                        filters.page === pageNumber ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-300'
+                        appliedFilters.page === pageNumber ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-300'
                       }`}
                     >
                       {pageNumber}
@@ -434,8 +482,8 @@ export default function Fabrics() {
                 })}
                 <button
                   type="button"
-                  onClick={() => updateFilter('page', Math.min(pagination.pages, filters.page + 1))}
-                  disabled={filters.page >= pagination.pages}
+                  onClick={() => handlePageChange(Math.min(pagination.pages, appliedFilters.page + 1))}
+                  disabled={appliedFilters.page >= pagination.pages}
                   className="p-2 border bg-white disabled:opacity-50"
                 >
                   <ChevronRight className="w-4 h-4" />
