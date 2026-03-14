@@ -208,6 +208,7 @@ interface AuthPageSettings {
   loginSubmitLabel: string;
   registerSubmitLabel: string;
   forgotPasswordSubmitLabel: string;
+  googleClientIds: string;
   showGoogleOnLogin: boolean;
   showGoogleOnRegister: boolean;
 }
@@ -507,6 +508,7 @@ export default function HomepageSections() {
     loginSubmitLabel: 'Sign In',
     registerSubmitLabel: 'Create Account',
     forgotPasswordSubmitLabel: 'Send Reset Link',
+    googleClientIds: '',
     showGoogleOnLogin: true,
     showGoogleOnRegister: true,
   });
@@ -1066,6 +1068,21 @@ export default function HomepageSections() {
               className="w-full border border-gray-300 px-3 py-2 focus:border-amber-500 focus:outline-none"
               placeholder="ZuriKaribu"
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Google OAuth Client IDs (comma separated)
+            </label>
+            <input
+              type="text"
+              value={authPageSettings.googleClientIds}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, googleClientIds: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 focus:border-amber-500 focus:outline-none"
+              placeholder="123.apps.googleusercontent.com, 456.apps.googleusercontent.com"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Used by backend Google token verification when server env variables are not set.
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <label className="inline-flex items-center gap-2 text-sm text-gray-700">

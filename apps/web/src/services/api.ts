@@ -7315,6 +7315,7 @@ type AuthPageSettingsPayload = {
   loginSubmitLabel: string;
   registerSubmitLabel: string;
   forgotPasswordSubmitLabel: string;
+  googleClientIds: string;
   showGoogleOnLogin: boolean;
   showGoogleOnRegister: boolean;
 };
@@ -7339,6 +7340,7 @@ const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettingsPayload = {
   loginSubmitLabel: 'Sign In',
   registerSubmitLabel: 'Create Account',
   forgotPasswordSubmitLabel: 'Send Reset Link',
+  googleClientIds: '',
   showGoogleOnLogin: true,
   showGoogleOnRegister: true,
 };
@@ -7381,6 +7383,8 @@ const normalizeAuthPageSettingsPayload = (raw: unknown): AuthPageSettingsPayload
       80,
       AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordSubmitLabel
     ),
+    googleClientIds:
+      readText('googleClientIds', 2000, '') || readText('googleClientId', 300, AUTH_PAGE_SETTINGS_DEFAULTS.googleClientIds),
     showGoogleOnLogin:
       typeof row.showGoogleOnLogin === 'boolean'
         ? row.showGoogleOnLogin

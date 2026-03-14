@@ -349,7 +349,8 @@ async function applyVendorRejectionPolicy(user: {
   return { user, blockedMessage: null as string | null };
 }
 
-const GOOGLE_CLIENT_IDS = Array.from(
+const AUTH_PAGE_SETTINGS_KEY = 'AUTH_PAGE_SETTINGS';
+const GOOGLE_CLIENT_IDS_FROM_ENV = Array.from(
   new Set(
     [
       process.env.GOOGLE_CLIENT_ID,
@@ -361,6 +362,85 @@ const GOOGLE_CLIENT_IDS = Array.from(
       .filter(Boolean)
   )
 );
+const GOOGLE_CLIENT_ID_CACHE_TTL_MS = 60_000;
+let cachedGoogleClientIdsFromSettings: string[] = [];
+let cachedGoogleClientIdsFromSettingsAt = 0;
+
+const parseGoogleClientIdTokens = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean);
+  }
+  const text = String(value || '').trim();
+  if (!text) return [];
+  if (text.startsWith('[') && text.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((entry) => String(entry || '').trim())
+          .filter(Boolean);
+      }
+    } catch {
+      // fall through
+    }
+  }
+  return text
+    .split(/[,\n]/g)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+const parseJsonRecord = (value: unknown): Record<string, unknown> => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  const text = String(value || '').trim();
+  if (!text) return {};
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+};
+
+const readGoogleClientIdsFromAuthSettings = async (): Promise<string[]> => {
+  const now = Date.now();
+  if (
+    cachedGoogleClientIdsFromSettingsAt > 0 &&
+    now - cachedGoogleClientIdsFromSettingsAt < GOOGLE_CLIENT_ID_CACHE_TTL_MS
+  ) {
+    return [...cachedGoogleClientIdsFromSettings];
+  }
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<{ value: unknown }>>(
+      `SELECT "value" FROM "HomepageSectionSetting" WHERE "key" = $1 LIMIT 1`,
+      AUTH_PAGE_SETTINGS_KEY
+    );
+    const payload = rows[0] ? parseJsonRecord(rows[0].value) : {};
+    const ids = Array.from(
+      new Set([
+        ...parseGoogleClientIdTokens(payload.googleClientIds),
+        ...parseGoogleClientIdTokens(payload.googleClientId),
+      ])
+    );
+    cachedGoogleClientIdsFromSettings = ids;
+    cachedGoogleClientIdsFromSettingsAt = now;
+    return [...ids];
+  } catch {
+    return [...cachedGoogleClientIdsFromSettings];
+  }
+};
+
+const resolveGoogleClientIds = async () => {
+  const settingsIds = await readGoogleClientIdsFromAuthSettings();
+  return Array.from(new Set([...GOOGLE_CLIENT_IDS_FROM_ENV, ...settingsIds]));
+};
+
 const googleClient = new OAuth2Client();
 let googleAuthSchemaEnsured = false;
 let googleAuthSchemaPromise: Promise<void> | null = null;
@@ -1052,17 +1132,19 @@ router.post('/reset-password', async (req, res, next) => {
 
 const handleGoogleLogin = async (req: any, res: any, next: any) => {
   try {
-    if (GOOGLE_CLIENT_IDS.length === 0) {
+    const googleClientIds = await resolveGoogleClientIds();
+    if (googleClientIds.length === 0) {
       return res.status(503).json({
         success: false,
-        message: 'Google login is not configured on this server.',
+        message:
+          'Google login is not configured on this server. Add Google Client ID in server env or Admin Homepage Sections > Authentication Page Design Settings.',
       });
     }
 
     const data = googleLoginSchema.parse(req.body);
     const ticket = await googleClient.verifyIdToken({
       idToken: data.idToken,
-      audience: GOOGLE_CLIENT_IDS,
+      audience: googleClientIds,
     });
     const payload = ticket.getPayload();
 
@@ -1260,16 +1342,18 @@ router.get('/google-link-status', authenticate, handleGoogleLinkStatus);
 
 const handleGoogleLink = async (req: any, res: any, next: any) => {
   try {
-    if (GOOGLE_CLIENT_IDS.length === 0) {
+    const googleClientIds = await resolveGoogleClientIds();
+    if (googleClientIds.length === 0) {
       return res.status(503).json({
         success: false,
-        message: 'Google login is not configured on this server.',
+        message:
+          'Google login is not configured on this server. Add Google Client ID in server env or Admin Homepage Sections > Authentication Page Design Settings.',
       });
     }
     const data = googleLoginSchema.parse(req.body);
     const ticket = await googleClient.verifyIdToken({
       idToken: data.idToken,
-      audience: GOOGLE_CLIENT_IDS,
+      audience: googleClientIds,
     });
     const payload = ticket.getPayload();
     if (!payload?.email || payload.email_verified === false || !payload.sub) {

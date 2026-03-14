@@ -547,6 +547,8 @@ const authPageSettingsUpdateSchema = z.object({
   loginSubmitLabel: z.string().trim().max(60).optional(),
   registerSubmitLabel: z.string().trim().max(60).optional(),
   forgotPasswordSubmitLabel: z.string().trim().max(80).optional(),
+  googleClientIds: z.string().trim().max(2000).optional(),
+  googleClientId: z.string().trim().max(300).optional(),
   showGoogleOnLogin: z.boolean().optional(),
   showGoogleOnRegister: z.boolean().optional(),
 });
@@ -605,6 +607,7 @@ type AuthPageSettings = {
   loginSubmitLabel: string;
   registerSubmitLabel: string;
   forgotPasswordSubmitLabel: string;
+  googleClientIds: string;
   showGoogleOnLogin: boolean;
   showGoogleOnRegister: boolean;
 };
@@ -664,6 +667,7 @@ const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettings = {
   loginSubmitLabel: 'Sign In',
   registerSubmitLabel: 'Create Account',
   forgotPasswordSubmitLabel: 'Send Reset Link',
+  googleClientIds: '',
   showGoogleOnLogin: true,
   showGoogleOnRegister: true,
 };
@@ -782,6 +786,8 @@ const normalizeAuthPageSettings = (raw: unknown): AuthPageSettings => {
     registerSubmitLabel: getString(row.registerSubmitLabel) || AUTH_PAGE_SETTINGS_DEFAULTS.registerSubmitLabel,
     forgotPasswordSubmitLabel:
       getString(row.forgotPasswordSubmitLabel) || AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordSubmitLabel,
+    googleClientIds:
+      getString(row.googleClientIds) || getString(row.googleClientId) || AUTH_PAGE_SETTINGS_DEFAULTS.googleClientIds,
     showGoogleOnLogin: getBoolean(row.showGoogleOnLogin) ?? AUTH_PAGE_SETTINGS_DEFAULTS.showGoogleOnLogin,
     showGoogleOnRegister:
       getBoolean(row.showGoogleOnRegister) ?? AUTH_PAGE_SETTINGS_DEFAULTS.showGoogleOnRegister,

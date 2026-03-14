@@ -18,6 +18,7 @@ export type AuthPageSettings = {
   loginSubmitLabel: string;
   registerSubmitLabel: string;
   forgotPasswordSubmitLabel: string;
+  googleClientIds: string;
   showGoogleOnLogin: boolean;
   showGoogleOnRegister: boolean;
 };
@@ -42,6 +43,7 @@ export const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettings = {
   loginSubmitLabel: 'Sign In',
   registerSubmitLabel: 'Create Account',
   forgotPasswordSubmitLabel: 'Send Reset Link',
+  googleClientIds: '',
   showGoogleOnLogin: true,
   showGoogleOnRegister: true,
 };
