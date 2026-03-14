@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, Filter, Plus, Edit, Upload, Star, CheckCircle, XCircle } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -116,6 +117,8 @@ const normalizeImageUrlList = (input: unknown): string[] =>
     .filter(Boolean);
 
 export default function AdminProducts() {
+  const location = useLocation();
+  const isConfigurationView = location.pathname === '/admin/products/configuration';
   const [products, setProducts] = useState<Product[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(40);
@@ -1241,13 +1244,41 @@ export default function AdminProducts() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Product Management</h1>
-        <Button onClick={openCreateModal}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Product
-        </Button>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {isConfigurationView ? 'Product Configuration' : 'Product Management'}
+        </h1>
+        {!isConfigurationView ? (
+          <Button onClick={openCreateModal}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Product
+          </Button>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Link
+          to="/admin/products"
+          className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+            !isConfigurationView
+              ? 'border-amber-300 bg-amber-50 text-amber-800'
+              : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          Product
+        </Link>
+        <Link
+          to="/admin/products/configuration"
+          className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+            isConfigurationView
+              ? 'border-amber-300 bg-amber-50 text-amber-800'
+              : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          Product Configuration
+        </Link>
       </div>
 
+      {isConfigurationView ? (
+      <>
       <div className="rounded-xl border bg-white p-4">
         <div className="mb-3">
           <h2 className="text-sm font-semibold text-gray-900">Product Taxonomy Management</h2>
@@ -1499,7 +1530,11 @@ export default function AdminProducts() {
           </div>
         )}
       </div>
+      </>
+      ) : null}
 
+      {!isConfigurationView ? (
+      <>
       {/* Tabs */}
       <div className="border-b">
         <div className="flex gap-6">
@@ -1789,7 +1824,9 @@ export default function AdminProducts() {
           Next
         </Button>
       </div>
-      {showModal && (
+      </>
+      ) : null}
+      {!isConfigurationView && showModal ? (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
           <div className="mx-auto w-full max-w-2xl rounded-xl bg-white p-6 max-h-[92vh] overflow-hidden">
             <h3 className="mb-4 text-xl font-bold text-gray-900">{editing ? 'Edit Product' : 'Add Product'}</h3>
@@ -2136,7 +2173,7 @@ export default function AdminProducts() {
             </form>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

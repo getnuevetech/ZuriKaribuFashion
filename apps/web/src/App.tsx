@@ -232,6 +232,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/admin/products/configuration"
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminProducts />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
                   path="/admin/product-labels"
                   element={
                     <AdminPermissionGuard required={['products:manage']}>

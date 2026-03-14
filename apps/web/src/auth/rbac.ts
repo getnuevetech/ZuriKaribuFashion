@@ -13,6 +13,7 @@ const ADMIN_PERMISSION_ROUTE_PRIORITY: Array<{ route: string; required: string[]
   { route: '/admin/users', required: ['users:read'] },
   { route: '/admin/orders', required: ['orders:manage'] },
   { route: '/admin/products', required: ['products:manage'] },
+  { route: '/admin/products/configuration', required: ['products:manage'] },
   { route: '/admin/pricing', required: ['pricing:manage'] },
   { route: '/admin/payments', required: ['payments:manage'] },
   { route: '/admin/shipping', required: ['shipping:manage'] },

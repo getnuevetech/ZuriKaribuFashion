@@ -55,8 +55,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Traffic Report', href: '/admin/traffic', icon: Layers },
     { label: 'Measurement Templates', href: '/admin/measurement-templates', icon: Ruler },
     { label: 'Currency Matrix', href: '/admin/currency', icon: DollarSign },
-    { label: 'Products', href: '/admin/products', icon: Package },
-    { label: 'Product Labels', href: '/admin/product-labels', icon: Tag },
+    { label: 'Product Management', href: '/admin/products', icon: Package },
     { label: 'Pricing Rules', href: '/admin/pricing', icon: DollarSign },
     { label: 'Promo Codes', href: '/admin/promo-codes', icon: CreditCard },
     { label: 'Payments', href: '/admin/payments', icon: CreditCard },
@@ -122,6 +121,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isOrderMenuOpen, setIsOrderMenuOpen] = useState(true);
   const [isPaymentMenuOpen, setIsPaymentMenuOpen] = useState(true);
   const [isAdminAccountsMenuOpen, setIsAdminAccountsMenuOpen] = useState(true);
+  const [isProductManagementMenuOpen, setIsProductManagementMenuOpen] = useState(true);
   const { user, logout } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -143,6 +143,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/measurement-templates': ['measurement_templates:manage'],
       '/admin/currency': ['currency:manage'],
       '/admin/products': ['products:manage'],
+      '/admin/products/configuration': ['products:manage'],
       '/admin/product-labels': ['products:manage'],
       '/admin/pricing': ['pricing:manage'],
       '/admin/promo-codes': ['pricing:manage'],
@@ -184,6 +185,11 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Designer Earnings', href: '/admin/vendor-payments?tab=designer-earnings', icon: ChevronRight },
     { label: 'Vendor Payment Config', href: '/admin/vendor-payments?tab=vendor-config', icon: ChevronRight },
     { label: 'Withdrawal Pay Integration', href: '/admin/vendor-payments?tab=withdrawal-integrations', icon: ChevronRight },
+  ];
+  const productManagementSubmenu = [
+    { label: 'Product', href: '/admin/products', icon: ChevronRight },
+    { label: 'Product Configuration', href: '/admin/products/configuration', icon: ChevronRight },
+    { label: 'Product Labels', href: '/admin/product-labels', icon: ChevronRight },
   ];
 
   const handleLogout = () => {
@@ -301,6 +307,72 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                     {isOrderMenuOpen && isSidebarOpen ? (
                       <div className="ml-7 space-y-1">
                         {orderManagementSubmenu.map((subItem) => {
+                          const subUrl = new URL(subItem.href, window.location.origin);
+                          const subTab = subUrl.searchParams.get('tab');
+                          const subActive =
+                            location.pathname === subUrl.pathname &&
+                            (subTab ? currentTab === subTab : !currentTab);
+                          const SubIcon = subItem.icon;
+                          return (
+                            <Link
+                              key={subItem.href}
+                              to={subItem.href}
+                              className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
+                                subActive
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <SubIcon className="h-4 w-4" />
+                              <span>{subItem.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+
+              if (userType === 'admin' && item.href === '/admin/products') {
+                const productMenuActive =
+                  location.pathname === '/admin/products' ||
+                  location.pathname === '/admin/products/configuration' ||
+                  location.pathname === '/admin/product-labels';
+                const visibleProductSubmenu = productManagementSubmenu.filter((subItem) =>
+                  canAccessAdminNav(subItem.href)
+                );
+                if (visibleProductSubmenu.length === 0) {
+                  return null;
+                }
+                return (
+                  <div key={item.href} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsProductManagementMenuOpen((prev) => !prev)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
+                        productMenuActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {isSidebarOpen ? (
+                        <>
+                          <span className="text-sm font-medium">Product Management</span>
+                          <span className="ml-auto">
+                            {isProductManagementMenuOpen ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </span>
+                        </>
+                      ) : null}
+                    </button>
+                    {isProductManagementMenuOpen && isSidebarOpen ? (
+                      <div className="ml-7 space-y-1">
+                        {visibleProductSubmenu.map((subItem) => {
                           const subUrl = new URL(subItem.href, window.location.origin);
                           const subTab = subUrl.searchParams.get('tab');
                           const subActive =
