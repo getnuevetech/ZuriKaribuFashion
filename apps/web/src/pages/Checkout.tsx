@@ -157,25 +157,71 @@ const toFiniteMoney = (value: unknown, fallback = 0) => {
   return Number(parsed.toFixed(2));
 };
 
+const pickFirstFiniteNumber = (row: Record<string, unknown>, keys: string[], fallback = 0) => {
+  for (const key of keys) {
+    const value = Number(row[key]);
+    if (Number.isFinite(value)) return value;
+  }
+  return fallback;
+};
+
 const normalizePromoPreviewResponse = (
   input: unknown,
   fallbackCode: string,
   fallbackSubtotalUsd: number
 ): PromoPreviewResult => {
   const row = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
-  const code = String(row.code || fallbackCode || '')
+  const code = String(row.code || row.promoCode || row.promo || fallbackCode || '')
     .trim()
     .toUpperCase();
-  const name = String(row.name || row.title || code || 'Promo').trim() || code || 'Promo';
-  const discountTypeRaw = String(row.discountType || '').trim().toUpperCase();
-  const discountType = discountTypeRaw === 'FIXED' ? 'FIXED' : 'PERCENTAGE';
-  const subtotalUsd = Math.max(0, toFiniteMoney(row.subtotalUsd, fallbackSubtotalUsd));
-  const eligibleSubtotalUsd = Math.max(0, toFiniteMoney(row.eligibleSubtotalUsd, subtotalUsd));
-  const discountValue = Math.max(0, toFiniteMoney(row.discountValue, 0));
-  const computedDiscountUsd = Number(row.discountUsd || 0);
-  const maxDiscountUsd = Number.isFinite(Number(row.maxDiscountUsd)) ? Number(row.maxDiscountUsd) : null;
+  const name = String(row.name || row.title || row.promoName || code || 'Promo').trim() || code || 'Promo';
+  const discountTypeRaw = String(row.discountType || row.type || row.discountMode || '')
+    .trim()
+    .toUpperCase();
+  const discountType =
+    discountTypeRaw === 'FIXED' || discountTypeRaw === 'AMOUNT' || discountTypeRaw === 'FLAT'
+      ? 'FIXED'
+      : 'PERCENTAGE';
+  const subtotalUsd = Math.max(
+    0,
+    toFiniteMoney(
+      pickFirstFiniteNumber(row, ['subtotalUsd', 'subtotal', 'cartSubtotalUsd', 'orderSubtotalUsd'], fallbackSubtotalUsd),
+      fallbackSubtotalUsd
+    )
+  );
+  const eligibleSubtotalUsd = Math.max(
+    0,
+    toFiniteMoney(
+      pickFirstFiniteNumber(row, ['eligibleSubtotalUsd', 'eligibleSubtotal', 'applicableSubtotalUsd'], subtotalUsd),
+      subtotalUsd
+    )
+  );
+  const discountValue = Math.max(
+    0,
+    toFiniteMoney(
+      pickFirstFiniteNumber(
+        row,
+        discountType === 'FIXED'
+          ? ['discountValue', 'fixedAmount', 'discountAmount', 'amountOff', 'value']
+          : ['discountValue', 'discountPercent', 'percentage', 'percentOff', 'value'],
+        0
+      ),
+      0
+    )
+  );
+  const computedDiscountUsd = pickFirstFiniteNumber(
+    row,
+    ['discountUsd', 'discount', 'discountAmountUsd', 'amountOffUsd', 'discountAmount', 'amountOff'],
+    0
+  );
+  const maxDiscountUsd = Number.isFinite(Number(row.maxDiscountUsd ?? row.maxDiscount ?? row.maxDiscountAmountUsd))
+    ? Number(row.maxDiscountUsd ?? row.maxDiscount ?? row.maxDiscountAmountUsd)
+    : null;
+  const computedFromValue =
+    discountType === 'FIXED' ? discountValue : Number((eligibleSubtotalUsd * discountValue) / 100);
+  const rawDiscountUsd = computedDiscountUsd > 0 ? computedDiscountUsd : computedFromValue;
   const cappedDiscountUsd =
-    maxDiscountUsd !== null ? Math.min(Number(computedDiscountUsd || 0), Math.max(0, maxDiscountUsd)) : Number(computedDiscountUsd || 0);
+    maxDiscountUsd !== null ? Math.min(Number(rawDiscountUsd || 0), Math.max(0, maxDiscountUsd)) : Number(rawDiscountUsd || 0);
   const discountUsd = Math.max(0, Math.min(eligibleSubtotalUsd, toFiniteMoney(cappedDiscountUsd, 0)));
   return {
     code,
@@ -197,24 +243,6 @@ const isStrictPromoPreviewMatch = (preview: PromoPreviewResult, expectedCode: st
   if (!Number.isFinite(Number(preview.discountUsd)) || Number(preview.discountUsd) <= 0) return false;
   if (!Number.isFinite(Number(preview.subtotalUsd)) || Number(preview.subtotalUsd) <= 0) return false;
   if (!Number.isFinite(Number(preview.eligibleSubtotalUsd)) || Number(preview.eligibleSubtotalUsd) <= 0) return false;
-  return true;
-};
-
-const isStrictPromoPreviewPayload = (input: unknown, expectedCode: string) => {
-  const row = input && typeof input === 'object' ? (input as Record<string, unknown>) : null;
-  if (!row) return false;
-  const responseCode = String(row.code || '').trim().toUpperCase();
-  if (!responseCode || responseCode !== String(expectedCode || '').trim().toUpperCase()) return false;
-  const discountType = String(row.discountType || '').trim().toUpperCase();
-  if (discountType !== 'PERCENTAGE' && discountType !== 'FIXED') return false;
-  const discountValue = Number(row.discountValue);
-  if (!Number.isFinite(discountValue) || discountValue <= 0) return false;
-  const discountUsd = Number(row.discountUsd);
-  if (!Number.isFinite(discountUsd) || discountUsd <= 0) return false;
-  const subtotalUsd = Number(row.subtotalUsd);
-  const eligibleSubtotalUsd = Number(row.eligibleSubtotalUsd);
-  if (!Number.isFinite(subtotalUsd) || subtotalUsd <= 0) return false;
-  if (!Number.isFinite(eligibleSubtotalUsd) || eligibleSubtotalUsd <= 0) return false;
   return true;
 };
 
@@ -1288,9 +1316,6 @@ export default function Checkout() {
       });
       if (!preview.success || !preview.data) {
         throw new Error(preview.message || 'Promo code could not be applied.');
-      }
-      if (!isStrictPromoPreviewPayload(preview.data, requestedCode)) {
-        throw new Error('Promo response is invalid for this code. Please verify backend promo routes and code setup.');
       }
       const subtotalFromItems = payloadItems.reduce(
         (sum, entry) => sum + Number(entry.unitPrice || 0) * Number(entry.quantity || 0),
