@@ -56,6 +56,9 @@ export default function ForgotPassword() {
 
         <div className="border border-gray-200 bg-white px-5 py-8 shadow-sm sm:px-8 md:py-10">
           <div className="mx-auto w-full max-w-md space-y-5">
+            <Link to="/" className="inline-flex text-sm font-medium text-amber-700 hover:text-amber-800">
+              Back to Home
+            </Link>
             <div className="text-center">
               <p className="text-4xl font-bold text-black">{authPageSettings.brandName}</p>
               <h1 className="mt-6 text-4xl font-bold text-gray-900">{authPageSettings.forgotPasswordTitle}</h1>
