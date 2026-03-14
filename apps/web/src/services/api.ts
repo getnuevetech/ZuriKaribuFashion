@@ -6637,6 +6637,30 @@ const adminApi = {
   listBackups: (params?: { limit?: number }) =>
     apiService.get<{ success: boolean; data: any[]; message?: string }>('/admin/backups/jobs', { params }),
 
+  downloadBackupArtifact: async (backupId: string) => {
+    const sanitizedId = encodeURIComponent(String(backupId || '').trim());
+    const response = await httpClient.get(`/admin/backups/jobs/${sanitizedId}/download`, {
+      responseType: 'blob',
+    });
+    const contentDisposition = String(response.headers?.['content-disposition'] || '').trim();
+    let fileName = `backup-${String(backupId || '').trim() || 'artifact'}`;
+    const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const basicMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+    if (utf8Match?.[1]) {
+      try {
+        fileName = decodeURIComponent(String(utf8Match[1]).trim());
+      } catch {
+        fileName = String(utf8Match[1]).trim();
+      }
+    } else if (basicMatch?.[1]) {
+      fileName = String(basicMatch[1]).trim();
+    }
+    return {
+      blob: response.data as Blob,
+      fileName,
+    };
+  },
+
   getBackupDownloadUrl: (backupId: string) => `${API_URL}/admin/backups/jobs/${encodeURIComponent(String(backupId || '').trim())}/download`,
 
   getOrderTicketingSettings: () =>

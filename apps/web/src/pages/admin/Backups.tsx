@@ -73,6 +73,7 @@ export default function AdminBackups() {
   const [jobs, setJobs] = useState<BackupJob[]>([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [downloadingId, setDownloadingId] = useState('');
 
   const completedJobs = useMemo(
     () => jobs.filter((job) => String(job.status || '').toUpperCase() === 'COMPLETED'),
@@ -176,6 +177,28 @@ export default function AdminBackups() {
       setError(runError?.response?.data?.message || 'Failed to execute daily profile backup.');
     } finally {
       setRunning(false);
+    }
+  };
+
+  const downloadArtifact = async (job: BackupJob) => {
+    const jobId = String(job.id || '').trim();
+    if (!jobId) return;
+    setDownloadingId(jobId);
+    setError('');
+    try {
+      const result = await api.admin.downloadBackupArtifact(jobId);
+      const objectUrl = URL.createObjectURL(result.blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = result.fileName || String(job.fileName || `backup-${jobId}`);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (downloadError: any) {
+      setError(downloadError?.response?.data?.message || 'Failed to download backup artifact.');
+    } finally {
+      setDownloadingId('');
     }
   };
 
@@ -459,10 +482,11 @@ export default function AdminBackups() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => window.open(api.admin.getBackupDownloadUrl(job.id), '_blank')}
+                          onClick={() => void downloadArtifact(job)}
+                          disabled={downloadingId === String(job.id || '')}
                         >
                           <Download className="mr-1 h-3.5 w-3.5" />
-                          Download
+                          {downloadingId === String(job.id || '') ? 'Downloading...' : 'Download'}
                         </Button>
                       ) : (
                         <span className="text-xs text-gray-400">Not ready</span>
