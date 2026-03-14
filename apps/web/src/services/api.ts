@@ -5204,10 +5204,6 @@ const promoPreviewPaths = [
   '/promotions/preview',
   '/promo/preview',
   '/promo-codes/preview',
-  '/promotions/check',
-  '/promotions/validate',
-  '/promo/check',
-  '/promo/validate',
 ];
 
 type PromoCriteriaFallback = {
@@ -5550,8 +5546,13 @@ const isPromoNotFoundOrInactiveError = (error: unknown) => {
   const status = (error as AxiosError)?.response?.status;
   const responseMessage = String((error as AxiosError)?.response?.data?.message || '').toLowerCase();
   const errorMessage = String((error as Error)?.message || '').toLowerCase();
+  const isRouteMissing =
+    responseMessage.includes('route not found') ||
+    errorMessage.includes('route not found') ||
+    responseMessage.includes('cannot') && responseMessage.includes('post') && responseMessage.includes('/promo') ||
+    errorMessage.includes('cannot') && errorMessage.includes('post') && errorMessage.includes('/promo');
   return (
-    status === 404 ||
+    (status === 404 && !isRouteMissing && (responseMessage.includes('promo') || errorMessage.includes('promo'))) ||
     responseMessage.includes('promo code not found') ||
     responseMessage.includes('promo code not found or inactive') ||
     responseMessage.includes('inactive') ||
@@ -5571,12 +5572,18 @@ async function previewPromotionWithFallback<T>(payload: {
   city?: string;
 }) {
   let lastError: unknown = null;
-  for (const path of promoPreviewPaths) {
+  for (let index = 0; index < promoPreviewPaths.length; index += 1) {
+    const path = promoPreviewPaths[index];
     try {
       return await apiService.post<T>(path, payload);
     } catch (error) {
       lastError = error;
-      if (isRetryableRouteError(error) || isPromoNotFoundOrInactiveError(error)) continue;
+      // If backend confirms promo code is invalid/inactive on any reachable promo endpoint, stop immediately.
+      if (isPromoNotFoundOrInactiveError(error)) {
+        throw new Error('Promo code not found or inactive.');
+      }
+      // Continue only when endpoint itself is missing/unavailable.
+      if (isRetryableRouteError(error)) continue;
       throw error;
     }
   }

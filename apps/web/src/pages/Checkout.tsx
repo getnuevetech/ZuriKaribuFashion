@@ -1898,7 +1898,13 @@ export default function Checkout() {
                   <div className="flex gap-2">
                     <input
                       value={promoCode}
-                      onChange={(event) => setPromoCode(event.target.value.toUpperCase())}
+                      onChange={(event) => {
+                        const nextCode = String(event.target.value || '').toUpperCase();
+                        setPromoCode(nextCode);
+                        if (promoPreview && String(promoPreview.code || '').toUpperCase() !== nextCode.trim()) {
+                          setPromoPreview(null);
+                        }
+                      }}
                       placeholder="Enter promo code"
                       className="w-full rounded-lg border px-3 py-2 text-sm"
                     />
