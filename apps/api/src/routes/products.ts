@@ -291,7 +291,11 @@ function normalizeProductLabelSettings(raw: unknown) {
       labelsRaw
         .map((entry) => {
           const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
-          const id = String(item.id || '').trim().toLowerCase();
+          const id = String(item.id || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9_-]/g, '')
+            .slice(0, 64);
           const name = String(item.name || '').trim();
           const mode = String(item.mode || '').trim().toUpperCase();
           if (!id || !name) return null;
@@ -335,7 +339,11 @@ function normalizeProductLabelSettings(raw: unknown) {
   const assignments = assignmentsRaw
     .map((entry) => {
       const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
-      const labelId = String(item.labelId || '').trim().toLowerCase();
+      const labelId = String(item.labelId || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '')
+        .slice(0, 64);
       const productType = String(item.productType || '').trim().toUpperCase();
       if (!validLabelIds.has(labelId)) return null;
       if (productType !== 'FABRIC' && productType !== 'DESIGN' && productType !== 'READY_TO_WEAR') return null;
@@ -1047,17 +1055,53 @@ router.get('/featured', async (req, res, next) => {
           category: true,
           images: { take: 1 },
           designer: { select: { businessName: true, country: true } },
+          sizeVariations: {
+            select: { price: true },
+          },
         },
         orderBy: { totalSold: 'desc' },
       }),
     ]);
+    const labelSettings = await readProductLabelSettings();
+    const withLabels = {
+      fabrics: fabrics.map((item) => ({
+        ...item,
+        productLabels: buildProductLabels({
+          productType: 'FABRIC',
+          productId: item.id,
+          createdAt: item.createdAt,
+          isOnSale: Number(item.finalPrice || 0) < Number(item.sellerPrice || 0),
+          settings: labelSettings,
+        }),
+      })),
+      designs: designs.map((item) => ({
+        ...item,
+        productLabels: buildProductLabels({
+          productType: 'DESIGN',
+          productId: item.id,
+          createdAt: item.createdAt,
+          isOnSale: Number(item.finalPrice || 0) < Number(item.basePrice || 0),
+          settings: labelSettings,
+        }),
+      })),
+      readyToWear: readyToWear.map((item) => ({
+        ...item,
+        productLabels: buildProductLabels({
+          productType: 'READY_TO_WEAR',
+          productId: item.id,
+          createdAt: item.createdAt,
+          isOnSale: (item.sizeVariations || []).some((row: any) => Number(row.price || 0) < Number(item.basePrice || 0)),
+          settings: labelSettings,
+        }),
+      })),
+    };
 
     res.json({
       success: true,
       data: {
-        fabrics,
-        designs,
-        readyToWear,
+        fabrics: withLabels.fabrics,
+        designs: withLabels.designs,
+        readyToWear: withLabels.readyToWear,
       },
     });
   } catch (error) {

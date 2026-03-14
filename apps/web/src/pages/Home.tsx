@@ -37,6 +37,7 @@ type FeaturedProduct = {
   country: string;
   flag?: string;
   productType: string;
+  productLabels?: Array<{ id: string; name: string; textColor: string; backgroundColor: string }>;
 };
 
 type CountryCard = {
@@ -458,6 +459,22 @@ function ProductCard({ product, descriptionWordLimit }: { product: FeaturedProdu
     <Link to={`${productBasePath(product.productType)}/${product.id}`} className="group block">
       <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-gray-100 mb-4 img-zoom">
         <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+        {(product.productLabels || []).length > 0 ? (
+          <div className="absolute left-3 top-3 z-10 flex flex-wrap gap-1">
+            {(product.productLabels || []).slice(0, 2).map((label) => (
+              <span
+                key={`${product.id}-home-label-${label.id}`}
+                className="px-1.5 py-0.5 text-[10px] font-semibold"
+                style={{
+                  backgroundColor: label.backgroundColor || '#111827',
+                  color: label.textColor || '#ffffff',
+                }}
+              >
+                {label.name}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <button className="absolute top-3 right-3 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white">
           <Heart className="w-4 h-4" />
         </button>
