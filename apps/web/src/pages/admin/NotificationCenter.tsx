@@ -21,6 +21,24 @@ const AUDIENCE_OPTIONS: Array<{ value: AudienceRole; label: string }> = [
   { value: 'QA_TEAM', label: 'QA Team' },
 ];
 
+const DEFAULT_TEMPLATE_PAYLOAD = {
+  title: 'New notification template',
+  subject: 'New notification from African Fashion',
+  bodyHtml: '<p>Hello,</p><p>This is a new notification template.</p>',
+  bodyText: 'Hello,\n\nThis is a new notification template.',
+  audienceRole: 'ALL' as AudienceRole,
+  channelEmail: true,
+  channelPush: true,
+  channelInApp: true,
+  isActive: true,
+};
+
+const sanitizeTemplateKey = (value: string) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_]/g, '_');
+
 export default function AdminNotificationCenter() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -53,6 +71,8 @@ export default function AdminNotificationCenter() {
     channelInApp: true,
   });
   const [dispatches, setDispatches] = useState<any[]>([]);
+  const [newTemplateKey, setNewTemplateKey] = useState('');
+  const [messageTemplateKey, setMessageTemplateKey] = useState('');
 
   const selectedTemplate = useMemo(
     () => templates.find((entry) => String(entry.key) === selectedTemplateKey) || null,
@@ -162,6 +182,86 @@ export default function AdminNotificationCenter() {
     }
   };
 
+  const createTemplate = async () => {
+    const key = sanitizeTemplateKey(newTemplateKey);
+    if (!key || key.length < 3) {
+      setError('Enter a template key with at least 3 characters.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      await api.admin.createNotificationTemplate({
+        key,
+        ...DEFAULT_TEMPLATE_PAYLOAD,
+      });
+      setSuccess('Template created successfully.');
+      setNewTemplateKey('');
+      await loadData();
+      setSelectedTemplateKey(key);
+    } catch (createError: any) {
+      setError(createError?.response?.data?.message || 'Failed to create template.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveMessageAsTemplate = async () => {
+    const key = sanitizeTemplateKey(messageTemplateKey);
+    if (!key || key.length < 3) {
+      setError('Enter a template key to save this message.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      await api.admin.createNotificationTemplate({
+        key,
+        title: String(sendForm.title || '').trim() || DEFAULT_TEMPLATE_PAYLOAD.title,
+        subject: String(sendForm.subject || '').trim() || DEFAULT_TEMPLATE_PAYLOAD.subject,
+        bodyHtml: String(sendForm.bodyHtml || '').trim() || DEFAULT_TEMPLATE_PAYLOAD.bodyHtml,
+        bodyText: String(sendForm.bodyText || '').trim() || DEFAULT_TEMPLATE_PAYLOAD.bodyText,
+        audienceRole: sendForm.audienceRole,
+        channelEmail: sendForm.channelEmail,
+        channelPush: sendForm.channelPush,
+        channelInApp: sendForm.channelInApp,
+        isActive: true,
+      });
+      setSuccess('Message saved as template.');
+      setMessageTemplateKey('');
+      await loadData();
+      setSelectedTemplateKey(key);
+    } catch (saveAsError: any) {
+      setError(saveAsError?.response?.data?.message || 'Failed to save message as template.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteTemplate = async () => {
+    const key = String(selectedTemplate?.key || '').trim();
+    if (!key) return;
+    if (selectedTemplate?.isSystem) {
+      setError('System templates cannot be deleted.');
+      return;
+    }
+    if (!window.confirm(`Delete template "${key}"?`)) return;
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      await api.admin.deleteNotificationTemplate(key);
+      setSuccess('Template deleted successfully.');
+      await loadData();
+    } catch (deleteError: any) {
+      setError(deleteError?.response?.data?.message || 'Failed to delete template.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const sendNotification = async () => {
     setSending(true);
     setError('');
@@ -213,6 +313,17 @@ export default function AdminNotificationCenter() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded-xl border bg-white p-4">
           <h2 className="text-sm font-semibold text-gray-900">Templates</h2>
+          <div className="mt-3 flex gap-2">
+            <input
+              value={newTemplateKey}
+              onChange={(event) => setNewTemplateKey(event.target.value.toUpperCase())}
+              placeholder="NEW_TEMPLATE_KEY"
+              className="w-full rounded border px-3 py-2 text-sm"
+            />
+            <Button onClick={createTemplate} disabled={saving}>
+              Create
+            </Button>
+          </div>
           <div className="mt-3 space-y-2">
             {templates.map((template) => (
               <button
@@ -225,7 +336,12 @@ export default function AdminNotificationCenter() {
                     : 'border-gray-200 text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                <p className="font-medium">{template.title}</p>
+                <p className="font-medium">
+                  {template.title}{' '}
+                  {template.isSystem ? (
+                    <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700">System</span>
+                  ) : null}
+                </p>
                 <p className="text-xs text-gray-500">{template.key}</p>
               </button>
             ))}
@@ -310,9 +426,16 @@ export default function AdminNotificationCenter() {
             </label>
           </div>
           <div className="mt-4 flex justify-end">
-            <Button onClick={saveTemplate} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Template'}
-            </Button>
+            <div className="flex gap-2">
+              {!selectedTemplate?.isSystem ? (
+                <Button onClick={deleteTemplate} disabled={saving} variant="outline">
+                  Delete Template
+                </Button>
+              ) : null}
+              <Button onClick={saveTemplate} disabled={saving}>
+                {saving ? 'Saving...' : 'Save Template'}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -325,7 +448,25 @@ export default function AdminNotificationCenter() {
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
           <select
             value={sendForm.templateKey}
-            onChange={(event) => setSendForm((prev) => ({ ...prev, templateKey: event.target.value }))}
+            onChange={(event) => {
+              const key = String(event.target.value || '').trim();
+              const selected = templates.find((entry) => String(entry.key || '') === key);
+              if (!selected) {
+                setSendForm((prev) => ({ ...prev, templateKey: key }));
+                return;
+              }
+              setSendForm({
+                templateKey: key,
+                title: String(selected.title || ''),
+                subject: String(selected.subject || ''),
+                bodyHtml: String(selected.bodyHtml || ''),
+                bodyText: String(selected.bodyText || ''),
+                audienceRole: String(selected.audienceRole || 'ALL') as AudienceRole,
+                channelEmail: Boolean(selected.channelEmail),
+                channelPush: Boolean(selected.channelPush),
+                channelInApp: Boolean(selected.channelInApp),
+              });
+            }}
             className="rounded border px-3 py-2 text-sm md:col-span-2"
           >
             <option value="">No template (manual)</option>
@@ -395,10 +536,23 @@ export default function AdminNotificationCenter() {
             In-app
           </label>
         </div>
-        <div className="mt-4 flex justify-end">
-          <Button onClick={sendNotification} disabled={sending}>
-            {sending ? 'Sending...' : 'Send Notification'}
-          </Button>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="flex gap-2">
+            <input
+              value={messageTemplateKey}
+              onChange={(event) => setMessageTemplateKey(event.target.value.toUpperCase())}
+              placeholder="SAVE_AS_TEMPLATE_KEY"
+              className="w-full rounded border px-3 py-2 text-sm"
+            />
+            <Button onClick={saveMessageAsTemplate} disabled={saving} variant="outline">
+              Save as Template
+            </Button>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={sendNotification} disabled={sending}>
+              {sending ? 'Sending...' : 'Send Notification'}
+            </Button>
+          </div>
         </div>
       </div>
 

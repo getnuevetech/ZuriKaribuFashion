@@ -2305,6 +2305,9 @@ const notificationTemplateSchema = z.object({
   channelInApp: z.boolean().default(true),
   isActive: z.boolean().default(true),
 });
+const notificationTemplateCreateSchema = notificationTemplateSchema.extend({
+  key: z.string().trim().min(3).max(120),
+});
 const notificationDispatchSchema = z.object({
   templateKey: z.string().trim().max(120).optional(),
   title: z.string().trim().min(2).max(180).optional(),
@@ -3291,6 +3294,59 @@ router.get('/notification-center/templates', async (_req, res, next) => {
   }
 });
 
+router.post('/notification-center/templates', async (req, res, next) => {
+  try {
+    const payload = notificationTemplateCreateSchema.parse(req.body || {});
+    const key = String(payload.key || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9_]/g, '_');
+    if (!key || key.length < 3) {
+      return res.status(400).json({
+        success: false,
+        message: 'Template key must be at least 3 characters (A-Z, 0-9, underscore).',
+      });
+    }
+    const existingRows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT "id"
+       FROM "NotificationTemplate"
+       WHERE "key" = $1
+       LIMIT 1`,
+      key
+    );
+    if (Array.isArray(existingRows) && existingRows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'A notification template with this key already exists.',
+      });
+    }
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "NotificationTemplate"
+        ("id","key","title","subject","bodyHtml","bodyText","audienceRole","channelEmail","channelPush","channelInApp","isSystem","isActive","createdById","updatedById","createdAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,false,$11,$12,$12,NOW(),NOW())`,
+      randomUUID(),
+      key,
+      payload.title,
+      payload.subject,
+      payload.bodyHtml,
+      payload.bodyText,
+      normalizeNotificationAudienceRole(payload.audienceRole),
+      Boolean(payload.channelEmail),
+      Boolean(payload.channelPush),
+      Boolean(payload.channelInApp),
+      Boolean(payload.isActive),
+      req.user!.id
+    );
+    return res.status(201).json({
+      success: true,
+      message: 'Notification template created successfully.',
+      data: { key },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.patch('/notification-center/templates/:key', async (req, res, next) => {
   try {
     const key = String(req.params.key || '')
@@ -3355,6 +3411,42 @@ router.patch('/notification-center/templates/:key', async (req, res, next) => {
     return res.json({
       success: true,
       message: 'Notification template saved successfully.',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/notification-center/templates/:key', async (req, res, next) => {
+  try {
+    const key = String(req.params.key || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9_]/g, '_');
+    const existingRows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT "id","isSystem"
+       FROM "NotificationTemplate"
+       WHERE "key" = $1
+       LIMIT 1`,
+      key
+    );
+    const existing = Array.isArray(existingRows) && existingRows.length > 0 ? existingRows[0] : null;
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notification template was not found.',
+      });
+    }
+    if (Boolean(existing.isSystem)) {
+      return res.status(400).json({
+        success: false,
+        message: 'System notification templates cannot be deleted.',
+      });
+    }
+    await prisma.$executeRawUnsafe(`DELETE FROM "NotificationTemplate" WHERE "key" = $1`, key);
+    return res.json({
+      success: true,
+      message: 'Notification template deleted successfully.',
     });
   } catch (error) {
     next(error);

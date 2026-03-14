@@ -5852,6 +5852,19 @@ const adminApi = {
   getNotificationTemplates: () =>
     apiService.get<{ success: boolean; data: any[] }>('/admin/notification-center/templates'),
 
+  createNotificationTemplate: (payload: {
+    key: string;
+    title: string;
+    subject: string;
+    bodyHtml: string;
+    bodyText: string;
+    audienceRole: 'ALL' | 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'VENDORS' | 'ADMINISTRATOR' | 'QA_TEAM';
+    channelEmail: boolean;
+    channelPush: boolean;
+    channelInApp: boolean;
+    isActive: boolean;
+  }) => apiService.post<{ success: boolean; message?: string; data?: { key: string } }>('/admin/notification-center/templates', payload),
+
   upsertNotificationTemplate: (
     key: string,
     payload: {
@@ -5866,6 +5879,9 @@ const adminApi = {
       isActive: boolean;
     }
   ) => apiService.patch<{ success: boolean; message?: string }>(`/admin/notification-center/templates/${key}`, payload),
+
+  deleteNotificationTemplate: (key: string) =>
+    apiService.delete<{ success: boolean; message?: string }>(`/admin/notification-center/templates/${encodeURIComponent(String(key || '').trim())}`),
 
   getNotificationDispatches: (params?: {
     role?: 'ALL' | 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'VENDORS' | 'ADMINISTRATOR' | 'QA_TEAM';
