@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { api } from '../../services/api';
@@ -34,6 +34,16 @@ const FIELD_TYPES: FieldType[] = [
   'IMAGE',
   'IMAGE_DOCUMENT',
 ];
+
+const REJECTION_REASON_OPTIONS = [
+  { code: 'DOCUMENT_MISSING', label: 'Missing required documents' },
+  { code: 'DOCUMENT_INVALID', label: 'Invalid/expired documents' },
+  { code: 'IDENTITY_MISMATCH', label: 'Identity mismatch' },
+  { code: 'BUSINESS_INFO_MISMATCH', label: 'Business information mismatch' },
+  { code: 'LOW_INFORMATION_QUALITY', label: 'Insufficient profile details' },
+  { code: 'COMPLIANCE_RISK', label: 'Compliance/risk concern' },
+  { code: 'OTHER', label: 'Other' },
+] as const;
 
 type DashboardToggleMap = Record<string, boolean>;
 type DashboardFieldMode = 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
@@ -265,7 +275,10 @@ export default function AdminVendorProfiles() {
   const [statusFilter, setStatusFilter] = useState<VendorProfileStatus | ''>('SUBMITTED');
   const [selectedProfile, setSelectedProfile] = useState<any | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
+  const [reviewReasonCode, setReviewReasonCode] = useState('');
+  const [reviewMessageHtml, setReviewMessageHtml] = useState('');
   const [reviewing, setReviewing] = useState(false);
+  const messageEditorRef = useRef<HTMLDivElement | null>(null);
   const [dashboardGovernance, setDashboardGovernance] = useState<DashboardGovernanceSettings>(
     DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS
   );
@@ -496,6 +509,8 @@ export default function AdminVendorProfiles() {
   const openProfile = async (entry: any) => {
     setSelectedProfile(null);
     setReviewNotes('');
+    setReviewReasonCode('');
+    setReviewMessageHtml('');
     setError('');
     try {
       const res = await api.admin.getVendorProfileDetails(entry.role, entry.userId);
@@ -507,17 +522,42 @@ export default function AdminVendorProfiles() {
     }
   };
 
-  const reviewProfile = async (status: 'APPROVED' | 'REJECTED') => {
+  const applyMessageFormat = (command: 'bold' | 'italic' | 'insertUnorderedList') => {
+    messageEditorRef.current?.focus();
+    try {
+      document.execCommand(command, false);
+      setReviewMessageHtml(String(messageEditorRef.current?.innerHTML || '').trim());
+    } catch {
+      // no-op
+    }
+  };
+
+  const reviewProfile = async (status: 'APPROVED' | 'REJECTED', rejectionType?: 'TEMPORARY' | 'PERMANENT') => {
     if (!selectedProfile?.role || !selectedProfile?.user?.id) return;
+    const selectedReason = REJECTION_REASON_OPTIONS.find((entry) => entry.code === reviewReasonCode);
+    if (status === 'REJECTED' && !selectedReason) {
+      setError('Please select a rejection reason.');
+      return;
+    }
     setReviewing(true);
     setError('');
     try {
       await api.admin.reviewVendorProfile(selectedProfile.role, selectedProfile.user.id, {
         status,
         notes: reviewNotes || undefined,
+        rejectionType: status === 'REJECTED' ? rejectionType || 'TEMPORARY' : undefined,
+        rejectionReasonCode: status === 'REJECTED' ? selectedReason?.code : undefined,
+        rejectionReasonLabel: status === 'REJECTED' ? selectedReason?.label : undefined,
+        messageHtml: status === 'REJECTED' ? (reviewMessageHtml || undefined) : undefined,
       });
       setSelectedProfile(null);
-      setSuccess(`Vendor profile ${status.toLowerCase()} successfully.`);
+      setSuccess(
+        status === 'REJECTED'
+          ? rejectionType === 'PERMANENT'
+            ? 'Vendor profile permanently rejected.'
+            : 'Vendor profile temporarily rejected for correction.'
+          : `Vendor profile ${status.toLowerCase()} successfully.`
+      );
       await loadProfiles();
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to review vendor profile.');
@@ -1013,8 +1053,25 @@ export default function AdminVendorProfiles() {
               </p>
               <p className="text-gray-600">Brand: {selectedProfile.profile?.businessName || '-'}</p>
               <p className="text-gray-600">Status: {selectedProfile.profile?.profileStatus || '-'}</p>
+              {selectedProfile.profile?.rejectionType ? (
+                <p className="text-gray-600">Rejection type: {String(selectedProfile.profile.rejectionType)}</p>
+              ) : null}
+              {selectedProfile.profile?.rejectionReasonLabel ? (
+                <p className="text-gray-600">Reason: {String(selectedProfile.profile.rejectionReasonLabel)}</p>
+              ) : null}
+              {selectedProfile.profile?.permanentDisableAt ? (
+                <p className="text-gray-600">
+                  Auto-disable date: {new Date(selectedProfile.profile.permanentDisableAt).toLocaleString()}
+                </p>
+              ) : null}
               {selectedProfile.profile?.profileReviewNotes ? (
                 <p className="mt-1 text-xs text-gray-500">Latest note: {selectedProfile.profile.profileReviewNotes}</p>
+              ) : null}
+              {selectedProfile.profile?.profileReviewMessage ? (
+                <div
+                  className="mt-2 rounded border border-gray-200 bg-white p-2 text-xs text-gray-700"
+                  dangerouslySetInnerHTML={{ __html: String(selectedProfile.profile.profileReviewMessage) }}
+                />
               ) : null}
             </div>
 
@@ -1044,23 +1101,68 @@ export default function AdminVendorProfiles() {
             </div>
 
             <div className="mt-4">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Rejection reason</label>
+              <select
+                value={reviewReasonCode}
+                onChange={(e) => setReviewReasonCode(e.target.value)}
+                className="mb-3 w-full rounded border px-3 py-2 text-sm"
+              >
+                <option value="">Select reason...</option>
+                {REJECTION_REASON_OPTIONS.map((reason) => (
+                  <option key={reason.code} value={reason.code}>
+                    {reason.label}
+                  </option>
+                ))}
+              </select>
               <label className="mb-1 block text-sm font-medium text-gray-700">Review note</label>
               <textarea
                 value={reviewNotes}
                 onChange={(e) => setReviewNotes(e.target.value)}
                 className="h-24 w-full rounded border px-3 py-2 text-sm"
-                placeholder="Optional note. Required for rejection."
+                placeholder="Short note (optional)."
               />
+              <div className="mt-3">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Detailed rejection message (formatted)</label>
+                <div className="mb-2 flex items-center gap-2">
+                  <Button size="sm" variant="outline" type="button" onClick={() => applyMessageFormat('bold')}>
+                    Bold
+                  </Button>
+                  <Button size="sm" variant="outline" type="button" onClick={() => applyMessageFormat('italic')}>
+                    Italic
+                  </Button>
+                  <Button size="sm" variant="outline" type="button" onClick={() => applyMessageFormat('insertUnorderedList')}>
+                    Bullet list
+                  </Button>
+                </div>
+                <div
+                  ref={messageEditorRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  onInput={() => setReviewMessageHtml(String(messageEditorRef.current?.innerHTML || '').trim())}
+                  className="min-h-[120px] w-full rounded border px-3 py-2 text-sm"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  This formatted message is shown on vendor dashboard and sent in email for temporary rejection.
+                </p>
+              </div>
             </div>
 
             <div className="mt-4 flex gap-3">
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={() => reviewProfile('REJECTED')}
+                onClick={() => reviewProfile('REJECTED', 'TEMPORARY')}
                 disabled={reviewing}
               >
-                {reviewing ? 'Submitting...' : 'Reject / Request Correction'}
+                {reviewing ? 'Submitting...' : 'Reject Temporarily (Needs Correction)'}
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => reviewProfile('REJECTED', 'PERMANENT')}
+                disabled={reviewing}
+              >
+                {reviewing ? 'Submitting...' : 'Reject Permanently'}
               </Button>
               <Button className="flex-1" onClick={() => reviewProfile('APPROVED')} disabled={reviewing}>
                 {reviewing ? 'Submitting...' : 'Approve Profile'}

@@ -140,6 +140,24 @@ async function ensureSellerGovernanceSchema() {
     `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
   );
   await executeBestEffort(
+    `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "rejectionType" TEXT`
+  );
+  await executeBestEffort(
+    `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "rejectionReasonCode" TEXT`
+  );
+  await executeBestEffort(
+    `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "rejectionReasonLabel" TEXT`
+  );
+  await executeBestEffort(
+    `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "profileReviewMessage" TEXT`
+  );
+  await executeBestEffort(
+    `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "permanentRejectionAt" TIMESTAMP(3)`
+  );
+  await executeBestEffort(
+    `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "permanentDisableAt" TIMESTAMP(3)`
+  );
+  await executeBestEffort(
     `UPDATE "VendorProfileSubmission" SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL`
   );
   await executeBestEffort(
@@ -152,6 +170,7 @@ async function ensureSellerGovernanceSchema() {
 }
 
 type VendorProfileStatus = 'INCOMPLETE' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+type VendorRejectionType = 'TEMPORARY' | 'PERMANENT';
 
 const normalizeVendorProfileStatus = (value: unknown): VendorProfileStatus => {
   const normalized = String(value || '').toUpperCase();
@@ -159,6 +178,11 @@ const normalizeVendorProfileStatus = (value: unknown): VendorProfileStatus => {
     return normalized;
   }
   return 'INCOMPLETE';
+};
+const normalizeVendorRejectionType = (value: unknown): VendorRejectionType | null => {
+  const normalized = String(value || '').toUpperCase();
+  if (normalized === 'TEMPORARY' || normalized === 'PERMANENT') return normalized;
+  return null;
 };
 
 const slugify = (value: string) =>
@@ -266,6 +290,12 @@ async function readSellerSubmission(userId: string) {
       columns.has('profilesubmittedat') ? `"profileSubmittedAt"` : `NULL AS "profileSubmittedAt"`,
       columns.has('profilereviewedat') ? `"profileReviewedAt"` : `NULL AS "profileReviewedAt"`,
       columns.has('profilereviewnotes') ? `"profileReviewNotes"` : `NULL AS "profileReviewNotes"`,
+      columns.has('rejectiontype') ? `"rejectionType"` : `NULL AS "rejectionType"`,
+      columns.has('rejectionreasoncode') ? `"rejectionReasonCode"` : `NULL AS "rejectionReasonCode"`,
+      columns.has('rejectionreasonlabel') ? `"rejectionReasonLabel"` : `NULL AS "rejectionReasonLabel"`,
+      columns.has('profilereviewmessage') ? `"profileReviewMessage"` : `NULL AS "profileReviewMessage"`,
+      columns.has('permanentrejectionat') ? `"permanentRejectionAt"` : `NULL AS "permanentRejectionAt"`,
+      columns.has('permanentdisableat') ? `"permanentDisableAt"` : `NULL AS "permanentDisableAt"`,
     ];
     const orderBy = columns.has('updatedat') ? `"updatedAt" DESC` : columns.has('profilesubmittedat') ? `"profileSubmittedAt" DESC` : `"id" ASC`;
     const rows = await prisma.$queryRawUnsafe<Array<any>>(
@@ -340,13 +370,18 @@ async function getSellerProfileCompletion(userId: string) {
     : profile.isVerified
       ? 'APPROVED'
       : 'INCOMPLETE';
+  const rejectionType = normalizeVendorRejectionType(submission?.rejectionType);
   const canUpload = status === 'APPROVED' || Boolean(profile.isVerified);
+  const canResubmitProfile = status !== 'REJECTED' || rejectionType !== 'PERMANENT';
+  const canOperateAccount = status === 'APPROVED' || Boolean(profile.isVerified);
   const brandSlug = slugify(profile.businessName || '');
   const storefrontPath = `/store/seller/${encodeURIComponent(profile.id)}/${encodeURIComponent(brandSlug || 'store')}`;
 
   return {
     role: 'FABRIC_SELLER',
     canUpload,
+    canResubmitProfile,
+    canOperateAccount,
     profileStatus: status,
     profile: {
       id: profile.id,
@@ -364,6 +399,12 @@ async function getSellerProfileCompletion(userId: string) {
     profileSubmittedAt: submission?.profileSubmittedAt || null,
     profileReviewedAt: submission?.profileReviewedAt || null,
     profileReviewNotes: submission?.profileReviewNotes || null,
+    rejectionType,
+    rejectionReasonCode: submission?.rejectionReasonCode || null,
+    rejectionReasonLabel: submission?.rejectionReasonLabel || null,
+    profileReviewMessage: submission?.profileReviewMessage || null,
+    permanentRejectionAt: submission?.permanentRejectionAt || null,
+    permanentDisableAt: submission?.permanentDisableAt || null,
     fields,
   };
 }
@@ -374,13 +415,34 @@ async function assertSellerCanManageCatalog(userId: string, action: string) {
     throw Object.assign(new Error('Seller profile not found.'), { status: 404 });
   }
   if (!completion.canUpload) {
+    const guidance =
+      completion.profileStatus === 'REJECTED'
+        ? completion.rejectionType === 'PERMANENT'
+          ? 'Your vendor account was permanently rejected. Please contact the administrator.'
+          : 'Your vendor profile was temporarily rejected. Please apply the requested corrections and resubmit your profile.'
+        : 'Complete and submit your vendor governance profile for admin approval.';
     throw Object.assign(
       new Error(
-        `Profile approval is required before you can ${action}. Complete and submit your vendor governance profile for admin approval.`
+        `Profile approval is required before you can ${action}. ${guidance}`
       ),
       { status: 403 }
     );
   }
+}
+
+async function assertSellerMutationAllowed(userId: string) {
+  const completion = await getSellerProfileCompletion(userId);
+  if (!completion || completion.profileStatus !== 'REJECTED') return;
+  if (completion.rejectionType === 'PERMANENT') {
+    throw Object.assign(
+      new Error('Your vendor account is permanently rejected. You cannot perform actions on this dashboard.'),
+      { status: 403 }
+    );
+  }
+  throw Object.assign(
+    new Error('Your profile is temporarily rejected. Please correct your vendor profile and resubmit for review.'),
+    { status: 403 }
+  );
 }
 
 async function computeFinalFabricPrice(baseSellerPrice: number, sellerCountry: string) {
@@ -612,6 +674,30 @@ router.get('/profile-fields', async (_req, res, next) => {
   }
 });
 
+router.use(async (req, res, next) => {
+  try {
+    if (!req.user?.id) return next();
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+    if (req.path === '/profile-completion' && req.method === 'PATCH') {
+      const completion = await getSellerProfileCompletion(req.user.id);
+      if (completion?.profileStatus === 'REJECTED' && completion?.rejectionType === 'PERMANENT') {
+        return res.status(403).json({
+          success: false,
+          message: 'Your vendor account is permanently rejected. Please contact the administrator.',
+        });
+      }
+      return next();
+    }
+    await assertSellerMutationAllowed(req.user.id);
+    return next();
+  } catch (error: any) {
+    if (error?.status) {
+      return res.status(error.status).json({ success: false, message: error.message || 'Request not allowed.' });
+    }
+    return next(error);
+  }
+});
+
 router.patch('/profile-completion', async (req, res, next) => {
   try {
     const payload = z
@@ -631,6 +717,12 @@ router.patch('/profile-completion', async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: 'Seller profile not found.',
+      });
+    }
+    if (current.profileStatus === 'REJECTED' && current.rejectionType === 'PERMANENT') {
+      return res.status(403).json({
+        success: false,
+        message: 'Your vendor account is permanently rejected. Please contact the administrator.',
       });
     }
 
@@ -721,8 +813,8 @@ router.patch('/profile-completion', async (req, res, next) => {
     const now = new Date();
     await prisma.$executeRawUnsafe(
       `INSERT INTO "VendorProfileSubmission"
-        ("id","role","userId","businessName","profileStatus","profileData","profileSubmittedAt","profileReviewedAt","profileReviewNotes","updatedAt")
-       VALUES ($1,'FABRIC_SELLER',$2,$3,'SUBMITTED',$4::jsonb,$5,NULL,NULL,NOW())
+        ("id","role","userId","businessName","profileStatus","profileData","profileSubmittedAt","profileReviewedAt","profileReviewNotes","profileReviewMessage","rejectionType","rejectionReasonCode","rejectionReasonLabel","permanentRejectionAt","permanentDisableAt","updatedAt")
+       VALUES ($1,'FABRIC_SELLER',$2,$3,'SUBMITTED',$4::jsonb,$5,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NOW())
        ON CONFLICT ("role","userId")
        DO UPDATE SET
          "businessName" = EXCLUDED."businessName",
@@ -731,6 +823,12 @@ router.patch('/profile-completion', async (req, res, next) => {
          "profileSubmittedAt" = EXCLUDED."profileSubmittedAt",
          "profileReviewedAt" = NULL,
          "profileReviewNotes" = NULL,
+         "profileReviewMessage" = NULL,
+         "rejectionType" = NULL,
+         "rejectionReasonCode" = NULL,
+         "rejectionReasonLabel" = NULL,
+         "permanentRejectionAt" = NULL,
+         "permanentDisableAt" = NULL,
          "updatedAt" = NOW()`,
       randomUUID(),
       req.user!.id,

@@ -2859,6 +2859,32 @@ router.patch('/:id/status', authorizePermissions(Permissions.ORDERS_UPDATE_SELF,
     const { status, notes } = schema.parse(req.body);
     const user = req.user!;
 
+    if (user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER) {
+      const submissionRows = await prisma
+        .$queryRawUnsafe<Array<any>>(
+          `SELECT "profileStatus","rejectionType"
+           FROM "VendorProfileSubmission"
+           WHERE "role"::text = $1 AND "userId" = $2
+           ORDER BY COALESCE("updatedAt","profileReviewedAt","profileSubmittedAt") DESC NULLS LAST
+           LIMIT 1`,
+          user.role,
+          user.id
+        )
+        .catch(() => []);
+      const submission = Array.isArray(submissionRows) && submissionRows.length > 0 ? submissionRows[0] : null;
+      const profileStatus = String(submission?.profileStatus || '').toUpperCase();
+      const rejectionType = String(submission?.rejectionType || '').toUpperCase();
+      if (profileStatus === 'REJECTED') {
+        return res.status(403).json({
+          success: false,
+          message:
+            rejectionType === 'PERMANENT'
+              ? 'Your vendor account is permanently rejected. Contact the administrator.'
+              : 'Your profile is temporarily rejected. Please correct your profile and resubmit before taking further actions.',
+        });
+      }
+    }
+
     // Get current order
     const order = await prisma.order.findUnique({
       where: { id },

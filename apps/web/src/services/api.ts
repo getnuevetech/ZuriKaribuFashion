@@ -5930,7 +5930,14 @@ const adminApi = {
   reviewVendorProfile: (
     role: 'FABRIC_SELLER' | 'FASHION_DESIGNER',
     userId: string,
-    data: { status: 'APPROVED' | 'REJECTED'; notes?: string }
+    data: {
+      status: 'APPROVED' | 'REJECTED';
+      notes?: string;
+      rejectionType?: 'TEMPORARY' | 'PERMANENT';
+      rejectionReasonCode?: string;
+      rejectionReasonLabel?: string;
+      messageHtml?: string;
+    }
   ) => apiService.patch<{ success: boolean; message?: string }>(`/admin/vendor-profiles/${role}/${userId}/review`, data),
 
   getVendorDashboardGovernance: () =>

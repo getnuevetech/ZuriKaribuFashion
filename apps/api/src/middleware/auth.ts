@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
-import { prisma, UserRole } from '../db';
+import { prisma, UserRole, UserStatus } from '../db';
 import {
   Permission,
   getRolePermissions,
@@ -21,6 +21,36 @@ if (!JWT_SECRET) {
 }
 
 const SECRET = JWT_SECRET || randomBytes(32).toString('hex');
+
+const normalizeVendorRejectionType = (value: unknown): 'TEMPORARY' | 'PERMANENT' | null => {
+  const normalized = String(value || '').toUpperCase();
+  if (normalized === 'TEMPORARY' || normalized === 'PERMANENT') return normalized;
+  return null;
+};
+
+async function readVendorRejectionSnapshot(userId: string, role: UserRole) {
+  if (role !== UserRole.FABRIC_SELLER && role !== UserRole.FASHION_DESIGNER) return null;
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT "profileStatus","rejectionType","permanentDisableAt"
+       FROM "VendorProfileSubmission"
+       WHERE "role"::text = $1 AND "userId" = $2
+       ORDER BY COALESCE("updatedAt","profileReviewedAt","profileSubmittedAt") DESC NULLS LAST
+       LIMIT 1`,
+      role,
+      userId
+    );
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const row = rows[0];
+    return {
+      profileStatus: String(row?.profileStatus || '').toUpperCase(),
+      rejectionType: normalizeVendorRejectionType(row?.rejectionType),
+      permanentDisableAt: row?.permanentDisableAt ? new Date(row.permanentDisableAt) : null,
+    };
+  } catch {
+    return null;
+  }
+}
 
 // Extend Express Request type
 declare global {
@@ -90,6 +120,35 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
         success: false,
         message: 'User not found.',
       });
+    }
+
+    if (user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER) {
+      const rejection = await readVendorRejectionSnapshot(user.id, user.role);
+      if (
+        rejection?.profileStatus === 'REJECTED' &&
+        rejection.rejectionType === 'PERMANENT' &&
+        rejection.permanentDisableAt &&
+        rejection.permanentDisableAt.getTime() <= Date.now()
+      ) {
+        if (user.status !== UserStatus.SUSPENDED) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { status: UserStatus.SUSPENDED },
+          });
+        }
+        return res.status(403).json({
+          success: false,
+          message:
+            'Your vendor account has been permanently disabled after rejection. Please contact support.',
+        });
+      }
+      if (user.status === UserStatus.REJECTED) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { status: UserStatus.ACTIVE },
+        });
+        (user as any).status = UserStatus.ACTIVE;
+      }
     }
 
     if (user.status !== 'ACTIVE') {

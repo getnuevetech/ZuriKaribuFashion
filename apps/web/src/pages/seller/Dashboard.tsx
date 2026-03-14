@@ -146,8 +146,15 @@ interface VendorProfileField {
 
 interface SellerProfileCompletion {
   canUpload: boolean;
+  canResubmitProfile?: boolean;
+  canOperateAccount?: boolean;
   profileStatus: 'INCOMPLETE' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
   profileReviewNotes?: string | null;
+  rejectionType?: 'TEMPORARY' | 'PERMANENT' | null;
+  rejectionReasonCode?: string | null;
+  rejectionReasonLabel?: string | null;
+  profileReviewMessage?: string | null;
+  permanentDisableAt?: string | null;
   profile: {
     businessName?: string;
     businessEmail?: string;
@@ -458,12 +465,14 @@ export default function SellerDashboard() {
   });
   const [submittingFeaturedRequest, setSubmittingFeaturedRequest] = useState(false);
 
+  const hasRejectionRestriction = profileCompletion?.profileStatus === 'REJECTED';
+  const restrictedTabs = hasRejectionRestriction ? (['overview'] as const) : (['overview', 'fabrics', 'featured', 'orders', 'tryon'] as const);
   const visibleTabs = useMemo(
     () =>
-      (['overview', 'fabrics', 'featured', 'orders', 'tryon'] as const).filter(
+      restrictedTabs.filter(
         (tab) => dashboardGovernance.tabs[tab] !== false
       ),
-    [dashboardGovernance.tabs]
+    [dashboardGovernance.tabs, restrictedTabs]
   );
   const fallbackTab = visibleTabs[0] || 'overview';
 
@@ -1252,7 +1261,7 @@ export default function SellerDashboard() {
   };
 
   const handleSubmitFeaturedRequestForProduct = async (productId: string) => {
-    if (!productId) return;
+    if (!productId || !canUploadByProfile) return;
     try {
       setSubmittingFeaturedRequest(true);
       setDashboardLoadError(null);
@@ -1276,6 +1285,7 @@ export default function SellerDashboard() {
   };
 
   const handlePayFeaturedRequest = async (requestId: string) => {
+    if (!canUploadByProfile) return;
     try {
       setDashboardLoadError(null);
       const response = await api.featuredRequests.payRequest(requestId, {
@@ -1344,8 +1354,9 @@ export default function SellerDashboard() {
   const canAddProduct = dashboardGovernance.actions.addProduct !== false && canUseProductForm && canUploadByProfile;
   const canEditProduct = dashboardGovernance.actions.editProduct !== false && canUseProductForm && canUploadByProfile;
   const canUpdateStock = dashboardGovernance.actions.updateStock !== false && canUploadByProfile;
-  const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false;
-  const canSubmitProfile = dashboardGovernance.actions.submitProfile !== false;
+  const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false && canUploadByProfile;
+  const canSubmitProfile =
+    dashboardGovernance.actions.submitProfile !== false && profileCompletion?.canResubmitProfile !== false;
   const hasNoDashboardTabs = visibleTabs.length === 0;
   const activeFeaturedRequestForSelectedFabric =
     selectedFabric?.id
@@ -1404,8 +1415,25 @@ export default function SellerDashboard() {
             <p className="text-sm text-gray-600 mt-1">
               Status: <span className="font-semibold">{profileCompletion?.profileStatus || 'INCOMPLETE'}</span>. Product upload access is controlled by admin approval.
             </p>
+            {profileCompletion?.rejectionType ? (
+              <p className="text-sm text-gray-700 mt-1">
+                Rejection type: <span className="font-semibold">{profileCompletion.rejectionType}</span>
+                {profileCompletion.rejectionReasonLabel ? ` • ${profileCompletion.rejectionReasonLabel}` : ''}
+              </p>
+            ) : null}
             {profileCompletion?.profileReviewNotes ? (
               <p className="text-sm text-gray-700 mt-1">Admin note: {profileCompletion.profileReviewNotes}</p>
+            ) : null}
+            {profileCompletion?.profileReviewMessage ? (
+              <div
+                className="mt-2 rounded border border-gray-200 bg-gray-50 p-2 text-sm text-gray-800"
+                dangerouslySetInnerHTML={{ __html: String(profileCompletion.profileReviewMessage) }}
+              />
+            ) : null}
+            {profileCompletion?.permanentDisableAt ? (
+              <p className="text-xs text-red-700 mt-2">
+                Account auto-disable date: {new Date(profileCompletion.permanentDisableAt).toLocaleString()}
+              </p>
             ) : null}
           </div>
 
@@ -1591,7 +1619,11 @@ export default function SellerDashboard() {
               onClick={handleSubmitProfile}
               disabled={submittingProfile || Boolean(uploadingProfileField) || activeProfileFields.length === 0 || !canSubmitProfile}
             >
-              {submittingProfile ? 'Submitting...' : 'Submit for Admin Approval'}
+              {submittingProfile
+                ? 'Submitting...'
+                : profileCompletion?.rejectionType === 'PERMANENT'
+                  ? 'Account Permanently Rejected'
+                  : 'Submit for Admin Approval'}
             </Button>
           </div>
         </div>
@@ -2093,7 +2125,7 @@ export default function SellerDashboard() {
                       <td className="px-3 py-2">${Number(request.approvedPriceUsd || 0).toFixed(2)}</td>
                       <td className="px-3 py-2">
                         {request.requestStatus === 'APPROVED_AWAITING_PAYMENT' ? (
-                          <Button size="sm" onClick={() => handlePayFeaturedRequest(request.id)}>
+                          <Button size="sm" onClick={() => handlePayFeaturedRequest(request.id)} disabled={!canUploadByProfile}>
                             Pay & Activate
                           </Button>
                         ) : request.requestStatus === 'ACTIVE' ? (
@@ -2489,7 +2521,7 @@ export default function SellerDashboard() {
                       <Button
                         size="sm"
                         onClick={() => handleSubmitFeaturedRequestForProduct(selectedFabric.id)}
-                        disabled={submittingFeaturedRequest}
+                        disabled={submittingFeaturedRequest || !canUploadByProfile}
                       >
                         {submittingFeaturedRequest ? 'Submitting...' : 'Submit Featured Request'}
                       </Button>
@@ -2505,8 +2537,9 @@ export default function SellerDashboard() {
                     {activeFeaturedRequestForSelectedFabric.requestStatus === 'APPROVED_AWAITING_PAYMENT' ? (
                       <button
                         type="button"
-                        className="ml-2 underline"
+                        className="ml-2 underline disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={() => handlePayFeaturedRequest(activeFeaturedRequestForSelectedFabric.id)}
+                        disabled={!canUploadByProfile}
                       >
                         Pay & Activate
                       </button>

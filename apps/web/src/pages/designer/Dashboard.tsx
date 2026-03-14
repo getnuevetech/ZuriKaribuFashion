@@ -213,8 +213,15 @@ interface VendorProfileField {
 
 interface DesignerProfileCompletion {
   canUpload: boolean;
+  canResubmitProfile?: boolean;
+  canOperateAccount?: boolean;
   profileStatus: 'INCOMPLETE' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
   profileReviewNotes?: string | null;
+  rejectionType?: 'TEMPORARY' | 'PERMANENT' | null;
+  rejectionReasonCode?: string | null;
+  rejectionReasonLabel?: string | null;
+  profileReviewMessage?: string | null;
+  permanentDisableAt?: string | null;
   profile: {
     businessName?: string;
     businessEmail?: string;
@@ -667,12 +674,14 @@ export default function DesignerDashboard() {
   });
   const [submittingFeaturedRequest, setSubmittingFeaturedRequest] = useState(false);
 
+  const hasRejectionRestriction = profileCompletion?.profileStatus === 'REJECTED';
+  const restrictedTabs = hasRejectionRestriction ? (['overview'] as const) : (['overview', 'designs', 'featured', 'orders', 'tryon'] as const);
   const visibleTabs = useMemo(
     () =>
-      (['overview', 'designs', 'featured', 'orders', 'tryon'] as const).filter(
+      restrictedTabs.filter(
         (tab) => dashboardGovernance.tabs[tab] !== false
       ),
-    [dashboardGovernance.tabs]
+    [dashboardGovernance.tabs, restrictedTabs]
   );
   const fallbackTab = visibleTabs[0] || 'overview';
 
@@ -2110,7 +2119,7 @@ export default function DesignerDashboard() {
     productId: string,
     productType: 'DESIGN' | 'READY_TO_WEAR'
   ) => {
-    if (!productId) return;
+    if (!productId || !canUploadByProfile) return;
     try {
       setSubmittingFeaturedRequest(true);
       setDashboardLoadError(null);
@@ -2140,6 +2149,7 @@ export default function DesignerDashboard() {
   };
 
   const handlePayFeaturedRequest = async (requestId: string) => {
+    if (!canUploadByProfile) return;
     try {
       setDashboardLoadError(null);
       const response = await api.featuredRequests.payRequest(requestId, {
@@ -2219,14 +2229,15 @@ export default function DesignerDashboard() {
   const showProfileGovernance = dashboardGovernance.sections.profileGovernance !== false;
   const showStats = dashboardGovernance.sections.stats !== false;
   const canUploadByProfile = Boolean(profileCompletion?.canUpload);
-  const canSubmitProfile = dashboardGovernance.actions.submitProfile !== false;
+  const canSubmitProfile =
+    dashboardGovernance.actions.submitProfile !== false && profileCompletion?.canResubmitProfile !== false;
   const canAddDesignProduct = dashboardGovernance.actions.addDesignProduct !== false && canUseDesignForm && canUploadByProfile;
   const canAddReadyProduct = dashboardGovernance.actions.addReadyToWearProduct !== false && canUseReadyForm && canUploadByProfile;
   const canEditDesignProduct = dashboardGovernance.actions.editDesignProduct !== false && canUseDesignForm && canUploadByProfile;
   const canEditReadyProduct = dashboardGovernance.actions.editReadyToWearProduct !== false && canUseReadyForm && canUploadByProfile;
   const canManageReadyStock = dashboardGovernance.actions.manageReadyStock !== false && canUploadByProfile;
-  const canRequestFabricCountryAccess = dashboardGovernance.actions.requestFabricCountryAccess !== false;
-  const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false;
+  const canRequestFabricCountryAccess = dashboardGovernance.actions.requestFabricCountryAccess !== false && canUploadByProfile;
+  const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false && canUploadByProfile;
   const hasNoDashboardTabs = visibleTabs.length === 0;
   const activeFeaturedRequestForSelectedDesign =
     selectedDesign?.id
@@ -2325,8 +2336,25 @@ export default function DesignerDashboard() {
             <p className="text-sm text-gray-600 mt-1">
               Status: <span className="font-semibold">{profileCompletion?.profileStatus || 'INCOMPLETE'}</span>. Product upload access is controlled by admin approval.
             </p>
+            {profileCompletion?.rejectionType ? (
+              <p className="text-sm text-gray-700 mt-1">
+                Rejection type: <span className="font-semibold">{profileCompletion.rejectionType}</span>
+                {profileCompletion.rejectionReasonLabel ? ` • ${profileCompletion.rejectionReasonLabel}` : ''}
+              </p>
+            ) : null}
             {profileCompletion?.profileReviewNotes ? (
               <p className="text-sm text-gray-700 mt-1">Admin note: {profileCompletion.profileReviewNotes}</p>
+            ) : null}
+            {profileCompletion?.profileReviewMessage ? (
+              <div
+                className="mt-2 rounded border border-gray-200 bg-gray-50 p-2 text-sm text-gray-800"
+                dangerouslySetInnerHTML={{ __html: String(profileCompletion.profileReviewMessage) }}
+              />
+            ) : null}
+            {profileCompletion?.permanentDisableAt ? (
+              <p className="text-xs text-red-700 mt-2">
+                Account auto-disable date: {new Date(profileCompletion.permanentDisableAt).toLocaleString()}
+              </p>
             ) : null}
           </div>
 
@@ -2512,7 +2540,11 @@ export default function DesignerDashboard() {
               onClick={handleSubmitProfile}
               disabled={submittingProfile || Boolean(uploadingProfileField) || activeProfileFields.length === 0 || !canSubmitProfile}
             >
-              {submittingProfile ? 'Submitting...' : 'Submit for Admin Approval'}
+              {submittingProfile
+                ? 'Submitting...'
+                : profileCompletion?.rejectionType === 'PERMANENT'
+                  ? 'Account Permanently Rejected'
+                  : 'Submit for Admin Approval'}
             </Button>
           </div>
         </div>
@@ -3043,7 +3075,7 @@ export default function DesignerDashboard() {
                       <td className="px-3 py-2">${Number(request.approvedPriceUsd || 0).toFixed(2)}</td>
                       <td className="px-3 py-2">
                         {request.requestStatus === 'APPROVED_AWAITING_PAYMENT' ? (
-                          <Button size="sm" onClick={() => handlePayFeaturedRequest(request.id)}>
+                          <Button size="sm" onClick={() => handlePayFeaturedRequest(request.id)} disabled={!canUploadByProfile}>
                             Pay & Activate
                           </Button>
                         ) : request.requestStatus === 'ACTIVE' ? (
@@ -3503,7 +3535,7 @@ export default function DesignerDashboard() {
                       <Button
                         size="sm"
                         onClick={() => handleSubmitFeaturedRequestForProduct(selectedReadyForEdit.id, 'READY_TO_WEAR')}
-                        disabled={submittingFeaturedRequest}
+                        disabled={submittingFeaturedRequest || !canUploadByProfile}
                       >
                         {submittingFeaturedRequest ? 'Submitting...' : 'Submit Featured Request'}
                       </Button>
@@ -3519,8 +3551,9 @@ export default function DesignerDashboard() {
                     {activeFeaturedRequestForSelectedReady.requestStatus === 'APPROVED_AWAITING_PAYMENT' ? (
                       <button
                         type="button"
-                        className="ml-2 underline"
+                        className="ml-2 underline disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={() => handlePayFeaturedRequest(activeFeaturedRequestForSelectedReady.id)}
+                        disabled={!canUploadByProfile}
                       >
                         Pay & Activate
                       </button>
@@ -3997,7 +4030,7 @@ export default function DesignerDashboard() {
                       <Button
                         size="sm"
                         onClick={() => handleSubmitFeaturedRequestForProduct(selectedDesign.id, 'DESIGN')}
-                        disabled={submittingFeaturedRequest}
+                        disabled={submittingFeaturedRequest || !canUploadByProfile}
                       >
                         {submittingFeaturedRequest ? 'Submitting...' : 'Submit Featured Request'}
                       </Button>
@@ -4013,8 +4046,9 @@ export default function DesignerDashboard() {
                     {activeFeaturedRequestForSelectedDesign.requestStatus === 'APPROVED_AWAITING_PAYMENT' ? (
                       <button
                         type="button"
-                        className="ml-2 underline"
+                        className="ml-2 underline disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={() => handlePayFeaturedRequest(activeFeaturedRequestForSelectedDesign.id)}
+                        disabled={!canUploadByProfile}
                       >
                         Pay & Activate
                       </button>

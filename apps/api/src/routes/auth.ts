@@ -256,6 +256,91 @@ async function resolveEffectivePermissions(userId: string, role: UserRole) {
   }
 }
 
+type VendorRejectionSnapshot = {
+  profileStatus: string;
+  rejectionType: string | null;
+  permanentDisableAt: Date | null;
+};
+const normalizeVendorRejectionType = (value: unknown): 'TEMPORARY' | 'PERMANENT' | null => {
+  const normalized = String(value || '').toUpperCase();
+  if (normalized === 'TEMPORARY' || normalized === 'PERMANENT') return normalized;
+  return null;
+};
+async function readVendorRejectionSnapshot(
+  userId: string,
+  role: 'FABRIC_SELLER' | 'FASHION_DESIGNER'
+): Promise<VendorRejectionSnapshot | null> {
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT "profileStatus","rejectionType","permanentDisableAt"
+       FROM "VendorProfileSubmission"
+       WHERE "role"::text = $1 AND "userId" = $2
+       ORDER BY COALESCE("updatedAt","profileReviewedAt","profileSubmittedAt") DESC NULLS LAST
+       LIMIT 1`,
+      role,
+      userId
+    );
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const row = rows[0];
+    return {
+      profileStatus: String(row?.profileStatus || ''),
+      rejectionType: row?.rejectionType ? String(row.rejectionType) : null,
+      permanentDisableAt: row?.permanentDisableAt ? new Date(row.permanentDisableAt) : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function applyVendorRejectionPolicy(user: {
+  id: string;
+  role: UserRole;
+  status: UserStatus;
+}) {
+  const isVendor =
+    user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER;
+  if (!isVendor) return { user, blockedMessage: null as string | null };
+  const snapshot = await readVendorRejectionSnapshot(
+    user.id,
+    user.role as 'FABRIC_SELLER' | 'FASHION_DESIGNER'
+  );
+  const rejectionType = normalizeVendorRejectionType(snapshot?.rejectionType);
+  const statusToken = String(snapshot?.profileStatus || '').toUpperCase();
+  const now = Date.now();
+
+  if (statusToken === 'REJECTED' && rejectionType === 'PERMANENT') {
+    const disableAt = snapshot?.permanentDisableAt ? Number(snapshot.permanentDisableAt.getTime()) : NaN;
+    if (Number.isFinite(disableAt) && disableAt <= now) {
+      if (user.status !== UserStatus.SUSPENDED) {
+        const updated = await prisma.user.update({
+          where: { id: user.id },
+          data: { status: UserStatus.SUSPENDED },
+        });
+        return {
+          user: { ...user, status: updated.status as UserStatus },
+          blockedMessage:
+            'Your vendor account has been permanently disabled after rejection. Please contact support.',
+        };
+      }
+      return {
+        user,
+        blockedMessage:
+          'Your vendor account has been permanently disabled after rejection. Please contact support.',
+      };
+    }
+  }
+
+  if (user.status === UserStatus.REJECTED) {
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { status: UserStatus.ACTIVE },
+    });
+    return { user: { ...user, status: updated.status as UserStatus }, blockedMessage: null as string | null };
+  }
+
+  return { user, blockedMessage: null as string | null };
+}
+
 const GOOGLE_CLIENT_IDS = Array.from(
   new Set(
     [
@@ -651,6 +736,24 @@ router.post('/login', async (req, res, next) => {
     const isVendor =
       user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER;
 
+    const rejectionPolicy = await applyVendorRejectionPolicy({
+      id: user.id,
+      role: user.role,
+      status: user.status as UserStatus,
+    });
+    if (rejectionPolicy.blockedMessage) {
+      return res.status(403).json({
+        success: false,
+        message: rejectionPolicy.blockedMessage,
+      });
+    }
+    if (rejectionPolicy.user.status !== user.status) {
+      user = {
+        ...user,
+        status: rejectionPolicy.user.status,
+      } as typeof user;
+    }
+
     // Backfill legacy vendor accounts that were previously created as PENDING.
     if (user.status === UserStatus.PENDING && isVendor) {
       user = await prisma.user.update({
@@ -815,6 +918,24 @@ const handleGoogleLogin = async (req: any, res: any, next: any) => {
 
     const isVendor =
       user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER;
+
+    const rejectionPolicy = await applyVendorRejectionPolicy({
+      id: user.id,
+      role: user.role,
+      status: user.status as UserStatus,
+    });
+    if (rejectionPolicy.blockedMessage) {
+      return res.status(403).json({
+        success: false,
+        message: rejectionPolicy.blockedMessage,
+      });
+    }
+    if (rejectionPolicy.user.status !== user.status) {
+      user = {
+        ...user,
+        status: rejectionPolicy.user.status,
+      } as typeof user;
+    }
 
     if (user.status === UserStatus.PENDING && isVendor) {
       user = await prisma.user.update({

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
+import nodemailer from 'nodemailer';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma, UserRole, UserStatus, ProductStatus, ProductType } from '../db';
@@ -1168,6 +1169,7 @@ const adminProductUpdateSchema = z.object({
 
 const vendorRoleSchema = z.enum(['FABRIC_SELLER', 'FASHION_DESIGNER']);
 const vendorProfileStatusSchema = z.enum(['INCOMPLETE', 'SUBMITTED', 'APPROVED', 'REJECTED']);
+const vendorRejectionTypeSchema = z.enum(['TEMPORARY', 'PERMANENT']);
 const vendorProfileFieldSchema = z.object({
   key: z.string().min(1),
   label: z.string().min(1),
@@ -1192,6 +1194,43 @@ const vendorProfileFieldSchema = z.object({
   sortOrder: z.number().int().optional(),
   isActive: z.boolean().optional().default(true),
 });
+
+let cachedTransporter: nodemailer.Transporter | null | undefined;
+function getMailer(): nodemailer.Transporter | null {
+  if (cachedTransporter !== undefined) return cachedTransporter;
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!host || !user || !pass) {
+    cachedTransporter = null;
+    return null;
+  }
+  cachedTransporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+    auth: { user, pass },
+  });
+  return cachedTransporter;
+}
+async function sendEmail(input: { to: string; subject: string; text: string; html: string }) {
+  const transporter = getMailer();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  if (!transporter || !from || !input.to) return;
+  await transporter.sendMail({
+    from,
+    to: input.to,
+    subject: input.subject,
+    text: input.text,
+    html: input.html,
+  });
+}
+const stripHtmlForText = (value: string) =>
+  String(value || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 const measurementTemplateSchema = z.object({
   name: z.string().min(1),
   unit: z.string().min(1).default('cm'),
@@ -1350,6 +1389,24 @@ const ensureAdminRbacSchema = async () => {
     );
     await prisma.$executeRawUnsafe(
       `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "rejectionType" TEXT`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "rejectionReasonCode" TEXT`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "rejectionReasonLabel" TEXT`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "profileReviewMessage" TEXT`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "permanentRejectionAt" TIMESTAMP(3)`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "VendorProfileSubmission" ADD COLUMN IF NOT EXISTS "permanentDisableAt" TIMESTAMP(3)`
     );
     await prisma.$executeRawUnsafe(
       `UPDATE "VendorProfileSubmission" SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL`
@@ -1963,6 +2020,7 @@ const parseStoredPermissions = (value: unknown) => {
 
 type VendorRole = z.infer<typeof vendorRoleSchema>;
 type VendorProfileStatus = z.infer<typeof vendorProfileStatusSchema>;
+type VendorRejectionType = z.infer<typeof vendorRejectionTypeSchema>;
 const vendorRoleSqlLiteral = (role: VendorRole) =>
   role === 'FABRIC_SELLER' ? 'FABRIC_SELLER' : 'FASHION_DESIGNER';
 
@@ -1972,6 +2030,11 @@ const normalizeVendorProfileStatus = (value: unknown): VendorProfileStatus => {
     return normalized;
   }
   return 'SUBMITTED';
+};
+const normalizeVendorRejectionType = (value: unknown): VendorRejectionType | null => {
+  const normalized = String(value || '').toUpperCase();
+  if (normalized === 'TEMPORARY' || normalized === 'PERMANENT') return normalized;
+  return null;
 };
 
 const readTableColumns = async (tableName: string): Promise<Set<string>> => {
@@ -2056,6 +2119,12 @@ const getVendorSubmissionRows = async () => {
     columns.has('profilesubmittedat') ? `"profileSubmittedAt"` : `NULL AS "profileSubmittedAt"`,
     columns.has('profilereviewedat') ? `"profileReviewedAt"` : `NULL AS "profileReviewedAt"`,
     columns.has('profilereviewnotes') ? `"profileReviewNotes"` : `NULL AS "profileReviewNotes"`,
+    columns.has('rejectiontype') ? `"rejectionType"` : `NULL AS "rejectionType"`,
+    columns.has('rejectionreasoncode') ? `"rejectionReasonCode"` : `NULL AS "rejectionReasonCode"`,
+    columns.has('rejectionreasonlabel') ? `"rejectionReasonLabel"` : `NULL AS "rejectionReasonLabel"`,
+    columns.has('profilereviewmessage') ? `"profileReviewMessage"` : `NULL AS "profileReviewMessage"`,
+    columns.has('permanentrejectionat') ? `"permanentRejectionAt"` : `NULL AS "permanentRejectionAt"`,
+    columns.has('permanentdisableat') ? `"permanentDisableAt"` : `NULL AS "permanentDisableAt"`,
     columns.has('updatedat') ? `"updatedAt"` : `NOW() AS "updatedAt"`,
   ];
   let rows: any[] = [];
@@ -2629,6 +2698,12 @@ router.get('/vendor-profiles', async (req, res, next) => {
           profileSubmittedAt: submission?.profileSubmittedAt || null,
           profileReviewedAt: submission?.profileReviewedAt || null,
           profileReviewNotes: submission?.profileReviewNotes || null,
+          rejectionType: normalizeVendorRejectionType(submission?.rejectionType),
+          rejectionReasonCode: submission?.rejectionReasonCode || null,
+          rejectionReasonLabel: submission?.rejectionReasonLabel || null,
+          profileReviewMessage: submission?.profileReviewMessage || null,
+          permanentRejectionAt: submission?.permanentRejectionAt || null,
+          permanentDisableAt: submission?.permanentDisableAt || null,
           profileData: submission?.profileData || {},
           user: profile.user,
           updatedAt: submission?.updatedAt || profile.updatedAt,
@@ -2653,6 +2728,12 @@ router.get('/vendor-profiles', async (req, res, next) => {
           profileSubmittedAt: submission?.profileSubmittedAt || null,
           profileReviewedAt: submission?.profileReviewedAt || null,
           profileReviewNotes: submission?.profileReviewNotes || null,
+          rejectionType: normalizeVendorRejectionType(submission?.rejectionType),
+          rejectionReasonCode: submission?.rejectionReasonCode || null,
+          rejectionReasonLabel: submission?.rejectionReasonLabel || null,
+          profileReviewMessage: submission?.profileReviewMessage || null,
+          permanentRejectionAt: submission?.permanentRejectionAt || null,
+          permanentDisableAt: submission?.permanentDisableAt || null,
           profileData: submission?.profileData || {},
           user: profile.user,
           updatedAt: submission?.updatedAt || profile.updatedAt,
@@ -2692,9 +2773,27 @@ router.get('/vendor-profiles/:role/:userId', async (req, res, next) => {
   try {
     const role = vendorRoleSchema.parse(String(req.params.role || ''));
     const userId = String(req.params.userId || '');
+    const submissionColumns = await readTableColumns('VendorProfileSubmission');
+    const submissionSelect = [
+      `"id"`,
+      `"role"`,
+      `"userId"`,
+      submissionColumns.has('businessname') ? `"businessName"` : `NULL AS "businessName"`,
+      submissionColumns.has('profilestatus') ? `"profileStatus"` : `'SUBMITTED' AS "profileStatus"`,
+      submissionColumns.has('profiledata') ? `"profileData"` : `NULL AS "profileData"`,
+      submissionColumns.has('profilesubmittedat') ? `"profileSubmittedAt"` : `NULL AS "profileSubmittedAt"`,
+      submissionColumns.has('profilereviewedat') ? `"profileReviewedAt"` : `NULL AS "profileReviewedAt"`,
+      submissionColumns.has('profilereviewnotes') ? `"profileReviewNotes"` : `NULL AS "profileReviewNotes"`,
+      submissionColumns.has('rejectiontype') ? `"rejectionType"` : `NULL AS "rejectionType"`,
+      submissionColumns.has('rejectionreasoncode') ? `"rejectionReasonCode"` : `NULL AS "rejectionReasonCode"`,
+      submissionColumns.has('rejectionreasonlabel') ? `"rejectionReasonLabel"` : `NULL AS "rejectionReasonLabel"`,
+      submissionColumns.has('profilereviewmessage') ? `"profileReviewMessage"` : `NULL AS "profileReviewMessage"`,
+      submissionColumns.has('permanentrejectionat') ? `"permanentRejectionAt"` : `NULL AS "permanentRejectionAt"`,
+      submissionColumns.has('permanentdisableat') ? `"permanentDisableAt"` : `NULL AS "permanentDisableAt"`,
+    ];
     const [submissionRows, fields] = await Promise.all([
       prisma.$queryRawUnsafe<Array<any>>(
-        `SELECT "id","role","userId","businessName","profileStatus","profileData","profileSubmittedAt","profileReviewedAt","profileReviewNotes"
+        `SELECT ${submissionSelect.join(', ')}
          FROM "VendorProfileSubmission"
          WHERE "role"::text = $1 AND "userId" = $2
          LIMIT 1`,
@@ -2725,6 +2824,12 @@ router.get('/vendor-profiles/:role/:userId', async (req, res, next) => {
             profileSubmittedAt: submission?.profileSubmittedAt || null,
             profileReviewedAt: submission?.profileReviewedAt || null,
             profileReviewNotes: submission?.profileReviewNotes || null,
+            rejectionType: normalizeVendorRejectionType(submission?.rejectionType),
+            rejectionReasonCode: submission?.rejectionReasonCode || null,
+            rejectionReasonLabel: submission?.rejectionReasonLabel || null,
+            profileReviewMessage: submission?.profileReviewMessage || null,
+            permanentRejectionAt: submission?.permanentRejectionAt || null,
+            permanentDisableAt: submission?.permanentDisableAt || null,
           },
           fields,
         },
@@ -2750,6 +2855,12 @@ router.get('/vendor-profiles/:role/:userId', async (req, res, next) => {
           profileSubmittedAt: submission?.profileSubmittedAt || null,
           profileReviewedAt: submission?.profileReviewedAt || null,
           profileReviewNotes: submission?.profileReviewNotes || null,
+          rejectionType: normalizeVendorRejectionType(submission?.rejectionType),
+          rejectionReasonCode: submission?.rejectionReasonCode || null,
+          rejectionReasonLabel: submission?.rejectionReasonLabel || null,
+          profileReviewMessage: submission?.profileReviewMessage || null,
+          permanentRejectionAt: submission?.permanentRejectionAt || null,
+          permanentDisableAt: submission?.permanentDisableAt || null,
         },
         fields,
       },
@@ -2767,25 +2878,74 @@ router.patch('/vendor-profiles/:role/:userId/review', async (req, res, next) => 
       .object({
         status: z.enum(['APPROVED', 'REJECTED']),
         notes: z.string().optional(),
+        rejectionType: vendorRejectionTypeSchema.optional(),
+        rejectionReasonCode: z.string().trim().max(80).optional(),
+        rejectionReasonLabel: z.string().trim().max(180).optional(),
+        messageHtml: z.string().trim().max(20000).optional(),
       })
       .parse(req.body);
 
     const now = new Date();
+    const permanentDisableAt =
+      payload.status === 'REJECTED' && payload.rejectionType === 'PERMANENT'
+        ? new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
+        : null;
+    const normalizedRejectionType =
+      payload.status === 'REJECTED'
+        ? payload.rejectionType || 'TEMPORARY'
+        : null;
+    const rejectionReasonCode =
+      payload.status === 'REJECTED' ? String(payload.rejectionReasonCode || '').trim() || null : null;
+    const rejectionReasonLabel =
+      payload.status === 'REJECTED' ? String(payload.rejectionReasonLabel || '').trim() || null : null;
+    if (payload.status === 'REJECTED' && !rejectionReasonCode && !rejectionReasonLabel) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select a rejection reason before rejecting the vendor profile.',
+      });
+    }
+    const customMessageHtml =
+      payload.status === 'REJECTED' ? String(payload.messageHtml || '').trim() || null : null;
+    const rejectionDisplayMessage =
+      payload.status !== 'REJECTED'
+        ? null
+        : normalizedRejectionType === 'PERMANENT'
+          ? 'Your vendor account has been permanently rejected. Please contact the administrator for further guidance.'
+          : customMessageHtml ||
+            payload.notes ||
+            'Your vendor profile was temporarily rejected. Please review the rejection reason, make corrections, and resubmit for verification.';
+    const reviewNoteValue =
+      payload.status === 'REJECTED'
+        ? payload.notes || rejectionReasonLabel || rejectionReasonCode || null
+        : payload.notes || null;
+
     const roleLiteral = vendorRoleSqlLiteral(role);
     await prisma.$executeRawUnsafe(
       `INSERT INTO "VendorProfileSubmission"
-        ("id","role","userId","profileStatus","profileReviewNotes","profileReviewedAt","updatedAt")
-       VALUES ($1,'${roleLiteral}',$2,$3,$4,$5,NOW())
+        ("id","role","userId","profileStatus","profileReviewNotes","profileReviewMessage","rejectionType","rejectionReasonCode","rejectionReasonLabel","permanentRejectionAt","permanentDisableAt","profileReviewedAt","updatedAt")
+       VALUES ($1,'${roleLiteral}',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
        ON CONFLICT ("role","userId")
        DO UPDATE SET
          "profileStatus" = EXCLUDED."profileStatus",
          "profileReviewNotes" = EXCLUDED."profileReviewNotes",
+         "profileReviewMessage" = EXCLUDED."profileReviewMessage",
+         "rejectionType" = EXCLUDED."rejectionType",
+         "rejectionReasonCode" = EXCLUDED."rejectionReasonCode",
+         "rejectionReasonLabel" = EXCLUDED."rejectionReasonLabel",
+         "permanentRejectionAt" = EXCLUDED."permanentRejectionAt",
+         "permanentDisableAt" = EXCLUDED."permanentDisableAt",
          "profileReviewedAt" = EXCLUDED."profileReviewedAt",
          "updatedAt" = NOW()`,
       randomUUID(),
       userId,
       payload.status,
-      payload.notes || null,
+      reviewNoteValue,
+      rejectionDisplayMessage,
+      normalizedRejectionType,
+      rejectionReasonCode,
+      rejectionReasonLabel,
+      normalizedRejectionType === 'PERMANENT' ? now : null,
+      permanentDisableAt,
       now
     );
 
@@ -2806,7 +2966,26 @@ router.patch('/vendor-profiles/:role/:userId/review', async (req, res, next) => 
         where: { id: userId },
         data: { status: UserStatus.ACTIVE },
       });
+    } else {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { status: UserStatus.ACTIVE },
+      });
     }
+
+    const vendorUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, firstName: true, lastName: true },
+    });
+    const vendorDisplayName =
+      `${String(vendorUser?.firstName || '').trim()} ${String(vendorUser?.lastName || '').trim()}`.trim() ||
+      String(vendorUser?.email || '').trim() ||
+      'Vendor';
+    const notificationMessage =
+      payload.status === 'APPROVED'
+        ? 'Your vendor profile has been approved. You can now upload products.'
+        : rejectionDisplayMessage ||
+          'Your vendor profile requires corrections before approval.';
 
     await prisma.$transaction([
       prisma.notification.create({
@@ -2814,10 +2993,7 @@ router.patch('/vendor-profiles/:role/:userId/review', async (req, res, next) => 
           userId,
           type: payload.status === 'APPROVED' ? 'SYSTEM' : 'NEW_MESSAGE',
           title: payload.status === 'APPROVED' ? 'Vendor profile approved' : 'Vendor profile rejected',
-          message:
-            payload.status === 'APPROVED'
-              ? 'Your vendor profile has been approved. You can now upload products.'
-              : payload.notes || 'Your vendor profile requires corrections before approval.',
+          message: notificationMessage,
           relatedType: 'PROFILE',
           relatedId: userId,
         },
@@ -2830,11 +3006,43 @@ router.patch('/vendor-profiles/:role/:userId/review', async (req, res, next) => 
             role,
             vendorUserId: userId,
             status: payload.status,
-            notes: payload.notes || null,
+            notes: reviewNoteValue,
+            rejectionType: normalizedRejectionType,
+            rejectionReasonCode,
+            rejectionReasonLabel,
+            permanentDisableAt: permanentDisableAt ? permanentDisableAt.toISOString() : null,
           },
         },
       }),
     ]);
+    if (vendorUser?.email) {
+      const subject =
+        payload.status === 'APPROVED'
+          ? 'Your vendor profile has been approved'
+          : normalizedRejectionType === 'PERMANENT'
+            ? 'Your vendor profile has been permanently rejected'
+            : 'Vendor profile correction required';
+      const textBody =
+        payload.status === 'APPROVED'
+          ? `Hello ${vendorDisplayName}, your vendor profile has been approved. You can now access vendor functionality.`
+          : normalizedRejectionType === 'PERMANENT'
+            ? `Hello ${vendorDisplayName}, your vendor profile has been permanently rejected. Please contact the administrator.`
+            : `Hello ${vendorDisplayName}, your vendor profile requires corrections before approval.\n\nReason: ${rejectionReasonLabel || rejectionReasonCode || 'Profile correction required'}\n\nDetails: ${stripHtmlForText(notificationMessage)}`;
+      const htmlBody =
+        payload.status === 'APPROVED'
+          ? `<p>Hello ${vendorDisplayName},</p><p>Your vendor profile has been approved. You can now access vendor functionality.</p>`
+          : normalizedRejectionType === 'PERMANENT'
+            ? `<p>Hello ${vendorDisplayName},</p><p>Your vendor profile has been <strong>permanently rejected</strong>.</p><p>Please contact the administrator for further guidance.</p>`
+            : `<p>Hello ${vendorDisplayName},</p><p>Your vendor profile was <strong>temporarily rejected</strong> and requires corrections before approval.</p><p><strong>Reason:</strong> ${rejectionReasonLabel || rejectionReasonCode || 'Profile correction required'}</p><div>${notificationMessage}</div>`;
+      void sendEmail({
+        to: vendorUser.email,
+        subject,
+        text: textBody,
+        html: htmlBody,
+      }).catch((error) => {
+        console.error('Failed to send vendor review email:', error);
+      });
+    }
 
     res.json({
       success: true,
