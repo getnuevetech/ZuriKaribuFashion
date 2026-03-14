@@ -8403,6 +8403,24 @@ const featuredRequestsApi = {
 
   listMyRequests: () => apiService.get<{ success: boolean; data: any[] }>('/featured-requests/requests/my'),
 
+  createPaymentSession: (
+    requestId: string,
+    data: { providerKey?: string; returnUrl?: string; cancelUrl?: string }
+  ) =>
+    apiService.post<{ success: boolean; data: any; message?: string }>(
+      `/featured-requests/requests/${requestId}/payment-session`,
+      data
+    ),
+
+  verifyPayment: (
+    requestId: string,
+    data: { providerKey?: string; reference?: string; payerId?: string }
+  ) =>
+    apiService.post<{ success: boolean; data: any; message?: string }>(
+      `/featured-requests/requests/${requestId}/payment-verify`,
+      data
+    ),
+
   payRequest: (requestId: string, data: { providerKey?: string; paymentReference: string }) =>
     apiService.post<{ success: boolean; data: any; message?: string }>(`/featured-requests/requests/${requestId}/pay`, data),
 

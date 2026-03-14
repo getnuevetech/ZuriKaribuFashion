@@ -119,6 +119,8 @@ interface FeaturedRequest {
   approvedDurationValue?: number | null;
   approvedDurationUnit?: 'DAYS' | 'WEEKS' | 'MONTHS' | null;
   approvedPriceUsd?: number | null;
+  paymentProviderKey?: string | null;
+  paymentReference?: string | null;
   activationEndsAt?: string | null;
   createdAt: string;
 }
@@ -199,6 +201,13 @@ interface ReadyToWearFormState {
   imageUrls: string;
   priceCurrencyCode: string;
   variants: ReadyVariantFormRow[];
+}
+
+interface PaymentProviderOption {
+  providerKey: string;
+  displayName: string;
+  checkoutType: 'INLINE' | 'REDIRECT';
+  mode: 'TEST' | 'LIVE';
 }
 
 interface VendorProfileField {
@@ -680,6 +689,10 @@ export default function DesignerDashboard() {
     basePriceUsdByType: { FABRIC: 0, DESIGN: 0, READY_TO_WEAR: 0 },
   });
   const [submittingFeaturedRequest, setSubmittingFeaturedRequest] = useState(false);
+  const [featuredPaymentProviders, setFeaturedPaymentProviders] = useState<PaymentProviderOption[]>([]);
+  const [featuredPaymentDrafts, setFeaturedPaymentDrafts] = useState<Record<string, { providerKey: string; reference: string }>>({});
+  const [featuredPaymentActionRequestId, setFeaturedPaymentActionRequestId] = useState<string | null>(null);
+  const [featuredPaymentMessage, setFeaturedPaymentMessage] = useState<string | null>(null);
 
   const hasRejectionRestriction = profileCompletion?.profileStatus === 'REJECTED';
   const restrictedTabs = hasRejectionRestriction ? (['overview'] as const) : (['overview', 'designs', 'featured', 'orders', 'tryon'] as const);
@@ -732,6 +745,46 @@ export default function DesignerDashboard() {
     }
   }, [activeTab, fallbackTab, visibleTabs]);
 
+  const resolveDefaultFeaturedProvider = (countryName?: string) => {
+    const available = featuredPaymentProviders.map((entry) => String(entry.providerKey || '').toUpperCase()).filter(Boolean);
+    if (available.length === 0) return '';
+    const normalizedCountry = String(countryName || '').trim().toUpperCase();
+    const preferredOrder = normalizedCountry ? ['FLUTTERWAVE', 'PAYPAL', 'STRIPE'] : ['STRIPE', 'PAYPAL', 'FLUTTERWAVE'];
+    for (const key of preferredOrder) {
+      if (available.includes(key)) return key;
+    }
+    return available[0] || '';
+  };
+
+  const getFeaturedPaymentDraft = (request: FeaturedRequest) => {
+    const existing = featuredPaymentDrafts[request.id];
+    if (existing) return existing;
+    return {
+      providerKey:
+        String(request.paymentProviderKey || '').toUpperCase() ||
+        resolveDefaultFeaturedProvider(profileCompletion?.profile?.country),
+      reference: String(request.paymentReference || '').trim(),
+    };
+  };
+
+  useEffect(() => {
+    if (featuredRequests.length === 0 || featuredPaymentProviders.length === 0) return;
+    setFeaturedPaymentDrafts((prev) => {
+      const next = { ...prev };
+      for (const request of featuredRequests) {
+        if (String(request.requestStatus || '').toUpperCase() !== 'APPROVED_AWAITING_PAYMENT') continue;
+        const existing = next[request.id];
+        next[request.id] = {
+          providerKey:
+            String(existing?.providerKey || request.paymentProviderKey || '').toUpperCase() ||
+            resolveDefaultFeaturedProvider(profileCompletion?.profile?.country),
+          reference: String(existing?.reference || request.paymentReference || '').trim(),
+        };
+      }
+      return next;
+    });
+  }, [featuredRequests, featuredPaymentProviders, profileCompletion?.profile?.country]);
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
@@ -750,6 +803,7 @@ export default function DesignerDashboard() {
         tryOnInsightsResult,
         featuredRequestsResult,
         featuredSettingsResult,
+        paymentOptionsResult,
       ] = await Promise.allSettled([
         api.designer.getDashboard(),
         api.designer.getDesigns(),
@@ -764,6 +818,7 @@ export default function DesignerDashboard() {
         api.designer.getTryOnInsights(),
         api.featuredRequests.listMyRequests(),
         api.featuredRequests.getSettings(),
+        api.payments.getOptions(),
       ]);
       const statsRes = statsResult.status === 'fulfilled' ? statsResult.value : null;
       const designsRes = designsResult.status === 'fulfilled' ? designsResult.value : null;
@@ -779,6 +834,7 @@ export default function DesignerDashboard() {
       const tryOnInsightsRes = tryOnInsightsResult.status === 'fulfilled' ? tryOnInsightsResult.value : null;
       const featuredRequestsRes = featuredRequestsResult.status === 'fulfilled' ? featuredRequestsResult.value : null;
       const featuredSettingsRes = featuredSettingsResult.status === 'fulfilled' ? featuredSettingsResult.value : null;
+      const paymentOptionsRes = paymentOptionsResult.status === 'fulfilled' ? paymentOptionsResult.value : null;
       const settledCallStatus = (result: PromiseSettledResult<any>) => {
         if (result.status === 'fulfilled') {
           return result.value?.success
@@ -1033,21 +1089,36 @@ export default function DesignerDashboard() {
         setTryOnInsights(tryOnInsightsRes.data || null);
       }
       if (featuredRequestsRes?.success && Array.isArray(featuredRequestsRes.data)) {
-        setFeaturedRequests(
-          featuredRequestsRes.data.map((row: any) => ({
-            id: String(row.id),
-            requestStatus: String(row.requestStatus || 'PENDING'),
-            paymentStatus: String(row.paymentStatus || 'UNPAID'),
-            productEntries: Array.isArray(row.productEntries) ? row.productEntries : [],
-            requestedDurationValue: row.requestedDurationValue != null ? Number(row.requestedDurationValue) : null,
-            requestedDurationUnit: row.requestedDurationUnit || null,
-            approvedDurationValue: row.approvedDurationValue != null ? Number(row.approvedDurationValue) : null,
-            approvedDurationUnit: row.approvedDurationUnit || null,
-            approvedPriceUsd: row.approvedPriceUsd != null ? Number(row.approvedPriceUsd) : null,
-            activationEndsAt: row.activationEndsAt || null,
-            createdAt: String(row.createdAt || new Date().toISOString()),
-          }))
-        );
+        const mappedRequests = featuredRequestsRes.data.map((row: any) => ({
+          id: String(row.id),
+          requestStatus: String(row.requestStatus || 'PENDING'),
+          paymentStatus: String(row.paymentStatus || 'UNPAID'),
+          productEntries: Array.isArray(row.productEntries) ? row.productEntries : [],
+          requestedDurationValue: row.requestedDurationValue != null ? Number(row.requestedDurationValue) : null,
+          requestedDurationUnit: row.requestedDurationUnit || null,
+          approvedDurationValue: row.approvedDurationValue != null ? Number(row.approvedDurationValue) : null,
+          approvedDurationUnit: row.approvedDurationUnit || null,
+          approvedPriceUsd: row.approvedPriceUsd != null ? Number(row.approvedPriceUsd) : null,
+          paymentProviderKey: row.paymentProviderKey ? String(row.paymentProviderKey).toUpperCase() : null,
+          paymentReference: row.paymentReference ? String(row.paymentReference) : null,
+          activationEndsAt: row.activationEndsAt || null,
+          createdAt: String(row.createdAt || new Date().toISOString()),
+        }));
+        setFeaturedRequests(mappedRequests);
+        setFeaturedPaymentDrafts((prev) => {
+          const next = { ...prev };
+          for (const request of mappedRequests) {
+            if (String(request.requestStatus || '').toUpperCase() !== 'APPROVED_AWAITING_PAYMENT') continue;
+            const current = next[request.id];
+            next[request.id] = {
+              providerKey:
+                String(current?.providerKey || request.paymentProviderKey || '').toUpperCase() ||
+                resolveDefaultFeaturedProvider(profileCompletion?.profile?.country),
+              reference: String(current?.reference || request.paymentReference || '').trim(),
+            };
+          }
+          return next;
+        });
       }
       if (featuredSettingsRes?.success && featuredSettingsRes.data) {
         setFeaturedSettings(featuredSettingsRes.data);
@@ -1057,6 +1128,20 @@ export default function DesignerDashboard() {
         if (featuredSettingsRes.data.defaultDurationUnit) {
           setFeaturedRequestDurationUnit(String(featuredSettingsRes.data.defaultDurationUnit).toUpperCase() as any);
         }
+      }
+      if (paymentOptionsRes?.success) {
+        const providerRows = Array.isArray(paymentOptionsRes.data?.providers) ? paymentOptionsRes.data.providers : [];
+        const normalizedProviders = providerRows
+          .map((entry: any) => ({
+            providerKey: String(entry?.providerKey || '').toUpperCase(),
+            displayName: String(entry?.displayName || entry?.providerKey || 'Payment'),
+            checkoutType: String(entry?.checkoutType || 'REDIRECT').toUpperCase() === 'INLINE' ? 'INLINE' : 'REDIRECT',
+            mode: String(entry?.mode || 'TEST').toUpperCase() === 'LIVE' ? 'LIVE' : 'TEST',
+          }))
+          .filter((entry: PaymentProviderOption) => Boolean(entry.providerKey));
+        setFeaturedPaymentProviders(normalizedProviders);
+      } else {
+        setFeaturedPaymentProviders([]);
       }
       const completionPayload = dashboardCompletion || (profileRes?.success ? profileRes.data : null);
       const configuredProfileFields =
@@ -2155,21 +2240,92 @@ export default function DesignerDashboard() {
     }
   };
 
-  const handlePayFeaturedRequest = async (requestId: string) => {
+  const handleFeaturedPaymentDraftChange = (
+    requestId: string,
+    patch: Partial<{ providerKey: string; reference: string }>
+  ) => {
+    setFeaturedPaymentDrafts((prev) => {
+      const current = prev[requestId] || {
+        providerKey: resolveDefaultFeaturedProvider(profileCompletion?.profile?.country),
+        reference: '',
+      };
+      return {
+        ...prev,
+        [requestId]: {
+          providerKey: String(patch.providerKey ?? current.providerKey ?? '').toUpperCase(),
+          reference: String(patch.reference ?? current.reference ?? '').trim(),
+        },
+      };
+    });
+  };
+
+  const handleCreateFeaturedPaymentSession = async (requestId: string) => {
     if (!canUploadByProfile) return;
+    const draft = featuredPaymentDrafts[requestId] || {
+      providerKey: resolveDefaultFeaturedProvider(profileCompletion?.profile?.country),
+      reference: '',
+    };
+    const providerKey = String(draft.providerKey || '').toUpperCase();
+    if (!providerKey) {
+      setDashboardLoadError('No active payment provider found. Configure payment providers in admin dashboard.');
+      return;
+    }
     try {
+      setFeaturedPaymentActionRequestId(requestId);
       setDashboardLoadError(null);
-      const response = await api.featuredRequests.payRequest(requestId, {
-        providerKey: 'MANUAL',
-        paymentReference: `DESIGNER-${Date.now()}`,
+      setFeaturedPaymentMessage(null);
+      const response = await api.featuredRequests.createPaymentSession(requestId, {
+        providerKey,
+        returnUrl: `${window.location.origin}/designer?tab=featured`,
+        cancelUrl: `${window.location.origin}/designer?tab=featured&payment_cancelled=true`,
       });
       if (!response.success) {
-        setDashboardLoadError(response.message || 'Unable to confirm featured request payment.');
+        setDashboardLoadError(response.message || 'Unable to create featured payment session.');
         return;
       }
+      const nextReference = String(response.data?.paymentIntentId || response.data?.reference || '').trim();
+      handleFeaturedPaymentDraftChange(requestId, {
+        providerKey: String(response.data?.providerKey || providerKey),
+        reference: nextReference,
+      });
+      if (response.data?.checkoutUrl) {
+        window.open(String(response.data.checkoutUrl), '_blank', 'noopener,noreferrer');
+      }
+      setFeaturedPaymentMessage(
+        response.message || 'Payment session created. Complete payment, then click Verify Payment to activate.'
+      );
+    } catch (error: any) {
+      setDashboardLoadError(error?.response?.data?.message || error?.message || 'Unable to create payment session.');
+    } finally {
+      setFeaturedPaymentActionRequestId(null);
+    }
+  };
+
+  const handleVerifyFeaturedPayment = async (requestId: string) => {
+    if (!canUploadByProfile) return;
+    const draft = featuredPaymentDrafts[requestId];
+    if (!draft?.providerKey || !draft.reference) {
+      setDashboardLoadError('Create a payment session first to generate a payment reference.');
+      return;
+    }
+    try {
+      setFeaturedPaymentActionRequestId(requestId);
+      setDashboardLoadError(null);
+      setFeaturedPaymentMessage(null);
+      const response = await api.featuredRequests.verifyPayment(requestId, {
+        providerKey: draft.providerKey,
+        reference: draft.reference,
+      });
+      if (!response.success) {
+        setDashboardLoadError(response.message || 'Unable to verify featured request payment.');
+        return;
+      }
+      setFeaturedPaymentMessage(response.message || 'Payment verified and featured request activated.');
       await fetchDashboardData();
     } catch (error: any) {
-      setDashboardLoadError(error?.response?.data?.message || error?.message || 'Unable to confirm payment.');
+      setDashboardLoadError(error?.response?.data?.message || error?.message || 'Unable to verify payment.');
+    } finally {
+      setFeaturedPaymentActionRequestId(null);
     }
   };
 
@@ -3081,6 +3237,11 @@ export default function DesignerDashboard() {
 
           <div className="rounded-xl border bg-white p-5">
             <h3 className="text-base font-semibold text-gray-900 mb-3">My Featured Requests</h3>
+            {featuredPaymentMessage ? (
+              <div className="mb-3 rounded border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+                {featuredPaymentMessage}
+              </div>
+            ) : null}
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                 <thead className="bg-gray-50">
@@ -3115,9 +3276,58 @@ export default function DesignerDashboard() {
                       <td className="px-3 py-2">${Number(request.approvedPriceUsd || 0).toFixed(2)}</td>
                       <td className="px-3 py-2">
                         {request.requestStatus === 'APPROVED_AWAITING_PAYMENT' ? (
-                          <Button size="sm" onClick={() => handlePayFeaturedRequest(request.id)} disabled={!canUploadByProfile}>
-                            Pay & Activate
-                          </Button>
+                          <div className="space-y-2">
+                            <select
+                              value={getFeaturedPaymentDraft(request).providerKey}
+                              onChange={(event) =>
+                                handleFeaturedPaymentDraftChange(request.id, { providerKey: event.target.value })
+                              }
+                              className="w-full rounded border px-2 py-1 text-xs"
+                              disabled={featuredPaymentActionRequestId === request.id}
+                            >
+                              {featuredPaymentProviders.length === 0 ? (
+                                <option value="">No payment providers</option>
+                              ) : null}
+                              {featuredPaymentProviders.map((provider) => (
+                                <option key={provider.providerKey} value={provider.providerKey}>
+                                  {provider.displayName} ({provider.mode})
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              value={getFeaturedPaymentDraft(request).reference}
+                              onChange={(event) =>
+                                handleFeaturedPaymentDraftChange(request.id, { reference: event.target.value })
+                              }
+                              placeholder="Payment reference"
+                              className="w-full rounded border px-2 py-1 text-xs"
+                              disabled={featuredPaymentActionRequestId === request.id}
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                type="button"
+                                onClick={() => handleCreateFeaturedPaymentSession(request.id)}
+                                disabled={!canUploadByProfile || featuredPaymentActionRequestId === request.id}
+                              >
+                                {featuredPaymentActionRequestId === request.id ? 'Processing...' : 'Pay'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                type="button"
+                                variant="outline"
+                                onClick={() => handleVerifyFeaturedPayment(request.id)}
+                                disabled={
+                                  !canUploadByProfile ||
+                                  featuredPaymentActionRequestId === request.id ||
+                                  !getFeaturedPaymentDraft(request).reference
+                                }
+                              >
+                                Verify
+                              </Button>
+                            </div>
+                          </div>
                         ) : request.requestStatus === 'ACTIVE' ? (
                           <span className="text-xs text-gray-600">
                             Active until {request.activationEndsAt ? new Date(request.activationEndsAt).toLocaleDateString() : '-'}
@@ -3589,14 +3799,31 @@ export default function DesignerDashboard() {
                   <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
                     Existing request status: {activeFeaturedRequestForSelectedReady.requestStatus}
                     {activeFeaturedRequestForSelectedReady.requestStatus === 'APPROVED_AWAITING_PAYMENT' ? (
-                      <button
-                        type="button"
-                        className="ml-2 underline disabled:cursor-not-allowed disabled:opacity-60"
-                        onClick={() => handlePayFeaturedRequest(activeFeaturedRequestForSelectedReady.id)}
-                        disabled={!canUploadByProfile}
-                      >
-                        Pay & Activate
-                      </button>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          type="button"
+                          onClick={() => handleCreateFeaturedPaymentSession(activeFeaturedRequestForSelectedReady.id)}
+                          disabled={!canUploadByProfile || featuredPaymentActionRequestId === activeFeaturedRequestForSelectedReady.id}
+                        >
+                          {featuredPaymentActionRequestId === activeFeaturedRequestForSelectedReady.id
+                            ? 'Processing...'
+                            : 'Open Payment'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                          onClick={() => handleVerifyFeaturedPayment(activeFeaturedRequestForSelectedReady.id)}
+                          disabled={
+                            !canUploadByProfile ||
+                            featuredPaymentActionRequestId === activeFeaturedRequestForSelectedReady.id ||
+                            !getFeaturedPaymentDraft(activeFeaturedRequestForSelectedReady).reference
+                          }
+                        >
+                          Verify Payment
+                        </Button>
+                      </div>
                     ) : null}
                   </div>
                 ) : null}
@@ -4084,14 +4311,31 @@ export default function DesignerDashboard() {
                   <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
                     Existing request status: {activeFeaturedRequestForSelectedDesign.requestStatus}
                     {activeFeaturedRequestForSelectedDesign.requestStatus === 'APPROVED_AWAITING_PAYMENT' ? (
-                      <button
-                        type="button"
-                        className="ml-2 underline disabled:cursor-not-allowed disabled:opacity-60"
-                        onClick={() => handlePayFeaturedRequest(activeFeaturedRequestForSelectedDesign.id)}
-                        disabled={!canUploadByProfile}
-                      >
-                        Pay & Activate
-                      </button>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          type="button"
+                          onClick={() => handleCreateFeaturedPaymentSession(activeFeaturedRequestForSelectedDesign.id)}
+                          disabled={!canUploadByProfile || featuredPaymentActionRequestId === activeFeaturedRequestForSelectedDesign.id}
+                        >
+                          {featuredPaymentActionRequestId === activeFeaturedRequestForSelectedDesign.id
+                            ? 'Processing...'
+                            : 'Open Payment'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                          onClick={() => handleVerifyFeaturedPayment(activeFeaturedRequestForSelectedDesign.id)}
+                          disabled={
+                            !canUploadByProfile ||
+                            featuredPaymentActionRequestId === activeFeaturedRequestForSelectedDesign.id ||
+                            !getFeaturedPaymentDraft(activeFeaturedRequestForSelectedDesign).reference
+                          }
+                        >
+                          Verify Payment
+                        </Button>
+                      </div>
                     ) : null}
                   </div>
                 ) : null}

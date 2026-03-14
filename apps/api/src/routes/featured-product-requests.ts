@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma, ProductType, ProductStatus, UserRole } from '../db';
 import { authenticate } from '../middleware/auth';
+import { createPaymentSessionForUser, verifyPaymentForUser } from './payments';
 
 const router = Router();
 router.use(authenticate);
@@ -351,6 +352,67 @@ const requireVendor = (role: UserRole) => {
     throw Object.assign(new Error('Only Seller or Designer can perform this action.'), { status: 403 });
   }
 };
+
+const normalizeProviderKey = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_]/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64);
+
+async function resolveVendorCountry(userId: string, role: UserRole): Promise<string> {
+  if (role === UserRole.FABRIC_SELLER) {
+    const profile = await prisma.fabricSellerProfile.findFirst({
+      where: { userId },
+      select: { country: true },
+    });
+    return String(profile?.country || '').trim();
+  }
+  if (role === UserRole.FASHION_DESIGNER) {
+    const profile = await prisma.designerProfile.findFirst({
+      where: { userId },
+      select: { country: true },
+    });
+    return String(profile?.country || '').trim();
+  }
+  return '';
+}
+
+async function readActivePaymentProviderKeys(): Promise<string[]> {
+  let active: string[] = [];
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<{ providerKey: string }>>(
+      `SELECT "providerKey"
+       FROM "PaymentIntegration"
+       WHERE "isActive" = TRUE`
+    );
+    active = Array.from(
+      new Set(
+        (rows || [])
+          .map((row) => normalizeProviderKey(row.providerKey))
+          .filter(Boolean)
+      )
+    );
+  } catch {
+    active = [];
+  }
+  if (!active.includes('STRIPE') && String(process.env.STRIPE_SECRET_KEY || '').trim()) {
+    active.push('STRIPE');
+  }
+  return active;
+}
+
+function resolveDefaultProviderByCountry(country: string, availableProviders: string[]) {
+  const list = Array.from(new Set(availableProviders.map((entry) => normalizeProviderKey(entry)).filter(Boolean)));
+  if (list.length === 0) return '';
+  const countryToken = String(country || '').trim().toUpperCase();
+  const preferred = countryToken ? ['FLUTTERWAVE', 'PAYPAL', 'STRIPE'] : ['STRIPE', 'PAYPAL', 'FLUTTERWAVE'];
+  for (const key of preferred) {
+    if (list.includes(key)) return key;
+  }
+  return list[0] || '';
+}
 
 async function assertVendorOwnsProducts(userId: string, role: UserRole, entries: RequestedProductEntry[]) {
   if (entries.length === 0) {
@@ -839,14 +901,15 @@ router.patch('/admin/requests/:id/review', async (req, res, next) => {
   }
 });
 
-router.post('/requests/:id/pay', async (req, res, next) => {
+router.post('/requests/:id/payment-session', async (req, res, next) => {
   try {
     const user = req.user!;
     requireVendor(user.role);
     const payload = z
       .object({
-        providerKey: z.string().trim().min(2).max(32).optional(),
-        paymentReference: z.string().trim().min(3).max(120),
+        providerKey: z.string().trim().min(2).max(40).optional(),
+        returnUrl: z.string().trim().optional(),
+        cancelUrl: z.string().trim().optional(),
       })
       .strict()
       .parse(req.body || {});
@@ -863,6 +926,148 @@ router.post('/requests/:id/pay', async (req, res, next) => {
     if (String(current.requestStatus || '').toUpperCase() !== 'APPROVED_AWAITING_PAYMENT') {
       return res.status(400).json({ success: false, message: 'Featured request is not awaiting payment.' });
     }
+    const amountUsd = Number(current.approvedPriceUsd || 0);
+    if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Approved featured request price is invalid.',
+      });
+    }
+    const activeProviderKeys = await readActivePaymentProviderKeys();
+    if (activeProviderKeys.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No active payment provider found. Configure Payment API in admin dashboard.',
+      });
+    }
+    const vendorCountry = await resolveVendorCountry(String(user.id), user.role);
+    const requestedProvider = normalizeProviderKey(payload.providerKey);
+    const providerKey = requestedProvider || resolveDefaultProviderByCountry(vendorCountry, activeProviderKeys);
+    if (!providerKey || !activeProviderKeys.includes(providerKey)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Selected payment provider is not active for this request.',
+      });
+    }
+    const session = await createPaymentSessionForUser({
+      user: {
+        id: String(user.id),
+        email: String(user.email || ''),
+        firstName: user.firstName,
+        lastName: user.lastName,
+      },
+      providerKey,
+      amount: Math.round(amountUsd * 100),
+      currency: 'USD',
+      reference: `AF-FEAT-${String(current.id)}-${Date.now()}`,
+      returnUrl: payload.returnUrl,
+      cancelUrl: payload.cancelUrl,
+      customer: {
+        email: String(user.email || ''),
+        name: `${String(user.firstName || '')} ${String(user.lastName || '')}`.trim() || String(user.email || ''),
+      },
+    });
+    const requestColumns = await readTableColumns('FeaturedProductRequest');
+    const assignments: string[] = [];
+    const params: unknown[] = [String(current.id)];
+    if (requestColumns.has('paymentstatus')) assignments.push(`"paymentStatus" = 'PENDING'`);
+    if (requestColumns.has('paymentproviderkey')) {
+      params.push(String(session.providerKey || providerKey));
+      assignments.push(`"paymentProviderKey" = $${params.length}`);
+    }
+    if (requestColumns.has('paymentreference')) {
+      params.push(String(session.paymentIntentId || session.reference || '').trim());
+      assignments.push(`"paymentReference" = $${params.length}`);
+    }
+    if (requestColumns.has('updatedat')) assignments.push(`"updatedAt" = NOW()`);
+    if (assignments.length > 0) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "FeaturedProductRequest"
+         SET ${assignments.join(', ')}
+         WHERE "id" = $1`,
+        ...params
+      );
+    }
+    res.json({
+      success: true,
+      data: {
+        ...session,
+        amountUsd,
+        vendorCountry,
+      },
+      message: 'Payment session created. Complete payment and verify to activate featured products.',
+    });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    if (error?.status) {
+      return res.status(error.status).json({ success: false, message: error.message || 'Request failed.' });
+    }
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Failed to create featured request payment session on this deployment.',
+    });
+  }
+});
+
+router.post('/requests/:id/payment-verify', async (req, res, next) => {
+  try {
+    const user = req.user!;
+    requireVendor(user.role);
+    const payload = z
+      .object({
+        providerKey: z.string().trim().min(2).max(40).optional(),
+        reference: z.string().trim().min(4).optional(),
+        payerId: z.string().trim().optional(),
+      })
+      .strict()
+      .parse(req.body || {});
+    await ensureFeaturedRequestSchema();
+    const rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT * FROM "FeaturedProductRequest" WHERE "id" = $1 LIMIT 1`,
+      String(req.params.id || '')
+    );
+    const current = rows[0];
+    if (!current) return res.status(404).json({ success: false, message: 'Featured request not found.' });
+    if (String(current.requesterUserId) !== String(user.id)) {
+      return res.status(403).json({ success: false, message: 'You can only verify your own featured request.' });
+    }
+    const requestStatus = String(current.requestStatus || '').toUpperCase();
+    const paymentStatus = String(current.paymentStatus || '').toUpperCase();
+    if (requestStatus === 'ACTIVE' && paymentStatus === 'PAID') {
+      return res.json({
+        success: true,
+        message: 'Featured request is already active and paid.',
+        data: {
+          requestId: String(current.id),
+          activationEndsAt: current.activationEndsAt ? new Date(current.activationEndsAt).toISOString() : null,
+        },
+      });
+    }
+    if (requestStatus !== 'APPROVED_AWAITING_PAYMENT') {
+      return res.status(400).json({ success: false, message: 'Featured request is not awaiting payment.' });
+    }
+    const providerKey = normalizeProviderKey(payload.providerKey || current.paymentProviderKey || '');
+    const reference = String(payload.reference || current.paymentReference || '').trim();
+    if (!providerKey || !reference) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment provider and payment reference are required. Create a payment session first.',
+      });
+    }
+    const verification = await verifyPaymentForUser({
+      userId: String(user.id),
+      providerKey,
+      reference,
+      payerId: payload.payerId,
+    });
+    if (!verification.isPaid) {
+      return res.status(400).json({
+        success: false,
+        message: `Payment is not completed yet (status: ${verification.status}).`,
+      });
+    }
     const durationValue = Math.max(1, Number(current.approvedDurationValue || 1));
     const durationUnit = normalizeDurationUnit(current.approvedDurationUnit || 'WEEKS');
     const now = new Date();
@@ -873,19 +1078,19 @@ router.post('/requests/:id/pay', async (req, res, next) => {
     const params: unknown[] = [String(current.id)];
     if (requestColumns.has('paymentstatus')) assignments.push(`"paymentStatus" = 'PAID'`);
     if (requestColumns.has('paymentproviderkey')) {
-      params.push(String(payload.providerKey || 'MANUAL').toUpperCase());
+      params.push(providerKey);
       assignments.push(`"paymentProviderKey" = $${params.length}`);
     }
     if (requestColumns.has('paymentreference')) {
-      params.push(String(payload.paymentReference).trim());
+      params.push(String(verification.paymentReference || reference));
       assignments.push(`"paymentReference" = $${params.length}`);
     }
     if (requestColumns.has('paidat')) assignments.push(`"paidAt" = NOW()`);
     if (requestColumns.has('requeststatus')) assignments.push(`"requestStatus" = 'ACTIVE'`);
     if (requestColumns.has('activationstartedat')) assignments.push(`"activationStartedAt" = NOW()`);
     if (requestColumns.has('activationendsat')) {
-      params.push(endsAt.toISOString());
-      assignments.push(`"activationEndsAt" = $${params.length}::timestamp`);
+      params.push(endsAt);
+      assignments.push(`"activationEndsAt" = $${params.length}`);
     }
     if (requestColumns.has('updatedat')) assignments.push(`"updatedAt" = NOW()`);
     if (assignments.length === 0) {
@@ -900,7 +1105,7 @@ router.post('/requests/:id/pay', async (req, res, next) => {
     await upsertFeaturedProducts(entries);
     res.json({
       success: true,
-      message: 'Featured request payment confirmed and products activated.',
+      message: 'Payment verified successfully. Featured products are now activated.',
       data: {
         requestId: String(current.id),
         activationEndsAt: endsAt.toISOString(),
