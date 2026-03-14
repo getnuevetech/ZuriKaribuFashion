@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Package, 
   DollarSign, 
@@ -430,6 +430,7 @@ export default function SellerDashboard() {
   const [profileForm, setProfileForm] = useState<Record<string, string>>({});
   const [profileFileValues, setProfileFileValues] = useState<Record<string, string[]>>({});
   const [uploadingProfileField, setUploadingProfileField] = useState<string | null>(null);
+  const profileUploadInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [submittingProfile, setSubmittingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [, setGovernanceDebug] = useState<GovernanceDebugInfo | null>(null);
@@ -1425,9 +1426,6 @@ export default function SellerDashboard() {
                       ? '.pdf,.doc,.docx,.txt,.rtf,.odt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.oasis.opendocument.text'
                       : '.jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.txt,.rtf,.odt,image/jpeg,image/png,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.oasis.opendocument.text';
                   const uploadedFiles = profileFileValues[field.key] || [];
-                  const uploadInputId = `seller-profile-upload-${String(field.key || '')
-                    .toLowerCase()
-                    .replace(/[^a-z0-9_-]/g, '-')}`;
                   const isCountryField = isCountryGovernanceField(field);
                   const isCityField = isCityGovernanceField(field);
                   return (
@@ -1501,10 +1499,12 @@ export default function SellerDashboard() {
                       ) : isUploadField ? (
                         <div className="space-y-2">
                           <input
-                            id={uploadInputId}
                             type="file"
                             multiple
                             accept={uploadAccept}
+                            ref={(node) => {
+                              profileUploadInputRefs.current[field.key] = node;
+                            }}
                             onChange={(event) => {
                               handleProfileFieldFileUpload(field, event.target.files);
                               event.target.value = '';
@@ -1513,15 +1513,16 @@ export default function SellerDashboard() {
                             disabled={uploadingProfileField === field.key}
                           />
                           <div className="flex items-center gap-2">
-                            <label
-                              htmlFor={uploadInputId}
+                            <button
+                              type="button"
+                              onClick={() => profileUploadInputRefs.current[field.key]?.click()}
                               className={`inline-flex cursor-pointer items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900 transition-colors ${
                                 uploadingProfileField === field.key ? 'pointer-events-none opacity-60' : 'hover:bg-gray-100'
                               }`}
                             >
                               <Upload className="mr-2 h-4 w-4" />
                               {uploadingProfileField === field.key ? 'Uploading...' : 'Choose file(s)'}
-                            </label>
+                            </button>
                             <span className="text-xs text-gray-500">
                               {isImageUploadField
                                 ? 'Images only'
