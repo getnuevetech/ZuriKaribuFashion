@@ -30,6 +30,7 @@ import {
   Mail,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import DashboardErrorBoundary from '../components/DashboardErrorBoundary';
 
 import { 
   User, 
@@ -879,7 +880,9 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
 
         {/* Page Content */}
         <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
-          <Outlet />
+          <DashboardErrorBoundary>
+            <Outlet />
+          </DashboardErrorBoundary>
         </main>
       </div>
 
