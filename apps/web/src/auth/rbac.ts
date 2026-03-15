@@ -32,17 +32,35 @@ export function normalizeRole(role: string | undefined | null): UserRole | null 
   if (!role) {
     return null;
   }
-  if (role === 'DESIGNER') {
+  const normalized = String(role || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
+  if (!normalized) return null;
+
+  if (normalized === 'DESIGNER' || normalized === 'FASHION_DESIGNER' || normalized === 'FASHIONDESIGNER') {
     return 'FASHION_DESIGNER';
   }
+  if (normalized === 'SELLER' || normalized === 'FABRIC_SELLER' || normalized === 'FABRICSELLER') {
+    return 'FABRIC_SELLER';
+  }
+  if (normalized === 'CUSTOMER') {
+    return 'CUSTOMER';
+  }
+  if (normalized === 'QA' || normalized === 'QA_TEAM' || normalized === 'QATEAM') {
+    return 'QA_TEAM';
+  }
+  if (normalized === 'ADMIN' || normalized === 'ADMINISTRATOR') {
+    return 'ADMINISTRATOR';
+  }
   if (
-    role === 'CUSTOMER' ||
-    role === 'FABRIC_SELLER' ||
-    role === 'FASHION_DESIGNER' ||
-    role === 'QA_TEAM' ||
-    role === 'ADMINISTRATOR'
+    normalized === 'CUSTOMER' ||
+    normalized === 'FABRIC_SELLER' ||
+    normalized === 'FASHION_DESIGNER' ||
+    normalized === 'QA_TEAM' ||
+    normalized === 'ADMINISTRATOR'
   ) {
-    return role;
+    return normalized;
   }
   return null;
 }
