@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { googleLogout } from '@react-oauth/google';
 import type { User, AuthState } from '../types';
 
 interface AuthStore extends AuthState {
@@ -30,12 +31,21 @@ export const useAuthStore = create<AuthStore>()(
         isLoading: false,
       }),
       
-      logout: () => set({
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-      }),
+      logout: () => {
+        try {
+          if (typeof window !== 'undefined') {
+            googleLogout();
+          }
+        } catch {
+          // Ignore Google session cleanup failures.
+        }
+        set({
+          user: null,
+          token: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
+      },
       
       setLoading: (isLoading) => set({ isLoading }),
       

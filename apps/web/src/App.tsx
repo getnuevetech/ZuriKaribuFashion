@@ -410,31 +410,29 @@ function App() {
 
             {/* Seller Routes */}
             <Route element={<ProtectedRoute allowedRoles={['FABRIC_SELLER']} />}>
-              <Route element={<DashboardLayout userType="seller" />}>
-                <Route path="/seller" element={<SellerDashboard />} />
-                <Route path="/seller/" element={<SellerDashboard />} />
-                <Route path="/seller/dashboard" element={<SellerDashboard />} />
-                <Route path="/seller/payments" element={<SellerPayments />} />
-                <Route path="/seller/profile" element={<SellerProfilePage />} />
-                <Route path="/seller/enterprise" element={<SellerEnterprisePage />} />
-                <Route path="/seller/enterprise/role-management" element={<SellerEnterpriseRoleManagementPage />} />
-                <Route path="/seller/messages" element={<SellerMessagesPage />} />
-                <Route path="/seller/*" element={<Navigate to="/seller" replace />} />
+              <Route path="/seller" element={<DashboardLayout userType="seller" />}>
+                <Route index element={<SellerDashboard />} />
+                <Route path="dashboard" element={<SellerDashboard />} />
+                <Route path="payments" element={<SellerPayments />} />
+                <Route path="profile" element={<SellerProfilePage />} />
+                <Route path="enterprise" element={<SellerEnterprisePage />} />
+                <Route path="enterprise/role-management" element={<SellerEnterpriseRoleManagementPage />} />
+                <Route path="messages" element={<SellerMessagesPage />} />
+                <Route path="*" element={<Navigate to="/seller" replace />} />
               </Route>
             </Route>
 
             {/* Designer Routes */}
             <Route element={<ProtectedRoute allowedRoles={['FASHION_DESIGNER']} />}>
-              <Route element={<DashboardLayout userType="designer" />}>
-                <Route path="/designer" element={<DesignerDashboard />} />
-                <Route path="/designer/" element={<DesignerDashboard />} />
-                <Route path="/designer/dashboard" element={<DesignerDashboard />} />
-                <Route path="/designer/payments" element={<DesignerPayments />} />
-                <Route path="/designer/profile" element={<DesignerProfilePage />} />
-                <Route path="/designer/enterprise" element={<DesignerEnterprisePage />} />
-                <Route path="/designer/enterprise/role-management" element={<DesignerEnterpriseRoleManagementPage />} />
-                <Route path="/designer/messages" element={<DesignerMessagesPage />} />
-                <Route path="/designer/*" element={<Navigate to="/designer" replace />} />
+              <Route path="/designer" element={<DashboardLayout userType="designer" />}>
+                <Route index element={<DesignerDashboard />} />
+                <Route path="dashboard" element={<DesignerDashboard />} />
+                <Route path="payments" element={<DesignerPayments />} />
+                <Route path="profile" element={<DesignerProfilePage />} />
+                <Route path="enterprise" element={<DesignerEnterprisePage />} />
+                <Route path="enterprise/role-management" element={<DesignerEnterpriseRoleManagementPage />} />
+                <Route path="messages" element={<DesignerMessagesPage />} />
+                <Route path="*" element={<Navigate to="/designer" replace />} />
               </Route>
             </Route>
 
