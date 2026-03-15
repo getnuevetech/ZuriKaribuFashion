@@ -5849,6 +5849,13 @@ const adminApi = {
     page?: number;
     limit?: number;
   }) => apiService.get<{ success: boolean; data: any }>('/admin/security/session-audit', { params }),
+  getActivityLogs: (params?: {
+    role?: 'ADMINISTRATOR' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'CUSTOMER' | 'QA_TEAM';
+    userQuery?: string;
+    action?: string;
+    page?: number;
+    limit?: number;
+  }) => apiService.get<{ success: boolean; data: any }>('/admin/activity-logs', { params }),
 
   getNotificationTemplates: () =>
     apiService.get<{ success: boolean; data: any[] }>('/admin/notification-center/templates'),
@@ -8778,6 +8785,15 @@ const enterpriseApi = {
       `/enterprise/upgrade-requests/${requestId}/payment-verify`,
       payload
     ),
+  getActivityLogs: (params?: {
+    userQuery?: string;
+    action?: string;
+    page?: number;
+    limit?: number;
+  }) =>
+    apiService.get<{ success: boolean; data: any }>('/enterprise/activity-logs', {
+      params,
+    }),
 };
 
 // Export combined API

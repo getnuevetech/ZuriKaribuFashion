@@ -2648,7 +2648,7 @@ router.get('/traffic-report', async (req, res, next) => {
   }
 });
 
-router.get('/security/session-audit', async (req, res, next) => {
+router.get('/security/session-audit', authorizePermissions(Permissions.SESSION_AUDIT_READ), async (req, res, next) => {
   try {
     const querySchema = z.object({
       action: z.enum(['VENDOR_SESSION_STARTED', 'VENDOR_SESSION_REPLACED', 'VENDOR_SESSION_LOGOUT']).optional(),
@@ -2717,6 +2717,92 @@ router.get('/security/session-audit', async (req, res, next) => {
             },
           };
         }),
+        pagination: {
+          page: pagination.page,
+          limit: pagination.limit,
+          total,
+          pages: Math.max(1, Math.ceil(total / pagination.limit)),
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/activity-logs', authorizePermissions(Permissions.SESSION_AUDIT_READ), async (req, res, next) => {
+  try {
+    const querySchema = z.object({
+      role: z
+        .enum(['ADMINISTRATOR', 'FABRIC_SELLER', 'FASHION_DESIGNER', 'CUSTOMER', 'QA_TEAM'])
+        .optional(),
+      userQuery: z.string().trim().max(120).optional(),
+      action: z.string().trim().max(120).optional(),
+      page: z.string().optional(),
+      limit: z.string().optional(),
+    });
+    const query = querySchema.parse(req.query || {});
+    if (query.role && !query.userQuery) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter username or email to pull role-specific activity logs.',
+      });
+    }
+    const pagination = parsePagination(query.page, query.limit, 25);
+    const where: any = {};
+    if (query.role) {
+      where.user = { role: query.role };
+    }
+    if (query.action) {
+      where.action = { contains: query.action, mode: 'insensitive' };
+    }
+    if (query.userQuery) {
+      const token = String(query.userQuery || '').trim();
+      where.user = {
+        ...(where.user || {}),
+        OR: [
+          { email: { contains: token, mode: 'insensitive' } },
+          { firstName: { contains: token, mode: 'insensitive' } },
+          { lastName: { contains: token, mode: 'insensitive' } },
+        ],
+      };
+    }
+
+    const [rows, total] = await Promise.all([
+      prisma.activityLog.findMany({
+        where,
+        skip: pagination.skip,
+        take: pagination.limit,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          userId: true,
+          action: true,
+          details: true,
+          ipAddress: true,
+          userAgent: true,
+          createdAt: true,
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              role: true,
+            },
+          },
+        },
+      }),
+      prisma.activityLog.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        logs: rows.map((row) => ({
+          ...row,
+          details: row.details && typeof row.details === 'object' ? row.details : null,
+        })),
         pagination: {
           page: pagination.page,
           limit: pagination.limit,

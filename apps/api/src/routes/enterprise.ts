@@ -206,6 +206,111 @@ router.get('/me', async (req, res, next) => {
   }
 });
 
+router.get('/activity-logs', async (req, res, next) => {
+  try {
+    await ensureEnterpriseSchema();
+    const actor = await resolveVendorActor(req);
+    const query = z
+      .object({
+        userQuery: z.string().trim().max(120).optional(),
+        action: z.string().trim().max(120).optional(),
+        page: z.string().optional(),
+        limit: z.string().optional(),
+      })
+      .parse(req.query || {});
+    const pagination = parsePagination(query.page, query.limit, 20);
+    const enterpriseAccountId = String(actor.account.id || '');
+    const subRows = await prisma.$queryRawUnsafe<Array<{ subUserId: string }>>(
+      `SELECT "subUserId"
+       FROM "EnterpriseSubAccount"
+       WHERE "enterpriseAccountId" = $1`,
+      enterpriseAccountId
+    );
+    const userIds = Array.from(
+      new Set([
+        actor.ownerUserId,
+        ...subRows.map((row) => String(row.subUserId || '').trim()).filter(Boolean),
+      ])
+    );
+    if (userIds.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          logs: [],
+          pagination: {
+            page: pagination.page,
+            limit: pagination.limit,
+            total: 0,
+            pages: 1,
+          },
+        },
+      });
+    }
+    const where: any = {
+      userId: { in: userIds },
+    };
+    if (query.action) {
+      where.action = { contains: query.action, mode: 'insensitive' };
+    }
+    if (query.userQuery) {
+      const token = String(query.userQuery || '').trim();
+      where.user = {
+        OR: [
+          { email: { contains: token, mode: 'insensitive' } },
+          { firstName: { contains: token, mode: 'insensitive' } },
+          { lastName: { contains: token, mode: 'insensitive' } },
+        ],
+      };
+    }
+
+    const [rows, total] = await Promise.all([
+      prisma.activityLog.findMany({
+        where,
+        skip: pagination.skip,
+        take: pagination.limit,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          userId: true,
+          action: true,
+          details: true,
+          ipAddress: true,
+          userAgent: true,
+          createdAt: true,
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              role: true,
+            },
+          },
+        },
+      }),
+      prisma.activityLog.count({ where }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        logs: rows.map((row) => ({
+          ...row,
+          details: row.details && typeof row.details === 'object' ? row.details : null,
+        })),
+        pagination: {
+          page: pagination.page,
+          limit: pagination.limit,
+          total,
+          pages: Math.max(1, Math.ceil(total / pagination.limit)),
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/roles', async (req, res, next) => {
   try {
     const actor = await resolveVendorActor(req);

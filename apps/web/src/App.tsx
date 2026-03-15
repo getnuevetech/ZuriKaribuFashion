@@ -199,13 +199,14 @@ function App() {
                   }
                 />
                 <Route
-                  path="/admin/session-audit"
+                  path="/admin/activity-logs"
                   element={
                     <AdminPermissionGuard required={['session_audit:read']}>
                       <AdminSessionAudit />
                     </AdminPermissionGuard>
                   }
                 />
+                <Route path="/admin/session-audit" element={<Navigate to="/admin/activity-logs" replace />} />
                 <Route
                   path="/admin/traffic"
                   element={

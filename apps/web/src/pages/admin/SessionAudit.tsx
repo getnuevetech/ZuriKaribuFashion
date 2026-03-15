@@ -1,33 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 
-type SessionAuditAction = 'VENDOR_SESSION_STARTED' | 'VENDOR_SESSION_REPLACED' | 'VENDOR_SESSION_LOGOUT';
-type VendorRole = 'FABRIC_SELLER' | 'FASHION_DESIGNER';
-
-interface SessionAuditEvent {
+type ActivityRole = 'ALL' | 'ADMINISTRATOR' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'CUSTOMER' | 'QA_TEAM';
+type ActivityLogRow = {
   id: string;
-  action: SessionAuditAction;
+  action: string;
   createdAt: string;
   ipAddress?: string | null;
   userAgent?: string | null;
-  user: {
+  details?: Record<string, any> | null;
+  user?: {
     id: string;
     email: string;
     firstName?: string;
     lastName?: string;
-    role: string;
-  };
-  details: {
-    role?: string | null;
-    deviceType?: string;
-    sessionIssuedAt?: number | null;
-    previousSessionAt?: string | null;
-  };
-}
+    role?: string;
+  } | null;
+};
 
-interface SessionAuditResponse {
-  events: SessionAuditEvent[];
+interface ActivityLogResponse {
+  logs: ActivityLogRow[];
   pagination: {
     page: number;
     limit: number;
@@ -36,45 +29,57 @@ interface SessionAuditResponse {
   };
 }
 
-const actionLabel: Record<SessionAuditAction, string> = {
-  VENDOR_SESSION_STARTED: 'Session started',
-  VENDOR_SESSION_REPLACED: 'Session replaced',
-  VENDOR_SESSION_LOGOUT: 'Session logout',
-};
+const ROLE_TABS: Array<{ key: ActivityRole; label: string }> = [
+  { key: 'ALL', label: 'All Activity' },
+  { key: 'ADMINISTRATOR', label: 'Admin Activity' },
+  { key: 'FABRIC_SELLER', label: 'Seller Activity' },
+  { key: 'FASHION_DESIGNER', label: 'Designer Activity' },
+  { key: 'CUSTOMER', label: 'Customer Activity' },
+  { key: 'QA_TEAM', label: 'QA Activity' },
+];
 
 export default function AdminSessionAudit() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [data, setData] = useState<SessionAuditResponse>({
-    events: [],
-    pagination: { page: 1, limit: 20, total: 0, pages: 1 },
+  const [data, setData] = useState<ActivityLogResponse>({
+    logs: [],
+    pagination: { page: 1, limit: 25, total: 0, pages: 1 },
   });
-
+  const [roleTab, setRoleTab] = useState<ActivityRole>('ALL');
+  const [userQuery, setUserQuery] = useState('');
   const [actionFilter, setActionFilter] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
-  const [userIdFilter, setUserIdFilter] = useState('');
   const [page, setPage] = useState(1);
 
+  const searchRequired = roleTab !== 'ALL';
+
   const load = async (nextPage = page) => {
+    if (searchRequired && !String(userQuery || '').trim()) {
+      setError(`Enter username or email to pull ${ROLE_TABS.find((tab) => tab.key === roleTab)?.label?.toLowerCase() || 'role'} logs.`);
+      setData({
+        logs: [],
+        pagination: { page: 1, limit: 25, total: 0, pages: 1 },
+      });
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError('');
-      const response = await api.admin.getSessionAudit({
-        action: (actionFilter || undefined) as SessionAuditAction | undefined,
-        role: (roleFilter || undefined) as VendorRole | undefined,
-        userId: userIdFilter.trim() || undefined,
+      const response = await api.admin.getActivityLogs({
+        role: roleTab === 'ALL' ? undefined : roleTab,
+        userQuery: userQuery.trim() || undefined,
+        action: actionFilter.trim() || undefined,
         page: nextPage,
-        limit: 20,
+        limit: 25,
       });
-
       if (response.success) {
-        setData(response.data);
-        setPage(response.data.pagination?.page || nextPage);
+        setData(response.data || { logs: [], pagination: { page: 1, limit: 25, total: 0, pages: 1 } });
+        setPage(response.data?.pagination?.page || nextPage);
       } else {
-        setError('Failed to load session audit.');
+        setError('Failed to load activity logs.');
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to load session audit.');
+      setError(err?.response?.data?.message || 'Failed to load activity logs.');
     } finally {
       setLoading(false);
     }
@@ -89,56 +94,67 @@ export default function AdminSessionAudit() {
     void load(1);
   };
 
-  const getUserDisplayName = (event: SessionAuditEvent) => {
-    const fullName = `${event.user?.firstName || ''} ${event.user?.lastName || ''}`.trim();
-    return fullName || event.user?.email || 'Unknown user';
+  const roleBadge = useMemo(() => {
+    if (roleTab === 'ALL') return 'All users';
+    return ROLE_TABS.find((tab) => tab.key === roleTab)?.label || roleTab;
+  }, [roleTab]);
+
+  const userName = (row: ActivityLogRow) => {
+    const fullName = `${row.user?.firstName || ''} ${row.user?.lastName || ''}`.trim();
+    return fullName || row.user?.email || 'Unknown user';
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Session Audit</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Activity Logs</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Track seller/designer login sessions, replacements, and logouts.
+          Operations audit for all user types. Use username/email to pull role-specific logs.
         </p>
       </div>
 
-      <div className="rounded-xl border bg-white p-4">
+      <div className="rounded-xl border bg-white p-4 space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {ROLE_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setRoleTab(tab.key)}
+              className={`rounded border px-3 py-1.5 text-sm ${
+                roleTab === tab.key
+                  ? 'border-black bg-black text-white'
+                  : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-          <select
-            value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value)}
-            className="rounded-lg border px-3 py-2"
-          >
-            <option value="">All actions</option>
-            <option value="VENDOR_SESSION_STARTED">Session started</option>
-            <option value="VENDOR_SESSION_REPLACED">Session replaced</option>
-            <option value="VENDOR_SESSION_LOGOUT">Session logout</option>
-          </select>
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="rounded-lg border px-3 py-2"
-          >
-            <option value="">All vendor roles</option>
-            <option value="FABRIC_SELLER">Fabric Seller</option>
-            <option value="FASHION_DESIGNER">Fashion Designer</option>
-          </select>
           <input
-            value={userIdFilter}
-            onChange={(e) => setUserIdFilter(e.target.value)}
-            placeholder="Filter by User ID"
+            value={userQuery}
+            onChange={(e) => setUserQuery(e.target.value)}
+            placeholder={searchRequired ? 'Enter username or email (required)' : 'Username or email (optional)'}
             className="rounded-lg border px-3 py-2"
           />
-          <Button onClick={applyFilters}>Apply Filters</Button>
+          <input
+            value={actionFilter}
+            onChange={(e) => setActionFilter(e.target.value)}
+            placeholder="Action contains (optional)"
+            className="rounded-lg border px-3 py-2"
+          />
+          <div className="rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-700">
+            Scope: <span className="font-semibold">{roleBadge}</span>
+          </div>
+          <Button onClick={applyFilters}>Pull Logs</Button>
         </div>
       </div>
 
-      {error && (
+      {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </div>
-      )}
+      ) : null}
 
       {loading ? (
         <div className="flex h-72 items-center justify-center">
@@ -148,7 +164,7 @@ export default function AdminSessionAudit() {
         <div className="rounded-xl border bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm text-gray-500">
-              Page {data.pagination.page} of {Math.max(1, data.pagination.pages)} • {data.pagination.total} events
+              Page {data.pagination.page} of {Math.max(1, data.pagination.pages)} • {data.pagination.total} logs
             </p>
           </div>
           <div className="overflow-auto">
@@ -156,48 +172,54 @@ export default function AdminSessionAudit() {
               <thead>
                 <tr className="text-left text-gray-500">
                   <th className="pb-2 pr-3">Time</th>
-                  <th className="pb-2 pr-3">Vendor</th>
+                  <th className="pb-2 pr-3">User</th>
+                  <th className="pb-2 pr-3">Role</th>
                   <th className="pb-2 pr-3">Action</th>
-                  <th className="pb-2 pr-3">Device</th>
+                  <th className="pb-2 pr-3">Endpoint/Details</th>
                   <th className="pb-2 pr-3">IP</th>
-                  <th className="pb-2">Previous Session</th>
+                  <th className="pb-2">Device</th>
                 </tr>
               </thead>
               <tbody>
-                {data.events.map((event) => (
-                  <tr key={event.id} className="border-t align-top">
-                    <td className="py-2 pr-3 text-gray-700">
-                      {new Date(event.createdAt).toLocaleString()}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <p className="font-medium text-gray-900">{getUserDisplayName(event)}</p>
-                      <p className="text-xs text-gray-500">{event.user?.role}</p>
-                      <p className="text-[11px] text-gray-400">{event.user?.id}</p>
-                    </td>
-                    <td className="py-2 pr-3">{actionLabel[event.action] || event.action}</td>
-                    <td className="py-2 pr-3">
-                      <p>{event.details?.deviceType || 'unknown'}</p>
-                      <p className="line-clamp-1 max-w-[280px] text-[11px] text-gray-400">{event.userAgent || '-'}</p>
-                    </td>
-                    <td className="py-2 pr-3">{event.ipAddress || '-'}</td>
-                    <td className="py-2 text-gray-700">
-                      {event.details?.previousSessionAt
-                        ? new Date(event.details.previousSessionAt).toLocaleString()
-                        : '-'}
-                    </td>
-                  </tr>
-                ))}
-                {data.events.length === 0 && (
+                {data.logs.map((row) => {
+                  const details = (row.details || {}) as Record<string, any>;
+                  const endpointSummary = details?.path
+                    ? `${details.method || 'GET'} ${details.path} (${details.statusCode ?? '-'})`
+                    : details?.deviceType || '-';
+                  return (
+                    <tr key={row.id} className="border-t align-top">
+                      <td className="py-2 pr-3 text-gray-700">{new Date(row.createdAt).toLocaleString()}</td>
+                      <td className="py-2 pr-3">
+                        <p className="font-medium text-gray-900">{userName(row)}</p>
+                        <p className="text-xs text-gray-500">{row.user?.email || '-'}</p>
+                      </td>
+                      <td className="py-2 pr-3">{row.user?.role || '-'}</td>
+                      <td className="py-2 pr-3">
+                        <p className="font-medium text-gray-900">{row.action}</p>
+                      </td>
+                      <td className="py-2 pr-3">
+                        <p>{endpointSummary}</p>
+                        {typeof details?.durationMs === 'number' ? (
+                          <p className="text-[11px] text-gray-400">Duration: {details.durationMs}ms</p>
+                        ) : null}
+                      </td>
+                      <td className="py-2 pr-3">{row.ipAddress || '-'}</td>
+                      <td className="py-2 text-gray-700">
+                        <p className="line-clamp-2 max-w-[280px] text-[11px] text-gray-400">{row.userAgent || '-'}</p>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {data.logs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-gray-500">
-                      No session audit events found.
+                    <td colSpan={7} className="py-10 text-center text-gray-500">
+                      No activity logs found for current filters.
                     </td>
                   </tr>
-                )}
+                ) : null}
               </tbody>
             </table>
           </div>
-
           <div className="mt-4 flex items-center justify-end gap-2">
             <Button
               variant="outline"

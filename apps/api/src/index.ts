@@ -42,6 +42,7 @@ import enterpriseRoutes from './routes/enterprise';
 import adminBackupsRoutes from './routes/admin-backups';
 import productChangeRequestRoutes from './routes/product-change-requests';
 import messageRoutes from './routes/messages';
+import { activityAuditMiddleware } from './middleware/activity-audit';
 import { runStartupRepairs } from './bootstrap';
 
 const app = express();
@@ -96,6 +97,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
+app.use(activityAuditMiddleware);
 
 // Static files for uploads
 app.use('/uploads', (req, res, next) => {

@@ -20,6 +20,22 @@ type EnterpriseUpgradeLevel = {
   yearlyFeeUsd: number;
 };
 
+type EnterpriseActivityLog = {
+  id: string;
+  action: string;
+  createdAt: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  details?: Record<string, any> | null;
+  user?: {
+    id: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    role?: string;
+  } | null;
+};
+
 export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceProps) {
   const vendorLabel = vendorType === 'seller' ? 'Seller' : 'Designer';
   const [loading, setLoading] = useState(true);
@@ -45,6 +61,11 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
   });
   const [paymentDraft, setPaymentDraft] = useState<Record<string, { providerKey: string; reference: string }>>({});
   const [selectedProvider, setSelectedProvider] = useState('STRIPE');
+  const [activityLogs, setActivityLogs] = useState<EnterpriseActivityLog[]>([]);
+  const [activityPagination, setActivityPagination] = useState({ page: 1, limit: 20, total: 0, pages: 1 });
+  const [activitySearch, setActivitySearch] = useState('');
+  const [activityActionFilter, setActivityActionFilter] = useState('');
+  const [activityLoading, setActivityLoading] = useState(false);
 
   const loadAll = async () => {
     setLoading(true);
@@ -284,6 +305,40 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
     }
   };
 
+  const loadEnterpriseActivityLogs = async (page = 1) => {
+    if (!String(activitySearch || '').trim()) {
+      setError('Enter username or email to pull enterprise user activity logs.');
+      setActivityLogs([]);
+      setActivityPagination({ page: 1, limit: 20, total: 0, pages: 1 });
+      return;
+    }
+    setActivityLoading(true);
+    setError('');
+    try {
+      const response = await api.enterprise.getActivityLogs({
+        userQuery: String(activitySearch || '').trim(),
+        action: String(activityActionFilter || '').trim() || undefined,
+        page,
+        limit: 20,
+      });
+      const payload = response.data || {};
+      setActivityLogs(Array.isArray(payload.logs) ? payload.logs : []);
+      setActivityPagination(
+        payload.pagination || {
+          page: 1,
+          limit: 20,
+          total: 0,
+          pages: 1,
+        }
+      );
+    } catch (loadError: any) {
+      setError(loadError?.response?.data?.message || 'Failed to load enterprise activity logs.');
+      setActivityLogs([]);
+    } finally {
+      setActivityLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-80 items-center justify-center">
@@ -478,6 +533,107 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
               ) : null}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-white p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-gray-900">Enterprise User Activity Logs</h2>
+        <p className="text-xs text-gray-500">
+          Pull activity logs for enterprise users by entering a username or email address.
+        </p>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+          <input
+            value={activitySearch}
+            onChange={(event) => setActivitySearch(event.target.value)}
+            placeholder="Enter username or email"
+            className="rounded border px-3 py-2 text-sm"
+          />
+          <input
+            value={activityActionFilter}
+            onChange={(event) => setActivityActionFilter(event.target.value)}
+            placeholder="Action contains (optional)"
+            className="rounded border px-3 py-2 text-sm"
+          />
+          <div className="rounded border bg-gray-50 px-3 py-2 text-xs text-gray-600">
+            Results: {activityPagination.total}
+          </div>
+          <Button onClick={() => loadEnterpriseActivityLogs(1)} disabled={activityLoading}>
+            {activityLoading ? 'Loading...' : 'Pull Logs'}
+          </Button>
+        </div>
+
+        <div className="overflow-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left text-gray-500">
+                <th className="py-2 pr-3">Time</th>
+                <th className="py-2 pr-3">User</th>
+                <th className="py-2 pr-3">Action</th>
+                <th className="py-2 pr-3">Endpoint/Details</th>
+                <th className="py-2 pr-3">IP</th>
+                <th className="py-2">Device</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activityLogs.map((row) => {
+                const details = (row.details || {}) as Record<string, any>;
+                const endpointSummary = details?.path
+                  ? `${details.method || 'GET'} ${details.path} (${details.statusCode ?? '-'})`
+                  : details?.deviceType || '-';
+                return (
+                  <tr key={row.id} className="border-t align-top">
+                    <td className="py-2 pr-3 text-gray-700">{new Date(row.createdAt).toLocaleString()}</td>
+                    <td className="py-2 pr-3">
+                      <p className="font-medium text-gray-900">
+                        {`${row.user?.firstName || ''} ${row.user?.lastName || ''}`.trim() || row.user?.email || 'Unknown user'}
+                      </p>
+                      <p className="text-xs text-gray-500">{row.user?.email || '-'}</p>
+                    </td>
+                    <td className="py-2 pr-3">{row.action}</td>
+                    <td className="py-2 pr-3">
+                      <p>{endpointSummary}</p>
+                      {typeof details?.durationMs === 'number' ? (
+                        <p className="text-[11px] text-gray-400">Duration: {details.durationMs}ms</p>
+                      ) : null}
+                    </td>
+                    <td className="py-2 pr-3">{row.ipAddress || '-'}</td>
+                    <td className="py-2">
+                      <p className="line-clamp-2 max-w-[280px] text-[11px] text-gray-400">{row.userAgent || '-'}</p>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!activityLoading && activityLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-4 text-center text-gray-500">
+                    No activity logs found.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={activityLoading || activityPagination.page <= 1}
+            onClick={() => loadEnterpriseActivityLogs(Math.max(1, activityPagination.page - 1))}
+          >
+            Previous
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={activityLoading || activityPagination.page >= Math.max(1, activityPagination.pages)}
+            onClick={() =>
+              loadEnterpriseActivityLogs(
+                Math.min(Math.max(1, activityPagination.pages), activityPagination.page + 1)
+              )
+            }
+          >
+            Next
+          </Button>
         </div>
       </div>
 
