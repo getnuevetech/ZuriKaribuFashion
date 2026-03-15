@@ -2663,9 +2663,9 @@ export default function DesignerDashboard() {
     canEditGovernanceProfile;
   const canAddDesignProduct = dashboardGovernance.actions.addDesignProduct !== false && canUseDesignForm && canUploadByProfile;
   const canAddReadyProduct = dashboardGovernance.actions.addReadyToWearProduct !== false && canUseReadyForm && canUploadByProfile;
-  // Keep add-product strict on full form visibility, but allow edit when edit action is enabled.
-  const canEditDesignProduct = dashboardGovernance.actions.editDesignProduct !== false && canUploadByProfile;
-  const canEditReadyProduct = dashboardGovernance.actions.editReadyToWearProduct !== false && canUploadByProfile;
+  // Keep add-product strict on full form visibility, but allow edit whenever edit action is enabled.
+  const canEditDesignProduct = dashboardGovernance.actions.editDesignProduct !== false;
+  const canEditReadyProduct = dashboardGovernance.actions.editReadyToWearProduct !== false;
   const canManageReadyStock = dashboardGovernance.actions.manageReadyStock !== false && canUploadByProfile;
   const canRequestFabricCountryAccess = dashboardGovernance.actions.requestFabricCountryAccess !== false && canUploadByProfile;
   const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false && canUploadByProfile;

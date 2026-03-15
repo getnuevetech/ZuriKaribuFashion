@@ -79,6 +79,7 @@ import DesignerProfilePage from './pages/designer/Profile';
 import DesignerEnterprisePage from './pages/designer/Enterprise';
 import DesignerEnterpriseRoleManagementPage from './pages/designer/EnterpriseRoleManagement';
 import DesignerMessagesPage from './pages/designer/Messages';
+import DesignerMeasurementsPage from './pages/designer/Measurements';
 
 // QA Pages
 import QADashboard from './pages/qa/Dashboard';
@@ -456,6 +457,7 @@ function App() {
                 <Route path="dashboard" element={<DesignerDashboard />} />
                 <Route path="payments" element={<DesignerPayments />} />
                 <Route path="profile" element={<DesignerProfilePage />} />
+                <Route path="measurements" element={<DesignerMeasurementsPage />} />
                 <Route path="enterprise" element={<DesignerEnterprisePage />} />
                 <Route path="enterprise/role-management" element={<DesignerEnterpriseRoleManagementPage />} />
                 <Route path="messages" element={<DesignerMessagesPage />} />

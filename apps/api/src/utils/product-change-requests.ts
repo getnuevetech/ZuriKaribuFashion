@@ -62,7 +62,7 @@ const PRODUCT_EDIT_POLICY_DEFAULTS: ProductEditPolicySettings = {
     },
     FASHION_DESIGNER: {
       FABRIC: [],
-      DESIGN: ['basePrice'],
+      DESIGN: ['basePrice', 'measurementVariables'],
       READY_TO_WEAR: ['basePrice', 'sizes'],
     },
   },
@@ -261,7 +261,11 @@ export function getAllowedFieldsForApprovedProduct(params: {
   policy: ProductEditPolicySettings;
   activeGrant?: ActiveProductEditGrant | null;
 }): string[] {
-  const base = params.policy.allowedFieldsByRole[params.role]?.[params.productType] || [];
+  const base = [...(params.policy.allowedFieldsByRole[params.role]?.[params.productType] || [])];
+  // Keep designer required-measurement edits available on approved CTW products.
+  if (params.role === 'FASHION_DESIGNER' && params.productType === 'DESIGN' && !base.includes('measurementVariables')) {
+    base.push('measurementVariables');
+  }
   const allTypeFields = getFieldKeysForProductType(params.productType);
   const grantFields =
     params.activeGrant?.grantAllChanges === true ? allTypeFields : params.activeGrant?.grantedFields || [];
