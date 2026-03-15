@@ -5945,6 +5945,13 @@ const adminApi = {
       success: boolean;
       data: {
         newTagDays: number;
+        autoConditions?: {
+          newTagDaysForSaleProducts: number;
+          autoNewProductTypes: Array<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'>;
+          autoSaleProductTypes: Array<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'>;
+          autoSaleUsePriceDrop: boolean;
+          autoSaleUseMarkdownRules: boolean;
+        };
         appearance: {
           sizePercent: number;
           fontSizePx: number;
@@ -5968,6 +5975,13 @@ const adminApi = {
 
   updateProductLabelsSettings: (payload: {
     newTagDays: number;
+    autoConditions?: {
+      newTagDaysForSaleProducts: number;
+      autoNewProductTypes: Array<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'>;
+      autoSaleProductTypes: Array<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'>;
+      autoSaleUsePriceDrop: boolean;
+      autoSaleUseMarkdownRules: boolean;
+    };
     appearance?: {
       sizePercent: number;
       fontSizePx: number;

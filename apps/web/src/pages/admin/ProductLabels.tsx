@@ -26,6 +26,13 @@ type LabelAppearance = {
   fontSizePx: number;
   isBold: boolean;
 };
+type LabelAutoConditions = {
+  newTagDaysForSaleProducts: number;
+  autoNewProductTypes: ProductType[];
+  autoSaleProductTypes: ProductType[];
+  autoSaleUsePriceDrop: boolean;
+  autoSaleUseMarkdownRules: boolean;
+};
 
 const DEFAULT_LABELS: ProductLabelRow[] = [
   { id: 'new', name: 'NEW', mode: 'AUTO_NEW', textColor: '#ffffff', backgroundColor: '#111827', isActive: true },
@@ -33,11 +40,19 @@ const DEFAULT_LABELS: ProductLabelRow[] = [
 ];
 
 export default function AdminProductLabels() {
+  const allProductTypes: ProductType[] = ['FABRIC', 'DESIGN', 'READY_TO_WEAR'];
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [newTagDays, setNewTagDays] = useState(14);
+  const [autoConditions, setAutoConditions] = useState<LabelAutoConditions>({
+    newTagDaysForSaleProducts: 14,
+    autoNewProductTypes: [...allProductTypes],
+    autoSaleProductTypes: [...allProductTypes],
+    autoSaleUsePriceDrop: true,
+    autoSaleUseMarkdownRules: true,
+  });
   const [appearance, setAppearance] = useState<LabelAppearance>({
     sizePercent: 120,
     fontSizePx: 12,
@@ -90,6 +105,22 @@ export default function AdminProductLabels() {
       if (settingsResult.status === 'fulfilled' && settingsResult.value.success) {
         const payload = settingsResult.value.data || {};
         setNewTagDays(Math.max(1, Number(payload.newTagDays || 14)));
+        const nextAutoNewTypes = Array.isArray(payload.autoConditions?.autoNewProductTypes)
+          ? payload.autoConditions.autoNewProductTypes.filter((entry: ProductType) => allProductTypes.includes(entry))
+          : [];
+        const nextAutoSaleTypes = Array.isArray(payload.autoConditions?.autoSaleProductTypes)
+          ? payload.autoConditions.autoSaleProductTypes.filter((entry: ProductType) => allProductTypes.includes(entry))
+          : [];
+        setAutoConditions({
+          newTagDaysForSaleProducts: Math.max(
+            1,
+            Math.min(120, Number(payload.autoConditions?.newTagDaysForSaleProducts || payload.newTagDays || 14))
+          ),
+          autoNewProductTypes: nextAutoNewTypes.length > 0 ? nextAutoNewTypes : [...allProductTypes],
+          autoSaleProductTypes: nextAutoSaleTypes.length > 0 ? nextAutoSaleTypes : [...allProductTypes],
+          autoSaleUsePriceDrop: payload.autoConditions?.autoSaleUsePriceDrop !== false,
+          autoSaleUseMarkdownRules: payload.autoConditions?.autoSaleUseMarkdownRules !== false,
+        });
         setAppearance({
           sizePercent: Math.max(60, Math.min(300, Number(payload.appearance?.sizePercent || 120))),
           fontSizePx: Math.max(8, Math.min(36, Number(payload.appearance?.fontSizePx || 12))),
@@ -183,8 +214,21 @@ export default function AdminProductLabels() {
           productIds: Array.from(new Set((entry.productIds || []).map((id) => String(id || '').trim()).filter(Boolean))),
         }))
         .filter((entry) => entry.labelId && entry.productIds.length > 0);
+      const normalizedAutoConditions = {
+        newTagDaysForSaleProducts: Math.max(
+          1,
+          Math.min(120, Number(autoConditions.newTagDaysForSaleProducts || newTagDays || 14))
+        ),
+        autoNewProductTypes:
+          autoConditions.autoNewProductTypes.length > 0 ? autoConditions.autoNewProductTypes : [...allProductTypes],
+        autoSaleProductTypes:
+          autoConditions.autoSaleProductTypes.length > 0 ? autoConditions.autoSaleProductTypes : [...allProductTypes],
+        autoSaleUsePriceDrop: autoConditions.autoSaleUsePriceDrop !== false,
+        autoSaleUseMarkdownRules: autoConditions.autoSaleUseMarkdownRules !== false,
+      };
       await api.admin.updateProductLabelsSettings({
         newTagDays: Math.max(1, Math.min(120, Number(newTagDays || 14))),
+        autoConditions: normalizedAutoConditions,
         appearance: {
           sizePercent: Math.max(60, Math.min(300, Number(appearance.sizePercent || 120))),
           fontSizePx: Math.max(8, Math.min(36, Number(appearance.fontSizePx || 12))),
@@ -200,6 +244,18 @@ export default function AdminProductLabels() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleProductType = (key: 'autoNewProductTypes' | 'autoSaleProductTypes', productType: ProductType) => {
+    setAutoConditions((prev) => {
+      const current = prev[key];
+      const hasType = current.includes(productType);
+      const next = hasType ? current.filter((entry) => entry !== productType) : [...current, productType];
+      return {
+        ...prev,
+        [key]: next.length > 0 ? next : [productType],
+      };
+    });
   };
 
   if (loading) {
@@ -226,7 +282,7 @@ export default function AdminProductLabels() {
       {success ? <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{success}</div> : null}
 
       <div className="rounded-xl border bg-white p-4">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
           <label className="block text-sm font-medium text-gray-700">
             Auto-NEW duration (days)
             <input
@@ -235,6 +291,22 @@ export default function AdminProductLabels() {
               max={120}
               value={newTagDays}
               onChange={(event) => setNewTagDays(Math.max(1, Math.min(120, Number(event.target.value || 14))))}
+              className="mt-2 w-full rounded-lg border px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-sm font-medium text-gray-700">
+            Auto-NEW on SALE duration (days)
+            <input
+              type="number"
+              min={1}
+              max={120}
+              value={autoConditions.newTagDaysForSaleProducts}
+              onChange={(event) =>
+                setAutoConditions((prev) => ({
+                  ...prev,
+                  newTagDaysForSaleProducts: Math.max(1, Math.min(120, Number(event.target.value || 14))),
+                }))
+              }
               className="mt-2 w-full rounded-lg border px-3 py-2 text-sm"
             />
           </label>
@@ -278,6 +350,62 @@ export default function AdminProductLabels() {
             />
             Label text bold
           </label>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="rounded-lg border p-3">
+            <p className="text-sm font-semibold text-gray-900">AUTO_NEW conditions</p>
+            <p className="mt-1 text-xs text-gray-500">Choose product types that should receive NEW automatically.</p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              {allProductTypes.map((productType) => (
+                <label key={`auto-new-${productType}`} className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={autoConditions.autoNewProductTypes.includes(productType)}
+                    onChange={() => toggleProductType('autoNewProductTypes', productType)}
+                  />
+                  {productType}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-sm font-semibold text-gray-900">AUTO_SALE conditions</p>
+            <p className="mt-1 text-xs text-gray-500">Trigger SALE by markdown rules and/or explicit price markdown.</p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              {allProductTypes.map((productType) => (
+                <label key={`auto-sale-${productType}`} className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={autoConditions.autoSaleProductTypes.includes(productType)}
+                    onChange={() => toggleProductType('autoSaleProductTypes', productType)}
+                  />
+                  {productType}
+                </label>
+              ))}
+            </div>
+            <div className="mt-3 space-y-2">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={autoConditions.autoSaleUseMarkdownRules}
+                  onChange={(event) =>
+                    setAutoConditions((prev) => ({ ...prev, autoSaleUseMarkdownRules: event.target.checked }))
+                  }
+                />
+                Use active markdown pricing rules
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={autoConditions.autoSaleUsePriceDrop}
+                  onChange={(event) =>
+                    setAutoConditions((prev) => ({ ...prev, autoSaleUsePriceDrop: event.target.checked }))
+                  }
+                />
+                Use product discounted prices (final &lt; base)
+              </label>
+            </div>
+          </div>
         </div>
       </div>
 

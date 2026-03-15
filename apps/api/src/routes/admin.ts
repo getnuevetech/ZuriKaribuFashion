@@ -213,6 +213,13 @@ const ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS = {
 };
 const ADMIN_PRODUCT_LABEL_DEFAULTS = {
   newTagDays: 14,
+  autoConditions: {
+    newTagDaysForSaleProducts: 14,
+    autoNewProductTypes: ['FABRIC', 'DESIGN', 'READY_TO_WEAR'] as Array<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'>,
+    autoSaleProductTypes: ['FABRIC', 'DESIGN', 'READY_TO_WEAR'] as Array<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'>,
+    autoSaleUsePriceDrop: true,
+    autoSaleUseMarkdownRules: true,
+  },
   appearance: {
     sizePercent: 120,
     fontSizePx: 12,
@@ -290,6 +297,15 @@ const adminReadyToWearSizeGuideUpdateSchema = z.object({
 });
 const adminProductLabelUpdateSchema = z.object({
   newTagDays: z.coerce.number().int().min(1).max(120),
+  autoConditions: z
+    .object({
+      newTagDaysForSaleProducts: z.coerce.number().int().min(1).max(120).optional(),
+      autoNewProductTypes: z.array(z.enum(['FABRIC', 'DESIGN', 'READY_TO_WEAR'])).min(1).max(3).optional(),
+      autoSaleProductTypes: z.array(z.enum(['FABRIC', 'DESIGN', 'READY_TO_WEAR'])).min(1).max(3).optional(),
+      autoSaleUsePriceDrop: z.boolean().optional(),
+      autoSaleUseMarkdownRules: z.boolean().optional(),
+    })
+    .optional(),
   appearance: z
     .object({
       sizePercent: z.coerce.number().int().min(60).max(300),
@@ -482,14 +498,71 @@ const normalizeAdminReadyToWearSizeGuideSettings = (raw: unknown) => {
   };
 };
 const normalizeAdminProductLabelSettings = (raw: unknown) => {
+  const allProductTypes: Array<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'> = ['FABRIC', 'DESIGN', 'READY_TO_WEAR'];
+  const normalizeProductTypeList = (
+    value: unknown,
+    fallback: Array<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'>
+  ): Array<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'> => {
+    const parsed = Array.isArray(value)
+      ? Array.from(
+          new Set(
+            value
+              .map((entry) => String(entry || '').trim().toUpperCase())
+              .filter(
+                (entry): entry is 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR' =>
+                  entry === 'FABRIC' || entry === 'DESIGN' || entry === 'READY_TO_WEAR'
+              )
+          )
+        )
+      : [];
+    return parsed.length > 0 ? parsed : [...fallback];
+  };
   const fallback = {
     ...ADMIN_PRODUCT_LABEL_DEFAULTS,
+    autoConditions: {
+      ...ADMIN_PRODUCT_LABEL_DEFAULTS.autoConditions,
+      autoNewProductTypes: [...ADMIN_PRODUCT_LABEL_DEFAULTS.autoConditions.autoNewProductTypes],
+      autoSaleProductTypes: [...ADMIN_PRODUCT_LABEL_DEFAULTS.autoConditions.autoSaleProductTypes],
+    },
     labels: ADMIN_PRODUCT_LABEL_DEFAULTS.labels.map((entry) => ({ ...entry })),
     assignments: [] as Array<{ labelId: string; productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; productIds: string[] }>,
   };
   if (!raw || typeof raw !== 'object') return fallback;
   const row = raw as Record<string, unknown>;
   const newTagDaysRaw = Number(row.newTagDays);
+  const autoConditionsRow =
+    row.autoConditions && typeof row.autoConditions === 'object' && !Array.isArray(row.autoConditions)
+      ? (row.autoConditions as Record<string, unknown>)
+      : {};
+  const autoConditions = {
+    newTagDaysForSaleProducts: Number.isFinite(Number(autoConditionsRow.newTagDaysForSaleProducts))
+      ? Math.max(1, Math.min(120, Math.round(Number(autoConditionsRow.newTagDaysForSaleProducts))))
+      : Number.isFinite(newTagDaysRaw)
+        ? Math.max(1, Math.min(120, Math.round(newTagDaysRaw)))
+        : fallback.autoConditions.newTagDaysForSaleProducts,
+    autoNewProductTypes: normalizeProductTypeList(
+      autoConditionsRow.autoNewProductTypes,
+      fallback.autoConditions.autoNewProductTypes
+    ),
+    autoSaleProductTypes: normalizeProductTypeList(
+      autoConditionsRow.autoSaleProductTypes,
+      fallback.autoConditions.autoSaleProductTypes
+    ),
+    autoSaleUsePriceDrop:
+      typeof autoConditionsRow.autoSaleUsePriceDrop === 'boolean'
+        ? autoConditionsRow.autoSaleUsePriceDrop
+        : fallback.autoConditions.autoSaleUsePriceDrop,
+    autoSaleUseMarkdownRules:
+      typeof autoConditionsRow.autoSaleUseMarkdownRules === 'boolean'
+        ? autoConditionsRow.autoSaleUseMarkdownRules
+        : fallback.autoConditions.autoSaleUseMarkdownRules,
+  };
+  if (autoConditions.autoNewProductTypes.length === 0) {
+    autoConditions.autoNewProductTypes = [...allProductTypes];
+  }
+  if (autoConditions.autoSaleProductTypes.length === 0) {
+    autoConditions.autoSaleProductTypes = [...allProductTypes];
+  }
   const appearanceRow =
     row.appearance && typeof row.appearance === 'object' && !Array.isArray(row.appearance)
       ? (row.appearance as Record<string, unknown>)
@@ -601,6 +674,7 @@ const normalizeAdminProductLabelSettings = (raw: unknown) => {
 
   return {
     newTagDays: Number.isFinite(newTagDaysRaw) ? Math.max(1, Math.min(120, Math.round(newTagDaysRaw))) : fallback.newTagDays,
+    autoConditions,
     appearance,
     labels: withSystemLabels.slice(0, 24),
     assignments,
