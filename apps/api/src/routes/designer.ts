@@ -29,6 +29,12 @@ import {
   readActiveProductEditGrantsForProducts,
   readProductEditPolicySettings,
 } from '../utils/product-change-requests';
+import {
+  readDesignPredominantColorMap,
+  readReadyToWearPredominantColorMap,
+  writeDesignPredominantColor,
+  writeReadyToWearPredominantColor,
+} from '../utils/fabric-attributes';
 
 const router = Router();
 let designerGovernanceSchemaEnsured = false;
@@ -1185,7 +1191,7 @@ router.get('/designs', async (req, res, next) => {
       if (!existing.includes(row.section)) existing.push(row.section);
       featuredByProductId.set(row.productId, existing);
     }
-    const [metadataRows, policy, grantsByDesignId] = await Promise.all([
+    const [metadataRows, policy, grantsByDesignId, designColorMap] = await Promise.all([
       Promise.all(designs.map(async (item) => [item.id, await getProductCurrencyMetadata('DESIGN', item.id)] as const)),
       readProductEditPolicySettings(),
       readActiveProductEditGrantsForProducts({
@@ -1194,6 +1200,7 @@ router.get('/designs', async (req, res, next) => {
         productType: 'DESIGN',
         productIds: designs.map((item) => item.id),
       }),
+      readDesignPredominantColorMap(designs.map((item) => item.id)),
     ]);
     const metadataByDesignId = new Map<string, any>(metadataRows);
 
@@ -1221,6 +1228,7 @@ router.get('/designs', async (req, res, next) => {
           listingLocalPrice: Number(currencyMeta?.localPrice || item.basePrice || 0),
           listingUsdPrice: Number(currencyMeta?.usdPrice || item.basePrice || 0),
           listingExchangeRate: Number(currencyMeta?.exchangeRate || 1),
+          predominantColor: designColorMap[item.id] || null,
           approvedEditableFields,
           approvedEditAccessEndsAt: activeGrant?.grantEndsAt || null,
         };
@@ -1466,6 +1474,7 @@ router.post('/designs', async (req, res, next) => {
         isRequired: z.boolean().default(true),
         instructions: z.string().optional(),
       })),
+      predominantColor: z.string().trim().min(2).max(40).optional(),
       images: z.array(z.object({
         url: z.string().url(),
         alt: z.string().optional(),
@@ -1633,11 +1642,15 @@ router.post('/designs', async (req, res, next) => {
       usdPrice: pricing.usdPrice,
       exchangeRate: pricing.usdPerUnit,
     });
+    await writeDesignPredominantColor(design.id, data.predominantColor || null);
 
     res.status(201).json({
       success: true,
       message: 'Design submitted for review.',
-      data: design,
+      data: {
+        ...design,
+        predominantColor: String(data.predominantColor || '').trim().toUpperCase() || null,
+      },
     });
   } catch (error: any) {
     if (error?.status) {
@@ -1675,6 +1688,7 @@ router.patch('/designs/:id', async (req, res, next) => {
           })
         )
         .optional(),
+      predominantColor: z.string().trim().min(2).max(40).optional(),
       images: z
         .array(
           z.object({
@@ -1944,10 +1958,17 @@ router.patch('/designs/:id', async (req, res, next) => {
         exchangeRate: pricing.usdPerUnit,
       });
     }
+    if (data.predominantColor !== undefined) {
+      await writeDesignPredominantColor(id, data.predominantColor);
+    }
+    const latestDesignColorMap = await readDesignPredominantColorMap([id]);
     res.json({
       success: true,
       message: 'Design updated successfully.',
-      data: updated,
+      data: {
+        ...updated,
+        predominantColor: latestDesignColorMap[id] || null,
+      },
     });
   } catch (error: any) {
     if (error?.status) {
@@ -2002,7 +2023,7 @@ router.get('/ready-to-wear', async (req, res, next) => {
       if (!existing.includes(row.section)) existing.push(row.section);
       featuredByProductId.set(row.productId, existing);
     }
-    const [metadataRows, policy, grantsByProductId] = await Promise.all([
+    const [metadataRows, policy, grantsByProductId, readyColorMap] = await Promise.all([
       Promise.all(products.map(async (item) => [item.id, await getProductCurrencyMetadata('READY_TO_WEAR', item.id)] as const)),
       readProductEditPolicySettings(),
       readActiveProductEditGrantsForProducts({
@@ -2011,6 +2032,7 @@ router.get('/ready-to-wear', async (req, res, next) => {
         productType: 'READY_TO_WEAR',
         productIds: products.map((item) => item.id),
       }),
+      readReadyToWearPredominantColorMap(products.map((item) => item.id)),
     ]);
     const metadataByProductId = new Map<string, any>(metadataRows);
 
@@ -2057,6 +2079,7 @@ router.get('/ready-to-wear', async (req, res, next) => {
           listingLocalPrice: Number(currencyMeta?.localPrice || item.basePrice || 0),
           listingUsdPrice: Number(currencyMeta?.usdPrice || item.basePrice || 0),
           listingExchangeRate: Number(currencyMeta?.exchangeRate || 1),
+          predominantColor: readyColorMap[item.id] || null,
           approvedEditableFields,
           approvedEditAccessEndsAt: activeGrant?.grantEndsAt || null,
         };
@@ -2092,6 +2115,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
       categoryId: z.string().uuid(),
       basePrice: z.number().positive(),
       priceCurrencyCode: z.string().min(3).max(8).optional(),
+      predominantColor: z.string().trim().min(2).max(40).optional(),
       sizes: z.array(z.object({
         size: z.string(),
         color: z.string().max(30).optional(),
@@ -2175,12 +2199,14 @@ router.post('/ready-to-wear', async (req, res, next) => {
       usdPrice: pricing.usdPrice,
       exchangeRate: pricing.usdPerUnit,
     });
+    await writeReadyToWearPredominantColor(product.id, data.predominantColor || null);
 
     res.status(201).json({
       success: true,
       message: 'Ready-to-wear product submitted for review.',
       data: {
         ...product,
+        predominantColor: String(data.predominantColor || '').trim().toUpperCase() || null,
         sizeVariations: Array.isArray(product.sizeVariations)
           ? product.sizeVariations.map((variation: any) => {
               const decoded = decodeReadyToWearVariantKey(variation?.size);
@@ -2212,6 +2238,7 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
       categoryId: z.string().uuid().optional(),
       basePrice: z.number().positive().optional(),
       priceCurrencyCode: z.string().min(3).max(8).optional(),
+      predominantColor: z.string().trim().min(2).max(40).optional(),
       sizes: z
         .array(
           z.object({
@@ -2393,11 +2420,16 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         exchangeRate: pricing.usdPerUnit,
       });
     }
+    if (data.predominantColor !== undefined) {
+      await writeReadyToWearPredominantColor(id, data.predominantColor);
+    }
+    const latestReadyColorMap = await readReadyToWearPredominantColorMap([id]);
     res.json({
       success: true,
       message: 'Ready-to-wear product updated successfully.',
       data: {
         ...updated,
+        predominantColor: latestReadyColorMap[id] || null,
         sizeVariations: Array.isArray(updated.sizeVariations)
           ? updated.sizeVariations.map((variation: any) => {
               const decoded = decodeReadyToWearVariantKey(variation?.size);

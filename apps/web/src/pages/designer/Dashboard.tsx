@@ -53,6 +53,7 @@ interface Design {
   id: string;
   name: string;
   description: string;
+  predominantColor?: string | null;
   categoryId?: string;
   basePrice: number;
   images: string[];
@@ -83,6 +84,7 @@ interface ReadyProduct {
   id: string;
   name: string;
   description: string;
+  predominantColor?: string | null;
   category: { name: string };
   basePrice: number;
   status: string;
@@ -181,6 +183,7 @@ interface FabricCountryAccessRequest {
 interface DesignFormState {
   name: string;
   description: string;
+  predominantColor: string;
   categoryId: string;
   basePrice: string;
   imageUrls: string;
@@ -200,6 +203,7 @@ interface ReadyVariantFormRow {
 interface ReadyToWearFormState {
   name: string;
   description: string;
+  predominantColor: string;
   categoryId: string;
   basePrice: string;
   imageUrls: string;
@@ -467,10 +471,12 @@ const READY_COLOR_OPTIONS = [
   'WHITE',
   'YELLOW',
 ];
+const PREDOMINANT_COLOR_OPTIONS = READY_COLOR_OPTIONS.filter((entry) => entry !== 'DEFAULT');
 const ALL_DESIGN_EDITABLE_FIELDS = [
   'name',
   'description',
   'categoryId',
+  'predominantColor',
   'basePrice',
   'suitableFabricIds',
   'measurementVariables',
@@ -480,6 +486,7 @@ const ALL_READY_TO_WEAR_EDITABLE_FIELDS = [
   'name',
   'description',
   'categoryId',
+  'predominantColor',
   'basePrice',
   'sizes',
   'images',
@@ -640,6 +647,7 @@ export default function DesignerDashboard() {
   const [designForm, setDesignForm] = useState<DesignFormState>({
     name: '',
     description: '',
+    predominantColor: '',
     categoryId: '',
     basePrice: '',
     imageUrls: '',
@@ -659,6 +667,7 @@ export default function DesignerDashboard() {
   const [readyForm, setReadyForm] = useState<ReadyToWearFormState>({
     name: '',
     description: '',
+    predominantColor: '',
     categoryId: '',
     basePrice: '',
     imageUrls: '',
@@ -993,6 +1002,7 @@ export default function DesignerDashboard() {
           id: String(design.id),
           name: design.name || 'Design',
           description: design.description || '',
+          predominantColor: design.predominantColor ? String(design.predominantColor).toUpperCase() : null,
           categoryId: design.categoryId || design.category?.id || '',
           basePrice: Number(design.basePrice || 0),
           images: normalizeImageUrlList(design.images),
@@ -1034,6 +1044,7 @@ export default function DesignerDashboard() {
           id: String(item.id),
           name: item.name || 'Ready To Wear',
           description: item.description || '',
+          predominantColor: item.predominantColor ? String(item.predominantColor).toUpperCase() : null,
           category: item.category || { name: 'Style' },
           basePrice: Number(item.basePrice || 0),
           status: item.status || 'DRAFT',
@@ -1453,6 +1464,7 @@ export default function DesignerDashboard() {
     setDesignForm({
       name: '',
       description: '',
+      predominantColor: '',
       categoryId: categories[0]?.id || '',
       basePrice: '',
       imageUrls: '',
@@ -1483,6 +1495,7 @@ export default function DesignerDashboard() {
     setReadyForm({
       name: '',
       description: '',
+      predominantColor: '',
       categoryId: categories[0]?.id || '',
       basePrice: '',
       imageUrls: '',
@@ -1519,6 +1532,7 @@ export default function DesignerDashboard() {
     setDesignForm({
       name: design.name,
       description: design.description || '',
+      predominantColor: String(design.predominantColor || '').toUpperCase(),
       categoryId: design.categoryId || categories[0]?.id || '',
       basePrice: String(design.listingLocalPrice || design.basePrice || ''),
       imageUrls: (design.images || []).join('\n'),
@@ -1582,6 +1596,7 @@ export default function DesignerDashboard() {
     setReadyForm({
       name: product.name || '',
       description: product.description || '',
+      predominantColor: String(product.predominantColor || '').toUpperCase(),
       categoryId: matchedCategoryId,
       basePrice: String(product.listingLocalPrice || product.basePrice || 0),
       imageUrls: Array.isArray(product.images) ? product.images.join('\n') : '',
@@ -1940,6 +1955,7 @@ export default function DesignerDashboard() {
       fabricId,
       yardsNeeded: Number(designForm.yardsByFabricId[fabricId] || 1),
     }));
+    const predominantColorToken = String(designForm.predominantColor || '').trim().toUpperCase();
     const isApprovedEdit = Boolean(isEditMode && selectedDesign && String(selectedDesign.status || '').toUpperCase() === 'APPROVED');
     const editableFieldSet = new Set<string>(
       isApprovedEdit
@@ -2009,6 +2025,9 @@ export default function DesignerDashboard() {
         }
         payload.measurementVariables = measurementVariables;
       }
+      if (editableFieldSet.has('predominantColor') && predominantColorToken) {
+        payload.predominantColor = predominantColorToken;
+      }
       if (Object.keys(payload).length === 0) {
         setDesignError('No editable fields are enabled for this approved product.');
         return;
@@ -2057,6 +2076,7 @@ export default function DesignerDashboard() {
       payload.priceCurrencyCode = designForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD';
       payload.suitableFabricIds = suitableFabricIds;
       payload.measurementVariables = measurementVariables;
+      if (predominantColorToken) payload.predominantColor = predominantColorToken;
       payload.images = images;
     }
 
@@ -2091,6 +2111,7 @@ export default function DesignerDashboard() {
     setReadySuccess(null);
     const images = parseImageInputs(readyForm.imageUrls);
     const basePrice = Number(readyForm.basePrice || 0);
+    const predominantColorToken = String(readyForm.predominantColor || '').trim().toUpperCase();
     const normalizedVariants = readyForm.variants.map((row) => ({
       size: String(row.size || '').trim().toUpperCase(),
       color: String(row.color || '').trim().toUpperCase() || 'DEFAULT',
@@ -2179,6 +2200,9 @@ export default function DesignerDashboard() {
           stock: Math.max(0, Math.floor(row.stock)),
         }));
       }
+      if (editableFieldSet.has('predominantColor') && predominantColorToken) {
+        payload.predominantColor = predominantColorToken;
+      }
       if (Object.keys(payload).length === 0) {
         setReadyError('No editable fields are enabled for this approved product.');
         return;
@@ -2237,6 +2261,7 @@ export default function DesignerDashboard() {
         price: row.price,
         stock: Math.max(0, Math.floor(row.stock)),
       }));
+      if (predominantColorToken) payload.predominantColor = predominantColorToken;
       payload.images = images.map((entry, index) => ({
         url: entry.url,
         alt: `${readyForm.name.trim() || 'Ready To Wear'} image ${index + 1}`,
@@ -3832,6 +3857,23 @@ export default function DesignerDashboard() {
                 </select>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Predominant Color</label>
+                <select
+                  value={readyForm.predominantColor}
+                  onChange={(e) => setReadyForm((prev) => ({ ...prev, predominantColor: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  disabled={isApprovedReadyFieldLocked('predominantColor')}
+                >
+                  <option value="">Select color</option>
+                  {PREDOMINANT_COLOR_OPTIONS.map((color) => (
+                    <option key={color} value={color}>
+                      {color}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className={isFieldHidden(dashboardGovernance.fields.readyBasePrice) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Base Price ({readyForm.priceCurrencyCode})</label>
                 <input
@@ -4279,6 +4321,23 @@ export default function DesignerDashboard() {
                   {categories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Predominant Color</label>
+                <select
+                  value={designForm.predominantColor}
+                  onChange={(e) => setDesignForm((prev) => ({ ...prev, predominantColor: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  disabled={isApprovedDesignFieldLocked('predominantColor')}
+                >
+                  <option value="">Select color</option>
+                  {PREDOMINANT_COLOR_OPTIONS.map((color) => (
+                    <option key={color} value={color}>
+                      {color}
                     </option>
                   ))}
                 </select>
