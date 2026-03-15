@@ -88,6 +88,7 @@ import CustomerMessagesPage from './pages/customer/Messages';
 // Auth
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminPermissionGuard from './components/AdminPermissionGuard';
+import DashboardErrorBoundary from './components/DashboardErrorBoundary';
 import { useAuthStore } from './store/authStore';
 import { getHomeRouteForUser } from './auth/rbac';
 
@@ -150,7 +151,13 @@ function App() {
 
             {/* Customer Routes */}
             <Route element={<ProtectedRoute allowedRoles={['CUSTOMER']} />}>
-              <Route element={<DashboardLayout userType="customer" />}>
+              <Route
+                element={
+                  <DashboardErrorBoundary>
+                    <DashboardLayout userType="customer" />
+                  </DashboardErrorBoundary>
+                }
+              >
                 <Route path="/dashboard" element={<CustomerDashboard />} />
                 <Route path="/orders" element={<CustomerOrders />} />
                 <Route path="/dashboard/messages" element={<CustomerMessagesPage />} />
@@ -161,7 +168,13 @@ function App() {
 
             {/* Admin Routes */}
             <Route element={<ProtectedRoute allowedRoles={['ADMINISTRATOR']} />}>
-              <Route element={<DashboardLayout userType="admin" />}>
+              <Route
+                element={
+                  <DashboardErrorBoundary>
+                    <DashboardLayout userType="admin" />
+                  </DashboardErrorBoundary>
+                }
+              >
                 <Route
                   path="/admin"
                   element={<AdminDashboard />}
@@ -410,7 +423,14 @@ function App() {
 
             {/* Seller Routes */}
             <Route element={<ProtectedRoute allowedRoles={['FABRIC_SELLER']} />}>
-              <Route path="/seller" element={<DashboardLayout userType="seller" />}>
+              <Route
+                path="/seller"
+                element={
+                  <DashboardErrorBoundary>
+                    <DashboardLayout userType="seller" />
+                  </DashboardErrorBoundary>
+                }
+              >
                 <Route index element={<SellerDashboard />} />
                 <Route path="dashboard" element={<SellerDashboard />} />
                 <Route path="payments" element={<SellerPayments />} />
@@ -424,7 +444,14 @@ function App() {
 
             {/* Designer Routes */}
             <Route element={<ProtectedRoute allowedRoles={['FASHION_DESIGNER']} />}>
-              <Route path="/designer" element={<DashboardLayout userType="designer" />}>
+              <Route
+                path="/designer"
+                element={
+                  <DashboardErrorBoundary>
+                    <DashboardLayout userType="designer" />
+                  </DashboardErrorBoundary>
+                }
+              >
                 <Route index element={<DesignerDashboard />} />
                 <Route path="dashboard" element={<DesignerDashboard />} />
                 <Route path="payments" element={<DesignerPayments />} />
@@ -438,7 +465,13 @@ function App() {
 
             {/* QA Routes */}
             <Route element={<ProtectedRoute allowedRoles={['QA_TEAM']} />}>
-              <Route element={<DashboardLayout userType="qa" />}>
+              <Route
+                element={
+                  <DashboardErrorBoundary>
+                    <DashboardLayout userType="qa" />
+                  </DashboardErrorBoundary>
+                }
+              >
                 <Route path="/qa" element={<QADashboard />} />
                 <Route path="/qa/messages" element={<QAMessagesPage />} />
               </Route>

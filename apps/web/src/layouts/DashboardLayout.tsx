@@ -439,6 +439,19 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     navigate('/');
   };
 
+  const readHrefMeta = (href: string) => {
+    const value = String(href || '').trim();
+    const queryIndex = value.indexOf('?');
+    const rawPath = queryIndex >= 0 ? value.slice(0, queryIndex) : value;
+    const rawQuery = queryIndex >= 0 ? value.slice(queryIndex + 1) : '';
+    const pathname = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+    const params = new URLSearchParams(rawQuery);
+    return {
+      pathname,
+      tab: params.get('tab'),
+    };
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
@@ -458,12 +471,11 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
           {/* Navigation */}
           <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
             {visibleItems.map((item) => {
-              const hrefUrl = new URL(item.href, window.location.origin);
               const currentTab = new URLSearchParams(location.search).get('tab');
-              const hrefTab = hrefUrl.searchParams.get('tab');
+              const hrefMeta = readHrefMeta(item.href);
               const isActive =
-                location.pathname === hrefUrl.pathname &&
-                (hrefTab ? currentTab === hrefTab : !currentTab);
+                location.pathname === hrefMeta.pathname &&
+                (hrefMeta.tab ? currentTab === hrefMeta.tab : !currentTab);
               const Icon = item.icon;
 
               if (userType === 'admin' && item.href === '/admin/payments') {
@@ -496,11 +508,10 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                     {isPaymentMenuOpen && isSidebarOpen ? (
                       <div className="ml-7 space-y-1">
                         {visiblePaymentSubmenu.map((subItem) => {
-                          const subUrl = new URL(subItem.href, window.location.origin);
-                          const subTab = subUrl.searchParams.get('tab');
+                          const subMeta = readHrefMeta(subItem.href);
                           const subActive =
-                            location.pathname === subUrl.pathname &&
-                            (subTab ? currentTab === subTab : !currentTab);
+                            location.pathname === subMeta.pathname &&
+                            (subMeta.tab ? currentTab === subMeta.tab : !currentTab);
                           const SubIcon = subItem.icon;
                           return (
                             <Link
@@ -549,11 +560,10 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                     {isOrderMenuOpen && isSidebarOpen ? (
                       <div className="ml-7 space-y-1">
                         {orderManagementSubmenu.map((subItem) => {
-                          const subUrl = new URL(subItem.href, window.location.origin);
-                          const subTab = subUrl.searchParams.get('tab');
+                          const subMeta = readHrefMeta(subItem.href);
                           const subActive =
-                            location.pathname === subUrl.pathname &&
-                            (subTab ? currentTab === subTab : !currentTab);
+                            location.pathname === subMeta.pathname &&
+                            (subMeta.tab ? currentTab === subMeta.tab : !currentTab);
                           const SubIcon = subItem.icon;
                           return (
                             <Link
@@ -616,11 +626,10 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                     {isProductManagementMenuOpen && isSidebarOpen ? (
                       <div className="ml-7 space-y-1">
                         {visibleProductSubmenu.map((subItem) => {
-                          const subUrl = new URL(subItem.href, window.location.origin);
-                          const subTab = subUrl.searchParams.get('tab');
+                          const subMeta = readHrefMeta(subItem.href);
                           const subActive =
-                            location.pathname === subUrl.pathname &&
-                            (subTab ? currentTab === subTab : !currentTab);
+                            location.pathname === subMeta.pathname &&
+                            (subMeta.tab ? currentTab === subMeta.tab : !currentTab);
                           const SubIcon = subItem.icon;
                           return (
                             <Link
@@ -682,11 +691,10 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                     {isAdminAccountsMenuOpen && isSidebarOpen ? (
                       <div className="ml-7 space-y-1">
                         {visibleAdminAccountSubmenu.map((subItem) => {
-                          const subUrl = new URL(subItem.href, window.location.origin);
-                          const subTab = subUrl.searchParams.get('tab');
+                          const subMeta = readHrefMeta(subItem.href);
                           const subActive =
-                            location.pathname === subUrl.pathname &&
-                            (subTab ? currentTab === subTab : !currentTab);
+                            location.pathname === subMeta.pathname &&
+                            (subMeta.tab ? currentTab === subMeta.tab : !currentTab);
                           const SubIcon = subItem.icon;
                           return (
                             <Link
