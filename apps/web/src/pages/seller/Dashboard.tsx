@@ -515,11 +515,12 @@ export default function SellerDashboard() {
   const syncTabWithUrl = (tab: 'overview' | 'fabrics' | 'featured' | 'orders' | 'tryon') => {
     const nextTab = dashboardGovernance.tabs[tab] !== false ? tab : fallbackTab;
     setActiveTab(nextTab);
+    const currentTab = String(searchParams.get('tab') || '').toLowerCase();
     if (nextTab === 'overview') {
-      setSearchParams({});
+      if (currentTab) setSearchParams({});
       return;
     }
-    setSearchParams({ tab: nextTab });
+    if (currentTab !== nextTab) setSearchParams({ tab: nextTab });
   };
 
   useEffect(() => {
@@ -547,6 +548,12 @@ export default function SellerDashboard() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (visibleTabs.length === 0) {
+      if (activeTab !== 'overview') {
+        setActiveTab('overview');
+      }
+      return;
+    }
     if (!visibleTabs.includes(activeTab)) {
       syncTabWithUrl(fallbackTab);
     }

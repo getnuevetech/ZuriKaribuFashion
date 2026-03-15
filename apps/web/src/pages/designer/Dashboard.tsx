@@ -735,11 +735,12 @@ export default function DesignerDashboard() {
   const syncTabWithUrl = (tab: 'overview' | 'designs' | 'featured' | 'orders' | 'tryon') => {
     const nextTab = dashboardGovernance.tabs[tab] !== false ? tab : fallbackTab;
     setActiveTab(nextTab);
+    const currentTab = String(searchParams.get('tab') || '').toLowerCase();
     if (nextTab === 'overview') {
-      setSearchParams({});
+      if (currentTab) setSearchParams({});
       return;
     }
-    setSearchParams({ tab: nextTab });
+    if (currentTab !== nextTab) setSearchParams({ tab: nextTab });
   };
 
   useEffect(() => {
@@ -767,6 +768,12 @@ export default function DesignerDashboard() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (visibleTabs.length === 0) {
+      if (activeTab !== 'overview') {
+        setActiveTab('overview');
+      }
+      return;
+    }
     if (!visibleTabs.includes(activeTab)) {
       syncTabWithUrl(fallbackTab);
     }
