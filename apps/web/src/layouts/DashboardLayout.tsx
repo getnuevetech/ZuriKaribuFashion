@@ -30,7 +30,6 @@ import {
   Mail,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { api } from '../services/api';
 
 import { 
   User, 
@@ -248,15 +247,30 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       return;
     }
     let cancelled = false;
-    api.enterprise
-      .getMe()
-      .then((response) => {
-        if (cancelled) return;
-        setEnterpriseRoleManagementAllowed(Boolean(response?.data?.account?.isEnterprise));
-      })
-      .catch(() => {
+    const resolveEnterpriseStatus = async () => {
+      try {
+        const fallbackApiUrl =
+          typeof window !== 'undefined' ? `${window.location.origin}/api` : '/api';
+        const apiBase = String(import.meta.env.VITE_API_URL || fallbackApiUrl).replace(/\/+$/, '');
+        const response = await fetch(`${apiBase}/enterprise/me`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) {
+          if (!cancelled) setEnterpriseRoleManagementAllowed(false);
+          return;
+        }
+        const payload = await response.json().catch(() => null);
+        if (!cancelled) {
+          setEnterpriseRoleManagementAllowed(Boolean(payload?.data?.account?.isEnterprise));
+        }
+      } catch {
         if (!cancelled) setEnterpriseRoleManagementAllowed(false);
-      });
+      }
+    };
+    void resolveEnterpriseStatus();
     return () => {
       cancelled = true;
     };
