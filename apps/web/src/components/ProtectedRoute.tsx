@@ -8,11 +8,11 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, token } = useAuthStore();
   const location = useLocation();
   const normalizedRole = normalizeRole(user?.role);
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !token) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

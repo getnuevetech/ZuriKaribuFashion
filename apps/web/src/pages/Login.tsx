@@ -11,7 +11,7 @@ import { useAuthPageSettings } from '../hooks/useAuthPageSettings';
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isAuthenticated, user } = useAuthStore();
+  const { login, isAuthenticated, user, token } = useAuthStore();
   const { settings: authPageSettings } = useAuthPageSettings();
   const [formData, setFormData] = useState({
     email: '',
@@ -43,10 +43,10 @@ export default function Login() {
   };
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !token || !user) return;
     const targetRoute = resolvePostLoginRoute(user);
     navigate(targetRoute, { replace: true });
-  }, [isAuthenticated, navigate, user, location.state, location.search]);
+  }, [isAuthenticated, token, navigate, user, location.state, location.search]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
