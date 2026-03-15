@@ -137,7 +137,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isAdminAccountsMenuOpen, setIsAdminAccountsMenuOpen] = useState(true);
   const [isProductManagementMenuOpen, setIsProductManagementMenuOpen] = useState(true);
   const [isEnterpriseMenuOpen, setIsEnterpriseMenuOpen] = useState(true);
-  const { user, logout } = useAuthStore();
+  const { user, token, logout } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -243,6 +243,10 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       setEnterpriseRoleManagementAllowed(false);
       return;
     }
+    if (!token || !user?.id) {
+      setEnterpriseRoleManagementAllowed(false);
+      return;
+    }
     let cancelled = false;
     api.enterprise
       .getMe()
@@ -256,7 +260,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     return () => {
       cancelled = true;
     };
-  }, [userType, user?.id]);
+  }, [userType, user?.id, token]);
 
   const normalizeSearchToken = (value: string) => String(value || '').trim().toLowerCase();
   const addSearchEntries = (
