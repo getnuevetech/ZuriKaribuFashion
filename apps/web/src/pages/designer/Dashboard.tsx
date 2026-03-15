@@ -2661,6 +2661,16 @@ export default function DesignerDashboard() {
   const canRequestFabricCountryAccess = dashboardGovernance.actions.requestFabricCountryAccess !== false && canUploadByProfile;
   const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false && canUploadByProfile;
   const hasNoDashboardTabs = visibleTabs.length === 0;
+  const overviewHasVisibleContent =
+    dashboardGovernance.sections.overviewOrderStatus !== false ||
+    dashboardGovernance.sections.overviewRevenueChart !== false ||
+    dashboardGovernance.sections.overviewTopDesigns !== false ||
+    dashboardGovernance.sections.overviewActivity !== false ||
+    dashboardGovernance.sections.overviewTryOnInsights !== false ||
+    (dashboardGovernance.sections.overviewPendingOrdersAlert !== false && pendingOrders.length > 0);
+  const tryOnHasVisibleContent =
+    dashboardGovernance.sections.tryOnInsightsSummary !== false ||
+    dashboardGovernance.sections.tryOnInsightsRecent !== false;
   const activeFeaturedRequestForSelectedDesign =
     selectedDesign?.id
       ? featuredRequests.find((request) => {
@@ -3216,6 +3226,11 @@ export default function DesignerDashboard() {
               </div>
             </div>
           ) : null}
+          {!overviewHasVisibleContent ? (
+            <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+              Overview widgets are disabled by admin governance.
+            </div>
+          ) : null}
         </>
       )}
 
@@ -3292,6 +3307,11 @@ export default function DesignerDashboard() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          ) : null}
+          {!tryOnHasVisibleContent ? (
+            <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+              3D TryON insights are disabled by admin governance.
             </div>
           ) : null}
         </div>

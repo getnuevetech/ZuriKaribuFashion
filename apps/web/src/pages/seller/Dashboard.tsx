@@ -1661,6 +1661,15 @@ export default function SellerDashboard() {
     profileCompletion?.canResubmitProfile !== false &&
     canEditGovernanceProfile;
   const hasNoDashboardTabs = visibleTabs.length === 0;
+  const overviewHasVisibleContent =
+    dashboardGovernance.sections.overviewCharts !== false ||
+    dashboardGovernance.sections.overviewRecentOrders !== false ||
+    dashboardGovernance.sections.overviewActivity !== false ||
+    dashboardGovernance.sections.overviewTryOnInsights !== false ||
+    (dashboardGovernance.sections.overviewLowStockAlert !== false && lowStockFabrics.length > 0);
+  const tryOnHasVisibleContent =
+    dashboardGovernance.sections.tryOnInsightsSummary !== false ||
+    dashboardGovernance.sections.tryOnInsightsRecent !== false;
   const activeFeaturedRequestForSelectedFabric =
     selectedFabric?.id
       ? featuredRequests.find((request) => {
@@ -2170,6 +2179,11 @@ export default function SellerDashboard() {
               <ActivityFeed activities={activities} title="Recent Activity" />
             ) : null}
           </div>
+          {!overviewHasVisibleContent ? (
+            <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+              Overview widgets are disabled by admin governance.
+            </div>
+          ) : null}
         </>
       )}
 
@@ -2245,6 +2259,11 @@ export default function SellerDashboard() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          ) : null}
+          {!tryOnHasVisibleContent ? (
+            <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+              3D TryON insights are disabled by admin governance.
             </div>
           ) : null}
         </div>
