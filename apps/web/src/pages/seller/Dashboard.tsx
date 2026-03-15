@@ -64,6 +64,8 @@ interface Fabric {
   listingCurrencyCode?: string;
   listingLocalPrice?: number;
   listingUsdPrice?: number;
+  approvedEditableFields?: string[];
+  approvedEditAccessEndsAt?: string | null;
 }
 
 interface FabricOrder {
@@ -142,6 +144,16 @@ const FABRIC_COLOR_OPTIONS = [
   'WHITE',
   'YELLOW',
 ];
+const ALL_FABRIC_EDITABLE_FIELDS = [
+  'name',
+  'description',
+  'materialTypeId',
+  'predominantColor',
+  'sellerPrice',
+  'minYards',
+  'stockYards',
+  'images',
+] as const;
 
 interface VendorProfileField {
   key: string;
@@ -422,6 +434,7 @@ export default function SellerDashboard() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [isSavingProduct, setIsSavingProduct] = useState(false);
   const [productError, setProductError] = useState<string | null>(null);
+  const [productSuccess, setProductSuccess] = useState<string | null>(null);
   const [dashboardLoadError, setDashboardLoadError] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [materialOptions, setMaterialOptions] = useState<MaterialOption[]>([]);
@@ -484,6 +497,9 @@ export default function SellerDashboard() {
   const [featuredPaymentDrafts, setFeaturedPaymentDrafts] = useState<Record<string, { providerKey: string; reference: string }>>({});
   const [featuredPaymentActionRequestId, setFeaturedPaymentActionRequestId] = useState<string | null>(null);
   const [featuredPaymentMessage, setFeaturedPaymentMessage] = useState<string | null>(null);
+  const [productChangeRequestMessage, setProductChangeRequestMessage] = useState('');
+  const [productChangeRequestedFields, setProductChangeRequestedFields] = useState<string[]>([]);
+  const [submittingProductChangeRequest, setSubmittingProductChangeRequest] = useState(false);
 
   const hasRejectionRestriction = profileCompletion?.profileStatus === 'REJECTED';
   const restrictedTabs = hasRejectionRestriction ? (['overview'] as const) : (['overview', 'fabrics', 'featured', 'orders', 'tryon'] as const);
@@ -706,6 +722,8 @@ export default function SellerDashboard() {
           listingCurrencyCode: String(item.listingCurrencyCode || 'USD'),
           listingLocalPrice: Number(item.listingLocalPrice || item.sellerPrice || 0),
           listingUsdPrice: Number(item.listingUsdPrice || item.sellerPrice || 0),
+          approvedEditableFields: Array.isArray(item.approvedEditableFields) ? item.approvedEditableFields : [],
+          approvedEditAccessEndsAt: item.approvedEditAccessEndsAt ? String(item.approvedEditAccessEndsAt) : null,
         }));
         setFabrics(mappedFabrics);
       }
@@ -1080,7 +1098,10 @@ export default function SellerDashboard() {
     setSelectedFabric(null);
     setIsEditMode(false);
     setProductError(null);
+    setProductSuccess(null);
     setFeaturedRequestNotes('');
+    setProductChangeRequestMessage('');
+    setProductChangeRequestedFields([]);
   };
 
   const openCreateProductModal = () => {
@@ -1094,6 +1115,7 @@ export default function SellerDashboard() {
     setSelectedFabric(fabric);
     setIsEditMode(true);
     setProductError(null);
+    setProductSuccess(null);
     setProductForm({
       name: fabric.name,
       description: fabric.description || '',
@@ -1108,6 +1130,8 @@ export default function SellerDashboard() {
     setShowProductModal(true);
     setProductImageUrlInput('');
     setFeaturedRequestNotes('');
+    setProductChangeRequestMessage('');
+    setProductChangeRequestedFields([]);
     setFeaturedRequestDurationValue(Math.max(1, Number(featuredSettings?.defaultDurationValue || 2)));
     setFeaturedRequestDurationUnit(
       String(featuredSettings?.defaultDurationUnit || 'WEEKS').toUpperCase() as 'DAYS' | 'WEEKS' | 'MONTHS'
@@ -1175,49 +1199,123 @@ export default function SellerDashboard() {
     if (!isEditMode && !canAddProduct) return;
     if (isEditMode && !canEditProduct) return;
     setProductError(null);
+    setProductSuccess(null);
     const images = parseImageInputs(productForm.imageUrls);
-    if (!productForm.name.trim()) {
-      setProductError('Fabric name is required.');
-      return;
-    }
-    if (!productForm.description.trim() || productForm.description.trim().length < 10) {
-      setProductError('Description must be at least 10 characters.');
-      return;
-    }
-    if (!productForm.materialTypeId) {
-      setProductError('Please select a material type.');
-      return;
-    }
-    if (Number(productForm.sellerPrice || 0) <= 0) {
-      setProductError('Seller price must be greater than zero.');
-      return;
-    }
-    if (Number(productForm.minYards || 0) < 3) {
-      setProductError('Minimum yards must be at least 3.');
-      return;
-    }
-    if (Number(productForm.stockYards || 0) < 0) {
-      setProductError('Stock yards cannot be negative.');
-      return;
-    }
-    if (images.length < 3 || images.length > 4) {
-      setProductError('Fabrics require 3 to 4 images.');
-      return;
-    }
-
     setIsSavingProduct(true);
     try {
-      const payload = {
-        name: productForm.name.trim(),
-        description: productForm.description.trim(),
-        materialTypeId: productForm.materialTypeId,
-        predominantColor: String(productForm.predominantColor || 'MULTI').toUpperCase(),
-        sellerPrice: Number(productForm.sellerPrice || 0),
-        priceCurrencyCode: productForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD',
-        minYards: Math.max(3, Number(productForm.minYards || 3)),
-        stockYards: Number(productForm.stockYards || 0),
-        images,
-      };
+      const payload: any = {};
+      if (isApprovedProductEdit) {
+        if (editableFieldSet.has('sellerPrice')) {
+          if (Number(productForm.sellerPrice || 0) <= 0) {
+            setProductError('Seller price must be greater than zero.');
+            setIsSavingProduct(false);
+            return;
+          }
+          payload.sellerPrice = Number(productForm.sellerPrice || 0);
+          payload.priceCurrencyCode = productForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD';
+        }
+        if (editableFieldSet.has('minYards')) {
+          if (Number(productForm.minYards || 0) < 3) {
+            setProductError('Minimum yards must be at least 3.');
+            setIsSavingProduct(false);
+            return;
+          }
+          payload.minYards = Math.max(3, Number(productForm.minYards || 3));
+        }
+        if (editableFieldSet.has('stockYards')) {
+          if (Number(productForm.stockYards || 0) < 0) {
+            setProductError('Stock yards cannot be negative.');
+            setIsSavingProduct(false);
+            return;
+          }
+          payload.stockYards = Number(productForm.stockYards || 0);
+        }
+        if (editableFieldSet.has('name')) {
+          if (!productForm.name.trim()) {
+            setProductError('Fabric name is required.');
+            setIsSavingProduct(false);
+            return;
+          }
+          payload.name = productForm.name.trim();
+        }
+        if (editableFieldSet.has('description')) {
+          if (!productForm.description.trim() || productForm.description.trim().length < 10) {
+            setProductError('Description must be at least 10 characters.');
+            setIsSavingProduct(false);
+            return;
+          }
+          payload.description = productForm.description.trim();
+        }
+        if (editableFieldSet.has('materialTypeId')) {
+          if (!productForm.materialTypeId) {
+            setProductError('Please select a material type.');
+            setIsSavingProduct(false);
+            return;
+          }
+          payload.materialTypeId = productForm.materialTypeId;
+        }
+        if (editableFieldSet.has('predominantColor')) {
+          payload.predominantColor = String(productForm.predominantColor || 'MULTI').toUpperCase();
+        }
+        if (editableFieldSet.has('images')) {
+          if (images.length < 3 || images.length > 4) {
+            setProductError('Fabrics require 3 to 4 images.');
+            setIsSavingProduct(false);
+            return;
+          }
+          payload.images = images;
+        }
+        if (Object.keys(payload).length === 0) {
+          setProductError('No editable fields are enabled for this approved product.');
+          setIsSavingProduct(false);
+          return;
+        }
+      } else {
+        if (!productForm.name.trim()) {
+          setProductError('Fabric name is required.');
+          setIsSavingProduct(false);
+          return;
+        }
+        if (!productForm.description.trim() || productForm.description.trim().length < 10) {
+          setProductError('Description must be at least 10 characters.');
+          setIsSavingProduct(false);
+          return;
+        }
+        if (!productForm.materialTypeId) {
+          setProductError('Please select a material type.');
+          setIsSavingProduct(false);
+          return;
+        }
+        if (Number(productForm.sellerPrice || 0) <= 0) {
+          setProductError('Seller price must be greater than zero.');
+          setIsSavingProduct(false);
+          return;
+        }
+        if (Number(productForm.minYards || 0) < 3) {
+          setProductError('Minimum yards must be at least 3.');
+          setIsSavingProduct(false);
+          return;
+        }
+        if (Number(productForm.stockYards || 0) < 0) {
+          setProductError('Stock yards cannot be negative.');
+          setIsSavingProduct(false);
+          return;
+        }
+        if (images.length < 3 || images.length > 4) {
+          setProductError('Fabrics require 3 to 4 images.');
+          setIsSavingProduct(false);
+          return;
+        }
+        payload.name = productForm.name.trim();
+        payload.description = productForm.description.trim();
+        payload.materialTypeId = productForm.materialTypeId;
+        payload.predominantColor = String(productForm.predominantColor || 'MULTI').toUpperCase();
+        payload.sellerPrice = Number(productForm.sellerPrice || 0);
+        payload.priceCurrencyCode = productForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD';
+        payload.minYards = Math.max(3, Number(productForm.minYards || 3));
+        payload.stockYards = Number(productForm.stockYards || 0);
+        payload.images = images;
+      }
       if (isEditMode && selectedFabric) {
         await api.seller.updateFabric(selectedFabric.id, payload);
       } else {
@@ -1231,6 +1329,37 @@ export default function SellerDashboard() {
       setProductError(error?.message || 'Unable to save fabric right now.');
     } finally {
       setIsSavingProduct(false);
+    }
+  };
+
+  const handleSubmitProductChangeRequest = async () => {
+    if (!selectedFabric?.id) return;
+    const message = String(productChangeRequestMessage || '').trim();
+    if (!message) {
+      setProductError('Please enter a message for the admin change request.');
+      return;
+    }
+    try {
+      setSubmittingProductChangeRequest(true);
+      setProductError(null);
+      setProductSuccess(null);
+      const response = await api.productChangeRequests.createRequest({
+        productType: 'FABRIC',
+        productId: selectedFabric.id,
+        message,
+        requestedFields: productChangeRequestedFields,
+      });
+      if (!response.success) {
+        setProductError(response.message || 'Unable to submit product change request.');
+        return;
+      }
+      setProductChangeRequestMessage('');
+      setProductChangeRequestedFields([]);
+      setProductSuccess('Change request submitted to admin. You can continue editing allowed fields.');
+    } catch (error: any) {
+      setProductError(error?.response?.data?.message || error?.message || 'Unable to submit product change request.');
+    } finally {
+      setSubmittingProductChangeRequest(false);
     }
   };
 
@@ -1535,6 +1664,19 @@ export default function SellerDashboard() {
             : false;
         })
       : null;
+  const isApprovedProductEdit =
+    Boolean(isEditMode && selectedFabric && String(selectedFabric.status || '').toUpperCase() === 'APPROVED');
+  const editableFieldSet = new Set<string>(
+    isApprovedProductEdit
+      ? Array.isArray(selectedFabric?.approvedEditableFields)
+        ? selectedFabric.approvedEditableFields
+        : []
+      : [...ALL_FABRIC_EDITABLE_FIELDS]
+  );
+  const lockedFieldKeys = isApprovedProductEdit
+    ? ALL_FABRIC_EDITABLE_FIELDS.filter((field) => !editableFieldSet.has(field))
+    : [];
+  const isApprovedFieldLocked = (fieldKey: string) => isApprovedProductEdit && !editableFieldSet.has(fieldKey);
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -2555,7 +2697,7 @@ export default function SellerDashboard() {
                   onChange={(e) => setProductForm((prev) => ({ ...prev, name: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                   placeholder="e.g. Premium Ankara Cotton"
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.productName)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.productName) || isApprovedFieldLocked('name')}
                 />
               </div>
               <div className={`md:col-span-2 ${isFieldHidden(dashboardGovernance.fields.productDescription) ? 'hidden' : ''}`}>
@@ -2565,7 +2707,7 @@ export default function SellerDashboard() {
                   onChange={(e) => setProductForm((prev) => ({ ...prev, description: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg min-h-[90px]"
                   placeholder="Describe fabric quality, weave, and best use."
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.productDescription)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.productDescription) || isApprovedFieldLocked('description')}
                 />
               </div>
               <div className={isFieldHidden(dashboardGovernance.fields.materialType) ? 'hidden' : ''}>
@@ -2574,7 +2716,7 @@ export default function SellerDashboard() {
                   value={productForm.materialTypeId}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, materialTypeId: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.materialType)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.materialType) || isApprovedFieldLocked('materialTypeId')}
                 >
                   {materialOptions.length === 0 ? (
                     <option value="">No material types found</option>
@@ -2592,7 +2734,7 @@ export default function SellerDashboard() {
                   value={productForm.predominantColor}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, predominantColor: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.materialType)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.materialType) || isApprovedFieldLocked('predominantColor')}
                 >
                   {FABRIC_COLOR_OPTIONS.map((color) => (
                     <option key={color} value={color}>
@@ -2612,7 +2754,7 @@ export default function SellerDashboard() {
                   value={productForm.sellerPrice}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, sellerPrice: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.sellerPrice)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.sellerPrice) || isApprovedFieldLocked('sellerPrice')}
                 />
                 <p className="mt-1 text-xs text-gray-500">Converted USD: ${usdPricePreview.toFixed(2)}</p>
               </div>
@@ -2624,7 +2766,8 @@ export default function SellerDashboard() {
                   className="w-full px-4 py-2 border rounded-lg"
                   disabled={
                     isFieldReadOnly(dashboardGovernance.fields.listingCurrency) ||
-                    (currencyOptions.allowedCurrencies || []).length <= 1
+                    (currencyOptions.allowedCurrencies || []).length <= 1 ||
+                    isApprovedFieldLocked('sellerPrice')
                   }
                 >
                   {(currencyOptions.allowedCurrencies || [currencyOptions.defaultCurrency || 'USD']).map((code) => (
@@ -2643,7 +2786,7 @@ export default function SellerDashboard() {
                   value={productForm.minYards}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, minYards: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.minYards)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.minYards) || isApprovedFieldLocked('minYards')}
                 />
               </div>
               <div className={isFieldHidden(dashboardGovernance.fields.stockYards) ? 'hidden' : ''}>
@@ -2655,7 +2798,7 @@ export default function SellerDashboard() {
                   value={productForm.stockYards}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, stockYards: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.stockYards)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.stockYards) || isApprovedFieldLocked('stockYards')}
                 />
               </div>
               {!isFieldHidden(dashboardGovernance.fields.productImages) ? (
@@ -2673,7 +2816,7 @@ export default function SellerDashboard() {
                     type="button"
                     variant="outline"
                     onClick={handleAddProductImageUrl}
-                    disabled={isFieldReadOnly(dashboardGovernance.fields.productImages)}
+                    disabled={isFieldReadOnly(dashboardGovernance.fields.productImages) || isApprovedFieldLocked('images')}
                   >
                     Add URL
                   </Button>
@@ -2685,7 +2828,11 @@ export default function SellerDashboard() {
                       accept="image/*"
                       className="hidden"
                       onChange={handleProductImageUpload}
-                      disabled={uploadingProductImage || isFieldReadOnly(dashboardGovernance.fields.productImages)}
+                      disabled={
+                        uploadingProductImage ||
+                        isFieldReadOnly(dashboardGovernance.fields.productImages) ||
+                        isApprovedFieldLocked('images')
+                      }
                       multiple
                     />
                   </label>
@@ -2702,7 +2849,7 @@ export default function SellerDashboard() {
                           type="button"
                           onClick={() => handleRemoveProductImage(entry.url)}
                           className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white"
-                          disabled={isFieldReadOnly(dashboardGovernance.fields.productImages)}
+                          disabled={isFieldReadOnly(dashboardGovernance.fields.productImages) || isApprovedFieldLocked('images')}
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -2713,6 +2860,59 @@ export default function SellerDashboard() {
                 </div>
               ) : null}
             </div>
+
+            {isApprovedProductEdit ? (
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
+                <p className="text-sm font-semibold text-blue-900">Approved Product Edit Access</p>
+                <p className="text-xs text-blue-800">
+                  Editable fields: {Array.from(editableFieldSet).join(', ') || 'None configured by admin'}.
+                  {selectedFabric?.approvedEditAccessEndsAt
+                    ? ` Extended access expires ${new Date(selectedFabric.approvedEditAccessEndsAt).toLocaleString()}.`
+                    : ''}
+                </p>
+                {lockedFieldKeys.length > 0 ? (
+                  <div className="rounded border border-blue-200 bg-white p-3 space-y-2">
+                    <p className="text-xs font-semibold text-gray-800">
+                      Need changes to locked fields? Send request to admin.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {lockedFieldKeys.map((fieldKey) => (
+                        <label key={fieldKey} className="inline-flex items-center gap-2 rounded border px-2 py-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={productChangeRequestedFields.includes(fieldKey)}
+                            onChange={(event) =>
+                              setProductChangeRequestedFields((prev) => {
+                                if (event.target.checked) return Array.from(new Set([...prev, fieldKey]));
+                                return prev.filter((entry) => entry !== fieldKey);
+                              })
+                            }
+                          />
+                          {fieldKey}
+                        </label>
+                      ))}
+                    </div>
+                    <textarea
+                      value={productChangeRequestMessage}
+                      onChange={(event) => setProductChangeRequestMessage(event.target.value)}
+                      placeholder="Describe exactly what needs to change for this product..."
+                      className="h-20 w-full rounded border px-3 py-2 text-sm"
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                        onClick={handleSubmitProductChangeRequest}
+                        disabled={submittingProductChangeRequest}
+                      >
+                        {submittingProductChangeRequest ? 'Submitting...' : 'Submit Product Change Request'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {isEditMode && selectedFabric ? (
               <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
@@ -2819,6 +3019,11 @@ export default function SellerDashboard() {
             {productError ? (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                 {productError}
+              </div>
+            ) : null}
+            {productSuccess ? (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+                {productSuccess}
               </div>
             ) : null}
 

@@ -22,6 +22,13 @@ import { readTryOnInsights } from '../utils/try-on-insights';
 import { readTryOnSettings } from '../utils/try-on-settings';
 import { readVendorDashboardGovernanceSettings } from '../utils/vendor-dashboard-governance';
 import { readOrderWorkflowSettings } from '../utils/order-workflow';
+import {
+  getAllowedFieldsForApprovedProduct,
+  getFieldKeysForProductType,
+  readActiveProductEditGrant,
+  readActiveProductEditGrantsForProducts,
+  readProductEditPolicySettings,
+} from '../utils/product-change-requests';
 
 const router = Router();
 let designerGovernanceSchemaEnsured = false;
@@ -1178,9 +1185,16 @@ router.get('/designs', async (req, res, next) => {
       if (!existing.includes(row.section)) existing.push(row.section);
       featuredByProductId.set(row.productId, existing);
     }
-    const metadataRows = await Promise.all(
-      designs.map(async (item) => [item.id, await getProductCurrencyMetadata('DESIGN', item.id)] as const)
-    );
+    const [metadataRows, policy, grantsByDesignId] = await Promise.all([
+      Promise.all(designs.map(async (item) => [item.id, await getProductCurrencyMetadata('DESIGN', item.id)] as const)),
+      readProductEditPolicySettings(),
+      readActiveProductEditGrantsForProducts({
+        requesterUserId: req.user!.id,
+        requesterRole: 'FASHION_DESIGNER',
+        productType: 'DESIGN',
+        productIds: designs.map((item) => item.id),
+      }),
+    ]);
     const metadataByDesignId = new Map<string, any>(metadataRows);
 
     res.json({
@@ -1188,6 +1202,17 @@ router.get('/designs', async (req, res, next) => {
       data: designs.map((item) => {
         const featuredSections = featuredByProductId.get(item.id) || [];
         const currencyMeta = metadataByDesignId.get(item.id) || null;
+        const status = String(item.status || '').toUpperCase();
+        const activeGrant = grantsByDesignId[item.id];
+        const approvedEditableFields =
+          status === 'APPROVED'
+            ? getAllowedFieldsForApprovedProduct({
+                role: 'FASHION_DESIGNER',
+                productType: 'DESIGN',
+                policy,
+                activeGrant,
+              })
+            : getFieldKeysForProductType('DESIGN');
         return {
           ...item,
           isFeatured: featuredSections.length > 0,
@@ -1196,6 +1221,8 @@ router.get('/designs', async (req, res, next) => {
           listingLocalPrice: Number(currencyMeta?.localPrice || item.basePrice || 0),
           listingUsdPrice: Number(currencyMeta?.usdPrice || item.basePrice || 0),
           listingExchangeRate: Number(currencyMeta?.exchangeRate || 1),
+          approvedEditableFields,
+          approvedEditAccessEndsAt: activeGrant?.grantEndsAt || null,
         };
       }),
     });
@@ -1680,6 +1707,43 @@ router.patch('/designs/:id', async (req, res, next) => {
         message: 'Design not found.',
       });
     }
+    if (String(existing.status || '').toUpperCase() === 'APPROVED') {
+      const [policy, activeGrant] = await Promise.all([
+        readProductEditPolicySettings(),
+        readActiveProductEditGrant({
+          requesterUserId: req.user!.id,
+          requesterRole: 'FASHION_DESIGNER',
+          productType: 'DESIGN',
+          productId: id,
+        }),
+      ]);
+      const allowedFields = new Set(
+        getAllowedFieldsForApprovedProduct({
+          role: 'FASHION_DESIGNER',
+          productType: 'DESIGN',
+          policy,
+          activeGrant,
+        })
+      );
+      const attemptedFields = Object.entries(data)
+        .filter(([key, value]) => key !== 'priceCurrencyCode' && value !== undefined)
+        .map(([key]) => key);
+      if (data.priceCurrencyCode !== undefined && data.basePrice === undefined) {
+        attemptedFields.push('priceCurrencyCode');
+      }
+      const disallowed = attemptedFields.filter((field) => !allowedFields.has(field));
+      if (disallowed.length > 0) {
+        return res.status(403).json({
+          success: false,
+          message:
+            'For approved products, you can only edit admin-allowed fields. Submit a Product Change Request for additional changes.',
+          data: {
+            disallowedFields: disallowed,
+            allowedFields: Array.from(allowedFields),
+          },
+        });
+      }
+    }
     let normalizedSuitableFabrics:
       | Array<{
           fabricId: string;
@@ -1830,7 +1894,10 @@ router.patch('/designs/:id', async (req, res, next) => {
         ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
         ...(data.basePrice !== undefined ? { basePrice: nextBasePriceUsd } : {}),
         finalPrice: nextFinalPrice,
-        status: ProductStatus.PENDING_REVIEW,
+        status:
+          String(existing.status || '').toUpperCase() === 'APPROVED'
+            ? ProductStatus.APPROVED
+            : ProductStatus.PENDING_REVIEW,
       };
 
       if (data.suitableFabricIds) {
@@ -1935,9 +2002,16 @@ router.get('/ready-to-wear', async (req, res, next) => {
       if (!existing.includes(row.section)) existing.push(row.section);
       featuredByProductId.set(row.productId, existing);
     }
-    const metadataRows = await Promise.all(
-      products.map(async (item) => [item.id, await getProductCurrencyMetadata('READY_TO_WEAR', item.id)] as const)
-    );
+    const [metadataRows, policy, grantsByProductId] = await Promise.all([
+      Promise.all(products.map(async (item) => [item.id, await getProductCurrencyMetadata('READY_TO_WEAR', item.id)] as const)),
+      readProductEditPolicySettings(),
+      readActiveProductEditGrantsForProducts({
+        requesterUserId: req.user!.id,
+        requesterRole: 'FASHION_DESIGNER',
+        productType: 'READY_TO_WEAR',
+        productIds: products.map((item) => item.id),
+      }),
+    ]);
     const metadataByProductId = new Map<string, any>(metadataRows);
 
     res.json({
@@ -1945,6 +2019,17 @@ router.get('/ready-to-wear', async (req, res, next) => {
       data: products.map((item) => {
         const featuredSections = featuredByProductId.get(item.id) || [];
         const currencyMeta = metadataByProductId.get(item.id) || null;
+        const status = String(item.status || '').toUpperCase();
+        const activeGrant = grantsByProductId[item.id];
+        const approvedEditableFields =
+          status === 'APPROVED'
+            ? getAllowedFieldsForApprovedProduct({
+                role: 'FASHION_DESIGNER',
+                productType: 'READY_TO_WEAR',
+                policy,
+                activeGrant,
+              })
+            : getFieldKeysForProductType('READY_TO_WEAR');
         return {
           ...item,
           sizeVariations: Array.isArray(item.sizeVariations)
@@ -1972,6 +2057,8 @@ router.get('/ready-to-wear', async (req, res, next) => {
           listingLocalPrice: Number(currencyMeta?.localPrice || item.basePrice || 0),
           listingUsdPrice: Number(currencyMeta?.usdPrice || item.basePrice || 0),
           listingExchangeRate: Number(currencyMeta?.exchangeRate || 1),
+          approvedEditableFields,
+          approvedEditAccessEndsAt: activeGrant?.grantEndsAt || null,
         };
       }),
     });
@@ -2193,6 +2280,43 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         message: 'Ready-to-wear product not found.',
       });
     }
+    if (String(existing.status || '').toUpperCase() === 'APPROVED') {
+      const [policy, activeGrant] = await Promise.all([
+        readProductEditPolicySettings(),
+        readActiveProductEditGrant({
+          requesterUserId: req.user!.id,
+          requesterRole: 'FASHION_DESIGNER',
+          productType: 'READY_TO_WEAR',
+          productId: id,
+        }),
+      ]);
+      const allowedFields = new Set(
+        getAllowedFieldsForApprovedProduct({
+          role: 'FASHION_DESIGNER',
+          productType: 'READY_TO_WEAR',
+          policy,
+          activeGrant,
+        })
+      );
+      const attemptedFields = Object.entries(data)
+        .filter(([key, value]) => key !== 'priceCurrencyCode' && value !== undefined)
+        .map(([key]) => key);
+      if (data.priceCurrencyCode !== undefined && data.basePrice === undefined) {
+        attemptedFields.push('priceCurrencyCode');
+      }
+      const disallowed = attemptedFields.filter((field) => !allowedFields.has(field));
+      if (disallowed.length > 0) {
+        return res.status(403).json({
+          success: false,
+          message:
+            'For approved products, you can only edit admin-allowed fields. Submit a Product Change Request for additional changes.',
+          data: {
+            disallowedFields: disallowed,
+            allowedFields: Array.from(allowedFields),
+          },
+        });
+      }
+    }
     const existingCurrencyMeta = await getProductCurrencyMetadata('READY_TO_WEAR', id);
     const pricing =
       data.basePrice !== undefined
@@ -2220,7 +2344,10 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         ...(data.description !== undefined ? { description: data.description } : {}),
         ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
         ...(data.basePrice !== undefined ? { basePrice: nextBasePriceUsd } : {}),
-        status: ProductStatus.PENDING_REVIEW,
+        status:
+          String(existing.status || '').toUpperCase() === 'APPROVED'
+            ? ProductStatus.APPROVED
+            : ProductStatus.PENDING_REVIEW,
       };
       if (normalizedSizes) {
         payload.sizeVariations = {

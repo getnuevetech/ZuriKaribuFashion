@@ -16,6 +16,13 @@ import { readTryOnInsights } from '../utils/try-on-insights';
 import { readTryOnSettings } from '../utils/try-on-settings';
 import { readVendorDashboardGovernanceSettings } from '../utils/vendor-dashboard-governance';
 import { readFabricPredominantColorMap, writeFabricPredominantColor } from '../utils/fabric-attributes';
+import {
+  getAllowedFieldsForApprovedProduct,
+  getFieldKeysForProductType,
+  readActiveProductEditGrant,
+  readActiveProductEditGrantsForProducts,
+  readProductEditPolicySettings,
+} from '../utils/product-change-requests';
 
 const router = Router();
 let sellerGovernanceSchemaEnsured = false;
@@ -613,9 +620,16 @@ router.get('/fabrics', async (req, res, next) => {
       if (!existing.includes(row.section)) existing.push(row.section);
       featuredByFabricId.set(row.productId, existing);
     }
-    const metadataRows = await Promise.all(
-      fabrics.map(async (item) => [item.id, await getProductCurrencyMetadata('FABRIC', item.id)] as const)
-    );
+    const [metadataRows, policy, grantsByFabricId] = await Promise.all([
+      Promise.all(fabrics.map(async (item) => [item.id, await getProductCurrencyMetadata('FABRIC', item.id)] as const)),
+      readProductEditPolicySettings(),
+      readActiveProductEditGrantsForProducts({
+        requesterUserId: req.user!.id,
+        requesterRole: 'FABRIC_SELLER',
+        productType: 'FABRIC',
+        productIds: fabrics.map((item) => item.id),
+      }),
+    ]);
     const metadataByFabricId = new Map<string, any>(metadataRows);
     const colorMap = await readFabricPredominantColorMap(fabrics.map((item) => item.id));
 
@@ -624,6 +638,17 @@ router.get('/fabrics', async (req, res, next) => {
       data: fabrics.map((item) => {
         const featuredSections = featuredByFabricId.get(item.id) || [];
         const currencyMeta = metadataByFabricId.get(item.id) || null;
+        const status = String(item.status || '').toUpperCase();
+        const activeGrant = grantsByFabricId[item.id];
+        const approvedEditableFields =
+          status === 'APPROVED'
+            ? getAllowedFieldsForApprovedProduct({
+                role: 'FABRIC_SELLER',
+                productType: 'FABRIC',
+                policy,
+                activeGrant,
+              })
+            : getFieldKeysForProductType('FABRIC');
         return {
           ...item,
           isFeatured: featuredSections.length > 0,
@@ -633,6 +658,8 @@ router.get('/fabrics', async (req, res, next) => {
           listingUsdPrice: Number(currencyMeta?.usdPrice || item.sellerPrice || 0),
           listingExchangeRate: Number(currencyMeta?.exchangeRate || 1),
           predominantColor: colorMap[item.id] || null,
+          approvedEditableFields,
+          approvedEditAccessEndsAt: activeGrant?.grantEndsAt || null,
         };
       }),
     });
@@ -1026,6 +1053,43 @@ router.patch('/fabrics/:id', async (req, res, next) => {
         message: 'Fabric not found.',
       });
     }
+    if (String(existing.status || '').toUpperCase() === 'APPROVED') {
+      const [policy, activeGrant] = await Promise.all([
+        readProductEditPolicySettings(),
+        readActiveProductEditGrant({
+          requesterUserId: req.user!.id,
+          requesterRole: 'FABRIC_SELLER',
+          productType: 'FABRIC',
+          productId: id,
+        }),
+      ]);
+      const allowedFields = new Set(
+        getAllowedFieldsForApprovedProduct({
+          role: 'FABRIC_SELLER',
+          productType: 'FABRIC',
+          policy,
+          activeGrant,
+        })
+      );
+      const attemptedFields = Object.entries(data)
+        .filter(([key, value]) => key !== 'priceCurrencyCode' && value !== undefined)
+        .map(([key]) => key);
+      if (data.priceCurrencyCode !== undefined && data.sellerPrice === undefined) {
+        attemptedFields.push('priceCurrencyCode');
+      }
+      const disallowed = attemptedFields.filter((field) => !allowedFields.has(field));
+      if (disallowed.length > 0) {
+        return res.status(403).json({
+          success: false,
+          message:
+            'For approved products, you can only edit admin-allowed fields. Submit a Product Change Request for additional changes.',
+          data: {
+            disallowedFields: disallowed,
+            allowedFields: Array.from(allowedFields),
+          },
+        });
+      }
+    }
     const pricing =
       data.sellerPrice !== undefined
         ? await resolveSellerListingPrice({
@@ -1051,7 +1115,10 @@ router.patch('/fabrics/:id', async (req, res, next) => {
         ...(data.minYards !== undefined ? { minYards: Math.max(3, Number(data.minYards || 3)) } : {}),
         ...(data.stockYards !== undefined ? { stockYards: data.stockYards } : {}),
         finalPrice: nextFinalPrice,
-        status: ProductStatus.PENDING_REVIEW,
+        status:
+          String(existing.status || '').toUpperCase() === 'APPROVED'
+            ? ProductStatus.APPROVED
+            : ProductStatus.PENDING_REVIEW,
       };
       if (data.images) {
         payload.images = {

@@ -75,6 +75,8 @@ interface Design {
   listingCurrencyCode?: string;
   listingLocalPrice?: number;
   listingUsdPrice?: number;
+  approvedEditableFields?: string[];
+  approvedEditAccessEndsAt?: string | null;
 }
 
 interface ReadyProduct {
@@ -92,6 +94,8 @@ interface ReadyProduct {
   listingCurrencyCode?: string;
   listingLocalPrice?: number;
   listingUsdPrice?: number;
+  approvedEditableFields?: string[];
+  approvedEditAccessEndsAt?: string | null;
 }
 
 interface DesignOrder {
@@ -463,6 +467,23 @@ const READY_COLOR_OPTIONS = [
   'WHITE',
   'YELLOW',
 ];
+const ALL_DESIGN_EDITABLE_FIELDS = [
+  'name',
+  'description',
+  'categoryId',
+  'basePrice',
+  'suitableFabricIds',
+  'measurementVariables',
+  'images',
+] as const;
+const ALL_READY_TO_WEAR_EDITABLE_FIELDS = [
+  'name',
+  'description',
+  'categoryId',
+  'basePrice',
+  'sizes',
+  'images',
+] as const;
 const normalizeImageUrlList = (input: unknown): string[] =>
   (Array.isArray(input) ? input : [])
     .map((entry) => {
@@ -694,6 +715,11 @@ export default function DesignerDashboard() {
   const [featuredPaymentDrafts, setFeaturedPaymentDrafts] = useState<Record<string, { providerKey: string; reference: string }>>({});
   const [featuredPaymentActionRequestId, setFeaturedPaymentActionRequestId] = useState<string | null>(null);
   const [featuredPaymentMessage, setFeaturedPaymentMessage] = useState<string | null>(null);
+  const [productChangeRequestMessage, setProductChangeRequestMessage] = useState('');
+  const [productChangeRequestedFields, setProductChangeRequestedFields] = useState<string[]>([]);
+  const [submittingProductChangeRequest, setSubmittingProductChangeRequest] = useState(false);
+  const [designSuccess, setDesignSuccess] = useState<string | null>(null);
+  const [readySuccess, setReadySuccess] = useState<string | null>(null);
 
   const hasRejectionRestriction = profileCompletion?.profileStatus === 'REJECTED';
   const restrictedTabs = hasRejectionRestriction ? (['overview'] as const) : (['overview', 'designs', 'featured', 'orders', 'tryon'] as const);
@@ -982,6 +1008,8 @@ export default function DesignerDashboard() {
           listingCurrencyCode: String(design.listingCurrencyCode || 'USD'),
           listingLocalPrice: Number(design.listingLocalPrice || design.basePrice || 0),
           listingUsdPrice: Number(design.listingUsdPrice || design.basePrice || 0),
+          approvedEditableFields: Array.isArray(design.approvedEditableFields) ? design.approvedEditableFields : [],
+          approvedEditAccessEndsAt: design.approvedEditAccessEndsAt ? String(design.approvedEditAccessEndsAt) : null,
         }));
         setDesigns(mappedDesigns);
       }
@@ -1013,6 +1041,8 @@ export default function DesignerDashboard() {
           listingCurrencyCode: String(item.listingCurrencyCode || 'USD'),
           listingLocalPrice: Number(item.listingLocalPrice || item.basePrice || 0),
           listingUsdPrice: Number(item.listingUsdPrice || item.basePrice || 0),
+          approvedEditableFields: Array.isArray(item.approvedEditableFields) ? item.approvedEditableFields : [],
+          approvedEditAccessEndsAt: item.approvedEditAccessEndsAt ? String(item.approvedEditAccessEndsAt) : null,
         }));
         setReadyProducts(mappedReady);
       }
@@ -1418,9 +1448,12 @@ export default function DesignerDashboard() {
     setSelectedDesign(null);
     setIsEditMode(false);
     setDesignError(null);
+    setDesignSuccess(null);
     setDesignImageUrlInput('');
     setDesignSelectedFabricOptionId('');
     setFeaturedRequestNotes('');
+    setProductChangeRequestMessage('');
+    setProductChangeRequestedFields([]);
   };
 
   const openCreateDesignModal = () => {
@@ -1443,8 +1476,11 @@ export default function DesignerDashboard() {
     setIsReadyEditMode(false);
     setSelectedReadyForEdit(null);
     setReadyError(null);
+    setReadySuccess(null);
     setReadyImageUrlInput('');
     setFeaturedRequestNotes('');
+    setProductChangeRequestMessage('');
+    setProductChangeRequestedFields([]);
   };
 
   const openCreateReadyModal = () => {
@@ -1463,6 +1499,7 @@ export default function DesignerDashboard() {
     setSelectedDesign(design);
     setIsEditMode(true);
     setDesignError(null);
+    setDesignSuccess(null);
     setDesignForm({
       name: design.name,
       description: design.description || '',
@@ -1497,6 +1534,8 @@ export default function DesignerDashboard() {
     setDesignSelectedFabricOptionId('');
     setDesignImageUrlInput('');
     setFeaturedRequestNotes('');
+    setProductChangeRequestMessage('');
+    setProductChangeRequestedFields([]);
     setFeaturedRequestDurationValue(Math.max(1, Number(featuredSettings?.defaultDurationValue || 2)));
     setFeaturedRequestDurationUnit(
       String(featuredSettings?.defaultDurationUnit || 'WEEKS').toUpperCase() as 'DAYS' | 'WEEKS' | 'MONTHS'
@@ -1522,6 +1561,7 @@ export default function DesignerDashboard() {
     setIsReadyEditMode(true);
     setSelectedReadyForEdit(product);
     setReadyError(null);
+    setReadySuccess(null);
     setReadyImageUrlInput('');
     setReadyForm({
       name: product.name || '',
@@ -1533,6 +1573,8 @@ export default function DesignerDashboard() {
       variants: mappedVariants,
     });
     setFeaturedRequestNotes('');
+    setProductChangeRequestMessage('');
+    setProductChangeRequestedFields([]);
     setFeaturedRequestDurationValue(Math.max(1, Number(featuredSettings?.defaultDurationValue || 2)));
     setFeaturedRequestDurationUnit(
       String(featuredSettings?.defaultDurationUnit || 'WEEKS').toUpperCase() as 'DAYS' | 'WEEKS' | 'MONTHS'
@@ -1864,6 +1906,8 @@ export default function DesignerDashboard() {
     if (!isEditMode && !canAddDesignProduct) return;
     if (isEditMode && !canEditDesignProduct) return;
     setDesignError(null);
+    setDesignSuccess(null);
+
     const images = parseImageInputs(designForm.imageUrls);
     const selectedMeasurementSet = new Set(
       (designForm.selectedMeasurementNames || []).map((name) => String(name || '').trim()).filter(Boolean)
@@ -1880,54 +1924,125 @@ export default function DesignerDashboard() {
       fabricId,
       yardsNeeded: Number(designForm.yardsByFabricId[fabricId] || 1),
     }));
+    const isApprovedEdit = Boolean(isEditMode && selectedDesign && String(selectedDesign.status || '').toUpperCase() === 'APPROVED');
+    const editableFieldSet = new Set<string>(
+      isApprovedEdit
+        ? Array.isArray(selectedDesign?.approvedEditableFields)
+          ? selectedDesign.approvedEditableFields
+          : []
+        : [...ALL_DESIGN_EDITABLE_FIELDS]
+    );
 
-    if (!designForm.name.trim()) {
-      setDesignError('Design name is required.');
-      return;
+    const payload: any = {};
+    if (isApprovedEdit) {
+      if (editableFieldSet.has('name')) {
+        if (!designForm.name.trim()) {
+          setDesignError('Design name is required.');
+          return;
+        }
+        payload.name = designForm.name.trim();
+      }
+      if (editableFieldSet.has('description')) {
+        if (!designForm.description.trim() || designForm.description.trim().length < 10) {
+          setDesignError('Description must be at least 10 characters.');
+          return;
+        }
+        payload.description = designForm.description.trim();
+      }
+      if (editableFieldSet.has('categoryId')) {
+        if (!designForm.categoryId) {
+          setDesignError('Please select a style.');
+          return;
+        }
+        payload.categoryId = designForm.categoryId;
+      }
+      if (editableFieldSet.has('basePrice')) {
+        if (Number(designForm.basePrice || 0) <= 0) {
+          setDesignError('Base price must be greater than zero.');
+          return;
+        }
+        payload.basePrice = Number(designForm.basePrice);
+        payload.priceCurrencyCode = designForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD';
+      }
+      if (editableFieldSet.has('images')) {
+        if (images.length < 4 || images.length > 6) {
+          setDesignError('Custom-to-wear designs require 4 to 6 images.');
+          return;
+        }
+        payload.images = images;
+      }
+      if (editableFieldSet.has('suitableFabricIds')) {
+        if (suitableFabricIds.length === 0) {
+          setDesignError('Select at least one suitable fabric.');
+          return;
+        }
+        if (suitableFabricIds.length > maxSuitableFabricsPerDesign) {
+          setDesignError(`You can select up to ${maxSuitableFabricsPerDesign} suitable fabrics for each CTW product.`);
+          return;
+        }
+        if (suitableFabricIds.some((item) => Number(item.yardsNeeded || 0) < 1)) {
+          setDesignError('Each selected fabric must have yardsNeeded >= 1.');
+          return;
+        }
+        payload.suitableFabricIds = suitableFabricIds;
+      }
+      if (editableFieldSet.has('measurementVariables')) {
+        if (measurementVariables.length === 0) {
+          setDesignError('Select at least one measurement field.');
+          return;
+        }
+        payload.measurementVariables = measurementVariables;
+      }
+      if (Object.keys(payload).length === 0) {
+        setDesignError('No editable fields are enabled for this approved product.');
+        return;
+      }
+    } else {
+      if (!designForm.name.trim()) {
+        setDesignError('Design name is required.');
+        return;
+      }
+      if (!designForm.description.trim() || designForm.description.trim().length < 10) {
+        setDesignError('Description must be at least 10 characters.');
+        return;
+      }
+      if (!designForm.categoryId) {
+        setDesignError('Please select a style.');
+        return;
+      }
+      if (Number(designForm.basePrice || 0) <= 0) {
+        setDesignError('Base price must be greater than zero.');
+        return;
+      }
+      if (images.length < 4 || images.length > 6) {
+        setDesignError('Custom-to-wear designs require 4 to 6 images.');
+        return;
+      }
+      if (suitableFabricIds.length === 0) {
+        setDesignError('Select at least one suitable fabric.');
+        return;
+      }
+      if (suitableFabricIds.length > maxSuitableFabricsPerDesign) {
+        setDesignError(`You can select up to ${maxSuitableFabricsPerDesign} suitable fabrics for each CTW product.`);
+        return;
+      }
+      if (measurementVariables.length === 0) {
+        setDesignError('Select at least one measurement field.');
+        return;
+      }
+      if (suitableFabricIds.some((item) => Number(item.yardsNeeded || 0) < 1)) {
+        setDesignError('Each selected fabric must have yardsNeeded >= 1.');
+        return;
+      }
+      payload.name = designForm.name.trim();
+      payload.description = designForm.description.trim();
+      payload.categoryId = designForm.categoryId;
+      payload.basePrice = Number(designForm.basePrice);
+      payload.priceCurrencyCode = designForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD';
+      payload.suitableFabricIds = suitableFabricIds;
+      payload.measurementVariables = measurementVariables;
+      payload.images = images;
     }
-    if (!designForm.description.trim() || designForm.description.trim().length < 10) {
-      setDesignError('Description must be at least 10 characters.');
-      return;
-    }
-    if (!designForm.categoryId) {
-      setDesignError('Please select a style.');
-      return;
-    }
-    if (Number(designForm.basePrice || 0) <= 0) {
-      setDesignError('Base price must be greater than zero.');
-      return;
-    }
-    if (images.length < 4 || images.length > 6) {
-      setDesignError('Custom-to-wear designs require 4 to 6 images.');
-      return;
-    }
-    if (suitableFabricIds.length === 0) {
-      setDesignError('Select at least one suitable fabric.');
-      return;
-    }
-    if (suitableFabricIds.length > maxSuitableFabricsPerDesign) {
-      setDesignError(`You can select up to ${maxSuitableFabricsPerDesign} suitable fabrics for each CTW product.`);
-      return;
-    }
-    if (measurementVariables.length === 0) {
-      setDesignError('Select at least one measurement field.');
-      return;
-    }
-    if (suitableFabricIds.some((item) => Number(item.yardsNeeded || 0) < 1)) {
-      setDesignError('Each selected fabric must have yardsNeeded >= 1.');
-      return;
-    }
-
-    const payload = {
-      name: designForm.name.trim(),
-      description: designForm.description.trim(),
-      categoryId: designForm.categoryId,
-      basePrice: Number(designForm.basePrice),
-      priceCurrencyCode: designForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD',
-      suitableFabricIds,
-      measurementVariables,
-      images,
-    };
 
     setIsSavingDesign(true);
     try {
@@ -1957,6 +2072,7 @@ export default function DesignerDashboard() {
     if (!isReadyEditMode && !canAddReadyProduct) return;
     if (isReadyEditMode && !canEditReadyProduct) return;
     setReadyError(null);
+    setReadySuccess(null);
     const images = parseImageInputs(readyForm.imageUrls);
     const basePrice = Number(readyForm.basePrice || 0);
     const normalizedVariants = readyForm.variants.map((row) => ({
@@ -1965,69 +2081,154 @@ export default function DesignerDashboard() {
       price: Number(row.price || 0),
       stock: Number(row.stock || 0),
     }));
+    const isApprovedEdit = Boolean(
+      isReadyEditMode && selectedReadyForEdit && String(selectedReadyForEdit.status || '').toUpperCase() === 'APPROVED'
+    );
+    const editableFieldSet = new Set<string>(
+      isApprovedEdit
+        ? Array.isArray(selectedReadyForEdit?.approvedEditableFields)
+          ? selectedReadyForEdit.approvedEditableFields
+          : []
+        : [...ALL_READY_TO_WEAR_EDITABLE_FIELDS]
+    );
 
-    if (!readyForm.name.trim()) {
-      setReadyError('Product name is required.');
-      return;
-    }
-    if (!readyForm.description.trim() || readyForm.description.trim().length < 10) {
-      setReadyError('Description must be at least 10 characters.');
-      return;
-    }
-    if (!readyForm.categoryId) {
-      setReadyError('Please select a style.');
-      return;
-    }
-    if (basePrice <= 0) {
-      setReadyError('Base price must be greater than zero.');
-      return;
-    }
-    if (images.length < 3 || images.length > 5) {
-      setReadyError('Ready-to-wear products require 3 to 5 images.');
-      return;
-    }
-    if (normalizedVariants.length === 0) {
-      setReadyError('Please add at least one size/color variant.');
-      return;
-    }
-    if (
-      normalizedVariants.some(
-        (row) =>
-          !row.size ||
-          !row.color ||
-          !Number.isFinite(row.price) ||
-          row.price <= 0 ||
-          !Number.isFinite(row.stock) ||
-          row.stock < 0
-      )
-    ) {
-      setReadyError('Each variant must include size, color, price, and stock quantity (0 or greater).');
-      return;
-    }
-    if (new Set(normalizedVariants.map((row) => `${row.size}::${row.color}`)).size !== normalizedVariants.length) {
-      setReadyError('Duplicate size/color variants are not allowed.');
-      return;
-    }
-
-    try {
-      setIsSavingReady(true);
-      const payload = {
-        name: readyForm.name.trim(),
-        description: readyForm.description.trim(),
-        categoryId: readyForm.categoryId,
-        basePrice,
-        priceCurrencyCode: readyForm.priceCurrencyCode,
-        sizes: normalizedVariants.map((row) => ({
+    const payload: any = {};
+    if (isApprovedEdit) {
+      if (editableFieldSet.has('name')) {
+        if (!readyForm.name.trim()) {
+          setReadyError('Product name is required.');
+          return;
+        }
+        payload.name = readyForm.name.trim();
+      }
+      if (editableFieldSet.has('description')) {
+        if (!readyForm.description.trim() || readyForm.description.trim().length < 10) {
+          setReadyError('Description must be at least 10 characters.');
+          return;
+        }
+        payload.description = readyForm.description.trim();
+      }
+      if (editableFieldSet.has('categoryId')) {
+        if (!readyForm.categoryId) {
+          setReadyError('Please select a style.');
+          return;
+        }
+        payload.categoryId = readyForm.categoryId;
+      }
+      if (editableFieldSet.has('basePrice')) {
+        if (basePrice <= 0) {
+          setReadyError('Base price must be greater than zero.');
+          return;
+        }
+        payload.basePrice = basePrice;
+        payload.priceCurrencyCode = readyForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD';
+      }
+      if (editableFieldSet.has('images')) {
+        if (images.length < 3 || images.length > 5) {
+          setReadyError('Ready-to-wear products require 3 to 5 images.');
+          return;
+        }
+        payload.images = images.map((entry, index) => ({
+          url: entry.url,
+          alt: `${readyForm.name.trim() || 'Ready To Wear'} image ${index + 1}`,
+        }));
+      }
+      if (editableFieldSet.has('sizes')) {
+        if (normalizedVariants.length === 0) {
+          setReadyError('Please add at least one size/color variant.');
+          return;
+        }
+        if (
+          normalizedVariants.some(
+            (row) =>
+              !row.size ||
+              !row.color ||
+              !Number.isFinite(row.price) ||
+              row.price <= 0 ||
+              !Number.isFinite(row.stock) ||
+              row.stock < 0
+          )
+        ) {
+          setReadyError('Each variant must include size, color, price, and stock quantity (0 or greater).');
+          return;
+        }
+        if (new Set(normalizedVariants.map((row) => `${row.size}::${row.color}`)).size !== normalizedVariants.length) {
+          setReadyError('Duplicate size/color variants are not allowed.');
+          return;
+        }
+        payload.sizes = normalizedVariants.map((row) => ({
           size: row.size,
           color: row.color,
           price: row.price,
           stock: Math.max(0, Math.floor(row.stock)),
-        })),
-        images: images.map((entry, index) => ({
-          url: entry.url,
-          alt: `${readyForm.name.trim() || 'Ready To Wear'} image ${index + 1}`,
-        })),
-      };
+        }));
+      }
+      if (Object.keys(payload).length === 0) {
+        setReadyError('No editable fields are enabled for this approved product.');
+        return;
+      }
+    } else {
+      if (!readyForm.name.trim()) {
+        setReadyError('Product name is required.');
+        return;
+      }
+      if (!readyForm.description.trim() || readyForm.description.trim().length < 10) {
+        setReadyError('Description must be at least 10 characters.');
+        return;
+      }
+      if (!readyForm.categoryId) {
+        setReadyError('Please select a style.');
+        return;
+      }
+      if (basePrice <= 0) {
+        setReadyError('Base price must be greater than zero.');
+        return;
+      }
+      if (images.length < 3 || images.length > 5) {
+        setReadyError('Ready-to-wear products require 3 to 5 images.');
+        return;
+      }
+      if (normalizedVariants.length === 0) {
+        setReadyError('Please add at least one size/color variant.');
+        return;
+      }
+      if (
+        normalizedVariants.some(
+          (row) =>
+            !row.size ||
+            !row.color ||
+            !Number.isFinite(row.price) ||
+            row.price <= 0 ||
+            !Number.isFinite(row.stock) ||
+            row.stock < 0
+        )
+      ) {
+        setReadyError('Each variant must include size, color, price, and stock quantity (0 or greater).');
+        return;
+      }
+      if (new Set(normalizedVariants.map((row) => `${row.size}::${row.color}`)).size !== normalizedVariants.length) {
+        setReadyError('Duplicate size/color variants are not allowed.');
+        return;
+      }
+      payload.name = readyForm.name.trim();
+      payload.description = readyForm.description.trim();
+      payload.categoryId = readyForm.categoryId;
+      payload.basePrice = basePrice;
+      payload.priceCurrencyCode = readyForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD';
+      payload.sizes = normalizedVariants.map((row) => ({
+        size: row.size,
+        color: row.color,
+        price: row.price,
+        stock: Math.max(0, Math.floor(row.stock)),
+      }));
+      payload.images = images.map((entry, index) => ({
+        url: entry.url,
+        alt: `${readyForm.name.trim() || 'Ready To Wear'} image ${index + 1}`,
+      }));
+    }
+
+    try {
+      setIsSavingReady(true);
       if (isReadyEditMode && selectedReadyForEdit) {
         await api.designer.updateReadyToWear(selectedReadyForEdit.id, payload);
       } else {
@@ -2046,6 +2247,47 @@ export default function DesignerDashboard() {
       setReadyError(issueText || error?.response?.data?.message || error?.message || 'Failed to save ready-to-wear product.');
     } finally {
       setIsSavingReady(false);
+    }
+  };
+
+  const handleSubmitProductChangeRequest = async (productType: 'DESIGN' | 'READY_TO_WEAR', productId: string) => {
+    const message = String(productChangeRequestMessage || '').trim();
+    if (!message) {
+      if (productType === 'DESIGN') setDesignError('Please enter a message for the admin change request.');
+      else setReadyError('Please enter a message for the admin change request.');
+      return;
+    }
+    try {
+      setSubmittingProductChangeRequest(true);
+      if (productType === 'DESIGN') {
+        setDesignError(null);
+        setDesignSuccess(null);
+      } else {
+        setReadyError(null);
+        setReadySuccess(null);
+      }
+      const response = await api.productChangeRequests.createRequest({
+        productType,
+        productId,
+        message,
+        requestedFields: productChangeRequestedFields,
+      });
+      if (!response.success) {
+        const text = response.message || 'Unable to submit product change request.';
+        if (productType === 'DESIGN') setDesignError(text);
+        else setReadyError(text);
+        return;
+      }
+      setProductChangeRequestMessage('');
+      setProductChangeRequestedFields([]);
+      if (productType === 'DESIGN') setDesignSuccess('Change request submitted to admin. You can continue editing allowed fields.');
+      else setReadySuccess('Change request submitted to admin. You can continue editing allowed fields.');
+    } catch (error: any) {
+      const text = error?.response?.data?.message || error?.message || 'Unable to submit product change request.';
+      if (productType === 'DESIGN') setDesignError(text);
+      else setReadyError(text);
+    } finally {
+      setSubmittingProductChangeRequest(false);
     }
   };
 
@@ -2439,6 +2681,32 @@ export default function DesignerDashboard() {
             : false;
         })
       : null;
+  const isApprovedDesignEdit =
+    Boolean(isEditMode && selectedDesign && String(selectedDesign.status || '').toUpperCase() === 'APPROVED');
+  const designEditableFieldSet = new Set<string>(
+    isApprovedDesignEdit
+      ? Array.isArray(selectedDesign?.approvedEditableFields)
+        ? selectedDesign.approvedEditableFields
+        : []
+      : [...ALL_DESIGN_EDITABLE_FIELDS]
+  );
+  const designLockedFieldKeys = isApprovedDesignEdit
+    ? ALL_DESIGN_EDITABLE_FIELDS.filter((field) => !designEditableFieldSet.has(field))
+    : [];
+  const isApprovedDesignFieldLocked = (fieldKey: string) => isApprovedDesignEdit && !designEditableFieldSet.has(fieldKey);
+  const isApprovedReadyEdit =
+    Boolean(isReadyEditMode && selectedReadyForEdit && String(selectedReadyForEdit.status || '').toUpperCase() === 'APPROVED');
+  const readyEditableFieldSet = new Set<string>(
+    isApprovedReadyEdit
+      ? Array.isArray(selectedReadyForEdit?.approvedEditableFields)
+        ? selectedReadyForEdit.approvedEditableFields
+        : []
+      : [...ALL_READY_TO_WEAR_EDITABLE_FIELDS]
+  );
+  const readyLockedFieldKeys = isApprovedReadyEdit
+    ? ALL_READY_TO_WEAR_EDITABLE_FIELDS.filter((field) => !readyEditableFieldSet.has(field))
+    : [];
+  const isApprovedReadyFieldLocked = (fieldKey: string) => isApprovedReadyEdit && !readyEditableFieldSet.has(fieldKey);
   const fabricOptionById = useMemo(() => {
     const map = new Map<string, FabricOption>();
     for (const option of Object.values(designFabricCache)) {
@@ -3495,7 +3763,7 @@ export default function DesignerDashboard() {
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, name: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                   placeholder="e.g. Ready-to-wear Kaftan"
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.readyName)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.readyName) || isApprovedReadyFieldLocked('name')}
                 />
               </div>
 
@@ -3506,7 +3774,7 @@ export default function DesignerDashboard() {
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, description: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg min-h-[90px]"
                   placeholder="Describe fit, cut, fabric, and styling details."
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.readyDescription)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.readyDescription) || isApprovedReadyFieldLocked('description')}
                 />
               </div>
 
@@ -3516,7 +3784,7 @@ export default function DesignerDashboard() {
                   value={readyForm.categoryId}
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, categoryId: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.readyStyle)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.readyStyle) || isApprovedReadyFieldLocked('categoryId')}
                 >
                   {categories.length === 0 ? <option value="">No styles found</option> : null}
                   {categories.map((category) => (
@@ -3536,7 +3804,7 @@ export default function DesignerDashboard() {
                   value={readyForm.basePrice}
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, basePrice: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.readyBasePrice)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.readyBasePrice) || isApprovedReadyFieldLocked('basePrice')}
                 />
                 <p className="mt-1 text-xs text-gray-500">Converted USD: ${readyUsdPricePreview.toFixed(2)}</p>
               </div>
@@ -3549,7 +3817,8 @@ export default function DesignerDashboard() {
                   className="w-full px-4 py-2 border rounded-lg"
                   disabled={
                     isFieldReadOnly(dashboardGovernance.fields.readyListingCurrency) ||
-                    (currencyOptions.allowedCurrencies || []).length <= 1
+                    (currencyOptions.allowedCurrencies || []).length <= 1 ||
+                    isApprovedReadyFieldLocked('basePrice')
                   }
                 >
                   {(currencyOptions.allowedCurrencies || [currencyOptions.defaultCurrency || 'USD']).map((code) => (
@@ -3575,7 +3844,7 @@ export default function DesignerDashboard() {
                     type="button"
                     variant="outline"
                     onClick={handleAddReadyImageUrl}
-                    disabled={isFieldReadOnly(dashboardGovernance.fields.readyImages)}
+                    disabled={isFieldReadOnly(dashboardGovernance.fields.readyImages) || isApprovedReadyFieldLocked('images')}
                   >
                     Add URL
                   </Button>
@@ -3587,7 +3856,11 @@ export default function DesignerDashboard() {
                       accept="image/*"
                       className="hidden"
                       onChange={handleReadyImageUpload}
-                      disabled={readyUploadingImage || isFieldReadOnly(dashboardGovernance.fields.readyImages)}
+                      disabled={
+                        readyUploadingImage ||
+                        isFieldReadOnly(dashboardGovernance.fields.readyImages) ||
+                        isApprovedReadyFieldLocked('images')
+                      }
                       multiple
                     />
                   </label>
@@ -3604,7 +3877,7 @@ export default function DesignerDashboard() {
                           type="button"
                           onClick={() => handleRemoveReadyImage(entry.url)}
                           className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white"
-                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyImages)}
+                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyImages) || isApprovedReadyFieldLocked('images')}
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -3623,7 +3896,7 @@ export default function DesignerDashboard() {
                     variant="outline"
                     size="sm"
                     onClick={addReadyVariantRow}
-                    disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants)}
+                    disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants) || isApprovedReadyFieldLocked('sizes')}
                   >
                     <Plus className="w-4 h-4 mr-1" />
                     Add Variant
@@ -3645,7 +3918,7 @@ export default function DesignerDashboard() {
                             }))
                           }
                           className="w-full rounded-lg border px-3 py-2 text-sm"
-                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants)}
+                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants) || isApprovedReadyFieldLocked('sizes')}
                         >
                           {readySizeOptions.map((size) => (
                             <option key={size} value={size}>
@@ -3667,7 +3940,7 @@ export default function DesignerDashboard() {
                             }))
                           }
                           className="w-full rounded-lg border px-3 py-2 text-sm"
-                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants)}
+                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants) || isApprovedReadyFieldLocked('sizes')}
                         >
                           {!READY_COLOR_OPTIONS.includes(String(row.color || '').toUpperCase()) && row.color ? (
                             <option value={row.color}>{String(row.color).toUpperCase()}</option>
@@ -3695,7 +3968,7 @@ export default function DesignerDashboard() {
                             }))
                           }
                           className="w-full rounded-lg border px-3 py-2 text-sm"
-                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants)}
+                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants) || isApprovedReadyFieldLocked('sizes')}
                         />
                       </div>
                       <div className="md:col-span-2">
@@ -3714,7 +3987,7 @@ export default function DesignerDashboard() {
                             }))
                           }
                           className="w-full rounded-lg border px-3 py-2 text-sm"
-                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants)}
+                          disabled={isFieldReadOnly(dashboardGovernance.fields.readyVariants) || isApprovedReadyFieldLocked('sizes')}
                         />
                       </div>
                       <div className="md:col-span-2 flex items-end justify-end">
@@ -3722,7 +3995,11 @@ export default function DesignerDashboard() {
                           variant="outline"
                           size="sm"
                           onClick={() => removeReadyVariantRow(index)}
-                          disabled={readyForm.variants.length <= 1 || isFieldReadOnly(dashboardGovernance.fields.readyVariants)}
+                          disabled={
+                            readyForm.variants.length <= 1 ||
+                            isFieldReadOnly(dashboardGovernance.fields.readyVariants) ||
+                            isApprovedReadyFieldLocked('sizes')
+                          }
                         >
                           Remove
                         </Button>
@@ -3733,6 +4010,59 @@ export default function DesignerDashboard() {
                 </div>
               ) : null}
             </div>
+
+            {isApprovedReadyEdit ? (
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
+                <p className="text-sm font-semibold text-blue-900">Approved Product Edit Access</p>
+                <p className="text-xs text-blue-800">
+                  Editable fields: {Array.from(readyEditableFieldSet).join(', ') || 'None configured by admin'}.
+                  {selectedReadyForEdit?.approvedEditAccessEndsAt
+                    ? ` Extended access expires ${new Date(selectedReadyForEdit.approvedEditAccessEndsAt).toLocaleString()}.`
+                    : ''}
+                </p>
+                {readyLockedFieldKeys.length > 0 ? (
+                  <div className="rounded border border-blue-200 bg-white p-3 space-y-2">
+                    <p className="text-xs font-semibold text-gray-800">
+                      Need changes to locked fields? Send request to admin.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {readyLockedFieldKeys.map((fieldKey) => (
+                        <label key={fieldKey} className="inline-flex items-center gap-2 rounded border px-2 py-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={productChangeRequestedFields.includes(fieldKey)}
+                            onChange={(event) =>
+                              setProductChangeRequestedFields((prev) => {
+                                if (event.target.checked) return Array.from(new Set([...prev, fieldKey]));
+                                return prev.filter((entry) => entry !== fieldKey);
+                              })
+                            }
+                          />
+                          {fieldKey}
+                        </label>
+                      ))}
+                    </div>
+                    <textarea
+                      value={productChangeRequestMessage}
+                      onChange={(event) => setProductChangeRequestMessage(event.target.value)}
+                      placeholder="Describe exactly what needs to change for this product..."
+                      className="h-20 w-full rounded border px-3 py-2 text-sm"
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleSubmitProductChangeRequest('READY_TO_WEAR', selectedReadyForEdit?.id || '')}
+                        disabled={submittingProductChangeRequest || !selectedReadyForEdit?.id}
+                      >
+                        {submittingProductChangeRequest ? 'Submitting...' : 'Submit Product Change Request'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {isReadyEditMode && selectedReadyForEdit ? (
               <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
@@ -3841,6 +4171,11 @@ export default function DesignerDashboard() {
                 {readyError}
               </div>
             ) : null}
+            {readySuccess ? (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                {readySuccess}
+              </div>
+            ) : null}
 
             <div className="mt-5 flex justify-end gap-2">
               <Button
@@ -3880,7 +4215,7 @@ export default function DesignerDashboard() {
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, name: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
                   placeholder="e.g. Royal Kente Evening Gown"
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.designName)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.designName) || isApprovedDesignFieldLocked('name')}
                 />
               </div>
 
@@ -3891,7 +4226,7 @@ export default function DesignerDashboard() {
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, description: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg min-h-[90px]"
                   placeholder="Describe style, fit, silhouette, and special details."
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.designDescription)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.designDescription) || isApprovedDesignFieldLocked('description')}
                 />
               </div>
 
@@ -3901,7 +4236,7 @@ export default function DesignerDashboard() {
                   value={designForm.categoryId}
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, categoryId: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.designStyle)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.designStyle) || isApprovedDesignFieldLocked('categoryId')}
                 >
                   {categories.length === 0 ? <option value="">No styles found</option> : null}
                   {categories.map((category) => (
@@ -3923,7 +4258,7 @@ export default function DesignerDashboard() {
                   value={designForm.basePrice}
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, basePrice: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.designBasePrice)}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.designBasePrice) || isApprovedDesignFieldLocked('basePrice')}
                 />
                 <p className="mt-1 text-xs text-gray-500">Converted USD: ${usdPricePreview.toFixed(2)}</p>
               </div>
@@ -3936,7 +4271,8 @@ export default function DesignerDashboard() {
                   className="w-full px-4 py-2 border rounded-lg"
                   disabled={
                     isFieldReadOnly(dashboardGovernance.fields.designListingCurrency) ||
-                    (currencyOptions.allowedCurrencies || []).length <= 1
+                    (currencyOptions.allowedCurrencies || []).length <= 1 ||
+                    isApprovedDesignFieldLocked('basePrice')
                   }
                 >
                   {(currencyOptions.allowedCurrencies || [currencyOptions.defaultCurrency || 'USD']).map((code) => (
@@ -3962,7 +4298,7 @@ export default function DesignerDashboard() {
                     type="button"
                     variant="outline"
                     onClick={handleAddDesignImageUrl}
-                    disabled={isFieldReadOnly(dashboardGovernance.fields.designImages)}
+                    disabled={isFieldReadOnly(dashboardGovernance.fields.designImages) || isApprovedDesignFieldLocked('images')}
                   >
                     Add URL
                   </Button>
@@ -3974,7 +4310,11 @@ export default function DesignerDashboard() {
                       accept="image/*"
                       className="hidden"
                       onChange={handleDesignImageUpload}
-                      disabled={designUploadingImage || isFieldReadOnly(dashboardGovernance.fields.designImages)}
+                      disabled={
+                        designUploadingImage ||
+                        isFieldReadOnly(dashboardGovernance.fields.designImages) ||
+                        isApprovedDesignFieldLocked('images')
+                      }
                       multiple
                     />
                   </label>
@@ -3991,7 +4331,7 @@ export default function DesignerDashboard() {
                           type="button"
                           onClick={() => handleRemoveDesignImage(entry.url)}
                           className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white"
-                          disabled={isFieldReadOnly(dashboardGovernance.fields.designImages)}
+                          disabled={isFieldReadOnly(dashboardGovernance.fields.designImages) || isApprovedDesignFieldLocked('images')}
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -4032,7 +4372,8 @@ export default function DesignerDashboard() {
                           disabled={
                             fabricAccessLoading ||
                             !canRequestFabricCountryAccess ||
-                            isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)
+                            isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) ||
+                            isApprovedDesignFieldLocked('suitableFabricIds')
                           }
                         >
                           {fabricAccessAvailableCountries
@@ -4051,7 +4392,8 @@ export default function DesignerDashboard() {
                           className="rounded border px-2 py-1 text-xs"
                           disabled={
                             !canRequestFabricCountryAccess ||
-                            isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)
+                            isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) ||
+                            isApprovedDesignFieldLocked('suitableFabricIds')
                           }
                         />
                         <Button
@@ -4063,7 +4405,8 @@ export default function DesignerDashboard() {
                             fabricAccessSubmitting ||
                             fabricAccessLoading ||
                             !canRequestFabricCountryAccess ||
-                            isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)
+                            isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) ||
+                            isApprovedDesignFieldLocked('suitableFabricIds')
                           }
                         >
                           {fabricAccessSubmitting ? 'Submitting...' : 'Request Access'}
@@ -4092,7 +4435,7 @@ export default function DesignerDashboard() {
                           setDesignFabricMaterialFilter('');
                         }}
                         className="w-full rounded-lg border px-3 py-2 text-sm"
-                        disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)}
+                        disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) || isApprovedDesignFieldLocked('suitableFabricIds')}
                       >
                         <option value="">All allowed countries</option>
                         {fabricCountryOptions.map((country) => (
@@ -4108,7 +4451,7 @@ export default function DesignerDashboard() {
                         value={designFabricMaterialFilter}
                         onChange={(event) => setDesignFabricMaterialFilter(event.target.value)}
                         className="w-full rounded-lg border px-3 py-2 text-sm"
-                        disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)}
+                        disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) || isApprovedDesignFieldLocked('suitableFabricIds')}
                       >
                         <option value="">All materials</option>
                         {fabricMaterialOptions.map((material) => (
@@ -4126,7 +4469,7 @@ export default function DesignerDashboard() {
                         onChange={(event) => setDesignFabricSearch(event.target.value)}
                         className="w-full rounded-lg border px-3 py-2 text-sm"
                         placeholder="Search by fabric name"
-                        disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)}
+                        disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) || isApprovedDesignFieldLocked('suitableFabricIds')}
                       />
                     </div>
                   </div>
@@ -4136,7 +4479,7 @@ export default function DesignerDashboard() {
                       value={designSelectedFabricOptionId}
                       onChange={(event) => setDesignSelectedFabricOptionId(event.target.value)}
                       className="w-full rounded-lg border px-3 py-2 text-sm"
-                      disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)}
+                      disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) || isApprovedDesignFieldLocked('suitableFabricIds')}
                     >
                       <option value="">
                         {designFabricOptionsLoading
@@ -4155,7 +4498,11 @@ export default function DesignerDashboard() {
                       type="button"
                       variant="outline"
                       onClick={addSelectedFabricFromDropdown}
-                      disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) || hasReachedSuitableFabricLimit}
+                      disabled={
+                        isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) ||
+                        isApprovedDesignFieldLocked('suitableFabricIds') ||
+                        hasReachedSuitableFabricLimit
+                      }
                     >
                       Add Fabric
                     </Button>
@@ -4188,14 +4535,14 @@ export default function DesignerDashboard() {
                               }))
                             }
                             className="rounded border px-2 py-1 text-sm"
-                            disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)}
+                            disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) || isApprovedDesignFieldLocked('suitableFabricIds')}
                           />
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             onClick={() => removeSelectedFabric(fabric.id)}
-                            disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)}
+                            disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) || isApprovedDesignFieldLocked('suitableFabricIds')}
                           >
                             Remove
                           </Button>
@@ -4234,7 +4581,10 @@ export default function DesignerDashboard() {
                                 return { ...prev, selectedMeasurementNames: Array.from(new Set(next)) };
                               })
                             }
-                            disabled={isFieldReadOnly(dashboardGovernance.fields.designMeasurementVariables)}
+                            disabled={
+                              isFieldReadOnly(dashboardGovernance.fields.designMeasurementVariables) ||
+                              isApprovedDesignFieldLocked('measurementVariables')
+                            }
                           />
                           <span>
                             <span className="font-medium">{template.name}</span> ({template.unit})
@@ -4251,6 +4601,59 @@ export default function DesignerDashboard() {
                 </div>
               ) : null}
             </div>
+
+            {isApprovedDesignEdit ? (
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
+                <p className="text-sm font-semibold text-blue-900">Approved Product Edit Access</p>
+                <p className="text-xs text-blue-800">
+                  Editable fields: {Array.from(designEditableFieldSet).join(', ') || 'None configured by admin'}.
+                  {selectedDesign?.approvedEditAccessEndsAt
+                    ? ` Extended access expires ${new Date(selectedDesign.approvedEditAccessEndsAt).toLocaleString()}.`
+                    : ''}
+                </p>
+                {designLockedFieldKeys.length > 0 ? (
+                  <div className="rounded border border-blue-200 bg-white p-3 space-y-2">
+                    <p className="text-xs font-semibold text-gray-800">
+                      Need changes to locked fields? Send request to admin.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {designLockedFieldKeys.map((fieldKey) => (
+                        <label key={fieldKey} className="inline-flex items-center gap-2 rounded border px-2 py-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={productChangeRequestedFields.includes(fieldKey)}
+                            onChange={(event) =>
+                              setProductChangeRequestedFields((prev) => {
+                                if (event.target.checked) return Array.from(new Set([...prev, fieldKey]));
+                                return prev.filter((entry) => entry !== fieldKey);
+                              })
+                            }
+                          />
+                          {fieldKey}
+                        </label>
+                      ))}
+                    </div>
+                    <textarea
+                      value={productChangeRequestMessage}
+                      onChange={(event) => setProductChangeRequestMessage(event.target.value)}
+                      placeholder="Describe exactly what needs to change for this product..."
+                      className="h-20 w-full rounded border px-3 py-2 text-sm"
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleSubmitProductChangeRequest('DESIGN', selectedDesign?.id || '')}
+                        disabled={submittingProductChangeRequest || !selectedDesign?.id}
+                      >
+                        {submittingProductChangeRequest ? 'Submitting...' : 'Submit Product Change Request'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {isEditMode && selectedDesign ? (
               <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
@@ -4357,6 +4760,11 @@ export default function DesignerDashboard() {
             {designError ? (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                 {designError}
+              </div>
+            ) : null}
+            {designSuccess ? (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+                {designSuccess}
               </div>
             ) : null}
 

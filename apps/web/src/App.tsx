@@ -62,21 +62,26 @@ import AdminApiRouteDiagnostics from './pages/admin/ApiRouteDiagnostics';
 import AdminFeaturedRequests from './pages/admin/FeaturedRequests';
 import AdminNotificationCenter from './pages/admin/NotificationCenter';
 import AdminBackups from './pages/admin/Backups';
+import AdminProductChangeRequests from './pages/admin/ProductChangeRequests';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
 import SellerPayments from './pages/seller/Payments';
 import SellerProfilePage from './pages/seller/Profile';
 import SellerEnterprisePage from './pages/seller/Enterprise';
+import SellerMessagesPage from './pages/seller/Messages';
 
 // Designer Pages
 import DesignerDashboard from './pages/designer/Dashboard';
 import DesignerPayments from './pages/designer/Payments';
 import DesignerProfilePage from './pages/designer/Profile';
 import DesignerEnterprisePage from './pages/designer/Enterprise';
+import DesignerMessagesPage from './pages/designer/Messages';
 
 // QA Pages
 import QADashboard from './pages/qa/Dashboard';
+import QAMessagesPage from './pages/qa/Messages';
+import CustomerMessagesPage from './pages/customer/Messages';
 
 // Auth
 import ProtectedRoute from './components/ProtectedRoute';
@@ -146,6 +151,7 @@ function App() {
               <Route element={<DashboardLayout userType="customer" />}>
                 <Route path="/dashboard" element={<CustomerDashboard />} />
                 <Route path="/orders" element={<CustomerOrders />} />
+                <Route path="/dashboard/messages" element={<CustomerMessagesPage />} />
                 <Route path="/profile" element={<CustomerProfile />} />
                 <Route path="/measurements" element={<CustomerMeasurements />} />
               </Route>
@@ -245,6 +251,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['products:manage']}>
                       <AdminProductLabels />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/product-change-requests"
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminProductChangeRequests />
                     </AdminPermissionGuard>
                   }
                 />
@@ -398,6 +412,7 @@ function App() {
                 <Route path="/seller/payments" element={<SellerPayments />} />
                 <Route path="/seller/profile" element={<SellerProfilePage />} />
                 <Route path="/seller/enterprise" element={<SellerEnterprisePage />} />
+                <Route path="/seller/messages" element={<SellerMessagesPage />} />
               </Route>
             </Route>
 
@@ -408,6 +423,7 @@ function App() {
                 <Route path="/designer/payments" element={<DesignerPayments />} />
                 <Route path="/designer/profile" element={<DesignerProfilePage />} />
                 <Route path="/designer/enterprise" element={<DesignerEnterprisePage />} />
+                <Route path="/designer/messages" element={<DesignerMessagesPage />} />
               </Route>
             </Route>
 
@@ -415,6 +431,7 @@ function App() {
             <Route element={<ProtectedRoute allowedRoles={['QA_TEAM']} />}>
               <Route element={<DashboardLayout userType="qa" />}>
                 <Route path="/qa" element={<QADashboard />} />
+                <Route path="/qa/messages" element={<QAMessagesPage />} />
               </Route>
             </Route>
 

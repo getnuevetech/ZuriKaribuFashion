@@ -8610,6 +8610,116 @@ const featuredRequestsApi = {
   ) => apiService.patch<{ success: boolean; data?: any; message?: string }>(`/featured-requests/admin/requests/${requestId}/review`, data),
 };
 
+const productChangeRequestsApi = {
+  getPolicy: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        role: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+        allowedFieldsByProductType: Record<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR', string[]>;
+        defaultGrantDurationHours: number;
+        fieldCatalog: Array<{ key: string; label: string; productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR' }>;
+      };
+    }>('/product-change-requests/policy'),
+
+  listMyRequests: (params?: { status?: string; page?: number; limit?: number }) =>
+    apiService.get<{
+      success: boolean;
+      data: { requests: any[]; pagination: { page: number; limit: number; total: number; pages: number } };
+    }>('/product-change-requests/requests/my', { params }),
+
+  createRequest: (payload: {
+    productType?: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+    productId: string;
+    message: string;
+    requestedFields?: string[];
+  }) =>
+    apiService.post<{ success: boolean; data?: { id: string }; message?: string }>('/product-change-requests/requests', payload),
+
+  getAdminConfig: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        defaultGrantDurationHours: number;
+        allowedFieldsByRole: Record<'FABRIC_SELLER' | 'FASHION_DESIGNER', Record<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR', string[]>>;
+        fieldCatalog: Array<{ key: string; label: string; productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR' }>;
+      };
+    }>('/product-change-requests/admin/config'),
+
+  updateAdminConfig: (payload: {
+    defaultGrantDurationHours?: number;
+    allowedFieldsByRole?: {
+      FABRIC_SELLER?: { FABRIC?: string[]; DESIGN?: string[]; READY_TO_WEAR?: string[] };
+      FASHION_DESIGNER?: { FABRIC?: string[]; DESIGN?: string[]; READY_TO_WEAR?: string[] };
+    };
+  }) =>
+    apiService.put<{ success: boolean; data?: any; message?: string }>('/product-change-requests/admin/config', payload),
+
+  listAdminRequests: (params?: {
+    status?: string;
+    role?: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+    productType?: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) =>
+    apiService.get<{
+      success: boolean;
+      data: { requests: any[]; pagination: { page: number; limit: number; total: number; pages: number } };
+    }>('/product-change-requests/admin/requests', { params }),
+
+  reviewAdminRequest: (
+    requestId: string,
+    payload: {
+      status: 'APPROVED' | 'REJECTED';
+      reviewNote?: string;
+      grantAllChanges?: boolean;
+      grantedFields?: string[];
+      grantDurationHours?: number;
+    }
+  ) =>
+    apiService.patch<{ success: boolean; message?: string }>(
+      `/product-change-requests/admin/requests/${requestId}/review`,
+      payload
+    ),
+};
+
+const messagesApi = {
+  getInbox: (params?: { page?: number; limit?: number; unreadOnly?: boolean }) =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        messages: Array<{
+          id: string;
+          source: 'IN_APP' | 'DISPATCH';
+          title: string;
+          subject: string;
+          body: string;
+          roleTarget?: string | null;
+          userTarget?: string | null;
+          sentEmail?: boolean;
+          sentPush?: boolean;
+          sentInApp?: boolean;
+          deliveryStatus?: string;
+          isRead?: boolean;
+          createdAt: string;
+          relatedType?: string | null;
+          relatedId?: string | null;
+        }>;
+        unreadCount: number;
+        pagination: { page: number; limit: number; total: number; pages: number };
+      };
+    }>('/messages/inbox', {
+      params: {
+        ...params,
+        unreadOnly: params?.unreadOnly ? 'true' : undefined,
+      },
+    }),
+
+  markInboxRead: (payload: { notificationIds?: string[]; markAll?: boolean }) =>
+    apiService.patch<{ success: boolean; message?: string }>('/messages/inbox/read', payload),
+};
+
 const enterpriseApi = {
   getMe: () =>
     apiService.get<{ success: boolean; data: any }>('/enterprise/me'),
@@ -8690,6 +8800,8 @@ export const api = {
   blogs: blogsApi,
   promotions: promotionsApi,
   featuredRequests: featuredRequestsApi,
+  productChangeRequests: productChangeRequestsApi,
+  messages: messagesApi,
   enterprise: enterpriseApi,
 };
 
@@ -8713,6 +8825,8 @@ export {
   blogsApi,
   promotionsApi,
   featuredRequestsApi,
+  productChangeRequestsApi,
+  messagesApi,
   enterpriseApi,
   apiService,
   httpClient,

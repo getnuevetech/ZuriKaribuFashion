@@ -27,6 +27,7 @@ import {
   Bell,
   Database,
   Search,
+  Mail,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -86,6 +87,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Product Lists', href: '/seller?tab=fabrics', icon: Package },
     { label: '3D TryON', href: '/seller?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/seller?tab=orders', icon: ShoppingBag },
+    { label: 'Messages', href: '/seller/messages', icon: Mail },
     { label: 'Payment', href: '/seller/payments', icon: CreditCard },
     { label: 'Enterprise', href: '/seller/enterprise', icon: Users },
     { label: 'Profile', href: '/seller/profile', icon: User },
@@ -95,6 +97,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Product Lists', href: '/designer?tab=designs', icon: Package },
     { label: '3D TryON', href: '/designer?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/designer?tab=orders', icon: ShoppingBag },
+    { label: 'Messages', href: '/designer/messages', icon: Mail },
     { label: 'Payment', href: '/designer/payments', icon: CreditCard },
     { label: 'Enterprise', href: '/designer/enterprise', icon: Users },
     { label: 'Profile', href: '/designer/profile', icon: User },
@@ -102,11 +105,13 @@ const navItems: Record<DashboardType, NavItem[]> = {
   qa: [
     { label: 'Dashboard', href: '/qa', icon: LayoutDashboard },
     { label: 'Orders', href: '/qa?tab=pending', icon: ClipboardCheck },
+    { label: 'Messages', href: '/qa/messages', icon: Mail },
   ],
   customer: [
     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { label: '3D TryON', href: '/dashboard?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/orders', icon: ShoppingBag },
+    { label: 'Messages', href: '/dashboard/messages', icon: Mail },
     { label: 'Profile', href: '/profile', icon: User },
     { label: 'Measurements', href: '/measurements', icon: Ruler },
   ],
@@ -153,6 +158,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/products': ['products:manage'],
       '/admin/products/configuration': ['products:manage'],
       '/admin/product-labels': ['products:manage'],
+      '/admin/product-change-requests': ['products:manage'],
       '/admin/pricing': ['pricing:manage'],
       '/admin/promo-codes': ['pricing:manage'],
       '/admin/payments': ['payments:manage'],
@@ -204,6 +210,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Product', href: '/admin/products', icon: ChevronRight },
     { label: 'Product Configuration', href: '/admin/products/configuration', icon: ChevronRight },
     { label: 'Product Labels', href: '/admin/product-labels', icon: ChevronRight },
+    { label: 'Product Change Request', href: '/admin/product-change-requests', icon: ChevronRight },
   ];
   const [dashboardSearchQuery, setDashboardSearchQuery] = useState('');
   const [isDashboardSearchOpen, setIsDashboardSearchOpen] = useState(false);
@@ -503,7 +510,8 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                 const productMenuActive =
                   location.pathname === '/admin/products' ||
                   location.pathname === '/admin/products/configuration' ||
-                  location.pathname === '/admin/product-labels';
+                  location.pathname === '/admin/product-labels' ||
+                  location.pathname === '/admin/product-change-requests';
                 const visibleProductSubmenu = productManagementSubmenu.filter((subItem) =>
                   canAccessAdminNav(subItem.href)
                 );

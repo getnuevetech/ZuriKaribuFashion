@@ -40,6 +40,8 @@ import adminDesignerFabricCountryAccessRoutes from './routes/admin-designer-fabr
 import featuredProductRequestsRoutes from './routes/featured-product-requests';
 import enterpriseRoutes from './routes/enterprise';
 import adminBackupsRoutes from './routes/admin-backups';
+import productChangeRequestRoutes from './routes/product-change-requests';
+import messageRoutes from './routes/messages';
 import { runStartupRepairs } from './bootstrap';
 
 const app = express();
@@ -223,6 +225,8 @@ app.use('/api/featured-product-requests', featuredProductRequestsRoutes);
 app.use('/api/enterprise', enterpriseRoutes);
 app.use('/api/admin/enterprise', enterpriseRoutes);
 app.use('/api/admin/backups', adminBackupsRoutes);
+app.use('/api/product-change-requests', productChangeRequestRoutes);
+app.use('/api/messages', messageRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
