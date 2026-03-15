@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { 
   Heart, 
   Share2, 
@@ -9,17 +9,25 @@ import {
   Shirt,
   ShoppingBag,
   Eye,
+  Sparkles,
   ChevronLeft,
-  ChevronRight,
-  Check
+  ChevronRight
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
 import { useCurrencyStore } from '../store/currencyStore';
 import { resolveCountryCode } from '../data/locationOptions';
+import {
+  buildMeasurementDropdownOptions,
+  normalizeMeasurementKey,
+  readMeasurementCache,
+  writeMeasurementCache,
+} from '../utils/measurementOptions';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
+
+const MEASUREMENT_CACHE_KEY = 'af_customer_measurement_profile_v1';
 
 interface Design {
   id: string;
@@ -91,6 +99,7 @@ interface DiscoverProduct {
 export default function DesignDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
   const { addItem } = useCartStore();
   const { formatFromUsd } = useCurrencyStore();
@@ -105,7 +114,13 @@ export default function DesignDetail() {
   const [fabricPreferenceNotes, setFabricPreferenceNotes] = useState('');
   const [fabricMeters, setFabricMeters] = useState<Record<string, number>>({});
   const [measurements, setMeasurements] = useState<Record<string, number>>({});
+  const [measurementSeed, setMeasurementSeed] = useState<Record<string, number>>({});
   const [showMeasurementModal, setShowMeasurementModal] = useState(false);
+  const [showTryOnPopup, setShowTryOnPopup] = useState(false);
+  const [tryOnGenerating, setTryOnGenerating] = useState(false);
+  const [tryOnGenerated, setTryOnGenerated] = useState(false);
+  const [persistingMeasurements, setPersistingMeasurements] = useState(false);
+  const [tryOnChoice, setTryOnChoice] = useState<'UNDECIDED' | 'RUN_TRY_ON' | 'SKIP_TRY_ON'>('UNDECIDED');
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [reviews, setReviews] = useState<ProductReview[]>([]);
@@ -116,7 +131,7 @@ export default function DesignDetail() {
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [discoverProducts, setDiscoverProducts] = useState<DiscoverProduct[]>([]);
   const [cartMessage, setCartMessage] = useState('');
-  const [activeTab, setActiveTab] = useState<'details' | 'fabrics' | 'measurements'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'fabrics' | 'measurements' | 'tryon'>('details');
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
@@ -163,6 +178,59 @@ export default function DesignDetail() {
     };
   }, [id]);
 
+  useEffect(() => {
+    if (!cartMessage) return;
+    const timer = window.setTimeout(() => setCartMessage(''), 3500);
+    return () => window.clearTimeout(timer);
+  }, [cartMessage]);
+
+  useEffect(() => {
+    const localSeed = readMeasurementCache(MEASUREMENT_CACHE_KEY);
+    setMeasurementSeed(localSeed);
+  }, []);
+
+  useEffect(() => {
+    if (!user || String(user.role || '').toUpperCase() !== 'CUSTOMER') return;
+    let cancelled = false;
+    api.customer
+      .getTryOnSummary()
+      .then((response) => {
+        if (cancelled || !response?.success) return;
+        const source = response.data?.measurements;
+        if (!source || typeof source !== 'object') return;
+        const normalized = Object.entries(source as Record<string, unknown>).reduce((acc, [key, value]) => {
+          const parsed = Number(value);
+          if (!Number.isFinite(parsed) || parsed <= 0) return acc;
+          acc[normalizeMeasurementKey(key)] = Number(parsed.toFixed(2));
+          return acc;
+        }, {} as Record<string, number>);
+        if (Object.keys(normalized).length > 0) {
+          setMeasurementSeed((prev) => ({ ...prev, ...normalized }));
+          writeMeasurementCache(MEASUREMENT_CACHE_KEY, normalized);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!design) return;
+    if (!measurementSeed || Object.keys(measurementSeed).length === 0) return;
+    setMeasurements((previous) => {
+      const next = { ...previous };
+      for (const measurement of design.measurements || []) {
+        const key = normalizeMeasurementKey(measurement.name);
+        const existing = Number(next[measurement.name] || 0);
+        const seeded = Number(measurementSeed[key] || 0);
+        if (existing > 0 || seeded <= 0) continue;
+        next[measurement.name] = seeded;
+      }
+      return next;
+    });
+  }, [design, measurementSeed]);
+
   const fetchDesign = async () => {
     try {
       setLoading(true);
@@ -185,7 +253,27 @@ export default function DesignDetail() {
     }
   };
 
-  const handleAddToCart = () => {
+  const persistMeasurementProfile = async (values: Record<string, number>) => {
+    const normalizedValues = Object.entries(values || {}).reduce((acc, [key, value]) => {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || parsed <= 0) return acc;
+      acc[normalizeMeasurementKey(key)] = Number(parsed.toFixed(2));
+      return acc;
+    }, {} as Record<string, number>);
+    writeMeasurementCache(MEASUREMENT_CACHE_KEY, normalizedValues);
+    setMeasurementSeed((prev) => ({ ...prev, ...normalizedValues }));
+    if (!user || String(user.role || '').toUpperCase() !== 'CUSTOMER') return;
+    try {
+      setPersistingMeasurements(true);
+      await api.customer.saveMeasurements({ measurements: normalizedValues });
+    } catch {
+      // Keep the flow non-blocking; local cache still prevents duplicate entry.
+    } finally {
+      setPersistingMeasurements(false);
+    }
+  };
+
+  const handleAddToCart = async () => {
     if (!areAllRequiredMeasurementsFilled()) {
       setActiveTab('measurements');
       return;
@@ -200,6 +288,7 @@ export default function DesignDetail() {
     const fabric = selectedFabric ? design.suitableFabrics.find(sf => sf.fabric.id === selectedFabric) : null;
     if (fabricSelectionMode === 'CUSTOMER_SELECTED' && !fabric) return;
 
+    await persistMeasurementProfile(measurements);
     const cartItem = {
       designId: design.id,
       designName: design.name,
@@ -219,21 +308,63 @@ export default function DesignDetail() {
     };
 
     addItem(cartItem);
-    setCartMessage('Added to cart. Continue to checkout when ready.');
-    navigate('/cart');
+    setCartMessage('Product added to cart. Use the floating Checkout button when ready.');
+  };
+
+  const handleStartDesignFlow = () => {
+    setActiveTab('measurements');
   };
 
   const handleTryOn = () => {
-    const tryOnFabricId = selectedFabric || design?.suitableFabrics?.[0]?.fabric?.id;
-    if (!tryOnFabricId) {
-      setActiveTab('fabrics');
+    setTryOnChoice('RUN_TRY_ON');
+    setActiveTab('tryon');
+  };
+
+  const handleContinueFromMeasurements = async () => {
+    if (!areAllRequiredMeasurementsFilled()) {
       return;
     }
-    if (!user) {
-      navigate('/login');
+    await persistMeasurementProfile(measurements);
+    setActiveTab('fabrics');
+  };
+
+  const handleContinueFromFabrics = () => {
+    if (fabricSelectionMode === 'CUSTOMER_SELECTED' && !selectedFabric) {
       return;
     }
-    navigate(`/try-on/${id}?fabric=${tryOnFabricId}`);
+    setActiveTab('tryon');
+  };
+
+  const handleContinueToLoginForMeasurementSync = () => {
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+    navigate(`/login?returnTo=${encodeURIComponent(returnTo)}`, {
+      state: { from: location },
+    });
+  };
+
+  const handleOpenTryOnPopup = async () => {
+    if (!areAllRequiredMeasurementsFilled()) {
+      setActiveTab('measurements');
+      return;
+    }
+    await persistMeasurementProfile(measurements);
+    setTryOnGenerating(false);
+    setTryOnGenerated(false);
+    setShowTryOnPopup(true);
+  };
+
+  const handleGenerateTryOnPreview = async () => {
+    setTryOnGenerating(true);
+    setTryOnGenerated(false);
+    await persistMeasurementProfile(measurements);
+    await new Promise((resolve) => window.setTimeout(resolve, 900));
+    setTryOnGenerating(false);
+    setTryOnGenerated(true);
+  };
+
+  const handleTryOnAddToCart = async () => {
+    await handleAddToCart();
+    setShowTryOnPopup(false);
   };
 
   const handleToggleLike = async () => {
@@ -293,7 +424,11 @@ export default function DesignDetail() {
   };
 
   const handleMeasurementChange = (name: string, value: number) => {
-    setMeasurements(prev => ({ ...prev, [name]: value }));
+    setMeasurements((prev) => {
+      const next = { ...prev, [name]: value };
+      writeMeasurementCache(MEASUREMENT_CACHE_KEY, next);
+      return next;
+    });
   };
 
   const areAllRequiredMeasurementsFilled = () => {
@@ -493,16 +628,21 @@ export default function DesignDetail() {
             {/* Tabs */}
             <div className="border-b">
               <div className="flex gap-6">
-                {(['details', 'fabrics', 'measurements'] as const).map((tab) => (
+                {[
+                  { key: 'details' as const, label: 'Details' },
+                  { key: 'measurements' as const, label: 'Measurements' },
+                  { key: 'fabrics' as const, label: 'Fabrics' },
+                  { key: 'tryon' as const, label: '3D TryOn' },
+                ].map((tab) => (
                   <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
                     className={`pb-3 text-sm font-medium capitalize transition-colors relative ${
-                      activeTab === tab ? 'text-black' : 'text-gray-500 hover:text-gray-700'
+                      activeTab === tab.key ? 'text-black' : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
-                    {tab}
-                    {activeTab === tab && (
+                    {tab.label}
+                    {activeTab === tab.key && (
                       <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
                     )}
                   </button>
@@ -662,6 +802,11 @@ export default function DesignDetail() {
                       })()}
                     </>
                   )}
+                  <div className="pt-2">
+                    <Button className="w-full rounded-none" onClick={handleContinueFromFabrics}>
+                      Continue to 3D TryOn options
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -669,7 +814,7 @@ export default function DesignDetail() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-gray-600">
-                      Enter your measurements for a perfect fit.
+                      Select your measurements to start this design process.
                     </p>
                     <button
                       onClick={() => setShowMeasurementModal(true)}
@@ -687,46 +832,107 @@ export default function DesignDetail() {
                       {design.measurements.map((measurement) => (
                         <div key={measurement.name} className="space-y-1">
                           <label className="text-sm font-medium text-gray-700">
-                            {measurement.name}
+                            {measurement.name} ({measurement.unit || 'cm'})
                             {measurement.isRequired && <span className="text-red-500">*</span>}
                           </label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={measurements[measurement.name] || ''}
-                              onChange={(e) => handleMeasurementChange(measurement.name, parseFloat(e.target.value))}
-                              placeholder={measurement.description}
-                              className="w-full border px-3 py-2 text-sm focus:border-black focus:ring-2 focus:ring-black/20"
-                            />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
-                              {measurement.unit}
-                            </span>
-                          </div>
+                          <select
+                            value={measurements[measurement.name] || ''}
+                            onChange={(event) => handleMeasurementChange(measurement.name, Number(event.target.value || 0))}
+                            className="w-full border px-3 py-2 text-sm focus:border-black focus:ring-2 focus:ring-black/20"
+                          >
+                            <option value="">Select value</option>
+                            {buildMeasurementDropdownOptions(measurement.name, measurement.unit).map((value) => (
+                              <option key={`${measurement.name}-${value}`} value={value}>
+                                {value} {measurement.unit || 'cm'}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       ))}
                     </div>
                   )}
+                  {(!user || String(user.role || '').toUpperCase() !== 'CUSTOMER') ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 border bg-gray-50 p-3 text-xs text-gray-700">
+                      <span>Sign in to keep your measurements saved across every product and TryOn flow.</span>
+                      <Button
+                        variant="outline"
+                        className="rounded-none"
+                        onClick={handleContinueToLoginForMeasurementSync}
+                      >
+                        Sign in to sync
+                      </Button>
+                    </div>
+                  ) : null}
+                  <Button
+                    className="w-full rounded-none"
+                    onClick={() => void handleContinueFromMeasurements()}
+                    disabled={!areAllRequiredMeasurementsFilled() || persistingMeasurements}
+                  >
+                    {persistingMeasurements ? 'Saving measurements...' : 'Submit measurements & continue to fabrics'}
+                  </Button>
+                </div>
+              )}
+
+              {activeTab === 'tryon' && (
+                <div className="space-y-4">
+                  <div className="border bg-gray-50 p-4 text-sm text-gray-700">
+                    Keep everything on this page: choose whether to run 3D TryOn before adding to cart.
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setTryOnChoice('RUN_TRY_ON')}
+                      className={`border px-3 py-2 text-left text-sm ${
+                        tryOnChoice === 'RUN_TRY_ON'
+                          ? 'border-black bg-black text-white'
+                          : 'border-gray-200 bg-white text-gray-800'
+                      }`}
+                    >
+                      Yes, open 3D TryOn popup
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTryOnChoice('SKIP_TRY_ON')}
+                      className={`border px-3 py-2 text-left text-sm ${
+                        tryOnChoice === 'SKIP_TRY_ON'
+                          ? 'border-black bg-black text-white'
+                          : 'border-gray-200 bg-white text-gray-800'
+                      }`}
+                    >
+                      Skip 3D TryOn and continue
+                    </button>
+                  </div>
+                  {tryOnChoice === 'RUN_TRY_ON' ? (
+                    <Button className="w-full rounded-none" onClick={() => void handleOpenTryOnPopup()}>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Open 3D TryOn popup
+                    </Button>
+                  ) : null}
+                  {tryOnChoice === 'SKIP_TRY_ON' ? (
+                    <Button className="w-full rounded-none" onClick={() => void handleAddToCart()}>
+                      <ShoppingBag className="mr-2 h-4 w-4" />
+                      Add product to cart
+                    </Button>
+                  ) : null}
                 </div>
               )}
             </div>
 
             {/* Actions */}
             <div className="flex gap-3 pt-4 border-t">
-                <Button
-                  className="flex-1 rounded-none"
+              <Button
+                className="flex-1 rounded-none"
                 onClick={handleTryOn}
-                disabled={design.suitableFabrics.length === 0}
               >
                 <Eye className="w-4 h-4 mr-2" />
-                Virtual Try-On
+                3D TryOn
               </Button>
-                <Button
-                  className="flex-1 rounded-none"
-                onClick={handleAddToCart}
+              <Button
+                className="flex-1 rounded-none"
+                onClick={handleStartDesignFlow}
               >
                 <ShoppingBag className="w-4 h-4 mr-2" />
-                Make Your Own Design
+                Start Design
               </Button>
             </div>
 
@@ -741,11 +947,8 @@ export default function DesignDetail() {
               </p>
             ) : !areAllRequiredMeasurementsFilled() ? (
               <p className="text-sm text-gray-700 text-center">
-                Complete required measurements before adding to cart.
+                Complete required measurements to continue through fabrics and 3D TryOn.
               </p>
-            ) : null}
-            {cartMessage ? (
-              <p className="text-sm text-emerald-700 text-center">{cartMessage}</p>
             ) : null}
           </div>
         </div>
@@ -839,6 +1042,94 @@ export default function DesignDetail() {
           )}
         </section>
       </div>
+
+      {cartMessage ? (
+        <div className="fixed right-4 top-24 z-[60] w-[min(92vw,360px)] border border-emerald-200 bg-emerald-50 p-3 shadow-lg">
+          <p className="text-sm font-medium text-emerald-800">{cartMessage}</p>
+          <div className="mt-2 flex items-center gap-2">
+            <Button className="rounded-none text-xs" onClick={() => navigate('/checkout')}>
+              Checkout now
+            </Button>
+            <Button variant="outline" className="rounded-none text-xs" onClick={() => navigate('/cart')}>
+              View cart
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {showTryOnPopup ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-3xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <h3 className="text-lg font-semibold text-gray-900">3D TryOn preview (mimic)</h3>
+              <button type="button" onClick={() => setShowTryOnPopup(false)} className="p-1 text-gray-500 hover:bg-gray-100">
+                ×
+              </button>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              <p className="text-sm text-gray-700">
+                Your measurements are prefilled from this product flow and reused for future TryOn sessions.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {design.measurements.map((measurement) => (
+                  <label key={`tryon-popup-${measurement.name}`} className="space-y-1">
+                    <span className="text-xs font-medium text-gray-600">
+                      {measurement.name} ({measurement.unit || 'cm'})
+                    </span>
+                    <select
+                      value={measurements[measurement.name] || ''}
+                      onChange={(event) => handleMeasurementChange(measurement.name, Number(event.target.value || 0))}
+                      className="w-full border px-3 py-2 text-sm"
+                    >
+                      <option value="">Select value</option>
+                      {buildMeasurementDropdownOptions(measurement.name, measurement.unit).map((value) => (
+                        <option key={`tryon-option-${measurement.name}-${value}`} value={value}>
+                          {value} {measurement.unit || 'cm'}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+              <div className="border bg-gray-50 p-4">
+                {tryOnGenerated ? (
+                  <div className="space-y-2">
+                    <img
+                      src={design.images?.[0] || '/images/placeholder.jpg'}
+                      alt="TryOn preview"
+                      className="h-48 w-full object-cover"
+                    />
+                    <p className="text-sm text-emerald-700">3D preview generated successfully (mock preview).</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-700">
+                    Click Generate 3D Image to mimic the try-on preview using your saved measurements.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 border-t px-5 py-4">
+              <Button
+                className="rounded-none"
+                onClick={() => void handleGenerateTryOnPreview()}
+                disabled={tryOnGenerating || !areAllRequiredMeasurementsFilled()}
+              >
+                {tryOnGenerating ? 'Generating...' : 'Generate 3D Image'}
+              </Button>
+              <Button variant="outline" className="rounded-none" onClick={() => setShowTryOnPopup(false)}>
+                Back to product
+              </Button>
+              <Button
+                className="rounded-none"
+                onClick={() => void handleTryOnAddToCart()}
+                disabled={!tryOnGenerated}
+              >
+                Add product to cart
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Measurement Guide Modal */}
       {showMeasurementModal && (

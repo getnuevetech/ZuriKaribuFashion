@@ -65,6 +65,9 @@ export default function MainLayout() {
   const dashboardRoute = getHomeRouteForUser(user);
   const profileRoute = userRole === 'CUSTOMER' ? '/profile' : dashboardRoute;
   const ordersRoute = userRole === 'CUSTOMER' ? '/orders' : null;
+  const cartItemCount = getItemCount();
+  const isProductRetailPath = /^\/(designs|ready-to-wear|fabrics)\/[^/]+$/i.test(location.pathname);
+  const showFloatingCheckout = isProductRetailPath && cartItemCount > 0;
   const profileLabel = userRole === 'CUSTOMER' ? 'My Profile' : 'Dashboard';
   const ordersLabel = 'My Orders';
   const topStripVisible = Boolean(visibilityContent?.topStrip ?? true);
@@ -251,7 +254,7 @@ export default function MainLayout() {
               >
                 <ShoppingBag className="w-5 h-5" />
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-black text-white text-[10px] rounded-full flex items-center justify-center">
-                  {getItemCount()}
+                  {cartItemCount}
                 </span>
               </Link>
 
@@ -301,6 +304,14 @@ export default function MainLayout() {
       <main className="flex-1">
         <Outlet />
       </main>
+      {showFloatingCheckout ? (
+        <Link
+          to="/checkout"
+          className="fixed right-3 top-1/2 z-40 -translate-y-1/2 border border-black bg-black px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-lg hover:bg-gray-900"
+        >
+          Checkout ({cartItemCount})
+        </Link>
+      ) : null}
       <Footer />
     </div>
   );

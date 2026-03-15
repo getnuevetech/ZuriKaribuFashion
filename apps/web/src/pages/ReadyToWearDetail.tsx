@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, ShoppingCart, Heart, Star, MapPin, Truck, Check, Loader2, Sparkles, Ruler, X } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { api } from '../services/api';
@@ -7,6 +7,14 @@ import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import { useCurrencyStore } from '../store/currencyStore';
 import { resolveCountryCode } from '../data/locationOptions';
+import {
+  buildMeasurementDropdownOptions,
+  normalizeMeasurementKey,
+  readMeasurementCache,
+  writeMeasurementCache,
+} from '../utils/measurementOptions';
+
+const MEASUREMENT_CACHE_KEY = 'af_customer_measurement_profile_v1';
 
 interface ReadyToWearProduct {
   id: string;
@@ -79,6 +87,7 @@ const DEFAULT_VARIANT_COLOR = 'DEFAULT';
 export default function ReadyToWearDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
   const { formatFromUsd } = useCurrencyStore();
   const { addReadyToWearItem } = useCartStore();
@@ -104,6 +113,7 @@ export default function ReadyToWearDetail() {
   const [activeInfoTab, setActiveInfoTab] = useState<'DESCRIPTION' | 'SIZE_GUIDE' | 'SHIPPING' | 'REVIEWS'>('DESCRIPTION');
   const [tryOnMeasurements, setTryOnMeasurements] = useState<TryOnMeasurements>(DEFAULT_TRY_ON_MEASUREMENTS);
   const [tryOnPreviewReady, setTryOnPreviewReady] = useState(false);
+  const [measurementSyncing, setMeasurementSyncing] = useState(false);
   const [sizeGuide, setSizeGuide] = useState<{ title: string; content: string }>({
     title: 'Ready-To-Wear Size Guide',
     content: '',
@@ -205,6 +215,74 @@ export default function ReadyToWearDetail() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!addToCartMessage) return;
+    const timer = window.setTimeout(() => setAddToCartMessage(''), 3500);
+    return () => window.clearTimeout(timer);
+  }, [addToCartMessage]);
+
+  const applyMeasurementSeed = (seed: Record<string, number>) => {
+    setTryOnMeasurements((previous) => {
+      const next = { ...previous };
+      for (const key of Object.keys(previous) as Array<keyof TryOnMeasurements>) {
+        const seededValue = Number(seed[normalizeMeasurementKey(key)] || 0);
+        if (seededValue > 0) next[key] = seededValue;
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const localSeed = readMeasurementCache(MEASUREMENT_CACHE_KEY);
+    if (Object.keys(localSeed).length > 0) {
+      applyMeasurementSeed(localSeed);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user || String(user.role || '').toUpperCase() !== 'CUSTOMER') return;
+    let cancelled = false;
+    api.customer
+      .getTryOnSummary()
+      .then((response) => {
+        if (cancelled || !response?.success) return;
+        const source = response.data?.measurements;
+        if (!source || typeof source !== 'object') return;
+        const normalized = Object.entries(source as Record<string, unknown>).reduce((acc, [key, value]) => {
+          const parsed = Number(value);
+          if (!Number.isFinite(parsed) || parsed <= 0) return acc;
+          acc[normalizeMeasurementKey(key)] = Number(parsed.toFixed(2));
+          return acc;
+        }, {} as Record<string, number>);
+        if (Object.keys(normalized).length === 0) return;
+        applyMeasurementSeed(normalized);
+        writeMeasurementCache(MEASUREMENT_CACHE_KEY, normalized);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const persistTryOnMeasurements = async (values: TryOnMeasurements) => {
+    const normalized = Object.entries(values || {}).reduce((acc, [key, value]) => {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || parsed <= 0) return acc;
+      acc[normalizeMeasurementKey(key)] = Number(parsed.toFixed(2));
+      return acc;
+    }, {} as Record<string, number>);
+    writeMeasurementCache(MEASUREMENT_CACHE_KEY, normalized);
+    if (!user || String(user.role || '').toUpperCase() !== 'CUSTOMER') return;
+    try {
+      setMeasurementSyncing(true);
+      await api.customer.saveMeasurements({ measurements: normalized });
+    } catch {
+      // Keep product flow uninterrupted.
+    } finally {
+      setMeasurementSyncing(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -270,12 +348,13 @@ export default function ReadyToWearDetail() {
   const canGoPrevImage = selectedImage > 0;
   const canGoNextImage = selectedImage < Math.max(0, (product.images?.length || 1) - 1);
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!product) return;
     if (!effectiveSelectedSize) {
       setAddToCartMessage('Please select a size before adding to cart.');
       return;
     }
+    await persistTryOnMeasurements(tryOnMeasurements);
 
     addReadyToWearItem({
       readyToWearId: product.id,
@@ -291,10 +370,9 @@ export default function ReadyToWearDetail() {
     });
     setAddToCartMessage(
       user
-        ? 'Added to cart. You can proceed to checkout.'
-        : 'Added to cart. Sign in during checkout to complete your order.'
+        ? 'Product added to cart. Use Checkout when you are ready.'
+        : 'Product added to cart. Sign in during checkout to complete your order.'
     );
-    navigate('/cart');
   };
 
   const handleToggleLike = async () => {
@@ -351,27 +429,18 @@ export default function ReadyToWearDetail() {
 
   const handleGenerateTryOnPreview = async () => {
     setTryOnPreviewReady(false);
+    await persistTryOnMeasurements(tryOnMeasurements);
     await new Promise((resolve) => setTimeout(resolve, 700));
     setTryOnPreviewReady(true);
   };
 
-  const handleContinueToTryOnPage = () => {
-    if (!id) return;
-    try {
-      sessionStorage.setItem(
-        `rtwTryOnDraft:${id}`,
-        JSON.stringify({
-          selectedSize: effectiveSelectedSize || '',
-          quantity,
-          measurements: tryOnMeasurements,
-          generatedAt: new Date().toISOString(),
-        })
-      );
-    } catch {
-      // Ignore storage errors; page navigation should still continue.
-    }
+  const handleCloseTryOnModal = () => {
     setShowTryOnModal(false);
-    navigate(`/ready-to-wear/${id}/try-on`);
+  };
+
+  const handleTryOnAddToCart = async () => {
+    await handleAddToCart();
+    setShowTryOnModal(false);
   };
 
   return (
@@ -629,7 +698,11 @@ export default function ReadyToWearDetail() {
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">
-                <Button className="w-full rounded-none py-3" onClick={handleAddToCart} disabled={!effectiveSelectedSize || !isSelectedVariantInStock}>
+                <Button
+                  className="w-full rounded-none py-3"
+                  onClick={() => void handleAddToCart()}
+                  disabled={!effectiveSelectedSize || !isSelectedVariantInStock}
+                >
                   <ShoppingCart className="mr-2 h-4 w-4" />
                   Add to Cart
                 </Button>
@@ -678,10 +751,6 @@ export default function ReadyToWearDetail() {
                   </div>
                 </div>
               </div>
-
-              {addToCartMessage ? (
-                <p className="text-sm text-emerald-700">{addToCartMessage}</p>
-              ) : null}
             </div>
           </div>
         </div>
@@ -824,6 +893,20 @@ export default function ReadyToWearDetail() {
         </section>
       </div>
 
+      {addToCartMessage ? (
+        <div className="fixed right-4 top-24 z-[60] w-[min(92vw,360px)] border border-emerald-200 bg-emerald-50 p-3 shadow-lg">
+          <p className="text-sm font-medium text-emerald-800">{addToCartMessage}</p>
+          <div className="mt-2 flex items-center gap-2">
+            <Button className="rounded-none text-xs" onClick={() => navigate('/checkout')}>
+              Checkout now
+            </Button>
+            <Button variant="outline" className="rounded-none text-xs" onClick={() => navigate('/cart')}>
+              View cart
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {showTryOnModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
           <div className="w-full max-w-2xl bg-white shadow-xl">
@@ -836,7 +919,7 @@ export default function ReadyToWearDetail() {
               </div>
               <button
                 type="button"
-                onClick={() => setShowTryOnModal(false)}
+                onClick={handleCloseTryOnModal}
                 className="p-1 text-gray-500 hover:bg-gray-100"
               >
                 <X className="h-5 w-5" />
@@ -844,29 +927,46 @@ export default function ReadyToWearDetail() {
             </div>
             <div className="space-y-4 px-5 py-4">
               <p className="border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
-                Use the same measurement profile format as Custom-to-Wear Try-On flow.
+                Uses your saved measurement profile so you don&apos;t enter values twice.
               </p>
+              {(!user || String(user.role || '').toUpperCase() !== 'CUSTOMER') ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 border bg-gray-50 px-3 py-2 text-xs text-gray-700">
+                  <span>Sign in to keep these measurements synced across products.</span>
+                  <Button
+                    variant="outline"
+                    className="rounded-none"
+                    onClick={() =>
+                      navigate(`/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}${location.hash}`)}`, {
+                        state: { from: location },
+                      })
+                    }
+                  >
+                    Sign in
+                  </Button>
+                </div>
+              ) : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 {(Object.keys(tryOnMeasurements) as Array<keyof TryOnMeasurements>).map((key) => (
                   <label key={key} className="space-y-1">
                     <span className="block text-xs font-medium uppercase tracking-wide text-gray-600">
                       {key} (cm)
                     </span>
-                    <input
-                      type="number"
-                      min={key === 'height' ? 145 : 50}
-                      max={key === 'height' ? 220 : 180}
+                    <select
                       value={tryOnMeasurements[key]}
                       onChange={(event) => {
-                        const value = Math.max(
-                          key === 'height' ? 145 : 50,
-                          Math.min(key === 'height' ? 220 : 180, Number(event.target.value || 0))
-                        );
+                        const value = Number(event.target.value || 0);
                         setTryOnMeasurements((previous) => ({ ...previous, [key]: value }));
+                        writeMeasurementCache(MEASUREMENT_CACHE_KEY, { ...tryOnMeasurements, [key]: value });
                         setTryOnPreviewReady(false);
                       }}
                       className="w-full border px-3 py-2 text-sm"
-                    />
+                    >
+                      {buildMeasurementDropdownOptions(key, 'cm').map((value) => (
+                        <option key={`rtw-tryon-${key}-${value}`} value={value}>
+                          {value} cm
+                        </option>
+                      ))}
+                    </select>
                   </label>
                 ))}
               </div>
@@ -878,13 +978,13 @@ export default function ReadyToWearDetail() {
             </div>
             <div className="flex flex-wrap justify-end gap-2 border-t px-5 py-4">
               <Button variant="ghost" className="rounded-none border-0 bg-black text-white hover:bg-gray-800" onClick={handleGenerateTryOnPreview}>
-                Generate Preview
+                {measurementSyncing ? 'Saving...' : 'Generate 3D Image'}
               </Button>
-              <Button className="rounded-none" onClick={handleContinueToTryOnPage} disabled={!tryOnPreviewReady}>
-                Continue to Full Try-On
+              <Button className="rounded-none" onClick={() => void handleTryOnAddToCart()} disabled={!tryOnPreviewReady}>
+                Add product to cart
               </Button>
-              <Button variant="ghost" className="rounded-none border-0 bg-black text-white hover:bg-gray-800" onClick={() => setShowTryOnModal(false)}>
-                Close
+              <Button variant="ghost" className="rounded-none border-0 bg-black text-white hover:bg-gray-800" onClick={handleCloseTryOnModal}>
+                Back to product
               </Button>
             </div>
           </div>
@@ -931,7 +1031,7 @@ export default function ReadyToWearDetail() {
           <Button variant="ghost" className="flex-1 rounded-none border-0 bg-black text-xs text-white hover:bg-gray-800" onClick={openTryOnModal}>
             Try On
           </Button>
-          <Button className="flex-1 rounded-none text-xs" onClick={handleAddToCart}>
+          <Button className="flex-1 rounded-none text-xs" onClick={() => void handleAddToCart()}>
             Add to Bag
           </Button>
         </div>
