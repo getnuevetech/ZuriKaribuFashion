@@ -846,7 +846,7 @@ export default function DesignerDashboard() {
         api.designer.getTryOnInsights(),
         api.featuredRequests.listMyRequests(),
         api.featuredRequests.getSettings(),
-        api.payments.getOptions(),
+        api.payments.getOptions({ useCase: 'FEATURED' }),
         api.orders.getOrderLimits(),
       ]);
       const statsRes = statsResult.status === 'fulfilled' ? statsResult.value : null;

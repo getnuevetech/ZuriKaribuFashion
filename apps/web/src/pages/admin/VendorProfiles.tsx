@@ -436,12 +436,26 @@ export default function AdminVendorProfiles() {
           levels: Array.isArray(nextConfig.levels) && nextConfig.levels.length > 0 ? nextConfig.levels : prev.levels,
         }));
       }
-      setEnterpriseAccounts(Array.isArray(accountsResponse?.data?.accounts) ? accountsResponse?.data?.accounts : []);
-      setEnterpriseRequests(Array.isArray(requestsResponse?.data?.requests) ? requestsResponse?.data?.requests : []);
+      const accountRows = Array.isArray(accountsResponse?.data?.accounts)
+        ? accountsResponse?.data?.accounts
+        : Array.isArray(accountsResponse?.data)
+          ? accountsResponse?.data
+          : [];
+      const requestRows = Array.isArray(requestsResponse?.data?.requests)
+        ? requestsResponse?.data?.requests
+        : Array.isArray(requestsResponse?.data)
+          ? requestsResponse?.data
+          : [];
+      setEnterpriseAccounts(accountRows);
+      setEnterpriseRequests(requestRows);
 
       if (!configResponse) {
-        const configError = (configResult as PromiseRejectedResult).reason;
-        setError(configError?.response?.data?.message || 'Failed to load enterprise account settings.');
+        const configError = configResult.status === 'rejected' ? configResult.reason : null;
+        if (accountRows.length === 0 && requestRows.length === 0) {
+          setError(configError?.response?.data?.message || 'Failed to load enterprise account settings.');
+        } else {
+          setError('Enterprise requests/accounts loaded, but enterprise config failed to load.');
+        }
       } else if (!accountsResponse || !requestsResponse) {
         setError('Enterprise settings loaded with partial data. Some enterprise lists may be temporarily unavailable.');
       }

@@ -5,6 +5,7 @@ import { api } from '../../services/api';
 type FieldType = 'TEXT' | 'PASSWORD' | 'URL' | 'NUMBER' | 'BOOLEAN' | 'SELECT' | 'TEXTAREA';
 type CheckoutType = 'INLINE' | 'REDIRECT';
 type ModeType = 'TEST' | 'LIVE';
+type PaymentUseCase = 'CHECKOUT' | 'FEATURED' | 'ENTERPRISE';
 
 interface IntegrationField {
   key: string;
@@ -33,6 +34,19 @@ interface PaymentProviderRow {
 }
 
 const FIELD_TYPE_OPTIONS: FieldType[] = ['TEXT', 'PASSWORD', 'URL', 'NUMBER', 'BOOLEAN', 'SELECT', 'TEXTAREA'];
+const PAYMENT_USE_CASES: Array<{ key: PaymentUseCase; label: string }> = [
+  { key: 'CHECKOUT', label: 'Checkout orders' },
+  { key: 'FEATURED', label: 'Featured product requests' },
+  { key: 'ENTERPRISE', label: 'Enterprise upgrade requests' },
+];
+
+const normalizeProviderUseCases = (value: unknown): PaymentUseCase[] => {
+  const rows = Array.isArray(value) ? value : [];
+  const normalized = rows
+    .map((entry) => String(entry || '').trim().toUpperCase())
+    .filter((entry) => entry === 'CHECKOUT' || entry === 'FEATURED' || entry === 'ENTERPRISE') as PaymentUseCase[];
+  return normalized.length > 0 ? Array.from(new Set(normalized)) : ['CHECKOUT', 'FEATURED', 'ENTERPRISE'];
+};
 
 const cloneProvider = (row: PaymentProviderRow): PaymentProviderRow => ({
   ...row,
@@ -43,7 +57,10 @@ const cloneProvider = (row: PaymentProviderRow): PaymentProviderRow => ({
         sortOrder: Number.isFinite(Number(field.sortOrder)) ? Number(field.sortOrder) : idx,
       }))
     : [],
-  configValues: row.configValues && typeof row.configValues === 'object' ? { ...row.configValues } : {},
+  configValues:
+    row.configValues && typeof row.configValues === 'object'
+      ? { ...row.configValues, enabledUseCases: normalizeProviderUseCases((row.configValues as any).enabledUseCases) }
+      : { enabledUseCases: ['CHECKOUT', 'FEATURED', 'ENTERPRISE'] },
 });
 
 export default function AdminPayments() {
@@ -133,13 +150,17 @@ export default function AdminPayments() {
         }))
         .filter((field) => field.key.length > 0);
       const configValues = draft.configValues && typeof draft.configValues === 'object' ? draft.configValues : {};
+      const enabledUseCases = normalizeProviderUseCases((configValues as any).enabledUseCases);
       const response = await api.admin.updatePaymentIntegration(draft.providerKey, {
         displayName: draft.displayName,
         checkoutType: draft.checkoutType,
         mode: draft.mode,
         isActive: draft.isActive,
         configSchema,
-        configValues,
+        configValues: {
+          ...configValues,
+          enabledUseCases,
+        },
         notes: draft.notes || '',
       });
       if (!response.success) throw new Error('Failed to save payment integration.');
@@ -338,6 +359,43 @@ export default function AdminPayments() {
                     className="w-full rounded-lg border px-3 py-2 text-sm"
                     placeholder="Optional operational notes"
                   />
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-3">
+                <h3 className="mb-3 font-semibold text-gray-900">Provider Use Cases</h3>
+                <p className="mb-3 text-xs text-gray-500">
+                  Select where this provider should be available for payment collection.
+                </p>
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                  {PAYMENT_USE_CASES.map((useCase) => {
+                    const selected = normalizeProviderUseCases((draft.configValues || {}).enabledUseCases);
+                    return (
+                      <label key={useCase.key} className="inline-flex items-center gap-2 rounded border px-3 py-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(useCase.key)}
+                          onChange={(event) =>
+                            setDraft((prev) => {
+                              if (!prev) return prev;
+                              const current = normalizeProviderUseCases((prev.configValues || {}).enabledUseCases);
+                              const next = event.target.checked
+                                ? Array.from(new Set([...current, useCase.key]))
+                                : current.filter((entry) => entry !== useCase.key);
+                              return {
+                                ...prev,
+                                configValues: {
+                                  ...(prev.configValues || {}),
+                                  enabledUseCases: next.length > 0 ? next : ['CHECKOUT'],
+                                },
+                              };
+                            })
+                          }
+                        />
+                        {useCase.label}
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 

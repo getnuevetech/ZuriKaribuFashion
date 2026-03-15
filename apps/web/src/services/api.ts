@@ -1971,14 +1971,40 @@ async function deleteAdminPaymentIntegrationWithFallback<T>(providerKey: string)
   } as T;
 }
 
-async function readPaymentOptionsWithFallback<T>() {
+async function readPaymentOptionsWithFallback<T>(params?: { useCase?: 'CHECKOUT' | 'FEATURED' | 'ENTERPRISE' }) {
+  const requestedUseCase = String(params?.useCase || '').trim().toUpperCase();
+  const useCase =
+    requestedUseCase === 'FEATURED' || requestedUseCase === 'ENTERPRISE' ? requestedUseCase : 'CHECKOUT';
   try {
-    return await apiService.get<T>('/payments/options', noCacheRequestConfig());
+    return await apiService.get<T>('/payments/options', {
+      ...noCacheRequestConfig(),
+      params: {
+        ...(noCacheRequestConfig().params || {}),
+        useCase,
+      },
+    });
   } catch (error) {
     if (!isRetryableRouteError(error)) throw error;
     const state = readPaymentFallbackState();
     const providers = (state.providers || [])
       .filter((provider: any) => Boolean(provider.isActive))
+      .filter((provider: any) => {
+        const configured =
+          provider?.configValues && typeof provider.configValues === 'object'
+            ? (provider.configValues as Record<string, unknown>)
+            : {};
+        const rawUseCases = Array.isArray(configured.enabledUseCases)
+          ? configured.enabledUseCases
+          : typeof configured.enabledUseCases === 'string'
+            ? String(configured.enabledUseCases)
+                .split(',')
+                .map((entry) => entry.trim())
+            : ['CHECKOUT', 'FEATURED', 'ENTERPRISE'];
+        const normalized = rawUseCases
+          .map((entry) => String(entry || '').trim().toUpperCase())
+          .filter(Boolean);
+        return normalized.includes(useCase);
+      })
       .map((provider: any) => {
         const schema = Array.isArray(provider.configSchema) ? provider.configSchema : [];
         const values = provider.configValues && typeof provider.configValues === 'object' ? provider.configValues : {};
@@ -1994,6 +2020,10 @@ async function readPaymentOptionsWithFallback<T>() {
           displayName: String(provider.displayName || provider.providerKey || 'Payment Provider'),
           checkoutType: provider.checkoutType === 'REDIRECT' ? 'REDIRECT' : 'INLINE',
           mode: provider.mode === 'LIVE' ? 'LIVE' : 'TEST',
+          enabledUseCases:
+            provider?.configValues && Array.isArray(provider.configValues.enabledUseCases)
+              ? provider.configValues.enabledUseCases
+              : ['CHECKOUT', 'FEATURED', 'ENTERPRISE'],
           publicConfig,
         };
       });
@@ -7245,7 +7275,7 @@ const qaApi = {
 const paymentsApi = {
   getLastCreateSessionDebugInfo: () => getCheckoutPaymentDebugInfo(),
 
-  getOptions: () =>
+  getOptions: (params?: { useCase?: 'CHECKOUT' | 'FEATURED' | 'ENTERPRISE' }) =>
     readPaymentOptionsWithFallback<{
       success: boolean;
       data: {
@@ -7254,10 +7284,11 @@ const paymentsApi = {
           displayName: string;
           checkoutType: 'INLINE' | 'REDIRECT';
           mode: 'TEST' | 'LIVE';
+          enabledUseCases?: Array<'CHECKOUT' | 'FEATURED' | 'ENTERPRISE'>;
           publicConfig?: Record<string, any>;
         }>;
       };
-    }>(),
+    }>(params),
 
   createPaymentSession: (data: {
     providerKey: string;
@@ -8507,12 +8538,24 @@ const blogsApi = {
   getEnterpriseSubAccountsForOwner: (ownerUserId: string) =>
     apiService.get<{ success: boolean; data: any[] }>(`/admin/enterprise/accounts/${ownerUserId}/subaccounts`),
 
-  getEnterpriseUpgradeRequests: (params?: {
+  getEnterpriseUpgradeRequests: async (params?: {
     status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
     role?: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
     page?: number;
     limit?: number;
-  }) => apiService.get<{ success: boolean; data: any }>('/admin/enterprise/upgrade-requests', { params }),
+  }) => {
+    let lastError: unknown = null;
+    for (const path of ['/admin/enterprise/upgrade-requests', '/admin/enterprise/requests']) {
+      try {
+        return await apiService.get<{ success: boolean; data: any }>(path, { params });
+      } catch (error) {
+        lastError = error;
+        if (isRetryableRouteError(error)) continue;
+        throw error;
+      }
+    }
+    throw lastError ?? new Error('Enterprise upgrade requests route not found.');
+  },
 
   reviewEnterpriseUpgradeRequest: (
     requestId: string,

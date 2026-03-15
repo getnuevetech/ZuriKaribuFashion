@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma, ProductType, ProductStatus, UserRole } from '../db';
 import { authenticate } from '../middleware/auth';
-import { createPaymentSessionForUser, verifyPaymentForUser } from './payments';
+import { createPaymentSessionForUser, readPaymentProviderKeysForUseCase, verifyPaymentForUser } from './payments';
 
 const router = Router();
 router.use(authenticate);
@@ -380,77 +380,7 @@ async function resolveVendorCountry(userId: string, role: UserRole): Promise<str
 }
 
 async function readActivePaymentProviderKeys(): Promise<string[]> {
-  let active: string[] = [];
-  try {
-    const rows = await prisma.$queryRawUnsafe<Array<{ providerKey: string }>>(
-      `SELECT "providerKey"
-       FROM "PaymentIntegration"
-       WHERE "isActive" = TRUE`
-    );
-    active = Array.from(
-      new Set(
-        (rows || [])
-          .map((row) => normalizeProviderKey(row.providerKey))
-          .filter(Boolean)
-      )
-    );
-  } catch {
-    active = [];
-  }
-  if (active.length === 0) {
-    try {
-      const configuredRows = await prisma.$queryRawUnsafe<Array<{ providerKey: string; configValues: unknown }>>(
-        `SELECT "providerKey","configValues"
-         FROM "PaymentIntegration"
-         ORDER BY "updatedAt" DESC NULLS LAST, "providerKey" ASC`
-      );
-      const hasProviderCredentials = (providerKey: string, rawConfig: unknown) => {
-        const config =
-          rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)
-            ? (rawConfig as Record<string, unknown>)
-            : typeof rawConfig === 'string'
-              ? (() => {
-                  try {
-                    const parsed = JSON.parse(rawConfig);
-                    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-                      ? (parsed as Record<string, unknown>)
-                      : {};
-                  } catch {
-                    return {};
-                  }
-                })()
-              : {};
-        if (providerKey === 'STRIPE') {
-          return Boolean(String(config.secretKey || '').trim() || String(process.env.STRIPE_SECRET_KEY || '').trim());
-        }
-        if (providerKey === 'FLUTTERWAVE') {
-          return Boolean(String(config.secretKey || '').trim());
-        }
-        if (providerKey === 'PAYPAL') {
-          return Boolean(String(config.clientId || '').trim() && String(config.clientSecret || '').trim());
-        }
-        return false;
-      };
-      active = Array.from(
-        new Set(
-          (configuredRows || [])
-            .map((row) => ({
-              providerKey: normalizeProviderKey(row.providerKey),
-              hasCredentials: hasProviderCredentials(normalizeProviderKey(row.providerKey), row.configValues),
-            }))
-            .filter((row) => row.providerKey && row.hasCredentials)
-            .map((row) => row.providerKey)
-            .filter(Boolean)
-        )
-      );
-    } catch {
-      active = [];
-    }
-  }
-  if (!active.includes('STRIPE') && String(process.env.STRIPE_SECRET_KEY || '').trim()) {
-    active.push('STRIPE');
-  }
-  return active;
+  return readPaymentProviderKeysForUseCase('FEATURED');
 }
 
 function resolveDefaultProviderByCountry(country: string, availableProviders: string[]) {
@@ -1007,6 +937,7 @@ router.post('/requests/:id/payment-session', async (req, res, next) => {
         lastName: user.lastName,
       },
       providerKey,
+      useCase: 'FEATURED',
       amount: Math.round(amountUsd * 100),
       currency: 'USD',
       reference: `AF-FEAT-${String(current.id)}-${Date.now()}`,
@@ -1111,6 +1042,7 @@ router.post('/requests/:id/payment-verify', async (req, res, next) => {
       providerKey,
       reference,
       payerId: payload.payerId,
+      useCase: 'FEATURED',
     });
     if (!verification.isPaid) {
       return res.status(400).json({

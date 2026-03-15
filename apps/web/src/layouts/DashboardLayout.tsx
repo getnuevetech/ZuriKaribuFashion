@@ -30,6 +30,7 @@ import {
   Mail,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { api } from '../services/api';
 
 import { 
   User, 
@@ -218,19 +219,44 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     userType === 'seller'
       ? [
           { label: 'Enterprise Workspace', href: '/seller/enterprise', icon: ChevronRight },
-          { label: 'Sub-account Role Management', href: '/seller/enterprise/role-management', icon: ChevronRight },
+          ...(enterpriseRoleManagementAllowed
+            ? [{ label: 'Sub-account Role Management', href: '/seller/enterprise/role-management', icon: ChevronRight }]
+            : []),
         ]
       : userType === 'designer'
         ? [
             { label: 'Enterprise Workspace', href: '/designer/enterprise', icon: ChevronRight },
-            { label: 'Sub-account Role Management', href: '/designer/enterprise/role-management', icon: ChevronRight },
+            ...(enterpriseRoleManagementAllowed
+              ? [{ label: 'Sub-account Role Management', href: '/designer/enterprise/role-management', icon: ChevronRight }]
+              : []),
           ]
         : [];
   const [dashboardSearchQuery, setDashboardSearchQuery] = useState('');
   const [isDashboardSearchOpen, setIsDashboardSearchOpen] = useState(false);
   const [highlightedSearchResultIndex, setHighlightedSearchResultIndex] = useState(0);
+  const [enterpriseRoleManagementAllowed, setEnterpriseRoleManagementAllowed] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (userType !== 'seller' && userType !== 'designer') {
+      setEnterpriseRoleManagementAllowed(false);
+      return;
+    }
+    let cancelled = false;
+    api.enterprise
+      .getMe()
+      .then((response) => {
+        if (cancelled) return;
+        setEnterpriseRoleManagementAllowed(Boolean(response?.data?.account?.isEnterprise));
+      })
+      .catch(() => {
+        if (!cancelled) setEnterpriseRoleManagementAllowed(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userType, user?.id]);
 
   const normalizeSearchToken = (value: string) => String(value || '').trim().toLowerCase();
   const addSearchEntries = (
@@ -322,7 +348,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       }
     }
     return Array.from(deduped.values());
-  }, [userType, visibleItems, userPermissions]);
+  }, [userType, visibleItems, userPermissions, enterpriseRoleManagementAllowed]);
 
   const dashboardSearchResults = useMemo(() => {
     const query = normalizeSearchToken(dashboardSearchQuery);

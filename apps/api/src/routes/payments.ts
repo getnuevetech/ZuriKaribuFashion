@@ -23,6 +23,10 @@ router.use((req, _res, next) => {
 type IntegrationFieldType = 'TEXT' | 'PASSWORD' | 'URL' | 'NUMBER' | 'BOOLEAN' | 'SELECT' | 'TEXTAREA';
 type ProviderMode = 'TEST' | 'LIVE';
 type CheckoutType = 'INLINE' | 'REDIRECT';
+export type PaymentUseCase = 'CHECKOUT' | 'FEATURED' | 'ENTERPRISE';
+
+const PAYMENT_USE_CASES = ['CHECKOUT', 'FEATURED', 'ENTERPRISE'] as const;
+const DEFAULT_PROVIDER_USE_CASES: PaymentUseCase[] = [...PAYMENT_USE_CASES];
 
 type IntegrationField = {
   key: string;
@@ -57,6 +61,33 @@ type PaymentIntegrationRow = {
   configValues: Record<string, unknown>;
   notes: string | null;
   updatedAt: string;
+};
+
+const normalizePaymentUseCase = (value: unknown): PaymentUseCase | null => {
+  const token = String(value || '').trim().toUpperCase();
+  if (token === 'CHECKOUT') return 'CHECKOUT';
+  if (token === 'FEATURED') return 'FEATURED';
+  if (token === 'ENTERPRISE') return 'ENTERPRISE';
+  return null;
+};
+
+const normalizeProviderUseCases = (value: unknown): PaymentUseCase[] => {
+  const rawValues = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter(Boolean)
+      : [];
+  const rows = rawValues.map((entry) => normalizePaymentUseCase(entry)).filter(Boolean) as PaymentUseCase[];
+  return rows.length > 0 ? Array.from(new Set(rows)) : [...DEFAULT_PROVIDER_USE_CASES];
+};
+
+const providerSupportsUseCase = (provider: PaymentIntegrationRow, useCase: PaymentUseCase) => {
+  const configValues = provider.configValues && typeof provider.configValues === 'object' ? provider.configValues : {};
+  const enabledUseCases = normalizeProviderUseCases((configValues as Record<string, unknown>).enabledUseCases);
+  return enabledUseCases.includes(useCase);
 };
 
 const FALLBACK_FRONTEND_URL =
@@ -363,6 +394,8 @@ async function readPaymentIntegrations(params?: { activeOnly?: boolean; provider
 
   return rows.map((row) => {
     const configSchema = normalizeConfigSchema(row.configSchema);
+    const configValues = parseObject(row.configValues);
+    const enabledUseCases = normalizeProviderUseCases(configValues.enabledUseCases);
     return {
       id: String(row.id),
       providerKey: normalizeProviderKey(row.providerKey),
@@ -371,23 +404,35 @@ async function readPaymentIntegrations(params?: { activeOnly?: boolean; provider
       mode: normalizeProviderMode(row.mode),
       isActive: Boolean(row.isActive),
       configSchema,
-      configValues: parseObject(row.configValues),
+      configValues: {
+        ...configValues,
+        enabledUseCases,
+      },
       notes: row.notes ? String(row.notes) : null,
       updatedAt: new Date(row.updatedAt || Date.now()).toISOString(),
     } as PaymentIntegrationRow;
   });
 }
 
-async function resolveProviderForUserPayment(providerKeyInput: string) {
+async function resolveProviderForUserPayment(providerKeyInput: string, options?: { useCase?: PaymentUseCase }) {
   const providerKey = normalizeProviderKey(providerKeyInput);
   if (!providerKey) return null;
+  const useCase = normalizePaymentUseCase(options?.useCase) || 'CHECKOUT';
   const activeProvider = (await readPaymentIntegrations({ activeOnly: true, providerKey }))[0] || null;
-  if (activeProvider) return activeProvider;
+  if (activeProvider && providerSupportsUseCase(activeProvider, useCase)) return activeProvider;
 
-  const anyActive = await readPaymentIntegrations({ activeOnly: true });
+  const anyActive = (await readPaymentIntegrations({ activeOnly: true })).filter((provider) =>
+    providerSupportsUseCase(provider, useCase)
+  );
   if (anyActive.length === 0) {
     const configuredProvider = (await readPaymentIntegrations({ providerKey }))[0] || null;
-    if (configuredProvider && providerHasCheckoutCredentials(configuredProvider)) return configuredProvider;
+    if (
+      configuredProvider &&
+      providerHasCheckoutCredentials(configuredProvider) &&
+      providerSupportsUseCase(configuredProvider, useCase)
+    ) {
+      return configuredProvider;
+    }
   }
 
   if (providerKey === 'STRIPE' && String(process.env.STRIPE_SECRET_KEY || '').trim()) {
@@ -405,6 +450,26 @@ async function resolveProviderForUserPayment(providerKeyInput: string) {
     } as PaymentIntegrationRow;
   }
   return null;
+}
+
+export async function readPaymentProviderKeysForUseCase(useCase: PaymentUseCase): Promise<string[]> {
+  const normalizedUseCase = normalizePaymentUseCase(useCase) || 'CHECKOUT';
+  let providers = (await readPaymentIntegrations({ activeOnly: true })).filter((provider) =>
+    providerSupportsUseCase(provider, normalizedUseCase)
+  );
+  if (providers.length === 0) {
+    const configuredFallback = (await readPaymentIntegrations()).filter(
+      (provider) => providerHasCheckoutCredentials(provider) && providerSupportsUseCase(provider, normalizedUseCase)
+    );
+    providers = configuredFallback;
+  }
+  const keys = providers
+    .map((provider) => normalizeProviderKey(provider.providerKey))
+    .filter(Boolean);
+  if (keys.length === 0 && String(process.env.STRIPE_SECRET_KEY || '').trim()) {
+    keys.push('STRIPE');
+  }
+  return Array.from(new Set(keys));
 }
 
 const providerHasCheckoutCredentials = (provider: PaymentIntegrationRow) => {
@@ -445,6 +510,7 @@ async function upsertPaymentIntegration(params: {
   const schemaSource = params.configSchema || existing?.configSchema || template?.configSchema || [];
   const configSchema = normalizeConfigSchema(schemaSource);
   const configValues = parseObject(params.configValues || existing?.configValues || template?.configValues || {});
+  configValues.enabledUseCases = normalizeProviderUseCases(configValues.enabledUseCases);
   const notes = params.notes === undefined ? existing?.notes || null : params.notes;
 
   await prisma.$executeRawUnsafe(
@@ -539,6 +605,7 @@ async function getPayPalAccessToken(integration: PaymentIntegrationRow) {
 export type PaymentSessionInput = {
   user: { id: string; email: string; firstName?: string | null; lastName?: string | null };
   providerKey: string;
+  useCase?: PaymentUseCase;
   amount: number;
   currency: string;
   reference?: string;
@@ -549,7 +616,7 @@ export type PaymentSessionInput = {
 
 export async function createPaymentSessionForUser(input: PaymentSessionInput) {
   const providerKey = normalizeProviderKey(input.providerKey);
-  const provider = await resolveProviderForUserPayment(providerKey);
+  const provider = await resolveProviderForUserPayment(providerKey, { useCase: input.useCase });
   if (!provider) {
     throw Object.assign(new Error(`Payment provider ${providerKey} is unavailable.`), { status: 404 });
   }
@@ -698,9 +765,10 @@ export async function verifyPaymentForUser(input: {
   providerKey: string;
   reference: string;
   payerId?: string;
+  useCase?: PaymentUseCase;
 }) {
   const providerKey = normalizeProviderKey(input.providerKey);
-  const provider = await resolveProviderForUserPayment(providerKey);
+  const provider = await resolveProviderForUserPayment(providerKey, { useCase: input.useCase });
   if (!provider) {
     throw Object.assign(new Error(`Payment provider ${providerKey} is unavailable.`), { status: 404 });
   }
@@ -919,12 +987,20 @@ router.delete(
   }
 );
 
-router.get('/options', authenticate, authorizePermissions(Permissions.PAYMENTS_CREATE), async (_req, res, next) => {
+router.get('/options', authenticate, authorizePermissions(Permissions.PAYMENTS_CREATE), async (req, res, next) => {
   try {
-    let providers = await readPaymentIntegrations({ activeOnly: true });
+    const query = z
+      .object({
+        useCase: z.enum(PAYMENT_USE_CASES).optional(),
+      })
+      .parse(req.query || {});
+    const useCase = normalizePaymentUseCase(query.useCase) || 'CHECKOUT';
+    let providers = (await readPaymentIntegrations({ activeOnly: true })).filter((provider) =>
+      providerSupportsUseCase(provider, useCase)
+    );
     if (providers.length === 0) {
       const configuredFallback = (await readPaymentIntegrations()).filter((provider) =>
-        providerHasCheckoutCredentials(provider)
+        providerHasCheckoutCredentials(provider) && providerSupportsUseCase(provider, useCase)
       );
       if (configuredFallback.length > 0) {
         providers = configuredFallback;
@@ -967,6 +1043,7 @@ router.get('/options', authenticate, authorizePermissions(Permissions.PAYMENTS_C
         displayName: provider.displayName,
         checkoutType: provider.checkoutType,
         mode: provider.mode,
+        enabledUseCases: normalizeProviderUseCases(provider.configValues?.enabledUseCases),
         publicConfig,
       };
     });
@@ -974,6 +1051,7 @@ router.get('/options', authenticate, authorizePermissions(Permissions.PAYMENTS_C
       success: true,
       data: {
         providers: options,
+        useCase,
       },
     });
   } catch (error) {
@@ -1035,6 +1113,12 @@ router.post('/create-session', authenticate, authorizePermissions(Permissions.PA
       return res.status(404).json({
         success: false,
         message: `Payment provider ${providerKey} is not active.`,
+      });
+    }
+    if (!providerSupportsUseCase(provider, 'CHECKOUT')) {
+      return res.status(400).json({
+        success: false,
+        message: `Payment provider ${providerKey} is not enabled for checkout.`,
       });
     }
 
@@ -1212,6 +1296,12 @@ router.post('/verify', authenticate, authorizePermissions(Permissions.PAYMENTS_C
       return res.status(404).json({
         success: false,
         message: `Payment provider ${providerKey} is not active.`,
+      });
+    }
+    if (!providerSupportsUseCase(provider, 'CHECKOUT')) {
+      return res.status(400).json({
+        success: false,
+        message: `Payment provider ${providerKey} is not enabled for checkout.`,
       });
     }
 

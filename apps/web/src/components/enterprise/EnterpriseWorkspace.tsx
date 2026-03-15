@@ -76,7 +76,7 @@ export default function EnterpriseWorkspace({ vendorType, initialSection = 'over
       const [enterpriseResult, requestsResult, paymentsResult] = await Promise.allSettled([
         api.enterprise.getMe(),
         api.enterprise.listMyUpgradeRequests(),
-        api.payments.getOptions(),
+        api.payments.getOptions({ useCase: 'ENTERPRISE' }),
       ]);
 
       const enterpriseResponse = enterpriseResult.status === 'fulfilled' ? enterpriseResult.value : null;
@@ -353,6 +353,21 @@ export default function EnterpriseWorkspace({ vendorType, initialSection = 'over
   const subAccounts = Array.isArray(enterpriseData?.subAccounts) ? enterpriseData.subAccounts : [];
   const roleRows = Array.isArray(enterpriseData?.roles) ? enterpriseData.roles : [];
   const permissionCatalog = Array.isArray(enterpriseData?.permissionCatalog) ? enterpriseData.permissionCatalog : [];
+  const isEnterpriseEnabled = Boolean(account.isEnterprise);
+
+  if (showRoleManagementOnly && !isEnterpriseEnabled) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{vendorLabel} Enterprise Role Management</h1>
+          <p className="mt-1 text-sm text-gray-600">Role management is available only after enterprise upgrade activation.</p>
+        </div>
+        <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Upgrade to an enterprise account and complete payment before managing sub-account roles.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

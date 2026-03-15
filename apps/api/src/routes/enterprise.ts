@@ -16,7 +16,7 @@ import {
   readEnterpriseActorContext,
   readEnterpriseConfig,
 } from '../utils/enterprise';
-import { createPaymentSessionForUser, verifyPaymentForUser } from './payments';
+import { createPaymentSessionForUser, readPaymentProviderKeysForUseCase, verifyPaymentForUser } from './payments';
 
 const router = Router();
 
@@ -76,6 +76,14 @@ const normalizeSubAccountStatus = (value: unknown) => {
   if (normalized === 'ACTIVE' || normalized === 'DISABLED') return normalized;
   return 'ACTIVE';
 };
+
+const normalizeProviderKey = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_]/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64);
 
 const isNumericColumnType = (column?: { dataType?: string; udtName?: string } | null) => {
   const dataType = String(column?.dataType || '').trim().toLowerCase();
@@ -749,7 +757,7 @@ router.post('/upgrade-requests/:requestId/payment-session', async (req, res, nex
     const requestId = String(req.params.requestId || '').trim();
     const payload = z
       .object({
-        providerKey: z.string().trim().min(2).max(40),
+        providerKey: z.string().trim().min(2).max(40).optional(),
         returnUrl: z.string().trim().optional(),
         cancelUrl: z.string().trim().optional(),
       })
@@ -790,6 +798,21 @@ router.post('/upgrade-requests/:requestId/payment-session', async (req, res, nex
         message: 'Approved enterprise fee is invalid.',
       });
     }
+    const availableProviderKeys = await readPaymentProviderKeysForUseCase('ENTERPRISE');
+    if (availableProviderKeys.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No payment provider is enabled for enterprise upgrades. Configure Payment API in admin dashboard.',
+      });
+    }
+    const requestedProvider = normalizeProviderKey(payload.providerKey || '');
+    const providerKey = requestedProvider || availableProviderKeys[0];
+    if (!providerKey || !availableProviderKeys.includes(providerKey)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Selected payment provider is not enabled for enterprise upgrades.',
+      });
+    }
     const session = await createPaymentSessionForUser({
       user: {
         id: actor.actorUserId,
@@ -797,7 +820,8 @@ router.post('/upgrade-requests/:requestId/payment-session', async (req, res, nex
         firstName: req.user!.firstName,
         lastName: req.user!.lastName,
       },
-      providerKey: payload.providerKey,
+      providerKey,
+      useCase: 'ENTERPRISE',
       amount: Math.round(amountUsd * 100),
       currency: 'USD',
       reference: `AF-ENT-${requestId}-${Date.now()}`,
@@ -816,7 +840,7 @@ router.post('/upgrade-requests/:requestId/payment-session', async (req, res, nex
            "updatedAt" = NOW()
        WHERE "id" = $1`,
       requestId,
-      String(session.providerKey || payload.providerKey),
+      String(session.providerKey || providerKey),
       String(session.paymentIntentId || session.reference || '')
     );
     return res.json({
@@ -882,6 +906,7 @@ router.post('/upgrade-requests/:requestId/payment-verify', async (req, res, next
       providerKey,
       reference,
       payerId: payload.payerId,
+      useCase: 'ENTERPRISE',
     });
     if (!verification.isPaid) {
       return res.status(400).json({
@@ -1321,26 +1346,33 @@ router.get('/upgrade-requests', authorizePermissions(Permissions.VENDOR_PROFILES
       whereClauses.push(`r."role" = $${values.length}`);
     }
     const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
-    const rows = await prisma.$queryRawUnsafe<Array<any>>(
-      `SELECT
-          r.*,
-          u."email" AS "ownerEmail",
-          u."firstName" AS "ownerFirstName",
-          u."lastName" AS "ownerLastName"
-       FROM "EnterpriseUpgradeRequest" r
-       JOIN "User" u ON u."id" = r."ownerUserId"
-       ${whereSql}
-       ORDER BY r."createdAt" DESC
-       LIMIT ${pagination.limit}
-       OFFSET ${pagination.skip}`,
-      ...values
-    );
-    const countRows = await prisma.$queryRawUnsafe<Array<{ count: bigint | number }>>(
-      `SELECT COUNT(*)::bigint AS "count"
-       FROM "EnterpriseUpgradeRequest" r
-       ${whereSql}`,
-      ...values
-    );
+    let rows: Array<any> = [];
+    let countRows: Array<{ count: bigint | number }> = [{ count: 0 }];
+    try {
+      rows = await prisma.$queryRawUnsafe<Array<any>>(
+        `SELECT
+            r.*,
+            COALESCE(u."email",'') AS "ownerEmail",
+            COALESCE(u."firstName",'') AS "ownerFirstName",
+            COALESCE(u."lastName",'') AS "ownerLastName"
+         FROM "EnterpriseUpgradeRequest" r
+         LEFT JOIN "User" u ON u."id" = r."ownerUserId"
+         ${whereSql}
+         ORDER BY r."createdAt" DESC
+         LIMIT ${pagination.limit}
+         OFFSET ${pagination.skip}`,
+        ...values
+      );
+      countRows = await prisma.$queryRawUnsafe<Array<{ count: bigint | number }>>(
+        `SELECT COUNT(*)::bigint AS "count"
+         FROM "EnterpriseUpgradeRequest" r
+         ${whereSql}`,
+        ...values
+      );
+    } catch {
+      rows = [];
+      countRows = [{ count: 0 }];
+    }
     const total = Number(countRows?.[0]?.count || 0);
     return res.json({
       success: true,

@@ -150,6 +150,7 @@ export async function ensureEnterpriseSchema() {
   if (enterpriseSchemaEnsured) return;
   if (!enterpriseSchemaPromise) {
     enterpriseSchemaPromise = (async () => {
+      try {
       await prisma.$executeRawUnsafe(
         `CREATE TABLE IF NOT EXISTS "EnterpriseAccount" (
           "id" TEXT NOT NULL,
@@ -363,8 +364,11 @@ export async function ensureEnterpriseSchema() {
       await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
       await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
       await executeBestEffort(`UPDATE "EnterpriseUpgradeRequest" SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL`);
-
-      enterpriseSchemaEnsured = true;
+      } catch {
+        // Ignore schema bootstrap failures in restricted deployments.
+      } finally {
+        enterpriseSchemaEnsured = true;
+      }
     })();
   }
   try {
@@ -376,13 +380,18 @@ export async function ensureEnterpriseSchema() {
 
 export async function readEnterpriseConfig() {
   await ensureEnterpriseSchema();
-  const rows = await prisma.$queryRawUnsafe<Array<any>>(
-    `SELECT "id","sellerEnabled","designerEnabled","enforceSubscription","defaultSeatLimit","defaultYearlyFeeUsd","levels"
-     FROM "EnterpriseUpgradeConfig"
-     WHERE "id" = 'default'
-     LIMIT 1`
-  );
-  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  let row: any = null;
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<any>>(
+      `SELECT "id","sellerEnabled","designerEnabled","enforceSubscription","defaultSeatLimit","defaultYearlyFeeUsd","levels"
+       FROM "EnterpriseUpgradeConfig"
+       WHERE "id" = 'default'
+       LIMIT 1`
+    );
+    row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  } catch {
+    row = null;
+  }
   const rawLevels = normalizeEnterpriseConfigLevels(row?.levels);
   return {
     sellerEnabled: row?.sellerEnabled !== false,

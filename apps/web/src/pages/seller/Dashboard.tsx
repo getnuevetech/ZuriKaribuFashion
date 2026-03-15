@@ -623,7 +623,7 @@ export default function SellerDashboard() {
         api.seller.getTryOnInsights(),
         api.featuredRequests.listMyRequests(),
         api.featuredRequests.getSettings(),
-        api.payments.getOptions(),
+        api.payments.getOptions({ useCase: 'FEATURED' }),
       ]);
       const dashboardRes = dashboardResult.status === 'fulfilled' ? dashboardResult.value : null;
       const fabricsRes = fabricsResult.status === 'fulfilled' ? fabricsResult.value : null;
