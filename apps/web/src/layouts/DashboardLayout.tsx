@@ -137,6 +137,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isAdminAccountsMenuOpen, setIsAdminAccountsMenuOpen] = useState(true);
   const [isProductManagementMenuOpen, setIsProductManagementMenuOpen] = useState(true);
   const [isEnterpriseMenuOpen, setIsEnterpriseMenuOpen] = useState(true);
+  const [enterpriseRoleManagementAllowed, setEnterpriseRoleManagementAllowed] = useState(false);
   const { user, token, logout } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -234,7 +235,6 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [dashboardSearchQuery, setDashboardSearchQuery] = useState('');
   const [isDashboardSearchOpen, setIsDashboardSearchOpen] = useState(false);
   const [highlightedSearchResultIndex, setHighlightedSearchResultIndex] = useState(0);
-  const [enterpriseRoleManagementAllowed, setEnterpriseRoleManagementAllowed] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
