@@ -91,12 +91,14 @@ const workflowSettingsSchema = z.object({
     .object({
       maxReadyToWearUnitsPerOrder: z.number().int().min(1).max(200).default(3),
       maxCustomToWearItemsPerCheckout: z.number().int().min(1).max(200).default(3),
+      maxSuitableFabricsPerDesign: z.number().int().min(1).max(50).default(5),
       minFabricYardsPerOrder: z.number().int().min(1).max(500).default(3),
       maxFabricYardsPerOrder: z.number().int().min(1).max(5000).default(200),
     })
     .default({
       maxReadyToWearUnitsPerOrder: 3,
       maxCustomToWearItemsPerCheckout: 3,
+      maxSuitableFabricsPerDesign: 5,
       minFabricYardsPerOrder: 3,
       maxFabricYardsPerOrder: 200,
     }),
@@ -224,6 +226,13 @@ function normalizeOrderWorkflowSettings(input: unknown): OrderWorkflowSettings {
           Number(
             parseObject(row.orderLimits).maxCustomToWearItemsPerCheckout || defaults.orderLimits.maxCustomToWearItemsPerCheckout
           )
+        )
+      ),
+      maxSuitableFabricsPerDesign: Math.max(
+        1,
+        Math.min(
+          50,
+          Number(parseObject(row.orderLimits).maxSuitableFabricsPerDesign || defaults.orderLimits.maxSuitableFabricsPerDesign)
         )
       ),
       minFabricYardsPerOrder: Math.max(

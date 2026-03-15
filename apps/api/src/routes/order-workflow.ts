@@ -54,6 +54,7 @@ const updateWorkflowSchema = z
       .object({
         maxReadyToWearUnitsPerOrder: z.number().int().min(1).max(200).optional(),
         maxCustomToWearItemsPerCheckout: z.number().int().min(1).max(200).optional(),
+        maxSuitableFabricsPerDesign: z.number().int().min(1).max(50).optional(),
         minFabricYardsPerOrder: z.number().int().min(1).max(500).optional(),
         maxFabricYardsPerOrder: z.number().int().min(1).max(5000).optional(),
       })

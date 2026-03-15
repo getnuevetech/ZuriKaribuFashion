@@ -4505,6 +4505,7 @@ const ordersApi = {
       data: {
         maxReadyToWearUnitsPerOrder: number;
         maxCustomToWearItemsPerCheckout: number;
+        maxSuitableFabricsPerDesign: number;
         minFabricYardsPerOrder: number;
         maxFabricYardsPerOrder: number;
       };

@@ -607,6 +607,7 @@ export default function DesignerDashboard() {
   const [fabricAccessMessage, setFabricAccessMessage] = useState<string | null>(null);
   const [designUploadingImage, setDesignUploadingImage] = useState(false);
   const [designImageUrlInput, setDesignImageUrlInput] = useState('');
+  const [maxSuitableFabricsPerDesign, setMaxSuitableFabricsPerDesign] = useState(5);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'designs' | 'featured' | 'orders' | 'tryon'>('overview');
   const [showDesignModal, setShowDesignModal] = useState(false);
@@ -804,6 +805,7 @@ export default function DesignerDashboard() {
         featuredRequestsResult,
         featuredSettingsResult,
         paymentOptionsResult,
+        orderLimitsResult,
       ] = await Promise.allSettled([
         api.designer.getDashboard(),
         api.designer.getDesigns(),
@@ -819,6 +821,7 @@ export default function DesignerDashboard() {
         api.featuredRequests.listMyRequests(),
         api.featuredRequests.getSettings(),
         api.payments.getOptions(),
+        api.orders.getOrderLimits(),
       ]);
       const statsRes = statsResult.status === 'fulfilled' ? statsResult.value : null;
       const designsRes = designsResult.status === 'fulfilled' ? designsResult.value : null;
@@ -835,6 +838,12 @@ export default function DesignerDashboard() {
       const featuredRequestsRes = featuredRequestsResult.status === 'fulfilled' ? featuredRequestsResult.value : null;
       const featuredSettingsRes = featuredSettingsResult.status === 'fulfilled' ? featuredSettingsResult.value : null;
       const paymentOptionsRes = paymentOptionsResult.status === 'fulfilled' ? paymentOptionsResult.value : null;
+      const orderLimitsRes = orderLimitsResult.status === 'fulfilled' ? orderLimitsResult.value : null;
+      setMaxSuitableFabricsPerDesign(
+        orderLimitsRes?.success
+          ? Math.max(1, Math.min(50, Number(orderLimitsRes.data?.maxSuitableFabricsPerDesign || 5)))
+          : 5
+      );
       const settledCallStatus = (result: PromiseSettledResult<any>) => {
         if (result.status === 'fulfilled') {
           return result.value?.success
@@ -1658,6 +1667,10 @@ export default function DesignerDashboard() {
     if (!fabricId) return;
     setDesignForm((prev) => {
       if (prev.selectedFabricIds.includes(fabricId)) return prev;
+      if (prev.selectedFabricIds.length >= maxSuitableFabricsPerDesign) {
+        setDesignError(`You can select up to ${maxSuitableFabricsPerDesign} suitable fabrics for each CTW product.`);
+        return prev;
+      }
       return {
         ...prev,
         selectedFabricIds: [...prev.selectedFabricIds, fabricId],
@@ -1902,6 +1915,10 @@ export default function DesignerDashboard() {
     }
     if (suitableFabricIds.length === 0) {
       setDesignError('Select at least one suitable fabric.');
+      return;
+    }
+    if (suitableFabricIds.length > maxSuitableFabricsPerDesign) {
+      setDesignError(`You can select up to ${maxSuitableFabricsPerDesign} suitable fabrics for each CTW product.`);
       return;
     }
     if (measurementVariables.length === 0) {
@@ -2447,6 +2464,7 @@ export default function DesignerDashboard() {
   const selectedDesignFabricRows = designForm.selectedFabricIds
     .map((fabricId) => fabricOptionById.get(fabricId))
     .filter(Boolean) as FabricOption[];
+  const hasReachedSuitableFabricLimit = designForm.selectedFabricIds.length >= maxSuitableFabricsPerDesign;
 
   if (loading) {
     return (
@@ -4149,11 +4167,14 @@ export default function DesignerDashboard() {
                       type="button"
                       variant="outline"
                       onClick={addSelectedFabricFromDropdown}
-                      disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics)}
+                      disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) || hasReachedSuitableFabricLimit}
                     >
                       Add Fabric
                     </Button>
                   </div>
+                  <p className="text-xs text-gray-600">
+                    Selected: {designForm.selectedFabricIds.length}/{maxSuitableFabricsPerDesign} suitable fabrics.
+                  </p>
 
                   <div className="space-y-2">
                     {selectedDesignFabricRows.length === 0 ? (

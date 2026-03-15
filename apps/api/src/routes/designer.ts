@@ -21,6 +21,7 @@ import {
 import { readTryOnInsights } from '../utils/try-on-insights';
 import { readTryOnSettings } from '../utils/try-on-settings';
 import { readVendorDashboardGovernanceSettings } from '../utils/vendor-dashboard-governance';
+import { readOrderWorkflowSettings } from '../utils/order-workflow';
 
 const router = Router();
 let designerGovernanceSchemaEnsured = false;
@@ -694,6 +695,15 @@ async function computeFinalDesignPrice(basePrice: number, designerCountry: strin
     finalPrice = finalPrice * (1 + Number(countryRule.value) / 100);
   }
   return finalPrice;
+}
+
+async function readMaxSuitableFabricsPerDesign(): Promise<number> {
+  try {
+    const settings = await readOrderWorkflowSettings();
+    return Math.max(1, Math.min(50, Number(settings.orderLimits?.maxSuitableFabricsPerDesign || 5)));
+  } catch {
+    return 5;
+  }
 }
 
 // Get designer dashboard
@@ -1450,6 +1460,13 @@ router.post('/designs', async (req, res, next) => {
     const selectedFabricIds = Array.from(
       new Set((data.suitableFabricIds || []).map((item) => String(item.fabricId || '').trim()).filter(Boolean))
     );
+    const maxSuitableFabricsPerDesign = await readMaxSuitableFabricsPerDesign();
+    if (selectedFabricIds.length > maxSuitableFabricsPerDesign) {
+      return res.status(400).json({
+        success: false,
+        message: `You can select a maximum of ${maxSuitableFabricsPerDesign} suitable fabrics per Custom To Wear product.`,
+      });
+    }
     if (selectedFabricIds.length === 0) {
       return res.status(400).json({
         success: false,
@@ -1670,6 +1687,7 @@ router.patch('/designs/:id', async (req, res, next) => {
         }>
       | undefined = undefined;
     if (data.suitableFabricIds) {
+      const maxSuitableFabricsPerDesign = await readMaxSuitableFabricsPerDesign();
       const homeCountry = await resolveDesignerHomeCountry(req.user!.id, profile);
       const allowedCountries = await getAllowedFabricCountriesForDesigner({
         designerUserId: req.user!.id,
@@ -1678,6 +1696,12 @@ router.patch('/designs/:id', async (req, res, next) => {
       const selectedFabricIds = Array.from(
         new Set(data.suitableFabricIds.map((item) => String(item.fabricId || '').trim()).filter(Boolean))
       );
+      if (selectedFabricIds.length > maxSuitableFabricsPerDesign) {
+        return res.status(400).json({
+          success: false,
+          message: `You can select a maximum of ${maxSuitableFabricsPerDesign} suitable fabrics per Custom To Wear product.`,
+        });
+      }
       const selectedFabricRows = await prisma.fabric.findMany({
         where: {
           id: { in: selectedFabricIds },

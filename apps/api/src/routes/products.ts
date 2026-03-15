@@ -5,6 +5,7 @@ import { authenticate, optionalAuth } from '../middleware/auth';
 import { z } from 'zod';
 import { readFabricPredominantColorMap } from '../utils/fabric-attributes';
 import { readCategoryPageSettings, type CategoryPageType } from '../utils/category-page-settings';
+import { readOrderWorkflowSettings } from '../utils/order-workflow';
 
 const router = Router();
 const HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE';
@@ -327,11 +328,20 @@ async function ensureProductExists(productType: CanonicalProductType, id: string
   return prisma.readyToWear.findUnique({ where: { id }, select: { id: true, categoryId: true } });
 }
 
-async function resolveDesignSuitableFabricsForCustomer(design: any) {
+async function readMaxSuitableFabricsPerDesign(): Promise<number> {
+  try {
+    const settings = await readOrderWorkflowSettings();
+    return Math.max(1, Math.min(50, Number(settings.orderLimits?.maxSuitableFabricsPerDesign || 5)));
+  } catch {
+    return 5;
+  }
+}
+
+async function resolveDesignSuitableFabricsForCustomer(design: any, maxCount: number) {
   const configuredRows = Array.isArray(design?.suitableFabrics)
     ? design.suitableFabrics.filter((entry: any) => Boolean(entry?.fabric?.id))
     : [];
-  if (configuredRows.length > 0) return configuredRows;
+  if (configuredRows.length > 0) return configuredRows.slice(0, maxCount);
 
   const designerCountry = String(design?.designer?.country || '').trim();
   if (!designerCountry) return [];
@@ -359,10 +369,10 @@ async function resolveDesignSuitableFabricsForCustomer(design: any) {
       },
     },
     orderBy: [{ totalSold: 'desc' }, { createdAt: 'desc' }],
-    take: 36,
+    take: Math.max(1, maxCount),
   });
 
-  return fallbackFabrics.map((fabric: any) => {
+  return fallbackFabrics.slice(0, maxCount).map((fabric: any) => {
     const minYards = Math.max(1, Number(fabric?.minYards || 1));
     return {
       id: `fallback-${String(design?.id || '')}-${String(fabric?.id || '')}`,
@@ -922,12 +932,16 @@ router.get('/designs', async (req, res, next) => {
       }),
       prisma.design.count({ where }),
     ]);
-    const [labelSettings, markdownRules] = await Promise.all([
+    const [labelSettings, markdownRules, maxSuitableFabricsPerDesign] = await Promise.all([
       readProductLabelSettings(),
       readActiveMarkdownPricingRules(),
+      readMaxSuitableFabricsPerDesign(),
     ]);
     const withLabels = designs.map((item) => ({
       ...item,
+      suitableFabrics: Array.isArray(item.suitableFabrics)
+        ? item.suitableFabrics.slice(0, maxSuitableFabricsPerDesign)
+        : [],
       productLabels: buildProductLabels({
         productType: 'DESIGN',
         productId: item.id,
@@ -1007,11 +1021,12 @@ router.get('/designs/:id', async (req, res, next) => {
         message: 'Design not found.',
       });
     }
-    const [labelSettings, markdownRules] = await Promise.all([
+    const [labelSettings, markdownRules, maxSuitableFabricsPerDesign] = await Promise.all([
       readProductLabelSettings(),
       readActiveMarkdownPricingRules(),
+      readMaxSuitableFabricsPerDesign(),
     ]);
-    const suitableFabrics = await resolveDesignSuitableFabricsForCustomer(design);
+    const suitableFabrics = await resolveDesignSuitableFabricsForCustomer(design, maxSuitableFabricsPerDesign);
 
     res.json({
       success: true,

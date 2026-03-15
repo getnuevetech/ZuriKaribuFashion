@@ -483,7 +483,7 @@ export default function AdminOrders() {
             <p className="mt-1 text-xs text-gray-600">
               Configure maximum/minimum checkout limits for Ready To Wear, Custom To Wear, and Fabric To Buy.
             </p>
-            <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
               <label className="text-sm text-gray-700">
                 RTW max units/order
                 <input
@@ -516,6 +516,25 @@ export default function AdminOrders() {
                       orderLimits: {
                         ...(prev?.orderLimits || {}),
                         maxCustomToWearItemsPerCheckout: Number(event.target.value || 3),
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                CTW max suitable fabrics/design
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={Number(workflowSettings.orderLimits?.maxSuitableFabricsPerDesign || 5)}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderLimits: {
+                        ...(prev?.orderLimits || {}),
+                        maxSuitableFabricsPerDesign: Number(event.target.value || 5),
                       },
                     }))
                   }
