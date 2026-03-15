@@ -2198,9 +2198,13 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       return res.status(404).json({ success: false, message: 'Fabric not found.' });
     }
 
-    // Check if selected fabric is suitable for design
+    const hasConfiguredSuitableFabrics =
+      Array.isArray(design.suitableFabrics) && design.suitableFabrics.length > 0;
+    // Check if selected fabric is suitable for design. If the design has no configured suitable fabrics,
+    // allow any approved/available same-country fabric to keep CTW checkout functional.
     if (
       hasCustomerSelectedFabric &&
+      hasConfiguredSuitableFabrics &&
       !design.suitableFabrics.some((row) => String(row.fabricId || '') === String(data.fabricId || ''))
     ) {
       return res.status(400).json({

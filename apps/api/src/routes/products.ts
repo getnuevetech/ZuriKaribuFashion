@@ -327,6 +327,56 @@ async function ensureProductExists(productType: CanonicalProductType, id: string
   return prisma.readyToWear.findUnique({ where: { id }, select: { id: true, categoryId: true } });
 }
 
+async function resolveDesignSuitableFabricsForCustomer(design: any) {
+  const configuredRows = Array.isArray(design?.suitableFabrics)
+    ? design.suitableFabrics.filter((entry: any) => Boolean(entry?.fabric?.id))
+    : [];
+  if (configuredRows.length > 0) return configuredRows;
+
+  const designerCountry = String(design?.designer?.country || '').trim();
+  if (!designerCountry) return [];
+
+  const fallbackFabrics = await prisma.fabric.findMany({
+    where: {
+      status: ProductStatus.APPROVED,
+      isAvailable: true,
+      seller: {
+        country: {
+          equals: designerCountry,
+          mode: 'insensitive',
+        },
+      },
+    },
+    include: {
+      materialType: true,
+      images: { take: 1, orderBy: { sortOrder: 'asc' } },
+      seller: {
+        select: {
+          businessName: true,
+          country: true,
+          city: true,
+        },
+      },
+    },
+    orderBy: [{ totalSold: 'desc' }, { createdAt: 'desc' }],
+    take: 36,
+  });
+
+  return fallbackFabrics.map((fabric: any) => {
+    const minYards = Math.max(1, Number(fabric?.minYards || 1));
+    return {
+      id: `fallback-${String(design?.id || '')}-${String(fabric?.id || '')}`,
+      designId: String(design?.id || ''),
+      fabricId: String(fabric?.id || ''),
+      yardsNeeded: minYards,
+      minMeters: minYards,
+      maxMeters: minYards,
+      isAutoFallback: true,
+      fabric,
+    };
+  });
+}
+
 function parsePagination(pageValue: unknown, limitValue: unknown, defaultLimit = 20) {
   const page = Math.max(1, Number.parseInt(String(pageValue ?? '1'), 10) || 1);
   const limit = Math.min(100, Math.max(1, Number.parseInt(String(limitValue ?? defaultLimit), 10) || defaultLimit));
@@ -961,11 +1011,13 @@ router.get('/designs/:id', async (req, res, next) => {
       readProductLabelSettings(),
       readActiveMarkdownPricingRules(),
     ]);
+    const suitableFabrics = await resolveDesignSuitableFabricsForCustomer(design);
 
     res.json({
       success: true,
       data: {
         ...design,
+        suitableFabrics,
         productLabels: buildProductLabels({
           productType: 'DESIGN',
           productId: design.id,
