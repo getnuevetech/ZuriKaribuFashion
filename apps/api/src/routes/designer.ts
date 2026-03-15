@@ -1524,7 +1524,7 @@ router.post('/designs', async (req, res, next) => {
         ? {
             name: matched.name,
             unit: matched.unit,
-            isRequired: matched.isRequired,
+            isRequired: true,
             instructions: matched.instructions || undefined,
           }
         : null;
@@ -1769,7 +1769,7 @@ router.patch('/designs/:id', async (req, res, next) => {
           ? {
               name: matched.name,
               unit: matched.unit,
-              isRequired: matched.isRequired,
+              isRequired: true,
               instructions: matched.instructions || undefined,
             }
           : null;

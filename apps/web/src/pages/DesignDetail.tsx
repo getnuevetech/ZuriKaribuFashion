@@ -175,6 +175,8 @@ export default function DesignDetail() {
           initialMeters[sf.fabric.id] = sf.minMeters;
         });
         setFabricMeters(initialMeters);
+        const firstFabricId = response.data.suitableFabrics?.[0]?.fabric?.id || null;
+        setSelectedFabric(firstFabricId);
       }
     } catch (error) {
       console.error('Failed to fetch design:', error);
@@ -296,9 +298,9 @@ export default function DesignDetail() {
 
   const areAllRequiredMeasurementsFilled = () => {
     if (!design) return false;
-    return design.measurements
-      .filter(m => m.isRequired)
-      .every(m => measurements[m.name] && measurements[m.name] > 0);
+    const requiredMeasurements = design.measurements.filter((measurement) => measurement.isRequired !== false);
+    if (requiredMeasurements.length === 0) return false;
+    return requiredMeasurements.every((measurement) => measurements[measurement.name] && measurements[measurement.name] > 0);
   };
 
   if (loading) {
@@ -322,6 +324,7 @@ export default function DesignDetail() {
   }
 
   const designerFlagCode = resolveCountryCode(design.designer?.country);
+  const hasRequiredMeasurementConfig = design.measurements.some((measurement) => measurement.isRequired !== false);
   const storefrontPath = design.designer?.id
     ? `/store/designer/${design.designer.id}/${encodeURIComponent(
         String(design.designer.businessName || 'designer')
@@ -571,63 +574,94 @@ export default function DesignDetail() {
                   <p className="text-sm text-gray-600">
                     Select a fabric for your design. All fabrics are from sellers in the same country as your designer.
                   </p>
-                  <div className="space-y-3">
-                    {design.suitableFabrics.map(({ fabric, minMeters, maxMeters }) => (
-                      <div
-                        key={fabric.id}
-                        onClick={() => setSelectedFabric(fabric.id)}
-                        className={`border-2 p-4 cursor-pointer transition-all ${
-                          selectedFabric === fabric.id && fabricSelectionMode === 'CUSTOMER_SELECTED'
-                            ? 'border-black bg-gray-50' 
-                            : 'border-gray-200 hover:border-black'
-                        }`}
-                      >
-                        <div className="flex gap-4">
-                          <img
-                            src={fabric.images[0]}
-                            alt={fabric.name}
-                            className="h-20 w-20 object-cover"
-                          />
-                          <div className="flex-1">
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <h4 className="font-semibold text-gray-900">{fabric.name}</h4>
-                                <p className="text-sm text-gray-500">{fabric.seller.businessName}</p>
-                                <p className="text-sm text-gray-500">{fabric.seller.country}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="font-semibold text-black">
-                                  {formatFromUsd(fabric.pricePerMeter)}/meter
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {minMeters}-{maxMeters} meters needed
-                                </p>
+                  {design.suitableFabrics.length === 0 ? (
+                    <div className="rounded border border-dashed border-gray-300 bg-white p-4 text-sm text-gray-600">
+                      No suitable fabrics are available for this design yet. You can still continue with
+                      &nbsp;<span className="font-semibold">Let designer/tailor choose fabric</span>.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {design.suitableFabrics.map(({ fabric }) => (
+                          <button
+                            key={fabric.id}
+                            type="button"
+                            onClick={() => setSelectedFabric(fabric.id)}
+                            className={`flex items-center gap-2 border px-2 py-2 text-left transition-colors ${
+                              selectedFabric === fabric.id
+                                ? 'border-black bg-black text-white'
+                                : 'border-gray-200 bg-white text-gray-800 hover:border-black'
+                            }`}
+                          >
+                            <img
+                              src={fabric.images[0]}
+                              alt={fabric.name}
+                              className="h-10 w-10 flex-shrink-0 object-cover"
+                            />
+                            <span className="line-clamp-2 text-xs font-medium">{fabric.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {(() => {
+                        const selectedRow = design.suitableFabrics.find((entry) => entry.fabric.id === selectedFabric);
+                        if (!selectedRow) {
+                          return (
+                            <p className="text-sm text-gray-600">
+                              Select a fabric thumbnail to view details and set meters.
+                            </p>
+                          );
+                        }
+                        const { fabric, minMeters, maxMeters } = selectedRow;
+                        return (
+                          <div className="border bg-white p-4">
+                            <div className="flex gap-4">
+                              <img
+                                src={fabric.images[0]}
+                                alt={fabric.name}
+                                className="h-20 w-20 object-cover"
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-start justify-between">
+                                  <div>
+                                    <h4 className="font-semibold text-gray-900">{fabric.name}</h4>
+                                    <p className="text-sm text-gray-500">{fabric.seller.businessName}</p>
+                                    <p className="text-sm text-gray-500">{fabric.seller.country}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="font-semibold text-black">
+                                      {formatFromUsd(fabric.pricePerMeter)}/meter
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                      {minMeters}-{maxMeters} meters needed
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="mt-3 border-t border-gray-200 pt-3">
+                                  <label className="text-sm font-medium text-gray-700">
+                                    Meters: {fabricMeters[fabric.id]}
+                                  </label>
+                                  <input
+                                    type="range"
+                                    min={minMeters}
+                                    max={maxMeters}
+                                    step={0.5}
+                                    value={fabricMeters[fabric.id] || minMeters}
+                                    onChange={(e) =>
+                                      setFabricMeters((prev) => ({
+                                        ...prev,
+                                        [fabric.id]: parseFloat(e.target.value),
+                                      }))
+                                    }
+                                    className="mt-1 w-full"
+                                  />
+                                </div>
                               </div>
                             </div>
-                            {selectedFabric === fabric.id && (
-                              <div className="mt-3 border-t border-gray-200 pt-3">
-                                <label className="text-sm font-medium text-gray-700">
-                                  Meters: {fabricMeters[fabric.id]}
-                                </label>
-                                <input
-                                  type="range"
-                                  min={minMeters}
-                                  max={maxMeters}
-                                  step={0.5}
-                                  value={fabricMeters[fabric.id] || minMeters}
-                                  onChange={(e) => setFabricMeters(prev => ({
-                                    ...prev,
-                                    [fabric.id]: parseFloat(e.target.value)
-                                  }))}
-                                  className="w-full mt-1"
-                                />
-                              </div>
-                            )}
                           </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                        );
+                      })()}
+                    </>
+                  )}
                 </div>
               )}
 
@@ -644,29 +678,35 @@ export default function DesignDetail() {
                       How to measure?
                     </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {design.measurements.map((measurement) => (
-                      <div key={measurement.name} className="space-y-1">
-                        <label className="text-sm font-medium text-gray-700">
-                          {measurement.name}
-                          {measurement.isRequired && <span className="text-red-500">*</span>}
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={measurements[measurement.name] || ''}
-                            onChange={(e) => handleMeasurementChange(measurement.name, parseFloat(e.target.value))}
-                            placeholder={measurement.description}
-                            className="w-full border px-3 py-2 text-sm focus:border-black focus:ring-2 focus:ring-black/20"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
-                            {measurement.unit}
-                          </span>
+                  {design.measurements.length === 0 ? (
+                    <div className="rounded border border-dashed border-gray-300 bg-white p-4 text-sm text-gray-600">
+                      Required measurements are not configured for this CTW product yet.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      {design.measurements.map((measurement) => (
+                        <div key={measurement.name} className="space-y-1">
+                          <label className="text-sm font-medium text-gray-700">
+                            {measurement.name}
+                            {measurement.isRequired && <span className="text-red-500">*</span>}
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={measurements[measurement.name] || ''}
+                              onChange={(e) => handleMeasurementChange(measurement.name, parseFloat(e.target.value))}
+                              placeholder={measurement.description}
+                              className="w-full border px-3 py-2 text-sm focus:border-black focus:ring-2 focus:ring-black/20"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                              {measurement.unit}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -695,7 +735,11 @@ export default function DesignDetail() {
                 Please select a fabric to continue
               </p>
             )}
-            {!areAllRequiredMeasurementsFilled() ? (
+            {!hasRequiredMeasurementConfig ? (
+              <p className="text-sm text-red-700 text-center">
+                This design is missing required measurement setup. Please contact support.
+              </p>
+            ) : !areAllRequiredMeasurementsFilled() ? (
               <p className="text-sm text-gray-700 text-center">
                 Complete required measurements before adding to cart.
               </p>

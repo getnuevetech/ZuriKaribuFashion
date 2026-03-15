@@ -2171,6 +2171,12 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
         include: {
           designer: true,
           suitableFabrics: true,
+          measurementVariables: {
+            select: {
+              name: true,
+              isRequired: true,
+            },
+          },
         },
       }),
       prisma.address.findFirst({
@@ -2226,6 +2232,34 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       return res.status(400).json({
         success: false,
         message: `Not enough fabric in stock. Available: ${fabric.stockYards} yards`,
+      });
+    }
+
+    const designMeasurementRows = Array.isArray((design as any).measurementVariables)
+      ? ((design as any).measurementVariables as Array<{ name?: string; isRequired?: boolean }>)
+      : [];
+    const requiredMeasurementNames: string[] = Array.from(
+      new Set(
+        designMeasurementRows
+          .filter((entry) => entry?.isRequired !== false)
+          .map((entry) => String(entry?.name || '').trim())
+          .filter((entry) => entry.length > 0)
+      )
+    );
+    if (requiredMeasurementNames.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'This CTW design is missing required measurement setup. Please contact support.',
+      });
+    }
+    const missingMeasurements = requiredMeasurementNames.filter((name) => {
+      const value = Number((data.measurements as Record<string, number>)[name]);
+      return !Number.isFinite(value) || value <= 0;
+    });
+    if (missingMeasurements.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Missing required measurement(s): ${missingMeasurements.join(', ')}`,
       });
     }
 

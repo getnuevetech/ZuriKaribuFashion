@@ -1860,18 +1860,6 @@ export default function DesignerDashboard() {
     void loadFabricCountryAccessSummary();
   }, [showDesignModal]);
 
-  useEffect(() => {
-    if (!showDesignModal) return;
-    if ((designForm.selectedMeasurementNames || []).length > 0) return;
-    if (measurementTemplateOptions.length === 0) return;
-    const requiredNames = measurementTemplateOptions.filter((item) => item.isRequired).map((item) => item.name);
-    if (requiredNames.length === 0) return;
-    setDesignForm((prev) => ({
-      ...prev,
-      selectedMeasurementNames: prev.selectedMeasurementNames.length > 0 ? prev.selectedMeasurementNames : requiredNames,
-    }));
-  }, [showDesignModal, measurementTemplateOptions]);
-
   const handleSaveDesign = async () => {
     if (!isEditMode && !canAddDesignProduct) return;
     if (isEditMode && !canEditDesignProduct) return;
@@ -1885,7 +1873,7 @@ export default function DesignerDashboard() {
       .map((item) => ({
         name: item.name,
         unit: item.unit || 'cm',
-        isRequired: Boolean(item.isRequired),
+        isRequired: true,
         instructions: item.instructions || undefined,
       }));
     const suitableFabricIds = designForm.selectedFabricIds.map((fabricId) => ({
@@ -4222,8 +4210,11 @@ export default function DesignerDashboard() {
               {!isFieldHidden(dashboardGovernance.fields.designMeasurementVariables) ? (
                 <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Measurement Fields (admin-defined templates)
+                  Required Measurements (admin-defined templates)
                 </label>
+                <p className="mb-2 text-xs text-gray-500">
+                  Select the measurements required for this design. Customers must complete selected fields on the product detail page.
+                </p>
                 <div className="max-h-44 overflow-y-auto rounded-lg border p-3 space-y-2">
                   {measurementTemplateOptions.length === 0 ? (
                     <p className="text-sm text-gray-500">No measurement templates found.</p>
@@ -4247,7 +4238,7 @@ export default function DesignerDashboard() {
                           />
                           <span>
                             <span className="font-medium">{template.name}</span> ({template.unit})
-                            {template.isRequired ? <span className="ml-1 text-amber-700">required</span> : null}
+                            <span className="ml-1 text-amber-700">required when selected</span>
                             {template.instructions ? (
                               <span className="block text-xs text-gray-500">{template.instructions}</span>
                             ) : null}
