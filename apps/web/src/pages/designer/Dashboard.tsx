@@ -748,36 +748,45 @@ export default function DesignerDashboard() {
   }, []);
 
   useEffect(() => {
-    const tabParam = searchParams.get('tab');
-    const normalizedTab = String(tabParam || '').toLowerCase();
-    if (normalizedTab === 'try-on' || normalizedTab === '3d-tryon' || normalizedTab === '3d-try-on') {
-      setActiveTab('tryon');
+    const rawTab = String(searchParams.get('tab') || '').toLowerCase();
+    if (visibleTabs.length === 0) {
+      if (activeTab !== 'overview') {
+        setActiveTab('overview');
+      }
+      if (rawTab) {
+        setSearchParams({}, { replace: true });
+      }
       return;
     }
-    if (
+
+    const normalizedTab =
+      rawTab === 'try-on' || rawTab === '3d-tryon' || rawTab === '3d-try-on' ? 'tryon' : rawTab;
+    const parsedTab =
       normalizedTab === 'designs' ||
       normalizedTab === 'featured' ||
       normalizedTab === 'orders' ||
       normalizedTab === 'overview' ||
       normalizedTab === 'tryon'
-    ) {
-      setActiveTab(normalizedTab as 'overview' | 'designs' | 'featured' | 'orders' | 'tryon');
-    } else {
-      setActiveTab('overview');
-    }
-  }, [searchParams]);
+        ? (normalizedTab as 'overview' | 'designs' | 'featured' | 'orders' | 'tryon')
+        : 'overview';
 
-  useEffect(() => {
-    if (visibleTabs.length === 0) {
-      if (activeTab !== 'overview') {
-        setActiveTab('overview');
+    if (!visibleTabs.includes(parsedTab)) {
+      const nextTab = fallbackTab;
+      if (activeTab !== nextTab) {
+        setActiveTab(nextTab);
+      }
+      if (nextTab === 'overview') {
+        if (rawTab) setSearchParams({}, { replace: true });
+      } else if (rawTab !== nextTab) {
+        setSearchParams({ tab: nextTab }, { replace: true });
       }
       return;
     }
-    if (!visibleTabs.includes(activeTab)) {
-      syncTabWithUrl(fallbackTab);
+
+    if (activeTab !== parsedTab) {
+      setActiveTab(parsedTab);
     }
-  }, [activeTab, fallbackTab, visibleTabs]);
+  }, [activeTab, fallbackTab, searchParams, setSearchParams, visibleTabs]);
 
   const resolveDefaultFeaturedProvider = (countryName?: string) => {
     const available = featuredPaymentProviders.map((entry) => String(entry.providerKey || '').toUpperCase()).filter(Boolean);

@@ -528,36 +528,45 @@ export default function SellerDashboard() {
   }, []);
 
   useEffect(() => {
-    const tabParam = searchParams.get('tab');
-    const normalizedTab = String(tabParam || '').toLowerCase();
-    if (normalizedTab === 'try-on' || normalizedTab === '3d-tryon' || normalizedTab === '3d-try-on') {
-      setActiveTab('tryon');
+    const rawTab = String(searchParams.get('tab') || '').toLowerCase();
+    if (visibleTabs.length === 0) {
+      if (activeTab !== 'overview') {
+        setActiveTab('overview');
+      }
+      if (rawTab) {
+        setSearchParams({}, { replace: true });
+      }
       return;
     }
-    if (
+
+    const normalizedTab =
+      rawTab === 'try-on' || rawTab === '3d-tryon' || rawTab === '3d-try-on' ? 'tryon' : rawTab;
+    const parsedTab =
       normalizedTab === 'fabrics' ||
       normalizedTab === 'featured' ||
       normalizedTab === 'orders' ||
       normalizedTab === 'overview' ||
       normalizedTab === 'tryon'
-    ) {
-      setActiveTab(normalizedTab as 'overview' | 'fabrics' | 'featured' | 'orders' | 'tryon');
-    } else {
-      setActiveTab('overview');
-    }
-  }, [searchParams]);
+        ? (normalizedTab as 'overview' | 'fabrics' | 'featured' | 'orders' | 'tryon')
+        : 'overview';
 
-  useEffect(() => {
-    if (visibleTabs.length === 0) {
-      if (activeTab !== 'overview') {
-        setActiveTab('overview');
+    if (!visibleTabs.includes(parsedTab)) {
+      const nextTab = fallbackTab;
+      if (activeTab !== nextTab) {
+        setActiveTab(nextTab);
+      }
+      if (nextTab === 'overview') {
+        if (rawTab) setSearchParams({}, { replace: true });
+      } else if (rawTab !== nextTab) {
+        setSearchParams({ tab: nextTab }, { replace: true });
       }
       return;
     }
-    if (!visibleTabs.includes(activeTab)) {
-      syncTabWithUrl(fallbackTab);
+
+    if (activeTab !== parsedTab) {
+      setActiveTab(parsedTab);
     }
-  }, [activeTab, fallbackTab, visibleTabs]);
+  }, [activeTab, fallbackTab, searchParams, setSearchParams, visibleTabs]);
 
   useEffect(() => {
     if (materialOptions.length > 0 && !productForm.materialTypeId) {
