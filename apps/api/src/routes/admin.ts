@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
+import PDFDocument from 'pdfkit';
+import * as XLSX from 'xlsx';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma, UserRole, UserStatus, ProductStatus, ProductType } from '../db';
@@ -2811,6 +2813,143 @@ router.get('/activity-logs', authorizePermissions(Permissions.SESSION_AUDIT_READ
         },
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/activity-logs/export', authorizePermissions(Permissions.SESSION_AUDIT_READ), async (req, res, next) => {
+  try {
+    const querySchema = z.object({
+      format: z.enum(['csv', 'xlsx', 'pdf']).default('csv'),
+      role: z
+        .enum(['ADMINISTRATOR', 'FABRIC_SELLER', 'FASHION_DESIGNER', 'CUSTOMER', 'QA_TEAM'])
+        .optional(),
+      userQuery: z.string().trim().max(120).optional(),
+      action: z.string().trim().max(120).optional(),
+    });
+    const query = querySchema.parse(req.query || {});
+    if (query.role && !query.userQuery) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter username or email to pull role-specific activity logs.',
+      });
+    }
+    const where: any = {};
+    if (query.role) {
+      where.user = { role: query.role };
+    }
+    if (query.action) {
+      where.action = { contains: query.action, mode: 'insensitive' };
+    }
+    if (query.userQuery) {
+      const token = String(query.userQuery || '').trim();
+      where.user = {
+        ...(where.user || {}),
+        OR: [
+          { email: { contains: token, mode: 'insensitive' } },
+          { firstName: { contains: token, mode: 'insensitive' } },
+          { lastName: { contains: token, mode: 'insensitive' } },
+        ],
+      };
+    }
+    const rows = await prisma.activityLog.findMany({
+      where,
+      take: 5000,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        action: true,
+        details: true,
+        ipAddress: true,
+        userAgent: true,
+        createdAt: true,
+        user: {
+          select: {
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+          },
+        },
+      },
+    });
+    const exportRows = rows.map((row) => {
+      const details = row.details && typeof row.details === 'object' ? (row.details as Record<string, any>) : {};
+      const userName = `${String(row.user?.firstName || '')} ${String(row.user?.lastName || '')}`.trim();
+      const endpoint = details?.path
+        ? `${String(details?.method || 'GET').toUpperCase()} ${String(details.path || '')}`
+        : '';
+      return {
+        Time: new Date(row.createdAt).toISOString(),
+        User: userName || String(row.user?.email || 'Unknown user'),
+        Email: String(row.user?.email || ''),
+        Role: String(row.user?.role || ''),
+        Action: String(row.action || ''),
+        Endpoint: endpoint,
+        StatusCode: details?.statusCode ?? '',
+        DurationMs: details?.durationMs ?? '',
+        IPAddress: String(row.ipAddress || ''),
+        Device: String(row.userAgent || ''),
+      };
+    });
+    const generatedAt = new Date();
+    const fileDate = generatedAt.toISOString().slice(0, 10);
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'ActivityLogs');
+    if (query.format === 'csv') {
+      const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="activity-logs-${fileDate}.csv"`);
+      return res.status(200).send(csvOutput);
+    }
+    if (query.format === 'xlsx') {
+      const xlsxOutput = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader('Content-Disposition', `attachment; filename="activity-logs-${fileDate}.xlsx"`);
+      return res.status(200).send(xlsxOutput);
+    }
+    const doc = new PDFDocument({ margin: 36, size: 'A4' });
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+    doc.on('end', () => {
+      if (res.headersSent) return;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="activity-logs-${fileDate}.pdf"`);
+      res.status(200).send(Buffer.concat(chunks));
+    });
+    doc.fontSize(15).text('Activity Logs Export');
+    doc.moveDown(0.3);
+    doc.fontSize(9).fillColor('#555555').text(`Generated at: ${generatedAt.toISOString()}`);
+    doc.text(`Records: ${exportRows.length} (max 5000)`);
+    doc.text(`Filters: role=${query.role || 'ALL'}, userQuery=${query.userQuery || '-'}, action=${query.action || '-'}`);
+    doc.moveDown(0.8);
+    doc.fillColor('#000000');
+    if (exportRows.length === 0) {
+      doc.fontSize(11).text('No activity logs found for the selected filters.');
+    } else {
+      exportRows.forEach((row, index) => {
+        if (doc.y > 760) doc.addPage();
+        doc.fontSize(9).text(
+          `${index + 1}. ${row.Time} | ${row.User} | ${row.Role} | ${row.Action}`,
+          { width: 520 }
+        );
+        doc.fontSize(8).fillColor('#555555').text(
+          `Endpoint: ${row.Endpoint || '-'} | Status: ${row.StatusCode || '-'} | Duration: ${row.DurationMs || '-'}ms | IP: ${
+            row.IPAddress || '-'
+          }`,
+          { width: 520 }
+        );
+        doc.text(`Device: ${row.Device || '-'}`, { width: 520 });
+        doc.moveDown(0.4);
+        doc.fillColor('#000000');
+      });
+    }
+    doc.end();
   } catch (error) {
     next(error);
   }

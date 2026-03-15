@@ -60,7 +60,6 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Customer Accounts', href: '/admin/customer-accounts', icon: Users },
     { label: 'Administrator Accounts', href: '/admin/administrator-accounts', icon: User },
     { label: 'Vendor Profiles', href: '/admin/vendor-profiles', icon: Tag },
-    { label: 'Activity Logs', href: '/admin/activity-logs', icon: ClipboardCheck },
     { label: 'Traffic Report', href: '/admin/traffic', icon: Layers },
     { label: 'Measurement Templates', href: '/admin/measurement-templates', icon: Ruler },
     { label: 'Currency Matrix', href: '/admin/currency', icon: DollarSign },
@@ -81,6 +80,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Homepage Sections', href: '/admin/homepage-sections', icon: LayoutGrid },
     { label: 'Category Pages', href: '/admin/category-pages', icon: LayoutGrid },
     { label: 'Blogs', href: '/admin/blogs', icon: FileText },
+    { label: 'Activity Logs', href: '/admin/activity-logs', icon: ClipboardCheck },
   ],
   seller: [
     { label: 'Dashboard', href: '/seller', icon: LayoutDashboard },
@@ -135,6 +135,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isPaymentMenuOpen, setIsPaymentMenuOpen] = useState(true);
   const [isAdminAccountsMenuOpen, setIsAdminAccountsMenuOpen] = useState(true);
   const [isProductManagementMenuOpen, setIsProductManagementMenuOpen] = useState(true);
+  const [isEnterpriseMenuOpen, setIsEnterpriseMenuOpen] = useState(true);
   const { user, logout } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -213,6 +214,18 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Product Labels', href: '/admin/product-labels', icon: ChevronRight },
     { label: 'Product Change Request', href: '/admin/product-change-requests', icon: ChevronRight },
   ];
+  const enterpriseSubmenu =
+    userType === 'seller'
+      ? [
+          { label: 'Enterprise Workspace', href: '/seller/enterprise', icon: ChevronRight },
+          { label: 'Sub-account Role Management', href: '/seller/enterprise/role-management', icon: ChevronRight },
+        ]
+      : userType === 'designer'
+        ? [
+            { label: 'Enterprise Workspace', href: '/designer/enterprise', icon: ChevronRight },
+            { label: 'Sub-account Role Management', href: '/designer/enterprise/role-management', icon: ChevronRight },
+          ]
+        : [];
   const [dashboardSearchQuery, setDashboardSearchQuery] = useState('');
   const [isDashboardSearchOpen, setIsDashboardSearchOpen] = useState(false);
   const [highlightedSearchResultIndex, setHighlightedSearchResultIndex] = useState(0);
@@ -287,6 +300,17 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
           },
         ],
         { prefix: 'Product Configuration' }
+      );
+    }
+    if (userType === 'seller' || userType === 'designer') {
+      addSearchEntries(
+        entries,
+        enterpriseSubmenu.map((item) => ({
+          label: item.label,
+          href: item.href,
+          keywords: ['enterprise', 'sub-account', 'role management'],
+        })),
+        { prefix: 'Enterprise' }
       );
     }
 
@@ -618,6 +642,62 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                           const subActive =
                             location.pathname === subUrl.pathname &&
                             (subTab ? currentTab === subTab : !currentTab);
+                          const SubIcon = subItem.icon;
+                          return (
+                            <Link
+                              key={subItem.href}
+                              to={subItem.href}
+                              className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
+                                subActive
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <SubIcon className="h-4 w-4" />
+                              <span>{subItem.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+
+              if (
+                (userType === 'seller' && item.href === '/seller/enterprise') ||
+                (userType === 'designer' && item.href === '/designer/enterprise')
+              ) {
+                const enterpriseMenuActive = enterpriseSubmenu.some((subItem) => location.pathname === subItem.href);
+                return (
+                  <div key={item.href} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsEnterpriseMenuOpen((prev) => !prev)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
+                        enterpriseMenuActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {isSidebarOpen ? (
+                        <>
+                          <span className="text-sm font-medium">Enterprise</span>
+                          <span className="ml-auto">
+                            {isEnterpriseMenuOpen ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </span>
+                        </>
+                      ) : null}
+                    </button>
+                    {isEnterpriseMenuOpen && isSidebarOpen ? (
+                      <div className="ml-7 space-y-1">
+                        {enterpriseSubmenu.map((subItem) => {
+                          const subActive = location.pathname === subItem.href;
                           const SubIcon = subItem.icon;
                           return (
                             <Link

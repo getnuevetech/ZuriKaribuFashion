@@ -77,6 +77,21 @@ const normalizeSubAccountStatus = (value: unknown) => {
   return 'ACTIVE';
 };
 
+const isNumericColumnType = (column?: { dataType?: string; udtName?: string } | null) => {
+  const dataType = String(column?.dataType || '').trim().toLowerCase();
+  const udtName = String(column?.udtName || '').trim().toLowerCase();
+  if (dataType.includes('numeric') || dataType.includes('decimal')) return true;
+  if (dataType.includes('double') || dataType.includes('real')) return true;
+  if (dataType.includes('integer') || dataType.includes('bigint') || dataType.includes('smallint')) return true;
+  return ['numeric', 'decimal', 'float4', 'float8', 'int2', 'int4', 'int8'].includes(udtName);
+};
+
+const isJsonColumnType = (column?: { dataType?: string; udtName?: string } | null) => {
+  const dataType = String(column?.dataType || '').trim().toLowerCase();
+  const udtName = String(column?.udtName || '').trim().toLowerCase();
+  return dataType.includes('json') || udtName === 'json' || udtName === 'jsonb';
+};
+
 const normalizeConfigUpgradeLevels = (
   rawLevels: unknown
 ): Array<{ key: string; name: string; seatLimit: number; yearlyFeeUsd: number }> => {
@@ -929,7 +944,7 @@ router.post('/upgrade-requests/:requestId/payment-verify', async (req, res, next
   }
 });
 
-router.get('/config', authorizePermissions(Permissions.USERS_MANAGE), async (_req, res, next) => {
+router.get('/config', authorizePermissions(Permissions.VENDOR_PROFILES_READ), async (_req, res, next) => {
   try {
     const config = await readEnterpriseConfig();
     return res.json({ success: true, data: config });
@@ -938,7 +953,7 @@ router.get('/config', authorizePermissions(Permissions.USERS_MANAGE), async (_re
   }
 });
 
-router.put('/config', authorizePermissions(Permissions.USERS_MANAGE), async (req, res, next) => {
+router.put('/config', authorizePermissions(Permissions.VENDOR_PROFILES_REVIEW), async (req, res, next) => {
   try {
     await ensureEnterpriseSchema();
     const payload = z
@@ -946,50 +961,84 @@ router.put('/config', authorizePermissions(Permissions.USERS_MANAGE), async (req
         sellerEnabled: z.boolean(),
         designerEnabled: z.boolean(),
         enforceSubscription: z.boolean(),
-        defaultSeatLimit: z.number().int().min(1).max(1000),
-        defaultYearlyFeeUsd: z.number().min(0),
+        defaultSeatLimit: z.coerce.number().int().min(1).max(1000),
+        defaultYearlyFeeUsd: z.coerce.number().min(0),
         levels: z
           .array(
             z.object({
               key: z.string().trim().min(1).max(40),
               name: z.string().trim().min(1).max(80),
-              seatLimit: z.number().int().min(1).max(10000),
-              yearlyFeeUsd: z.number().min(0),
+              seatLimit: z.coerce.number().int().min(1).max(10000),
+              yearlyFeeUsd: z.coerce.number().min(0),
             })
           )
           .default([]),
       })
       .parse(req.body || {});
+    const normalizedLevels = normalizeConfigUpgradeLevels(payload.levels);
+    const seatLimit = Math.max(1, Number(payload.defaultSeatLimit || 1));
+    const yearlyFeeUsd = Math.max(0, Number(payload.defaultYearlyFeeUsd || 0));
+    const configColumns = await prisma.$queryRawUnsafe<
+      Array<{ column_name: string; data_type: string; udt_name: string }>
+    >(
+      `SELECT "column_name","data_type","udt_name"
+       FROM information_schema.columns
+       WHERE table_schema = current_schema()
+         AND table_name = 'EnterpriseUpgradeConfig'`
+    );
+    const typeByColumn = new Map(
+      (Array.isArray(configColumns) ? configColumns : []).map((row) => [
+        String(row.column_name || '').trim().toLowerCase(),
+        {
+          dataType: String(row.data_type || '').trim(),
+          udtName: String(row.udt_name || '').trim(),
+        },
+      ])
+    );
+    const levelsColumn = typeByColumn.get('levels');
+    const yearlyColumn = typeByColumn.get('defaultyearlyfeeusd');
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "EnterpriseUpgradeConfig" ("id","createdAt","updatedAt")
+       VALUES ('default', NOW(), NOW())
+       ON CONFLICT ("id") DO NOTHING`
+    );
     await prisma.$executeRawUnsafe(
       `UPDATE "EnterpriseUpgradeConfig"
        SET "sellerEnabled" = $1,
            "designerEnabled" = $2,
            "enforceSubscription" = $3,
            "defaultSeatLimit" = $4,
-           "defaultYearlyFeeUsd" = $5,
-           "levels" = $6::jsonb,
+           "defaultYearlyFeeUsd" = ${
+             isNumericColumnType(yearlyColumn) ? '$5::numeric' : '$5::text'
+           },
+           "levels" = ${isJsonColumnType(levelsColumn) ? '$6::jsonb' : '$6'},
            "updatedById" = $7,
            "updatedAt" = NOW()
        WHERE "id" = 'default'`,
       payload.sellerEnabled,
       payload.designerEnabled,
       payload.enforceSubscription,
-      payload.defaultSeatLimit,
-      payload.defaultYearlyFeeUsd,
-      JSON.stringify(payload.levels),
+      seatLimit,
+      yearlyFeeUsd,
+      JSON.stringify(normalizedLevels),
       req.user!.id
     );
     return res.json({
       success: true,
       message: 'Enterprise configuration updated successfully.',
-      data: payload,
+      data: {
+        ...payload,
+        defaultSeatLimit: seatLimit,
+        defaultYearlyFeeUsd: yearlyFeeUsd,
+        levels: normalizedLevels,
+      },
     });
   } catch (error) {
     next(error);
   }
 });
 
-router.get('/accounts', authorizePermissions(Permissions.USERS_MANAGE), async (req, res, next) => {
+router.get('/accounts', authorizePermissions(Permissions.VENDOR_PROFILES_READ), async (req, res, next) => {
   try {
     await ensureEnterpriseSchema();
     const query = z
@@ -1076,7 +1125,10 @@ router.get('/accounts', authorizePermissions(Permissions.USERS_MANAGE), async (r
   }
 });
 
-router.patch('/accounts/:ownerUserId/convert', authorizePermissions(Permissions.USERS_MANAGE), async (req, res, next) => {
+router.patch(
+  '/accounts/:ownerUserId/convert',
+  authorizePermissions(Permissions.VENDOR_PROFILES_REVIEW),
+  async (req, res, next) => {
   try {
     await ensureEnterpriseSchema();
     const ownerUserId = String(req.params.ownerUserId || '').trim();
@@ -1138,9 +1190,13 @@ router.patch('/accounts/:ownerUserId/convert', authorizePermissions(Permissions.
   } catch (error) {
     next(error);
   }
-});
+  }
+);
 
-router.patch('/accounts/:ownerUserId/subscription', authorizePermissions(Permissions.USERS_MANAGE), async (req, res, next) => {
+router.patch(
+  '/accounts/:ownerUserId/subscription',
+  authorizePermissions(Permissions.VENDOR_PROFILES_REVIEW),
+  async (req, res, next) => {
   try {
     await ensureEnterpriseSchema();
     const ownerUserId = String(req.params.ownerUserId || '').trim();
@@ -1201,9 +1257,13 @@ router.patch('/accounts/:ownerUserId/subscription', authorizePermissions(Permiss
   } catch (error) {
     next(error);
   }
-});
+  }
+);
 
-router.get('/accounts/:ownerUserId/subaccounts', authorizePermissions(Permissions.USERS_MANAGE), async (req, res, next) => {
+router.get(
+  '/accounts/:ownerUserId/subaccounts',
+  authorizePermissions(Permissions.VENDOR_PROFILES_READ),
+  async (req, res, next) => {
   try {
     await ensureEnterpriseSchema();
     const ownerUserId = String(req.params.ownerUserId || '').trim();
@@ -1235,9 +1295,10 @@ router.get('/accounts/:ownerUserId/subaccounts', authorizePermissions(Permission
   } catch (error) {
     next(error);
   }
-});
+  }
+);
 
-router.get('/upgrade-requests', authorizePermissions(Permissions.USERS_MANAGE), async (req, res, next) => {
+router.get('/upgrade-requests', authorizePermissions(Permissions.VENDOR_PROFILES_READ), async (req, res, next) => {
   try {
     await ensureEnterpriseSchema();
     const query = z
@@ -1298,7 +1359,10 @@ router.get('/upgrade-requests', authorizePermissions(Permissions.USERS_MANAGE), 
   }
 });
 
-router.patch('/upgrade-requests/:requestId/review', authorizePermissions(Permissions.USERS_MANAGE), async (req, res, next) => {
+router.patch(
+  '/upgrade-requests/:requestId/review',
+  authorizePermissions(Permissions.VENDOR_PROFILES_REVIEW),
+  async (req, res, next) => {
   try {
     await ensureEnterpriseSchema();
     const requestId = String(req.params.requestId || '').trim();
@@ -1365,9 +1429,13 @@ router.patch('/upgrade-requests/:requestId/review', authorizePermissions(Permiss
   } catch (error) {
     next(error);
   }
-});
+  }
+);
 
-router.patch('/subaccounts/:subAccountId/status', authorizePermissions(Permissions.USERS_MANAGE), async (req, res, next) => {
+router.patch(
+  '/subaccounts/:subAccountId/status',
+  authorizePermissions(Permissions.VENDOR_PROFILES_REVIEW),
+  async (req, res, next) => {
   try {
     await ensureEnterpriseSchema();
     const subAccountId = String(req.params.subAccountId || '').trim();
@@ -1406,7 +1474,8 @@ router.patch('/subaccounts/:subAccountId/status', authorizePermissions(Permissio
   } catch (error) {
     next(error);
   }
-});
+  }
+);
 
 export default router;
 

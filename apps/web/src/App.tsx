@@ -69,6 +69,7 @@ import SellerDashboard from './pages/seller/Dashboard';
 import SellerPayments from './pages/seller/Payments';
 import SellerProfilePage from './pages/seller/Profile';
 import SellerEnterprisePage from './pages/seller/Enterprise';
+import SellerEnterpriseRoleManagementPage from './pages/seller/EnterpriseRoleManagement';
 import SellerMessagesPage from './pages/seller/Messages';
 
 // Designer Pages
@@ -76,6 +77,7 @@ import DesignerDashboard from './pages/designer/Dashboard';
 import DesignerPayments from './pages/designer/Payments';
 import DesignerProfilePage from './pages/designer/Profile';
 import DesignerEnterprisePage from './pages/designer/Enterprise';
+import DesignerEnterpriseRoleManagementPage from './pages/designer/EnterpriseRoleManagement';
 import DesignerMessagesPage from './pages/designer/Messages';
 
 // QA Pages
@@ -413,6 +415,7 @@ function App() {
                 <Route path="/seller/payments" element={<SellerPayments />} />
                 <Route path="/seller/profile" element={<SellerProfilePage />} />
                 <Route path="/seller/enterprise" element={<SellerEnterprisePage />} />
+                <Route path="/seller/enterprise/role-management" element={<SellerEnterpriseRoleManagementPage />} />
                 <Route path="/seller/messages" element={<SellerMessagesPage />} />
               </Route>
             </Route>
@@ -424,6 +427,7 @@ function App() {
                 <Route path="/designer/payments" element={<DesignerPayments />} />
                 <Route path="/designer/profile" element={<DesignerProfilePage />} />
                 <Route path="/designer/enterprise" element={<DesignerEnterprisePage />} />
+                <Route path="/designer/enterprise/role-management" element={<DesignerEnterpriseRoleManagementPage />} />
                 <Route path="/designer/messages" element={<DesignerMessagesPage />} />
               </Route>
             </Route>

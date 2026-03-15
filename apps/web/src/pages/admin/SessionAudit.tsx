@@ -49,6 +49,7 @@ export default function AdminSessionAudit() {
   const [userQuery, setUserQuery] = useState('');
   const [actionFilter, setActionFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [exportingFormat, setExportingFormat] = useState<'' | 'csv' | 'xlsx' | 'pdf'>('');
 
   const searchRequired = roleTab !== 'ALL';
 
@@ -92,6 +93,35 @@ export default function AdminSessionAudit() {
 
   const applyFilters = () => {
     void load(1);
+  };
+
+  const downloadExport = async (format: 'csv' | 'xlsx' | 'pdf') => {
+    if (searchRequired && !String(userQuery || '').trim()) {
+      setError(`Enter username or email to pull ${ROLE_TABS.find((tab) => tab.key === roleTab)?.label?.toLowerCase() || 'role'} logs.`);
+      return;
+    }
+    try {
+      setExportingFormat(format);
+      setError('');
+      const payload = await api.admin.exportActivityLogs({
+        format,
+        role: roleTab === 'ALL' ? undefined : roleTab,
+        userQuery: userQuery.trim() || undefined,
+        action: actionFilter.trim() || undefined,
+      });
+      const blobUrl = window.URL.createObjectURL(payload.blob);
+      const anchor = document.createElement('a');
+      anchor.href = blobUrl;
+      anchor.download = payload.filename || `activity-logs.${format}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to export activity logs.');
+    } finally {
+      setExportingFormat('');
+    }
   };
 
   const roleBadge = useMemo(() => {
@@ -147,6 +177,32 @@ export default function AdminSessionAudit() {
             Scope: <span className="font-semibold">{roleBadge}</span>
           </div>
           <Button onClick={applyFilters}>Pull Logs</Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void downloadExport('csv')}
+            disabled={Boolean(exportingFormat)}
+          >
+            {exportingFormat === 'csv' ? 'Exporting CSV...' : 'Export CSV'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void downloadExport('xlsx')}
+            disabled={Boolean(exportingFormat)}
+          >
+            {exportingFormat === 'xlsx' ? 'Exporting Excel...' : 'Export Excel'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void downloadExport('pdf')}
+            disabled={Boolean(exportingFormat)}
+          >
+            {exportingFormat === 'pdf' ? 'Exporting PDF...' : 'Export PDF'}
+          </Button>
         </div>
       </div>
 

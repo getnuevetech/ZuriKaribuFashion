@@ -5856,6 +5856,24 @@ const adminApi = {
     page?: number;
     limit?: number;
   }) => apiService.get<{ success: boolean; data: any }>('/admin/activity-logs', { params }),
+  exportActivityLogs: async (params?: {
+    format?: 'csv' | 'xlsx' | 'pdf';
+    role?: 'ADMINISTRATOR' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'CUSTOMER' | 'QA_TEAM';
+    userQuery?: string;
+    action?: string;
+  }) => {
+    const response = await httpClient.get('/admin/activity-logs/export', {
+      params,
+      responseType: 'blob',
+    });
+    const disposition = String(response.headers['content-disposition'] || '');
+    const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+    const filename = filenameMatch?.[1] || `activity-logs.${params?.format || 'csv'}`;
+    return {
+      blob: response.data as Blob,
+      filename,
+    };
+  },
 
   getNotificationTemplates: () =>
     apiService.get<{ success: boolean; data: any[] }>('/admin/notification-center/templates'),

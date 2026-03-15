@@ -4,6 +4,7 @@ import { api } from '../../services/api';
 
 type EnterpriseWorkspaceProps = {
   vendorType: 'seller' | 'designer';
+  initialSection?: 'overview' | 'roles';
 };
 
 type PaymentProvider = {
@@ -36,8 +37,9 @@ type EnterpriseActivityLog = {
   } | null;
 };
 
-export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceProps) {
+export default function EnterpriseWorkspace({ vendorType, initialSection = 'overview' }: EnterpriseWorkspaceProps) {
   const vendorLabel = vendorType === 'seller' ? 'Seller' : 'Designer';
+  const showRoleManagementOnly = initialSection === 'roles';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -355,9 +357,13 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{vendorLabel} Enterprise Workspace</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {showRoleManagementOnly ? `${vendorLabel} Enterprise Role Management` : `${vendorLabel} Enterprise Workspace`}
+        </h1>
         <p className="mt-1 text-sm text-gray-600">
-          Manage enterprise subscription, sub-accounts, and internal role permissions for your brand account.
+          {showRoleManagementOnly
+            ? 'Create and configure sub-account roles for your enterprise team.'
+            : 'Manage enterprise subscription, sub-accounts, and internal role permissions for your brand account.'}
         </p>
       </div>
 
@@ -366,31 +372,33 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
         <div className="rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <div className="rounded-xl border bg-white p-4">
-          <p className="text-xs text-gray-500">Enterprise status</p>
-          <p className="mt-1 text-lg font-semibold text-gray-900">{account.isEnterprise ? 'Enabled' : 'Not enabled'}</p>
+      {!showRoleManagementOnly ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="rounded-xl border bg-white p-4">
+            <p className="text-xs text-gray-500">Enterprise status</p>
+            <p className="mt-1 text-lg font-semibold text-gray-900">{account.isEnterprise ? 'Enabled' : 'Not enabled'}</p>
+          </div>
+          <div className="rounded-xl border bg-white p-4">
+            <p className="text-xs text-gray-500">Subscription</p>
+            <p className="mt-1 text-lg font-semibold text-gray-900">{account.subscriptionStatus || 'INACTIVE'}</p>
+            <p className="text-xs text-gray-500">
+              {account.subscriptionEndsAt ? `Ends: ${new Date(account.subscriptionEndsAt).toLocaleDateString()}` : 'No active expiry'}
+            </p>
+          </div>
+          <div className="rounded-xl border bg-white p-4">
+            <p className="text-xs text-gray-500">Seat usage</p>
+            <p className="mt-1 text-lg font-semibold text-gray-900">
+              {Number(account.seatUsage || 0)} / {Number(account.seatLimit || 1)}
+            </p>
+          </div>
+          <div className="rounded-xl border bg-white p-4">
+            <p className="text-xs text-gray-500">Yearly fee (USD)</p>
+            <p className="mt-1 text-lg font-semibold text-gray-900">${Number(account.yearlyFeeUsd || 0).toFixed(2)}</p>
+          </div>
         </div>
-        <div className="rounded-xl border bg-white p-4">
-          <p className="text-xs text-gray-500">Subscription</p>
-          <p className="mt-1 text-lg font-semibold text-gray-900">{account.subscriptionStatus || 'INACTIVE'}</p>
-          <p className="text-xs text-gray-500">
-            {account.subscriptionEndsAt ? `Ends: ${new Date(account.subscriptionEndsAt).toLocaleDateString()}` : 'No active expiry'}
-          </p>
-        </div>
-        <div className="rounded-xl border bg-white p-4">
-          <p className="text-xs text-gray-500">Seat usage</p>
-          <p className="mt-1 text-lg font-semibold text-gray-900">
-            {Number(account.seatUsage || 0)} / {Number(account.seatLimit || 1)}
-          </p>
-        </div>
-        <div className="rounded-xl border bg-white p-4">
-          <p className="text-xs text-gray-500">Yearly fee (USD)</p>
-          <p className="mt-1 text-lg font-semibold text-gray-900">${Number(account.yearlyFeeUsd || 0).toFixed(2)}</p>
-        </div>
-      </div>
+      ) : null}
 
-      <div className="rounded-xl border bg-white p-4 space-y-3">
+      {!showRoleManagementOnly ? <div className="rounded-xl border bg-white p-4 space-y-3">
         <h2 className="text-sm font-semibold text-gray-900">Request enterprise upgrade</h2>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <select
@@ -463,9 +471,9 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
             Submit Upgrade Request
           </Button>
         </div>
-      </div>
+      </div> : null}
 
-      <div className="rounded-xl border bg-white p-4 space-y-3">
+      {!showRoleManagementOnly ? <div className="rounded-xl border bg-white p-4 space-y-3">
         <h2 className="text-sm font-semibold text-gray-900">Upgrade request history</h2>
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
@@ -534,9 +542,9 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
             </tbody>
           </table>
         </div>
-      </div>
+      </div> : null}
 
-      <div className="rounded-xl border bg-white p-4 space-y-3">
+      {!showRoleManagementOnly ? <div className="rounded-xl border bg-white p-4 space-y-3">
         <h2 className="text-sm font-semibold text-gray-900">Enterprise User Activity Logs</h2>
         <p className="text-xs text-gray-500">
           Pull activity logs for enterprise users by entering a username or email address.
@@ -635,7 +643,7 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
             Next
           </Button>
         </div>
-      </div>
+      </div> : null}
 
       <div className="rounded-xl border bg-white p-4 space-y-3">
         <h2 className="text-sm font-semibold text-gray-900">Sub-account role management</h2>
@@ -704,7 +712,7 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
         </div>
       </div>
 
-      <div className="rounded-xl border bg-white p-4 space-y-3">
+      {!showRoleManagementOnly ? <div className="rounded-xl border bg-white p-4 space-y-3">
         <h2 className="text-sm font-semibold text-gray-900">Sub-account management</h2>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
           <input
@@ -816,7 +824,7 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
             </tbody>
           </table>
         </div>
-      </div>
+      </div> : null}
     </div>
   );
 }

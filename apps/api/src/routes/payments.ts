@@ -378,6 +378,48 @@ async function readPaymentIntegrations(params?: { activeOnly?: boolean; provider
   });
 }
 
+async function resolveProviderForUserPayment(providerKeyInput: string) {
+  const providerKey = normalizeProviderKey(providerKeyInput);
+  if (!providerKey) return null;
+  const activeProvider = (await readPaymentIntegrations({ activeOnly: true, providerKey }))[0] || null;
+  if (activeProvider) return activeProvider;
+
+  const anyActive = await readPaymentIntegrations({ activeOnly: true });
+  if (anyActive.length === 0) {
+    const configuredProvider = (await readPaymentIntegrations({ providerKey }))[0] || null;
+    if (configuredProvider && providerHasCheckoutCredentials(configuredProvider)) return configuredProvider;
+  }
+
+  if (providerKey === 'STRIPE' && String(process.env.STRIPE_SECRET_KEY || '').trim()) {
+    return {
+      id: 'fallback-stripe',
+      providerKey: 'STRIPE',
+      displayName: 'Stripe',
+      checkoutType: 'INLINE',
+      mode: 'TEST',
+      isActive: true,
+      configSchema: [],
+      configValues: {},
+      notes: null,
+      updatedAt: new Date().toISOString(),
+    } as PaymentIntegrationRow;
+  }
+  return null;
+}
+
+const providerHasCheckoutCredentials = (provider: PaymentIntegrationRow) => {
+  if (provider.providerKey === 'STRIPE') {
+    return Boolean(readIntegrationValue(provider, 'secretKey') || String(process.env.STRIPE_SECRET_KEY || '').trim());
+  }
+  if (provider.providerKey === 'FLUTTERWAVE') {
+    return Boolean(readIntegrationValue(provider, 'secretKey'));
+  }
+  if (provider.providerKey === 'PAYPAL') {
+    return Boolean(readIntegrationValue(provider, 'clientId') && readIntegrationValue(provider, 'clientSecret'));
+  }
+  return false;
+};
+
 async function upsertPaymentIntegration(params: {
   providerKey: string;
   displayName?: string;
@@ -507,24 +549,9 @@ export type PaymentSessionInput = {
 
 export async function createPaymentSessionForUser(input: PaymentSessionInput) {
   const providerKey = normalizeProviderKey(input.providerKey);
-  const provider =
-    (await readPaymentIntegrations({ activeOnly: true, providerKey }))[0] ||
-    (providerKey === 'STRIPE' && String(process.env.STRIPE_SECRET_KEY || '').trim()
-      ? ({
-          id: 'fallback-stripe',
-          providerKey: 'STRIPE',
-          displayName: 'Stripe',
-          checkoutType: 'INLINE',
-          mode: 'TEST',
-          isActive: true,
-          configSchema: [],
-          configValues: {},
-          notes: null,
-          updatedAt: new Date().toISOString(),
-        } as PaymentIntegrationRow)
-      : null);
+  const provider = await resolveProviderForUserPayment(providerKey);
   if (!provider) {
-    throw Object.assign(new Error(`Payment provider ${providerKey} is not active.`), { status: 404 });
+    throw Object.assign(new Error(`Payment provider ${providerKey} is unavailable.`), { status: 404 });
   }
 
   const amountMajor = Number((input.amount / 100).toFixed(2));
@@ -673,9 +700,9 @@ export async function verifyPaymentForUser(input: {
   payerId?: string;
 }) {
   const providerKey = normalizeProviderKey(input.providerKey);
-  const provider = (await readPaymentIntegrations({ activeOnly: true, providerKey }))[0];
+  const provider = await resolveProviderForUserPayment(providerKey);
   if (!provider) {
-    throw Object.assign(new Error(`Payment provider ${providerKey} is not active.`), { status: 404 });
+    throw Object.assign(new Error(`Payment provider ${providerKey} is unavailable.`), { status: 404 });
   }
 
   if (provider.providerKey === 'STRIPE') {
@@ -895,6 +922,14 @@ router.delete(
 router.get('/options', authenticate, authorizePermissions(Permissions.PAYMENTS_CREATE), async (_req, res, next) => {
   try {
     let providers = await readPaymentIntegrations({ activeOnly: true });
+    if (providers.length === 0) {
+      const configuredFallback = (await readPaymentIntegrations()).filter((provider) =>
+        providerHasCheckoutCredentials(provider)
+      );
+      if (configuredFallback.length > 0) {
+        providers = configuredFallback;
+      }
+    }
     if (providers.length === 0 && String(process.env.STRIPE_SECRET_KEY || '').trim()) {
       providers = [
         {

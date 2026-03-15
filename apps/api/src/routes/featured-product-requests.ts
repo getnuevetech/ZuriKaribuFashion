@@ -397,6 +397,56 @@ async function readActivePaymentProviderKeys(): Promise<string[]> {
   } catch {
     active = [];
   }
+  if (active.length === 0) {
+    try {
+      const configuredRows = await prisma.$queryRawUnsafe<Array<{ providerKey: string; configValues: unknown }>>(
+        `SELECT "providerKey","configValues"
+         FROM "PaymentIntegration"
+         ORDER BY "updatedAt" DESC NULLS LAST, "providerKey" ASC`
+      );
+      const hasProviderCredentials = (providerKey: string, rawConfig: unknown) => {
+        const config =
+          rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)
+            ? (rawConfig as Record<string, unknown>)
+            : typeof rawConfig === 'string'
+              ? (() => {
+                  try {
+                    const parsed = JSON.parse(rawConfig);
+                    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                      ? (parsed as Record<string, unknown>)
+                      : {};
+                  } catch {
+                    return {};
+                  }
+                })()
+              : {};
+        if (providerKey === 'STRIPE') {
+          return Boolean(String(config.secretKey || '').trim() || String(process.env.STRIPE_SECRET_KEY || '').trim());
+        }
+        if (providerKey === 'FLUTTERWAVE') {
+          return Boolean(String(config.secretKey || '').trim());
+        }
+        if (providerKey === 'PAYPAL') {
+          return Boolean(String(config.clientId || '').trim() && String(config.clientSecret || '').trim());
+        }
+        return false;
+      };
+      active = Array.from(
+        new Set(
+          (configuredRows || [])
+            .map((row) => ({
+              providerKey: normalizeProviderKey(row.providerKey),
+              hasCredentials: hasProviderCredentials(normalizeProviderKey(row.providerKey), row.configValues),
+            }))
+            .filter((row) => row.providerKey && row.hasCredentials)
+            .map((row) => row.providerKey)
+            .filter(Boolean)
+        )
+      );
+    } catch {
+      active = [];
+    }
+  }
   if (!active.includes('STRIPE') && String(process.env.STRIPE_SECRET_KEY || '').trim()) {
     active.push('STRIPE');
   }
