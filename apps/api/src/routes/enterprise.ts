@@ -77,6 +77,28 @@ const normalizeSubAccountStatus = (value: unknown) => {
   return 'ACTIVE';
 };
 
+const normalizeConfigUpgradeLevels = (
+  rawLevels: unknown
+): Array<{ key: string; name: string; seatLimit: number; yearlyFeeUsd: number }> => {
+  if (!Array.isArray(rawLevels)) return [];
+  const rows = rawLevels
+    .map((entry) => {
+      const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+      const key = String(item.key || '')
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9_]/g, '_')
+        .slice(0, 40);
+      const name = String(item.name || '').trim().slice(0, 80);
+      const seatLimit = Math.max(1, Math.min(10000, Number(item.seatLimit || 1)));
+      const yearlyFeeUsd = Math.max(0, Number(item.yearlyFeeUsd || 0));
+      if (!key || !name) return null;
+      return { key, name, seatLimit, yearlyFeeUsd };
+    })
+    .filter(Boolean) as Array<{ key: string; name: string; seatLimit: number; yearlyFeeUsd: number }>;
+  return Array.from(new Map(rows.map((entry) => [entry.key, entry])).values());
+};
+
 const parseJsonArray = (value: unknown): string[] => {
   if (Array.isArray(value)) return value.map((entry) => String(entry || '').trim()).filter(Boolean);
   if (typeof value === 'string') {
@@ -129,6 +151,7 @@ router.get('/me', async (req, res, next) => {
   try {
     await ensureEnterpriseSchema();
     const actor = await resolveVendorActor(req);
+    const config = await readEnterpriseConfig();
     const enterpriseAccountId = String(actor.account.id || '');
     const roleRows = await prisma.$queryRawUnsafe<Array<any>>(
       `SELECT "id","key","name","permissions","isSystem","isActive","updatedAt"
@@ -170,6 +193,7 @@ router.get('/me', async (req, res, next) => {
         actorPermissions,
         permissionCatalog: ENTERPRISE_PERMISSION_CATALOG,
         standardRoleTemplates: ENTERPRISE_STANDARD_ROLE_TEMPLATES,
+        availableUpgradeLevels: normalizeConfigUpgradeLevels(config.levels),
         roles: roleRows.map((row) => ({
           ...row,
           permissions: parseJsonArray(row.permissions),
@@ -516,13 +540,13 @@ router.post('/upgrade-requests', async (req, res, next) => {
     const actor = await resolveVendorActor(req, { requireOwner: true });
     const payload = z
       .object({
-        requestedLevelKey: z.string().trim().max(60).optional(),
-        requestedSeatLimit: z.number().int().min(1).max(1000).optional(),
+        requestedLevelKey: z.string().trim().min(1).max(60),
         requestedYears: z.number().int().min(1).max(5).default(1),
-        note: z.string().trim().max(2000).optional(),
+        note: z.string().trim().min(1).max(2000),
       })
       .parse(req.body || {});
     const config = await readEnterpriseConfig();
+    const availableLevels = normalizeConfigUpgradeLevels(config.levels);
     if (
       (actor.role === UserRole.FABRIC_SELLER && !config.sellerEnabled) ||
       (actor.role === UserRole.FASHION_DESIGNER && !config.designerEnabled)
@@ -530,6 +554,21 @@ router.post('/upgrade-requests', async (req, res, next) => {
       return res.status(403).json({
         success: false,
         message: 'Enterprise upgrades are currently disabled for this vendor role.',
+      });
+    }
+    if (availableLevels.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Enterprise upgrade levels are not configured yet. Please contact admin.',
+      });
+    }
+    const selectedLevel = availableLevels.find(
+      (level) => level.key === String(payload.requestedLevelKey || '').trim().toUpperCase()
+    );
+    if (!selectedLevel) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select a valid upgrade level from the available options.',
       });
     }
     const pendingRows = await prisma.$queryRawUnsafe<Array<any>>(
@@ -552,10 +591,10 @@ router.post('/upgrade-requests', async (req, res, next) => {
       randomUUID(),
       actor.ownerUserId,
       actor.role,
-      payload.requestedLevelKey || null,
-      Number(payload.requestedSeatLimit || config.defaultSeatLimit),
+      selectedLevel.key,
+      Number(selectedLevel.seatLimit),
       Number(payload.requestedYears || 1),
-      payload.note || null
+      payload.note
     );
 
     const admins = await prisma.user.findMany({

@@ -13,6 +13,13 @@ type PaymentProvider = {
   mode: 'TEST' | 'LIVE';
 };
 
+type EnterpriseUpgradeLevel = {
+  key: string;
+  name: string;
+  seatLimit: number;
+  yearlyFeeUsd: number;
+};
+
 export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceProps) {
   const vendorLabel = vendorType === 'seller' ? 'Seller' : 'Designer';
   const [loading, setLoading] = useState(true);
@@ -33,7 +40,6 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
   });
   const [upgradeForm, setUpgradeForm] = useState({
     requestedLevelKey: '',
-    requestedSeatLimit: 5,
     requestedYears: 1,
     note: '',
   });
@@ -72,16 +78,53 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
     return rows.filter((entry: any) => entry.isActive !== false);
   }, [enterpriseData]);
 
+  const availableUpgradeLevels = useMemo(() => {
+    const rows = Array.isArray(enterpriseData?.availableUpgradeLevels) ? enterpriseData.availableUpgradeLevels : [];
+    return rows.filter(
+      (entry: any) =>
+        entry &&
+        typeof entry === 'object' &&
+        String(entry.key || '').trim() &&
+        String(entry.name || '').trim() &&
+        Number(entry.seatLimit || 0) > 0
+    ) as EnterpriseUpgradeLevel[];
+  }, [enterpriseData]);
+
+  const selectedUpgradeLevel = useMemo(() => {
+    const key = String(upgradeForm.requestedLevelKey || '').trim().toUpperCase();
+    if (!key) return null;
+    return availableUpgradeLevels.find((level) => String(level.key || '').toUpperCase() === key) || null;
+  }, [availableUpgradeLevels, upgradeForm.requestedLevelKey]);
+
+  useEffect(() => {
+    if (availableUpgradeLevels.length === 0) return;
+    const currentKey = String(upgradeForm.requestedLevelKey || '').trim().toUpperCase();
+    const hasCurrent = availableUpgradeLevels.some((level) => String(level.key || '').toUpperCase() === currentKey);
+    if (hasCurrent) return;
+    setUpgradeForm((prev) => ({
+      ...prev,
+      requestedLevelKey: String(availableUpgradeLevels[0].key || ''),
+    }));
+  }, [availableUpgradeLevels, upgradeForm.requestedLevelKey]);
+
   const handleCreateUpgradeRequest = async () => {
+    const selectedLevelKey = String(upgradeForm.requestedLevelKey || '').trim().toUpperCase();
+    if (!selectedLevelKey) {
+      setError('Please select an upgrade level.');
+      return;
+    }
+    if (!String(upgradeForm.note || '').trim()) {
+      setError('Reason for upgrade request is required.');
+      return;
+    }
     setSaving(true);
     setError('');
     setSuccess('');
     try {
       await api.enterprise.createUpgradeRequest({
-        requestedLevelKey: upgradeForm.requestedLevelKey || undefined,
-        requestedSeatLimit: Number(upgradeForm.requestedSeatLimit || 0) || undefined,
+        requestedLevelKey: selectedLevelKey,
         requestedYears: Number(upgradeForm.requestedYears || 1),
-        note: upgradeForm.note || undefined,
+        note: String(upgradeForm.note || '').trim(),
       });
       setSuccess('Enterprise upgrade request submitted successfully.');
       await loadAll();
@@ -283,20 +326,19 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
       <div className="rounded-xl border bg-white p-4 space-y-3">
         <h2 className="text-sm font-semibold text-gray-900">Request enterprise upgrade</h2>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-          <input
+          <select
             value={upgradeForm.requestedLevelKey}
-            onChange={(event) => setUpgradeForm((prev) => ({ ...prev, requestedLevelKey: event.target.value.toUpperCase() }))}
-            placeholder="Level key (e.g. GROWTH)"
+            onChange={(event) => setUpgradeForm((prev) => ({ ...prev, requestedLevelKey: event.target.value }))}
             className="rounded border px-3 py-2 text-sm"
-          />
-          <input
-            type="number"
-            min={1}
-            value={upgradeForm.requestedSeatLimit}
-            onChange={(event) => setUpgradeForm((prev) => ({ ...prev, requestedSeatLimit: Number(event.target.value || 1) }))}
-            placeholder="Requested seats"
-            className="rounded border px-3 py-2 text-sm"
-          />
+            disabled={availableUpgradeLevels.length === 0}
+          >
+            <option value="">{availableUpgradeLevels.length > 0 ? 'Select upgrade level' : 'No levels configured yet'}</option>
+            {availableUpgradeLevels.map((level) => (
+              <option key={level.key} value={level.key}>
+                {level.name} ({level.key})
+              </option>
+            ))}
+          </select>
           <input
             type="number"
             min={1}
@@ -317,15 +359,40 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
               </option>
             ))}
           </select>
+          <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 md:col-span-4">
+            {selectedUpgradeLevel ? (
+              <div className="space-y-1">
+                <p>
+                  <span className="font-semibold">Selected plan:</span> {selectedUpgradeLevel.name} ({selectedUpgradeLevel.key})
+                </p>
+                <p>
+                  <span className="font-semibold">Seat limit:</span> {Number(selectedUpgradeLevel.seatLimit || 0)}
+                </p>
+                <p>
+                  <span className="font-semibold">Yearly fee:</span> ${Number(selectedUpgradeLevel.yearlyFeeUsd || 0).toFixed(2)}
+                </p>
+                <p>
+                  <span className="font-semibold">Total for selected years:</span>{' '}
+                  ${(Number(selectedUpgradeLevel.yearlyFeeUsd || 0) * Math.max(1, Number(upgradeForm.requestedYears || 1))).toFixed(2)}
+                </p>
+              </div>
+            ) : (
+              'Select an upgrade level to view plan details.'
+            )}
+          </div>
           <textarea
             value={upgradeForm.note}
             onChange={(event) => setUpgradeForm((prev) => ({ ...prev, note: event.target.value }))}
-            placeholder="Reason / note for admin (optional)"
+            placeholder="Reason / note for admin (required)"
             className="h-20 rounded border px-3 py-2 text-sm md:col-span-4"
+            required
           />
         </div>
         <div className="flex justify-end">
-          <Button onClick={handleCreateUpgradeRequest} disabled={saving}>
+          <Button
+            onClick={handleCreateUpgradeRequest}
+            disabled={saving || availableUpgradeLevels.length === 0 || !String(upgradeForm.note || '').trim() || !selectedUpgradeLevel}
+          >
             Submit Upgrade Request
           </Button>
         </div>

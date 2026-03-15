@@ -8647,7 +8647,6 @@ const enterpriseApi = {
 
   createUpgradeRequest: (payload: {
     requestedLevelKey?: string;
-    requestedSeatLimit?: number;
     requestedYears?: number;
     note?: string;
   }) => apiService.post<{ success: boolean; message?: string }>('/enterprise/upgrade-requests', payload),
