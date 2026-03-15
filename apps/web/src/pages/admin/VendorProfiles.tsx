@@ -415,23 +415,36 @@ export default function AdminVendorProfiles() {
     setError('');
     setLoading(true);
     try {
-      const [configResponse, accountsResponse, requestsResponse] = await Promise.all([
+      const [configResult, accountsResult, requestsResult] = await Promise.allSettled([
         api.admin.getEnterpriseConfig(),
         api.admin.getEnterpriseAccounts({ page: 1, limit: 200 }),
         api.admin.getEnterpriseUpgradeRequests({ page: 1, limit: 200 }),
       ]);
+      const configResponse = configResult.status === 'fulfilled' ? configResult.value : null;
+      const accountsResponse = accountsResult.status === 'fulfilled' ? accountsResult.value : null;
+      const requestsResponse = requestsResult.status === 'fulfilled' ? requestsResult.value : null;
+
       const nextConfig = configResponse?.data || {};
-      setEnterpriseConfig((prev) => ({
-        ...prev,
-        sellerEnabled: nextConfig.sellerEnabled !== false,
-        designerEnabled: nextConfig.designerEnabled !== false,
-        enforceSubscription: nextConfig.enforceSubscription !== false,
-        defaultSeatLimit: Math.max(1, Number(nextConfig.defaultSeatLimit || prev.defaultSeatLimit)),
-        defaultYearlyFeeUsd: Number(nextConfig.defaultYearlyFeeUsd || prev.defaultYearlyFeeUsd),
-        levels: Array.isArray(nextConfig.levels) && nextConfig.levels.length > 0 ? nextConfig.levels : prev.levels,
-      }));
-      setEnterpriseAccounts(Array.isArray(accountsResponse?.data?.accounts) ? accountsResponse.data.accounts : []);
-      setEnterpriseRequests(Array.isArray(requestsResponse?.data?.requests) ? requestsResponse.data.requests : []);
+      if (configResponse) {
+        setEnterpriseConfig((prev) => ({
+          ...prev,
+          sellerEnabled: nextConfig.sellerEnabled !== false,
+          designerEnabled: nextConfig.designerEnabled !== false,
+          enforceSubscription: nextConfig.enforceSubscription !== false,
+          defaultSeatLimit: Math.max(1, Number(nextConfig.defaultSeatLimit || prev.defaultSeatLimit)),
+          defaultYearlyFeeUsd: Number(nextConfig.defaultYearlyFeeUsd || prev.defaultYearlyFeeUsd),
+          levels: Array.isArray(nextConfig.levels) && nextConfig.levels.length > 0 ? nextConfig.levels : prev.levels,
+        }));
+      }
+      setEnterpriseAccounts(Array.isArray(accountsResponse?.data?.accounts) ? accountsResponse?.data?.accounts : []);
+      setEnterpriseRequests(Array.isArray(requestsResponse?.data?.requests) ? requestsResponse?.data?.requests : []);
+
+      if (!configResponse) {
+        const configError = (configResult as PromiseRejectedResult).reason;
+        setError(configError?.response?.data?.message || 'Failed to load enterprise account settings.');
+      } else if (!accountsResponse || !requestsResponse) {
+        setError('Enterprise settings loaded with partial data. Some enterprise lists may be temporarily unavailable.');
+      }
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to load enterprise account settings.');
       setEnterpriseAccounts([]);

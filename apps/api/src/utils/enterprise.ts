@@ -65,6 +65,13 @@ export const ENTERPRISE_STANDARD_ROLE_TEMPLATES: Array<{
 
 let enterpriseSchemaEnsured = false;
 let enterpriseSchemaPromise: Promise<void> | null = null;
+const executeBestEffort = async (sql: string, ...params: any[]) => {
+  try {
+    await prisma.$executeRawUnsafe(sql, ...params);
+  } catch {
+    // Keep compatibility with drifted schemas in long-lived deployments.
+  }
+};
 
 const parseJsonArray = (value: unknown): string[] => {
   if (Array.isArray(value)) return value.map((entry) => String(entry || '').trim()).filter(Boolean);
@@ -77,6 +84,50 @@ const parseJsonArray = (value: unknown): string[] => {
     }
   }
   return [];
+};
+
+const normalizeEnterpriseConfigLevels = (value: unknown): Array<{
+  key: string;
+  name: string;
+  seatLimit: number;
+  yearlyFeeUsd: number;
+}> => {
+  const toList = (input: unknown): unknown[] => {
+    if (Array.isArray(input)) return input;
+    if (typeof input === 'string') {
+      try {
+        return toList(JSON.parse(input));
+      } catch {
+        return [];
+      }
+    }
+    if (input && typeof input === 'object') {
+      const record = input as Record<string, unknown>;
+      if (Array.isArray(record.levels)) return record.levels;
+      return Object.entries(record).map(([key, row]) => ({
+        key,
+        ...(row && typeof row === 'object' ? (row as Record<string, unknown>) : {}),
+      }));
+    }
+    return [];
+  };
+
+  const rows = toList(value)
+    .map((entry) => {
+      const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+      const key = String(item.key || '')
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9_]/g, '_')
+        .slice(0, 40);
+      const name = String(item.name || '').trim().slice(0, 80);
+      const seatLimit = Math.max(1, Math.min(10000, Number(item.seatLimit || 1)));
+      const yearlyFeeUsd = Math.max(0, Number(item.yearlyFeeUsd || 0));
+      if (!key || !name) return null;
+      return { key, name, seatLimit, yearlyFeeUsd };
+    })
+    .filter(Boolean) as Array<{ key: string; name: string; seatLimit: number; yearlyFeeUsd: number }>;
+  return Array.from(new Map(rows.map((row) => [row.key, row])).values());
 };
 
 const addYears = (baseDate: Date, years: number) => {
@@ -129,6 +180,24 @@ export async function ensureEnterpriseSchema() {
       await prisma.$executeRawUnsafe(
         `CREATE INDEX IF NOT EXISTS "EnterpriseAccount_status_idx" ON "EnterpriseAccount"("status","subscriptionStatus")`
       );
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "role" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "isEnterprise" BOOLEAN NOT NULL DEFAULT false`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'INACTIVE'`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "levelKey" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "levelName" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "seatLimit" INTEGER NOT NULL DEFAULT 1`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "yearlyFeeUsd" DECIMAL(12,2) NOT NULL DEFAULT 0`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "subscriptionStatus" TEXT NOT NULL DEFAULT 'INACTIVE'`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "subscriptionStartedAt" TIMESTAMP(3)`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "subscriptionEndsAt" TIMESTAMP(3)`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "renewalDueAt" TIMESTAMP(3)`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "enforceSubscription" BOOLEAN NOT NULL DEFAULT true`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "allowSubAccounts" BOOLEAN NOT NULL DEFAULT false`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "createdById" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "updatedById" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseAccount" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+      await executeBestEffort(`UPDATE "EnterpriseAccount" SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL`);
 
       await prisma.$executeRawUnsafe(
         `CREATE TABLE IF NOT EXISTS "EnterpriseRole" (
@@ -150,6 +219,15 @@ export async function ensureEnterpriseSchema() {
       await prisma.$executeRawUnsafe(
         `CREATE INDEX IF NOT EXISTS "EnterpriseRole_account_idx" ON "EnterpriseRole"("enterpriseAccountId")`
       );
+      await executeBestEffort(`ALTER TABLE "EnterpriseRole" ADD COLUMN IF NOT EXISTS "enterpriseAccountId" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseRole" ADD COLUMN IF NOT EXISTS "key" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseRole" ADD COLUMN IF NOT EXISTS "name" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseRole" ADD COLUMN IF NOT EXISTS "permissions" JSONB NOT NULL DEFAULT '[]'::jsonb`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseRole" ADD COLUMN IF NOT EXISTS "isSystem" BOOLEAN NOT NULL DEFAULT false`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseRole" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseRole" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseRole" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+      await executeBestEffort(`UPDATE "EnterpriseRole" SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL`);
 
       await prisma.$executeRawUnsafe(
         `CREATE TABLE IF NOT EXISTS "EnterpriseSubAccount" (
@@ -174,6 +252,23 @@ export async function ensureEnterpriseSchema() {
       );
       await prisma.$executeRawUnsafe(
         `CREATE INDEX IF NOT EXISTS "EnterpriseSubAccount_account_idx" ON "EnterpriseSubAccount"("enterpriseAccountId","status")`
+      );
+      await executeBestEffort(`ALTER TABLE "EnterpriseSubAccount" ADD COLUMN IF NOT EXISTS "enterpriseAccountId" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseSubAccount" ADD COLUMN IF NOT EXISTS "ownerUserId" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseSubAccount" ADD COLUMN IF NOT EXISTS "subUserId" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseSubAccount" ADD COLUMN IF NOT EXISTS "roleId" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseSubAccount" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'ACTIVE'`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseSubAccount" ADD COLUMN IF NOT EXISTS "createdById" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseSubAccount" ADD COLUMN IF NOT EXISTS "updatedById" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseSubAccount" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseSubAccount" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+      await executeBestEffort(`UPDATE "EnterpriseSubAccount" SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL`);
+      await executeBestEffort(
+        `UPDATE "EnterpriseSubAccount" sa
+         SET "ownerUserId" = ea."ownerUserId"
+         FROM "EnterpriseAccount" ea
+         WHERE sa."ownerUserId" IS NULL
+           AND sa."enterpriseAccountId" = ea."id"`
       );
 
       await prisma.$executeRawUnsafe(
@@ -202,6 +297,16 @@ export async function ensureEnterpriseSchema() {
           { key: 'PREMIUM', name: 'Premium', seatLimit: 50, yearlyFeeUsd: 699 },
         ])
       );
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeConfig" ADD COLUMN IF NOT EXISTS "sellerEnabled" BOOLEAN NOT NULL DEFAULT true`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeConfig" ADD COLUMN IF NOT EXISTS "designerEnabled" BOOLEAN NOT NULL DEFAULT true`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeConfig" ADD COLUMN IF NOT EXISTS "enforceSubscription" BOOLEAN NOT NULL DEFAULT true`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeConfig" ADD COLUMN IF NOT EXISTS "defaultSeatLimit" INTEGER NOT NULL DEFAULT 5`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeConfig" ADD COLUMN IF NOT EXISTS "defaultYearlyFeeUsd" DECIMAL(12,2) NOT NULL DEFAULT 99`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeConfig" ADD COLUMN IF NOT EXISTS "levels" JSONB NOT NULL DEFAULT '[]'::jsonb`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeConfig" ADD COLUMN IF NOT EXISTS "updatedById" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeConfig" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeConfig" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+      await executeBestEffort(`UPDATE "EnterpriseUpgradeConfig" SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL`);
 
       await prisma.$executeRawUnsafe(
         `CREATE TABLE IF NOT EXISTS "EnterpriseUpgradeRequest" (
@@ -236,6 +341,28 @@ export async function ensureEnterpriseSchema() {
       await prisma.$executeRawUnsafe(
         `CREATE INDEX IF NOT EXISTS "EnterpriseUpgradeRequest_payment_idx" ON "EnterpriseUpgradeRequest"("paymentStatus","status")`
       );
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "ownerUserId" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "role" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "requestedLevelKey" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "requestedSeatLimit" INTEGER NOT NULL DEFAULT 5`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "requestedYears" INTEGER NOT NULL DEFAULT 1`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "note" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'PENDING'`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "reviewedById" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "reviewedAt" TIMESTAMP(3)`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "reviewNote" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "approvedLevelName" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "approvedSeatLimit" INTEGER`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "approvedYearlyFeeUsd" DECIMAL(12,2)`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "paymentProviderKey" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "paymentReference" TEXT`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'UNPAID'`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "paidAt" TIMESTAMP(3)`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "activatedAt" TIMESTAMP(3)`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP(3)`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+      await executeBestEffort(`ALTER TABLE "EnterpriseUpgradeRequest" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+      await executeBestEffort(`UPDATE "EnterpriseUpgradeRequest" SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL`);
 
       enterpriseSchemaEnsured = true;
     })();
@@ -256,19 +383,7 @@ export async function readEnterpriseConfig() {
      LIMIT 1`
   );
   const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-  const rawLevels =
-    row?.levels && typeof row.levels === 'string'
-      ? (() => {
-          try {
-            const parsed = JSON.parse(row.levels);
-            return Array.isArray(parsed) ? parsed : [];
-          } catch {
-            return [];
-          }
-        })()
-      : Array.isArray(row?.levels)
-        ? row.levels
-        : [];
+  const rawLevels = normalizeEnterpriseConfigLevels(row?.levels);
   return {
     sellerEnabled: row?.sellerEnabled !== false,
     designerEnabled: row?.designerEnabled !== false,

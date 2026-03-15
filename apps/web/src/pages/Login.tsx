@@ -116,10 +116,10 @@ export default function Login() {
             className="h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-black/20" />
-          <p className="absolute left-6 top-5 text-3xl font-bold text-white md:text-4xl">
+          <p className="absolute left-6 top-5 font-['Oswald'] text-3xl font-bold text-white md:text-4xl">
             {authPageSettings.brandName}
           </p>
-          <p className="absolute bottom-6 left-6 pr-6 text-2xl font-medium italic text-white md:text-4xl">
+          <p className="absolute bottom-6 left-6 pr-6 font-['Oswald'] text-2xl font-medium italic text-white md:text-4xl">
             {authPageSettings.loginHeroCaption}
           </p>
         </div>
@@ -130,8 +130,8 @@ export default function Login() {
               Back to Home
             </Link>
             <div className="text-center">
-              <p className="text-4xl font-bold text-black">{authPageSettings.brandName}</p>
-              <h2 className="mt-6 text-4xl font-bold text-gray-900">{authPageSettings.loginTitle}</h2>
+              <p className="font-['Oswald'] text-4xl font-bold text-black">{authPageSettings.brandName}</p>
+              <h2 className="mt-6 font-['Oswald'] text-4xl font-bold text-gray-900">{authPageSettings.loginTitle}</h2>
               <p className="mt-2 text-sm text-gray-600">{authPageSettings.loginSubtitle}</p>
             </div>
 

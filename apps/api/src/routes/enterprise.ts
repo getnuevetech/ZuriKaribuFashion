@@ -935,11 +935,11 @@ router.get('/accounts', authorizePermissions(Permissions.USERS_MANAGE), async (r
        FROM "User" u
        LEFT JOIN "EnterpriseAccount" ea ON ea."ownerUserId" = u."id"
        LEFT JOIN (
-          SELECT "ownerUserId", COUNT(*)::int AS "activeCount"
+          SELECT "enterpriseAccountId", COUNT(*)::int AS "activeCount"
           FROM "EnterpriseSubAccount"
           WHERE "status" = 'ACTIVE'
-          GROUP BY "ownerUserId"
-       ) subCounts ON subCounts."ownerUserId" = u."id"
+          GROUP BY "enterpriseAccountId"
+       ) subCounts ON subCounts."enterpriseAccountId" = ea."id"
        ${whereSql}
        ORDER BY u."createdAt" DESC
        LIMIT ${pagination.limit}
@@ -1115,10 +1115,11 @@ router.get('/accounts/:ownerUserId/subaccounts', authorizePermissions(Permission
          er."id" AS "roleId",
          er."name" AS "roleName",
          er."key" AS "roleKey"
-       FROM "EnterpriseSubAccount" sa
+      FROM "EnterpriseSubAccount" sa
+      JOIN "EnterpriseAccount" ea ON ea."id" = sa."enterpriseAccountId"
        JOIN "User" u ON u."id" = sa."subUserId"
        LEFT JOIN "EnterpriseRole" er ON er."id" = sa."roleId"
-       WHERE sa."ownerUserId" = $1
+      WHERE ea."ownerUserId" = $1
        ORDER BY sa."createdAt" DESC`,
       ownerUserId
     );

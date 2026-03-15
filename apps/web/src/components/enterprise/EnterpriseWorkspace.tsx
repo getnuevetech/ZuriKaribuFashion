@@ -50,17 +50,29 @@ export default function EnterpriseWorkspace({ vendorType }: EnterpriseWorkspaceP
     setLoading(true);
     setError('');
     try {
-      const [enterpriseResponse, requestsResponse, paymentsResponse] = await Promise.all([
+      const [enterpriseResult, requestsResult, paymentsResult] = await Promise.allSettled([
         api.enterprise.getMe(),
         api.enterprise.listMyUpgradeRequests(),
         api.payments.getOptions(),
       ]);
-      setEnterpriseData(enterpriseResponse.data || null);
-      setRequests(Array.isArray(requestsResponse.data) ? requestsResponse.data : []);
-      const providers = Array.isArray(paymentsResponse.data?.providers) ? paymentsResponse.data.providers : [];
+
+      const enterpriseResponse = enterpriseResult.status === 'fulfilled' ? enterpriseResult.value : null;
+      const requestsResponse = requestsResult.status === 'fulfilled' ? requestsResult.value : null;
+      const paymentsResponse = paymentsResult.status === 'fulfilled' ? paymentsResult.value : null;
+
+      setEnterpriseData(enterpriseResponse?.data || null);
+      setRequests(Array.isArray(requestsResponse?.data) ? requestsResponse?.data : []);
+      const providers = Array.isArray(paymentsResponse?.data?.providers) ? paymentsResponse.data.providers : [];
       setPaymentProviders(providers);
       if (providers.length > 0 && !providers.some((provider: any) => provider.providerKey === selectedProvider)) {
         setSelectedProvider(String(providers[0].providerKey || 'STRIPE'));
+      }
+
+      if (!enterpriseResponse) {
+        const enterpriseError = (enterpriseResult as PromiseRejectedResult).reason;
+        setError(enterpriseError?.response?.data?.message || 'Failed to load enterprise workspace.');
+      } else if (!requestsResponse || !paymentsResponse) {
+        setError('Enterprise workspace loaded with partial data. Some sections may be temporarily unavailable.');
       }
     } catch (loadError: any) {
       setError(loadError?.response?.data?.message || 'Failed to load enterprise workspace.');
