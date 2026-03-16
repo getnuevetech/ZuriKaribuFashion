@@ -69,6 +69,66 @@ const COUNTRY_NAME_TO_CODE: Record<string, string> = {
   uk: 'GB',
 };
 
+const normalizeProductTypeToken = (value: unknown): PricingProductType | '' => {
+  const token = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
+  if (!token) return '';
+  if (token === 'FABRIC' || token === 'FTB' || token === 'FABRIC_TO_BUY') return 'FABRIC';
+  if (
+    token === 'DESIGN' ||
+    token === 'CTW' ||
+    token === 'CUSTOM_TO_WEAR' ||
+    token === 'CUSTOMTOWEAR' ||
+    token === 'CUSTOM_TO_WEAR_DESIGN'
+  ) {
+    return 'DESIGN';
+  }
+  if (
+    token === 'READY_TO_WEAR' ||
+    token === 'READYTOWEAR' ||
+    token === 'RTW' ||
+    token === 'READY_TO_BUY' ||
+    token === 'READYTOBUY'
+  ) {
+    return 'READY_TO_WEAR';
+  }
+  return '';
+};
+
+const normalizeRuleTypeToken = (
+  value: unknown
+): 'GLOBAL_MARKUP' | 'CATEGORY_MARKUP' | 'COUNTRY_MARKUP' | 'DATE_BASED' | '' => {
+  const token = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
+  if (!token) return '';
+  if (token === 'GLOBAL' || token === 'GLOBAL_MARKUP') return 'GLOBAL_MARKUP';
+  if (token === 'CATEGORY' || token === 'PRODUCT' || token === 'CATEGORY_MARKUP') return 'CATEGORY_MARKUP';
+  if (token === 'COUNTRY' || token === 'COUNTRY_MARKUP') return 'COUNTRY_MARKUP';
+  if (token === 'DATE' || token === 'DATE_BASED' || token === 'DATE_RANGE') return 'DATE_BASED';
+  return '';
+};
+
+const normalizeAdjustmentToken = (
+  value: unknown
+): 'PERCENTAGE_MARKUP' | 'PERCENTAGE_DISCOUNT' | 'FIXED_MARKUP' | 'FIXED_DISCOUNT' | '' => {
+  const token = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
+  if (!token) return '';
+  if (token === 'PERCENTAGE_MARKUP' || token === 'PERCENT_MARKUP') return 'PERCENTAGE_MARKUP';
+  if (token === 'PERCENTAGE_DISCOUNT' || token === 'PERCENT_DISCOUNT' || token === 'PERCENTAGE_MARKDOWN') {
+    return 'PERCENTAGE_DISCOUNT';
+  }
+  if (token === 'FIXED_MARKUP') return 'FIXED_MARKUP';
+  if (token === 'FIXED_DISCOUNT' || token === 'FIXED_MARKDOWN') return 'FIXED_DISCOUNT';
+  return '';
+};
+
 const normalizeCountryToken = (value: unknown) => {
   const raw = String(value || '')
     .trim()
@@ -81,16 +141,29 @@ const normalizeCountryToken = (value: unknown) => {
   return collapsed.toUpperCase().replace(/[^A-Z0-9]+/g, '');
 };
 
-const countryMatches = (ruleCountry: unknown, contextCountry: unknown) => {
-  const ruleRaw = String(ruleCountry || '').trim();
-  if (!ruleRaw) return true;
+const parseCountryTokenList = (value: unknown) =>
+  String(value || '')
+    .split(/[,\n;|/]+/g)
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean);
+
+const countryMatches = (
+  ruleCountry: unknown,
+  contextCountry: unknown,
+  options?: { allowEmptyRuleCountry?: boolean }
+) => {
+  const allowEmptyRuleCountry = options?.allowEmptyRuleCountry !== false;
+  const ruleTokens = parseCountryTokenList(ruleCountry);
+  if (ruleTokens.length === 0) return allowEmptyRuleCountry;
   const contextRaw = String(contextCountry || '').trim();
   if (!contextRaw) return false;
-  if (ruleRaw.localeCompare(contextRaw, undefined, { sensitivity: 'accent' }) === 0) return true;
-  const normalizedRule = normalizeCountryToken(ruleRaw);
   const normalizedContext = normalizeCountryToken(contextRaw);
-  if (!normalizedRule || !normalizedContext) return false;
-  return normalizedRule === normalizedContext;
+  if (!normalizedContext) return false;
+  return ruleTokens.some((ruleRaw) => {
+    if (ruleRaw.localeCompare(contextRaw, undefined, { sensitivity: 'accent' }) === 0) return true;
+    const normalizedRule = normalizeCountryToken(ruleRaw);
+    return Boolean(normalizedRule) && normalizedRule === normalizedContext;
+  });
 };
 
 export async function readActivePricingRules(now = new Date()): Promise<ActivePricingRule[]> {
@@ -118,21 +191,32 @@ const ruleApplies = (
   rule: ActivePricingRule,
   context: { productType: PricingProductType; country?: string | null }
 ) => {
-  const ruleType = String(rule.ruleType || '').toUpperCase();
-  const ruleProductType = String(rule.productType || '').toUpperCase();
-  if (ruleProductType && ruleProductType !== context.productType) return false;
-  if (rule.country && !countryMatches(rule.country, context.country || '')) return false;
-  if (ruleType === 'GLOBAL_MARKUP') return true;
-  if (ruleType === 'CATEGORY_MARKUP') return true;
-  if (ruleType === 'COUNTRY_MARKUP') return countryMatches(rule.country, context.country || '');
-  if (ruleType === 'DATE_BASED') return true;
-  return true;
+  const ruleType = normalizeRuleTypeToken(rule.ruleType);
+  const ruleProductType = normalizeProductTypeToken(rule.productType);
+  const contextProductType = normalizeProductTypeToken(context.productType);
+  if (!ruleType || !contextProductType) return false;
+  if (ruleProductType && ruleProductType !== contextProductType) return false;
+
+  if (ruleType === 'GLOBAL_MARKUP') {
+    return countryMatches(rule.country, context.country || '', { allowEmptyRuleCountry: true });
+  }
+  if (ruleType === 'CATEGORY_MARKUP') {
+    // Legacy compatibility: treat missing productType category-rules as broad rules.
+    return countryMatches(rule.country, context.country || '', { allowEmptyRuleCountry: true });
+  }
+  if (ruleType === 'COUNTRY_MARKUP') {
+    return countryMatches(rule.country, context.country || '', { allowEmptyRuleCountry: false });
+  }
+  if (ruleType === 'DATE_BASED') {
+    return countryMatches(rule.country, context.country || '', { allowEmptyRuleCountry: true });
+  }
+  return false;
 };
 
 const applyRuleAdjustment = (amount: number, rule: ActivePricingRule) => {
   const value = Number(rule.value || 0);
   if (!Number.isFinite(value) || value <= 0) return amount;
-  const adjustment = String(rule.adjustmentType || '').toUpperCase();
+  const adjustment = normalizeAdjustmentToken(rule.adjustmentType);
   if (adjustment === 'PERCENTAGE_MARKUP') return amount * (1 + value / 100);
   if (adjustment === 'FIXED_MARKUP') return amount + value;
   if (adjustment === 'PERCENTAGE_DISCOUNT') return amount * (1 - value / 100);
@@ -158,7 +242,7 @@ export function hasActiveMarkdownPricingRule(
 ) {
   return rules.some((rule) => {
     if (!ruleApplies(rule, context)) return false;
-    const adjustment = String(rule.adjustmentType || '').toUpperCase();
+    const adjustment = normalizeAdjustmentToken(rule.adjustmentType);
     return Boolean(rule.isSale) || adjustment === 'PERCENTAGE_DISCOUNT' || adjustment === 'FIXED_DISCOUNT';
   });
 }
