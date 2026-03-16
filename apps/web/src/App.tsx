@@ -71,6 +71,8 @@ import AdminResellerInfluencers from './pages/admin/ResellerInfluencers';
 import AdminAutomationApprovals from './pages/admin/AutomationApprovals';
 import AdminAutomationAiConfig from './pages/admin/AutomationAiConfig';
 import AdminReferralMaterials from './pages/admin/ReferralMaterials';
+import AdminReferralList from './pages/admin/ReferralList';
+import AdminReports from './pages/admin/Reports';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -393,10 +395,26 @@ function App() {
                   }
                 />
                 <Route
+                  path="/admin/referrals/list"
+                  element={
+                    <AdminPermissionGuard required={['users:read']}>
+                      <AdminReferralList />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
                   path="/admin/referrals/materials"
                   element={
                     <AdminPermissionGuard required={['users:manage']}>
                       <AdminReferralMaterials />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/reports"
+                  element={
+                    <AdminPermissionGuard required={['admin:dashboard:read']}>
+                      <AdminReports />
                     </AdminPermissionGuard>
                   }
                 />

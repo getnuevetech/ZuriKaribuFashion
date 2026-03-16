@@ -67,9 +67,9 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Customer Accounts', href: '/admin/customer-accounts', icon: Users },
     { label: 'Administrator Accounts', href: '/admin/administrator-accounts', icon: User },
     { label: 'Vendor Profiles', href: '/admin/vendor-profiles', icon: Tag },
-    { label: 'Reseller/Influencers', href: '/admin/resellers', icon: Users },
-    { label: 'Referral Materials', href: '/admin/referrals/materials', icon: ImageIcon },
+    { label: 'Referral/Influence', href: '/admin/resellers', icon: Users },
     { label: 'Traffic Report', href: '/admin/traffic', icon: Layers },
+    { label: 'Report Studio', href: '/admin/reports', icon: FileText },
     { label: 'Measurement Templates', href: '/admin/measurement-templates', icon: Ruler },
     { label: 'Currency Matrix', href: '/admin/currency', icon: DollarSign },
     { label: 'Product Management', href: '/admin/products', icon: Package },
@@ -155,6 +155,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isAdminAccountsMenuOpen, setIsAdminAccountsMenuOpen] = useState(true);
   const [isProductManagementMenuOpen, setIsProductManagementMenuOpen] = useState(true);
   const [isAutomationMenuOpen, setIsAutomationMenuOpen] = useState(true);
+  const [isReferralMenuOpen, setIsReferralMenuOpen] = useState(true);
   const [isEnterpriseMenuOpen, setIsEnterpriseMenuOpen] = useState(true);
   const [enterpriseRoleManagementAllowed, setEnterpriseRoleManagementAllowed] = useState(false);
   const { user, token, logout } = useAuthStore();
@@ -174,7 +175,9 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/roles': ['admin:roles:manage', 'users:read'],
       '/admin/vendor-profiles': ['vendor_profiles:read'],
       '/admin/resellers': ['users:manage'],
+      '/admin/referrals/list': ['users:read'],
       '/admin/referrals/materials': ['users:manage'],
+      '/admin/reports': ['admin:dashboard:read'],
       '/admin/activity-logs': ['session_audit:read'],
       '/admin/session-audit': ['session_audit:read'],
       '/admin/traffic': ['traffic:read'],
@@ -245,6 +248,11 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Automated Product Approval', href: '/admin/automation/approvals', icon: ChevronRight },
     { label: 'Account Approval Automation', href: '/admin/automation/approvals?tab=account', icon: ChevronRight },
     { label: 'AI API Integrations', href: '/admin/automation/ai-integrations', icon: ChevronRight },
+  ];
+  const referralSubmenu = [
+    { label: 'Program Settings', href: '/admin/resellers', icon: ChevronRight },
+    { label: 'Referral List', href: '/admin/referrals/list', icon: ChevronRight },
+    { label: 'Referral Materials', href: '/admin/referrals/materials', icon: ChevronRight },
   ];
   const enterpriseSubmenu =
     userType === 'seller'
@@ -361,6 +369,17 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
           .filter((item) => canAccessAdminNav(item.href))
           .map((item) => ({ label: item.label, href: item.href, keywords: ['automation', 'ai', 'approval'] })),
         { prefix: 'Automation' }
+      );
+      addSearchEntries(
+        entries,
+        referralSubmenu
+          .filter((item) => canAccessAdminNav(item.href))
+          .map((item) => ({
+            label: item.label,
+            href: item.href,
+            keywords: ['referral', 'influencer', 'commission', 'materials', 'referral list'],
+          })),
+        { prefix: 'Referral/Influence' }
       );
       addSearchEntries(
         entries,
@@ -801,6 +820,61 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                                 subActive
                                   ? 'bg-white/10 text-white'
                                   : 'text-white/70 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <SubIcon className="h-4 w-4" />
+                              <span>{subItem.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+
+              if (userType === 'admin' && item.href === '/admin/resellers') {
+                const referralMenuActive =
+                  location.pathname === '/admin/resellers' ||
+                  location.pathname === '/admin/referrals/list' ||
+                  location.pathname === '/admin/referrals/materials';
+                const visibleReferralSubmenu = referralSubmenu.filter((subItem) => canAccessAdminNav(subItem.href));
+                if (visibleReferralSubmenu.length === 0) {
+                  return null;
+                }
+                return (
+                  <div key={item.href} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsReferralMenuOpen((prev) => !prev)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
+                        referralMenuActive ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Icon className="h-5 w-5 flex-shrink-0" />
+                      {isSidebarOpen ? (
+                        <>
+                          <span className="text-sm font-medium">Referral/Influence</span>
+                          <span className="ml-auto">
+                            {isReferralMenuOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </span>
+                        </>
+                      ) : null}
+                    </button>
+                    {isReferralMenuOpen && isSidebarOpen ? (
+                      <div className="ml-7 space-y-1">
+                        {visibleReferralSubmenu.map((subItem) => {
+                          const subMeta = readHrefMeta(subItem.href);
+                          const subActive =
+                            location.pathname === subMeta.pathname &&
+                            (subMeta.tab ? currentTab === subMeta.tab : !currentTab);
+                          const SubIcon = subItem.icon;
+                          return (
+                            <Link
+                              key={subItem.href}
+                              to={subItem.href}
+                              className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
+                                subActive ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'
                               }`}
                             >
                               <SubIcon className="h-4 w-4" />

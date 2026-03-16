@@ -6039,6 +6039,9 @@ const adminApi = {
   getResellerInfluencers: (params?: { search?: string; page?: number; limit?: number }) =>
     apiService.get<{ success: boolean; data: any[]; pagination?: any }>('/admin/referrals/resellers', { params }),
 
+  getReferralAttributionList: (params?: { search?: string; page?: number; limit?: number }) =>
+    apiService.get<{ success: boolean; data: any[]; pagination?: any }>('/admin/referrals/referral-list', { params }),
+
   createResellerInfluencer: (data: {
     email: string;
     firstName: string;
@@ -7054,6 +7057,37 @@ const adminApi = {
 
   evaluateAutomationAccount: (data: { userId: string; role?: string }) =>
     apiService.post<{ success: boolean; data: any }>('/admin/automation/evaluate-account', data),
+
+  getReportCatalog: () =>
+    apiService.get<{ success: boolean; data: any }>('/admin/reports/catalog'),
+
+  getReportDefinitions: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/admin/reports/definitions'),
+
+  createReportDefinition: (data: {
+    name: string;
+    description?: string;
+    reportType: 'GENERAL_SALES' | 'STOCK_OVERVIEW' | 'VENDOR_SALES' | 'REFERRAL_PERFORMANCE' | 'ORDER_ACTIVITY';
+    config?: Record<string, any>;
+    isActive?: boolean;
+  }) => apiService.post<{ success: boolean; data: any; message?: string }>('/admin/reports/definitions', data),
+
+  updateReportDefinition: (
+    id: string,
+    data: {
+      name?: string;
+      description?: string;
+      reportType?: 'GENERAL_SALES' | 'STOCK_OVERVIEW' | 'VENDOR_SALES' | 'REFERRAL_PERFORMANCE' | 'ORDER_ACTIVITY';
+      config?: Record<string, any>;
+      isActive?: boolean;
+    }
+  ) => apiService.patch<{ success: boolean; data: any; message?: string }>(`/admin/reports/definitions/${id}`, data),
+
+  generateReport: (data: {
+    definitionId?: string;
+    reportType?: 'GENERAL_SALES' | 'STOCK_OVERVIEW' | 'VENDOR_SALES' | 'REFERRAL_PERFORMANCE' | 'ORDER_ACTIVITY';
+    config?: Record<string, any>;
+  }) => apiService.post<{ success: boolean; data: any }>('/admin/reports/generate', data),
 
   getAutomationProviderSuggestions: () =>
     apiService.get<{ success: boolean; data: any[] }>('/admin/automation/providers/suggestions'),

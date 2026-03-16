@@ -104,6 +104,12 @@ const referralMaterialCreateSchema = z.object({
 
 const referralMaterialUpdateSchema = referralMaterialCreateSchema.partial();
 
+const parsePagination = (pageInput: unknown, limitInput: unknown, fallback = 20) => {
+  const page = Math.max(1, Number(pageInput || 1) || 1);
+  const limit = Math.max(1, Math.min(100, Number(limitInput || fallback) || fallback));
+  return { page, limit, offset: (page - 1) * limit };
+};
+
 router.get('/program/public', async (_req, res, next) => {
   try {
     const payload = await readReferralProgramSettings();
@@ -183,6 +189,168 @@ router.get('/resellers', authorizePermissions(Permissions.USERS_READ), async (re
       success: true,
       data: result.rows,
       pagination: result.pagination,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/referral-list', authorizePermissions(Permissions.USERS_READ), async (req, res, next) => {
+  try {
+    const querySchema = z.object({
+      search: z.string().optional(),
+      page: z.coerce.number().int().min(1).optional(),
+      limit: z.coerce.number().int().min(1).max(100).optional(),
+    });
+    const query = querySchema.parse(req.query || {});
+    const pagination = parsePagination(query.page, query.limit, 20);
+    const search = String(query.search || '').trim();
+    const whereSql = search
+      ? `WHERE (
+           LOWER(COALESCE(rp."displayName", '')) LIKE LOWER($1)
+           OR LOWER(COALESCE(ru."firstName",'') || ' ' || COALESCE(ru."lastName",'')) LIKE LOWER($1)
+           OR LOWER(COALESCE(uu."firstName",'') || ' ' || COALESCE(uu."lastName",'')) LIKE LOWER($1)
+           OR LOWER(COALESCE(uu."email", '')) LIKE LOWER($1)
+           OR LOWER(COALESCE(rp."referralCode", '')) LIKE LOWER($1)
+         )`
+      : '';
+    const values: unknown[] = [];
+    if (search) values.push(`%${search}%`);
+    values.push(pagination.offset, pagination.limit);
+    let rows: Array<any> = [];
+    try {
+      rows = await prisma.$queryRawUnsafe<Array<any>>(
+        `SELECT
+            a."id" AS "attributionId",
+            a."createdAt" AS "attributedAt",
+            a."referredRole",
+            a."source",
+            rp."referralCode",
+            rp."createdAt" AS "referralJoinedAt",
+            COALESCE(rp."displayName", TRIM(COALESCE(ru."firstName",'') || ' ' || COALESCE(ru."lastName",''))) AS "referralName",
+            rp."isActive" AS "referralProgramActive",
+            ru."status" AS "referralAccountStatus",
+            uu."id" AS "referredUserId",
+            TRIM(COALESCE(uu."firstName",'') || ' ' || COALESCE(uu."lastName",'')) AS "referredName",
+            uu."email" AS "referredEmail",
+            uu."createdAt" AS "refereeJoinedAt",
+            uu."status" AS "referredAccountStatus",
+            vps."profileStatus" AS "vendorProfileStatus",
+            COALESCE(comm."designerSellerSalesUsd", 0)::numeric AS "designerSellerSalesUsd",
+            COALESCE(comm."referralCommissionUsd", 0)::numeric AS "referralCommissionUsd"
+         FROM "ReferralAttribution" a
+         JOIN "ResellerInfluencerProfile" rp ON rp."userId" = a."resellerUserId"
+         JOIN "User" ru ON ru."id" = rp."userId"
+         JOIN "User" uu ON uu."id" = a."referredUserId"
+         LEFT JOIN LATERAL (
+           SELECT v."profileStatus"
+           FROM "VendorProfileSubmission" v
+           WHERE v."userId" = uu."id"
+             AND UPPER(v."role") = UPPER(a."referredRole")
+           ORDER BY COALESCE(v."updatedAt", v."profileReviewedAt", v."profileSubmittedAt", v."createdAt") DESC
+           LIMIT 1
+         ) vps ON TRUE
+         LEFT JOIN (
+           SELECT
+             "vendorUserId",
+             SUM("baseAmountUsd")::numeric AS "designerSellerSalesUsd",
+             SUM("commissionAmountUsd")::numeric AS "referralCommissionUsd"
+           FROM "ReferralCommissionLedger"
+           GROUP BY "vendorUserId"
+         ) comm ON comm."vendorUserId" = a."referredUserId"
+         ${whereSql}
+         ORDER BY a."createdAt" DESC
+         OFFSET $${search ? 2 : 1}
+         LIMIT $${search ? 3 : 2}`,
+        ...values
+      );
+    } catch {
+      rows = await prisma.$queryRawUnsafe<Array<any>>(
+        `SELECT
+            a."id" AS "attributionId",
+            a."createdAt" AS "attributedAt",
+            a."referredRole",
+            a."source",
+            rp."referralCode",
+            rp."createdAt" AS "referralJoinedAt",
+            COALESCE(rp."displayName", TRIM(COALESCE(ru."firstName",'') || ' ' || COALESCE(ru."lastName",''))) AS "referralName",
+            rp."isActive" AS "referralProgramActive",
+            ru."status" AS "referralAccountStatus",
+            uu."id" AS "referredUserId",
+            TRIM(COALESCE(uu."firstName",'') || ' ' || COALESCE(uu."lastName",'')) AS "referredName",
+            uu."email" AS "referredEmail",
+            uu."createdAt" AS "refereeJoinedAt",
+            uu."status" AS "referredAccountStatus",
+            NULL::text AS "vendorProfileStatus",
+            COALESCE(comm."designerSellerSalesUsd", 0)::numeric AS "designerSellerSalesUsd",
+            COALESCE(comm."referralCommissionUsd", 0)::numeric AS "referralCommissionUsd"
+         FROM "ReferralAttribution" a
+         JOIN "ResellerInfluencerProfile" rp ON rp."userId" = a."resellerUserId"
+         JOIN "User" ru ON ru."id" = rp."userId"
+         JOIN "User" uu ON uu."id" = a."referredUserId"
+         LEFT JOIN (
+           SELECT
+             "vendorUserId",
+             SUM("baseAmountUsd")::numeric AS "designerSellerSalesUsd",
+             SUM("commissionAmountUsd")::numeric AS "referralCommissionUsd"
+           FROM "ReferralCommissionLedger"
+           GROUP BY "vendorUserId"
+         ) comm ON comm."vendorUserId" = a."referredUserId"
+         ${whereSql}
+         ORDER BY a."createdAt" DESC
+         OFFSET $${search ? 2 : 1}
+         LIMIT $${search ? 3 : 2}`,
+        ...values
+      );
+    }
+    const countRows = await prisma.$queryRawUnsafe<Array<{ total: number }>>(
+      `SELECT COUNT(*)::int AS total
+       FROM "ReferralAttribution" a
+       JOIN "ResellerInfluencerProfile" rp ON rp."userId" = a."resellerUserId"
+       JOIN "User" ru ON ru."id" = rp."userId"
+       JOIN "User" uu ON uu."id" = a."referredUserId"
+       ${whereSql}`,
+      ...(search ? [`%${search}%`] : [])
+    );
+    const data = (Array.isArray(rows) ? rows : []).map((row) => {
+      const referredRole = String(row.referredRole || '').toUpperCase();
+      const vendorCategory =
+        referredRole === 'FABRIC_SELLER'
+          ? 'SELLER'
+          : referredRole === 'FASHION_DESIGNER'
+            ? 'DESIGNER'
+            : 'USER';
+      return {
+        attributionId: String(row.attributionId || ''),
+        referralName: String(row.referralName || 'Referral'),
+        referralCode: String(row.referralCode || ''),
+        referredName: String(row.referredName || '') || 'User',
+        referredEmail: String(row.referredEmail || ''),
+        vendorCategory,
+        referredRole,
+        referralJoinedAt: row.referralJoinedAt ? new Date(row.referralJoinedAt).toISOString() : null,
+        refereeJoinedAt: row.refereeJoinedAt ? new Date(row.refereeJoinedAt).toISOString() : null,
+        designerSellerSalesUsd: Number(row.designerSellerSalesUsd || 0),
+        referralCommissionUsd: Number(row.referralCommissionUsd || 0),
+        refereeStatus: String(row.source || 'ATTRIBUTED'),
+        sellerDesignerCustomerStatus:
+          String(row.vendorProfileStatus || '').trim() || String(row.referredAccountStatus || '').trim() || 'UNKNOWN',
+        referredAccountStatus: String(row.referredAccountStatus || ''),
+        referralProgramStatus:
+          row.referralProgramActive === false || String(row.referralAccountStatus || '').toUpperCase() !== 'ACTIVE'
+            ? 'INACTIVE'
+            : 'ACTIVE',
+      };
+    });
+    res.json({
+      success: true,
+      data,
+      pagination: {
+        page: pagination.page,
+        limit: pagination.limit,
+        total: Number(countRows?.[0]?.total || 0),
+        pages: Math.max(1, Math.ceil(Number(countRows?.[0]?.total || 0) / pagination.limit)),
+      },
     });
   } catch (error) {
     next(error);
