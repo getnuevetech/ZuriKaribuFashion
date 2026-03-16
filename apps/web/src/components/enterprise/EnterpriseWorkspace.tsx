@@ -5,6 +5,7 @@ import { api } from '../../services/api';
 type EnterpriseWorkspaceProps = {
   vendorType: 'seller' | 'designer';
   initialSection?: 'overview' | 'roles';
+  upgradeOnly?: boolean;
 };
 
 type PaymentProvider = {
@@ -37,7 +38,11 @@ type EnterpriseActivityLog = {
   } | null;
 };
 
-export default function EnterpriseWorkspace({ vendorType, initialSection = 'overview' }: EnterpriseWorkspaceProps) {
+export default function EnterpriseWorkspace({
+  vendorType,
+  initialSection = 'overview',
+  upgradeOnly = false,
+}: EnterpriseWorkspaceProps) {
   const vendorLabel = vendorType === 'seller' ? 'Seller' : 'Designer';
   const showRoleManagementOnly = initialSection === 'roles';
   const [loading, setLoading] = useState(true);
@@ -378,7 +383,9 @@ export default function EnterpriseWorkspace({ vendorType, initialSection = 'over
         <p className="mt-1 text-sm text-gray-600">
           {showRoleManagementOnly
             ? 'Create and configure sub-account roles for your enterprise team.'
-            : 'Manage enterprise subscription, sub-accounts, and internal role permissions for your brand account.'}
+            : upgradeOnly
+              ? 'Submit enterprise upgrade requests. Additional enterprise tools become available after activation.'
+              : 'Manage enterprise subscription, sub-accounts, and internal role permissions for your brand account.'}
         </p>
       </div>
 
@@ -387,7 +394,7 @@ export default function EnterpriseWorkspace({ vendorType, initialSection = 'over
         <div className="rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>
       ) : null}
 
-      {!showRoleManagementOnly ? (
+      {!showRoleManagementOnly && !upgradeOnly ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <div className="rounded-xl border bg-white p-4">
             <p className="text-xs text-gray-500">Enterprise status</p>
@@ -488,7 +495,7 @@ export default function EnterpriseWorkspace({ vendorType, initialSection = 'over
         </div>
       </div> : null}
 
-      {!showRoleManagementOnly ? <div className="rounded-xl border bg-white p-4 space-y-3">
+      {!showRoleManagementOnly && !upgradeOnly ? <div className="rounded-xl border bg-white p-4 space-y-3">
         <h2 className="text-sm font-semibold text-gray-900">Upgrade request history</h2>
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
@@ -559,7 +566,7 @@ export default function EnterpriseWorkspace({ vendorType, initialSection = 'over
         </div>
       </div> : null}
 
-      {!showRoleManagementOnly ? <div className="rounded-xl border bg-white p-4 space-y-3">
+      {!showRoleManagementOnly && !upgradeOnly ? <div className="rounded-xl border bg-white p-4 space-y-3">
         <h2 className="text-sm font-semibold text-gray-900">Enterprise User Activity Logs</h2>
         <p className="text-xs text-gray-500">
           Pull activity logs for enterprise users by entering a username or email address.
@@ -660,7 +667,7 @@ export default function EnterpriseWorkspace({ vendorType, initialSection = 'over
         </div>
       </div> : null}
 
-      <div className="rounded-xl border bg-white p-4 space-y-3">
+      {!upgradeOnly ? <div className="rounded-xl border bg-white p-4 space-y-3">
         <h2 className="text-sm font-semibold text-gray-900">Sub-account role management</h2>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
           <input
@@ -725,9 +732,9 @@ export default function EnterpriseWorkspace({ vendorType, initialSection = 'over
             </div>
           ))}
         </div>
-      </div>
+      </div> : null}
 
-      {!showRoleManagementOnly ? <div className="rounded-xl border bg-white p-4 space-y-3">
+      {!showRoleManagementOnly && !upgradeOnly ? <div className="rounded-xl border bg-white p-4 space-y-3">
         <h2 className="text-sm font-semibold text-gray-900">Sub-account management</h2>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
           <input

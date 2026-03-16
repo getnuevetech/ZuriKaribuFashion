@@ -7,6 +7,7 @@ import { normalizePhoneWithCountryPrefix } from '../../utils/phone';
 
 type VendorRole = 'FABRIC_SELLER' | 'FASHION_DESIGNER';
 type VendorProfileStatus = 'INCOMPLETE' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+type VendorReviewRoleFilter = '' | VendorRole;
 type FieldType =
   | 'TEXT'
   | 'TEXTAREA'
@@ -273,7 +274,8 @@ export default function AdminVendorProfiles() {
   const [success, setSuccess] = useState('');
   const [fields, setFields] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
-  const [statusFilter, setStatusFilter] = useState<VendorProfileStatus | ''>('SUBMITTED');
+  const [statusFilter, setStatusFilter] = useState<VendorProfileStatus | ''>('');
+  const [reviewRoleFilter, setReviewRoleFilter] = useState<VendorReviewRoleFilter>('');
   const [selectedProfile, setSelectedProfile] = useState<any | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
   const [reviewReasonCode, setReviewReasonCode] = useState('');
@@ -339,7 +341,7 @@ export default function AdminVendorProfiles() {
   const roleLabel = role === 'FABRIC_SELLER' ? 'Fabric Seller' : 'Fashion Designer';
   const activeAccountRole: VendorRole = tab === 'designerAccounts' ? 'FASHION_DESIGNER' : 'FABRIC_SELLER';
   const activeAccountRoleLabel = activeAccountRole === 'FABRIC_SELLER' ? 'Fabric Seller' : 'Fashion Designer';
-  const showRoleSelector = tab === 'fields' || tab === 'reviews' || tab === 'dashboard';
+  const showRoleSelector = tab === 'fields' || tab === 'dashboard';
 
   const loadFields = async () => {
     setError('');
@@ -361,7 +363,7 @@ export default function AdminVendorProfiles() {
     setLoading(true);
     try {
       const res = await api.admin.getVendorProfiles({
-        role,
+        role: reviewRoleFilter || undefined,
         status: statusFilter || undefined,
         page: 1,
         limit: 100,
@@ -509,7 +511,7 @@ export default function AdminVendorProfiles() {
     } else if (tab === 'enterprise') {
       void loadEnterpriseData();
     }
-  }, [tab, role, statusFilter, vendorAccountSearch, vendorAccountStatusFilter, vendorAccountCountryFilter, activeAccountRole]);
+  }, [tab, role, reviewRoleFilter, statusFilter, vendorAccountSearch, vendorAccountStatusFilter, vendorAccountCountryFilter, activeAccountRole]);
 
   useEffect(() => {
     if (tab === 'sellerAccounts' || tab === 'designerAccounts') {
@@ -991,17 +993,28 @@ export default function AdminVendorProfiles() {
         <div className="space-y-4 rounded-xl border bg-white p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-600">Review submitted vendor profiles and approve/reject.</p>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as VendorProfileStatus | '')}
-              className="rounded border px-3 py-2 text-sm"
-            >
-              <option value="">All statuses</option>
-              <option value="INCOMPLETE">INCOMPLETE</option>
-              <option value="SUBMITTED">SUBMITTED</option>
-              <option value="APPROVED">APPROVED</option>
-              <option value="REJECTED">REJECTED</option>
-            </select>
+            <div className="flex items-center gap-2">
+              <select
+                value={reviewRoleFilter}
+                onChange={(e) => setReviewRoleFilter(e.target.value as VendorReviewRoleFilter)}
+                className="rounded border px-3 py-2 text-sm"
+              >
+                <option value="">All roles</option>
+                <option value="FABRIC_SELLER">Fabric Seller</option>
+                <option value="FASHION_DESIGNER">Fashion Designer</option>
+              </select>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as VendorProfileStatus | '')}
+                className="rounded border px-3 py-2 text-sm"
+              >
+                <option value="">All statuses</option>
+                <option value="INCOMPLETE">INCOMPLETE</option>
+                <option value="SUBMITTED">SUBMITTED</option>
+                <option value="APPROVED">APPROVED</option>
+                <option value="REJECTED">REJECTED</option>
+              </select>
+            </div>
           </div>
 
           <div className="overflow-auto">
