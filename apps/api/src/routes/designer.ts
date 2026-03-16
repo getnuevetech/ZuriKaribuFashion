@@ -37,6 +37,10 @@ import {
 } from '../utils/fabric-attributes';
 import { applyActivePricingRules, readActivePricingRules } from '../utils/pricing-rules';
 import { syncReadyToWearAvailabilityById } from '../utils/product-stock-monitor';
+import {
+  evaluateProductAutomationChecks,
+  readAutomationApprovalSettings,
+} from '../utils/automation-approval';
 
 const router = Router();
 let designerGovernanceSchemaEnsured = false;
@@ -1647,12 +1651,58 @@ router.post('/designs', async (req, res, next) => {
     });
     await writeDesignPredominantColor(design.id, data.predominantColor || null);
 
+    let responseStatus = design.status;
+    let responseAvailability = design.isAvailable;
+    let automation: any = null;
+    let responseMessage = 'Design submitted for review.';
+    try {
+      const automationSettings = (await readAutomationApprovalSettings()).settings;
+      if (automationSettings.enabled && automationSettings.autoRunOnProductSubmit) {
+        const evaluation = await evaluateProductAutomationChecks({
+          productType: 'DESIGN' as any,
+          productId: design.id,
+          settingsOverride: automationSettings,
+        });
+        automation = evaluation;
+        if (evaluation.canAutoApprove && automationSettings.autoApproveOnPass) {
+          await prisma.design.update({
+            where: { id: design.id },
+            data: {
+              status: ProductStatus.APPROVED,
+              isAvailable: true,
+            },
+          });
+          responseStatus = ProductStatus.APPROVED;
+          responseAvailability = true;
+          responseMessage = 'Design auto-approved by automation.';
+          automation = { ...evaluation, action: 'AUTO_APPROVED' };
+        } else if (!evaluation.canAutoApprove) {
+          await prisma.design.update({
+            where: { id: design.id },
+            data: {
+              status: ProductStatus.REJECTED,
+              isAvailable: false,
+            },
+          });
+          responseStatus = ProductStatus.REJECTED;
+          responseAvailability = false;
+          responseMessage = 'Design auto-rejected by automation checks.';
+          automation = { ...evaluation, action: 'AUTO_REJECTED' };
+        }
+      }
+    } catch {
+      // Keep upload flow available if automation fails.
+    }
+
     res.status(201).json({
       success: true,
-      message: 'Design submitted for review.',
+      message: responseMessage,
       data: {
         ...design,
+        status: responseStatus,
+        isAvailable: responseAvailability,
         predominantColor: String(data.predominantColor || '').trim().toUpperCase() || null,
+        automation,
       },
     });
   } catch (error: any) {
@@ -2214,11 +2264,56 @@ router.post('/ready-to-wear', async (req, res, next) => {
     });
     await writeReadyToWearPredominantColor(product.id, data.predominantColor || null);
 
+    let responseStatus = product.status;
+    let responseAvailability = product.isAvailable;
+    let automation: any = null;
+    let responseMessage = 'Ready-to-wear product submitted for review.';
+    try {
+      const automationSettings = (await readAutomationApprovalSettings()).settings;
+      if (automationSettings.enabled && automationSettings.autoRunOnProductSubmit) {
+        const evaluation = await evaluateProductAutomationChecks({
+          productType: 'READY_TO_WEAR' as any,
+          productId: product.id,
+          settingsOverride: automationSettings,
+        });
+        automation = evaluation;
+        if (evaluation.canAutoApprove && automationSettings.autoApproveOnPass) {
+          await prisma.readyToWear.update({
+            where: { id: product.id },
+            data: {
+              status: ProductStatus.APPROVED,
+              isAvailable: true,
+            },
+          });
+          responseStatus = ProductStatus.APPROVED;
+          responseAvailability = true;
+          responseMessage = 'Ready-to-wear product auto-approved by automation.';
+          automation = { ...evaluation, action: 'AUTO_APPROVED' };
+        } else if (!evaluation.canAutoApprove) {
+          await prisma.readyToWear.update({
+            where: { id: product.id },
+            data: {
+              status: ProductStatus.REJECTED,
+              isAvailable: false,
+            },
+          });
+          responseStatus = ProductStatus.REJECTED;
+          responseAvailability = false;
+          responseMessage = 'Ready-to-wear product auto-rejected by automation checks.';
+          automation = { ...evaluation, action: 'AUTO_REJECTED' };
+        }
+      }
+    } catch {
+      // Keep upload flow available if automation fails.
+    }
+
     res.status(201).json({
       success: true,
-      message: 'Ready-to-wear product submitted for review.',
+      message: responseMessage,
       data: {
         ...product,
+        status: responseStatus,
+        isAvailable: responseAvailability,
         predominantColor: String(data.predominantColor || '').trim().toUpperCase() || null,
         sizeVariations: Array.isArray(product.sizeVariations)
           ? product.sizeVariations.map((variation: any) => {
@@ -2231,6 +2326,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
               };
             })
           : [],
+        automation,
       },
     });
   } catch (error: any) {

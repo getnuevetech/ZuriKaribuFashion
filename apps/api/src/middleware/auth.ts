@@ -10,6 +10,7 @@ import {
   sanitizePermissionGrants,
 } from '../rbac';
 import { isEnterpriseSubscriptionActive, readEnterpriseActorContext } from '../utils/enterprise';
+const RESELLER_ROLE = 'RESELLER_INFLUENCER' as unknown as UserRole;
 
 // JWT Secret - must be set in production
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -26,6 +27,7 @@ const SINGLE_SESSION_ROLES = new Set<UserRole>([
   UserRole.ADMINISTRATOR,
   UserRole.FABRIC_SELLER,
   UserRole.FASHION_DESIGNER,
+  RESELLER_ROLE,
 ]);
 
 const normalizeVendorRejectionType = (value: unknown): 'TEMPORARY' | 'PERMANENT' | null => {

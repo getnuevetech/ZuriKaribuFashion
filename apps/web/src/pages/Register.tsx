@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Store, Scissors } from 'lucide-react';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { api } from '../services/api';
@@ -48,6 +48,7 @@ const roleOptions: RoleOption[] = [
 
 export default function Register() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuthStore();
   const { settings: authPageSettings } = useAuthPageSettings();
   const [selectedRole, setSelectedRole] = useState<UserRole>('CUSTOMER');
@@ -77,6 +78,7 @@ export default function Register() {
       : allCountryOptions;
   const selectedCountryCode = resolveCountryCode(formData.country);
   const cityOptions = getCityOptionsByCountryCode(selectedCountryCode);
+  const referralCode = String(searchParams.get('ref') || '').trim();
 
   useEffect(() => {
     if (selectedRole !== 'FABRIC_SELLER' && selectedRole !== 'FASHION_DESIGNER') return;
@@ -118,6 +120,7 @@ export default function Register() {
         firstName,
         lastName,
         role: selectedRole,
+        referralCode: referralCode || undefined,
       });
 
       if (response.success) {
@@ -235,6 +238,11 @@ export default function Register() {
             {notice ? (
               <div className="border border-green-200 bg-green-50 p-3 text-sm text-green-700">
                 {notice}
+              </div>
+            ) : null}
+            {referralCode ? (
+              <div className="border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                Referral applied: <span className="font-semibold">{referralCode}</span>
               </div>
             ) : null}
 

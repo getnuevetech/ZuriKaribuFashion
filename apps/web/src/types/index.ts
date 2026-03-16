@@ -1,5 +1,11 @@
 // User Types
-export type UserRole = 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR';
+export type UserRole =
+  | 'CUSTOMER'
+  | 'FABRIC_SELLER'
+  | 'FASHION_DESIGNER'
+  | 'RESELLER_INFLUENCER'
+  | 'QA_TEAM'
+  | 'ADMINISTRATOR';
 export type UserStatus = 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REJECTED';
 
 export interface User {

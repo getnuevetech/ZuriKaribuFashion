@@ -65,6 +65,9 @@ import AdminNotificationCenter from './pages/admin/NotificationCenter';
 import AdminBackups from './pages/admin/Backups';
 import AdminProductChangeRequests from './pages/admin/ProductChangeRequests';
 import AdminProductStockList from './pages/admin/ProductStockList';
+import AdminResellerInfluencers from './pages/admin/ResellerInfluencers';
+import AdminAutomationApprovals from './pages/admin/AutomationApprovals';
+import AdminAutomationAiConfig from './pages/admin/AutomationAiConfig';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -87,6 +90,7 @@ import DesignerMeasurementsPage from './pages/designer/Measurements';
 import QADashboard from './pages/qa/Dashboard';
 import QAMessagesPage from './pages/qa/Messages';
 import CustomerMessagesPage from './pages/customer/Messages';
+import ResellerDashboard from './pages/reseller/Dashboard';
 
 // Auth
 import ProtectedRoute from './components/ProtectedRoute';
@@ -371,6 +375,30 @@ function App() {
                   }
                 />
                 <Route
+                  path="/admin/resellers"
+                  element={
+                    <AdminPermissionGuard required={['users:manage']}>
+                      <AdminResellerInfluencers />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/automation/approvals"
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminAutomationApprovals />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/automation/ai-integrations"
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminAutomationAiConfig />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
                   path="/admin/partners"
                   element={
                     <AdminPermissionGuard required={['users:manage']}>
@@ -487,6 +515,21 @@ function App() {
               >
                 <Route path="/qa" element={<QADashboard />} />
                 <Route path="/qa/messages" element={<QAMessagesPage />} />
+              </Route>
+            </Route>
+
+            {/* Reseller Routes */}
+            <Route element={<ProtectedRoute allowedRoles={['RESELLER_INFLUENCER']} />}>
+              <Route
+                path="/reseller"
+                element={
+                  <DashboardErrorBoundary>
+                    <DashboardLayout userType="reseller" />
+                  </DashboardErrorBoundary>
+                }
+              >
+                <Route index element={<ResellerDashboard />} />
+                <Route path="*" element={<Navigate to="/reseller" replace />} />
               </Route>
             </Route>
 

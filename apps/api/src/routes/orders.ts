@@ -20,6 +20,7 @@ import {
   type PricingProductType,
 } from '../utils/pricing-rules';
 import { readCheckoutPricingSettings } from '../utils/checkout-pricing-settings';
+import { recordReferralCommissionsForOrder } from '../utils/referral-program';
 
 const router = Router();
 
@@ -2925,6 +2926,31 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
     if (isPaymentConfirmed && hasCustomerSelectedFabric && data.fabricId) {
       await syncFabricAvailabilityById(data.fabricId, { notifyVendor: true });
     }
+    if (isPaymentConfirmed) {
+      void recordReferralCommissionsForOrder({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        vendorSales: [
+          {
+            vendorUserId: String(design.designer.userId || ''),
+            vendorRole: 'FASHION_DESIGNER',
+            baseAmountUsd: Number(designPrice || 0),
+          },
+          ...(hasCustomerSelectedFabric && fabric
+            ? [
+                {
+                  vendorUserId: String(fabric.seller.userId || ''),
+                  vendorRole: 'FABRIC_SELLER' as const,
+                  baseAmountUsd: Number(fabricPrice || 0),
+                },
+              ]
+            : []),
+        ],
+        metadata: {
+          orderType: 'CUSTOM_DESIGN',
+        },
+      }).catch(() => undefined);
+    }
 
     res.status(201).json({
       success: true,
@@ -2998,6 +3024,8 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       quantity: number;
       price: number;
       sizeVariationId: string;
+      vendorUserId: string;
+      lineTotal: number;
     };
 
     const schema = z.object({
@@ -3078,6 +3106,11 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
         },
         include: {
           sizeVariations: true,
+          designer: {
+            select: {
+              userId: true,
+            },
+          },
         },
       });
 
@@ -3148,6 +3181,8 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
         quantity: item.quantity,
         price: Number(sizeVar.price),
         sizeVariationId: sizeVar.id,
+        vendorUserId: String(product.designer?.userId || ''),
+        lineTotal: itemTotal,
       });
       readyItemLines.push(
         `${product.name} — ${selectedVariant.size}${
@@ -3295,6 +3330,18 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       for (const productId of productIds) {
         await syncReadyToWearAvailabilityById(productId, { notifyVendor: true });
       }
+      void recordReferralCommissionsForOrder({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        vendorSales: validatedItems.map((item) => ({
+          vendorUserId: String(item.vendorUserId || ''),
+          vendorRole: 'FASHION_DESIGNER' as const,
+          baseAmountUsd: Number(item.lineTotal || 0),
+        })),
+        metadata: {
+          orderType: 'READY_TO_WEAR',
+        },
+      }).catch(() => undefined);
     }
 
     res.status(201).json({
@@ -3654,6 +3701,20 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
     });
     if (isPaymentConfirmed) {
       await syncFabricAvailabilityById(data.fabricId, { notifyVendor: true });
+      void recordReferralCommissionsForOrder({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        vendorSales: [
+          {
+            vendorUserId: String(fabric.seller.userId || ''),
+            vendorRole: 'FABRIC_SELLER',
+            baseAmountUsd: Number(subtotalBeforeDiscount || 0),
+          },
+        ],
+        metadata: {
+          orderType: 'FABRIC_ONLY',
+        },
+      }).catch(() => undefined);
     }
 
     res.status(201).json({

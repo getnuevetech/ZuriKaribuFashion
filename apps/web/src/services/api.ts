@@ -5957,6 +5957,7 @@ const adminApi = {
           { label: 'Customers', value: Number(data?.users?.customers || 0) },
           { label: 'Designers', value: Number(data?.users?.designers || 0) },
           { label: 'Sellers', value: Number(data?.users?.fabricSellers || 0) },
+          { label: 'Resellers', value: Number(data?.users?.resellers || 0) },
           { label: 'QA Team', value: Number(data?.users?.qa || 0) },
         ],
       },
@@ -6012,6 +6013,48 @@ const adminApi = {
 
   updateUserStatus: (id: string, status: string, reason?: string) =>
     apiService.patch(`/admin/users/${id}/status`, { status, reason }),
+
+  getReferralProgramSettings: () =>
+    apiService.get<{ success: boolean; data: any; source?: string; updatedAt?: string | null }>(
+      '/admin/referrals/program/settings'
+    ),
+
+  updateReferralProgramSettings: (data: {
+    enabled?: boolean;
+    registrationReferralEnabled?: boolean;
+    sellerCommissionPercent?: number;
+    designerCommissionPercent?: number;
+    holdDays?: number;
+    minimumPayoutUsd?: number;
+    referralBaseUrl?: string;
+  }) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>('/admin/referrals/program/settings', data),
+
+  getResellerInfluencers: (params?: { search?: string; page?: number; limit?: number }) =>
+    apiService.get<{ success: boolean; data: any[]; pagination?: any }>('/admin/referrals/resellers', { params }),
+
+  createResellerInfluencer: (data: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    password: string;
+    phone?: string;
+    status?: 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'REJECTED';
+    displayName?: string;
+    commissionOverridePercent?: number | null;
+  }) => apiService.post<{ success: boolean; data: any; message?: string }>('/admin/referrals/resellers', data),
+
+  updateResellerInfluencer: (
+    userId: string,
+    data: {
+      displayName?: string;
+      isActive?: boolean;
+      commissionOverridePercent?: number | null;
+      status?: 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'REJECTED';
+      phone?: string | null;
+    }
+  ) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>(`/admin/referrals/resellers/${userId}`, data),
 
   createMinimalVendor: (data: {
     role: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
@@ -6953,6 +6996,23 @@ const adminApi = {
 
   updateOrderWorkflowSettings: (data: any) =>
     apiService.patch<{ success: boolean; data: any; message?: string }>('/admin/order-workflow/settings', data),
+
+  getAutomationSettings: () =>
+    apiService.get<{ success: boolean; data: any; source?: string; updatedAt?: string | null }>(
+      '/admin/automation/settings'
+    ),
+
+  updateAutomationSettings: (data: any) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>('/admin/automation/settings', data),
+
+  evaluateAutomationProduct: (data: {
+    productType: 'FABRIC' | 'READY_TO_WEAR' | 'DESIGN';
+    productId: string;
+    applyDecision?: boolean;
+  }) => apiService.post<{ success: boolean; data: any }>('/admin/automation/evaluate-product', data),
+
+  getAutomationProviderSuggestions: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/admin/automation/providers/suggestions'),
 
   autoCloseOverdueOrders: () =>
     apiService.post<{ success: boolean; data: { closedCount: number }; message?: string }>(
@@ -9156,6 +9216,11 @@ const enterpriseApi = {
     }),
 };
 
+const referralsApi = {
+  getMyDashboard: (params?: { page?: number; limit?: number }) =>
+    apiService.get<{ success: boolean; data: any }>('/referrals/me', { params }),
+};
+
 // Export combined API
 export const api = {
   auth: authApi,
@@ -9179,6 +9244,7 @@ export const api = {
   productChangeRequests: productChangeRequestsApi,
   messages: messagesApi,
   enterprise: enterpriseApi,
+  referrals: referralsApi,
 };
 
 // Named exports for direct import
@@ -9204,6 +9270,7 @@ export {
   productChangeRequestsApi,
   messagesApi,
   enterpriseApi,
+  referralsApi,
   apiService,
   httpClient,
 };

@@ -34,6 +34,8 @@ import {
   stripPricingScopeTag,
 } from '../utils/pricing-rules';
 import { readCheckoutPricingSettings, saveCheckoutPricingSettings } from '../utils/checkout-pricing-settings';
+import { ensureResellerProfileForUser } from '../utils/referral-program';
+const RESELLER_ROLE = 'RESELLER_INFLUENCER' as unknown as UserRole;
 
 const router = Router();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
@@ -1776,6 +1778,7 @@ router.get('/dashboard', async (req, res, next) => {
       totalCustomers,
       totalFabricSellers,
       totalDesigners,
+      totalResellers,
       totalQa,
       pendingApprovals,
       totalOrders,
@@ -1787,6 +1790,7 @@ router.get('/dashboard', async (req, res, next) => {
       prisma.user.count({ where: { role: UserRole.CUSTOMER } }),
       prisma.user.count({ where: { role: UserRole.FABRIC_SELLER } }),
       prisma.user.count({ where: { role: UserRole.FASHION_DESIGNER } }),
+      prisma.user.count({ where: { role: RESELLER_ROLE } }),
       prisma.user.count({ where: { role: UserRole.QA_TEAM } }),
       prisma.user.count({
         where: {
@@ -1823,6 +1827,7 @@ router.get('/dashboard', async (req, res, next) => {
           customers: totalCustomers,
           fabricSellers: totalFabricSellers,
           designers: totalDesigners,
+          resellers: totalResellers,
           qa: totalQa,
           pendingApprovals,
         },
@@ -2002,6 +2007,13 @@ router.post('/users', async (req, res, next) => {
         update: {},
       });
     }
+    if (created.role === RESELLER_ROLE) {
+      await ensureResellerProfileForUser({
+        userId: created.id,
+        createdById: req.user?.id || null,
+        displayName: `${created.firstName} ${created.lastName}`.trim(),
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -2095,6 +2107,13 @@ router.patch('/users/:id', async (req, res, next) => {
           address: '',
         },
         update: {},
+      });
+    }
+    if (updated.role === RESELLER_ROLE) {
+      await ensureResellerProfileForUser({
+        userId: updated.id,
+        createdById: req.user?.id || null,
+        displayName: `${updated.firstName} ${updated.lastName}`.trim(),
       });
     }
 

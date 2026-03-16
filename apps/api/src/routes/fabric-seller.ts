@@ -25,6 +25,10 @@ import {
   readProductEditPolicySettings,
 } from '../utils/product-change-requests';
 import { syncFabricAvailabilityById } from '../utils/product-stock-monitor';
+import {
+  evaluateProductAutomationChecks,
+  readAutomationApprovalSettings,
+} from '../utils/automation-approval';
 
 const router = Router();
 let sellerGovernanceSchemaEnsured = false;
@@ -974,12 +978,58 @@ router.post('/fabrics', async (req, res, next) => {
     });
     await writeFabricPredominantColor(fabric.id, data.predominantColor || null);
 
+    let responseStatus = fabric.status;
+    let responseAvailability = fabric.isAvailable;
+    let automation: any = null;
+    let responseMessage = 'Fabric submitted for review.';
+    try {
+      const automationSettings = (await readAutomationApprovalSettings()).settings;
+      if (automationSettings.enabled && automationSettings.autoRunOnProductSubmit) {
+        const evaluation = await evaluateProductAutomationChecks({
+          productType: 'FABRIC' as any,
+          productId: fabric.id,
+          settingsOverride: automationSettings,
+        });
+        automation = evaluation;
+        if (evaluation.canAutoApprove && automationSettings.autoApproveOnPass) {
+          await prisma.fabric.update({
+            where: { id: fabric.id },
+            data: {
+              status: ProductStatus.APPROVED,
+              isAvailable: true,
+            },
+          });
+          responseStatus = ProductStatus.APPROVED;
+          responseAvailability = true;
+          responseMessage = 'Fabric auto-approved by automation.';
+          automation = { ...evaluation, action: 'AUTO_APPROVED' };
+        } else if (!evaluation.canAutoApprove) {
+          await prisma.fabric.update({
+            where: { id: fabric.id },
+            data: {
+              status: ProductStatus.REJECTED,
+              isAvailable: false,
+            },
+          });
+          responseStatus = ProductStatus.REJECTED;
+          responseAvailability = false;
+          responseMessage = 'Fabric auto-rejected by automation checks.';
+          automation = { ...evaluation, action: 'AUTO_REJECTED' };
+        }
+      }
+    } catch {
+      // Keep upload flow available if automation fails.
+    }
+
     res.status(201).json({
       success: true,
-      message: 'Fabric submitted for review.',
+      message: responseMessage,
       data: {
         ...fabric,
+        status: responseStatus,
+        isAvailable: responseAvailability,
         predominantColor: data.predominantColor ? String(data.predominantColor).trim().toUpperCase() : null,
+        automation,
       },
     });
   } catch (error) {

@@ -1,4 +1,5 @@
 import { UserRole } from './db';
+const RESELLER_ROLE = 'RESELLER_INFLUENCER' as unknown as UserRole;
 
 export const Permissions = {
   ADMIN_ACCESS: 'admin:access',
@@ -7,6 +8,7 @@ export const Permissions = {
   CUSTOMER_ACCESS: 'customer:access',
   SELLER_ACCESS: 'seller:access',
   DESIGNER_ACCESS: 'designer:access',
+  RESELLER_ACCESS: 'reseller:access',
   QA_ACCESS: 'qa:access',
   USERS_READ: 'users:read',
   USERS_MANAGE: 'users:manage',
@@ -119,6 +121,12 @@ export const PERMISSION_CATALOG: PermissionCatalogEntry[] = [
     description: 'Manage exchange rates, currency rules, and overrides.',
   },
   {
+    key: Permissions.RESELLER_ACCESS,
+    label: 'Reseller dashboard access',
+    group: 'CORE',
+    description: 'Access reseller/influencer referral dashboard and commission insights.',
+  },
+  {
     key: Permissions.PAYMENTS_MANAGE,
     label: 'Manage payment integrations',
     group: 'OPERATIONS',
@@ -178,6 +186,7 @@ export const ROLE_HOME_ROUTE: Record<UserRole, string> = {
   [UserRole.CUSTOMER]: '/dashboard',
   [UserRole.FABRIC_SELLER]: '/seller',
   [UserRole.FASHION_DESIGNER]: '/designer',
+  [RESELLER_ROLE]: '/reseller',
   [UserRole.QA_TEAM]: '/qa',
   [UserRole.ADMINISTRATOR]: '/admin',
 };
@@ -202,6 +211,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, PermissionGrant[]> = {
     Permissions.ORDERS_READ_ASSIGNED,
     Permissions.ORDERS_UPDATE_SELF,
     Permissions.UPLOADS_CREATE,
+  ],
+  [RESELLER_ROLE]: [
+    Permissions.RESELLER_ACCESS,
+    Permissions.ORDERS_READ_SELF,
   ],
   [UserRole.QA_TEAM]: [
     Permissions.QA_ACCESS,

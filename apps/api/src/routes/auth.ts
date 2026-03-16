@@ -9,6 +9,7 @@ import { prisma, UserRole, UserStatus } from '../db';
 import { generateToken, authenticate } from '../middleware/auth';
 import { getRolePermissions, ROLE_HOME_ROUTE, sanitizePermissionGrants } from '../rbac';
 import { bootstrapAdminConfig } from '../bootstrap';
+import { attributeReferredUser } from '../utils/referral-program';
 
 const router = Router();
 
@@ -29,6 +30,7 @@ const registerSchema = z.object({
   city: z.string().optional(),
   address: z.string().optional(),
   bio: z.string().optional(),
+  referralCode: z.string().trim().max(80).optional(),
 });
 
 const loginSchema = z.object({
@@ -821,6 +823,15 @@ router.post('/register', async (req, res, next) => {
         },
       });
     }
+    void attributeReferredUser({
+      referralCode: data.referralCode || null,
+      referredUserId: user.id,
+      referredRole: user.role,
+      source: 'REGISTER',
+      metadata: {
+        registrationRole: user.role,
+      },
+    }).catch(() => undefined);
 
     // Only ACTIVE users should receive an authentication token immediately.
     const token = user.status === UserStatus.ACTIVE

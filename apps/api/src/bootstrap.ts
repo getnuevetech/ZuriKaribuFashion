@@ -85,6 +85,28 @@ async function ensureAdminBootstrap() {
   }
 }
 
+async function ensureUserRoleEnumExtensions() {
+  try {
+    await prisma.$executeRawUnsafe(
+      `DO $$
+       BEGIN
+         IF NOT EXISTS (
+           SELECT 1
+           FROM pg_enum e
+           JOIN pg_type t ON t.oid = e.enumtypid
+           WHERE t.typname = 'UserRole'
+             AND e.enumlabel = 'RESELLER_INFLUENCER'
+         ) THEN
+           ALTER TYPE "UserRole" ADD VALUE 'RESELLER_INFLUENCER';
+         END IF;
+       END
+       $$;`
+    );
+  } catch (error) {
+    if (!isSchemaDriftError(error)) throw error;
+  }
+}
+
 async function backfillHomepageSectionData() {
   try {
     const steps = await prisma.howItWorksStep.findMany();
@@ -204,6 +226,7 @@ async function backfillHomepageSectionData() {
 }
 
 export async function runStartupRepairs() {
+  await ensureUserRoleEnumExtensions();
   await ensureAdminBootstrap();
   await backfillHomepageSectionData();
 }

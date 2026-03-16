@@ -4,6 +4,7 @@ export const ROLE_HOME_ROUTE: Record<UserRole, string> = {
   CUSTOMER: '/dashboard',
   FABRIC_SELLER: '/seller',
   FASHION_DESIGNER: '/designer',
+  RESELLER_INFLUENCER: '/reseller',
   QA_TEAM: '/qa',
   ADMINISTRATOR: '/admin',
 };
@@ -50,6 +51,14 @@ export function normalizeRole(role: string | undefined | null): UserRole | null 
   if (normalized === 'QA' || normalized === 'QA_TEAM' || normalized === 'QATEAM') {
     return 'QA_TEAM';
   }
+  if (
+    normalized === 'RESELLER' ||
+    normalized === 'INFLUENCER' ||
+    normalized === 'RESELLER_INFLUENCER' ||
+    normalized === 'RESELLERINFLUENCER'
+  ) {
+    return 'RESELLER_INFLUENCER';
+  }
   if (normalized === 'ADMIN' || normalized === 'ADMINISTRATOR') {
     return 'ADMINISTRATOR';
   }
@@ -57,6 +66,7 @@ export function normalizeRole(role: string | undefined | null): UserRole | null 
     normalized === 'CUSTOMER' ||
     normalized === 'FABRIC_SELLER' ||
     normalized === 'FASHION_DESIGNER' ||
+    normalized === 'RESELLER_INFLUENCER' ||
     normalized === 'QA_TEAM' ||
     normalized === 'ADMINISTRATOR'
   ) {

@@ -40,8 +40,14 @@ import {
   LayoutGrid
 } from 'lucide-react';
 
-type UserRole = 'ADMINISTRATOR' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'CUSTOMER';
-type DashboardType = 'admin' | 'seller' | 'designer' | 'qa' | 'customer';
+type UserRole =
+  | 'ADMINISTRATOR'
+  | 'FABRIC_SELLER'
+  | 'FASHION_DESIGNER'
+  | 'RESELLER_INFLUENCER'
+  | 'QA_TEAM'
+  | 'CUSTOMER';
+type DashboardType = 'admin' | 'seller' | 'designer' | 'reseller' | 'qa' | 'customer';
 
 interface NavItem {
   label: string;
@@ -61,10 +67,12 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Customer Accounts', href: '/admin/customer-accounts', icon: Users },
     { label: 'Administrator Accounts', href: '/admin/administrator-accounts', icon: User },
     { label: 'Vendor Profiles', href: '/admin/vendor-profiles', icon: Tag },
+    { label: 'Reseller/Influencers', href: '/admin/resellers', icon: Users },
     { label: 'Traffic Report', href: '/admin/traffic', icon: Layers },
     { label: 'Measurement Templates', href: '/admin/measurement-templates', icon: Ruler },
     { label: 'Currency Matrix', href: '/admin/currency', icon: DollarSign },
     { label: 'Product Management', href: '/admin/products', icon: Package },
+    { label: 'Automation', href: '/admin/automation/approvals', icon: Sparkles },
     { label: 'Pricing Rules', href: '/admin/pricing', icon: DollarSign },
     { label: 'Promo Codes', href: '/admin/promo-codes', icon: CreditCard },
     { label: 'Payments', href: '/admin/payments', icon: CreditCard },
@@ -104,6 +112,11 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Enterprise', href: '/designer/enterprise', icon: Users },
     { label: 'Profile', href: '/designer/profile', icon: User },
   ],
+  reseller: [
+    { label: 'Dashboard', href: '/reseller', icon: LayoutDashboard },
+    { label: 'Referrals', href: '/reseller?tab=referrals', icon: Users },
+    { label: 'Commissions', href: '/reseller?tab=commissions', icon: DollarSign },
+  ],
   qa: [
     { label: 'Dashboard', href: '/qa', icon: LayoutDashboard },
     { label: 'Orders', href: '/qa?tab=pending', icon: ClipboardCheck },
@@ -123,6 +136,7 @@ const roleLabels: Record<DashboardType, string> = {
   admin: 'Administrator',
   seller: 'Fabric Seller',
   designer: 'Fashion Designer',
+  reseller: 'Reseller / Influencer',
   qa: 'QA Team',
   customer: 'Customer',
 };
@@ -137,6 +151,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isPaymentMenuOpen, setIsPaymentMenuOpen] = useState(true);
   const [isAdminAccountsMenuOpen, setIsAdminAccountsMenuOpen] = useState(true);
   const [isProductManagementMenuOpen, setIsProductManagementMenuOpen] = useState(true);
+  const [isAutomationMenuOpen, setIsAutomationMenuOpen] = useState(true);
   const [isEnterpriseMenuOpen, setIsEnterpriseMenuOpen] = useState(true);
   const [enterpriseRoleManagementAllowed, setEnterpriseRoleManagementAllowed] = useState(false);
   const { user, token, logout } = useAuthStore();
@@ -155,6 +170,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/administrators': ['users:read'],
       '/admin/roles': ['admin:roles:manage', 'users:read'],
       '/admin/vendor-profiles': ['vendor_profiles:read'],
+      '/admin/resellers': ['users:manage'],
       '/admin/activity-logs': ['session_audit:read'],
       '/admin/session-audit': ['session_audit:read'],
       '/admin/traffic': ['traffic:read'],
@@ -165,6 +181,8 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/products/stock-list': ['products:manage'],
       '/admin/product-labels': ['products:manage'],
       '/admin/product-change-requests': ['products:manage'],
+      '/admin/automation/approvals': ['products:manage'],
+      '/admin/automation/ai-integrations': ['products:manage'],
       '/admin/pricing': ['pricing:manage'],
       '/admin/promo-codes': ['pricing:manage'],
       '/admin/payments': ['payments:manage'],
@@ -218,6 +236,10 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Product Configuration', href: '/admin/products/configuration', icon: ChevronRight },
     { label: 'Product Labels', href: '/admin/product-labels', icon: ChevronRight },
     { label: 'Product Change Request', href: '/admin/product-change-requests', icon: ChevronRight },
+  ];
+  const automationSubmenu = [
+    { label: 'Automated Product Approval', href: '/admin/automation/approvals', icon: ChevronRight },
+    { label: 'AI API Integrations', href: '/admin/automation/ai-integrations', icon: ChevronRight },
   ];
   const enterpriseSubmenu =
     userType === 'seller'
@@ -327,6 +349,13 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
           .filter((item) => canAccessAdminNav(item.href.split('?')[0]))
           .map((item) => ({ label: item.label, href: item.href, keywords: ['product', 'catalog', 'labels', 'configuration'] })),
         { prefix: 'Product Management' }
+      );
+      addSearchEntries(
+        entries,
+        automationSubmenu
+          .filter((item) => canAccessAdminNav(item.href))
+          .map((item) => ({ label: item.label, href: item.href, keywords: ['automation', 'ai', 'approval'] })),
+        { prefix: 'Automation' }
       );
       addSearchEntries(
         entries,
@@ -694,6 +723,66 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                     {isAdminAccountsMenuOpen && isSidebarOpen ? (
                       <div className="ml-7 space-y-1">
                         {visibleAdminAccountSubmenu.map((subItem) => {
+                          const subMeta = readHrefMeta(subItem.href);
+                          const subActive =
+                            location.pathname === subMeta.pathname &&
+                            (subMeta.tab ? currentTab === subMeta.tab : !currentTab);
+                          const SubIcon = subItem.icon;
+                          return (
+                            <Link
+                              key={subItem.href}
+                              to={subItem.href}
+                              className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
+                                subActive
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <SubIcon className="h-4 w-4" />
+                              <span>{subItem.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+
+              if (userType === 'admin' && item.href === '/admin/automation/approvals') {
+                const automationMenuActive = location.pathname.startsWith('/admin/automation');
+                const visibleAutomationSubmenu = automationSubmenu.filter((subItem) => canAccessAdminNav(subItem.href));
+                if (visibleAutomationSubmenu.length === 0) {
+                  return null;
+                }
+                return (
+                  <div key={item.href} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsAutomationMenuOpen((prev) => !prev)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
+                        automationMenuActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Icon className="h-5 w-5 flex-shrink-0" />
+                      {isSidebarOpen ? (
+                        <>
+                          <span className="text-sm font-medium">Automation</span>
+                          <span className="ml-auto">
+                            {isAutomationMenuOpen ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </span>
+                        </>
+                      ) : null}
+                    </button>
+                    {isAutomationMenuOpen && isSidebarOpen ? (
+                      <div className="ml-7 space-y-1">
+                        {visibleAutomationSubmenu.map((subItem) => {
                           const subMeta = readHrefMeta(subItem.href);
                           const subActive =
                             location.pathname === subMeta.pathname &&

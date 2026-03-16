@@ -42,6 +42,8 @@ import enterpriseRoutes from './routes/enterprise';
 import adminBackupsRoutes from './routes/admin-backups';
 import productChangeRequestRoutes from './routes/product-change-requests';
 import messageRoutes from './routes/messages';
+import referralRoutes from './routes/referrals';
+import adminAutomationRoutes from './routes/admin-automation';
 import { activityAuditMiddleware } from './middleware/activity-audit';
 import { runStartupRepairs } from './bootstrap';
 
@@ -234,6 +236,9 @@ app.use('/api/admin/enterprise', enterpriseRoutes);
 app.use('/api/admin/backups', adminBackupsRoutes);
 app.use('/api/product-change-requests', productChangeRequestRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/referrals', referralRoutes);
+app.use('/api/admin/referrals', referralRoutes);
+app.use('/api/admin/automation', adminAutomationRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
