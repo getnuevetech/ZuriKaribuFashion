@@ -1967,7 +1967,7 @@ export default function DesignerDashboard() {
       }));
     const suitableFabricIds = designForm.selectedFabricIds.map((fabricId) => ({
       fabricId,
-      yardsNeeded: Number(designForm.yardsByFabricId[fabricId] || 1),
+      yardsNeeded: 1,
     }));
     const predominantColorToken = String(designForm.predominantColor || '').trim().toUpperCase();
     const isApprovedEdit = Boolean(isEditMode && selectedDesign && String(selectedDesign.status || '').toUpperCase() === 'APPROVED');
@@ -2026,10 +2026,6 @@ export default function DesignerDashboard() {
           setDesignError(`You can select up to ${maxSuitableFabricsPerDesign} suitable fabrics for each CTW product.`);
           return;
         }
-        if (suitableFabricIds.some((item) => Number(item.yardsNeeded || 0) < 1)) {
-          setDesignError('Each selected fabric must have yardsNeeded >= 1.');
-          return;
-        }
         payload.suitableFabricIds = suitableFabricIds;
       }
       if (editableFieldSet.has('measurementVariables')) {
@@ -2077,10 +2073,6 @@ export default function DesignerDashboard() {
       }
       if (measurementVariables.length === 0) {
         setDesignError('Select at least one measurement field.');
-        return;
-      }
-      if (suitableFabricIds.some((item) => Number(item.yardsNeeded || 0) < 1)) {
-        setDesignError('Each selected fabric must have yardsNeeded >= 1.');
         return;
       }
       payload.name = designForm.name.trim();
@@ -4667,36 +4659,18 @@ export default function DesignerDashboard() {
                       Add Fabric
                     </Button>
                   </div>
-                  <p className="text-xs text-gray-600">
-                    Selected: {designForm.selectedFabricIds.length}/{maxSuitableFabricsPerDesign} suitable fabrics.
-                  </p>
-
                   <div className="space-y-2">
                     {selectedDesignFabricRows.length === 0 ? (
                       <p className="text-sm text-gray-500">No suitable fabrics selected yet.</p>
                     ) : (
                       selectedDesignFabricRows.map((fabric) => (
-                        <div key={fabric.id} className="grid grid-cols-1 items-center gap-2 rounded border p-2 md:grid-cols-[1fr_120px_96px]">
+                        <div key={fabric.id} className="grid grid-cols-1 items-center gap-2 rounded border p-2 md:grid-cols-[1fr_96px]">
                           <div className="text-sm text-gray-800">
                             <p className="font-medium">{fabric.name}</p>
                             <p className="text-xs text-gray-500">
                               {fabric.materialTypeName} • {fabric.sellerCountry}
                             </p>
                           </div>
-                          <input
-                            type="number"
-                            min="1"
-                            step="1"
-                            value={designForm.yardsByFabricId[fabric.id] || '1'}
-                            onChange={(event) =>
-                              setDesignForm((prev) => ({
-                                ...prev,
-                                yardsByFabricId: { ...prev.yardsByFabricId, [fabric.id]: event.target.value },
-                              }))
-                            }
-                            className="rounded border px-2 py-1 text-sm"
-                            disabled={isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) || isApprovedDesignFieldLocked('suitableFabricIds')}
-                          />
                           <Button
                             type="button"
                             variant="outline"
