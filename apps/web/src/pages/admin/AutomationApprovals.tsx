@@ -28,6 +28,7 @@ export default function AdminAutomationApprovalsPage() {
     key: '',
     label: '',
     requiresAi: false,
+    allowAiEdits: false,
   });
   const [evaluationResult, setEvaluationResult] = useState<any>(null);
 
@@ -150,12 +151,13 @@ export default function AdminAutomationApprovalsPage() {
               label,
               enabled: true,
               requiresAi: Boolean(newCriterion.requiresAi),
+              allowAiEdits: Boolean(newCriterion.allowAiEdits),
             },
           ],
         },
       };
     });
-    setNewCriterion({ key: '', label: '', requiresAi: false });
+    setNewCriterion({ key: '', label: '', requiresAi: false, allowAiEdits: false });
   };
 
   if (loading) {
@@ -248,7 +250,7 @@ export default function AdminAutomationApprovalsPage() {
             </button>
           ))}
         </div>
-        <div className="mt-3 grid gap-2 rounded border p-3 md:grid-cols-[1fr_2fr_auto_auto]">
+        <div className="mt-3 grid gap-2 rounded border p-3 md:grid-cols-[1fr_2fr_auto_auto_auto]">
           <input
             className="rounded border px-3 py-2 text-sm"
             placeholder="criterion_key"
@@ -269,36 +271,100 @@ export default function AdminAutomationApprovalsPage() {
             />
             Requires AI
           </label>
+          <label className="inline-flex items-center gap-2 rounded border px-3 py-2 text-xs">
+            <input
+              type="checkbox"
+              checked={newCriterion.allowAiEdits}
+              onChange={(event) => setNewCriterion((prev) => ({ ...prev, allowAiEdits: event.target.checked }))}
+            />
+            Allow AI edits
+          </label>
           <Button variant="outline" onClick={addCriterion}>
             Add Criterion
           </Button>
         </div>
         <div className="mt-3 space-y-2">
           {criteriaRows.map((criterion: any) => (
-            <label
+            <div
               key={criterion.key}
-              className="flex items-center justify-between gap-3 rounded border px-3 py-2 text-sm text-gray-700"
+              className="rounded border px-3 py-2 text-sm text-gray-700"
             >
-              <div>
-                <p className="font-medium text-gray-900">{criterion.label || criterion.key}</p>
-                <p className="text-xs text-gray-500">{criterion.requiresAi ? 'Requires AI provider' : 'Rule-based check'}</p>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-medium text-gray-900">{criterion.label || criterion.key}</p>
+                  <p className="font-mono text-[11px] text-gray-500">{criterion.key}</p>
+                  <p className="text-xs text-gray-500">{criterion.requiresAi ? 'Requires AI provider' : 'Rule-based check'}</p>
+                </div>
+                <div className="grid gap-2 text-xs md:grid-cols-3">
+                  <label className="inline-flex items-center gap-2 rounded border px-2 py-1">
+                    <input
+                      type="checkbox"
+                      checked={criterion.enabled !== false}
+                      onChange={(event) => {
+                        setSettings((prev: any) => ({
+                          ...(prev || {}),
+                          criteria: {
+                            ...(prev?.criteria || {}),
+                            [activeCriteriaScope]: (prev?.criteria?.[activeCriteriaScope] || []).map((row: any) =>
+                              row.key === criterion.key ? { ...row, enabled: event.target.checked } : row
+                            ),
+                          },
+                        }));
+                      }}
+                    />
+                    Enabled
+                  </label>
+                  <label className="inline-flex items-center gap-2 rounded border px-2 py-1">
+                    <input
+                      type="checkbox"
+                      checked={criterion.requiresAi === true}
+                      onChange={(event) => {
+                        setSettings((prev: any) => ({
+                          ...(prev || {}),
+                          criteria: {
+                            ...(prev?.criteria || {}),
+                            [activeCriteriaScope]: (prev?.criteria?.[activeCriteriaScope] || []).map((row: any) =>
+                              row.key === criterion.key
+                                ? {
+                                    ...row,
+                                    requiresAi: event.target.checked,
+                                    allowAiEdits: event.target.checked ? row.allowAiEdits === true : false,
+                                  }
+                                : row
+                            ),
+                          },
+                        }));
+                      }}
+                    />
+                    Requires AI
+                  </label>
+                  <label className="inline-flex items-center gap-2 rounded border px-2 py-1">
+                    <input
+                      type="checkbox"
+                      checked={criterion.allowAiEdits === true}
+                      disabled={criterion.requiresAi !== true}
+                      onChange={(event) => {
+                        setSettings((prev: any) => ({
+                          ...(prev || {}),
+                          criteria: {
+                            ...(prev?.criteria || {}),
+                            [activeCriteriaScope]: (prev?.criteria?.[activeCriteriaScope] || []).map((row: any) =>
+                              row.key === criterion.key ? { ...row, allowAiEdits: event.target.checked } : row
+                            ),
+                          },
+                        }));
+                      }}
+                    />
+                    Allow AI edits
+                  </label>
+                </div>
               </div>
-              <input
-                type="checkbox"
-                checked={criterion.enabled !== false}
-                onChange={(event) => {
-                  setSettings((prev: any) => ({
-                    ...(prev || {}),
-                    criteria: {
-                      ...(prev?.criteria || {}),
-                      [activeCriteriaScope]: (prev?.criteria?.[activeCriteriaScope] || []).map((row: any) =>
-                        row.key === criterion.key ? { ...row, enabled: event.target.checked } : row
-                      ),
-                    },
-                  }));
-                }}
-              />
-            </label>
+              {criterion.allowAiEdits === true ? (
+                <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                  AI can directly update mapped product fields for this criterion and include before/after comparison.
+                </p>
+              ) : null}
+            </div>
           ))}
           {criteriaRows.length === 0 ? <p className="text-sm text-gray-500">No criteria configured for this type.</p> : null}
         </div>
@@ -408,6 +474,38 @@ export default function AdminAutomationApprovalsPage() {
               </div>
             ))}
           </div>
+          {Array.isArray(evaluationResult.changeReport) && evaluationResult.changeReport.length > 0 ? (
+            <div className="mt-4 rounded border border-amber-200 bg-amber-50 p-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+                AI Applied Changes (Comparison Report)
+              </h3>
+              <div className="mt-2 space-y-2">
+                {evaluationResult.changeReport.map((entry: any, index: number) => (
+                  <div key={`${entry.key}-${entry.field}-${index}`} className="rounded border bg-white px-3 py-2 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-gray-900">
+                        {entry.label || entry.key} • Field: {entry.field}
+                      </p>
+                      <Badge variant={String(entry.status || '').toUpperCase() === 'APPLIED' ? 'green' : 'yellow'}>
+                        {String(entry.status || '').toUpperCase()}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-gray-600">
+                      <span className="font-medium text-gray-800">Before:</span> {String(entry.beforeValue || '-')}
+                    </p>
+                    <p className="mt-1 text-gray-600">
+                      <span className="font-medium text-gray-800">After:</span> {String(entry.afterValue || '-')}
+                    </p>
+                    {entry.reason ? (
+                      <p className="mt-1 text-gray-500">
+                        <span className="font-medium text-gray-700">Reason:</span> {String(entry.reason)}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -28,6 +28,7 @@ export type AutomationCriterion = {
   label: string;
   enabled: boolean;
   requiresAi: boolean;
+  allowAiEdits?: boolean;
 };
 
 export type ProductAutomationCriteria = {
@@ -66,6 +67,16 @@ export type ProductAutomationOutcome = {
   summaryMessage: string;
   report: AutomationCheckReportRow[];
   updatedAt: string | null;
+};
+
+export type AutomationAppliedChange = {
+  key: string;
+  label: string;
+  field: string;
+  beforeValue: string;
+  afterValue: string;
+  status: 'APPLIED' | 'SKIPPED';
+  reason: string;
 };
 
 const parseObject = (value: unknown): Record<string, unknown> => {
@@ -113,6 +124,27 @@ const truncateText = (value: string, max = 280) => {
   const normalized = String(value || '').trim();
   if (normalized.length <= max) return normalized;
   return `${normalized.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+};
+
+const parseFirstJsonObject = (value: string): Record<string, unknown> | null => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const tryParse = (input: string): Record<string, unknown> | null => {
+    try {
+      const parsed = JSON.parse(input);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  };
+  const direct = tryParse(raw);
+  if (direct) return direct;
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    return tryParse(raw.slice(start, end + 1));
+  }
+  return null;
 };
 
 const correctionRowsFromReport = (report: AutomationCheckReportRow[]) =>
@@ -252,7 +284,11 @@ const DEFAULT_SETTINGS: AutomationApprovalSettings = {
 };
 
 const normalizeCriteria = (value: unknown, fallback: AutomationCriterion[]) => {
-  if (!Array.isArray(value)) return fallback;
+  const fallbackRows = fallback.map((entry) => ({
+    ...entry,
+    allowAiEdits: entry.allowAiEdits === true,
+  }));
+  if (!Array.isArray(value)) return fallbackRows;
   const rows = value
     .map((entry) => parseObject(entry))
     .map((row) => ({
@@ -260,9 +296,10 @@ const normalizeCriteria = (value: unknown, fallback: AutomationCriterion[]) => {
       label: String(row.label || '').trim(),
       enabled: row.enabled !== false,
       requiresAi: row.requiresAi === true,
+      allowAiEdits: row.allowAiEdits === true,
     }))
     .filter((row) => row.key.length > 0);
-  return rows.length > 0 ? rows : fallback;
+  return rows.length > 0 ? rows : fallbackRows;
 };
 
 export const normalizeAutomationApprovalSettings = (value: unknown): AutomationApprovalSettings => {
@@ -955,6 +992,7 @@ export const evaluateProductAutomationChecks = async (input: {
           message: 'Enable automation in settings to run product approval checks.',
         },
       ],
+      changeReport: [] as AutomationAppliedChange[],
     };
   }
 
@@ -967,8 +1005,91 @@ export const evaluateProductAutomationChecks = async (input: {
     report.push(row);
   };
 
+  const changeReport: AutomationAppliedChange[] = [];
+  const stagedProductFields: Record<string, string> = {};
+  let persistStagedProductEdits: null | ((updates: Record<string, string>) => Promise<void>) = null;
+  const readStagedProductField = (field: string) => String(stagedProductFields[field] || '');
+  const criterionEditRule: Record<string, { field: 'name' | 'description'; minLength: number; maxLength: number }> = {
+    name_grammar: { field: 'name', minLength: 3, maxLength: 160 },
+    description_grammar: { field: 'description', minLength: 24, maxLength: 4000 },
+  };
+
+  const requestAiFieldEdit = async (params: { row: AutomationCheckReportRow }) => {
+    const rule = criterionEditRule[params.row.key];
+    if (!rule) {
+      return null as {
+        applied: boolean;
+        before: string;
+        after: string;
+        reason: string;
+      } | null;
+    }
+    const before = readStagedProductField(rule.field);
+    if (!before.trim()) {
+      return { applied: false, before, after: before, reason: 'No existing value available for AI edit.' };
+    }
+    const execution = await executeAutomationAiFunction({
+      settings,
+      functionKey: 'text_grammar_enhancement',
+      prompt: `You are correcting a product ${rule.field} field.
+
+Criterion: ${params.row.label}
+Current value:
+"""${before}"""
+
+Return STRICT JSON only:
+{"updatedValue":"<corrected value>","reason":"<short reason>"}
+Rules:
+- Keep original meaning and product intent.
+- Avoid adding claims not present in the original text.
+- Keep concise, sales-friendly wording.
+- Do not exceed ${rule.maxLength} characters.`,
+      systemPrompt: 'You are a product content correction assistant. Return strict JSON only.',
+    });
+    if (execution.status !== 'OK') {
+      return {
+        applied: false,
+        before,
+        after: before,
+        reason:
+          execution.status === 'NO_PROVIDER'
+            ? execution.reason
+            : `AI edit execution failed: ${execution.reason}`,
+      };
+    }
+    const parsed = parseFirstJsonObject(execution.output);
+    const candidate =
+      String(parsed?.updatedValue || parsed?.value || parsed?.updated || '').trim() ||
+      String(execution.output || '').trim();
+    const normalized = candidate.replace(/\s+/g, ' ').trim().slice(0, rule.maxLength);
+    if (normalized.length < rule.minLength) {
+      return {
+        applied: false,
+        before,
+        after: before,
+        reason: `AI suggestion too short for ${rule.field}.`,
+      };
+    }
+    if (normalized === before) {
+      return {
+        applied: false,
+        before,
+        after: before,
+        reason: 'AI suggestion is identical to current value.',
+      };
+    }
+    const reason = String(parsed?.reason || '').trim() || `AI updated ${rule.field}.`;
+    return {
+      applied: true,
+      before,
+      after: normalized,
+      reason,
+    };
+  };
+
   const applyAiExecution = async () => {
     const enhanced: AutomationCheckReportRow[] = [];
+    const pendingUpdates: Record<string, string> = {};
     for (const row of report) {
       const criterion = criteria.find((entry) => entry.key === row.key);
       if (!criterion || !criterion.requiresAi || row.status === 'SKIPPED') {
@@ -992,15 +1113,14 @@ Return concise analysis and correction guidance in plain text.`;
         systemPrompt:
           'You are an e-commerce quality automation evaluator. Return concise actionable analysis only.',
       });
+      let nextRow: AutomationCheckReportRow;
       if (execution.status === 'NO_PROVIDER') {
-        enhanced.push({
+        nextRow = {
           ...row,
           status: 'NEEDS_AI',
           message: `AI provider missing: ${execution.reason}`,
-        });
-        continue;
-      }
-      if (execution.status === 'ERROR') {
+        };
+      } else if (execution.status === 'ERROR') {
         if (row.key === 'image_quality') {
           const regenerate = await executeAutomationAiFunction({
             settings,
@@ -1010,34 +1130,81 @@ Return concise analysis and correction guidance in plain text.`;
               'You are an image regeneration assistant for e-commerce catalog quality improvement.',
           });
           if (regenerate.status === 'OK') {
-            enhanced.push({
+            nextRow = {
               ...row,
               status: row.status === 'FAIL' ? 'FAIL' : 'PASS',
               message: `${row.message} AI regeneration fallback: ${regenerate.output}`,
-            });
-            continue;
+            };
+          } else {
+            nextRow = {
+              ...row,
+              status: 'FAIL',
+              message: `${row.message} AI execution error: ${execution.reason}`,
+            };
           }
+        } else {
+          nextRow = {
+            ...row,
+            status: 'FAIL',
+            message: `${row.message} AI execution error: ${execution.reason}`,
+          };
         }
-        enhanced.push({
-          ...row,
-          status: 'FAIL',
-          message: `${row.message} AI execution error: ${execution.reason}`,
-        });
-        continue;
-      }
-      if (row.status === 'FAIL') {
-        enhanced.push({
+      } else if (row.status === 'FAIL') {
+        nextRow = {
           ...row,
           status: 'FAIL',
           message: `${row.message} AI guidance: ${execution.output}`,
-        });
-        continue;
+        };
+      } else {
+        nextRow = {
+          ...row,
+          status: 'PASS',
+          message: `${row.message} AI verification: ${execution.output}`,
+        };
       }
-      enhanced.push({
-        ...row,
-        status: 'PASS',
-        message: `${row.message} AI verification: ${execution.output}`,
-      });
+      if (
+        criterion.allowAiEdits === true &&
+        criterion.requiresAi === true &&
+        nextRow.status === 'FAIL' &&
+        persistStagedProductEdits
+      ) {
+        const editResult = await requestAiFieldEdit({ row: nextRow });
+        if (editResult) {
+          const rule = criterionEditRule[row.key];
+          if (editResult.applied && rule) {
+            pendingUpdates[rule.field] = editResult.after;
+            stagedProductFields[rule.field] = editResult.after;
+            nextRow = {
+              ...nextRow,
+              status: 'PASS',
+              message: `${nextRow.message} AI auto-edit applied to ${rule.field}.`,
+            };
+            changeReport.push({
+              key: row.key,
+              label: row.label,
+              field: rule.field,
+              beforeValue: editResult.before,
+              afterValue: editResult.after,
+              status: 'APPLIED',
+              reason: editResult.reason,
+            });
+          } else if (rule) {
+            changeReport.push({
+              key: row.key,
+              label: row.label,
+              field: rule.field,
+              beforeValue: editResult.before,
+              afterValue: editResult.after,
+              status: 'SKIPPED',
+              reason: editResult.reason,
+            });
+          }
+        }
+      }
+      enhanced.push(nextRow);
+    }
+    if (persistStagedProductEdits && Object.keys(pendingUpdates).length > 0) {
+      await persistStagedProductEdits(pendingUpdates);
     }
     return enhanced;
   };
@@ -1062,6 +1229,7 @@ Return concise analysis and correction guidance in plain text.`;
             message: 'Fabric product was not found.',
           },
         ],
+        changeReport: [] as AutomationAppliedChange[],
       };
     }
     const peerAvgRows = await prisma.$queryRawUnsafe<Array<{ avgPrice: number }>>(
@@ -1076,6 +1244,18 @@ Return concise analysis and correction guidance in plain text.`;
     const peerAverage = Number(peerAvgRows?.[0]?.avgPrice || 0);
     const workflow = await readOrderWorkflowSettings();
     const platformMinYards = Math.max(1, Number(workflow.orderLimits?.minFabricYardsPerOrder || 3));
+    stagedProductFields.name = String(product.name || '').trim();
+    stagedProductFields.description = String(product.description || '').trim();
+    persistStagedProductEdits = async (updates) => {
+      const payload: Record<string, unknown> = {};
+      if (typeof updates.name === 'string') payload.name = updates.name;
+      if (typeof updates.description === 'string') payload.description = updates.description;
+      if (Object.keys(payload).length === 0) return;
+      await prisma.fabric.update({
+        where: { id: product.id },
+        data: payload as any,
+      });
+    };
     aiContextSummary = JSON.stringify({
       productType: 'FABRIC',
       id: product.id,
@@ -1172,6 +1352,7 @@ Return concise analysis and correction guidance in plain text.`;
             message: 'Ready-to-wear product was not found.',
           },
         ],
+        changeReport: [] as AutomationAppliedChange[],
       };
     }
     const peerAvgRows = await prisma.$queryRawUnsafe<Array<{ avgPrice: number }>>(
@@ -1184,6 +1365,18 @@ Return concise analysis and correction guidance in plain text.`;
       product.id
     );
     const peerAverage = Number(peerAvgRows?.[0]?.avgPrice || 0);
+    stagedProductFields.name = String(product.name || '').trim();
+    stagedProductFields.description = String(product.description || '').trim();
+    persistStagedProductEdits = async (updates) => {
+      const payload: Record<string, unknown> = {};
+      if (typeof updates.name === 'string') payload.name = updates.name;
+      if (typeof updates.description === 'string') payload.description = updates.description;
+      if (Object.keys(payload).length === 0) return;
+      await prisma.readyToWear.update({
+        where: { id: product.id },
+        data: payload as any,
+      });
+    };
     aiContextSummary = JSON.stringify({
       productType: 'READY_TO_WEAR',
       id: product.id,
@@ -1269,6 +1462,7 @@ Return concise analysis and correction guidance in plain text.`;
             message: 'Design product was not found.',
           },
         ],
+        changeReport: [] as AutomationAppliedChange[],
       };
     }
     const peerAvgRows = await prisma.$queryRawUnsafe<Array<{ avgPrice: number }>>(
@@ -1281,6 +1475,18 @@ Return concise analysis and correction guidance in plain text.`;
       product.id
     );
     const peerAverage = Number(peerAvgRows?.[0]?.avgPrice || 0);
+    stagedProductFields.name = String(product.name || '').trim();
+    stagedProductFields.description = String(product.description || '').trim();
+    persistStagedProductEdits = async (updates) => {
+      const payload: Record<string, unknown> = {};
+      if (typeof updates.name === 'string') payload.name = updates.name;
+      if (typeof updates.description === 'string') payload.description = updates.description;
+      if (Object.keys(payload).length === 0) return;
+      await prisma.design.update({
+        where: { id: product.id },
+        data: payload as any,
+      });
+    };
     aiContextSummary = JSON.stringify({
       productType: 'DESIGN',
       id: product.id,
@@ -1371,6 +1577,7 @@ Return concise analysis and correction guidance in plain text.`;
     canAutoApprove,
     status: canAutoApprove ? ('PASS' as const) : ('REVIEW_REQUIRED' as const),
     report: enhancedReport,
+    changeReport,
   };
 };
 
