@@ -22,6 +22,13 @@ export default function Cart() {
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(false);
 
+  const resolveCartItemPath = (item: any) => {
+    if (item.kind === 'READY_TO_WEAR' && item.readyToWearId) return `/ready-to-wear/${item.readyToWearId}`;
+    if (item.kind === 'FABRIC_ONLY' && item.fabricId) return `/fabrics/${item.fabricId}`;
+    if (item.kind === 'CUSTOM_DESIGN' && item.designId) return `/designs/${item.designId}`;
+    return '';
+  };
+
   const handleApplyPromo = () => {
     if (promoCode.trim()) {
       setPromoApplied(true);
@@ -77,11 +84,19 @@ export default function Cart() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
-            {items.map((item, index) => (
+            {items.map((item, index) => {
+              const productPath = resolveCartItemPath(item);
+              return (
               <div key={index} className="bg-white rounded-xl p-6 shadow-sm border">
                 <div className="flex gap-4">
                   {/* Images */}
-                  <div className="flex-shrink-0 relative">
+                  <button
+                    type="button"
+                    onClick={() => productPath && navigate(productPath)}
+                    disabled={!productPath}
+                    className="flex-shrink-0 relative text-left disabled:cursor-default"
+                    title={productPath ? 'View product details' : undefined}
+                  >
                     {item.kind === 'READY_TO_WEAR' ? (
                       <img
                         src={item.productImage}
@@ -110,19 +125,34 @@ export default function Cart() {
                         ) : null}
                       </>
                     )}
-                  </div>
+                  </button>
 
                   {/* Details */}
                   <div className="flex-1">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="font-semibold text-gray-900">
-                          {item.kind === 'READY_TO_WEAR'
-                            ? item.productName
-                            : item.kind === 'FABRIC_ONLY'
-                              ? item.fabricName
-                              : item.designName}
-                        </h3>
+                        {productPath ? (
+                          <button
+                            type="button"
+                            onClick={() => navigate(productPath)}
+                            className="text-left font-semibold text-gray-900 hover:underline"
+                            title="View product details"
+                          >
+                            {item.kind === 'READY_TO_WEAR'
+                              ? item.productName
+                              : item.kind === 'FABRIC_ONLY'
+                                ? item.fabricName
+                                : item.designName}
+                          </button>
+                        ) : (
+                          <h3 className="font-semibold text-gray-900">
+                            {item.kind === 'READY_TO_WEAR'
+                              ? item.productName
+                              : item.kind === 'FABRIC_ONLY'
+                                ? item.fabricName
+                                : item.designName}
+                          </h3>
+                        )}
                         <p className="text-sm text-gray-500">
                           by {item.kind === 'FABRIC_ONLY' ? item.sellerName : item.designerName}
                         </p>
@@ -299,7 +329,7 @@ export default function Cart() {
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
 
             <button
               onClick={clearCart}

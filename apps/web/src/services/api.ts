@@ -168,6 +168,61 @@ const getCheckoutPaymentDebugInfo = (): CheckoutPaymentDebugInfo | null => {
 
 const STATIC_COUNTRY_NAMES = getCountryOptions().map((entry) => String(entry.name || '').trim()).filter(Boolean);
 
+const normalizeApiImageObjectList = (images: unknown): Array<{ url: string }> =>
+  (Array.isArray(images) ? images : [])
+    .map((entry) => {
+      if (typeof entry === 'string') return entry;
+      if (entry && typeof entry === 'object') return String((entry as any).url || '');
+      return '';
+    })
+    .map((entry) => resolveApiAssetUrl(entry))
+    .filter(Boolean)
+    .map((url) => ({ url }));
+
+const normalizeSellerFabricsResponse = (payload: any) => {
+  if (!payload || !payload.success || !Array.isArray(payload.data)) return payload;
+  return {
+    ...payload,
+    data: payload.data.map((item: any) => ({
+      ...item,
+      images: normalizeApiImageObjectList(item?.images),
+    })),
+  };
+};
+
+const normalizeDesignerDesignsResponse = (payload: any) => {
+  if (!payload || !payload.success || !Array.isArray(payload.data)) return payload;
+  return {
+    ...payload,
+    data: payload.data.map((item: any) => ({
+      ...item,
+      images: normalizeApiImageObjectList(item?.images),
+      suitableFabrics: Array.isArray(item?.suitableFabrics)
+        ? item.suitableFabrics.map((entry: any) => ({
+            ...entry,
+            fabric: entry?.fabric
+              ? {
+                  ...entry.fabric,
+                  images: normalizeApiImageObjectList(entry.fabric.images),
+                }
+              : entry?.fabric,
+          }))
+        : item?.suitableFabrics,
+    })),
+  };
+};
+
+const normalizeDesignerReadyToWearResponse = (payload: any) => {
+  if (!payload || !payload.success || !Array.isArray(payload.data)) return payload;
+  return {
+    ...payload,
+    data: payload.data.map((item: any) => ({
+      ...item,
+      images: normalizeApiImageObjectList(item?.images),
+    })),
+  };
+};
+
 async function readSellerProfileCompletionWithFallback<T>() {
   let lastError: unknown = null;
   for (const path of ['/fabric-seller/profile-completion', '/seller/profile-completion']) {
@@ -200,7 +255,8 @@ async function readSellerFabricsWithFallback<T>() {
   let lastError: unknown = null;
   for (const path of ['/fabric-seller/fabrics', '/seller/fabrics']) {
     try {
-      return await apiService.get<T>(path, noCacheRequestConfig());
+      const response = await apiService.get<any>(path, noCacheRequestConfig());
+      return normalizeSellerFabricsResponse(response) as T;
     } catch (error) {
       lastError = error;
       if (isRetryableRouteError(error)) continue;
@@ -293,7 +349,8 @@ async function readDesignerDesignsWithFallback<T>() {
   let lastError: unknown = null;
   for (const path of ['/designer/designs', '/fashion-designer/designs']) {
     try {
-      return await apiService.get<T>(path, noCacheRequestConfig());
+      const response = await apiService.get<any>(path, noCacheRequestConfig());
+      return normalizeDesignerDesignsResponse(response) as T;
     } catch (error) {
       lastError = error;
       if (isRetryableRouteError(error)) continue;
@@ -307,7 +364,8 @@ async function readDesignerReadyToWearWithFallback<T>() {
   let lastError: unknown = null;
   for (const path of ['/designer/ready-to-wear', '/fashion-designer/ready-to-wear']) {
     try {
-      return await apiService.get<T>(path, noCacheRequestConfig());
+      const response = await apiService.get<any>(path, noCacheRequestConfig());
+      return normalizeDesignerReadyToWearResponse(response) as T;
     } catch (error) {
       lastError = error;
       if (isRetryableRouteError(error)) continue;
@@ -1673,9 +1731,21 @@ async function readDesignerFabricOptionsWithFallback<T>(params?: {
 }) {
   let lastError: unknown = null;
   try {
-    return await apiService.get<T>('/designer/fabric-options', {
+    const response = await apiService.get<any>('/designer/fabric-options', {
       params: { ...(params || {}), _r: Date.now() },
     });
+    if (!response?.success || !response?.data) return response as T;
+    const rows = Array.isArray(response.data?.fabrics) ? response.data.fabrics : [];
+    return {
+      ...response,
+      data: {
+        ...response.data,
+        fabrics: rows.map((entry: any) => ({
+          ...entry,
+          image: resolveApiAssetUrl(entry?.image || entry?.images?.[0]?.url || entry?.images?.[0] || ''),
+        })),
+      },
+    } as T;
   } catch (error) {
     lastError = error;
     if (!isRetryableRouteError(error)) throw error;
@@ -1693,7 +1763,7 @@ async function readDesignerFabricOptionsWithFallback<T>(params?: {
     sellerCountry: String(entry?.seller?.country || '').trim(),
     sellerName: String(entry?.seller?.businessName || 'Fabric Seller').trim(),
     priceUsd: Number(entry?.finalPrice || entry?.sellerPrice || 0),
-    image: String(entry?.images?.[0]?.url || '').trim(),
+    image: resolveApiAssetUrl(String(entry?.images?.[0]?.url || '').trim()),
   }));
   const profileCompletion = await readDesignerProfileCompletionWithFallback<any>().catch(() => null);
   const homeCountry = String(profileCompletion?.data?.profile?.country || '').trim();
@@ -4261,7 +4331,7 @@ const productsApi = {
   getMaterials: () =>
     apiService.get<{ success: boolean; data: any[] }>('/products/materials'),
 
-  getFabrics: (params?: {
+  getFabrics: async (params?: {
     country?: string;
     materialTypeId?: string;
     color?: string;
@@ -4269,8 +4339,23 @@ const productsApi = {
     search?: string;
     page?: number;
     limit?: number;
-  }) =>
-    apiService.get<{ success: boolean; data: { fabrics: any[]; pagination: any } }>('/products/fabrics', { params }),
+  }) => {
+    const response = await apiService.get<{ success: boolean; data: { fabrics: any[]; pagination: any } }>('/products/fabrics', {
+      params,
+    });
+    if (!response?.success) return response;
+    const rows = Array.isArray(response.data?.fabrics) ? response.data.fabrics : [];
+    return {
+      ...response,
+      data: {
+        ...(response.data || {}),
+        fabrics: rows.map((row: any) => ({
+          ...row,
+          images: normalizeImageObjects(row?.images),
+        })),
+      },
+    };
+  },
 
   getFabric: async (id: string) => {
     const response = await apiService.get<{ success: boolean; data: any }>(`/products/fabrics/${id}`);
@@ -4290,7 +4375,7 @@ const productsApi = {
     };
   },
 
-  getDesigns: (params?: {
+  getDesigns: async (params?: {
     categoryId?: string;
     country?: string;
     materialTypeId?: string;
@@ -4300,8 +4385,23 @@ const productsApi = {
     search?: string;
     page?: number;
     limit?: number;
-  }) =>
-    apiService.get<{ success: boolean; data: { designs: any[]; pagination: any } }>('/products/designs', { params }),
+  }) => {
+    const response = await apiService.get<{ success: boolean; data: { designs: any[]; pagination: any } }>('/products/designs', {
+      params,
+    });
+    if (!response?.success) return response;
+    const rows = Array.isArray(response.data?.designs) ? response.data.designs : [];
+    return {
+      ...response,
+      data: {
+        ...(response.data || {}),
+        designs: rows.map((row: any) => ({
+          ...row,
+          images: normalizeImageObjects(row?.images),
+        })),
+      },
+    };
+  },
 
   getDesign: async (id: string) => {
     const response = await apiService.get<{ success: boolean; data: any }>(`/products/designs/${id}`);
@@ -4321,7 +4421,7 @@ const productsApi = {
     };
   },
 
-  getReadyToWear: (params?: {
+  getReadyToWear: async (params?: {
     categoryId?: string;
     country?: string;
     material?: string;
@@ -4331,8 +4431,24 @@ const productsApi = {
     search?: string;
     page?: number;
     limit?: number;
-  }) =>
-    apiService.get<{ success: boolean; data: { products: any[]; pagination: any } }>('/products/ready-to-wear', { params }),
+  }) => {
+    const response = await apiService.get<{ success: boolean; data: { products: any[]; pagination: any } }>(
+      '/products/ready-to-wear',
+      { params }
+    );
+    if (!response?.success) return response;
+    const rows = Array.isArray(response.data?.products) ? response.data.products : [];
+    return {
+      ...response,
+      data: {
+        ...(response.data || {}),
+        products: rows.map((row: any) => ({
+          ...row,
+          images: normalizeImageObjects(row?.images),
+        })),
+      },
+    };
+  },
 
   getReadyToWearProduct: async (id: string) => {
     const response = await apiService.get<{ success: boolean; data: any }>(`/products/ready-to-wear/${id}`);
@@ -5848,13 +5964,30 @@ const adminApi = {
     phone?: string;
   }) => createMinimalVendorWithFallback<{ success: boolean; data: any; message?: string }>(data),
 
-  getProducts: (params?: {
+  getProducts: async (params?: {
     search?: string;
     status?: string;
     type?: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
     page?: number;
     limit?: number;
-  }) => apiService.get<{ success: boolean; data: { products: any[]; pagination: any } }>('/admin/products', { params }),
+  }) => {
+    const response = await apiService.get<{ success: boolean; data: { products: any[]; pagination: any } }>('/admin/products', {
+      params,
+    });
+    if (!response?.success) return response;
+    const rows = Array.isArray(response.data?.products) ? response.data.products : [];
+    return {
+      ...response,
+      data: {
+        ...(response.data || {}),
+        products: rows.map((row: any) => ({
+          ...row,
+          images: normalizeImageObjects(row?.images),
+          image: resolveApiAssetUrl(row?.image || row?.images?.[0]?.url || row?.images?.[0] || ''),
+        })),
+      },
+    };
+  },
 
   getProductOptions: () =>
     apiService.get<{
