@@ -2075,7 +2075,9 @@ async function deleteAdminPaymentIntegrationWithFallback<T>(providerKey: string)
   } as T;
 }
 
-async function readPaymentOptionsWithFallback<T>(params?: { useCase?: 'CHECKOUT' | 'FEATURED' | 'ENTERPRISE' }) {
+async function readPaymentOptionsWithFallback<T>(params?: {
+  useCase?: 'CHECKOUT' | 'FEATURED' | 'ENTERPRISE' | 'WITHDRAWAL';
+}) {
   const requestedUseCase = String(params?.useCase || '').trim().toUpperCase();
   const useCase =
     requestedUseCase === 'FEATURED' || requestedUseCase === 'ENTERPRISE' ? requestedUseCase : 'CHECKOUT';
@@ -2103,7 +2105,7 @@ async function readPaymentOptionsWithFallback<T>(params?: { useCase?: 'CHECKOUT'
             ? String(configured.enabledUseCases)
                 .split(',')
                 .map((entry) => entry.trim())
-            : ['CHECKOUT', 'FEATURED', 'ENTERPRISE'];
+            : ['CHECKOUT', 'FEATURED', 'ENTERPRISE', 'WITHDRAWAL'];
         const normalized = rawUseCases
           .map((entry) => String(entry || '').trim().toUpperCase())
           .filter(Boolean);
@@ -2127,7 +2129,7 @@ async function readPaymentOptionsWithFallback<T>(params?: { useCase?: 'CHECKOUT'
           enabledUseCases:
             provider?.configValues && Array.isArray(provider.configValues.enabledUseCases)
               ? provider.configValues.enabledUseCases
-              : ['CHECKOUT', 'FEATURED', 'ENTERPRISE'],
+              : ['CHECKOUT', 'FEATURED', 'ENTERPRISE', 'WITHDRAWAL'],
           publicConfig,
         };
       });
@@ -6697,6 +6699,12 @@ const adminApi = {
     platformFeePercent?: number;
     withdrawalOptions?: string[];
     payoutIntegrationProviders?: string[];
+    countryWithdrawalRules?: Array<{
+      country: string;
+      withdrawalOptions?: string[];
+      payoutIntegrationProviders?: string[];
+      notes?: string;
+    }>;
     notes?: string;
   }) => apiService.put<{ success: boolean; data: any; message?: string }>('/payments/admin/vendor-config', data),
 
@@ -7516,7 +7524,7 @@ const qaApi = {
 const paymentsApi = {
   getLastCreateSessionDebugInfo: () => getCheckoutPaymentDebugInfo(),
 
-  getOptions: (params?: { useCase?: 'CHECKOUT' | 'FEATURED' | 'ENTERPRISE' }) =>
+  getOptions: (params?: { useCase?: 'CHECKOUT' | 'FEATURED' | 'ENTERPRISE' | 'WITHDRAWAL' }) =>
     readPaymentOptionsWithFallback<{
       success: boolean;
       data: {
@@ -7525,7 +7533,7 @@ const paymentsApi = {
           displayName: string;
           checkoutType: 'INLINE' | 'REDIRECT';
           mode: 'TEST' | 'LIVE';
-          enabledUseCases?: Array<'CHECKOUT' | 'FEATURED' | 'ENTERPRISE'>;
+          enabledUseCases?: Array<'CHECKOUT' | 'FEATURED' | 'ENTERPRISE' | 'WITHDRAWAL'>;
           publicConfig?: Record<string, any>;
         }>;
       };

@@ -5,6 +5,12 @@ import Badge from '../../components/ui/Badge';
 import { api } from '../../services/api';
 
 type AdminTab = 'seller-earnings' | 'designer-earnings' | 'vendor-config' | 'withdrawal-integrations';
+type CountryWithdrawalRule = {
+  country: string;
+  withdrawalOptions: string[];
+  payoutIntegrationProviders: string[];
+  notes?: string;
+};
 
 export default function AdminVendorPayments() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -23,18 +29,23 @@ export default function AdminVendorPayments() {
     platformFeePercent: 0,
     withdrawalOptions: [] as string[],
     payoutIntegrationProviders: [] as string[],
+    countryWithdrawalRules: [] as CountryWithdrawalRule[],
     notes: '',
   });
+  const [availableWithdrawalProviders, setAvailableWithdrawalProviders] = useState<
+    Array<{ providerKey: string; displayName: string }>
+  >([]);
   const [withdrawalAction, setWithdrawalAction] = useState<Record<string, { status: string; adminNotes: string; payoutReference: string }>>({});
 
   const loadData = async () => {
     try {
       setLoading(true);
       setError('');
-      const [earningsRes, configRes, withdrawalsRes] = await Promise.all([
+      const [earningsRes, configRes, withdrawalsRes, integrationsRes] = await Promise.all([
         api.admin.getVendorEarnings(),
         api.admin.getVendorPaymentConfig(),
         api.admin.getVendorWithdrawals(),
+        api.admin.getPaymentIntegrations(),
       ]);
       if (earningsRes.success) {
         setSellerEarnings(Array.isArray(earningsRes.data?.seller) ? earningsRes.data.seller : []);
@@ -42,6 +53,10 @@ export default function AdminVendorPayments() {
       }
       if (configRes.success && configRes.data) {
         const data = configRes.data;
+        const providerRowsFromConfig =
+          Array.isArray((data as any).availableWithdrawalProviders) && (data as any).availableWithdrawalProviders.length > 0
+            ? (data as any).availableWithdrawalProviders
+            : [];
         setConfig({
           releaseDelayDays: Number(data.releaseDelayDays || 7),
           minimumWithdrawalUsd: Number(data.minimumWithdrawalUsd || 25),
@@ -49,8 +64,40 @@ export default function AdminVendorPayments() {
           platformFeePercent: Number(data.platformFeePercent || 0),
           withdrawalOptions: Array.isArray(data.withdrawalOptions) ? data.withdrawalOptions : [],
           payoutIntegrationProviders: Array.isArray(data.payoutIntegrationProviders) ? data.payoutIntegrationProviders : [],
+          countryWithdrawalRules: Array.isArray(data.countryWithdrawalRules)
+            ? data.countryWithdrawalRules.map((entry: any) => ({
+                country: String(entry?.country || ''),
+                withdrawalOptions: Array.isArray(entry?.withdrawalOptions) ? entry.withdrawalOptions : [],
+                payoutIntegrationProviders: Array.isArray(entry?.payoutIntegrationProviders)
+                  ? entry.payoutIntegrationProviders
+                  : [],
+                notes: String(entry?.notes || ''),
+              }))
+            : [],
           notes: String(data.notes || ''),
         });
+        if (providerRowsFromConfig.length > 0) {
+          setAvailableWithdrawalProviders(
+            providerRowsFromConfig.map((entry: any) => ({
+              providerKey: String(entry?.providerKey || '').toUpperCase(),
+              displayName: String(entry?.displayName || entry?.providerKey || '').trim(),
+            }))
+          );
+        } else if (integrationsRes.success) {
+          const providers = Array.isArray(integrationsRes.data?.providers) ? integrationsRes.data.providers : [];
+          const mapped = providers
+            .filter((entry: any) => {
+              const useCases = Array.isArray(entry?.configValues?.enabledUseCases)
+                ? entry.configValues.enabledUseCases
+                : [];
+              return entry?.isActive && useCases.includes('WITHDRAWAL');
+            })
+            .map((entry: any) => ({
+              providerKey: String(entry?.providerKey || '').toUpperCase(),
+              displayName: String(entry?.displayName || entry?.providerKey || '').trim(),
+            }));
+          setAvailableWithdrawalProviders(mapped);
+        }
       }
       if (withdrawalsRes.success && Array.isArray(withdrawalsRes.data)) {
         setWithdrawals(withdrawalsRes.data);
@@ -285,23 +332,174 @@ export default function AdminVendorPayments() {
         <div className="space-y-4">
           <div className="rounded-xl border bg-white p-4 space-y-3">
             <h2 className="text-lg font-semibold text-gray-900">Withdrawal Pay Integration Configuration</h2>
-            <p className="text-sm text-gray-500">Set which payout integration providers are available for seller and designer withdrawals.</p>
+            <p className="text-sm text-gray-500">
+              Map withdrawal providers by country. Providers below are pulled from Payment API integrations enabled for withdrawal.
+            </p>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">Payout Integration Providers (comma separated)</label>
-              <input
-                value={config.payoutIntegrationProviders.join(', ')}
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    payoutIntegrationProviders: event.target.value
-                      .split(',')
-                      .map((entry) => entry.trim().toUpperCase())
-                      .filter(Boolean),
-                  }))
-                }
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-                placeholder="BANK_TRANSFER, PAYPAL, FLUTTERWAVE_PAYOUT"
-              />
+              <label className="mb-1 block text-xs font-semibold text-gray-600">Global Payout Integration Providers</label>
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                {availableWithdrawalProviders.map((provider) => {
+                  const checked = config.payoutIntegrationProviders.includes(provider.providerKey);
+                  return (
+                    <label key={`global-provider-${provider.providerKey}`} className="inline-flex items-center gap-2 rounded border px-2 py-1 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) =>
+                          setConfig((prev) => {
+                            const next = event.target.checked
+                              ? Array.from(new Set([...(prev.payoutIntegrationProviders || []), provider.providerKey]))
+                              : (prev.payoutIntegrationProviders || []).filter((entry) => entry !== provider.providerKey);
+                            return {
+                              ...prev,
+                              payoutIntegrationProviders: next,
+                              withdrawalOptions: Array.from(new Set([...(prev.withdrawalOptions || []), ...next])),
+                            };
+                          })
+                        }
+                      />
+                      {provider.displayName}
+                    </label>
+                  );
+                })}
+                {availableWithdrawalProviders.length === 0 ? (
+                  <p className="text-xs text-gray-500">No withdrawal-enabled providers found. Enable WITHDRAWAL use-case in Payment API.</p>
+                ) : null}
+              </div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-900">Country-Based Withdrawal Rules</h3>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      countryWithdrawalRules: [
+                        ...(Array.isArray(prev.countryWithdrawalRules) ? prev.countryWithdrawalRules : []),
+                        { country: '', withdrawalOptions: [], payoutIntegrationProviders: [], notes: '' },
+                      ],
+                    }))
+                  }
+                >
+                  Add Country Rule
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {(Array.isArray(config.countryWithdrawalRules) ? config.countryWithdrawalRules : []).map((rule, index) => (
+                  <div key={`country-rule-${index}`} className="rounded border bg-gray-50 p-3">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-600">Country</label>
+                        <input
+                          value={rule.country}
+                          onChange={(event) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              countryWithdrawalRules: (prev.countryWithdrawalRules || []).map((entry, rowIndex) =>
+                                rowIndex === index ? { ...entry, country: event.target.value } : entry
+                              ),
+                            }))
+                          }
+                          className="w-full rounded border px-3 py-2 text-sm"
+                          placeholder="e.g. Nigeria"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-600">Withdrawal Options (comma separated)</label>
+                        <input
+                          value={(Array.isArray(rule.withdrawalOptions) ? rule.withdrawalOptions : []).join(', ')}
+                          onChange={(event) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              countryWithdrawalRules: (prev.countryWithdrawalRules || []).map((entry, rowIndex) =>
+                                rowIndex === index
+                                  ? {
+                                      ...entry,
+                                      withdrawalOptions: event.target.value
+                                        .split(',')
+                                        .map((token) => token.trim().toUpperCase())
+                                        .filter(Boolean),
+                                    }
+                                  : entry
+                              ),
+                            }))
+                          }
+                          className="w-full rounded border px-3 py-2 text-sm"
+                          placeholder="BANK_TRANSFER, PAYPAL"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <label className="mb-1 block text-xs font-semibold text-gray-600">Country Payout Providers</label>
+                      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                        {availableWithdrawalProviders.map((provider) => {
+                          const checked = (rule.payoutIntegrationProviders || []).includes(provider.providerKey);
+                          return (
+                            <label key={`rule-${index}-provider-${provider.providerKey}`} className="inline-flex items-center gap-2 rounded border px-2 py-1 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(event) =>
+                                  setConfig((prev) => ({
+                                    ...prev,
+                                    countryWithdrawalRules: (prev.countryWithdrawalRules || []).map((entry, rowIndex) => {
+                                      if (rowIndex !== index) return entry;
+                                      const nextProviders = event.target.checked
+                                        ? Array.from(new Set([...(entry.payoutIntegrationProviders || []), provider.providerKey]))
+                                        : (entry.payoutIntegrationProviders || []).filter((token) => token !== provider.providerKey);
+                                      return {
+                                        ...entry,
+                                        payoutIntegrationProviders: nextProviders,
+                                        withdrawalOptions: Array.from(new Set([...(entry.withdrawalOptions || []), ...nextProviders])),
+                                      };
+                                    }),
+                                  }))
+                                }
+                              />
+                              {provider.displayName}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <label className="mb-1 block text-xs font-semibold text-gray-600">Notes</label>
+                      <input
+                        value={String(rule.notes || '')}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            countryWithdrawalRules: (prev.countryWithdrawalRules || []).map((entry, rowIndex) =>
+                              rowIndex === index ? { ...entry, notes: event.target.value } : entry
+                            ),
+                          }))
+                        }
+                        className="w-full rounded border px-3 py-2 text-sm"
+                        placeholder="Optional note for this country setup"
+                      />
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            countryWithdrawalRules: (prev.countryWithdrawalRules || []).filter((_, rowIndex) => rowIndex !== index),
+                          }))
+                        }
+                      >
+                        Remove Rule
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {(!Array.isArray(config.countryWithdrawalRules) || config.countryWithdrawalRules.length === 0) && (
+                  <p className="text-sm text-gray-500">No country rules configured yet. Vendors will use global options.</p>
+                )}
+              </div>
             </div>
             <Button onClick={updateConfig} disabled={saving}>
               {saving ? 'Saving...' : 'Save Withdrawal Integration'}

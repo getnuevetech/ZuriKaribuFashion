@@ -5,7 +5,7 @@ import { api } from '../../services/api';
 type FieldType = 'TEXT' | 'PASSWORD' | 'URL' | 'NUMBER' | 'BOOLEAN' | 'SELECT' | 'TEXTAREA';
 type CheckoutType = 'INLINE' | 'REDIRECT';
 type ModeType = 'TEST' | 'LIVE';
-type PaymentUseCase = 'CHECKOUT' | 'FEATURED' | 'ENTERPRISE';
+type PaymentUseCase = 'CHECKOUT' | 'FEATURED' | 'ENTERPRISE' | 'WITHDRAWAL';
 
 interface IntegrationField {
   key: string;
@@ -38,14 +38,17 @@ const PAYMENT_USE_CASES: Array<{ key: PaymentUseCase; label: string }> = [
   { key: 'CHECKOUT', label: 'Checkout orders' },
   { key: 'FEATURED', label: 'Featured product requests' },
   { key: 'ENTERPRISE', label: 'Enterprise upgrade requests' },
+  { key: 'WITHDRAWAL', label: 'Vendor withdrawals' },
 ];
 
 const normalizeProviderUseCases = (value: unknown): PaymentUseCase[] => {
   const rows = Array.isArray(value) ? value : [];
   const normalized = rows
     .map((entry) => String(entry || '').trim().toUpperCase())
-    .filter((entry) => entry === 'CHECKOUT' || entry === 'FEATURED' || entry === 'ENTERPRISE') as PaymentUseCase[];
-  return normalized.length > 0 ? Array.from(new Set(normalized)) : ['CHECKOUT', 'FEATURED', 'ENTERPRISE'];
+    .filter(
+      (entry) => entry === 'CHECKOUT' || entry === 'FEATURED' || entry === 'ENTERPRISE' || entry === 'WITHDRAWAL'
+    ) as PaymentUseCase[];
+  return normalized.length > 0 ? Array.from(new Set(normalized)) : ['CHECKOUT', 'FEATURED', 'ENTERPRISE', 'WITHDRAWAL'];
 };
 
 const cloneProvider = (row: PaymentProviderRow): PaymentProviderRow => ({
@@ -60,7 +63,7 @@ const cloneProvider = (row: PaymentProviderRow): PaymentProviderRow => ({
   configValues:
     row.configValues && typeof row.configValues === 'object'
       ? { ...row.configValues, enabledUseCases: normalizeProviderUseCases((row.configValues as any).enabledUseCases) }
-      : { enabledUseCases: ['CHECKOUT', 'FEATURED', 'ENTERPRISE'] },
+      : { enabledUseCases: ['CHECKOUT', 'FEATURED', 'ENTERPRISE', 'WITHDRAWAL'] },
 });
 
 export default function AdminPayments() {

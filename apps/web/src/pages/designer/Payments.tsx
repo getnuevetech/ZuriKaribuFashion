@@ -95,8 +95,20 @@ export default function DesignerPayments() {
   }, []);
 
   const availableWithdrawalOptions = useMemo(() => {
-    const options = Array.isArray(config?.withdrawalOptions) ? config.withdrawalOptions : [];
+    const options = Array.isArray(config?.effectiveWithdrawalOptions)
+      ? config.effectiveWithdrawalOptions
+      : Array.isArray(config?.withdrawalOptions)
+        ? config.withdrawalOptions
+        : [];
     return options.length > 0 ? options : ['BANK_TRANSFER', 'MOBILE_MONEY', 'PAYPAL'];
+  }, [config]);
+
+  const availableWithdrawalProviders = useMemo(() => {
+    const rows = Array.isArray(config?.availableWithdrawalProviders) ? config.availableWithdrawalProviders : [];
+    return rows.map((entry: any) => ({
+      providerKey: String(entry?.providerKey || '').toUpperCase(),
+      displayName: String(entry?.displayName || entry?.providerKey || '').trim(),
+    }));
   }, [config]);
 
   const saveMethod = async () => {
@@ -108,9 +120,16 @@ export default function DesignerPayments() {
       setSavingMethod(true);
       setError('');
       setMessage('');
+      const normalizedMethodType = methodForm.methodType.trim().toUpperCase();
+      const normalizedProviderName =
+        String(methodForm.providerName || '').trim().toUpperCase() ||
+        (availableWithdrawalProviders.some((entry) => entry.providerKey === normalizedMethodType)
+          ? normalizedMethodType
+          : '');
       const response = await api.payments.createVendorWithdrawalMethod({
         ...methodForm,
-        methodType: methodForm.methodType.trim().toUpperCase(),
+        methodType: normalizedMethodType,
+        providerName: normalizedProviderName || undefined,
       });
       if (!response.success) {
         setError(response.message || 'Unable to save withdrawal method.');
@@ -227,12 +246,27 @@ export default function DesignerPayments() {
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-gray-600">Provider</label>
-              <input
-                value={methodForm.providerName}
-                onChange={(event) => setMethodForm((prev) => ({ ...prev, providerName: event.target.value }))}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-                placeholder="e.g. GTBank, MTN, PayPal"
-              />
+              {availableWithdrawalProviders.length > 0 ? (
+                <select
+                  value={methodForm.providerName}
+                  onChange={(event) => setMethodForm((prev) => ({ ...prev, providerName: event.target.value }))}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                >
+                  <option value="">Select provider...</option>
+                  {availableWithdrawalProviders.map((provider) => (
+                    <option key={provider.providerKey} value={provider.providerKey}>
+                      {provider.displayName}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={methodForm.providerName}
+                  onChange={(event) => setMethodForm((prev) => ({ ...prev, providerName: event.target.value }))}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                  placeholder="e.g. GTBank, MTN, PayPal"
+                />
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-gray-600">Account Name</label>

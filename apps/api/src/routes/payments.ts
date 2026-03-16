@@ -23,9 +23,9 @@ router.use((req, _res, next) => {
 type IntegrationFieldType = 'TEXT' | 'PASSWORD' | 'URL' | 'NUMBER' | 'BOOLEAN' | 'SELECT' | 'TEXTAREA';
 type ProviderMode = 'TEST' | 'LIVE';
 type CheckoutType = 'INLINE' | 'REDIRECT';
-export type PaymentUseCase = 'CHECKOUT' | 'FEATURED' | 'ENTERPRISE';
+export type PaymentUseCase = 'CHECKOUT' | 'FEATURED' | 'ENTERPRISE' | 'WITHDRAWAL';
 
-const PAYMENT_USE_CASES = ['CHECKOUT', 'FEATURED', 'ENTERPRISE'] as const;
+const PAYMENT_USE_CASES = ['CHECKOUT', 'FEATURED', 'ENTERPRISE', 'WITHDRAWAL'] as const;
 const DEFAULT_PROVIDER_USE_CASES: PaymentUseCase[] = [...PAYMENT_USE_CASES];
 
 type IntegrationField = {
@@ -68,6 +68,7 @@ const normalizePaymentUseCase = (value: unknown): PaymentUseCase | null => {
   if (token === 'CHECKOUT') return 'CHECKOUT';
   if (token === 'FEATURED') return 'FEATURED';
   if (token === 'ENTERPRISE') return 'ENTERPRISE';
+  if (token === 'WITHDRAWAL') return 'WITHDRAWAL';
   return null;
 };
 
@@ -1490,6 +1491,13 @@ router.post('/confirm', authenticate, authorizePermissions(Permissions.PAYMENTS_
 type VendorRoleToken = 'FABRIC_SELLER' | 'FASHION_DESIGNER';
 type VendorWithdrawalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAID' | 'CANCELLED';
 
+type VendorCountryWithdrawalRule = {
+  country: string;
+  withdrawalOptions: string[];
+  payoutIntegrationProviders: string[];
+  notes?: string;
+};
+
 type VendorPaymentConfig = {
   releaseDelayDays: number;
   minimumWithdrawalUsd: number;
@@ -1497,6 +1505,7 @@ type VendorPaymentConfig = {
   platformFeePercent: number;
   withdrawalOptions: string[];
   payoutIntegrationProviders: string[];
+  countryWithdrawalRules: VendorCountryWithdrawalRule[];
   notes?: string;
 };
 
@@ -1509,6 +1518,7 @@ const DEFAULT_VENDOR_PAYMENT_CONFIG: VendorPaymentConfig = {
   platformFeePercent: 0,
   withdrawalOptions: ['BANK_TRANSFER', 'MOBILE_MONEY', 'PAYPAL'],
   payoutIntegrationProviders: ['BANK_TRANSFER'],
+  countryWithdrawalRules: [],
   notes: '',
 };
 
@@ -1540,19 +1550,57 @@ const parsePositiveNumber = (value: unknown, fallback: number) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
+const normalizeCountryToken = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .slice(0, 120);
+
+const normalizeTokenList = (value: unknown) =>
+  Array.from(
+    new Set(
+      parseArray(value)
+        .map((entry) => String(entry || '').trim().toUpperCase())
+        .filter(Boolean)
+    )
+  );
+
+const normalizeCountryWithdrawalRules = (value: unknown): VendorCountryWithdrawalRule[] => {
+  const rows = parseArray(value);
+  const normalized: VendorCountryWithdrawalRule[] = [];
+  for (const entry of rows) {
+    const row = parseObject(entry);
+    const country = normalizeCountryToken(row.country);
+    if (!country) continue;
+    const payoutIntegrationProviders = normalizeTokenList(row.payoutIntegrationProviders);
+    const withdrawalOptions = Array.from(
+      new Set([...normalizeTokenList(row.withdrawalOptions), ...payoutIntegrationProviders])
+    );
+    normalized.push({
+      country,
+      withdrawalOptions,
+      payoutIntegrationProviders,
+      notes: row.notes ? String(row.notes).trim().slice(0, 1000) : '',
+    });
+  }
+  return normalized;
+};
+
 const normalizeVendorPaymentConfig = (value: unknown): VendorPaymentConfig => {
   const objectValue = parseObject(value);
+  const payoutIntegrationProviders = normalizeTokenList(objectValue.payoutIntegrationProviders);
+  const withdrawalOptions = Array.from(
+    new Set([...normalizeTokenList(objectValue.withdrawalOptions), ...payoutIntegrationProviders])
+  );
   return {
     releaseDelayDays: Math.max(0, Math.floor(parsePositiveNumber(objectValue.releaseDelayDays, DEFAULT_VENDOR_PAYMENT_CONFIG.releaseDelayDays))),
     minimumWithdrawalUsd: Number(parsePositiveNumber(objectValue.minimumWithdrawalUsd, DEFAULT_VENDOR_PAYMENT_CONFIG.minimumWithdrawalUsd).toFixed(2)),
     slaHours: Math.max(1, Math.floor(parsePositiveNumber(objectValue.slaHours, DEFAULT_VENDOR_PAYMENT_CONFIG.slaHours))),
     platformFeePercent: Number(parsePositiveNumber(objectValue.platformFeePercent, DEFAULT_VENDOR_PAYMENT_CONFIG.platformFeePercent).toFixed(2)),
-    withdrawalOptions: parseArray(objectValue.withdrawalOptions)
-      .map((entry) => String(entry || '').trim().toUpperCase())
-      .filter(Boolean),
-    payoutIntegrationProviders: parseArray(objectValue.payoutIntegrationProviders)
-      .map((entry) => String(entry || '').trim().toUpperCase())
-      .filter(Boolean),
+    withdrawalOptions,
+    payoutIntegrationProviders,
+    countryWithdrawalRules: normalizeCountryWithdrawalRules(objectValue.countryWithdrawalRules),
     notes: objectValue.notes ? String(objectValue.notes) : '',
   };
 };
@@ -1646,7 +1694,28 @@ async function readVendorPaymentConfig() {
 
 async function saveVendorPaymentConfig(config: VendorPaymentConfig, updatedById: string) {
   await ensureVendorPaymentSchema();
-  const normalized = normalizeVendorPaymentConfig(config);
+  const normalizedBase = normalizeVendorPaymentConfig(config);
+  const enabledWithdrawalProviders = await readEnabledWithdrawalProviderOptions();
+  const normalized: VendorPaymentConfig = {
+    ...normalizedBase,
+    payoutIntegrationProviders: filterProviderKeysByEnabled(
+      normalizedBase.payoutIntegrationProviders,
+      enabledWithdrawalProviders
+    ),
+    countryWithdrawalRules: normalizedBase.countryWithdrawalRules.map((entry) => ({
+      ...entry,
+      payoutIntegrationProviders: filterProviderKeysByEnabled(
+        entry.payoutIntegrationProviders,
+        enabledWithdrawalProviders
+      ),
+      withdrawalOptions: Array.from(
+        new Set([
+          ...entry.withdrawalOptions,
+          ...filterProviderKeysByEnabled(entry.payoutIntegrationProviders, enabledWithdrawalProviders),
+        ])
+      ),
+    })),
+  };
   await prisma.$executeRawUnsafe(
     `INSERT INTO "VendorPaymentConfig" ("id","key","value","updatedById","createdAt","updatedAt")
      VALUES ($1,$2,$3::jsonb,$4,NOW(),NOW())
@@ -1658,6 +1727,99 @@ async function saveVendorPaymentConfig(config: VendorPaymentConfig, updatedById:
     updatedById
   );
   return normalized;
+}
+
+const normalizeProviderList = (values: string[]) =>
+  Array.from(
+    new Set(
+      (Array.isArray(values) ? values : [])
+        .map((entry) => normalizeProviderKey(entry))
+        .filter(Boolean)
+    )
+  );
+
+async function readEnabledWithdrawalProviderOptions() {
+  const rows = (await readPaymentIntegrations({ activeOnly: true }))
+    .filter((provider) => providerSupportsUseCase(provider, 'WITHDRAWAL'))
+    .map((provider) => ({
+      providerKey: normalizeProviderKey(provider.providerKey),
+      displayName: String(provider.displayName || provider.providerKey || '').trim() || normalizeProviderKey(provider.providerKey),
+    }))
+    .filter((entry) => entry.providerKey);
+  return rows;
+}
+
+function filterProviderKeysByEnabled(
+  requested: string[],
+  enabledOptions: Array<{ providerKey: string; displayName: string }>
+) {
+  const enabledSet = new Set(enabledOptions.map((entry) => entry.providerKey));
+  return normalizeProviderList(requested).filter((entry) => enabledSet.has(entry));
+}
+
+function resolveCountryRule(
+  config: VendorPaymentConfig,
+  country: string | null | undefined
+): VendorCountryWithdrawalRule | null {
+  const countryToken = normalizeCountryToken(country || '');
+  if (!countryToken) return null;
+  return (
+    config.countryWithdrawalRules.find((entry) => normalizeCountryToken(entry.country) === countryToken) || null
+  );
+}
+
+function applyCountryRuleToVendorConfig(
+  config: VendorPaymentConfig,
+  options: {
+    country?: string | null;
+    enabledWithdrawalProviders: Array<{ providerKey: string; displayName: string }>;
+  }
+) {
+  const rule = resolveCountryRule(config, options.country);
+  const globalProviders = filterProviderKeysByEnabled(
+    config.payoutIntegrationProviders,
+    options.enabledWithdrawalProviders
+  );
+  const countryProviders = filterProviderKeysByEnabled(
+    rule?.payoutIntegrationProviders || [],
+    options.enabledWithdrawalProviders
+  );
+  const effectivePayoutProviders = countryProviders.length > 0 ? countryProviders : globalProviders;
+  const effectiveWithdrawalOptions = Array.from(
+    new Set([
+      ...(rule?.withdrawalOptions || config.withdrawalOptions || []),
+      ...effectivePayoutProviders,
+    ])
+  );
+  return {
+    ...config,
+    payoutIntegrationProviders: globalProviders,
+    countryWithdrawalRules: config.countryWithdrawalRules.map((entry) => ({
+      ...entry,
+      payoutIntegrationProviders: filterProviderKeysByEnabled(
+        entry.payoutIntegrationProviders,
+        options.enabledWithdrawalProviders
+      ),
+    })),
+    vendorCountry: normalizeCountryToken(options.country || ''),
+    effectiveWithdrawalOptions,
+    effectivePayoutIntegrationProviders: effectivePayoutProviders,
+  };
+}
+
+async function readVendorCountryByRole(userId: string, role: VendorRoleToken) {
+  if (role === 'FABRIC_SELLER') {
+    const row = await prisma.fabricSellerProfile.findFirst({
+      where: { userId },
+      select: { country: true },
+    });
+    return row?.country ? String(row.country) : '';
+  }
+  const row = await prisma.designerProfile.findFirst({
+    where: { userId },
+    select: { country: true },
+  });
+  return row?.country ? String(row.country) : '';
 }
 
 type VendorEarningRow = {
@@ -1907,8 +2069,22 @@ router.get('/vendor/config', authenticate, async (req, res, next) => {
     if (!role) {
       return res.status(403).json({ success: false, message: 'Vendor account required.' });
     }
-    const config = await readVendorPaymentConfig();
-    res.json({ success: true, data: config });
+    const [config, enabledWithdrawalProviders, vendorCountry] = await Promise.all([
+      readVendorPaymentConfig(),
+      readEnabledWithdrawalProviderOptions(),
+      readVendorCountryByRole(req.user!.id, role),
+    ]);
+    const effectiveConfig = applyCountryRuleToVendorConfig(config, {
+      country: vendorCountry,
+      enabledWithdrawalProviders,
+    });
+    res.json({
+      success: true,
+      data: {
+        ...effectiveConfig,
+        availableWithdrawalProviders: enabledWithdrawalProviders,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -2010,6 +2186,38 @@ router.post('/vendor/withdrawal-methods', authenticate, async (req, res, next) =
       })
       .parse(req.body);
 
+    const [config, enabledWithdrawalProviders, vendorCountry] = await Promise.all([
+      readVendorPaymentConfig(),
+      readEnabledWithdrawalProviderOptions(),
+      readVendorCountryByRole(req.user!.id, role),
+    ]);
+    const effectiveConfig = applyCountryRuleToVendorConfig(config, {
+      country: vendorCountry,
+      enabledWithdrawalProviders,
+    });
+    const normalizedMethodType = String(payload.methodType || '').trim().toUpperCase();
+    if (
+      Array.isArray(effectiveConfig.effectiveWithdrawalOptions) &&
+      effectiveConfig.effectiveWithdrawalOptions.length > 0 &&
+      !effectiveConfig.effectiveWithdrawalOptions.includes(normalizedMethodType)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `Withdrawal method "${normalizedMethodType}" is not enabled for your country (${effectiveConfig.vendorCountry || 'default'}).`,
+      });
+    }
+    const normalizedProviderName = normalizeProviderKey(payload.providerName || normalizedMethodType);
+    if (
+      effectiveConfig.effectivePayoutIntegrationProviders.length > 0 &&
+      effectiveConfig.effectiveWithdrawalOptions.includes(normalizedProviderName) &&
+      !effectiveConfig.effectivePayoutIntegrationProviders.includes(normalizedProviderName)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `Provider "${normalizedProviderName}" is not enabled for withdrawals in your country.`,
+      });
+    }
+
     if (payload.isDefault) {
       await prisma.$executeRawUnsafe(
         `UPDATE "VendorWithdrawalMethod" SET "isDefault" = false, "updatedAt" = NOW()
@@ -2028,13 +2236,13 @@ router.post('/vendor/withdrawal-methods', authenticate, async (req, res, next) =
       id,
       req.user!.id,
       role,
-      String(payload.methodType || '').trim().toUpperCase(),
+      normalizedMethodType,
       payload.accountName ? String(payload.accountName) : null,
       payload.accountNumber ? String(payload.accountNumber) : null,
       payload.bankName ? String(payload.bankName) : null,
       payload.routingNumber ? String(payload.routingNumber) : null,
       payload.walletAddress ? String(payload.walletAddress) : null,
-      payload.providerName ? String(payload.providerName) : null,
+      normalizedProviderName || null,
       String(payload.currencyCode || 'USD').toUpperCase(),
       JSON.stringify(payload.metadata || {}),
       Boolean(payload.isDefault)
@@ -2067,6 +2275,43 @@ router.put('/vendor/withdrawal-methods/:id', authenticate, async (req, res, next
         isActive: z.boolean().optional(),
       })
       .parse(req.body);
+    const [config, enabledWithdrawalProviders, vendorCountry] = await Promise.all([
+      readVendorPaymentConfig(),
+      readEnabledWithdrawalProviderOptions(),
+      readVendorCountryByRole(req.user!.id, role),
+    ]);
+    const effectiveConfig = applyCountryRuleToVendorConfig(config, {
+      country: vendorCountry,
+      enabledWithdrawalProviders,
+    });
+    const normalizedMethodType = payload.methodType ? String(payload.methodType).trim().toUpperCase() : null;
+    if (
+      normalizedMethodType &&
+      Array.isArray(effectiveConfig.effectiveWithdrawalOptions) &&
+      effectiveConfig.effectiveWithdrawalOptions.length > 0 &&
+      !effectiveConfig.effectiveWithdrawalOptions.includes(normalizedMethodType)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `Withdrawal method "${normalizedMethodType}" is not enabled for your country (${effectiveConfig.vendorCountry || 'default'}).`,
+      });
+    }
+    const normalizedProviderName = payload.providerName
+      ? normalizeProviderKey(payload.providerName)
+      : normalizedMethodType && effectiveConfig.effectiveWithdrawalOptions.includes(normalizedMethodType)
+        ? normalizeProviderKey(normalizedMethodType)
+        : null;
+    if (
+      normalizedProviderName &&
+      effectiveConfig.effectivePayoutIntegrationProviders.length > 0 &&
+      effectiveConfig.effectiveWithdrawalOptions.includes(normalizedProviderName) &&
+      !effectiveConfig.effectivePayoutIntegrationProviders.includes(normalizedProviderName)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `Provider "${normalizedProviderName}" is not enabled for withdrawals in your country.`,
+      });
+    }
     const methodId = String(req.params.id || '').trim();
     if (!methodId) {
       return res.status(400).json({ success: false, message: 'Method id is required.' });
@@ -2094,13 +2339,13 @@ router.put('/vendor/withdrawal-methods/:id', authenticate, async (req, res, next
            "isActive" = COALESCE($11, "isActive"),
            "updatedAt" = NOW()
        WHERE "id" = $12 AND "userId" = $13 AND UPPER("role") = $14`,
-      payload.methodType ? String(payload.methodType).trim().toUpperCase() : null,
+      normalizedMethodType,
       payload.accountName ?? null,
       payload.accountNumber ?? null,
       payload.bankName ?? null,
       payload.routingNumber ?? null,
       payload.walletAddress ?? null,
-      payload.providerName ?? null,
+      normalizedProviderName ?? payload.providerName ?? null,
       payload.currencyCode ? String(payload.currencyCode).toUpperCase() : null,
       payload.metadata ? JSON.stringify(payload.metadata) : null,
       payload.isDefault ?? null,
@@ -2190,8 +2435,21 @@ router.post('/vendor/withdrawals', authenticate, async (req, res, next) => {
 
 router.get('/admin/vendor-config', authenticate, authorizePermissions(Permissions.PAYMENTS_MANAGE), async (_req, res, next) => {
   try {
-    const config = await readVendorPaymentConfig();
-    res.json({ success: true, data: config });
+    const [config, enabledWithdrawalProviders] = await Promise.all([
+      readVendorPaymentConfig(),
+      readEnabledWithdrawalProviderOptions(),
+    ]);
+    const normalizedConfig = applyCountryRuleToVendorConfig(config, {
+      country: null,
+      enabledWithdrawalProviders,
+    });
+    res.json({
+      success: true,
+      data: {
+        ...normalizedConfig,
+        availableWithdrawalProviders: enabledWithdrawalProviders,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -2207,11 +2465,22 @@ router.put('/admin/vendor-config', authenticate, authorizePermissions(Permission
         platformFeePercent: z.number().min(0).optional(),
         withdrawalOptions: z.array(z.string()).optional(),
         payoutIntegrationProviders: z.array(z.string()).optional(),
+        countryWithdrawalRules: z
+          .array(
+            z.object({
+              country: z.string().min(1),
+              withdrawalOptions: z.array(z.string()).optional(),
+              payoutIntegrationProviders: z.array(z.string()).optional(),
+              notes: z.string().optional(),
+            })
+          )
+          .optional(),
         notes: z.string().optional(),
       })
       .parse(req.body);
     const current = await readVendorPaymentConfig();
-    const saved = await saveVendorPaymentConfig({ ...current, ...payload }, req.user!.id);
+    const merged = normalizeVendorPaymentConfig({ ...current, ...payload });
+    const saved = await saveVendorPaymentConfig(merged, req.user!.id);
     res.json({ success: true, data: saved, message: 'Vendor payment configuration saved.' });
   } catch (error) {
     next(error);
