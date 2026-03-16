@@ -12,6 +12,16 @@ type ProviderForm = {
   isActive: boolean;
 };
 
+const toProviderForm = (value: any): ProviderForm => ({
+  id: String(value?.id || ''),
+  name: String(value?.name || ''),
+  functionTag: String(value?.functionTag || ''),
+  baseUrl: String(value?.baseUrl || ''),
+  apiKey: String(value?.apiKey || ''),
+  model: String(value?.model || ''),
+  isActive: value?.isActive !== false,
+});
+
 export default function AdminAutomationAiConfigPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -20,6 +30,7 @@ export default function AdminAutomationAiConfigPage() {
   const [testFunctionKey, setTestFunctionKey] = useState('text_grammar_enhancement');
   const [testPrompt, setTestPrompt] = useState('');
   const [settings, setSettings] = useState<any>(null);
+  const [providerDrafts, setProviderDrafts] = useState<Record<string, ProviderForm>>({});
   const [newProvider, setNewProvider] = useState<ProviderForm>({
     id: '',
     name: '',
@@ -68,6 +79,16 @@ export default function AdminAutomationAiConfigPage() {
     [settings]
   );
 
+  useEffect(() => {
+    const nextDrafts = (providers || []).reduce<Record<string, ProviderForm>>((acc, provider: any) => {
+      const id = String(provider?.id || '').trim();
+      if (!id) return acc;
+      acc[id] = toProviderForm(provider);
+      return acc;
+    }, {});
+    setProviderDrafts(nextDrafts);
+  }, [providers]);
+
   const persist = async (next: any) => {
     try {
       setSaving(true);
@@ -109,6 +130,56 @@ export default function AdminAutomationAiConfigPage() {
       apiKey: '',
       model: '',
       isActive: true,
+    });
+  };
+
+  const updateProviderDraft = (providerId: string, patch: Partial<ProviderForm>) => {
+    setProviderDrafts((prev) => ({
+      ...prev,
+      [providerId]: {
+        ...(prev[providerId] || toProviderForm(providers.find((entry: any) => String(entry?.id || '') === providerId))),
+        ...patch,
+      },
+    }));
+  };
+
+  const saveProviderRow = async (providerId: string) => {
+    const draft = providerDrafts[providerId];
+    if (!draft || !String(draft.name || '').trim()) {
+      setMessage('Provider name is required.');
+      return;
+    }
+    const nextProviders = providers.map((entry: any) =>
+      String(entry?.id || '') === providerId
+        ? {
+            ...entry,
+            ...draft,
+            id: providerId,
+          }
+        : entry
+    );
+    const nextSettings = {
+      ...(settings || {}),
+      aiProviders: nextProviders,
+    };
+    await persist(nextSettings);
+  };
+
+  const deleteProviderRow = async (providerId: string) => {
+    const nextProviders = providers.filter((entry: any) => String(entry?.id || '') !== providerId);
+    const nextBindings = bindings.map((entry: any) =>
+      String(entry?.providerId || '') === providerId ? { ...entry, providerId: '' } : entry
+    );
+    const nextSettings = {
+      ...(settings || {}),
+      aiProviders: nextProviders,
+      functionBindings: nextBindings,
+    };
+    await persist(nextSettings);
+    setProviderDrafts((prev) => {
+      const next = { ...prev };
+      delete next[providerId];
+      return next;
     });
   };
 
@@ -204,6 +275,25 @@ export default function AdminAutomationAiConfigPage() {
 
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-gray-900">AI Providers</h2>
+        <div className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <p className="font-semibold">Base URL and Model guide</p>
+          <p className="mt-1">
+            Base URL should be the API root used by your provider (the system appends
+            <code className="mx-1 rounded bg-white px-1">/chat/completions</code>
+            and
+            <code className="mx-1 rounded bg-white px-1">/images/generations</code>
+            automatically).
+          </p>
+          <p className="mt-1">
+            Example: OpenAI-compatible Base URL
+            <code className="mx-1 rounded bg-white px-1">https://api.openai.com/v1</code>
+            with model
+            <code className="mx-1 rounded bg-white px-1">gpt-4o-mini</code>
+            for text and
+            <code className="mx-1 rounded bg-white px-1">gpt-image-1</code>
+            for image generation.
+          </p>
+        </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <select
             className="rounded border px-3 py-2 text-sm"
@@ -223,39 +313,106 @@ export default function AdminAutomationAiConfigPage() {
           />
         </div>
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[960px] text-sm">
+          <table className="w-full min-w-[1200px] text-sm">
             <thead className="bg-gray-50 text-left text-gray-500">
               <tr>
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Function Tag</th>
                 <th className="px-3 py-2">Base URL</th>
                 <th className="px-3 py-2">Model</th>
+                <th className="px-3 py-2">API Key</th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2">Test</th>
+                <th className="px-3 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {providers.map((provider: any) => (
-                <tr key={provider.id} className="border-t">
-                  <td className="px-3 py-2">{provider.name || '-'}</td>
-                  <td className="px-3 py-2">{provider.functionTag || '-'}</td>
-                  <td className="px-3 py-2">{provider.baseUrl || '-'}</td>
-                  <td className="px-3 py-2">{provider.model || '-'}</td>
-                  <td className="px-3 py-2">{provider.isActive !== false ? 'Active' : 'Inactive'}</td>
-                  <td className="px-3 py-2">
-                    <Button
-                      variant="outline"
-                      disabled={testingProviderId === provider.id || provider.isActive === false}
-                      onClick={() => void testProvider(String(provider.id || ''))}
-                    >
-                      {testingProviderId === provider.id ? 'Testing...' : 'Test Provider'}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {providers.map((provider: any) => {
+                const providerId = String(provider.id || '');
+                const draft = providerDrafts[providerId] || toProviderForm(provider);
+                return (
+                  <tr key={provider.id} className="border-t">
+                    <td className="px-3 py-2">
+                      <input
+                        className="w-full rounded border px-2 py-1"
+                        value={draft.name}
+                        onChange={(event) => updateProviderDraft(providerId, { name: event.target.value })}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        className="w-full rounded border px-2 py-1"
+                        value={draft.functionTag}
+                        onChange={(event) => updateProviderDraft(providerId, { functionTag: event.target.value })}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        className="w-full rounded border px-2 py-1"
+                        value={draft.baseUrl}
+                        onChange={(event) => updateProviderDraft(providerId, { baseUrl: event.target.value })}
+                        placeholder="https://api.openai.com/v1"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        className="w-full rounded border px-2 py-1"
+                        value={draft.model}
+                        onChange={(event) => updateProviderDraft(providerId, { model: event.target.value })}
+                        placeholder="gpt-4o-mini"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        className="w-full rounded border px-2 py-1"
+                        value={draft.apiKey}
+                        onChange={(event) => updateProviderDraft(providerId, { apiKey: event.target.value })}
+                        placeholder="sk-..."
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={draft.isActive}
+                          onChange={(event) => updateProviderDraft(providerId, { isActive: event.target.checked })}
+                        />
+                        {draft.isActive ? 'Active' : 'Inactive'}
+                      </label>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Button
+                        variant="outline"
+                        disabled={testingProviderId === provider.id || draft.isActive === false}
+                        onClick={() => void testProvider(providerId)}
+                      >
+                        {testingProviderId === provider.id ? 'Testing...' : 'Test Provider'}
+                      </Button>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          disabled={saving}
+                          onClick={() => void saveProviderRow(providerId)}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          variant="outline"
+                          disabled={saving}
+                          onClick={() => void deleteProviderRow(providerId)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {providers.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-4 text-center text-sm text-gray-500" colSpan={6}>
+                  <td className="px-3 py-4 text-center text-sm text-gray-500" colSpan={8}>
                     No provider configured yet.
                   </td>
                 </tr>

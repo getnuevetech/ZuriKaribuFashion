@@ -152,7 +152,7 @@ const normalizeProvider = (value: unknown): AutomationAiProvider | null => {
 
 const normalizeBinding = (value: unknown): AutomationFunctionBinding | null => {
   const row = parseObject(value);
-  const functionKey = String(row.functionKey || '').trim();
+  const functionKey = normalizeAutomationFunctionKey(row.functionKey);
   if (!functionKey) return null;
   return {
     id: String(row.id || randomUUID()),
@@ -162,6 +162,14 @@ const normalizeBinding = (value: unknown): AutomationFunctionBinding | null => {
     isActive: row.isActive !== false,
   };
 };
+
+const normalizeAutomationFunctionKey = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
 
 const DEFAULT_CRITERIA: ProductAutomationCriteria = {
   FABRIC: [
@@ -699,16 +707,28 @@ const readNestedString = (payload: any, path: string[]): string => {
 };
 
 const resolveProviderForFunction = (settings: AutomationApprovalSettings, functionKey: string) => {
-  const binding = settings.functionBindings.find(
-    (entry) => entry.isActive !== false && String(entry.functionKey || '').trim() === functionKey
+  const targetKey = normalizeAutomationFunctionKey(functionKey);
+  if (!targetKey) return null;
+  const activeProviders = new Map(
+    (settings.aiProviders || [])
+      .filter(
+        (entry) =>
+          entry.isActive !== false &&
+          String(entry.id || '').trim().length > 0 &&
+          String(entry.baseUrl || '').trim().length > 0 &&
+          String(entry.apiKey || '').trim().length > 0
+      )
+      .map((entry) => [String(entry.id || '').trim(), entry] as const)
   );
-  if (!binding?.providerId) return null;
-  const provider = settings.aiProviders.find(
-    (entry) => entry.isActive !== false && String(entry.id || '').trim() === String(binding.providerId || '').trim()
-  );
-  if (!provider) return null;
-  if (!String(provider.baseUrl || '').trim() || !String(provider.apiKey || '').trim()) return null;
-  return provider;
+  for (const binding of settings.functionBindings || []) {
+    if (binding.isActive === false) continue;
+    if (normalizeAutomationFunctionKey(binding.functionKey) !== targetKey) continue;
+    const providerId = String(binding.providerId || '').trim();
+    if (!providerId) continue;
+    const provider = activeProviders.get(providerId);
+    if (provider) return provider;
+  }
+  return null;
 };
 
 const callTextExecutor = async (
@@ -822,14 +842,15 @@ const executeAutomationAiFunction = async (params: {
   prompt: string;
   systemPrompt: string;
 }): Promise<AiExecutionResult> => {
-  const provider = resolveProviderForFunction(params.settings, params.functionKey);
+  const normalizedFunctionKey = normalizeAutomationFunctionKey(params.functionKey);
+  const provider = resolveProviderForFunction(params.settings, normalizedFunctionKey);
   if (!provider) {
     return {
       status: 'NO_PROVIDER',
-      reason: `No active provider binding for ${params.functionKey}.`,
+      reason: `No active provider binding for ${normalizedFunctionKey || params.functionKey}.`,
     } as AiExecutionResult;
   }
-  if (params.functionKey === 'image_regeneration') {
+  if (normalizedFunctionKey === 'image_regeneration') {
     return callImageRegenerationExecutor(provider, params.prompt);
   }
   return callTextExecutor(provider, params.prompt, params.systemPrompt);
@@ -842,7 +863,7 @@ export const testAutomationProviderBinding = async (input: {
 }) => {
   const settings = (await readAutomationApprovalSettings()).settings;
   const providerId = String(input.providerId || '').trim();
-  const functionKey = String(input.functionKey || 'text_grammar_enhancement').trim();
+  const functionKey = normalizeAutomationFunctionKey(input.functionKey || 'text_grammar_enhancement');
   if (!providerId) {
     return {
       ok: false,
@@ -863,7 +884,9 @@ export const testAutomationProviderBinding = async (input: {
   const clonedSettings: AutomationApprovalSettings = {
     ...settings,
     functionBindings: [
-      ...(settings.functionBindings || []).filter((entry) => entry.functionKey !== functionKey),
+      ...(settings.functionBindings || []).filter(
+        (entry) => normalizeAutomationFunctionKey(entry.functionKey) !== functionKey
+      ),
       {
         id: randomUUID(),
         functionKey,
