@@ -458,15 +458,19 @@ export default function AdminVendorProfiles() {
             ? productOptionsResponse?.data?.designers
             : [];
       const countryByUserId = new Map<string, string>();
+      const profileIdByUserId = new Map<string, string>();
       optionRows.forEach((row: any) => {
         const ownerUserId = String(row?.ownerUserId || row?.userId || '').trim();
         if (!ownerUserId) return;
         countryByUserId.set(ownerUserId, String(row?.country || '').trim());
+        profileIdByUserId.set(ownerUserId, String(row?.id || '').trim());
       });
       const countryFilter = String(vendorAccountCountryFilter || '').trim().toLowerCase();
       const mergedRows = userRows.map((user: any) => ({
         ...user,
         country: String(countryByUserId.get(String(user?.id || '')) || '').trim(),
+        vendorUuid:
+          String(profileIdByUserId.get(String(user?.id || '')) || '').trim() || String(user?.id || '').trim(),
       }));
       const filteredRows =
         countryFilter.length > 0
@@ -493,9 +497,12 @@ export default function AdminVendorProfiles() {
       const configResponse = configResult.status === 'fulfilled' ? configResult.value : null;
       const accountsResponse = accountsResult.status === 'fulfilled' ? accountsResult.value : null;
       const requestsResponse = requestsResult.status === 'fulfilled' ? requestsResult.value : null;
+      const configLoaded = Boolean(configResponse && configResponse.success !== false);
+      const accountsLoaded = Boolean(accountsResponse && accountsResponse.success !== false);
+      const requestsLoaded = Boolean(requestsResponse && requestsResponse.success !== false);
 
       const nextConfig = configResponse?.data || {};
-      if (configResponse) {
+      if (configLoaded) {
         setEnterpriseConfig((prev) => ({
           ...prev,
           sellerEnabled: nextConfig.sellerEnabled !== false,
@@ -519,15 +526,9 @@ export default function AdminVendorProfiles() {
       setEnterpriseAccounts(accountRows);
       setEnterpriseRequests(requestRows);
 
-      if (!configResponse) {
+      if (!configLoaded && !accountsLoaded && !requestsLoaded) {
         const configError = configResult.status === 'rejected' ? configResult.reason : null;
-        if (accountRows.length === 0 && requestRows.length === 0) {
-          setError(configError?.response?.data?.message || 'Failed to load enterprise account settings.');
-        } else {
-          setError('Enterprise requests/accounts loaded, but enterprise config failed to load.');
-        }
-      } else if (!accountsResponse || !requestsResponse) {
-        setError('Enterprise settings loaded with partial data. Some enterprise lists may be temporarily unavailable.');
+        setError(configError?.response?.data?.message || 'Failed to load enterprise account settings.');
       }
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to load enterprise account settings.');
@@ -1232,6 +1233,7 @@ export default function AdminVendorProfiles() {
               <thead>
                 <tr className="text-left text-gray-500">
                   <th className="py-2 pr-3">Account</th>
+                  <th className="py-2 pr-3">Vendor UUID</th>
                   <th className="py-2 pr-3">Type</th>
                   <th className="py-2 pr-3">Country</th>
                   <th className="py-2 pr-3">Status</th>
@@ -1247,6 +1249,11 @@ export default function AdminVendorProfiles() {
                         {`${account.firstName || ''} ${account.lastName || ''}`.trim() || account.email}
                       </p>
                       <p className="text-xs text-gray-500">{account.email}</p>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700">
+                        {String(account.vendorUuid || account.id || '').trim() || '-'}
+                      </code>
                     </td>
                     <td className="py-2 pr-3">
                       {String(account.role || '').toUpperCase() === 'FABRIC_SELLER' ? 'Fabric Seller' : 'Fashion Designer'}
@@ -1279,7 +1286,7 @@ export default function AdminVendorProfiles() {
                 ))}
                 {vendorAccounts.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-gray-500">
+                    <td colSpan={7} className="py-8 text-center text-gray-500">
                       No {activeAccountRoleLabel.toLowerCase()} accounts found.
                     </td>
                   </tr>

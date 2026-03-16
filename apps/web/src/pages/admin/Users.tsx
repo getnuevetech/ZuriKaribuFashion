@@ -53,6 +53,7 @@ export default function AdminUsers() {
     password: '',
     status: 'ACTIVE',
     phone: '',
+    country: '',
     adminRoleId: '',
   });
   const [editForm, setEditForm] = useState({
@@ -61,6 +62,7 @@ export default function AdminUsers() {
     lastName: '',
     email: '',
     phone: '',
+    country: '',
     status: 'ACTIVE',
     adminRoleId: '',
   });
@@ -111,7 +113,7 @@ export default function AdminUsers() {
           phone: user.phone || '',
           role: user.role,
           status: user.status,
-          country: '-',
+          country: String(user.country || user?.adminProfile?.country || '').trim(),
           createdAt: user.createdAt,
           orderCount: 0,
           adminRoleId: user?.adminProfile?.adminRoleId ? String(user.adminProfile.adminRoleId) : null,
@@ -168,6 +170,7 @@ export default function AdminUsers() {
         role: isAdministratorMode ? 'ADMINISTRATOR' : 'CUSTOMER',
         status: createForm.status,
         phone: createForm.phone.trim() || undefined,
+        country: isAdministratorMode ? createForm.country.trim() : undefined,
       });
       if (
         createdResponse?.success &&
@@ -186,6 +189,7 @@ export default function AdminUsers() {
         password: '',
         status: 'ACTIVE',
         phone: '',
+        country: '',
         adminRoleId: '',
       });
       await fetchUsers();
@@ -205,6 +209,7 @@ export default function AdminUsers() {
       lastName: user.lastName || '',
       email: user.email,
       phone: user.phone || '',
+      country: user.country || '',
       status: user.status,
       adminRoleId: user.adminRoleId || '',
     });
@@ -221,6 +226,7 @@ export default function AdminUsers() {
         lastName: editForm.lastName.trim(),
         email: editForm.email.trim(),
         phone: editForm.phone.trim() || null,
+        country: isAdministratorMode ? editForm.country.trim() : undefined,
         status: editForm.status,
       });
       if (isAdministratorMode) {
@@ -525,6 +531,15 @@ export default function AdminUsers() {
                 placeholder="Phone (optional)"
                 className="w-full px-3 py-2 border rounded-lg"
               />
+              {isAdministratorMode ? (
+                <input
+                  type="text"
+                  value={createForm.country}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, country: e.target.value }))}
+                  placeholder="Country (optional)"
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              ) : null}
               </div>
               <div className="sticky bottom-0 flex gap-3 border-t bg-white pt-3">
                 <Button type="button" variant="outline" className="flex-1" onClick={() => setShowCreateModal(false)}>
@@ -583,6 +598,15 @@ export default function AdminUsers() {
                 placeholder="Phone (optional)"
                 className="w-full px-3 py-2 border rounded-lg"
               />
+              {isAdministratorMode ? (
+                <input
+                  type="text"
+                  value={editForm.country}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, country: e.target.value }))}
+                  placeholder="Country (optional)"
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              ) : null}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <select
                   value={editForm.status}

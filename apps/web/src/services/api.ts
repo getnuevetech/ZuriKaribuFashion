@@ -5997,6 +5997,7 @@ const adminApi = {
     role: string;
     status?: string;
     phone?: string;
+    country?: string;
   }) => apiService.post<{ success: boolean; data: any; message?: string }>('/admin/users', data),
 
   updateUser: (
@@ -6008,11 +6009,24 @@ const adminApi = {
       role?: string;
       status?: string;
       phone?: string | null;
+      country?: string | null;
     }
   ) => apiService.patch<{ success: boolean; data: any; message?: string }>(`/admin/users/${id}`, data),
 
   updateUserStatus: (id: string, status: string, reason?: string) =>
     apiService.patch(`/admin/users/${id}/status`, { status, reason }),
+
+  getAdminProfile: () =>
+    apiService.get<{ success: boolean; data: any }>('/admin/profile'),
+
+  updateAdminProfile: (data: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string | null;
+    avatar?: string | null;
+    country?: string;
+  }) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>('/admin/profile', data),
 
   getReferralProgramSettings: () =>
     apiService.get<{ success: boolean; data: any; source?: string; updatedAt?: string | null }>(
@@ -6070,7 +6084,17 @@ const adminApi = {
     apiService.patch<{ success: boolean; data: any; message?: string }>(`/admin/referrals/resellers/${userId}`, data),
 
   getReferralMaterials: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/admin/referrals/materials/manage'),
+    apiService
+      .get<{ success: boolean; data: any[] }>('/admin/referrals/materials/manage')
+      .then((response) => ({
+        ...response,
+        data: Array.isArray(response?.data)
+          ? response.data.map((row: any) => ({
+              ...row,
+              imageUrl: resolveApiAssetUrl(row?.imageUrl || ''),
+            }))
+          : [],
+      })),
 
   createReferralMaterial: (data: {
     title: string;
@@ -6081,7 +6105,18 @@ const adminApi = {
     heightPx?: number;
     sortOrder?: number;
     isActive?: boolean;
-  }) => apiService.post<{ success: boolean; data: any[]; message?: string }>('/admin/referrals/materials/manage', data),
+  }) =>
+    apiService
+      .post<{ success: boolean; data: any[]; message?: string }>('/admin/referrals/materials/manage', data)
+      .then((response) => ({
+        ...response,
+        data: Array.isArray(response?.data)
+          ? response.data.map((row: any) => ({
+              ...row,
+              imageUrl: resolveApiAssetUrl(row?.imageUrl || ''),
+            }))
+          : [],
+      })),
 
   updateReferralMaterial: (
     id: string,
@@ -6095,10 +6130,31 @@ const adminApi = {
       sortOrder?: number;
       isActive?: boolean;
     }
-  ) => apiService.patch<{ success: boolean; data: any[]; message?: string }>(`/admin/referrals/materials/manage/${id}`, data),
+  ) =>
+    apiService
+      .patch<{ success: boolean; data: any[]; message?: string }>(`/admin/referrals/materials/manage/${id}`, data)
+      .then((response) => ({
+        ...response,
+        data: Array.isArray(response?.data)
+          ? response.data.map((row: any) => ({
+              ...row,
+              imageUrl: resolveApiAssetUrl(row?.imageUrl || ''),
+            }))
+          : [],
+      })),
 
   deleteReferralMaterial: (id: string) =>
-    apiService.delete<{ success: boolean; data: any[]; message?: string }>(`/admin/referrals/materials/manage/${id}`),
+    apiService
+      .delete<{ success: boolean; data: any[]; message?: string }>(`/admin/referrals/materials/manage/${id}`)
+      .then((response) => ({
+        ...response,
+        data: Array.isArray(response?.data)
+          ? response.data.map((row: any) => ({
+              ...row,
+              imageUrl: resolveApiAssetUrl(row?.imageUrl || ''),
+            }))
+          : [],
+      })),
 
   createMinimalVendor: (data: {
     role: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
@@ -8937,8 +8993,19 @@ const blogsApi = {
   deleteAdminBlog: (id: string) =>
     adminBlogsApi.deleteAdminBlog(id),
 
-  getEnterpriseConfig: () =>
-    apiService.get<{ success: boolean; data: any }>('/admin/enterprise/config'),
+  getEnterpriseConfig: async () => {
+    let lastError: unknown = null;
+    for (const path of ['/admin/enterprise/config', '/enterprise/config']) {
+      try {
+        return await apiService.get<{ success: boolean; data: any }>(path);
+      } catch (error) {
+        lastError = error;
+        if (isRetryableRouteError(error)) continue;
+        throw error;
+      }
+    }
+    throw lastError ?? new Error('Enterprise config route not found.');
+  },
 
   updateEnterpriseConfig: (payload: {
     sellerEnabled: boolean;
@@ -8949,8 +9016,25 @@ const blogsApi = {
     levels: Array<{ key: string; name: string; seatLimit: number; yearlyFeeUsd: number }>;
   }) => apiService.put<{ success: boolean; data: any; message?: string }>('/admin/enterprise/config', payload),
 
-  getEnterpriseAccounts: (params?: { role?: 'FABRIC_SELLER' | 'FASHION_DESIGNER'; status?: string; search?: string; page?: number; limit?: number }) =>
-    apiService.get<{ success: boolean; data: any }>('/admin/enterprise/accounts', { params }),
+  getEnterpriseAccounts: async (params?: {
+    role?: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    let lastError: unknown = null;
+    for (const path of ['/admin/enterprise/accounts', '/enterprise/accounts']) {
+      try {
+        return await apiService.get<{ success: boolean; data: any }>(path, { params });
+      } catch (error) {
+        lastError = error;
+        if (isRetryableRouteError(error)) continue;
+        throw error;
+      }
+    }
+    throw lastError ?? new Error('Enterprise accounts route not found.');
+  },
 
   convertVendorToEnterprise: (
     ownerUserId: string,
@@ -9327,7 +9411,15 @@ const referralsApi = {
   }) => apiService.patch<{ success: boolean; data: { profile: any; editableFields: string[] }; message?: string }>('/referrals/me/profile', data),
 
   getMyMaterials: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/referrals/materials'),
+    apiService.get<{ success: boolean; data: any[] }>('/referrals/materials').then((response) => ({
+      ...response,
+      data: Array.isArray(response?.data)
+        ? response.data.map((row: any) => ({
+            ...row,
+            imageUrl: resolveApiAssetUrl(row?.imageUrl || ''),
+          }))
+        : [],
+    })),
 };
 
 // Export combined API

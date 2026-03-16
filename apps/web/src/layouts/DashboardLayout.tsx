@@ -64,6 +64,7 @@ interface DashboardSearchEntry {
 const navItems: Record<DashboardType, NavItem[]> = {
   admin: [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+    { label: 'Profile', href: '/admin/profile', icon: User },
     { label: 'Customer Accounts', href: '/admin/customer-accounts', icon: Users },
     { label: 'Administrator Accounts', href: '/admin/administrator-accounts', icon: User },
     { label: 'Vendor Profiles', href: '/admin/vendor-profiles', icon: Tag },
@@ -169,6 +170,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     if (!userPermissions || userPermissions.length === 0 || userPermissions.includes('*')) return true;
     const permissionByHref: Record<string, string[]> = {
       '/admin/users': ['users:read'],
+      '/admin/profile': [],
       '/admin/customer-accounts': ['users:read'],
       '/admin/administrator-accounts': [],
       '/admin/administrators': ['users:read'],

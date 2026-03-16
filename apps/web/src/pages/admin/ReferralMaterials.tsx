@@ -16,6 +16,7 @@ const emptyForm = {
 export default function AdminReferralMaterialsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [rows, setRows] = useState<any[]>([]);
   const [form, setForm] = useState<any>(emptyForm);
   const [message, setMessage] = useState('');
@@ -35,6 +36,26 @@ export default function AdminReferralMaterialsPage() {
   useEffect(() => {
     void loadRows();
   }, []);
+
+  const handleImageUpload = async (file?: File | null) => {
+    if (!file) return;
+    try {
+      setUploadingImage(true);
+      setMessage('');
+      const payload = new FormData();
+      payload.append('image', file);
+      const response = await api.upload.image(payload);
+      if (response?.success && response?.data?.url) {
+        setForm((prev: any) => ({ ...prev, imageUrl: String(response.data.url || '').trim() }));
+      } else {
+        setMessage('Image upload failed. Please try again.');
+      }
+    } catch (error: any) {
+      setMessage(error?.response?.data?.message || 'Image upload failed.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -115,12 +136,40 @@ export default function AdminReferralMaterialsPage() {
             value={form.targetUrl}
             onChange={(event) => setForm((prev: any) => ({ ...prev, targetUrl: event.target.value }))}
           />
-          <input
-            placeholder="Image URL"
-            className="rounded border px-3 py-2 md:col-span-2"
-            value={form.imageUrl}
-            onChange={(event) => setForm((prev: any) => ({ ...prev, imageUrl: event.target.value }))}
-          />
+          <div className="rounded border px-3 py-2 md:col-span-2">
+            <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-gray-600">
+              Material image upload
+            </label>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                void handleImageUpload(file);
+              }}
+              className="w-full text-sm"
+            />
+            {uploadingImage ? <p className="mt-2 text-xs text-amber-700">Uploading image...</p> : null}
+            {form.imageUrl ? (
+              <div className="mt-3 flex items-center gap-3">
+                <img
+                  src={form.imageUrl}
+                  alt="Uploaded referral material"
+                  className="h-20 w-20 rounded border object-cover"
+                />
+                <div className="space-y-1">
+                  <p className="max-w-[420px] break-all text-xs text-gray-600">{form.imageUrl}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setForm((prev: any) => ({ ...prev, imageUrl: '' }))}
+                  >
+                    Remove image
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </div>
           <textarea
             placeholder="Description"
             className="rounded border px-3 py-2 md:col-span-2"
@@ -177,7 +226,15 @@ export default function AdminReferralMaterialsPage() {
                   <div>
                     <p className="font-medium text-gray-900">{row.title}</p>
                     <p className="text-xs text-gray-500">{row.description || '-'}</p>
-                    <p className="mt-1 text-xs text-gray-600">{row.imageUrl || '-'}</p>
+                    {row.imageUrl ? (
+                      <img
+                        src={row.imageUrl}
+                        alt={row.title || 'Referral material'}
+                        className="mt-2 h-20 w-20 rounded border object-cover"
+                      />
+                    ) : (
+                      <p className="mt-1 text-xs text-gray-600">No image</p>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" onClick={() => void toggle(row)} disabled={saving}>

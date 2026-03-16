@@ -1183,6 +1183,7 @@ const adminUserCreateSchema = z.object({
   role: z.nativeEnum(UserRole),
   status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
   phone: z.string().optional(),
+  country: z.string().optional(),
 });
 
 const adminUserUpdateSchema = z.object({
@@ -1192,6 +1193,7 @@ const adminUserUpdateSchema = z.object({
   role: z.nativeEnum(UserRole).optional(),
   status: z.nativeEnum(UserStatus).optional(),
   phone: z.string().nullable().optional(),
+  country: z.string().nullable().optional(),
 });
 
 const vendorCreateMinimalSchema = z.object({
@@ -1430,6 +1432,8 @@ const ensureAdminRbacSchema = async () => {
         END IF;
       END $$;`
     );
+    await prisma.$executeRawUnsafe(`ALTER TABLE "AdminProfile" ADD COLUMN IF NOT EXISTS "country" TEXT NOT NULL DEFAULT ''`);
+    await prisma.$executeRawUnsafe(`UPDATE "AdminProfile" SET "country" = '' WHERE "country" IS NULL`);
     await prisma.$executeRawUnsafe(
       `CREATE INDEX IF NOT EXISTS "AdminProfile_adminRoleId_idx" ON "AdminProfile"("adminRoleId")`
     );
@@ -1953,19 +1957,30 @@ router.get('/users', async (req, res, next) => {
     const userIds = users.map((user) => user.id);
     const adminRoleRows =
       userIds.length > 0
-        ? await prisma.$queryRawUnsafe<Array<{ userId: string; adminRoleId: string | null }>>(
-            `SELECT "userId", "adminRoleId" FROM "AdminProfile" WHERE "userId" = ANY($1::text[])`,
+        ? await prisma.$queryRawUnsafe<Array<{ userId: string; adminRoleId: string | null; country: string | null }>>(
+            `SELECT "userId", "adminRoleId", COALESCE("country",'') AS "country"
+             FROM "AdminProfile"
+             WHERE "userId" = ANY($1::text[])`,
             userIds
           )
         : [];
-    const adminRoleByUserId = new Map(adminRoleRows.map((row) => [String(row.userId), row.adminRoleId || null]));
+    const adminMetaByUserId = new Map(
+      adminRoleRows.map((row) => [
+        String(row.userId),
+        {
+          adminRoleId: row.adminRoleId || null,
+          country: String(row.country || '').trim(),
+        },
+      ])
+    );
     const usersWithAdminMeta = users.map((user) => ({
       ...user,
+      country: user.role === UserRole.ADMINISTRATOR ? adminMetaByUserId.get(user.id)?.country || '' : '',
       adminProfile: user.adminProfile
         ? {
             ...user.adminProfile,
             permissions: sanitizePermissionGrants(user.adminProfile.permissions),
-            adminRoleId: adminRoleByUserId.get(user.id) ?? null,
+            adminRoleId: adminMetaByUserId.get(user.id)?.adminRoleId ?? null,
           }
         : null,
     }));
@@ -1991,6 +2006,7 @@ router.post('/users', async (req, res, next) => {
   try {
     const data = adminUserCreateSchema.parse(req.body);
     const password = await bcrypt.hash(data.password, 10);
+    const normalizedCountry = String(data.country || '').trim();
 
     const created = await prisma.user.create({
       data: {
@@ -2019,6 +2035,14 @@ router.post('/users', async (req, res, next) => {
         create: { userId: created.id },
         update: {},
       });
+      await prisma.$executeRawUnsafe(
+        `UPDATE "AdminProfile"
+         SET "country" = $1,
+             "updatedAt" = NOW()
+         WHERE "userId" = $2`,
+        normalizedCountry,
+        created.id
+      );
     }
 
     if (created.role === UserRole.FABRIC_SELLER) {
@@ -2093,6 +2117,7 @@ router.post('/users', async (req, res, next) => {
 router.patch('/users/:id', async (req, res, next) => {
   try {
     const data = adminUserUpdateSchema.parse(req.body);
+    const normalizedCountry = data.country === undefined ? undefined : String(data.country || '').trim();
     const updated = await prisma.user.update({
       where: { id: req.params.id },
       data: {
@@ -2122,6 +2147,16 @@ router.patch('/users/:id', async (req, res, next) => {
         create: { userId: updated.id },
         update: {},
       });
+      if (normalizedCountry !== undefined) {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "AdminProfile"
+           SET "country" = $1,
+               "updatedAt" = NOW()
+           WHERE "userId" = $2`,
+          normalizedCountry,
+          updated.id
+        );
+      }
     }
 
     if (updated.role === UserRole.FABRIC_SELLER) {
@@ -2188,6 +2223,115 @@ router.patch('/users/:id', async (req, res, next) => {
         message: 'A user with this email already exists.',
       });
     }
+    next(error);
+  }
+});
+
+router.get('/profile', async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        avatar: true,
+        role: true,
+        status: true,
+      },
+    });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin profile not found.',
+      });
+    }
+    const adminRows = await prisma.$queryRawUnsafe<Array<{ country: string | null; adminRoleId: string | null }>>(
+      `SELECT COALESCE("country",'') AS "country", "adminRoleId"
+       FROM "AdminProfile"
+       WHERE "userId" = $1
+       LIMIT 1`,
+      user.id
+    );
+    const adminRow = Array.isArray(adminRows) && adminRows.length > 0 ? adminRows[0] : null;
+    return res.json({
+      success: true,
+      data: {
+        ...user,
+        country: String(adminRow?.country || '').trim(),
+        adminRoleId: adminRow?.adminRoleId || null,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/profile', async (req, res, next) => {
+  try {
+    const payload = z
+      .object({
+        firstName: z.string().trim().min(1).optional(),
+        lastName: z.string().trim().min(1).optional(),
+        phone: z.string().trim().nullable().optional(),
+        avatar: z.string().trim().nullable().optional(),
+        country: z.string().trim().optional(),
+      })
+      .parse(req.body || {});
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user!.id },
+      data: {
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        phone: payload.phone === undefined ? undefined : payload.phone,
+        avatar: payload.avatar === undefined ? undefined : payload.avatar,
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        avatar: true,
+        role: true,
+        status: true,
+      },
+    });
+    await prisma.adminProfile.upsert({
+      where: { userId: updatedUser.id },
+      create: { userId: updatedUser.id },
+      update: {},
+    });
+    if (payload.country !== undefined) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "AdminProfile"
+         SET "country" = $1,
+             "updatedAt" = NOW()
+         WHERE "userId" = $2`,
+        String(payload.country || '').trim(),
+        updatedUser.id
+      );
+    }
+    const adminRows = await prisma.$queryRawUnsafe<Array<{ country: string | null; adminRoleId: string | null }>>(
+      `SELECT COALESCE("country",'') AS "country", "adminRoleId"
+       FROM "AdminProfile"
+       WHERE "userId" = $1
+       LIMIT 1`,
+      updatedUser.id
+    );
+    const adminRow = Array.isArray(adminRows) && adminRows.length > 0 ? adminRows[0] : null;
+    return res.json({
+      success: true,
+      message: 'Admin profile updated successfully.',
+      data: {
+        ...updatedUser,
+        country: String(adminRow?.country || '').trim(),
+        adminRoleId: adminRow?.adminRoleId || null,
+      },
+    });
+  } catch (error) {
     next(error);
   }
 });

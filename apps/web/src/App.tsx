@@ -73,6 +73,7 @@ import AdminAutomationAiConfig from './pages/admin/AutomationAiConfig';
 import AdminReferralMaterials from './pages/admin/ReferralMaterials';
 import AdminReferralList from './pages/admin/ReferralList';
 import AdminReports from './pages/admin/Reports';
+import AdminProfilePage from './pages/admin/Profile';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -199,6 +200,7 @@ function App() {
                   path="/admin"
                   element={<AdminDashboard />}
                 />
+                <Route path="/admin/profile" element={<AdminProfilePage />} />
                 <Route
                   path="/admin/customer-accounts"
                   element={
