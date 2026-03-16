@@ -664,6 +664,7 @@ export default function DesignerDashboard() {
   const [readyUploadingImage, setReadyUploadingImage] = useState(false);
   const [readyImageUrlInput, setReadyImageUrlInput] = useState('');
   const [readySizeOptions, setReadySizeOptions] = useState<string[]>(['S', 'M', 'L', 'XL']);
+  const [minReadyVariantStock, setMinReadyVariantStock] = useState(2);
   const [readyForm, setReadyForm] = useState<ReadyToWearFormState>({
     name: '',
     description: '',
@@ -672,7 +673,7 @@ export default function DesignerDashboard() {
     basePrice: '',
     imageUrls: '',
     priceCurrencyCode: 'USD',
-    variants: [{ size: 'M', color: 'DEFAULT', price: '', stock: '0' }],
+    variants: [{ size: 'M', color: 'DEFAULT', price: '', stock: '2' }],
   });
   const [currencyOptions, setCurrencyOptions] = useState<{
     defaultCurrency: string;
@@ -1145,6 +1146,7 @@ export default function DesignerDashboard() {
         if (normalized.length > 0) {
           setReadySizeOptions(normalized);
         }
+        setMinReadyVariantStock(Math.max(2, Math.floor(Number(readySizeOptionsRes.data?.minVariantStock || 2))));
       }
       if (governanceRes?.success) {
         setDashboardGovernance(normalizeDesignerDashboardGovernance(governanceRes.data));
@@ -1500,7 +1502,7 @@ export default function DesignerDashboard() {
       basePrice: '',
       imageUrls: '',
       priceCurrencyCode: currencyOptions.defaultCurrency || 'USD',
-      variants: [{ size: defaultSize, color: 'DEFAULT', price: '', stock: '0' }],
+      variants: [{ size: defaultSize, color: 'DEFAULT', price: '', stock: String(minReadyVariantStock) }],
     });
     setIsReadyEditMode(false);
     setSelectedReadyForEdit(null);
@@ -1585,9 +1587,16 @@ export default function DesignerDashboard() {
             size: String(entry.size || '').trim() || 'M',
             color: String(entry.color || 'DEFAULT').trim() || 'DEFAULT',
             price: String(Number(entry.price || 0)),
-            stock: String(Math.max(0, Number(entry.stock || 0))),
+            stock: String(Math.max(minReadyVariantStock, Number(entry.stock || 0))),
           }))
-        : [{ size: readySizeOptions[0] || 'M', color: 'DEFAULT', price: String(Number(product.basePrice || 0)), stock: '0' }];
+        : [
+            {
+              size: readySizeOptions[0] || 'M',
+              color: 'DEFAULT',
+              price: String(Number(product.basePrice || 0)),
+              stock: String(minReadyVariantStock),
+            },
+          ];
     setIsReadyEditMode(true);
     setSelectedReadyForEdit(product);
     setReadyError(null);
@@ -1724,7 +1733,10 @@ export default function DesignerDashboard() {
     const defaultSize = readySizeOptions[0] || 'M';
     setReadyForm((prev) => ({
       ...prev,
-      variants: [...prev.variants, { size: defaultSize, color: 'DEFAULT', price: prev.basePrice || '', stock: '0' }],
+      variants: [
+        ...prev.variants,
+        { size: defaultSize, color: 'DEFAULT', price: prev.basePrice || '', stock: String(minReadyVariantStock) },
+      ],
     }));
   };
 
@@ -2183,10 +2195,12 @@ export default function DesignerDashboard() {
               !Number.isFinite(row.price) ||
               row.price <= 0 ||
               !Number.isFinite(row.stock) ||
-              row.stock < 0
+              row.stock < minReadyVariantStock
           )
         ) {
-          setReadyError('Each variant must include size, color, price, and stock quantity (0 or greater).');
+          setReadyError(
+            `Each variant must include size, color, price, and stock quantity (at least ${minReadyVariantStock}).`
+          );
           return;
         }
         if (new Set(normalizedVariants.map((row) => `${row.size}::${row.color}`)).size !== normalizedVariants.length) {
@@ -2197,7 +2211,7 @@ export default function DesignerDashboard() {
           size: row.size,
           color: row.color,
           price: row.price,
-          stock: Math.max(0, Math.floor(row.stock)),
+          stock: Math.max(minReadyVariantStock, Math.floor(row.stock)),
         }));
       }
       if (editableFieldSet.has('predominantColor') && predominantColorToken) {
@@ -2240,10 +2254,12 @@ export default function DesignerDashboard() {
             !Number.isFinite(row.price) ||
             row.price <= 0 ||
             !Number.isFinite(row.stock) ||
-            row.stock < 0
+            row.stock < minReadyVariantStock
         )
       ) {
-        setReadyError('Each variant must include size, color, price, and stock quantity (0 or greater).');
+        setReadyError(
+          `Each variant must include size, color, price, and stock quantity (at least ${minReadyVariantStock}).`
+        );
         return;
       }
       if (new Set(normalizedVariants.map((row) => `${row.size}::${row.color}`)).size !== normalizedVariants.length) {
@@ -2259,7 +2275,7 @@ export default function DesignerDashboard() {
         size: row.size,
         color: row.color,
         price: row.price,
-        stock: Math.max(0, Math.floor(row.stock)),
+        stock: Math.max(minReadyVariantStock, Math.floor(row.stock)),
       }));
       if (predominantColorToken) payload.predominantColor = predominantColorToken;
       payload.images = images.map((entry, index) => ({
@@ -2455,7 +2471,7 @@ export default function DesignerDashboard() {
     const rows = (product.sizeVariations || []).map((entry) => ({
       size: String(entry.size || ''),
       color: String(entry.color || 'DEFAULT'),
-      stock: String(Math.max(0, Number(entry.stock || 0))),
+      stock: String(Math.max(minReadyVariantStock, Number(entry.stock || 0))),
     }));
     setSelectedReadyProduct(product);
     setReadyStockDraft(rows);
@@ -2474,8 +2490,8 @@ export default function DesignerDashboard() {
       setReadyStockError('No size rows found for this product.');
       return;
     }
-    if (normalized.some((entry) => !entry.size || !Number.isFinite(entry.stock) || entry.stock < 0)) {
-      setReadyStockError('Each size must have a valid stock value (0 or greater).');
+    if (normalized.some((entry) => !entry.size || !Number.isFinite(entry.stock) || entry.stock < minReadyVariantStock)) {
+      setReadyStockError(`Each size must have a stock value of at least ${minReadyVariantStock}.`);
       return;
     }
 
@@ -3754,7 +3770,9 @@ export default function DesignerDashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl">
             <h3 className="text-lg font-semibold text-gray-900">Manage Ready-To-Wear Size Stock</h3>
-            <p className="mt-1 text-sm text-gray-500">{selectedReadyProduct.name}</p>
+            <p className="mt-1 text-sm text-gray-500">
+              {selectedReadyProduct.name} · minimum per variant: {minReadyVariantStock}
+            </p>
 
             <div className="mt-4 space-y-3">
               {readyStockDraft.map((row, index) => (
@@ -3764,7 +3782,7 @@ export default function DesignerDashboard() {
                   </div>
                   <input
                     type="number"
-                    min={0}
+                    min={minReadyVariantStock}
                     step={1}
                     value={row.stock}
                     onChange={(event) =>
@@ -3813,7 +3831,8 @@ export default function DesignerDashboard() {
               {isReadyEditMode ? 'Update Ready-To-Wear Product' : 'Add Ready-To-Wear Product'}
             </h3>
             <p className="text-sm text-gray-500 mb-5">
-              Configure variant rows by size, color, and quantity to manage stock accurately.
+              Configure variant rows by size, color, and quantity to manage stock accurately. Minimum stock per
+              variant: {minReadyVariantStock}.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4054,7 +4073,7 @@ export default function DesignerDashboard() {
                         <label className="mb-1 block text-xs font-medium text-gray-600">Quantity</label>
                         <input
                           type="number"
-                          min="0"
+                          min={minReadyVariantStock}
                           step="1"
                           value={row.stock}
                           onChange={(event) =>

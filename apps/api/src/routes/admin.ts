@@ -207,6 +207,7 @@ const ADMIN_FEATURED_PRODUCT_DESCRIPTION_DEFAULTS = {
 };
 const ADMIN_READY_TO_WEAR_SIZES_DEFAULTS = {
   sizes: [...DEFAULT_READY_TO_WEAR_SIZES],
+  minVariantStock: 2,
 };
 const ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS = {
   title: 'Ready-To-Wear Size Guide',
@@ -292,6 +293,7 @@ const adminReadyToWearSizesUpdateSchema = z.object({
     .array(z.string().trim().min(1).max(20))
     .min(3)
     .max(20),
+  minVariantStock: z.coerce.number().int().min(2).max(500).optional(),
 });
 const adminReadyToWearSizeGuideUpdateSchema = z.object({
   title: z.string().trim().min(3).max(120),
@@ -487,7 +489,13 @@ const normalizeAdminReadyToWearSizesSettings = (raw: unknown) => {
   if (normalized.length < 3 || normalized.length > 20) {
     return { ...ADMIN_READY_TO_WEAR_SIZES_DEFAULTS };
   }
-  return { sizes: normalized };
+  const minVariantStockRaw = Number(row.minVariantStock);
+  return {
+    sizes: normalized,
+    minVariantStock: Number.isFinite(minVariantStockRaw)
+      ? Math.max(2, Math.min(500, Math.floor(minVariantStockRaw)))
+      : ADMIN_READY_TO_WEAR_SIZES_DEFAULTS.minVariantStock,
+  };
 };
 const normalizeAdminReadyToWearSizeGuideSettings = (raw: unknown) => {
   if (!raw || typeof raw !== 'object') return { ...ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS };
@@ -4918,6 +4926,8 @@ router.post('/products', async (req, res, next) => {
     if (!payload.designerId || !payload.categoryId) {
       return res.status(400).json({ success: false, message: 'designerId and categoryId are required for ready-to-wear.' });
     }
+    const { settings: readyToWearSizeSettings } = await readAdminReadyToWearSizesSettings();
+    const minVariantStock = Math.max(2, Number(readyToWearSizeSettings?.minVariantStock || 2));
     const normalizedVariants =
       Array.isArray(payload.variants) && payload.variants.length > 0
         ? payload.variants.map((entry) => ({
@@ -4932,10 +4942,16 @@ router.post('/products', async (req, res, next) => {
               size: normalizeReadyToWearSize(payload.size || 'M'),
               color: DEFAULT_READY_TO_WEAR_COLOR,
               price: resolvedPrice,
-              stock: Number(payload.stock ?? 0),
+              stock: Number(payload.stock ?? minVariantStock),
               variantKey: encodeReadyToWearVariantKey(payload.size || 'M', DEFAULT_READY_TO_WEAR_COLOR),
             },
           ];
+    if (normalizedVariants.some((entry) => !Number.isFinite(entry.stock) || entry.stock < minVariantStock)) {
+      return res.status(400).json({
+        success: false,
+        message: `Each ready-to-wear variant stock must be at least ${minVariantStock}.`,
+      });
+    }
     if (new Set(normalizedVariants.map((entry) => entry.variantKey)).size !== normalizedVariants.length) {
       return res.status(400).json({
         success: false,
@@ -4960,7 +4976,7 @@ router.post('/products', async (req, res, next) => {
           create: normalizedVariants.map((entry) => ({
             size: entry.variantKey,
             price: entry.price > 0 ? entry.price : resolvedPrice,
-            stock: entry.stock,
+            stock: Math.max(minVariantStock, Math.floor(Number(entry.stock || 0))),
           })),
         },
       },
@@ -5056,6 +5072,8 @@ router.patch('/products/:type/:id', async (req, res, next) => {
       return res.json({ success: true, data: { id: updated.id, type }, message: 'Product updated.' });
     }
 
+    const { settings: readyToWearSizeSettings } = await readAdminReadyToWearSizesSettings();
+    const minVariantStock = Math.max(2, Number(readyToWearSizeSettings?.minVariantStock || 2));
     const updated = await prisma.readyToWear.update({
       where: { id: req.params.id },
       data: {
@@ -5093,6 +5111,12 @@ router.patch('/products/:type/:id', async (req, res, next) => {
         stock: Number(entry.stock || 0),
         variantKey: encodeReadyToWearVariantKey(entry.size, entry.color),
       }));
+      if (normalizedVariants.some((entry) => !Number.isFinite(entry.stock) || entry.stock < minVariantStock)) {
+        return res.status(400).json({
+          success: false,
+          message: `Each ready-to-wear variant stock must be at least ${minVariantStock}.`,
+        });
+      }
       if (new Set(normalizedVariants.map((entry) => entry.variantKey)).size !== normalizedVariants.length) {
         return res.status(400).json({
           success: false,
@@ -5106,7 +5130,7 @@ router.patch('/products/:type/:id', async (req, res, next) => {
             readyToWearId: updated.id,
             size: entry.variantKey,
             price: entry.price > 0 ? entry.price : Number(resolvedPrice || 0),
-            stock: entry.stock,
+            stock: Math.max(minVariantStock, Math.floor(Number(entry.stock || 0))),
           })),
         });
       }
@@ -5119,6 +5143,12 @@ router.patch('/products/:type/:id', async (req, res, next) => {
         });
       }
       if (payload.stock !== undefined) {
+        if (!Number.isFinite(Number(payload.stock)) || Number(payload.stock) < minVariantStock) {
+          return res.status(400).json({
+            success: false,
+            message: `Ready-to-wear stock must be at least ${minVariantStock}.`,
+          });
+        }
         const existingSizes = await prisma.readyToWearSize.findMany({
           where: { readyToWearId: updated.id },
           select: { id: true },
@@ -5127,7 +5157,7 @@ router.patch('/products/:type/:id', async (req, res, next) => {
         if (existingSizes.length === 1) {
           await prisma.readyToWearSize.update({
             where: { id: existingSizes[0].id },
-            data: { stock: payload.stock },
+            data: { stock: Math.max(minVariantStock, Math.floor(Number(payload.stock || 0))) },
           });
         }
       }
@@ -5140,7 +5170,9 @@ router.patch('/products/:type/:id', async (req, res, next) => {
             readyToWearId: updated.id,
             size: encodeReadyToWearVariantKey('M', DEFAULT_READY_TO_WEAR_COLOR),
             price: Number(resolvedPrice),
-            stock: Number.isFinite(Number(payload.stock)) ? Math.max(0, Math.floor(Number(payload.stock))) : 0,
+            stock: Number.isFinite(Number(payload.stock))
+              ? Math.max(minVariantStock, Math.floor(Number(payload.stock)))
+              : minVariantStock,
           },
         });
       }

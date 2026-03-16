@@ -311,6 +311,7 @@ const slugify = (value: string) =>
 const normalizeCurrencyCode = (value: unknown) => String(value || '').trim().toUpperCase();
 const DEFAULT_READY_TO_WEAR_STANDARD_SIZES = ['S', 'M', 'L', 'XL'];
 const HOMEPAGE_READY_TO_WEAR_SIZES_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZES';
+const DEFAULT_READY_TO_WEAR_MIN_VARIANT_STOCK = 2;
 const normalizeReadyToWearSize = (value: unknown) => String(value || '').trim().toUpperCase();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
 const DEFAULT_READY_TO_WEAR_COLOR = 'DEFAULT';
@@ -353,7 +354,7 @@ const decodeReadyToWearVariantKey = (variantKey: unknown) => {
   };
 };
 
-async function readAllowedReadyToWearSizes() {
+async function readReadyToWearVariantRules() {
   await prisma.$executeRawUnsafe(
     `CREATE TABLE IF NOT EXISTS "HomepageSectionSetting" (
       "id" TEXT NOT NULL,
@@ -372,10 +373,16 @@ async function readAllowedReadyToWearSizes() {
     HOMEPAGE_READY_TO_WEAR_SIZES_SETTINGS_KEY
   );
   const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-  if (!row) return [...DEFAULT_READY_TO_WEAR_STANDARD_SIZES];
+  if (!row) {
+    return {
+      sizes: [...DEFAULT_READY_TO_WEAR_STANDARD_SIZES],
+      minVariantStock: DEFAULT_READY_TO_WEAR_MIN_VARIANT_STOCK,
+    };
+  }
   try {
     const parsed = JSON.parse(String(row.value || '{}')) as any;
     const list = Array.isArray(parsed?.sizes) ? parsed.sizes : [];
+    const minVariantStockRaw = Number(parsed?.minVariantStock);
     const normalized = Array.from(
       new Set(
         list
@@ -383,10 +390,19 @@ async function readAllowedReadyToWearSizes() {
           .filter((entry: string) => entry.length > 0 && entry.length <= 20)
       )
     );
-    if (normalized.length < 3 || normalized.length > 20) return [...DEFAULT_READY_TO_WEAR_STANDARD_SIZES];
-    return normalized;
+    const sizes =
+      normalized.length < 3 || normalized.length > 20 ? [...DEFAULT_READY_TO_WEAR_STANDARD_SIZES] : normalized;
+    return {
+      sizes,
+      minVariantStock: Number.isFinite(minVariantStockRaw)
+        ? Math.max(DEFAULT_READY_TO_WEAR_MIN_VARIANT_STOCK, Math.floor(minVariantStockRaw))
+        : DEFAULT_READY_TO_WEAR_MIN_VARIANT_STOCK,
+    };
   } catch {
-    return [...DEFAULT_READY_TO_WEAR_STANDARD_SIZES];
+    return {
+      sizes: [...DEFAULT_READY_TO_WEAR_STANDARD_SIZES],
+      minVariantStock: DEFAULT_READY_TO_WEAR_MIN_VARIANT_STOCK,
+    };
   }
 }
 
@@ -2093,11 +2109,12 @@ router.get('/ready-to-wear', async (req, res, next) => {
 // Create ready-to-wear product
 router.get('/ready-to-wear-size-options', async (_req, res, next) => {
   try {
-    const allowedSizes = await readAllowedReadyToWearSizes();
+    const readyVariantRules = await readReadyToWearVariantRules();
     res.json({
       success: true,
       data: {
-        sizes: allowedSizes,
+        sizes: readyVariantRules.sizes,
+        minVariantStock: readyVariantRules.minVariantStock,
         standardSizes: [...DEFAULT_READY_TO_WEAR_STANDARD_SIZES],
       },
     });
@@ -2130,7 +2147,9 @@ router.post('/ready-to-wear', async (req, res, next) => {
 
     const data = schema.parse(req.body);
     await assertDesignerCanManageCatalog(req.user!.id, 'upload products');
-    const allowedSizes = await readAllowedReadyToWearSizes();
+    const readyVariantRules = await readReadyToWearVariantRules();
+    const allowedSizes = readyVariantRules.sizes;
+    const minVariantStock = readyVariantRules.minVariantStock;
     const normalizedSizes = data.sizes.map((row) => ({
       ...row,
       size: normalizeReadyToWearSize(row.size),
@@ -2148,6 +2167,12 @@ router.post('/ready-to-wear', async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Duplicate ready-to-wear size + color variants are not allowed.',
+      });
+    }
+    if (normalizedSizes.some((row) => !Number.isFinite(Number(row.stock)) || Number(row.stock) < minVariantStock)) {
+      return res.status(400).json({
+        success: false,
+        message: `Each variant stock must be at least ${minVariantStock}.`,
       });
     }
     const profile = await resolveDesignerProfile(req.user!.id);
@@ -2173,7 +2198,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
           create: normalizedSizes.map((row) => ({
             size: row.variantKey,
             price: Number((Number(row.price || 0) * pricing.usdPerUnit).toFixed(2)),
-            stock: row.stock,
+            stock: Math.max(minVariantStock, Math.floor(Number(row.stock || 0))),
           })),
         },
         images: {
@@ -2264,7 +2289,9 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
     });
     const data = schema.parse(req.body);
     await assertDesignerCanManageCatalog(req.user!.id, 'edit products');
-    const allowedSizes = await readAllowedReadyToWearSizes();
+    const readyVariantRules = await readReadyToWearVariantRules();
+    const allowedSizes = readyVariantRules.sizes;
+    const minVariantStock = readyVariantRules.minVariantStock;
     const normalizedSizes = data.sizes
       ? data.sizes.map((row) => ({
           ...row,
@@ -2285,6 +2312,12 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         return res.status(400).json({
           success: false,
           message: 'Duplicate ready-to-wear size + color variants are not allowed.',
+        });
+      }
+      if (normalizedSizes.some((row) => !Number.isFinite(Number(row.stock)) || Number(row.stock) < minVariantStock)) {
+        return res.status(400).json({
+          success: false,
+          message: `Each variant stock must be at least ${minVariantStock}.`,
         });
       }
     }
@@ -2384,7 +2417,7 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
               effectiveCurrencyCode === 'USD'
                 ? Number(row.price || 0)
                 : Number((Number(row.price || 0) * effectiveUsdPerUnit).toFixed(2)),
-            stock: row.stock,
+            stock: Math.max(minVariantStock, Math.floor(Number(row.stock || 0))),
           })),
         };
       }
@@ -2468,6 +2501,8 @@ const handleReadyToWearSizeStockUpdate = async (req: any, res: any, next: any) =
         .max(20),
     });
     const payload = schema.parse(req.body);
+    const readyVariantRules = await readReadyToWearVariantRules();
+    const minVariantStock = readyVariantRules.minVariantStock;
     const normalizedSizes = payload.sizes.map((entry) => ({
       size: normalizeReadyToWearSize(entry.size),
       color: normalizeReadyToWearColor(entry.color),
@@ -2478,6 +2513,12 @@ const handleReadyToWearSizeStockUpdate = async (req: any, res: any, next: any) =
       return res.status(400).json({
         success: false,
         message: 'Duplicate ready-to-wear size + color variants are not allowed.',
+      });
+    }
+    if (normalizedSizes.some((entry) => !Number.isFinite(entry.stock) || entry.stock < minVariantStock)) {
+      return res.status(400).json({
+        success: false,
+        message: `Each variant stock must be at least ${minVariantStock}.`,
       });
     }
 
@@ -2521,7 +2562,7 @@ const handleReadyToWearSizeStockUpdate = async (req: any, res: any, next: any) =
       normalizedSizes.map((entry) =>
         prisma.readyToWearSize.update({
           where: { id: sizeIdByVariantKey.get(entry.variantKey)! },
-          data: { stock: entry.stock },
+          data: { stock: Math.max(minVariantStock, Math.floor(Number(entry.stock || 0))) },
         })
       )
     );

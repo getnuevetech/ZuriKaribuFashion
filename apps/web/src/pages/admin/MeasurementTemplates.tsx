@@ -38,6 +38,7 @@ export default function AdminMeasurementTemplates() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [readyToWearSizes, setReadyToWearSizes] = useState<string[]>([...DEFAULT_READY_TO_WEAR_SIZE_OPTIONS]);
+  const [minVariantStock, setMinVariantStock] = useState(2);
   const [newReadyToWearSize, setNewReadyToWearSize] = useState('');
   const [sizeGuideTitle, setSizeGuideTitle] = useState('Ready-To-Wear Size Guide');
   const [sizeGuideContent, setSizeGuideContent] = useState('');
@@ -61,6 +62,9 @@ export default function AdminMeasurementTemplates() {
         }
         if (sizesResult.status === 'fulfilled' && sizesResult.value.success && Array.isArray(sizesResult.value.data?.sizes)) {
           setReadyToWearSizes(normalizeReadyToWearSizes(sizesResult.value.data.sizes));
+          setMinVariantStock(
+            Math.max(2, Math.min(500, Math.floor(Number(sizesResult.value.data?.minVariantStock || 2))))
+          );
         }
         if (sizeGuideResult.status === 'fulfilled' && sizeGuideResult.value.success) {
           setSizeGuideTitle((sizeGuideResult.value.data?.title || 'Ready-To-Wear Size Guide').trim());
@@ -100,6 +104,11 @@ export default function AdminMeasurementTemplates() {
         setError('Ready-to-wear sizes must include at least 3 and at most 20 options.');
         return;
       }
+      const normalizedMinVariantStock = Math.max(2, Math.min(500, Math.floor(Number(minVariantStock || 2))));
+      if (!Number.isFinite(Number(minVariantStock)) || normalizedMinVariantStock < 2) {
+        setError('Minimum variant stock must be at least 2.');
+        return;
+      }
       const cleanSizeGuideTitle = sizeGuideTitle.trim();
       const cleanSizeGuideContent = sizeGuideContent.trim();
       if (cleanSizeGuideTitle.length < 3 || cleanSizeGuideContent.length < 20) {
@@ -110,7 +119,10 @@ export default function AdminMeasurementTemplates() {
         await api.admin.updateMeasurementTemplates(payload);
       }
       const [sizesSaveResult, guideSaveResult] = await Promise.allSettled([
-        api.admin.updateReadyToWearSizesSettings(normalizeReadyToWearSizes(readyToWearSizes)),
+        api.admin.updateReadyToWearSizesSettings({
+          sizes: normalizeReadyToWearSizes(readyToWearSizes),
+          minVariantStock: normalizedMinVariantStock,
+        }),
         api.admin.updateReadyToWearSizeGuideSettings({
           title: cleanSizeGuideTitle,
           content: cleanSizeGuideContent,
@@ -176,6 +188,21 @@ export default function AdminMeasurementTemplates() {
           <p className="mt-1 text-xs text-gray-600">
             Designers can only upload ready-to-wear sizes from the options you define below.
           </p>
+          <div className="mt-3">
+            <label className="mb-1 block text-xs font-semibold text-gray-700">Minimum Variant Stock (Global)</label>
+            <input
+              type="number"
+              min={2}
+              max={500}
+              step={1}
+              value={minVariantStock}
+              onChange={(event) => setMinVariantStock(Number(event.target.value || 2))}
+              className="w-full rounded-lg border bg-white px-3 py-2 text-sm md:w-64"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Every ready-to-wear variant must have stock at least this value.
+            </p>
+          </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {readyToWearSizes.map((size) => (
               <span key={size} className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs">

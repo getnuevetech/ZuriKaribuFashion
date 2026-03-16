@@ -172,6 +172,7 @@ export default function AdminProducts() {
   const [designerFabricAccessRequestLimit] = useState(20);
   const [designerFabricAccessRequestTotalPages, setDesignerFabricAccessRequestTotalPages] = useState(1);
   const [designerFabricAccessRequestTotal, setDesignerFabricAccessRequestTotal] = useState(0);
+  const [minReadyVariantStock, setMinReadyVariantStock] = useState(2);
   const [form, setForm] = useState({
     type: 'FABRIC' as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR',
     name: '',
@@ -189,9 +190,9 @@ export default function AdminProducts() {
     images: [] as string[],
     minYards: 1,
     stockYards: 0,
-    stock: 0,
+    stock: 2,
     size: 'M',
-    readyVariants: [{ size: 'M', color: 'DEFAULT', price: 0, stock: 0 }] as ReadyVariantRow[],
+    readyVariants: [{ size: 'M', color: 'DEFAULT', price: 0, stock: 2 }] as ReadyVariantRow[],
   });
 
   const getDefaultFeaturedSection = (type: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR') => {
@@ -364,7 +365,16 @@ export default function AdminProducts() {
   }, [selectedOwnerCountry, currencyMatrix]);
 
   const fetchOptions = async () => {
-    const [productOptionsResult, currencyResult, ownerResult, categoriesResult, materialsResult, sellerProfilesResult, designerProfilesResult] =
+    const [
+      productOptionsResult,
+      currencyResult,
+      ownerResult,
+      categoriesResult,
+      materialsResult,
+      sellerProfilesResult,
+      designerProfilesResult,
+      readySizesSettingsResult,
+    ] =
       await Promise.allSettled([
       api.admin.getProductOptions(),
       api.currency.getConfig(),
@@ -373,6 +383,7 @@ export default function AdminProducts() {
       api.admin.getMaterials(),
       api.admin.getVendorProfiles({ role: 'FABRIC_SELLER', page: 1, limit: 500 }),
       api.admin.getVendorProfiles({ role: 'FASHION_DESIGNER', page: 1, limit: 500 }),
+      api.admin.getReadyToWearSizesSettings(),
     ]);
 
     const productOptions =
@@ -512,6 +523,9 @@ export default function AdminProducts() {
 
     if (currencyResult.status === 'fulfilled' && currencyResult.value.success) {
       setCurrencyMatrix(Array.isArray(currencyResult.value.data?.matrix) ? currencyResult.value.data.matrix : []);
+    }
+    if (readySizesSettingsResult.status === 'fulfilled' && readySizesSettingsResult.value.success) {
+      setMinReadyVariantStock(Math.max(2, Math.floor(Number(readySizesSettingsResult.value.data?.minVariantStock || 2))));
     }
   };
 
@@ -784,9 +798,9 @@ export default function AdminProducts() {
       images: [],
       minYards: 1,
       stockYards: 0,
-      stock: 0,
+      stock: minReadyVariantStock,
       size: 'M',
-      readyVariants: [{ size: 'M', color: 'DEFAULT', price: 0, stock: 0 }],
+      readyVariants: [{ size: 'M', color: 'DEFAULT', price: 0, stock: minReadyVariantStock }],
     });
     setImagesDirty(false);
     setReadyVariantsDirty(false);
@@ -836,7 +850,7 @@ export default function AdminProducts() {
           size: decoded.size || 'M',
           color: decoded.color || 'DEFAULT',
           price: Number(entry?.price || sourceProduct.finalPrice || 0),
-          stock: Math.max(0, Number(entry?.stock || 0)),
+          stock: Math.max(minReadyVariantStock, Number(entry?.stock || 0)),
         };
       })
       .filter((entry: any) => entry.size && Number.isFinite(entry.price));
@@ -868,12 +882,12 @@ export default function AdminProducts() {
             : [],
       minYards: 1,
       stockYards: 0,
-      stock: Math.max(0, Number(existingReadyVariants[0]?.stock || 0)),
+      stock: Math.max(minReadyVariantStock, Number(existingReadyVariants[0]?.stock || 0)),
       size: 'M',
       readyVariants:
         existingReadyVariants.length > 0
           ? existingReadyVariants
-          : [{ size: 'M', color: 'DEFAULT', price: Number(sourceProduct.finalPrice || 0), stock: 0 }],
+          : [{ size: 'M', color: 'DEFAULT', price: Number(sourceProduct.finalPrice || 0), stock: minReadyVariantStock }],
     });
     setImagesDirty(false);
     setReadyVariantsDirty(shouldForceVariantSave);
@@ -961,10 +975,10 @@ export default function AdminProducts() {
               !Number.isFinite(Number(variant.price || 0)) ||
               Number(variant.price || 0) <= 0 ||
               !Number.isFinite(Number(variant.stock || 0)) ||
-              Number(variant.stock || 0) < 0
+              Number(variant.stock || 0) < minReadyVariantStock
           )
         ) {
-          setModalError('Each ready-to-wear variant needs size, price > 0, and stock >= 0.');
+          setModalError(`Each ready-to-wear variant needs size, price > 0, and stock >= ${minReadyVariantStock}.`);
           setSaving(false);
           return;
         }
@@ -982,7 +996,7 @@ export default function AdminProducts() {
                 size: String(variant.size || '').trim().toUpperCase(),
                 color: String(variant.color || 'DEFAULT').trim().toUpperCase() || 'DEFAULT',
                 price: Number(variant.price || 0),
-                stock: Math.max(0, Math.floor(Number(variant.stock || 0))),
+                stock: Math.max(minReadyVariantStock, Math.floor(Number(variant.stock || 0))),
               }))
             : undefined;
         await api.admin.updateProduct(editing.type, editing.id, {
@@ -1011,7 +1025,7 @@ export default function AdminProducts() {
                 size: String(variant.size || '').trim().toUpperCase(),
                 color: String(variant.color || 'DEFAULT').trim().toUpperCase() || 'DEFAULT',
                 price: Number(variant.price || 0),
-                stock: Math.max(0, Math.floor(Number(variant.stock || 0))),
+                stock: Math.max(minReadyVariantStock, Math.floor(Number(variant.stock || 0))),
               }))
             : undefined;
         const created = await api.admin.createProduct({
@@ -1851,7 +1865,7 @@ export default function AdminProducts() {
                           nextType === 'READY_TO_WEAR'
                             ? prev.readyVariants.length > 0
                               ? prev.readyVariants
-                              : [{ size: 'M', color: 'DEFAULT', price: Number(prev.price || 0), stock: 0 }]
+                              : [{ size: 'M', color: 'DEFAULT', price: Number(prev.price || 0), stock: minReadyVariantStock }]
                             : prev.readyVariants,
                       };
                     })
@@ -1965,7 +1979,9 @@ export default function AdminProducts() {
               {(editing?.type || form.type) === 'READY_TO_WEAR' ? (
                 <div className="space-y-2 rounded-lg border p-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-gray-800">Ready-To-Wear Variants (Size + Color + Quantity)</p>
+                    <p className="text-sm font-medium text-gray-800">
+                      Ready-To-Wear Variants (Size + Color + Quantity, min stock {minReadyVariantStock})
+                    </p>
                     <Button
                       type="button"
                       variant="outline"
@@ -1976,7 +1992,12 @@ export default function AdminProducts() {
                           ...prev,
                           readyVariants: [
                             ...prev.readyVariants,
-                            { size: 'M', color: 'DEFAULT', price: Number(prev.price || 0), stock: 0 },
+                            {
+                              size: 'M',
+                              color: 'DEFAULT',
+                              price: Number(prev.price || 0),
+                              stock: minReadyVariantStock,
+                            },
                           ],
                         }));
                       }}
@@ -2034,7 +2055,7 @@ export default function AdminProducts() {
                         />
                         <input
                           type="number"
-                          min={0}
+                          min={minReadyVariantStock}
                           step="1"
                           value={variant.stock}
                           onChange={(event) => {

@@ -401,12 +401,17 @@ type MeasurementTemplateRow = {
   instructions?: string;
 };
 type ReadyToWearStandardSize = string;
+type ReadyToWearSizeSettings = {
+  sizes: Array<ReadyToWearStandardSize>;
+  minVariantStock: number;
+};
 
 const MEASUREMENT_TEMPLATES_FALLBACK_KEY = 'af_measurement_templates_fallback_v1';
 const READY_TO_WEAR_SIZES_FALLBACK_KEY = 'af_ready_to_wear_sizes_fallback_v1';
 const READY_TO_WEAR_SIZE_GUIDE_FALLBACK_KEY = 'af_ready_to_wear_size_guide_fallback_v1';
 
 const READY_TO_WEAR_SIZES_DEFAULT: Array<ReadyToWearStandardSize> = ['S', 'M', 'L', 'XL'];
+const READY_TO_WEAR_MIN_VARIANT_STOCK_DEFAULT = 2;
 const READY_TO_WEAR_SIZE_GUIDE_DEFAULT = {
   title: 'Ready-To-Wear Size Guide',
   content:
@@ -441,6 +446,12 @@ const normalizeReadyToWearSizes = (input: unknown): Array<ReadyToWearStandardSiz
   return normalized.length >= 3 ? normalized : [...READY_TO_WEAR_SIZES_DEFAULT];
 };
 
+const normalizeReadyToWearMinVariantStock = (input: unknown): number => {
+  const numeric = Number(input);
+  if (!Number.isFinite(numeric)) return READY_TO_WEAR_MIN_VARIANT_STOCK_DEFAULT;
+  return Math.max(2, Math.min(500, Math.floor(numeric)));
+};
+
 const normalizeReadyToWearSizeGuide = (input: unknown) => {
   const row = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
   const title = String(row.title || '').trim();
@@ -473,27 +484,42 @@ const writeMeasurementTemplatesFallback = (templates: MeasurementTemplateRow[]) 
   }
 };
 
-const readReadyToWearSizesFallback = (): { sizes: Array<ReadyToWearStandardSize> } => {
+const readReadyToWearSizesFallback = (): ReadyToWearSizeSettings => {
   if (typeof window === 'undefined' || !window.localStorage) {
-    return { sizes: [...READY_TO_WEAR_SIZES_DEFAULT] };
+    return {
+      sizes: [...READY_TO_WEAR_SIZES_DEFAULT],
+      minVariantStock: READY_TO_WEAR_MIN_VARIANT_STOCK_DEFAULT,
+    };
   }
   try {
     const raw = window.localStorage.getItem(READY_TO_WEAR_SIZES_FALLBACK_KEY);
-    if (!raw) return { sizes: [...READY_TO_WEAR_SIZES_DEFAULT] };
+    if (!raw) {
+      return {
+        sizes: [...READY_TO_WEAR_SIZES_DEFAULT],
+        minVariantStock: READY_TO_WEAR_MIN_VARIANT_STOCK_DEFAULT,
+      };
+    }
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     return {
       sizes: normalizeReadyToWearSizes(parsed?.sizes),
+      minVariantStock: normalizeReadyToWearMinVariantStock(parsed?.minVariantStock),
     };
   } catch {
-    return { sizes: [...READY_TO_WEAR_SIZES_DEFAULT] };
+    return {
+      sizes: [...READY_TO_WEAR_SIZES_DEFAULT],
+      minVariantStock: READY_TO_WEAR_MIN_VARIANT_STOCK_DEFAULT,
+    };
   }
 };
-const writeReadyToWearSizesFallback = (sizes: Array<ReadyToWearStandardSize>) => {
+const writeReadyToWearSizesFallback = (settings: ReadyToWearSizeSettings) => {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
     window.localStorage.setItem(
       READY_TO_WEAR_SIZES_FALLBACK_KEY,
-      JSON.stringify({ sizes: normalizeReadyToWearSizes(sizes) })
+      JSON.stringify({
+        sizes: normalizeReadyToWearSizes(settings.sizes),
+        minVariantStock: normalizeReadyToWearMinVariantStock(settings.minVariantStock),
+      })
     );
   } catch {
     // ignore localStorage write failures
@@ -583,11 +609,14 @@ async function readReadyToWearSizesSettingsWithFallback<T>() {
   for (const path of ['/admin/ready-to-wear-sizes', '/admin/readytowear-sizes']) {
     try {
       const response = await apiService.get<any>(path, noCacheRequestConfig());
-      const normalized = normalizeReadyToWearSizes(response?.data?.sizes);
-      writeReadyToWearSizesFallback(normalized);
+      const normalizedSettings: ReadyToWearSizeSettings = {
+        sizes: normalizeReadyToWearSizes(response?.data?.sizes),
+        minVariantStock: normalizeReadyToWearMinVariantStock(response?.data?.minVariantStock),
+      };
+      writeReadyToWearSizesFallback(normalizedSettings);
       return {
         success: true,
-        data: { sizes: normalized },
+        data: normalizedSettings,
       } as T;
     } catch (error) {
       lastError = error;
@@ -604,32 +633,35 @@ async function readReadyToWearSizesSettingsWithFallback<T>() {
   throw lastError ?? new Error('Ready-to-wear sizes route not found.');
 }
 
-async function writeReadyToWearSizesSettingsWithFallback<T>(sizes: Array<ReadyToWearStandardSize>) {
-  const normalized = normalizeReadyToWearSizes(sizes);
+async function writeReadyToWearSizesSettingsWithFallback<T>(input: ReadyToWearSizeSettings) {
+  const normalizedSettings: ReadyToWearSizeSettings = {
+    sizes: normalizeReadyToWearSizes(input?.sizes),
+    minVariantStock: normalizeReadyToWearMinVariantStock(input?.minVariantStock),
+  };
   let lastError: unknown = null;
   for (const path of ['/admin/ready-to-wear-sizes', '/admin/readytowear-sizes']) {
     try {
-      const response = await apiService.put<any>(path, { sizes: normalized });
-      writeReadyToWearSizesFallback(normalized);
-      return (response || { success: true, data: { sizes: normalized } }) as T;
+      const response = await apiService.put<any>(path, normalizedSettings);
+      writeReadyToWearSizesFallback(normalizedSettings);
+      return (response || { success: true, data: normalizedSettings }) as T;
     } catch (putError) {
       lastError = putError;
       if (!isRetryableRouteError(putError)) throw putError;
     }
     try {
-      const response = await apiService.patch<any>(path, { sizes: normalized });
-      writeReadyToWearSizesFallback(normalized);
-      return (response || { success: true, data: { sizes: normalized } }) as T;
+      const response = await apiService.patch<any>(path, normalizedSettings);
+      writeReadyToWearSizesFallback(normalizedSettings);
+      return (response || { success: true, data: normalizedSettings }) as T;
     } catch (patchError) {
       lastError = patchError;
       if (!isRetryableRouteError(patchError)) throw patchError;
     }
   }
   if (isRetryableRouteError(lastError)) {
-    writeReadyToWearSizesFallback(normalized);
+    writeReadyToWearSizesFallback(normalizedSettings);
     return {
       success: true,
-      data: { sizes: normalized },
+      data: normalizedSettings,
       message: 'Ready-to-wear sizes saved to local fallback.',
     } as T;
   }
@@ -5971,16 +6003,16 @@ const adminApi = {
   getReadyToWearSizesSettings: () =>
     readReadyToWearSizesSettingsWithFallback<{
       success: boolean;
-      data: { sizes: string[] };
+      data: { sizes: string[]; minVariantStock: number };
       message?: string;
     }>(),
 
-  updateReadyToWearSizesSettings: (sizes: string[]) =>
+  updateReadyToWearSizesSettings: (settings: { sizes: string[]; minVariantStock: number }) =>
     writeReadyToWearSizesSettingsWithFallback<{
       success: boolean;
-      data: { sizes: string[] };
+      data: { sizes: string[]; minVariantStock: number };
       message?: string;
-    }>(sizes),
+    }>(settings),
 
   getReadyToWearSizeGuideSettings: () =>
     readReadyToWearSizeGuideSettingsWithFallback<{
@@ -7103,7 +7135,7 @@ const designerApi = {
     readDesignerReadyToWearWithFallback<{ success: boolean; data: any[] }>(),
 
   getReadyToWearSizeOptions: () =>
-    apiService.get<{ success: boolean; data: { sizes: string[]; standardSizes: string[] } }>(
+    apiService.get<{ success: boolean; data: { sizes: string[]; standardSizes: string[]; minVariantStock: number } }>(
       '/designer/ready-to-wear-size-options'
     ),
 
