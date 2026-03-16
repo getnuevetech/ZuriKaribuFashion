@@ -6007,6 +6007,62 @@ const adminApi = {
     };
   },
 
+  getProductStockMonitor: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        threshold: number;
+        updatedAt?: string | null;
+        summary: {
+          total: number;
+          zeroStockCount: number;
+          byType?: {
+            FABRIC: number;
+            READY_TO_WEAR: number;
+          };
+          sync?: {
+            changed: number;
+            disabledOutOfStock: number;
+            reenabledInStock: number;
+          };
+        };
+        rows: Array<{
+          productId: string;
+          productType: 'FABRIC' | 'READY_TO_WEAR';
+          name: string;
+          ownerName: string;
+          ownerCountry: string;
+          ownerUserId: string | null;
+          stockValue: number;
+          status: string;
+          isAvailable: boolean;
+          updatedAt: string;
+        }>;
+      };
+    }>('/admin/products/stock-monitor'),
+
+  updateProductStockMonitor: (payload: { threshold: number }) =>
+    apiService.patch<{
+      success: boolean;
+      message?: string;
+      data: {
+        threshold: number;
+        summary: { total: number; zeroStockCount: number };
+        rows: Array<any>;
+      };
+    }>('/admin/products/stock-monitor', payload),
+
+  runProductStockMonitorSync: () =>
+    apiService.post<{
+      success: boolean;
+      message?: string;
+      data: {
+        changed: number;
+        disabledOutOfStock: number;
+        reenabledInStock: number;
+      };
+    }>('/admin/products/stock-monitor/sync', {}),
+
   getProductOptions: () =>
     apiService.get<{
       success: boolean;

@@ -1100,6 +1100,28 @@ export default function Checkout() {
       const customItems = items.filter((item) => item.kind === 'CUSTOM_DESIGN');
       const readyToWearItems = items.filter((item) => item.kind === 'READY_TO_WEAR');
       const fabricOnlyItems = items.filter((item) => item.kind === 'FABRIC_ONLY');
+      const groupedFabricItems = Array.from(
+        fabricOnlyItems.reduce((map, item) => {
+          const fabricId = String(item.fabricId || '').trim();
+          if (!fabricId) return map;
+          const existing = map.get(fabricId);
+          if (!existing) {
+            map.set(fabricId, {
+              key: fabricId,
+              fabricId,
+              yards: Number(item.yards || 0),
+              subtotal: Number(item.pricePerYard || 0) * Number(item.yards || 0),
+            });
+            return map;
+          }
+          existing.yards += Number(item.yards || 0);
+          existing.subtotal += Number(item.pricePerYard || 0) * Number(item.yards || 0);
+          return map;
+        }, new Map<string, { key: string; fabricId: string; yards: number; subtotal: number }>())
+      ).map(([, value], index) => ({
+        ...value,
+        key: `fabric-${index}`,
+      }));
       const discountBudget = Math.max(0, Number(promoPreview?.discountUsd || 0));
       const customSegments = customItems.map((item, index) => ({
         key: `custom-${index}`,
@@ -1109,9 +1131,9 @@ export default function Checkout() {
         key: 'ready',
         subtotal: readyToWearItems.reduce((sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 1), 0),
       };
-      const fabricSegments = fabricOnlyItems.map((item, index) => ({
-        key: `fabric-${index}`,
-        subtotal: Number(item.pricePerYard || 0) * Number(item.yards || 1),
+      const fabricSegments = groupedFabricItems.map((item) => ({
+        key: item.key,
+        subtotal: Number(item.subtotal || 0),
       }));
       const allSegments = [...customSegments, ...(readySegment.subtotal > 0 ? [readySegment] : []), ...fabricSegments];
       const totalSegmentSubtotal = allSegments.reduce((sum, entry) => sum + Number(entry.subtotal || 0), 0);
@@ -1180,8 +1202,7 @@ export default function Checkout() {
         }
       }
 
-      for (let index = 0; index < fabricOnlyItems.length; index += 1) {
-        const item = fabricOnlyItems[index];
+      for (const item of groupedFabricItems) {
         if (!item.fabricId || Number(item.yards || 0) < 1) continue;
         const fabricOrderResponse = await api.orders.createFabricOnlyOrder({
           fabricId: item.fabricId,
@@ -1190,7 +1211,7 @@ export default function Checkout() {
           paymentMethod,
           paymentIntentId,
           promoCode: promoPreview?.code || undefined,
-          discountUsd: allocatedDiscount.get(`fabric-${index}`) || 0,
+          discountUsd: allocatedDiscount.get(item.key) || 0,
           ...shippingPayload,
         });
         if (fabricOrderResponse.success && fabricOrderResponse.data?.orderNumber) {

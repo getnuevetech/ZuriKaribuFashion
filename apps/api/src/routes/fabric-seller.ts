@@ -24,6 +24,7 @@ import {
   readActiveProductEditGrantsForProducts,
   readProductEditPolicySettings,
 } from '../utils/product-change-requests';
+import { syncFabricAvailabilityById } from '../utils/product-stock-monitor';
 
 const router = Router();
 let sellerGovernanceSchemaEnsured = false;
@@ -886,6 +887,7 @@ router.patch('/fabrics/:id/stock', async (req, res, next) => {
       where: { id },
       data: { stockYards: stock },
     });
+    await syncFabricAvailabilityById(id, { notifyVendor: true });
 
     res.json({
       success: true,
@@ -954,6 +956,7 @@ router.post('/fabrics', async (req, res, next) => {
         images: true,
       },
     });
+    await syncFabricAvailabilityById(fabric.id, { notifyVendor: false });
 
     // Update seller fabric count
     await prisma.fabricSellerProfile.update({
@@ -1114,6 +1117,7 @@ router.patch('/fabrics/:id', async (req, res, next) => {
         },
       });
     });
+    await syncFabricAvailabilityById(id, { notifyVendor: true });
 
     if (pricing) {
       await setProductCurrencyMetadata({

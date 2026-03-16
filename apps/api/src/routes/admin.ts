@@ -21,6 +21,13 @@ import {
 } from '../utils/vendor-dashboard-governance';
 import { readTryOnInsights } from '../utils/try-on-insights';
 import { readTryOnSettings, saveTryOnSettings } from '../utils/try-on-settings';
+import {
+  listStockMonitorRows,
+  readStockMonitorSettings,
+  syncAllStockAvailability,
+  syncProductAvailabilityByType,
+  writeStockMonitorSettings,
+} from '../utils/product-stock-monitor';
 
 const router = Router();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
@@ -4841,6 +4848,77 @@ router.get('/products', async (req, res, next) => {
   }
 });
 
+router.get('/products/stock-monitor', async (_req, res, next) => {
+  try {
+    const [settingsBundle, syncSummary] = await Promise.all([
+      readStockMonitorSettings(),
+      syncAllStockAvailability({ notifyVendor: true }),
+    ]);
+    const threshold = Number(settingsBundle.settings.threshold || 0);
+    const rows = await listStockMonitorRows(threshold);
+    res.json({
+      success: true,
+      data: {
+        threshold,
+        updatedAt: settingsBundle.updatedAt,
+        summary: {
+          total: rows.length,
+          zeroStockCount: rows.filter((row) => Number(row.stockValue || 0) <= 0).length,
+          byType: {
+            FABRIC: rows.filter((row) => row.productType === 'FABRIC').length,
+            READY_TO_WEAR: rows.filter((row) => row.productType === 'READY_TO_WEAR').length,
+          },
+          sync: syncSummary,
+        },
+        rows,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/products/stock-monitor', async (req, res, next) => {
+  try {
+    const payload = z
+      .object({
+        threshold: z.coerce.number().int().min(0).max(100000),
+      })
+      .parse(req.body || {});
+    const settings = await writeStockMonitorSettings({
+      threshold: payload.threshold,
+    });
+    const rows = await listStockMonitorRows(settings.threshold);
+    res.json({
+      success: true,
+      message: 'Stock list threshold updated.',
+      data: {
+        threshold: settings.threshold,
+        summary: {
+          total: rows.length,
+          zeroStockCount: rows.filter((row) => Number(row.stockValue || 0) <= 0).length,
+        },
+        rows,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/products/stock-monitor/sync', async (_req, res, next) => {
+  try {
+    const summary = await syncAllStockAvailability({ notifyVendor: true });
+    res.json({
+      success: true,
+      message: 'Stock availability sync completed.',
+      data: summary,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/products', async (req, res, next) => {
   try {
     const payload = adminProductCreateSchema.parse(req.body);
@@ -4891,6 +4969,7 @@ router.post('/products', async (req, res, next) => {
             : undefined,
         },
       });
+      await syncProductAvailabilityByType(ProductType.FABRIC, created.id, { notifyVendor: false });
       return res.status(201).json({ success: true, data: { id: created.id, type: payload.type }, message: 'Product created.' });
     }
 
@@ -4977,6 +5056,7 @@ router.post('/products', async (req, res, next) => {
         },
       },
     });
+    await syncProductAvailabilityByType(ProductType.READY_TO_WEAR, created.id, { notifyVendor: false });
     return res.status(201).json({ success: true, data: { id: created.id, type: payload.type }, message: 'Product created.' });
   } catch (error) {
     next(error);
@@ -5036,6 +5116,7 @@ router.patch('/products/:type/:id', async (req, res, next) => {
           });
         }
       }
+      await syncProductAvailabilityByType(ProductType.FABRIC, updated.id, { notifyVendor: true });
       return res.json({ success: true, data: { id: updated.id, type }, message: 'Product updated.' });
     }
 
@@ -5173,6 +5254,7 @@ router.patch('/products/:type/:id', async (req, res, next) => {
         });
       }
     }
+    await syncProductAvailabilityByType(ProductType.READY_TO_WEAR, updated.id, { notifyVendor: true });
     return res.json({ success: true, data: { id: updated.id, type }, message: 'Product updated.' });
   } catch (error) {
     next(error);
@@ -5235,6 +5317,7 @@ router.patch('/products/:type/:id/moderate', async (req, res, next) => {
         where: { id },
         data: updateData,
       });
+      await syncProductAvailabilityByType(ProductType.FABRIC, id, { notifyVendor: false });
     } else if (productType === ProductType.DESIGN) {
       await prisma.design.update({
         where: { id },
@@ -5245,6 +5328,7 @@ router.patch('/products/:type/:id/moderate', async (req, res, next) => {
         where: { id },
         data: updateData,
       });
+      await syncProductAvailabilityByType(ProductType.READY_TO_WEAR, id, { notifyVendor: false });
     }
 
     if (payload.action !== 'APPROVE' && payload.action !== 'PUBLISH') {
@@ -5320,6 +5404,9 @@ router.post('/products/moderate-bulk', async (req, res, next) => {
         where: { id: { in: payload.productIds } },
         data: updateData,
       });
+      for (const productId of payload.productIds) {
+        await syncProductAvailabilityByType(ProductType.FABRIC, productId, { notifyVendor: false });
+      }
     } else if (payload.productType === ProductType.DESIGN) {
       await prisma.design.updateMany({
         where: { id: { in: payload.productIds } },
@@ -5330,6 +5417,9 @@ router.post('/products/moderate-bulk', async (req, res, next) => {
         where: { id: { in: payload.productIds } },
         data: updateData,
       });
+      for (const productId of payload.productIds) {
+        await syncProductAvailabilityByType(ProductType.READY_TO_WEAR, productId, { notifyVendor: false });
+      }
     }
 
     if (payload.action !== 'APPROVE' && payload.action !== 'PUBLISH') {

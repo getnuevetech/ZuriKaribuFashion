@@ -13,6 +13,7 @@ import {
   shouldNotifyRoleForStatus,
 } from '../utils/order-workflow';
 import { emitPartnerOrderEvent } from '../utils/partner-api';
+import { syncFabricAvailabilityById, syncReadyToWearAvailabilityById } from '../utils/product-stock-monitor';
 
 const router = Router();
 
@@ -2188,6 +2189,10 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
 
     const data = schema.parse(req.body);
     const customerId = req.user!.id;
+    const wantsDesignerToChooseFabric =
+      data.fabricSelectionMode === 'DESIGNER_DECIDES' || !data.fabricId;
+    const hasCustomerSelectedFabric = !wantsDesignerToChooseFabric;
+    let mergeIntoOrderId: string | null = null;
 
     const customerProfile = await prisma.customerProfile.findUnique({
       where: { userId: customerId },
@@ -2207,24 +2212,35 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       Number(workflowSettings.orderLimits?.maxCustomToWearItemsPerCheckout || 3)
     );
     if (data.paymentIntentId) {
-      const existingCount = await prisma.order.count({
+      const existingOrders = await prisma.order.findMany({
         where: {
           customerId,
           type: OrderType.CUSTOM_DESIGN,
           paymentIntentId: data.paymentIntentId,
         },
+        include: {
+          designOrder: {
+            select: { designId: true },
+          },
+          fabricOrder: {
+            select: { fabricId: true },
+          },
+        },
       });
-      if (existingCount >= maxCustomToWearItemsPerCheckout) {
+      mergeIntoOrderId =
+        existingOrders.find((order) => {
+          if (String(order.designOrder?.designId || '') !== String(data.designId || '')) return false;
+          if (wantsDesignerToChooseFabric) return !order.fabricOrder;
+          return String(order.fabricOrder?.fabricId || '') === String(data.fabricId || '');
+        })?.id || null;
+      const existingCount = existingOrders.length;
+      if (!mergeIntoOrderId && existingCount >= maxCustomToWearItemsPerCheckout) {
         return res.status(400).json({
           success: false,
           message: `A maximum of ${maxCustomToWearItemsPerCheckout} Custom To Wear product(s) is allowed in one checkout.`,
         });
       }
     }
-
-    const wantsDesignerToChooseFabric =
-      data.fabricSelectionMode === 'DESIGNER_DECIDES' || !data.fabricId;
-    const hasCustomerSelectedFabric = !wantsDesignerToChooseFabric;
     const selectedYards = Number(data.yards || 0);
     if (hasCustomerSelectedFabric && (!data.fabricId || selectedYards < 1)) {
       return res.status(400).json({
@@ -2365,12 +2381,14 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       settings: effectiveWorkflowSettings,
     });
 
-    const orderNumber = await generateManagedOrderNumber({
-      orderType: OrderType.CUSTOM_DESIGN,
-      customerId,
-      paymentIntentId: data.paymentIntentId,
-      workflowSettings,
-    });
+    const orderNumber = mergeIntoOrderId
+      ? null
+      : await generateManagedOrderNumber({
+          orderType: OrderType.CUSTOM_DESIGN,
+          customerId,
+          paymentIntentId: data.paymentIntentId,
+          workflowSettings,
+        });
 
     const shippingSnapshot = appendWorkflowMetadataToShippingAddress({
       shippingAddress: {
@@ -2391,10 +2409,79 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
 
     // Create order with all components
     const order = await prisma.$transaction(async (tx) => {
+      if (mergeIntoOrderId) {
+        const existing = await tx.order.findFirst({
+          where: {
+            id: mergeIntoOrderId,
+            customerId,
+            type: OrderType.CUSTOM_DESIGN,
+          },
+          include: {
+            designOrder: true,
+            fabricOrder: true,
+          },
+        });
+        if (!existing || !existing.designOrder) {
+          throw new Error('Existing custom order could not be merged.');
+        }
+        await tx.order.update({
+          where: { id: existing.id },
+          data: {
+            shippingAddress: shippingSnapshot as any,
+            subtotal: { increment: subtotal },
+            shippingCost: { increment: shippingCost },
+            tax: { increment: tax },
+            total: { increment: total },
+            paymentMethod: data.paymentMethod,
+            paymentStatus: isPaymentConfirmed ? PaymentStatus.COMPLETED : existing.paymentStatus,
+            paidAt: isPaymentConfirmed ? new Date() : existing.paidAt,
+            timeline: {
+              create: {
+                status: initialStatus,
+                notes: `Merged additional custom design quantity into existing order${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}.`,
+                updatedById: customerId,
+                updatedByRole: UserRole.CUSTOMER,
+              },
+            },
+          },
+        });
+        await tx.designOrderItem.update({
+          where: { id: existing.designOrder.id },
+          data: {
+            price: { increment: designPrice },
+          },
+        });
+        if (hasCustomerSelectedFabric && fabric && existing.fabricOrder) {
+          await tx.fabricOrderItem.update({
+            where: { id: existing.fabricOrder.id },
+            data: {
+              yards: { increment: selectedYards },
+              totalPrice: { increment: fabricPrice },
+            },
+          });
+        }
+        if (isPaymentConfirmed && hasCustomerSelectedFabric && data.fabricId) {
+          await tx.fabric.update({
+            where: { id: data.fabricId },
+            data: { stockYards: { decrement: selectedYards } },
+          });
+        }
+        const merged = await tx.order.findUnique({
+          where: { id: existing.id },
+          include: {
+            designOrder: true,
+            fabricOrder: true,
+          },
+        });
+        if (!merged) {
+          throw new Error('Failed to load merged custom-design order.');
+        }
+        return merged;
+      }
       // Create main order
       const newOrder = await tx.order.create({
         data: {
-          orderNumber,
+          orderNumber: String(orderNumber || ''),
           type: OrderType.CUSTOM_DESIGN,
           customerId,
           shippingAddress: shippingSnapshot as any,
@@ -2467,6 +2554,9 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
 
       return newOrder;
     });
+    if (isPaymentConfirmed && hasCustomerSelectedFabric && data.fabricId) {
+      await syncFabricAvailabilityById(data.fabricId, { notifyVendor: true });
+    }
 
     res.status(201).json({
       success: true,
@@ -2781,6 +2871,12 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
 
       return newOrder;
     });
+    if (isPaymentConfirmed) {
+      const productIds = Array.from(new Set(validatedItems.map((item) => String(item.readyToWearId || '').trim()).filter(Boolean)));
+      for (const productId of productIds) {
+        await syncReadyToWearAvailabilityById(productId, { notifyVendor: true });
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -2843,6 +2939,7 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
       minFabricYardsPerOrder,
       Number(workflowSettings.orderLimits?.maxFabricYardsPerOrder || 200)
     );
+    let mergeIntoOrderId: string | null = null;
     if (Number(data.yards || 0) > maxFabricYardsPerOrder) {
       return res.status(400).json({
         success: false,
@@ -2858,7 +2955,7 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
         },
         include: {
           fabricOrder: {
-            select: { yards: true },
+            select: { yards: true, fabricId: true },
           },
         },
       });
@@ -2866,6 +2963,8 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
         (sum, order) => sum + Math.max(0, Number(order.fabricOrder?.yards || 0)),
         0
       );
+      mergeIntoOrderId =
+        existingOrders.find((order) => String(order.fabricOrder?.fabricId || '') === String(data.fabricId || ''))?.id || null;
       if (alreadyOrderedYards + Number(data.yards || 0) > maxFabricYardsPerOrder) {
         return res.status(400).json({
           success: false,
@@ -2945,12 +3044,14 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
       hasFabricOrder: true,
       settings: effectiveWorkflowSettings,
     });
-    const orderNumber = await generateManagedOrderNumber({
-      orderType: OrderType.FABRIC_ONLY,
-      customerId,
-      paymentIntentId: data.paymentIntentId,
-      workflowSettings,
-    });
+    const orderNumber = mergeIntoOrderId
+      ? null
+      : await generateManagedOrderNumber({
+          orderType: OrderType.FABRIC_ONLY,
+          customerId,
+          paymentIntentId: data.paymentIntentId,
+          workflowSettings,
+        });
 
     const shippingSnapshot = appendWorkflowMetadataToShippingAddress({
       shippingAddress: {
@@ -2968,9 +3069,68 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
     });
 
     const order = await prisma.$transaction(async (tx) => {
+      if (mergeIntoOrderId) {
+        const existing = await tx.order.findFirst({
+          where: {
+            id: mergeIntoOrderId,
+            customerId,
+            type: OrderType.FABRIC_ONLY,
+          },
+          include: {
+            fabricOrder: true,
+          },
+        });
+        if (!existing || !existing.fabricOrder) {
+          throw new Error('Existing fabric order could not be merged.');
+        }
+        await tx.order.update({
+          where: { id: existing.id },
+          data: {
+            shippingAddress: shippingSnapshot as any,
+            subtotal: { increment: subtotal },
+            shippingCost: { increment: shippingCost },
+            tax: { increment: tax },
+            total: { increment: total },
+            paymentMethod: data.paymentMethod,
+            paymentStatus: isPaymentConfirmed ? PaymentStatus.COMPLETED : existing.paymentStatus,
+            paidAt: isPaymentConfirmed ? new Date() : existing.paidAt,
+            timeline: {
+              create: {
+                status: initialStatus,
+                notes: `Merged additional fabric quantity into existing order${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}.`,
+                updatedById: customerId,
+                updatedByRole: UserRole.CUSTOMER,
+              },
+            },
+          },
+        });
+        await tx.fabricOrderItem.update({
+          where: { id: existing.fabricOrder.id },
+          data: {
+            yards: { increment: data.yards },
+            totalPrice: { increment: subtotal },
+          },
+        });
+        if (isPaymentConfirmed) {
+          await tx.fabric.update({
+            where: { id: data.fabricId },
+            data: { stockYards: { decrement: data.yards } },
+          });
+        }
+        const merged = await tx.order.findUnique({
+          where: { id: existing.id },
+          include: {
+            fabricOrder: true,
+          },
+        });
+        if (!merged) {
+          throw new Error('Failed to load merged fabric order.');
+        }
+        return merged;
+      }
       const newOrder = await tx.order.create({
         data: {
-          orderNumber,
+          orderNumber: String(orderNumber || ''),
           type: OrderType.FABRIC_ONLY,
           customerId,
           shippingAddress: shippingSnapshot as any,
@@ -3018,6 +3178,9 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
 
       return newOrder;
     });
+    if (isPaymentConfirmed) {
+      await syncFabricAvailabilityById(data.fabricId, { notifyVendor: true });
+    }
 
     res.status(201).json({
       success: true,

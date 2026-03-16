@@ -162,6 +162,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/currency': ['currency:manage'],
       '/admin/products': ['products:manage'],
       '/admin/products/configuration': ['products:manage'],
+      '/admin/products/stock-list': ['products:manage'],
       '/admin/product-labels': ['products:manage'],
       '/admin/product-change-requests': ['products:manage'],
       '/admin/pricing': ['pricing:manage'],
@@ -213,6 +214,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   ];
   const productManagementSubmenu = [
     { label: 'Product', href: '/admin/products', icon: ChevronRight },
+    { label: 'Stock List', href: '/admin/products/stock-list', icon: ChevronRight },
     { label: 'Product Configuration', href: '/admin/products/configuration', icon: ChevronRight },
     { label: 'Product Labels', href: '/admin/product-labels', icon: ChevronRight },
     { label: 'Product Change Request', href: '/admin/product-change-requests', icon: ChevronRight },

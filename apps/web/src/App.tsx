@@ -64,6 +64,7 @@ import AdminFeaturedRequests from './pages/admin/FeaturedRequests';
 import AdminNotificationCenter from './pages/admin/NotificationCenter';
 import AdminBackups from './pages/admin/Backups';
 import AdminProductChangeRequests from './pages/admin/ProductChangeRequests';
+import AdminProductStockList from './pages/admin/ProductStockList';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -278,6 +279,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['products:manage']}>
                       <AdminProductChangeRequests />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/products/stock-list"
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminProductStockList />
                     </AdminPermissionGuard>
                   }
                 />

@@ -36,6 +36,7 @@ import {
   writeReadyToWearPredominantColor,
 } from '../utils/fabric-attributes';
 import { applyActivePricingRules, readActivePricingRules } from '../utils/pricing-rules';
+import { syncReadyToWearAvailabilityById } from '../utils/product-stock-monitor';
 
 const router = Router();
 let designerGovernanceSchemaEnsured = false;
@@ -2201,6 +2202,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
         images: true,
       },
     });
+    await syncReadyToWearAvailabilityById(product.id, { notifyVendor: false });
     await setProductCurrencyMetadata({
       userId: req.user!.id,
       productType: 'READY_TO_WEAR',
@@ -2427,6 +2429,7 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         },
       });
     });
+    await syncReadyToWearAvailabilityById(id, { notifyVendor: true });
 
     if (pricing) {
       await setProductCurrencyMetadata({
@@ -2552,6 +2555,7 @@ const handleReadyToWearSizeStockUpdate = async (req: any, res: any, next: any) =
         })
       )
     );
+    await syncReadyToWearAvailabilityById(id, { notifyVendor: true });
 
     const updated = await prisma.readyToWear.findFirst({
       where: { id, designerId: profile.id },
