@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
-import { prisma, UserRole, ProductStatus } from '../db';
+import { prisma, UserRole, ProductStatus, ProductType } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import {
@@ -26,8 +26,12 @@ import {
 } from '../utils/product-change-requests';
 import { syncFabricAvailabilityById } from '../utils/product-stock-monitor';
 import {
+  clearProductAutomationOutcome,
   evaluateProductAutomationChecks,
+  notifyVendorAboutProductAutomationFailure,
+  readProductAutomationOutcomesForProducts,
   readAutomationApprovalSettings,
+  saveProductAutomationOutcome,
 } from '../utils/automation-approval';
 
 const router = Router();
@@ -601,13 +605,17 @@ router.get('/fabrics', async (req, res, next) => {
       if (!existing.includes(row.section)) existing.push(row.section);
       featuredByFabricId.set(row.productId, existing);
     }
-    const [metadataRows, policy, grantsByFabricId] = await Promise.all([
+    const [metadataRows, policy, grantsByFabricId, automationOutcomesByFabricId] = await Promise.all([
       Promise.all(fabrics.map(async (item) => [item.id, await getProductCurrencyMetadata('FABRIC', item.id)] as const)),
       readProductEditPolicySettings(),
       readActiveProductEditGrantsForProducts({
         requesterUserId: req.user!.id,
         requesterRole: 'FABRIC_SELLER',
         productType: 'FABRIC',
+        productIds: fabrics.map((item) => item.id),
+      }),
+      readProductAutomationOutcomesForProducts({
+        productType: ProductType.FABRIC as any,
         productIds: fabrics.map((item) => item.id),
       }),
     ]);
@@ -641,6 +649,7 @@ router.get('/fabrics', async (req, res, next) => {
           predominantColor: colorMap[item.id] || null,
           approvedEditableFields,
           approvedEditAccessEndsAt: activeGrant?.grantEndsAt || null,
+          automationOutcome: automationOutcomesByFabricId[item.id] || null,
         };
       }),
     });
@@ -981,6 +990,7 @@ router.post('/fabrics', async (req, res, next) => {
     let responseStatus = fabric.status;
     let responseAvailability = fabric.isAvailable;
     let automation: any = null;
+    let automationOutcome: any = null;
     let responseMessage = 'Fabric submitted for review.';
     try {
       const automationSettings = (await readAutomationApprovalSettings()).settings;
@@ -1003,6 +1013,16 @@ router.post('/fabrics', async (req, res, next) => {
           responseAvailability = true;
           responseMessage = 'Fabric auto-approved by automation.';
           automation = { ...evaluation, action: 'AUTO_APPROVED' };
+          automationOutcome = await saveProductAutomationOutcome({
+            productType: ProductType.FABRIC as any,
+            productId: fabric.id,
+            evaluationStatus: evaluation.status,
+            action: 'AUTO_APPROVED',
+            report: evaluation.report,
+            failureSeverity: 'NONE',
+            needsCorrection: false,
+            summaryMessage: 'All automation checks passed. Product auto-approved.',
+          });
         } else if (!evaluation.canAutoApprove) {
           await prisma.fabric.update({
             where: { id: fabric.id },
@@ -1015,10 +1035,66 @@ router.post('/fabrics', async (req, res, next) => {
           responseAvailability = false;
           responseMessage = 'Fabric auto-rejected by automation checks.';
           automation = { ...evaluation, action: 'AUTO_REJECTED' };
+          automationOutcome = await saveProductAutomationOutcome({
+            productType: ProductType.FABRIC as any,
+            productId: fabric.id,
+            evaluationStatus: evaluation.status,
+            action: 'AUTO_REJECTED',
+            report: evaluation.report,
+          });
+          await notifyVendorAboutProductAutomationFailure({
+            productType: ProductType.FABRIC as any,
+            productId: fabric.id,
+            report: evaluation.report,
+            outcome: automationOutcome,
+          });
+        } else {
+          automation = { ...evaluation, action: 'NONE' };
+          automationOutcome = await saveProductAutomationOutcome({
+            productType: ProductType.FABRIC as any,
+            productId: fabric.id,
+            evaluationStatus: evaluation.status,
+            action: 'NONE',
+            report: evaluation.report,
+            failureSeverity: 'NONE',
+            needsCorrection: false,
+            summaryMessage: 'Automation checks passed. Pending manual approval because auto-approve is disabled.',
+          });
         }
       }
-    } catch {
-      // Keep upload flow available if automation fails.
+    } catch (automationError: any) {
+      const automationMessage = String(
+        automationError?.message || 'Automation processing failed. Manual review is required.'
+      );
+      const errorRow = {
+        key: 'automation_runtime_error',
+        label: 'Automation runtime processing',
+        status: 'FAIL' as const,
+        message: automationMessage,
+      };
+      automation = {
+        canAutoApprove: false,
+        status: 'AUTOMATION_ERROR',
+        report: [errorRow],
+        action: 'ERROR',
+      };
+      automationOutcome = await saveProductAutomationOutcome({
+        productType: ProductType.FABRIC as any,
+        productId: fabric.id,
+        evaluationStatus: 'AUTOMATION_ERROR',
+        action: 'ERROR',
+        report: [errorRow],
+        failureSeverity: 'MAJOR',
+        needsCorrection: true,
+        summaryMessage: automationMessage,
+      });
+      await notifyVendorAboutProductAutomationFailure({
+        productType: ProductType.FABRIC as any,
+        productId: fabric.id,
+        report: [errorRow],
+        outcome: automationOutcome,
+        errorMessage: automationMessage,
+      });
     }
 
     res.status(201).json({
@@ -1030,6 +1106,7 @@ router.post('/fabrics', async (req, res, next) => {
         isAvailable: responseAvailability,
         predominantColor: data.predominantColor ? String(data.predominantColor).trim().toUpperCase() : null,
         automation,
+        automationOutcome,
       },
     });
   } catch (error) {
@@ -1183,6 +1260,10 @@ router.patch('/fabrics/:id', async (req, res, next) => {
     if (data.predominantColor !== undefined) {
       await writeFabricPredominantColor(id, data.predominantColor);
     }
+    await clearProductAutomationOutcome({
+      productType: ProductType.FABRIC as any,
+      productId: id,
+    });
     const colorMap = await readFabricPredominantColorMap([id]);
     res.json({
       success: true,

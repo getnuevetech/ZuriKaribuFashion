@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import nodemailer from 'nodemailer';
-import { prisma, UserRole, UserStatus, ProductStatus } from '../db';
+import { prisma, UserRole, UserStatus, ProductStatus, ProductType } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import {
@@ -38,8 +38,12 @@ import {
 import { applyActivePricingRules, readActivePricingRules } from '../utils/pricing-rules';
 import { syncReadyToWearAvailabilityById } from '../utils/product-stock-monitor';
 import {
+  clearProductAutomationOutcome,
   evaluateProductAutomationChecks,
+  notifyVendorAboutProductAutomationFailure,
+  readProductAutomationOutcomesForProducts,
   readAutomationApprovalSettings,
+  saveProductAutomationOutcome,
 } from '../utils/automation-approval';
 
 const router = Router();
@@ -1198,7 +1202,7 @@ router.get('/designs', async (req, res, next) => {
       if (!existing.includes(row.section)) existing.push(row.section);
       featuredByProductId.set(row.productId, existing);
     }
-    const [metadataRows, policy, grantsByDesignId, designColorMap] = await Promise.all([
+    const [metadataRows, policy, grantsByDesignId, designColorMap, automationOutcomesByDesignId] = await Promise.all([
       Promise.all(designs.map(async (item) => [item.id, await getProductCurrencyMetadata('DESIGN', item.id)] as const)),
       readProductEditPolicySettings(),
       readActiveProductEditGrantsForProducts({
@@ -1208,6 +1212,10 @@ router.get('/designs', async (req, res, next) => {
         productIds: designs.map((item) => item.id),
       }),
       readDesignPredominantColorMap(designs.map((item) => item.id)),
+      readProductAutomationOutcomesForProducts({
+        productType: ProductType.DESIGN as any,
+        productIds: designs.map((item) => item.id),
+      }),
     ]);
     const metadataByDesignId = new Map<string, any>(metadataRows);
 
@@ -1238,6 +1246,7 @@ router.get('/designs', async (req, res, next) => {
           predominantColor: designColorMap[item.id] || null,
           approvedEditableFields,
           approvedEditAccessEndsAt: activeGrant?.grantEndsAt || null,
+          automationOutcome: automationOutcomesByDesignId[item.id] || null,
         };
       }),
     });
@@ -1654,6 +1663,7 @@ router.post('/designs', async (req, res, next) => {
     let responseStatus = design.status;
     let responseAvailability = design.isAvailable;
     let automation: any = null;
+    let automationOutcome: any = null;
     let responseMessage = 'Design submitted for review.';
     try {
       const automationSettings = (await readAutomationApprovalSettings()).settings;
@@ -1676,6 +1686,16 @@ router.post('/designs', async (req, res, next) => {
           responseAvailability = true;
           responseMessage = 'Design auto-approved by automation.';
           automation = { ...evaluation, action: 'AUTO_APPROVED' };
+          automationOutcome = await saveProductAutomationOutcome({
+            productType: ProductType.DESIGN as any,
+            productId: design.id,
+            evaluationStatus: evaluation.status,
+            action: 'AUTO_APPROVED',
+            report: evaluation.report,
+            failureSeverity: 'NONE',
+            needsCorrection: false,
+            summaryMessage: 'All automation checks passed. Product auto-approved.',
+          });
         } else if (!evaluation.canAutoApprove) {
           await prisma.design.update({
             where: { id: design.id },
@@ -1688,10 +1708,66 @@ router.post('/designs', async (req, res, next) => {
           responseAvailability = false;
           responseMessage = 'Design auto-rejected by automation checks.';
           automation = { ...evaluation, action: 'AUTO_REJECTED' };
+          automationOutcome = await saveProductAutomationOutcome({
+            productType: ProductType.DESIGN as any,
+            productId: design.id,
+            evaluationStatus: evaluation.status,
+            action: 'AUTO_REJECTED',
+            report: evaluation.report,
+          });
+          await notifyVendorAboutProductAutomationFailure({
+            productType: ProductType.DESIGN as any,
+            productId: design.id,
+            report: evaluation.report,
+            outcome: automationOutcome,
+          });
+        } else {
+          automation = { ...evaluation, action: 'NONE' };
+          automationOutcome = await saveProductAutomationOutcome({
+            productType: ProductType.DESIGN as any,
+            productId: design.id,
+            evaluationStatus: evaluation.status,
+            action: 'NONE',
+            report: evaluation.report,
+            failureSeverity: 'NONE',
+            needsCorrection: false,
+            summaryMessage: 'Automation checks passed. Pending manual approval because auto-approve is disabled.',
+          });
         }
       }
-    } catch {
-      // Keep upload flow available if automation fails.
+    } catch (automationError: any) {
+      const automationMessage = String(
+        automationError?.message || 'Automation processing failed. Manual review is required.'
+      );
+      const errorRow = {
+        key: 'automation_runtime_error',
+        label: 'Automation runtime processing',
+        status: 'FAIL' as const,
+        message: automationMessage,
+      };
+      automation = {
+        canAutoApprove: false,
+        status: 'AUTOMATION_ERROR',
+        report: [errorRow],
+        action: 'ERROR',
+      };
+      automationOutcome = await saveProductAutomationOutcome({
+        productType: ProductType.DESIGN as any,
+        productId: design.id,
+        evaluationStatus: 'AUTOMATION_ERROR',
+        action: 'ERROR',
+        report: [errorRow],
+        failureSeverity: 'MAJOR',
+        needsCorrection: true,
+        summaryMessage: automationMessage,
+      });
+      await notifyVendorAboutProductAutomationFailure({
+        productType: ProductType.DESIGN as any,
+        productId: design.id,
+        report: [errorRow],
+        outcome: automationOutcome,
+        errorMessage: automationMessage,
+      });
     }
 
     res.status(201).json({
@@ -1703,6 +1779,7 @@ router.post('/designs', async (req, res, next) => {
         isAvailable: responseAvailability,
         predominantColor: String(data.predominantColor || '').trim().toUpperCase() || null,
         automation,
+        automationOutcome,
       },
     });
   } catch (error: any) {
@@ -2014,6 +2091,10 @@ router.patch('/designs/:id', async (req, res, next) => {
     if (data.predominantColor !== undefined) {
       await writeDesignPredominantColor(id, data.predominantColor);
     }
+    await clearProductAutomationOutcome({
+      productType: ProductType.DESIGN as any,
+      productId: id,
+    });
     const latestDesignColorMap = await readDesignPredominantColorMap([id]);
     res.json({
       success: true,
@@ -2076,7 +2157,7 @@ router.get('/ready-to-wear', async (req, res, next) => {
       if (!existing.includes(row.section)) existing.push(row.section);
       featuredByProductId.set(row.productId, existing);
     }
-    const [metadataRows, policy, grantsByProductId, readyColorMap] = await Promise.all([
+    const [metadataRows, policy, grantsByProductId, readyColorMap, automationOutcomesByProductId] = await Promise.all([
       Promise.all(products.map(async (item) => [item.id, await getProductCurrencyMetadata('READY_TO_WEAR', item.id)] as const)),
       readProductEditPolicySettings(),
       readActiveProductEditGrantsForProducts({
@@ -2086,6 +2167,10 @@ router.get('/ready-to-wear', async (req, res, next) => {
         productIds: products.map((item) => item.id),
       }),
       readReadyToWearPredominantColorMap(products.map((item) => item.id)),
+      readProductAutomationOutcomesForProducts({
+        productType: ProductType.READY_TO_WEAR as any,
+        productIds: products.map((item) => item.id),
+      }),
     ]);
     const metadataByProductId = new Map<string, any>(metadataRows);
 
@@ -2135,6 +2220,7 @@ router.get('/ready-to-wear', async (req, res, next) => {
           predominantColor: readyColorMap[item.id] || null,
           approvedEditableFields,
           approvedEditAccessEndsAt: activeGrant?.grantEndsAt || null,
+          automationOutcome: automationOutcomesByProductId[item.id] || null,
         };
       }),
     });
@@ -2267,6 +2353,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
     let responseStatus = product.status;
     let responseAvailability = product.isAvailable;
     let automation: any = null;
+    let automationOutcome: any = null;
     let responseMessage = 'Ready-to-wear product submitted for review.';
     try {
       const automationSettings = (await readAutomationApprovalSettings()).settings;
@@ -2289,6 +2376,16 @@ router.post('/ready-to-wear', async (req, res, next) => {
           responseAvailability = true;
           responseMessage = 'Ready-to-wear product auto-approved by automation.';
           automation = { ...evaluation, action: 'AUTO_APPROVED' };
+          automationOutcome = await saveProductAutomationOutcome({
+            productType: ProductType.READY_TO_WEAR as any,
+            productId: product.id,
+            evaluationStatus: evaluation.status,
+            action: 'AUTO_APPROVED',
+            report: evaluation.report,
+            failureSeverity: 'NONE',
+            needsCorrection: false,
+            summaryMessage: 'All automation checks passed. Product auto-approved.',
+          });
         } else if (!evaluation.canAutoApprove) {
           await prisma.readyToWear.update({
             where: { id: product.id },
@@ -2301,10 +2398,66 @@ router.post('/ready-to-wear', async (req, res, next) => {
           responseAvailability = false;
           responseMessage = 'Ready-to-wear product auto-rejected by automation checks.';
           automation = { ...evaluation, action: 'AUTO_REJECTED' };
+          automationOutcome = await saveProductAutomationOutcome({
+            productType: ProductType.READY_TO_WEAR as any,
+            productId: product.id,
+            evaluationStatus: evaluation.status,
+            action: 'AUTO_REJECTED',
+            report: evaluation.report,
+          });
+          await notifyVendorAboutProductAutomationFailure({
+            productType: ProductType.READY_TO_WEAR as any,
+            productId: product.id,
+            report: evaluation.report,
+            outcome: automationOutcome,
+          });
+        } else {
+          automation = { ...evaluation, action: 'NONE' };
+          automationOutcome = await saveProductAutomationOutcome({
+            productType: ProductType.READY_TO_WEAR as any,
+            productId: product.id,
+            evaluationStatus: evaluation.status,
+            action: 'NONE',
+            report: evaluation.report,
+            failureSeverity: 'NONE',
+            needsCorrection: false,
+            summaryMessage: 'Automation checks passed. Pending manual approval because auto-approve is disabled.',
+          });
         }
       }
-    } catch {
-      // Keep upload flow available if automation fails.
+    } catch (automationError: any) {
+      const automationMessage = String(
+        automationError?.message || 'Automation processing failed. Manual review is required.'
+      );
+      const errorRow = {
+        key: 'automation_runtime_error',
+        label: 'Automation runtime processing',
+        status: 'FAIL' as const,
+        message: automationMessage,
+      };
+      automation = {
+        canAutoApprove: false,
+        status: 'AUTOMATION_ERROR',
+        report: [errorRow],
+        action: 'ERROR',
+      };
+      automationOutcome = await saveProductAutomationOutcome({
+        productType: ProductType.READY_TO_WEAR as any,
+        productId: product.id,
+        evaluationStatus: 'AUTOMATION_ERROR',
+        action: 'ERROR',
+        report: [errorRow],
+        failureSeverity: 'MAJOR',
+        needsCorrection: true,
+        summaryMessage: automationMessage,
+      });
+      await notifyVendorAboutProductAutomationFailure({
+        productType: ProductType.READY_TO_WEAR as any,
+        productId: product.id,
+        report: [errorRow],
+        outcome: automationOutcome,
+        errorMessage: automationMessage,
+      });
     }
 
     res.status(201).json({
@@ -2327,6 +2480,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
             })
           : [],
         automation,
+        automationOutcome,
       },
     });
   } catch (error: any) {
@@ -2541,6 +2695,10 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
     if (data.predominantColor !== undefined) {
       await writeReadyToWearPredominantColor(id, data.predominantColor);
     }
+    await clearProductAutomationOutcome({
+      productType: ProductType.READY_TO_WEAR as any,
+      productId: id,
+    });
     const latestReadyColorMap = await readReadyToWearPredominantColorMap([id]);
     res.json({
       success: true,

@@ -46,6 +46,23 @@ interface SellerStats {
   revenueChange: number;
 }
 
+type AutomationReportRow = {
+  key: string;
+  label: string;
+  status: 'PASS' | 'FAIL' | 'NEEDS_AI' | 'SKIPPED' | string;
+  message: string;
+};
+
+type ProductAutomationOutcome = {
+  evaluationStatus: string;
+  action: string;
+  failureSeverity: 'NONE' | 'MID' | 'MAJOR' | string;
+  needsCorrection: boolean;
+  summaryMessage: string;
+  report: AutomationReportRow[];
+  updatedAt?: string | null;
+};
+
 interface Fabric {
   id: string;
   name: string;
@@ -66,6 +83,7 @@ interface Fabric {
   listingUsdPrice?: number;
   approvedEditableFields?: string[];
   approvedEditAccessEndsAt?: string | null;
+  automationOutcome?: ProductAutomationOutcome | null;
 }
 
 interface FabricOrder {
@@ -154,6 +172,35 @@ const ALL_FABRIC_EDITABLE_FIELDS = [
   'stockYards',
   'images',
 ] as const;
+
+const normalizeAutomationOutcome = (value: any): ProductAutomationOutcome | null => {
+  if (!value || typeof value !== 'object') return null;
+  const report = Array.isArray(value.report)
+    ? value.report.map((row: any) => ({
+        key: String(row?.key || '').trim(),
+        label: String(row?.label || row?.key || '').trim(),
+        status: String(row?.status || 'SKIPPED').toUpperCase(),
+        message: String(row?.message || '').trim(),
+      }))
+    : [];
+  const severity = String(value.failureSeverity || 'NONE').toUpperCase();
+  return {
+    evaluationStatus: String(value.evaluationStatus || 'REVIEW_REQUIRED'),
+    action: String(value.action || 'NONE'),
+    failureSeverity: severity === 'MAJOR' ? 'MAJOR' : severity === 'MID' ? 'MID' : 'NONE',
+    needsCorrection: Boolean(value.needsCorrection),
+    summaryMessage: String(value.summaryMessage || '').trim(),
+    report,
+    updatedAt: value.updatedAt ? String(value.updatedAt) : null,
+  };
+};
+
+const getOutcomeSeverity = (outcome?: ProductAutomationOutcome | null) =>
+  String(outcome?.failureSeverity || 'NONE').toUpperCase() === 'MAJOR'
+    ? 'MAJOR'
+    : String(outcome?.failureSeverity || 'NONE').toUpperCase() === 'MID'
+      ? 'MID'
+      : 'NONE';
 
 interface VendorProfileField {
   key: string;
@@ -745,6 +792,7 @@ export default function SellerDashboard() {
           listingUsdPrice: Number(item.listingUsdPrice || item.sellerPrice || 0),
           approvedEditableFields: Array.isArray(item.approvedEditableFields) ? item.approvedEditableFields : [],
           approvedEditAccessEndsAt: item.approvedEditAccessEndsAt ? String(item.approvedEditAccessEndsAt) : null,
+          automationOutcome: normalizeAutomationOutcome(item.automationOutcome),
         }));
         setFabrics(mappedFabrics);
       }
@@ -2353,14 +2401,30 @@ export default function SellerDashboard() {
                     const local = Number(item.listingLocalPrice || item.pricePerMeter || 0);
                     const usd = Number(item.listingUsdPrice || item.pricePerMeter || 0);
                     const priceText = code === 'USD' ? `$${usd.toFixed(2)} / yd` : `${code} ${local.toFixed(2)} / yd · USD ${usd.toFixed(2)}`;
+                    const severity = getOutcomeSeverity(item.automationOutcome);
+                    const rowClass =
+                      severity === 'MAJOR'
+                        ? 'border-b border-red-200 bg-red-50/70 hover:bg-red-100/80'
+                        : severity === 'MID'
+                          ? 'border-b border-amber-200 bg-amber-50/70 hover:bg-amber-100/80'
+                          : 'border-b last:border-0 hover:bg-gray-50';
                     return (
-                      <tr key={item.id} className="border-b last:border-0 hover:bg-gray-50">
+                      <tr key={item.id} className={rowClass}>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <img src={item.images?.[0] || '/images/placeholder.jpg'} alt={item.name} className="h-10 w-10 rounded-lg object-cover" />
                             <div>
                               <p className="font-medium text-gray-900">{item.name}</p>
                               <p className="text-sm text-gray-500">{item.materialType?.name || 'Material'}</p>
+                              {item.automationOutcome?.needsCorrection ? (
+                                <p
+                                  className={`text-xs font-semibold ${
+                                    severity === 'MAJOR' ? 'text-red-700' : 'text-amber-700'
+                                  }`}
+                                >
+                                  Automation correction required ({severity === 'MAJOR' ? 'Major' : 'Mid'})
+                                </p>
+                              ) : null}
                               <p className="font-mono text-[11px] text-gray-400">ID: {item.id}</p>
                             </div>
                           </div>
@@ -2721,6 +2785,43 @@ export default function SellerDashboard() {
               {isEditMode ? 'Update Fabric Product' : 'Add Fabric Product'}
             </h3>
             <p className="text-sm text-gray-500 mb-5">Fabrics require 3 to 4 image URLs.</p>
+            {isEditMode && selectedFabric?.automationOutcome?.needsCorrection ? (
+              <div
+                className={`mb-5 rounded-lg border p-3 ${
+                  getOutcomeSeverity(selectedFabric.automationOutcome) === 'MAJOR'
+                    ? 'border-red-300 bg-red-50'
+                    : 'border-amber-300 bg-amber-50'
+                }`}
+              >
+                <p
+                  className={`text-sm font-semibold ${
+                    getOutcomeSeverity(selectedFabric.automationOutcome) === 'MAJOR' ? 'text-red-700' : 'text-amber-700'
+                  }`}
+                >
+                  Automation flagged this product for correction (
+                  {getOutcomeSeverity(selectedFabric.automationOutcome) === 'MAJOR' ? 'Major' : 'Mid'} severity)
+                </p>
+                {selectedFabric.automationOutcome.summaryMessage ? (
+                  <p className="mt-1 text-xs text-gray-700">{selectedFabric.automationOutcome.summaryMessage}</p>
+                ) : null}
+                <div className="mt-2 space-y-2">
+                  {(selectedFabric.automationOutcome.report || [])
+                    .filter((row) => String(row.status || '').toUpperCase() !== 'PASS')
+                    .map((row) => {
+                      const rowStatus = String(row.status || '').toUpperCase();
+                      const rowClass =
+                        rowStatus === 'FAIL'
+                          ? 'border-red-200 bg-red-100 text-red-800'
+                          : 'border-amber-200 bg-amber-100 text-amber-800';
+                      return (
+                        <div key={`${row.key}-${rowStatus}`} className={`rounded border px-2 py-1 text-xs ${rowClass}`}>
+                          <span className="font-semibold">{row.label || row.key}</span>: {row.message || 'Needs review'}
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className={`md:col-span-2 ${isFieldHidden(dashboardGovernance.fields.productName) ? 'hidden' : ''}`}>

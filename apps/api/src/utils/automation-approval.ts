@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import nodemailer from 'nodemailer';
 import { prisma, ProductType } from '../db';
 import { readOrderWorkflowSettings } from './order-workflow';
 
@@ -53,6 +54,20 @@ export type AutomationCheckReportRow = {
   message: string;
 };
 
+export type AutomationFailureSeverity = 'NONE' | 'MID' | 'MAJOR';
+
+export type ProductAutomationOutcome = {
+  productType: ProductType;
+  productId: string;
+  evaluationStatus: string;
+  action: string;
+  failureSeverity: AutomationFailureSeverity;
+  needsCorrection: boolean;
+  summaryMessage: string;
+  report: AutomationCheckReportRow[];
+  updatedAt: string | null;
+};
+
 const parseObject = (value: unknown): Record<string, unknown> => {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
   if (typeof value === 'string') {
@@ -64,6 +79,60 @@ const parseObject = (value: unknown): Record<string, unknown> => {
     }
   }
   return {};
+};
+
+const parseReportRows = (value: unknown): AutomationCheckReportRow[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => parseObject(entry))
+      .map((entry) => {
+        const status = String(entry.status || '').toUpperCase();
+        return {
+          key: String(entry.key || '').trim(),
+          label: String(entry.label || entry.key || '').trim(),
+          status:
+            status === 'PASS' || status === 'FAIL' || status === 'NEEDS_AI' || status === 'SKIPPED'
+              ? (status as AutomationCheckReportRow['status'])
+              : 'SKIPPED',
+          message: String(entry.message || '').trim(),
+        } satisfies AutomationCheckReportRow;
+      })
+      .filter((entry) => entry.key.length > 0);
+  }
+  if (typeof value === 'string') {
+    try {
+      return parseReportRows(JSON.parse(value));
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const truncateText = (value: string, max = 280) => {
+  const normalized = String(value || '').trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+};
+
+const correctionRowsFromReport = (report: AutomationCheckReportRow[]) =>
+  report.filter((entry) => entry.status === 'FAIL' || entry.status === 'NEEDS_AI' || entry.status === 'SKIPPED');
+
+export const resolveProductAutomationFailureSeverity = (
+  report: AutomationCheckReportRow[]
+): AutomationFailureSeverity => {
+  const rows = correctionRowsFromReport(report);
+  if (rows.some((entry) => entry.status === 'FAIL')) return 'MAJOR';
+  if (rows.some((entry) => entry.status === 'NEEDS_AI' || entry.status === 'SKIPPED')) return 'MID';
+  return 'NONE';
+};
+
+const buildAutomationSummaryMessage = (report: AutomationCheckReportRow[], fallback = '') => {
+  const rows = correctionRowsFromReport(report).slice(0, 3);
+  if (rows.length === 0) return truncateText(fallback || 'Automation checks passed.', 400);
+  const parts = rows.map((entry) => truncateText(entry.message || entry.label || entry.key, 100)).filter(Boolean);
+  const suffix = correctionRowsFromReport(report).length > rows.length ? ' (+more)' : '';
+  return truncateText(`Needs correction: ${parts.join(' | ')}${suffix}`, 400);
 };
 
 const normalizeProvider = (value: unknown): AutomationAiProvider | null => {
@@ -228,6 +297,317 @@ export const ensureAutomationSettingsSchema = async () => {
     `CREATE UNIQUE INDEX IF NOT EXISTS "HomepageSectionSetting_key_key" ON "HomepageSectionSetting"("key")`
   );
   automationSchemaEnsured = true;
+};
+
+let productAutomationOutcomeSchemaEnsured = false;
+export const ensureProductAutomationOutcomeSchema = async () => {
+  if (productAutomationOutcomeSchemaEnsured) return;
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "ProductAutomationOutcome" (
+      "id" TEXT NOT NULL,
+      "productType" TEXT NOT NULL,
+      "productId" TEXT NOT NULL,
+      "evaluationStatus" TEXT NOT NULL DEFAULT 'REVIEW_REQUIRED',
+      "action" TEXT NOT NULL DEFAULT 'NONE',
+      "failureSeverity" TEXT NOT NULL DEFAULT 'NONE',
+      "needsCorrection" BOOLEAN NOT NULL DEFAULT false,
+      "summaryMessage" TEXT NOT NULL DEFAULT '',
+      "report" JSONB NOT NULL DEFAULT '[]'::jsonb,
+      "notifiedAt" TIMESTAMP(3),
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "ProductAutomationOutcome_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "ProductAutomationOutcome_productType_productId_key"
+     ON "ProductAutomationOutcome"("productType","productId")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "ProductAutomationOutcome_productType_productId_idx"
+     ON "ProductAutomationOutcome"("productType","productId")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "ProductAutomationOutcome_failureSeverity_idx"
+     ON "ProductAutomationOutcome"("failureSeverity","needsCorrection")`
+  );
+  productAutomationOutcomeSchemaEnsured = true;
+};
+
+let cachedTransporter: nodemailer.Transporter | null | undefined;
+const getMailer = (): nodemailer.Transporter | null => {
+  if (cachedTransporter !== undefined) return cachedTransporter;
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!host || !user || !pass) {
+    cachedTransporter = null;
+    return null;
+  }
+  cachedTransporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+    auth: { user, pass },
+  });
+  return cachedTransporter;
+};
+
+const sendAutomationEmail = async (input: { to: string; subject: string; text: string; html: string }) => {
+  const transporter = getMailer();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  if (!transporter || !from || !input.to) return;
+  await transporter.sendMail({
+    from,
+    to: input.to,
+    subject: input.subject,
+    text: input.text,
+    html: input.html,
+  });
+};
+
+const mapProductAutomationOutcomeRow = (row: any): ProductAutomationOutcome => ({
+  productType: String(row?.productType || ProductType.FABRIC) as ProductType,
+  productId: String(row?.productId || ''),
+  evaluationStatus: String(row?.evaluationStatus || 'REVIEW_REQUIRED'),
+  action: String(row?.action || 'NONE'),
+  failureSeverity: String(row?.failureSeverity || 'NONE').toUpperCase() === 'MAJOR'
+    ? 'MAJOR'
+    : String(row?.failureSeverity || 'NONE').toUpperCase() === 'MID'
+      ? 'MID'
+      : 'NONE',
+  needsCorrection: Boolean(row?.needsCorrection),
+  summaryMessage: String(row?.summaryMessage || ''),
+  report: parseReportRows(row?.report),
+  updatedAt: row?.updatedAt ? new Date(row.updatedAt).toISOString() : null,
+});
+
+export const saveProductAutomationOutcome = async (input: {
+  productType: ProductType;
+  productId: string;
+  evaluationStatus: string;
+  action?: string;
+  report?: unknown;
+  summaryMessage?: string;
+  failureSeverity?: AutomationFailureSeverity;
+  needsCorrection?: boolean;
+  notifiedAt?: Date | null;
+}) => {
+  await ensureProductAutomationOutcomeSchema();
+  const report = parseReportRows(input.report);
+  const derivedSeverity = input.failureSeverity || resolveProductAutomationFailureSeverity(report);
+  const needsCorrection = input.needsCorrection ?? derivedSeverity !== 'NONE';
+  const summaryMessage =
+    String(input.summaryMessage || '').trim() || buildAutomationSummaryMessage(report, needsCorrection ? 'Needs correction.' : 'Passed');
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "ProductAutomationOutcome"
+      ("id","productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","notifiedAt","createdAt","updatedAt")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,NOW(),NOW())
+     ON CONFLICT ("productType","productId")
+     DO UPDATE SET
+       "evaluationStatus" = EXCLUDED."evaluationStatus",
+       "action" = EXCLUDED."action",
+       "failureSeverity" = EXCLUDED."failureSeverity",
+       "needsCorrection" = EXCLUDED."needsCorrection",
+       "summaryMessage" = EXCLUDED."summaryMessage",
+       "report" = EXCLUDED."report",
+       "notifiedAt" = COALESCE(EXCLUDED."notifiedAt","ProductAutomationOutcome"."notifiedAt"),
+       "updatedAt" = NOW()`,
+    randomUUID(),
+    input.productType,
+    input.productId,
+    String(input.evaluationStatus || 'REVIEW_REQUIRED'),
+    String(input.action || 'NONE'),
+    derivedSeverity,
+    Boolean(needsCorrection),
+    summaryMessage,
+    JSON.stringify(report),
+    input.notifiedAt || null
+  );
+  const rows = await prisma.$queryRawUnsafe<Array<any>>(
+    `SELECT "productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","updatedAt"
+     FROM "ProductAutomationOutcome"
+     WHERE "productType" = $1 AND "productId" = $2
+     LIMIT 1`,
+    input.productType,
+    input.productId
+  );
+  return rows.length > 0 ? mapProductAutomationOutcomeRow(rows[0]) : null;
+};
+
+export const clearProductAutomationOutcome = async (input: { productType: ProductType; productId: string }) => {
+  await saveProductAutomationOutcome({
+    productType: input.productType,
+    productId: input.productId,
+    evaluationStatus: 'RESET',
+    action: 'RESET',
+    report: [],
+    failureSeverity: 'NONE',
+    needsCorrection: false,
+    summaryMessage: 'Automation result reset after product update.',
+  });
+};
+
+export const readProductAutomationOutcomesForProducts = async (input: {
+  productType: ProductType;
+  productIds: string[];
+}) => {
+  await ensureProductAutomationOutcomeSchema();
+  const ids = Array.from(new Set((input.productIds || []).map((entry) => String(entry || '').trim()).filter(Boolean)));
+  if (ids.length === 0) return {} as Record<string, ProductAutomationOutcome>;
+  const rows = await prisma.$queryRawUnsafe<Array<any>>(
+    `SELECT "productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","updatedAt"
+     FROM "ProductAutomationOutcome"
+     WHERE "productType" = $1
+       AND "productId" = ANY($2::text[])`,
+    input.productType,
+    ids
+  );
+  return (Array.isArray(rows) ? rows : []).reduce<Record<string, ProductAutomationOutcome>>((acc, row) => {
+    const mapped = mapProductAutomationOutcomeRow(row);
+    if (mapped.productId) acc[mapped.productId] = mapped;
+    return acc;
+  }, {});
+};
+
+const resolveAutomationRecipient = async (input: { productType: ProductType; productId: string }) => {
+  if (input.productType === ProductType.FABRIC) {
+    const row = await prisma.fabric.findUnique({
+      where: { id: input.productId },
+      select: {
+        id: true,
+        name: true,
+        seller: {
+          select: {
+            user: { select: { id: true, email: true, firstName: true, lastName: true } },
+          },
+        },
+      },
+    });
+    return row
+      ? {
+          productName: String(row.name || 'Fabric product'),
+          userId: String(row.seller.user.id),
+          email: String(row.seller.user.email || ''),
+          firstName: String(row.seller.user.firstName || ''),
+          lastName: String(row.seller.user.lastName || ''),
+        }
+      : null;
+  }
+  if (input.productType === ProductType.READY_TO_WEAR) {
+    const row = await prisma.readyToWear.findUnique({
+      where: { id: input.productId },
+      select: {
+        id: true,
+        name: true,
+        designer: {
+          select: {
+            user: { select: { id: true, email: true, firstName: true, lastName: true } },
+          },
+        },
+      },
+    });
+    return row
+      ? {
+          productName: String(row.name || 'Ready-to-wear product'),
+          userId: String(row.designer.user.id),
+          email: String(row.designer.user.email || ''),
+          firstName: String(row.designer.user.firstName || ''),
+          lastName: String(row.designer.user.lastName || ''),
+        }
+      : null;
+  }
+  const row = await prisma.design.findUnique({
+    where: { id: input.productId },
+    select: {
+      id: true,
+      name: true,
+      designer: {
+        select: {
+          user: { select: { id: true, email: true, firstName: true, lastName: true } },
+        },
+      },
+    },
+  });
+  return row
+    ? {
+        productName: String(row.name || 'Design product'),
+        userId: String(row.designer.user.id),
+        email: String(row.designer.user.email || ''),
+        firstName: String(row.designer.user.firstName || ''),
+        lastName: String(row.designer.user.lastName || ''),
+      }
+    : null;
+};
+
+export const notifyVendorAboutProductAutomationFailure = async (input: {
+  productType: ProductType;
+  productId: string;
+  report?: unknown;
+  outcome?: ProductAutomationOutcome | null;
+  errorMessage?: string;
+}) => {
+  try {
+    const recipient = await resolveAutomationRecipient({
+      productType: input.productType,
+      productId: input.productId,
+    });
+    if (!recipient) return;
+    const report = parseReportRows(input.report);
+    const severity = input.outcome?.failureSeverity || resolveProductAutomationFailureSeverity(report);
+    const summary = truncateText(
+      String(input.outcome?.summaryMessage || '').trim() ||
+        buildAutomationSummaryMessage(report, input.errorMessage || 'Automation checks require updates.'),
+      400
+    );
+    const vendorName = `${recipient.firstName} ${recipient.lastName}`.trim() || 'Vendor';
+    const title =
+      severity === 'MAJOR'
+        ? 'Product requires major corrections'
+        : severity === 'MID'
+          ? 'Product requires additional corrections'
+          : 'Product automation update';
+    await prisma.notification.create({
+      data: {
+        userId: recipient.userId,
+        type: 'PRODUCT_REJECTED' as any,
+        title,
+        message: `${recipient.productName}: ${summary}`,
+        relatedType: 'PRODUCT',
+        relatedId: input.productId,
+      },
+    });
+    if (recipient.email) {
+      const topRows = correctionRowsFromReport(report).slice(0, 6);
+      const bulletText = topRows.length
+        ? topRows.map((entry) => `- ${entry.label || entry.key}: ${truncateText(entry.message || 'Requires review', 140)}`).join('\n')
+        : `- ${summary}`;
+      const bulletHtml = topRows.length
+        ? topRows
+            .map(
+              (entry) =>
+                `<li><strong>${entry.label || entry.key}:</strong> ${truncateText(entry.message || 'Requires review', 180)}</li>`
+            )
+            .join('')
+        : `<li>${summary}</li>`;
+      await sendAutomationEmail({
+        to: recipient.email,
+        subject: `[Action Required] ${recipient.productName} needs correction`,
+        text: `Hello ${vendorName},\n\nYour product "${recipient.productName}" did not pass automation checks.\n\n${summary}\n\nItems to correct:\n${bulletText}\n\nPlease update the product and resubmit.\n`,
+        html: `<p>Hello ${vendorName},</p><p>Your product <strong>${recipient.productName}</strong> did not pass automation checks.</p><p>${summary}</p><p><strong>Items to correct:</strong></p><ul>${bulletHtml}</ul><p>Please update the product and resubmit.</p>`,
+      });
+    }
+    await prisma.$executeRawUnsafe(
+      `UPDATE "ProductAutomationOutcome"
+       SET "notifiedAt" = NOW(), "updatedAt" = NOW()
+       WHERE "productType" = $1 AND "productId" = $2`,
+      input.productType,
+      input.productId
+    );
+  } catch (error) {
+    console.error('[automation] Failed to notify vendor about automation failure:', error);
+  }
 };
 
 export const readAutomationApprovalSettings = async () => {
@@ -959,9 +1339,11 @@ Return concise analysis and correction guidance in plain text.`;
   }
 
   const enhancedReport = await applyAiExecution();
-  const hasFail = enhancedReport.some((entry) => entry.status === 'FAIL');
-  const hasNeedsAi = enhancedReport.some((entry) => entry.status === 'NEEDS_AI');
-  const canAutoApprove = !hasFail && (!settings.failOnNeedsAi || !hasNeedsAi);
+  const requiredRows = enhancedReport.filter((entry) => {
+    const criterion = criteria.find((item) => item.key === entry.key);
+    return criterion ? criterion.enabled !== false : true;
+  });
+  const canAutoApprove = requiredRows.length > 0 && requiredRows.every((entry) => entry.status === 'PASS');
   return {
     canAutoApprove,
     status: canAutoApprove ? ('PASS' as const) : ('REVIEW_REQUIRED' as const),

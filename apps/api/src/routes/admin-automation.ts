@@ -7,7 +7,9 @@ import {
   ensureAutomationSettingsSchema,
   evaluateAccountAutomationChecks,
   evaluateProductAutomationChecks,
+  notifyVendorAboutProductAutomationFailure,
   readAutomationApprovalSettings,
+  saveProductAutomationOutcome,
   saveAutomationApprovalSettings,
   testAutomationProviderBinding,
 } from '../utils/automation-approval';
@@ -77,6 +79,7 @@ router.post('/evaluate-product', async (req, res, next) => {
       }),
     ]);
     let action: 'NONE' | 'AUTO_APPROVED' | 'AUTO_REJECTED' = 'NONE';
+    let automationOutcome: any = null;
     if (payload.applyDecision) {
       if (evaluation.canAutoApprove && settingsPayload.settings.autoApproveOnPass) {
         if (payload.productType === ProductType.FABRIC) {
@@ -116,6 +119,16 @@ router.post('/evaluate-product', async (req, res, next) => {
           },
         });
         action = 'AUTO_APPROVED';
+        automationOutcome = await saveProductAutomationOutcome({
+          productType: payload.productType as any,
+          productId: payload.productId,
+          evaluationStatus: evaluation.status,
+          action,
+          report: evaluation.report,
+          failureSeverity: 'NONE',
+          needsCorrection: false,
+          summaryMessage: 'All automation checks passed. Product auto-approved.',
+        });
       } else {
         if (payload.productType === ProductType.FABRIC) {
           await prisma.fabric.update({
@@ -155,13 +168,38 @@ router.post('/evaluate-product', async (req, res, next) => {
           },
         });
         action = 'AUTO_REJECTED';
+        automationOutcome = await saveProductAutomationOutcome({
+          productType: payload.productType as any,
+          productId: payload.productId,
+          evaluationStatus: evaluation.status,
+          action,
+          report: evaluation.report,
+        });
+        await notifyVendorAboutProductAutomationFailure({
+          productType: payload.productType as any,
+          productId: payload.productId,
+          report: evaluation.report,
+          outcome: automationOutcome,
+        });
       }
+    } else {
+      automationOutcome = await saveProductAutomationOutcome({
+        productType: payload.productType as any,
+        productId: payload.productId,
+        evaluationStatus: evaluation.status,
+        action: 'NONE',
+        report: evaluation.report,
+        failureSeverity: evaluation.canAutoApprove ? 'NONE' : undefined,
+        needsCorrection: evaluation.canAutoApprove ? false : undefined,
+        summaryMessage: evaluation.canAutoApprove ? 'Automation checks passed.' : undefined,
+      });
     }
     res.json({
       success: true,
       data: {
         ...evaluation,
         action,
+        automationOutcome,
       },
     });
   } catch (error) {
