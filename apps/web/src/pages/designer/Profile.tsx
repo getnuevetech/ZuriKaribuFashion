@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../../components/ui/Button';
 import { api } from '../../services/api';
+import { resolveCountryCode } from '../../data/locationOptions';
 
 export default function DesignerProfilePage() {
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,9 @@ export default function DesignerProfilePage() {
     );
   }
 
+  const profileCountry = String(profileCompletion?.profile?.country || '').trim();
+  const countryCode = resolveCountryCode(profileCountry);
+
   return (
     <div className="space-y-4">
       <div>
@@ -78,9 +82,20 @@ export default function DesignerProfilePage() {
           </div>
           <div>
             <p className="text-xs uppercase tracking-wide text-gray-500">Country / City</p>
-            <p className="text-sm font-medium text-gray-900">
-              {[profileCompletion?.profile?.country, profileCompletion?.profile?.city].filter(Boolean).join(', ') || '-'}
-            </p>
+            <div className="flex items-center gap-2">
+              {countryCode ? (
+                <img
+                  src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
+                  alt={`${profileCountry || 'Country'} flag`}
+                  className="h-4 w-6 rounded-sm border object-cover"
+                />
+              ) : (
+                <span className="text-sm" aria-hidden="true">🌍</span>
+              )}
+              <p className="text-sm font-medium text-gray-900">
+                {[profileCompletion?.profile?.country, profileCompletion?.profile?.city].filter(Boolean).join(', ') || '-'}
+              </p>
+            </div>
           </div>
           <div className="md:col-span-2">
             <p className="text-xs uppercase tracking-wide text-gray-500">Address</p>
