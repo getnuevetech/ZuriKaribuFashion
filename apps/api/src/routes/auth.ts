@@ -120,6 +120,66 @@ const normalizeVendorRegistrationCountry = (countryInput: string | undefined | n
   return null;
 };
 
+const ensureVendorProfileSubmissionSchema = async () => {
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "VendorProfileSubmission" (
+      "id" TEXT NOT NULL,
+      "role" TEXT NOT NULL,
+      "userId" TEXT NOT NULL,
+      "businessName" TEXT,
+      "profileStatus" TEXT NOT NULL DEFAULT 'SUBMITTED',
+      "profileData" JSONB,
+      "profileSubmittedAt" TIMESTAMP(3),
+      "profileReviewedAt" TIMESTAMP(3),
+      "profileReviewNotes" TEXT,
+      "profileReviewMessage" TEXT,
+      "rejectionType" TEXT,
+      "rejectionReasonCode" TEXT,
+      "rejectionReasonLabel" TEXT,
+      "permanentRejectionAt" TIMESTAMP(3),
+      "permanentDisableAt" TIMESTAMP(3),
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "VendorProfileSubmission_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "VendorProfileSubmission_role_userId_key" ON "VendorProfileSubmission"("role","userId")`
+  );
+};
+
+const upsertVendorOnboardingSubmission = async (input: {
+  role: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+  userId: string;
+  businessName: string;
+  profileData: Record<string, unknown>;
+}) => {
+  try {
+    await ensureVendorProfileSubmissionSchema();
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "VendorProfileSubmission"
+        ("id","role","userId","businessName","profileStatus","profileData","profileSubmittedAt","profileReviewedAt","profileReviewNotes","profileReviewMessage","rejectionType","rejectionReasonCode","rejectionReasonLabel","permanentRejectionAt","permanentDisableAt","updatedAt")
+       VALUES ($1,$2,$3,$4,'INCOMPLETE',$5::jsonb,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NOW())
+       ON CONFLICT ("role","userId")
+       DO UPDATE SET
+         "businessName" = EXCLUDED."businessName",
+         "profileStatus" = CASE
+           WHEN "VendorProfileSubmission"."profileStatus" = 'APPROVED' THEN "VendorProfileSubmission"."profileStatus"
+           ELSE EXCLUDED."profileStatus"
+         END,
+         "profileData" = COALESCE("VendorProfileSubmission"."profileData", '{}'::jsonb) || EXCLUDED."profileData",
+         "updatedAt" = NOW()`,
+      crypto.randomUUID(),
+      input.role,
+      input.userId,
+      input.businessName,
+      JSON.stringify(input.profileData || {})
+    );
+  } catch {
+    // Best-effort bootstrap for governance visibility.
+  }
+};
+
 const BCRYPT_PATTERN = /^\$2[aby]\$\d{2}\$/;
 const isSchemaDriftError = (error: unknown) =>
   error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -708,6 +768,7 @@ router.post('/register', async (req, res, next) => {
           country: normalizedVendorCountry || data.country,
           city: data.city,
           address: data.address || '',
+          isVerified: false,
         },
       };
     } else if (data.role === 'FASHION_DESIGNER') {
@@ -726,6 +787,7 @@ router.post('/register', async (req, res, next) => {
           country: normalizedVendorCountry || data.country,
           city: data.city,
           address: data.address || '',
+          isVerified: false,
         },
       };
     }
@@ -742,6 +804,23 @@ router.post('/register', async (req, res, next) => {
         createdAt: true,
       },
     });
+
+    if (data.role === 'FABRIC_SELLER' || data.role === 'FASHION_DESIGNER') {
+      await upsertVendorOnboardingSubmission({
+        role: data.role,
+        userId: user.id,
+        businessName: String(data.businessName || `${firstName} ${lastName}`).trim(),
+        profileData: {
+          businessName: String(data.businessName || '').trim(),
+          businessEmail: String(data.businessEmail || data.email || '').trim(),
+          businessPhone: String(data.businessPhone || data.phone || '').trim(),
+          country: String(normalizedVendorCountry || data.country || '').trim(),
+          city: String(data.city || '').trim(),
+          address: String(data.address || '').trim(),
+          ...(data.role === 'FASHION_DESIGNER' ? { bio: String(data.bio || '').trim() } : {}),
+        },
+      });
+    }
 
     // Only ACTIVE users should receive an authentication token immediately.
     const token = user.status === UserStatus.ACTIVE

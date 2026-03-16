@@ -697,7 +697,6 @@ export default function DesignerDashboard() {
   );
   const [searchParams, setSearchParams] = useSearchParams();
   const [productSearch, setProductSearch] = useState('');
-  const [productTypeFilter, setProductTypeFilter] = useState('');
   const [productStatusFilter, setProductStatusFilter] = useState('');
   const [productCategoryFilter, setProductCategoryFilter] = useState('');
   const [showReadyStockModal, setShowReadyStockModal] = useState(false);
@@ -2637,20 +2636,30 @@ export default function DesignerDashboard() {
     ...designs.map((item) => ({ ...item, productType: 'CUSTOM_TO_WEAR' as const })),
     ...readyProducts.map((item) => ({ ...item, productType: 'READY_TO_WEAR' as const })),
   ];
-  const filteredProductRows = useMemo(() => {
+  const filteredDesignRows = useMemo(() => {
     const normalizedSearch = productSearch.trim().toLowerCase();
-    return productRows.filter((item) => {
-      if (productTypeFilter && item.productType !== productTypeFilter) return false;
+    return designs.filter((item) => {
       if (productStatusFilter && String(item.status || '').toUpperCase() !== productStatusFilter.toUpperCase()) return false;
       if (productCategoryFilter && String(item.category?.name || '') !== productCategoryFilter) return false;
       if (!normalizedSearch) return true;
       return (
         String(item.name || '').toLowerCase().includes(normalizedSearch) ||
-        String(item.category?.name || '').toLowerCase().includes(normalizedSearch) ||
-        String(item.productType || '').toLowerCase().includes(normalizedSearch)
+        String(item.category?.name || '').toLowerCase().includes(normalizedSearch)
       );
     });
-  }, [productRows, productSearch, productTypeFilter, productStatusFilter, productCategoryFilter]);
+  }, [designs, productSearch, productStatusFilter, productCategoryFilter]);
+  const filteredReadyRows = useMemo(() => {
+    const normalizedSearch = productSearch.trim().toLowerCase();
+    return readyProducts.filter((item) => {
+      if (productStatusFilter && String(item.status || '').toUpperCase() !== productStatusFilter.toUpperCase()) return false;
+      if (productCategoryFilter && String(item.category?.name || '') !== productCategoryFilter) return false;
+      if (!normalizedSearch) return true;
+      return (
+        String(item.name || '').toLowerCase().includes(normalizedSearch) ||
+        String(item.category?.name || '').toLowerCase().includes(normalizedSearch)
+      );
+    });
+  }, [readyProducts, productSearch, productStatusFilter, productCategoryFilter]);
   const featuredRows = productRows.filter((item) => item.isFeatured);
   const pendingOrders = orders.filter(o => o.status === 'PENDING');
   const activeProfileFields = useMemo(
@@ -2678,21 +2687,6 @@ export default function DesignerDashboard() {
       : Number((readyLocalPricePreview * selectedReadyUsdPerUnit).toFixed(2));
   const isFieldHidden = (mode: 'ENABLED' | 'READ_ONLY' | 'HIDDEN') => mode === 'HIDDEN';
   const isFieldReadOnly = (mode: 'ENABLED' | 'READ_ONLY' | 'HIDDEN') => mode === 'READ_ONLY';
-  const canUseDesignForm =
-    !isFieldHidden(dashboardGovernance.fields.designName) &&
-    !isFieldHidden(dashboardGovernance.fields.designDescription) &&
-    !isFieldHidden(dashboardGovernance.fields.designStyle) &&
-    !isFieldHidden(dashboardGovernance.fields.designBasePrice) &&
-    !isFieldHidden(dashboardGovernance.fields.designImages) &&
-    !isFieldHidden(dashboardGovernance.fields.designSuitableFabrics) &&
-    !isFieldHidden(dashboardGovernance.fields.designMeasurementVariables);
-  const canUseReadyForm =
-    !isFieldHidden(dashboardGovernance.fields.readyName) &&
-    !isFieldHidden(dashboardGovernance.fields.readyDescription) &&
-    !isFieldHidden(dashboardGovernance.fields.readyStyle) &&
-    !isFieldHidden(dashboardGovernance.fields.readyBasePrice) &&
-    !isFieldHidden(dashboardGovernance.fields.readyImages) &&
-    !isFieldHidden(dashboardGovernance.fields.readyVariants);
   const showProfileGovernance = dashboardGovernance.sections.profileGovernance !== false;
   const showStats = dashboardGovernance.sections.stats !== false;
   const canUploadByProfile = Boolean(profileCompletion?.canUpload);
@@ -2702,9 +2696,8 @@ export default function DesignerDashboard() {
     dashboardGovernance.actions.submitProfile !== false &&
     profileCompletion?.canResubmitProfile !== false &&
     canEditGovernanceProfile;
-  const canAddDesignProduct = dashboardGovernance.actions.addDesignProduct !== false && canUseDesignForm && canUploadByProfile;
-  const canAddReadyProduct = dashboardGovernance.actions.addReadyToWearProduct !== false && canUseReadyForm && canUploadByProfile;
-  // Keep add-product strict on full form visibility, but allow edit whenever edit action is enabled.
+  const canAddDesignProduct = dashboardGovernance.actions.addDesignProduct !== false && canUploadByProfile;
+  const canAddReadyProduct = dashboardGovernance.actions.addReadyToWearProduct !== false && canUploadByProfile;
   const canEditDesignProduct = dashboardGovernance.actions.editDesignProduct !== false;
   const canEditReadyProduct = dashboardGovernance.actions.editReadyToWearProduct !== false;
   const canManageReadyStock = dashboardGovernance.actions.manageReadyStock !== false && canUploadByProfile;
@@ -2789,6 +2782,129 @@ export default function DesignerDashboard() {
     .map((fabricId) => fabricOptionById.get(fabricId))
     .filter(Boolean) as FabricOption[];
   const hasReachedSuitableFabricLimit = designForm.selectedFabricIds.length >= maxSuitableFabricsPerDesign;
+  const renderProductsTable = (rows: Array<any>, productType: 'CUSTOM_TO_WEAR' | 'READY_TO_WEAR') => (
+    <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Product</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Price</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Style</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Featured</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Status</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Orders</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((item: any) => {
+              const code = String(item.listingCurrencyCode || 'USD').toUpperCase();
+              const local = Number(item.listingLocalPrice || item.basePrice || 0);
+              const usd = Number(item.listingUsdPrice || item.basePrice || 0);
+              const priceText = code === 'USD' ? `$${usd.toFixed(2)}` : `${code} ${local.toFixed(2)} · USD ${usd.toFixed(2)}`;
+              const readySizeSummary =
+                productType === 'READY_TO_WEAR'
+                  ? ((item.sizeVariations || [])
+                      .map((entry: any) => `${entry.size}/${String(entry.color || 'DEFAULT')}: ${Number(entry.stock || 0)}`)
+                      .join(' • ') || 'No sizes')
+                  : '';
+              return (
+                <tr key={`${productType}-${item.id}`} className="border-b last:border-0 hover:bg-gray-50">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <img src={item.images?.[0] || '/images/placeholder.jpg'} alt={item.name} className="h-10 w-10 rounded-lg object-cover" />
+                      <div>
+                        <p className="font-medium text-gray-900">{item.name}</p>
+                        <p className="text-sm text-gray-500">{productType === 'READY_TO_WEAR' ? 'Ready To Wear' : 'Custom To Wear'}</p>
+                        <p className="font-mono text-[11px] text-gray-400">ID: {item.id}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 font-medium">{priceText}</td>
+                  <td className="px-4 py-3 text-gray-600">
+                    <p>{item.category?.name || 'Style'}</p>
+                    {productType === 'READY_TO_WEAR' ? (
+                      <p className="mt-1 text-xs text-gray-500">Size stock: {readySizeSummary}</p>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge variant={item.isFeatured ? 'green' : 'gray'}>{item.isFeatured ? 'YES' : 'NO'}</Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge
+                      variant={
+                        item.status === 'APPROVED'
+                          ? 'green'
+                          : item.status === 'PENDING_REVIEW'
+                            ? 'yellow'
+                            : item.status === 'REJECTED'
+                              ? 'red'
+                              : 'gray'
+                      }
+                    >
+                      {item.status}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">{item.orderCount}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      {productType === 'CUSTOM_TO_WEAR' ? (
+                        canEditDesignProduct ? (
+                          <button
+                            onClick={() => openEditDesignModal(item as Design)}
+                            className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
+                            title="Edit product"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                        ) : null
+                      ) : (
+                        <>
+                          {canEditReadyProduct ? (
+                            <button
+                              onClick={() => openEditReadyModal(item as ReadyProduct)}
+                              className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
+                              title="Edit product"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                          ) : null}
+                          {canManageReadyStock ? (
+                            <button
+                              onClick={() => openReadyStockModal(item as ReadyProduct)}
+                              className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-700"
+                              title="Manage size stock"
+                            >
+                              <Scissors className="h-4 w-4" />
+                            </button>
+                          ) : null}
+                        </>
+                      )}
+                      <Link
+                        to={productType === 'READY_TO_WEAR' ? `/ready-to-wear/${item.id}` : `/designs/${item.id}`}
+                        className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                        title="View"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">
+                  No {productType === 'READY_TO_WEAR' ? 'ready-to-wear' : 'custom-to-wear'} products matched your filters.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -3371,12 +3487,20 @@ export default function DesignerDashboard() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">My Products</h2>
-            {canAddDesignProduct ? (
-              <Button size="sm" onClick={openCreateDesignModal}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Custom Product
-              </Button>
-            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              {canAddReadyProduct ? (
+                <Button size="sm" variant="outline" onClick={openCreateReadyModal}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Ready-To-Wear
+                </Button>
+              ) : null}
+              {canAddDesignProduct ? (
+                <Button size="sm" onClick={openCreateDesignModal}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Custom To Wear
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -3392,15 +3516,6 @@ export default function DesignerDashboard() {
                 />
               </div>
             </div>
-            <select
-              value={productTypeFilter}
-              onChange={(event) => setProductTypeFilter(event.target.value)}
-              className="rounded-lg border px-4 py-2"
-            >
-              <option value="">All Types</option>
-              <option value="CUSTOM_TO_WEAR">Custom To Wear</option>
-              <option value="READY_TO_WEAR">Ready To Wear</option>
-            </select>
             <select
               value={productStatusFilter}
               onChange={(event) => setProductStatusFilter(event.target.value)}
@@ -3432,129 +3547,15 @@ export default function DesignerDashboard() {
           </div>
 
           {dashboardGovernance.sections.productsTable !== false ? (
-            <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Product</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Type</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Price</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Style</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Featured</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Status</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Orders</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredProductRows.map((item) => {
-                    const code = String(item.listingCurrencyCode || 'USD').toUpperCase();
-                    const local = Number(item.listingLocalPrice || item.basePrice || 0);
-                    const usd = Number(item.listingUsdPrice || item.basePrice || 0);
-                    const priceText = code === 'USD' ? `$${usd.toFixed(2)}` : `${code} ${local.toFixed(2)} · USD ${usd.toFixed(2)}`;
-                    const readySizeSummary =
-                      item.productType === 'READY_TO_WEAR'
-                        ? (((item as ReadyProduct).sizeVariations || [])
-                            .map((entry) => `${entry.size}/${String(entry.color || 'DEFAULT')}: ${Number(entry.stock || 0)}`)
-                            .join(' • ') || 'No sizes')
-                        : '';
-                    return (
-                      <tr key={`${item.productType}-${item.id}`} className="border-b last:border-0 hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            <img src={item.images?.[0] || '/images/placeholder.jpg'} alt={item.name} className="h-10 w-10 rounded-lg object-cover" />
-                            <div>
-                              <p className="font-medium text-gray-900">{item.name}</p>
-                              <p className="text-sm text-gray-500">{item.productType === 'READY_TO_WEAR' ? 'Ready To Wear' : 'Custom To Wear'}</p>
-                              <p className="font-mono text-[11px] text-gray-400">ID: {item.id}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge variant="secondary">{item.productType}</Badge>
-                        </td>
-                        <td className="px-4 py-3 font-medium">{priceText}</td>
-                        <td className="px-4 py-3 text-gray-600">
-                          <p>{item.category?.name || 'Style'}</p>
-                          {item.productType === 'READY_TO_WEAR' ? (
-                            <p className="mt-1 text-xs text-gray-500">Size stock: {readySizeSummary}</p>
-                          ) : null}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge variant={item.isFeatured ? 'green' : 'gray'}>{item.isFeatured ? 'YES' : 'NO'}</Badge>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge
-                            variant={
-                              item.status === 'APPROVED'
-                                ? 'green'
-                                : item.status === 'PENDING_REVIEW'
-                                  ? 'yellow'
-                                  : item.status === 'REJECTED'
-                                    ? 'red'
-                                    : 'gray'
-                            }
-                          >
-                            {item.status}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3 text-gray-600">{item.orderCount}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-2">
-                            {item.productType !== 'READY_TO_WEAR' && canEditDesignProduct ? (
-                              <button
-                                onClick={() => openEditDesignModal(item as Design)}
-                                className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
-                                title="Edit product"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </button>
-                            ) : null}
-                            {item.productType === 'READY_TO_WEAR' ? (
-                              <>
-                                {canEditReadyProduct ? (
-                                  <button
-                                    onClick={() => openEditReadyModal(item as ReadyProduct)}
-                                    className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
-                                    title="Edit product"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </button>
-                                ) : null}
-                                {canManageReadyStock ? (
-                                  <button
-                                    onClick={() => openReadyStockModal(item as ReadyProduct)}
-                                    className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-700"
-                                    title="Manage size stock"
-                                  >
-                                    <Scissors className="h-4 w-4" />
-                                  </button>
-                                ) : null}
-                              </>
-                            ) : null}
-                            <Link
-                              to={item.productType === 'READY_TO_WEAR' ? `/ready-to-wear/${item.id}` : `/designs/${item.id}`}
-                              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-                              title="View"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Link>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {filteredProductRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-500">
-                        No products found for the selected filters.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
+            <div className="space-y-5">
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Custom To Wear</h3>
+                {renderProductsTable(filteredDesignRows, 'CUSTOM_TO_WEAR')}
+              </section>
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Ready To Wear</h3>
+                {renderProductsTable(filteredReadyRows, 'READY_TO_WEAR')}
+              </section>
             </div>
           ) : (
             <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">

@@ -3230,11 +3230,9 @@ router.get('/vendor-profiles', async (req, res, next) => {
         const submission = submissions.get(`FABRIC_SELLER:${profile.userId}`);
         const profileStatus = submission
           ? normalizeVendorProfileStatus(submission.profileStatus)
-          : profile.isVerified
-            ? 'APPROVED'
-            : profile.user.status === UserStatus.PENDING
-              ? 'SUBMITTED'
-              : 'INCOMPLETE';
+          : profile.user.status === UserStatus.PENDING
+            ? 'SUBMITTED'
+            : 'INCOMPLETE';
         return {
           role: 'FABRIC_SELLER' as const,
           userId: profile.userId,
@@ -3260,11 +3258,9 @@ router.get('/vendor-profiles', async (req, res, next) => {
         const submission = submissions.get(`FASHION_DESIGNER:${profile.userId}`);
         const profileStatus = submission
           ? normalizeVendorProfileStatus(submission.profileStatus)
-          : profile.isVerified
-            ? 'APPROVED'
-            : profile.user.status === UserStatus.PENDING
-              ? 'SUBMITTED'
-              : 'INCOMPLETE';
+          : profile.user.status === UserStatus.PENDING
+            ? 'SUBMITTED'
+            : 'INCOMPLETE';
         return {
           role: 'FASHION_DESIGNER' as const,
           userId: profile.userId,
@@ -3366,7 +3362,7 @@ router.get('/vendor-profiles/:role/:userId', async (req, res, next) => {
           user: profile.user,
           profile: {
             ...profile,
-            profileStatus: submission ? normalizeVendorProfileStatus(submission.profileStatus) : profile.isVerified ? 'APPROVED' : 'SUBMITTED',
+            profileStatus: submission ? normalizeVendorProfileStatus(submission.profileStatus) : 'INCOMPLETE',
             profileData: submission?.profileData || {},
             profileSubmittedAt: submission?.profileSubmittedAt || null,
             profileReviewedAt: submission?.profileReviewedAt || null,
@@ -3397,7 +3393,7 @@ router.get('/vendor-profiles/:role/:userId', async (req, res, next) => {
         user: profile.user,
         profile: {
           ...profile,
-          profileStatus: submission ? normalizeVendorProfileStatus(submission.profileStatus) : profile.isVerified ? 'APPROVED' : 'SUBMITTED',
+          profileStatus: submission ? normalizeVendorProfileStatus(submission.profileStatus) : 'INCOMPLETE',
           profileData: submission?.profileData || {},
           profileSubmittedAt: submission?.profileSubmittedAt || null,
           profileReviewedAt: submission?.profileReviewedAt || null,

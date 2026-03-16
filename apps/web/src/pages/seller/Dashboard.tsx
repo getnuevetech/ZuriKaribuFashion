@@ -1655,14 +1655,8 @@ export default function SellerDashboard() {
   const canEditGovernanceProfile = profileStatus === 'INCOMPLETE' || profileStatus === 'REJECTED';
   const isFieldHidden = (mode: 'ENABLED' | 'READ_ONLY' | 'HIDDEN') => mode === 'HIDDEN';
   const isFieldReadOnly = (mode: 'ENABLED' | 'READ_ONLY' | 'HIDDEN') => mode === 'READ_ONLY';
-  const canUseProductForm =
-    !isFieldHidden(dashboardGovernance.fields.productName) &&
-    !isFieldHidden(dashboardGovernance.fields.productDescription) &&
-    !isFieldHidden(dashboardGovernance.fields.materialType) &&
-    !isFieldHidden(dashboardGovernance.fields.sellerPrice) &&
-    !isFieldHidden(dashboardGovernance.fields.productImages);
-  const canAddProduct = dashboardGovernance.actions.addProduct !== false && canUseProductForm && canUploadByProfile;
-  const canEditProduct = dashboardGovernance.actions.editProduct !== false && canUseProductForm && canUploadByProfile;
+  const canAddProduct = dashboardGovernance.actions.addProduct !== false && canUploadByProfile;
+  const canEditProduct = dashboardGovernance.actions.editProduct !== false && canUploadByProfile;
   const canUpdateStock = dashboardGovernance.actions.updateStock !== false && canUploadByProfile;
   const canUpdateOrderStatus = dashboardGovernance.actions.updateOrderStatus !== false && canUploadByProfile;
   const canSubmitProfile =

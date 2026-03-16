@@ -374,13 +374,11 @@ async function getSellerProfileCompletion(userId: string) {
   writeAliasValue(profileData, PROFILE_FIELD_ALIASES.address, profile.address || '', fieldKeys);
   const status = submission
     ? normalizeVendorProfileStatus(submission.profileStatus)
-    : profile.isVerified
-      ? 'APPROVED'
-      : 'INCOMPLETE';
+    : 'INCOMPLETE';
   const rejectionType = normalizeVendorRejectionType(submission?.rejectionType);
-  const canUpload = status === 'APPROVED' || Boolean(profile.isVerified);
+  const canUpload = status === 'APPROVED';
   const canResubmitProfile = status !== 'REJECTED' || rejectionType !== 'PERMANENT';
-  const canOperateAccount = status === 'APPROVED' || Boolean(profile.isVerified);
+  const canOperateAccount = status === 'APPROVED';
   const brandSlug = slugify(profile.businessName || '');
   const storefrontPath = `/store/seller/${encodeURIComponent(profile.id)}/${encodeURIComponent(brandSlug || 'store')}`;
 
