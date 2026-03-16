@@ -228,6 +228,18 @@ export default function OrderSupportModal({
   }
   const computedLineSubtotal = invoiceLineItems.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0);
   const subtotalAmount = subtotalAmountRaw > 0 ? subtotalAmountRaw : computedLineSubtotal;
+  const checkoutPricingLabel =
+    String(orderDetail?.checkoutPricingLabel || 'Checkout Pricing').trim() || 'Checkout Pricing';
+  const checkoutPricingAdjustmentAmount = Number(
+    orderDetail?.checkoutPricingAdjustmentUsd ?? orderDetail?.shippingAddress?.checkoutPricingAdjustmentUsd ?? 0
+  );
+  const promoDiscountAmount = Number(orderDetail?.discountUsd ?? 0);
+  const baseItemsSubtotal = Math.max(
+    0,
+    Number((Number(subtotalAmount || 0) - Number(checkoutPricingAdjustmentAmount || 0) + Number(promoDiscountAmount || 0)).toFixed(2))
+  );
+  const formatSignedCurrency = (amount: number) =>
+    `${Number(amount || 0) < 0 ? '-' : ''}$${Math.abs(Number(amount || 0)).toFixed(2)}`;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
@@ -341,6 +353,24 @@ export default function OrderSupportModal({
               )}
               <div className="mt-3 border-t pt-3 text-sm text-gray-700">
                 <div className="flex items-center justify-between">
+                  <span>Items Subtotal</span>
+                  <span>${Number(baseItemsSubtotal || 0).toFixed(2)}</span>
+                </div>
+                {Math.abs(Number(checkoutPricingAdjustmentAmount || 0)) > 0 ? (
+                  <div className="flex items-center justify-between">
+                    <span>{checkoutPricingLabel}</span>
+                    <span className={checkoutPricingAdjustmentAmount < 0 ? 'text-green-700' : ''}>
+                      {formatSignedCurrency(checkoutPricingAdjustmentAmount)}
+                    </span>
+                  </div>
+                ) : null}
+                {Number(promoDiscountAmount || 0) > 0 ? (
+                  <div className="flex items-center justify-between">
+                    <span>Promo Discount</span>
+                    <span className="text-green-700">-${Number(promoDiscountAmount || 0).toFixed(2)}</span>
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-between font-medium text-gray-900">
                   <span>Subtotal</span>
                   <span>${Number(subtotalAmount || 0).toFixed(2)}</span>
                 </div>

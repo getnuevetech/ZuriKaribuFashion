@@ -190,6 +190,78 @@ const appendOrderCategoryBundleItem = (
   const existingItems = readOrderCategoryBundleItems(shippingAddress, categoryKey);
   return withOrderCategoryBundleItems(shippingAddress, categoryKey, [...existingItems, item]);
 };
+const toMoney = (value: unknown) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Number(parsed.toFixed(2));
+};
+const readOrderPricingBreakdown = (shippingAddress: unknown, fallbackLabel = 'Checkout Pricing') => {
+  const shipping = parseJsonObject(shippingAddress);
+  const workflow = parseJsonObject(shipping.workflow);
+  const pricing = parseJsonObject(workflow.pricing);
+  const categoryBundles = parseJsonObject(workflow.categoryBundles);
+  let bundleCheckoutPricingAdjustmentUsd = 0;
+  let bundleDiscountUsd = 0;
+  (['READY_TO_WEAR', 'CUSTOM_DESIGN', 'FABRIC_ONLY'] as OrderCategoryBundleKey[]).forEach((key) => {
+    const bundleRow = parseJsonObject(categoryBundles[key]);
+    const bundleItems = parseJsonArray(bundleRow.items);
+    bundleItems.forEach((entry) => {
+      const item = parseJsonObject(entry);
+      bundleCheckoutPricingAdjustmentUsd = toMoney(
+        bundleCheckoutPricingAdjustmentUsd + Number(item.checkoutPricingAdjustmentUsd || 0)
+      );
+      bundleDiscountUsd = toMoney(bundleDiscountUsd + Number(item.discountUsd || 0));
+    });
+  });
+  const hasExplicitCheckoutPricing = Number.isFinite(Number(pricing.checkoutPricingAdjustmentUsd));
+  const hasExplicitDiscount = Number.isFinite(Number(pricing.discountUsd));
+  return {
+    checkoutPricingLabel:
+      String(pricing.checkoutPricingLabel || pricing.label || fallbackLabel)
+        .trim()
+        .slice(0, 80) || fallbackLabel,
+    checkoutPricingAdjustmentUsd: hasExplicitCheckoutPricing
+      ? toMoney(pricing.checkoutPricingAdjustmentUsd)
+      : Math.abs(bundleCheckoutPricingAdjustmentUsd) > 0
+        ? toMoney(bundleCheckoutPricingAdjustmentUsd)
+        : toMoney(shipping.checkoutPricingAdjustmentUsd),
+    discountUsd: hasExplicitDiscount ? toMoney(pricing.discountUsd) : toMoney(bundleDiscountUsd),
+    promoCode: String(pricing.promoCode || '').trim(),
+  };
+};
+const withOrderPricingBreakdown = (
+  shippingAddress: unknown,
+  pricingInput: {
+    checkoutPricingLabel?: unknown;
+    checkoutPricingAdjustmentUsd?: unknown;
+    discountUsd?: unknown;
+    promoCode?: unknown;
+  }
+) => {
+  const shipping = parseJsonObject(shippingAddress);
+  const workflow = parseJsonObject(shipping.workflow);
+  const existingPricing = parseJsonObject(workflow.pricing);
+  const nextLabel =
+    String(pricingInput.checkoutPricingLabel || existingPricing.checkoutPricingLabel || existingPricing.label || 'Checkout Pricing')
+      .trim()
+      .slice(0, 80) || 'Checkout Pricing';
+  return {
+    ...shipping,
+    workflow: {
+      ...workflow,
+      pricing: {
+        ...existingPricing,
+        checkoutPricingLabel: nextLabel,
+        checkoutPricingAdjustmentUsd: toMoney(
+          pricingInput.checkoutPricingAdjustmentUsd ?? existingPricing.checkoutPricingAdjustmentUsd ?? 0
+        ),
+        discountUsd: toMoney(pricingInput.discountUsd ?? existingPricing.discountUsd ?? 0),
+        promoCode: String(pricingInput.promoCode ?? existingPricing.promoCode ?? '').trim(),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  };
+};
 const parseRoleArray = (value: unknown): unknown[] => {
   const parsed = parseJsonArray(value);
   if (parsed.length > 0) return parsed;
@@ -1047,6 +1119,7 @@ async function sendOrderConfirmationEmail(params: {
   promoCode?: string | null;
   discountUsd?: number | null;
   shippingCostUsd?: number | null;
+  checkoutPricingLabel?: string | null;
   checkoutPricingAdjustmentUsd?: number | null;
   itemLines?: string[];
   itemRows?: Array<{
@@ -1100,11 +1173,16 @@ async function sendOrderConfirmationEmail(params: {
           params.promoCode ? ` (${String(params.promoCode).toUpperCase()})` : ''
         }`
       : '';
+  const checkoutPricingLabel =
+    String(params.checkoutPricingLabel || '')
+      .trim()
+      .slice(0, 80) || 'Checkout Pricing';
+  const checkoutPricingSignedText = `${Number(params.checkoutPricingAdjustmentUsd || 0) < 0 ? '-' : ''}$${Math.abs(
+    Number(params.checkoutPricingAdjustmentUsd || 0)
+  ).toFixed(2)}`;
   const checkoutPricingText =
     Math.abs(Number(params.checkoutPricingAdjustmentUsd || 0)) > 0
-      ? `\nCheckout Pricing: ${Number(params.checkoutPricingAdjustmentUsd || 0) >= 0 ? '+' : '-'}$${Math.abs(
-          Number(params.checkoutPricingAdjustmentUsd || 0)
-        ).toFixed(2)}`
+      ? `\n${checkoutPricingLabel}: ${checkoutPricingSignedText}`
       : '';
   const paymentMethodText = params.paymentMethod ? `\nPayment Method: ${String(params.paymentMethod)}` : '';
   const shippingAddressText = params.shippingAddress ? `\nShipping Address: ${String(params.shippingAddress)}` : '';
@@ -1166,7 +1244,7 @@ async function sendOrderConfirmationEmail(params: {
       <p><strong>Invoice Date:</strong> ${invoiceDateText}</p>
       <p><strong>Items:</strong> ${params.itemCount}</p>
       <p><strong>Subtotal:</strong> $${subtotalText}</p>
-      ${Math.abs(Number(params.checkoutPricingAdjustmentUsd || 0)) > 0 ? `<p><strong>Checkout Pricing:</strong> ${Number(params.checkoutPricingAdjustmentUsd || 0) >= 0 ? '+' : '-'}$${Math.abs(Number(params.checkoutPricingAdjustmentUsd || 0)).toFixed(2)}</p>` : ''}
+      ${Math.abs(Number(params.checkoutPricingAdjustmentUsd || 0)) > 0 ? `<p><strong>${escapeHtml(checkoutPricingLabel)}:</strong> ${checkoutPricingSignedText}</p>` : ''}
       ${Number(params.discountUsd || 0) > 0 ? `<p><strong>Promo Discount:</strong> -$${Number(params.discountUsd || 0).toFixed(2)}${params.promoCode ? ` (${String(params.promoCode).toUpperCase()})` : ''}</p>` : ''}
       ${Number(params.shippingCostUsd || 0) > 0 || Number(params.shippingCostUsd || 0) === 0 ? `<p><strong>Shipping:</strong> ${Number(params.shippingCostUsd || 0) === 0 ? 'FREE' : `$${Number(params.shippingCostUsd || 0).toFixed(2)}`}</p>` : '<p><strong>Shipping:</strong> N/A</p>'}
       <p><strong>Tax:</strong> $${taxText}</p>
@@ -2359,6 +2437,7 @@ router.get('/:id', authorizePermissions(Permissions.ORDERS_READ_SELF, Permission
       });
     }
 
+    const pricingBreakdown = readOrderPricingBreakdown(order.shippingAddress);
     const safeOrder =
       user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER
         ? {
@@ -2369,8 +2448,18 @@ router.get('/:id', authorizePermissions(Permissions.ORDERS_READ_SELF, Permission
               email: '',
             },
             shippingAddress: redactShippingAddressForVendor(order.shippingAddress),
+            checkoutPricingLabel: pricingBreakdown.checkoutPricingLabel,
+            checkoutPricingAdjustmentUsd: pricingBreakdown.checkoutPricingAdjustmentUsd,
+            discountUsd: pricingBreakdown.discountUsd,
+            promoCode: pricingBreakdown.promoCode || null,
           }
-        : order;
+        : {
+            ...order,
+            checkoutPricingLabel: pricingBreakdown.checkoutPricingLabel,
+            checkoutPricingAdjustmentUsd: pricingBreakdown.checkoutPricingAdjustmentUsd,
+            discountUsd: pricingBreakdown.discountUsd,
+            promoCode: pricingBreakdown.promoCode || null,
+          };
 
     res.json({
       success: true,
@@ -2407,6 +2496,7 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
     });
 
     const data = schema.parse(req.body);
+    const checkoutPricingSettings = await readCheckoutPricingSettings();
     const customerId = req.user!.id;
     const wantsDesignerToChooseFabric =
       data.fabricSelectionMode === 'DESIGNER_DECIDES' || !data.fabricId;
@@ -2642,8 +2732,14 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
         ? 'Customer requested designer-selected fabric.'
         : 'Customer selected fabric.',
     });
+    const shippingSnapshotWithPricing = withOrderPricingBreakdown(shippingSnapshot, {
+      checkoutPricingLabel: checkoutPricingSettings.settings.label,
+      checkoutPricingAdjustmentUsd,
+      discountUsd,
+      promoCode: data.promoCode || undefined,
+    });
     const shippingSnapshotWithCategoryBundle = appendOrderCategoryBundleItem(
-      shippingSnapshot,
+      shippingSnapshotWithPricing,
       'CUSTOM_DESIGN',
       ctwBundleItem
     );
@@ -2670,14 +2766,24 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
           ctwBundleItem,
         ];
         const mergedShippingSnapshot = withOrderCategoryBundleItems(
-          shippingSnapshot,
+          shippingSnapshotWithPricing,
           'CUSTOM_DESIGN',
           mergedCustomBundleItems
         );
+        const existingPricing = readOrderPricingBreakdown(
+          existing.shippingAddress,
+          checkoutPricingSettings.settings.label
+        );
+        const mergedShippingSnapshotWithPricing = withOrderPricingBreakdown(mergedShippingSnapshot, {
+          checkoutPricingLabel: checkoutPricingSettings.settings.label,
+          checkoutPricingAdjustmentUsd: Number(existingPricing.checkoutPricingAdjustmentUsd || 0) + checkoutPricingAdjustmentUsd,
+          discountUsd: Number(existingPricing.discountUsd || 0) + discountUsd,
+          promoCode: data.promoCode || existingPricing.promoCode || undefined,
+        });
         await tx.order.update({
           where: { id: existing.id },
           data: {
-            shippingAddress: mergedShippingSnapshot as any,
+            shippingAddress: mergedShippingSnapshotWithPricing as any,
             subtotal: { increment: subtotal },
             shippingCost: { increment: shippingCost },
             tax: { increment: tax },
@@ -2836,6 +2942,7 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       paymentMethod: data.paymentMethod,
       shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
       promoCode: data.promoCode || undefined,
+      checkoutPricingLabel: checkoutPricingSettings.settings.label,
       checkoutPricingAdjustmentUsd,
       discountUsd,
       shippingCostUsd: shippingCost,
@@ -2916,6 +3023,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
     });
 
     const data = schema.parse(req.body);
+    const checkoutPricingSettings = await readCheckoutPricingSettings();
     const customerId = req.user!.id;
     const workflowSettings = await readOrderWorkflowSettings();
     const maxReadyToWearUnitsPerOrder = Math.max(
@@ -3122,6 +3230,12 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       status: initialStatus,
       note: 'Ready-to-wear order queued for fulfillment.',
     });
+    const shippingSnapshotWithPricing = withOrderPricingBreakdown(shippingSnapshot, {
+      checkoutPricingLabel: checkoutPricingSettings.settings.label,
+      checkoutPricingAdjustmentUsd,
+      discountUsd,
+      promoCode: data.promoCode || undefined,
+    });
 
     // Create order
     const order = await prisma.$transaction(async (tx) => {
@@ -3130,7 +3244,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
           orderNumber,
           type: OrderType.READY_TO_WEAR,
           customerId,
-          shippingAddress: shippingSnapshot as any,
+          shippingAddress: shippingSnapshotWithPricing as any,
           subtotal,
           shippingCost,
           tax,
@@ -3199,6 +3313,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       paymentMethod: data.paymentMethod,
       shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
       promoCode: data.promoCode || undefined,
+      checkoutPricingLabel: checkoutPricingSettings.settings.label,
       checkoutPricingAdjustmentUsd,
       discountUsd,
       shippingCostUsd: shippingCost,
@@ -3240,6 +3355,7 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
     });
 
     const data = schema.parse(req.body);
+    const checkoutPricingSettings = await readCheckoutPricingSettings();
     const customerId = req.user!.id;
     const workflowSettings = await readOrderWorkflowSettings();
     const minFabricYardsPerOrder = Math.max(1, Number(workflowSettings.orderLimits?.minFabricYardsPerOrder || 3));
@@ -3395,8 +3511,14 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
       status: initialStatus,
       note: 'Fabric order queued for seller fulfillment.',
     });
+    const shippingSnapshotWithPricing = withOrderPricingBreakdown(shippingSnapshot, {
+      checkoutPricingLabel: checkoutPricingSettings.settings.label,
+      checkoutPricingAdjustmentUsd,
+      discountUsd,
+      promoCode: data.promoCode || undefined,
+    });
     const shippingSnapshotWithCategoryBundle = appendOrderCategoryBundleItem(
-      shippingSnapshot,
+      shippingSnapshotWithPricing,
       'FABRIC_ONLY',
       fabricBundleItem
     );
@@ -3421,14 +3543,24 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
           fabricBundleItem,
         ];
         const mergedShippingSnapshot = withOrderCategoryBundleItems(
-          shippingSnapshot,
+          shippingSnapshotWithPricing,
           'FABRIC_ONLY',
           mergedFabricBundleItems
         );
+        const existingPricing = readOrderPricingBreakdown(
+          existing.shippingAddress,
+          checkoutPricingSettings.settings.label
+        );
+        const mergedShippingSnapshotWithPricing = withOrderPricingBreakdown(mergedShippingSnapshot, {
+          checkoutPricingLabel: checkoutPricingSettings.settings.label,
+          checkoutPricingAdjustmentUsd: Number(existingPricing.checkoutPricingAdjustmentUsd || 0) + checkoutPricingAdjustmentUsd,
+          discountUsd: Number(existingPricing.discountUsd || 0) + discountUsd,
+          promoCode: data.promoCode || existingPricing.promoCode || undefined,
+        });
         await tx.order.update({
           where: { id: existing.id },
           data: {
-            shippingAddress: mergedShippingSnapshot as any,
+            shippingAddress: mergedShippingSnapshotWithPricing as any,
             subtotal: { increment: subtotal },
             shippingCost: { increment: shippingCost },
             tax: { increment: tax },
@@ -3540,6 +3672,7 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
       paymentMethod: data.paymentMethod,
       shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
       promoCode: data.promoCode || undefined,
+      checkoutPricingLabel: checkoutPricingSettings.settings.label,
       checkoutPricingAdjustmentUsd,
       discountUsd,
       shippingCostUsd: shippingCost,
