@@ -575,7 +575,7 @@ export default function ReadyToWear() {
               {rotatingProducts.map((product) => {
                 const flagCode = resolveCountryCode(product.country || '');
                 return (
-                  <Link key={`rotating-${product.id}`} to={product.href} className="group bg-white border border-gray-200 overflow-hidden">
+                  <Link key={`rotating-${product.id}`} to={product.href} className="group bg-white border border-gray-200 overflow-hidden rounded-xl">
                     <div className="relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
                       <img
                         src={product.image || '/placeholder.jpg'}
@@ -620,7 +620,7 @@ export default function ReadyToWear() {
             {featuredProducts.slice(0, 3).map((product) => {
               const flagCode = resolveCountryCode(product.country || '');
               return (
-                <Link key={product.id} to={product.href} className="group bg-white border border-gray-200 overflow-hidden">
+                <Link key={product.id} to={product.href} className="group bg-white border border-gray-200 overflow-hidden rounded-xl">
                   <div className="relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
                     <img
                       src={product.image || '/placeholder.jpg'}
@@ -669,7 +669,7 @@ export default function ReadyToWear() {
                   .filter((value) => Number.isFinite(value) && value > 0);
                 const defaultPrice = validVariationPrices.length > 0 ? Math.min(...validVariationPrices) : Number(product.basePrice || 0);
                 return (
-                  <Link key={product.id} to={`/ready-to-wear/${product.id}`} className="group bg-white border border-gray-200 overflow-hidden">
+                  <Link key={product.id} to={`/ready-to-wear/${product.id}`} className="group bg-white border border-gray-200 overflow-hidden rounded-xl">
                     <div className="relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
                       <img
                         src={product.images?.[0]?.url || '/placeholder.jpg'}

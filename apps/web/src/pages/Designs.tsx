@@ -444,7 +444,7 @@ export default function Designs() {
             {featuredProducts.slice(0, 3).map((product) => {
               const flagCode = resolveCountryCode(product.country || '');
               return (
-                <Link key={product.id} to={product.href} className="group bg-white border border-gray-200 overflow-hidden">
+                <Link key={product.id} to={product.href} className="group bg-white border border-gray-200 overflow-hidden rounded-xl">
                   <div className="relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
                     <img
                       src={product.image || '/placeholder.jpg'}
@@ -489,7 +489,7 @@ export default function Designs() {
               {designs.map((design) => {
                 const flagCode = resolveCountryCode(design.designer?.country || '');
                 return (
-                  <Link key={design.id} to={`/designs/${design.id}`} className="group bg-white border border-gray-200 overflow-hidden">
+                  <Link key={design.id} to={`/designs/${design.id}`} className="group bg-white border border-gray-200 overflow-hidden rounded-xl">
                     <div className="relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
                       <img
                         src={design.images?.[0]?.url || '/placeholder.jpg'}

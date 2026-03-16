@@ -133,6 +133,57 @@ const parseJsonArray = (value: unknown): unknown[] => {
   }
   return [];
 };
+type OrderCategoryBundleKey = 'READY_TO_WEAR' | 'CUSTOM_DESIGN' | 'FABRIC_ONLY';
+const readOrderCategoryBundleItems = (shippingAddress: unknown, categoryKey: OrderCategoryBundleKey) => {
+  const shipping = parseJsonObject(shippingAddress);
+  const workflow = parseJsonObject(shipping.workflow);
+  const categoryBundles = parseJsonObject(workflow.categoryBundles);
+  const categoryRow = parseJsonObject(categoryBundles[categoryKey]);
+  return parseJsonArray(categoryRow.items).map((entry) => parseJsonObject(entry));
+};
+const readOrderCategoryBundleCount = (
+  shippingAddress: unknown,
+  categoryKey: OrderCategoryBundleKey,
+  fallbackCount = 1
+) => {
+  const items = readOrderCategoryBundleItems(shippingAddress, categoryKey);
+  if (items.length > 0) return items.length;
+  return Math.max(1, Number(fallbackCount || 1));
+};
+const withOrderCategoryBundleItems = (
+  shippingAddress: unknown,
+  categoryKey: OrderCategoryBundleKey,
+  items: Array<Record<string, unknown>>
+) => {
+  const shipping = parseJsonObject(shippingAddress);
+  const workflow = parseJsonObject(shipping.workflow);
+  const categoryBundles = parseJsonObject(workflow.categoryBundles);
+  const normalizedItems = items
+    .map((entry) => parseJsonObject(entry))
+    .filter((entry) => Object.keys(entry).length > 0);
+  return {
+    ...shipping,
+    workflow: {
+      ...workflow,
+      categoryBundles: {
+        ...categoryBundles,
+        [categoryKey]: {
+          count: normalizedItems.length,
+          items: normalizedItems,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    },
+  };
+};
+const appendOrderCategoryBundleItem = (
+  shippingAddress: unknown,
+  categoryKey: OrderCategoryBundleKey,
+  item: Record<string, unknown>
+) => {
+  const existingItems = readOrderCategoryBundleItems(shippingAddress, categoryKey);
+  return withOrderCategoryBundleItems(shippingAddress, categoryKey, [...existingItems, item]);
+};
 const parseRoleArray = (value: unknown): unknown[] => {
   const parsed = parseJsonArray(value);
   if (parsed.length > 0) return parsed;
@@ -2218,23 +2269,18 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
           type: OrderType.CUSTOM_DESIGN,
           paymentIntentId: data.paymentIntentId,
         },
-        include: {
-          designOrder: {
-            select: { designId: true },
-          },
-          fabricOrder: {
-            select: { fabricId: true },
-          },
+        select: {
+          id: true,
+          shippingAddress: true,
         },
+        orderBy: { createdAt: 'asc' },
       });
-      mergeIntoOrderId =
-        existingOrders.find((order) => {
-          if (String(order.designOrder?.designId || '') !== String(data.designId || '')) return false;
-          if (wantsDesignerToChooseFabric) return !order.fabricOrder;
-          return String(order.fabricOrder?.fabricId || '') === String(data.fabricId || '');
-        })?.id || null;
-      const existingCount = existingOrders.length;
-      if (!mergeIntoOrderId && existingCount >= maxCustomToWearItemsPerCheckout) {
+      const existingPrimaryOrder = existingOrders[0] || null;
+      mergeIntoOrderId = existingPrimaryOrder?.id || null;
+      const existingItemCount = existingPrimaryOrder
+        ? readOrderCategoryBundleCount(existingPrimaryOrder.shippingAddress, 'CUSTOM_DESIGN', 1)
+        : 0;
+      if (existingItemCount >= maxCustomToWearItemsPerCheckout) {
         return res.status(400).json({
           success: false,
           message: `A maximum of ${maxCustomToWearItemsPerCheckout} Custom To Wear product(s) is allowed in one checkout.`,
@@ -2361,6 +2407,22 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
     const shippingCost = Number.isFinite(Number(data.shippingCostUsd)) ? Number(data.shippingCostUsd) : 25;
     const tax = subtotal * 0.08; // 8% tax
     const total = subtotal + shippingCost + tax;
+    const ctwBundleItem: Record<string, unknown> = {
+      designId: String(data.designId),
+      designName: String(design.name || 'Custom Design'),
+      designerId: String(design.designerId),
+      fabricSelectionMode: wantsDesignerToChooseFabric ? 'DESIGNER_DECIDES' : 'CUSTOMER_SELECTED',
+      fabricId: hasCustomerSelectedFabric ? String(data.fabricId || '') : null,
+      fabricName: hasCustomerSelectedFabric ? String(fabric?.name || '') : null,
+      yards: hasCustomerSelectedFabric ? selectedYards : 0,
+      designPrice,
+      fabricPrice,
+      subtotalBeforeDiscount,
+      discountUsd,
+      subtotal,
+      paymentIntentId: String(data.paymentIntentId || ''),
+      capturedAt: new Date().toISOString(),
+    };
     const isPaymentConfirmed = Boolean(data.paymentIntentId);
     const autoProcessingEligible = canAutoProcessOrder({
       processingMode: workflowSettings.processingMode,
@@ -2406,6 +2468,11 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
         ? 'Customer requested designer-selected fabric.'
         : 'Customer selected fabric.',
     });
+    const shippingSnapshotWithCategoryBundle = appendOrderCategoryBundleItem(
+      shippingSnapshot,
+      'CUSTOM_DESIGN',
+      ctwBundleItem
+    );
 
     // Create order with all components
     const order = await prisma.$transaction(async (tx) => {
@@ -2424,10 +2491,19 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
         if (!existing || !existing.designOrder) {
           throw new Error('Existing custom order could not be merged.');
         }
+        const mergedCustomBundleItems = [
+          ...readOrderCategoryBundleItems(existing.shippingAddress, 'CUSTOM_DESIGN'),
+          ctwBundleItem,
+        ];
+        const mergedShippingSnapshot = withOrderCategoryBundleItems(
+          shippingSnapshot,
+          'CUSTOM_DESIGN',
+          mergedCustomBundleItems
+        );
         await tx.order.update({
           where: { id: existing.id },
           data: {
-            shippingAddress: shippingSnapshot as any,
+            shippingAddress: mergedShippingSnapshot as any,
             subtotal: { increment: subtotal },
             shippingCost: { increment: shippingCost },
             tax: { increment: tax },
@@ -2459,6 +2535,18 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
               totalPrice: { increment: fabricPrice },
             },
           });
+        } else if (hasCustomerSelectedFabric && fabric && !existing.fabricOrder) {
+          await tx.fabricOrderItem.create({
+            data: {
+              orderId: existing.id,
+              fabricId: data.fabricId!,
+              sellerId: fabric.sellerId,
+              yards: selectedYards,
+              pricePerYard: fabric.finalPrice,
+              totalPrice: fabricPrice,
+              status: 'PENDING',
+            },
+          });
         }
         if (isPaymentConfirmed && hasCustomerSelectedFabric && data.fabricId) {
           await tx.fabric.update({
@@ -2484,7 +2572,7 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
           orderNumber: String(orderNumber || ''),
           type: OrderType.CUSTOM_DESIGN,
           customerId,
-          shippingAddress: shippingSnapshot as any,
+          shippingAddress: shippingSnapshotWithCategoryBundle as any,
           subtotal,
           shippingCost,
           tax,
@@ -2953,18 +3041,20 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
           type: OrderType.FABRIC_ONLY,
           paymentIntentId: data.paymentIntentId,
         },
-        include: {
+        select: {
+          id: true,
+          shippingAddress: true,
           fabricOrder: {
             select: { yards: true, fabricId: true },
           },
         },
+        orderBy: { createdAt: 'asc' },
       });
       const alreadyOrderedYards = existingOrders.reduce(
         (sum, order) => sum + Math.max(0, Number(order.fabricOrder?.yards || 0)),
         0
       );
-      mergeIntoOrderId =
-        existingOrders.find((order) => String(order.fabricOrder?.fabricId || '') === String(data.fabricId || ''))?.id || null;
+      mergeIntoOrderId = existingOrders[0]?.id || null;
       if (alreadyOrderedYards + Number(data.yards || 0) > maxFabricYardsPerOrder) {
         return res.status(400).json({
           success: false,
@@ -3025,6 +3115,18 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
     const shippingCost = Number.isFinite(Number(data.shippingCostUsd)) ? Number(data.shippingCostUsd) : 15;
     const tax = subtotal * 0.08;
     const total = subtotal + shippingCost + tax;
+    const fabricBundleItem: Record<string, unknown> = {
+      fabricId: String(data.fabricId),
+      fabricName: String(fabric.name || 'Fabric'),
+      sellerId: String(fabric.sellerId),
+      yards: Number(data.yards || 0),
+      pricePerYard: Number(fabric.finalPrice || 0),
+      subtotalBeforeDiscount,
+      discountUsd,
+      subtotal,
+      paymentIntentId: String(data.paymentIntentId || ''),
+      capturedAt: new Date().toISOString(),
+    };
     const isPaymentConfirmed = Boolean(data.paymentIntentId);
     const autoProcessingEligible = canAutoProcessOrder({
       processingMode: workflowSettings.processingMode,
@@ -3067,6 +3169,11 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
       status: initialStatus,
       note: 'Fabric order queued for seller fulfillment.',
     });
+    const shippingSnapshotWithCategoryBundle = appendOrderCategoryBundleItem(
+      shippingSnapshot,
+      'FABRIC_ONLY',
+      fabricBundleItem
+    );
 
     const order = await prisma.$transaction(async (tx) => {
       if (mergeIntoOrderId) {
@@ -3083,10 +3190,19 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
         if (!existing || !existing.fabricOrder) {
           throw new Error('Existing fabric order could not be merged.');
         }
+        const mergedFabricBundleItems = [
+          ...readOrderCategoryBundleItems(existing.shippingAddress, 'FABRIC_ONLY'),
+          fabricBundleItem,
+        ];
+        const mergedShippingSnapshot = withOrderCategoryBundleItems(
+          shippingSnapshot,
+          'FABRIC_ONLY',
+          mergedFabricBundleItems
+        );
         await tx.order.update({
           where: { id: existing.id },
           data: {
-            shippingAddress: shippingSnapshot as any,
+            shippingAddress: mergedShippingSnapshot as any,
             subtotal: { increment: subtotal },
             shippingCost: { increment: shippingCost },
             tax: { increment: tax },
@@ -3133,7 +3249,7 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
           orderNumber: String(orderNumber || ''),
           type: OrderType.FABRIC_ONLY,
           customerId,
-          shippingAddress: shippingSnapshot as any,
+          shippingAddress: shippingSnapshotWithCategoryBundle as any,
           subtotal,
           shippingCost,
           tax,

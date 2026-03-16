@@ -1087,6 +1087,13 @@ export default function Checkout() {
       setValidatedShippingAddressId(shippingAddressId);
 
       const createdOrderNumbers: string[] = [];
+      const createdOrderNumbersSet = new Set<string>();
+      const pushCreatedOrderNumber = (value: unknown) => {
+        const orderNumber = String(value || '').trim();
+        if (!orderNumber || createdOrderNumbersSet.has(orderNumber)) return;
+        createdOrderNumbersSet.add(orderNumber);
+        createdOrderNumbers.push(orderNumber);
+      };
       const shippingPayload = {
         shippingCostUsd: Number(shippingQuote?.priceUsd ?? shipping),
         shippingQuoteId: shippingQuote?.id || undefined,
@@ -1156,6 +1163,43 @@ export default function Checkout() {
         remaining = Number((remaining - amount).toFixed(2));
       });
 
+      if (readyToWearItems.length > 0) {
+        const readyOrderResponse = await api.orders.createReadyToWearOrder({
+          items: readyToWearItems.map((item) => ({
+            readyToWearId: item.readyToWearId,
+            size: item.selectedSize,
+            color: item.selectedColor || undefined,
+            quantity: item.quantity,
+          })),
+          shippingAddressId,
+          paymentMethod,
+          paymentIntentId,
+          promoCode: promoPreview?.code || undefined,
+          discountUsd: allocatedDiscount.get('ready') || 0,
+          ...shippingPayload,
+        });
+        if (readyOrderResponse.success && readyOrderResponse.data?.orderNumber) {
+          pushCreatedOrderNumber(readyOrderResponse.data.orderNumber);
+        }
+      }
+
+      for (const item of groupedFabricItems) {
+        if (!item.fabricId || Number(item.yards || 0) < 1) continue;
+        const fabricOrderResponse = await api.orders.createFabricOnlyOrder({
+          fabricId: item.fabricId,
+          yards: Number(item.yards || 1),
+          shippingAddressId,
+          paymentMethod,
+          paymentIntentId,
+          promoCode: promoPreview?.code || undefined,
+          discountUsd: allocatedDiscount.get(item.key) || 0,
+          ...shippingPayload,
+        });
+        if (fabricOrderResponse.success && fabricOrderResponse.data?.orderNumber) {
+          pushCreatedOrderNumber(fabricOrderResponse.data.orderNumber);
+        }
+      }
+
       for (let index = 0; index < customItems.length; index += 1) {
         const item = customItems[index];
         if (!item.designId) {
@@ -1178,44 +1222,7 @@ export default function Checkout() {
           ...shippingPayload,
         });
         if (orderResponse.success && orderResponse.data?.orderNumber) {
-          createdOrderNumbers.push(orderResponse.data.orderNumber);
-        }
-      }
-
-      if (readyToWearItems.length > 0) {
-        const readyOrderResponse = await api.orders.createReadyToWearOrder({
-          items: readyToWearItems.map((item) => ({
-            readyToWearId: item.readyToWearId,
-            size: item.selectedSize,
-            color: item.selectedColor || undefined,
-            quantity: item.quantity,
-          })),
-          shippingAddressId,
-          paymentMethod,
-          paymentIntentId,
-          promoCode: promoPreview?.code || undefined,
-          discountUsd: allocatedDiscount.get('ready') || 0,
-          ...shippingPayload,
-        });
-        if (readyOrderResponse.success && readyOrderResponse.data?.orderNumber) {
-          createdOrderNumbers.push(readyOrderResponse.data.orderNumber);
-        }
-      }
-
-      for (const item of groupedFabricItems) {
-        if (!item.fabricId || Number(item.yards || 0) < 1) continue;
-        const fabricOrderResponse = await api.orders.createFabricOnlyOrder({
-          fabricId: item.fabricId,
-          yards: Number(item.yards || 1),
-          shippingAddressId,
-          paymentMethod,
-          paymentIntentId,
-          promoCode: promoPreview?.code || undefined,
-          discountUsd: allocatedDiscount.get(item.key) || 0,
-          ...shippingPayload,
-        });
-        if (fabricOrderResponse.success && fabricOrderResponse.data?.orderNumber) {
-          createdOrderNumbers.push(fabricOrderResponse.data.orderNumber);
+          pushCreatedOrderNumber(orderResponse.data.orderNumber);
         }
       }
 
