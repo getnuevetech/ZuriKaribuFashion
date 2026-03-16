@@ -72,7 +72,9 @@ httpClient.interceptors.response.use(
     if (error.response?.status === 401 && !isAuthRequest) {
       useAuthStore.getState().logout();
       if (isProtectedPath && window.location.pathname !== '/login') {
-        window.location.href = '/login';
+        const returnTo = `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}`;
+        const encodedReturnTo = encodeURIComponent(returnTo);
+        window.location.href = `/login?returnTo=${encodedReturnTo}`;
       }
     }
     return Promise.reject(error);
