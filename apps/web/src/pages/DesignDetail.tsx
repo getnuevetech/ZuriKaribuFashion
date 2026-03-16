@@ -96,6 +96,33 @@ interface DiscoverProduct {
   productType: 'DESIGN' | 'FABRIC' | 'READY_TO_WEAR';
 }
 
+type FabricLengthUnit = 'YARDS' | 'METERS' | 'CENTIMETERS';
+
+const YARD_TO_METER = 0.9144;
+const YARD_TO_CENTIMETER = 91.44;
+
+const convertYardsToUnit = (yards: number, unit: FabricLengthUnit) => {
+  if (unit === 'METERS') return yards * YARD_TO_METER;
+  if (unit === 'CENTIMETERS') return yards * YARD_TO_CENTIMETER;
+  return yards;
+};
+
+const convertUnitToYards = (value: number, unit: FabricLengthUnit) => {
+  if (!Number.isFinite(value)) return 0;
+  if (unit === 'METERS') return value / YARD_TO_METER;
+  if (unit === 'CENTIMETERS') return value / YARD_TO_CENTIMETER;
+  return value;
+};
+
+const unitLabel = (unit: FabricLengthUnit) => {
+  if (unit === 'METERS') return 'meters';
+  if (unit === 'CENTIMETERS') return 'cm';
+  return 'yards';
+};
+
+const clampWithin = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
+
 export default function DesignDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -111,6 +138,7 @@ export default function DesignDetail() {
   const [fabricSelectionMode, setFabricSelectionMode] = useState<'CUSTOMER_SELECTED' | 'DESIGNER_DECIDES'>(
     'CUSTOMER_SELECTED'
   );
+  const [fabricUnit, setFabricUnit] = useState<FabricLengthUnit>('YARDS');
   const [fabricPreferenceNotes, setFabricPreferenceNotes] = useState('');
   const [fabricMeters, setFabricMeters] = useState<Record<string, number>>({});
   const [measurements, setMeasurements] = useState<Record<string, number>>({});
@@ -419,8 +447,10 @@ export default function DesignDetail() {
     if (fabricSelectionMode === 'DESIGNER_DECIDES' || !selectedFabric) return Number(design.basePrice || 0);
     const fabric = design.suitableFabrics.find(sf => sf.fabric.id === selectedFabric);
     if (!fabric) return design.basePrice;
-    const meters = fabricMeters[selectedFabric] || fabric.minMeters;
-    return design.basePrice + (fabric.fabric.pricePerMeter * meters);
+    const minYards = Math.max(1, Number(fabric.minMeters || 1));
+    const maxYards = Math.max(minYards, Number(fabric.maxMeters || minYards));
+    const selectedYards = clampWithin(Number(fabricMeters[selectedFabric] || minYards), minYards, maxYards);
+    return design.basePrice + (fabric.fabric.pricePerMeter * selectedYards);
   };
 
   const handleMeasurementChange = (name: string, value: number) => {
@@ -747,11 +777,29 @@ export default function DesignDetail() {
                         if (!selectedRow) {
                           return (
                             <p className="text-sm text-gray-600">
-                              Select a fabric thumbnail to view details and set meters.
+                              Select a fabric thumbnail to view details and set quantity.
                             </p>
                           );
                         }
                         const { fabric, minMeters, maxMeters } = selectedRow;
+                        const minYards = Math.max(1, Number(minMeters || 1));
+                        const maxYards = Math.max(minYards, Number(maxMeters || minYards));
+                        const currentYards = clampWithin(
+                          Number(fabricMeters[fabric.id] || minYards),
+                          minYards,
+                          maxYards
+                        );
+                        const minDisplay = convertYardsToUnit(minYards, fabricUnit);
+                        const maxDisplay = convertYardsToUnit(maxYards, fabricUnit);
+                        const currentDisplay = convertYardsToUnit(currentYards, fabricUnit);
+                        const displayStep = fabricUnit === 'CENTIMETERS' ? 1 : fabricUnit === 'METERS' ? 0.1 : 0.5;
+                        const displayDecimals = fabricUnit === 'CENTIMETERS' ? 0 : 2;
+                        const pricePerSelectedUnit =
+                          fabricUnit === 'YARDS'
+                            ? Number(fabric.pricePerMeter || 0)
+                            : fabricUnit === 'METERS'
+                              ? Number(fabric.pricePerMeter || 0) / YARD_TO_METER
+                              : Number(fabric.pricePerMeter || 0) / YARD_TO_CENTIMETER;
                         return (
                           <div className="border bg-white p-4">
                             <div className="flex gap-4">
@@ -769,31 +817,54 @@ export default function DesignDetail() {
                                   </div>
                                   <div className="text-right">
                                     <p className="font-semibold text-black">
-                                      {formatFromUsd(fabric.pricePerMeter)}/meter
+                                      {formatFromUsd(pricePerSelectedUnit)}/{unitLabel(fabricUnit)}
                                     </p>
                                     <p className="text-xs text-gray-500">
-                                      {minMeters}-{maxMeters} meters needed
+                                      {minDisplay.toFixed(displayDecimals)}-{maxDisplay.toFixed(displayDecimals)} {unitLabel(fabricUnit)} needed
                                     </p>
                                   </div>
                                 </div>
                                 <div className="mt-3 border-t border-gray-200 pt-3">
-                                  <label className="text-sm font-medium text-gray-700">
-                                    Meters: {fabricMeters[fabric.id]}
-                                  </label>
-                                  <input
-                                    type="range"
-                                    min={minMeters}
-                                    max={maxMeters}
-                                    step={0.5}
-                                    value={fabricMeters[fabric.id] || minMeters}
-                                    onChange={(e) =>
-                                      setFabricMeters((prev) => ({
-                                        ...prev,
-                                        [fabric.id]: parseFloat(e.target.value),
-                                      }))
-                                    }
-                                    className="mt-1 w-full"
-                                  />
+                                  <div className="grid grid-cols-1 gap-2 md:grid-cols-[180px_1fr]">
+                                    <div>
+                                      <label className="mb-1 block text-xs font-medium text-gray-600">Unit</label>
+                                      <select
+                                        value={fabricUnit}
+                                        onChange={(event) => setFabricUnit(event.target.value as FabricLengthUnit)}
+                                        className="w-full border px-2 py-2 text-sm"
+                                      >
+                                        <option value="YARDS">Yards</option>
+                                        <option value="METERS">Meters</option>
+                                        <option value="CENTIMETERS">Centimeters</option>
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-xs font-medium text-gray-600">
+                                        Quantity ({unitLabel(fabricUnit)})
+                                      </label>
+                                      <input
+                                        type="number"
+                                        min={Number(minDisplay.toFixed(displayDecimals))}
+                                        max={Number(maxDisplay.toFixed(displayDecimals))}
+                                        step={displayStep}
+                                        value={Number(currentDisplay.toFixed(displayDecimals))}
+                                        onChange={(event) => {
+                                          const parsed = Number(event.target.value);
+                                          if (!Number.isFinite(parsed)) return;
+                                          const nextYards = clampWithin(
+                                            convertUnitToYards(parsed, fabricUnit),
+                                            minYards,
+                                            maxYards
+                                          );
+                                          setFabricMeters((prev) => ({
+                                            ...prev,
+                                            [fabric.id]: Number(nextYards.toFixed(4)),
+                                          }));
+                                        }}
+                                        className="w-full border px-2 py-2 text-sm"
+                                      />
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
