@@ -104,6 +104,11 @@ app.use('/uploads', (req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   next();
 }, express.static('uploads'));
+// Backward compatibility: older persisted URLs can include /api/uploads/*
+app.use('/api/uploads', (req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  next();
+}, express.static('uploads'));
 
 const getDeploymentMetadata = () => ({
   commit:

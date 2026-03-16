@@ -962,6 +962,13 @@ async function sendOrderConfirmationEmail(params: {
   discountUsd?: number | null;
   shippingCostUsd?: number | null;
   itemLines?: string[];
+  itemRows?: Array<{
+    label: string;
+    meta?: string | null;
+    quantity: number;
+    unitPriceUsd?: number | null;
+    lineTotalUsd?: number | null;
+  }>;
 }) {
   const transporter = getOrderMailer();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
@@ -972,12 +979,34 @@ async function sendOrderConfirmationEmail(params: {
   const subtotalText = Number(params.subtotalUsd || 0).toFixed(2);
   const taxText = Number(params.taxUsd || 0).toFixed(2);
   const postCheckoutOfferLines = await getPostCheckoutOfferLines(3);
+  const escapeHtml = (value: unknown) =>
+    String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   const safeItemLines = Array.isArray(params.itemLines)
     ? params.itemLines
         .map((line) => String(line || '').trim())
         .filter(Boolean)
         .slice(0, 12)
     : [];
+  const safeItemRows = Array.isArray(params.itemRows)
+    ? params.itemRows
+        .map((row) => ({
+          label: String(row?.label || '').trim(),
+          meta: String(row?.meta || '').trim(),
+          quantity: Math.max(1, Number(row?.quantity || 1)),
+          unitPriceUsd: Number(row?.unitPriceUsd || 0),
+          lineTotalUsd: Number(
+            row?.lineTotalUsd != null ? row.lineTotalUsd : Number(row?.unitPriceUsd || 0) * Math.max(1, Number(row?.quantity || 1))
+          ),
+        }))
+        .filter((row) => row.label.length > 0)
+        .slice(0, 20)
+    : [];
+  const invoiceDateText = new Date().toLocaleString();
   const discountText =
     Number(params.discountUsd || 0) > 0
       ? `\nPromo Discount: -$${Number(params.discountUsd || 0).toFixed(2)}${
@@ -986,18 +1015,62 @@ async function sendOrderConfirmationEmail(params: {
       : '';
   const paymentMethodText = params.paymentMethod ? `\nPayment Method: ${String(params.paymentMethod)}` : '';
   const shippingAddressText = params.shippingAddress ? `\nShipping Address: ${String(params.shippingAddress)}` : '';
-  const itemListText = safeItemLines.length > 0 ? `\nItems:\n- ${safeItemLines.join('\n- ')}` : '';
+  const itemListText =
+    safeItemRows.length > 0
+      ? `\nItems:\n- ${safeItemRows
+          .map(
+            (row) =>
+              `${row.label}${row.meta ? ` (${row.meta})` : ''} • Qty ${row.quantity} • Unit $${Number(row.unitPriceUsd || 0).toFixed(2)} • Line $${Number(
+                row.lineTotalUsd || 0
+              ).toFixed(2)}`
+          )
+          .join('\n- ')}`
+      : safeItemLines.length > 0
+        ? `\nItems:\n- ${safeItemLines.join('\n- ')}`
+        : '';
   const offerListText =
     postCheckoutOfferLines.length > 0 ? `\n\nNext-order offers:\n- ${postCheckoutOfferLines.join('\n- ')}` : '';
+  const htmlItemTable =
+    safeItemRows.length > 0
+      ? `
+      <p><strong>Invoice Items:</strong></p>
+      <table cellpadding="6" cellspacing="0" border="1" style="border-collapse:collapse;width:100%;font-size:12px">
+        <thead>
+          <tr>
+            <th align="left">Item</th>
+            <th align="left">Details</th>
+            <th align="right">Qty</th>
+            <th align="right">Unit</th>
+            <th align="right">Line Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${safeItemRows
+            .map(
+              (row) => `<tr>
+            <td>${escapeHtml(row.label)}</td>
+            <td>${escapeHtml(row.meta || '-')}</td>
+            <td align="right">${row.quantity}</td>
+            <td align="right">$${Number(row.unitPriceUsd || 0).toFixed(2)}</td>
+            <td align="right">$${Number(row.lineTotalUsd || 0).toFixed(2)}</td>
+          </tr>`
+            )
+            .join('')}
+        </tbody>
+      </table>`
+      : safeItemLines.length > 0
+        ? `<p><strong>Items:</strong></p><ul>${safeItemLines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
+        : '';
   await transporter.sendMail({
     from,
     to: params.to,
     subject: `Order Confirmation: ${params.orderNumber}`,
-    text: `Thank you for your order!\n\nOrder Number: ${params.orderNumber}\nOrder Type: ${params.orderType}\nItems: ${params.itemCount}\nSubtotal: $${subtotalText}${discountText}\nShipping: ${Number(params.shippingCostUsd || 0) === 0 ? 'FREE' : `$${Number(params.shippingCostUsd || 0).toFixed(2)}`}\nTax: $${taxText}\nGrand Total: $${totalText}${paymentMethodText}${shippingAddressText}${itemListText}${offerListText}\n\nYour order has been received and is now being processed.`,
+    text: `Thank you for your order!\n\nOrder Number: ${params.orderNumber}\nOrder Type: ${params.orderType}\nInvoice Date: ${invoiceDateText}\nItems: ${params.itemCount}\nSubtotal: $${subtotalText}${discountText}\nShipping: ${Number(params.shippingCostUsd || 0) === 0 ? 'FREE' : `$${Number(params.shippingCostUsd || 0).toFixed(2)}`}\nTax: $${taxText}\nGrand Total: $${totalText}${paymentMethodText}${shippingAddressText}${itemListText}${offerListText}\n\nYour order has been received and is now being processed.`,
     html: `
       <p>Thank you for your order.</p>
       <p><strong>Order Number:</strong> ${params.orderNumber}</p>
       <p><strong>Order Type:</strong> ${params.orderType}</p>
+      <p><strong>Invoice Date:</strong> ${invoiceDateText}</p>
       <p><strong>Items:</strong> ${params.itemCount}</p>
       <p><strong>Subtotal:</strong> $${subtotalText}</p>
       ${Number(params.discountUsd || 0) > 0 ? `<p><strong>Promo Discount:</strong> -$${Number(params.discountUsd || 0).toFixed(2)}${params.promoCode ? ` (${String(params.promoCode).toUpperCase()})` : ''}</p>` : ''}
@@ -1006,7 +1079,7 @@ async function sendOrderConfirmationEmail(params: {
       <p><strong>Grand Total:</strong> $${totalText}</p>
       ${params.paymentMethod ? `<p><strong>Payment Method:</strong> ${String(params.paymentMethod)}</p>` : ''}
       ${params.shippingAddress ? `<p><strong>Shipping Address:</strong> ${String(params.shippingAddress)}</p>` : ''}
-      ${safeItemLines.length > 0 ? `<p><strong>Items:</strong></p><ul>${safeItemLines.map((line) => `<li>${line}</li>`).join('')}</ul>` : ''}
+      ${htmlItemTable}
       ${postCheckoutOfferLines.length > 0 ? `<p><strong>Next-order offers:</strong></p><ul>${postCheckoutOfferLines.map((line) => `<li>${line}</li>`).join('')}</ul>` : ''}
       <p>Your order has been received and is now being processed.</p>
     `,
@@ -2664,6 +2737,26 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       promoCode: data.promoCode || undefined,
       discountUsd,
       shippingCostUsd: shippingCost,
+      itemRows: [
+        {
+          label: design.name,
+          meta: 'Custom To Wear Design',
+          quantity: 1,
+          unitPriceUsd: designPrice,
+          lineTotalUsd: designPrice,
+        },
+        ...(hasCustomerSelectedFabric && fabric
+          ? [
+              {
+                label: fabric.name,
+                meta: 'Selected Fabric',
+                quantity: selectedYards,
+                unitPriceUsd: Number(fabric.finalPrice || 0),
+                lineTotalUsd: fabricPrice,
+              },
+            ]
+          : []),
+      ],
       itemLines: [
         `Design: ${design.name}`,
         wantsDesignerToChooseFabric
@@ -2753,6 +2846,13 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
     let subtotal = 0;
     const validatedItems: ValidatedReadyToWearItem[] = [];
     const readyItemLines: string[] = [];
+    const readyInvoiceRows: Array<{
+      label: string;
+      meta: string;
+      quantity: number;
+      unitPriceUsd: number;
+      lineTotalUsd: number;
+    }> = [];
 
     for (const item of data.items) {
       const requestedSize = normalizeReadyToWearSize(item.size);
@@ -2843,6 +2943,15 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
           selectedVariant.color !== DEFAULT_READY_TO_WEAR_COLOR ? ` / ${selectedVariant.color}` : ''
         } × ${item.quantity}`
       );
+      readyInvoiceRows.push({
+        label: product.name,
+        meta: `${selectedVariant.size}${
+          selectedVariant.color !== DEFAULT_READY_TO_WEAR_COLOR ? ` / ${selectedVariant.color}` : ''
+        }`,
+        quantity: item.quantity,
+        unitPriceUsd: Number(sizeVar.price || 0),
+        lineTotalUsd: itemTotal,
+      });
     }
 
     // Get shipping address
@@ -2984,6 +3093,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       promoCode: data.promoCode || undefined,
       discountUsd,
       shippingCostUsd: shippingCost,
+      itemRows: readyInvoiceRows,
       itemLines: readyItemLines,
     }).catch((error) => {
       console.error('Failed to send ready-to-wear order confirmation email:', error);
@@ -3316,6 +3426,15 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
       promoCode: data.promoCode || undefined,
       discountUsd,
       shippingCostUsd: shippingCost,
+      itemRows: [
+        {
+          label: fabric.name,
+          meta: 'Fabric To Buy',
+          quantity: data.yards,
+          unitPriceUsd: Number(fabric.finalPrice || 0),
+          lineTotalUsd: subtotalBeforeDiscount,
+        },
+      ],
       itemLines: [`Fabric: ${fabric.name} (${data.yards} yards)`],
     }).catch((error) => {
       console.error('Failed to send fabric-only order confirmation email:', error);

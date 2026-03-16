@@ -9,16 +9,36 @@ const API_URL = import.meta.env.VITE_API_URL || defaultApiUrl;
 const resolveApiAssetUrl = (value: unknown): string => {
   const raw = String(value || '').trim();
   if (!raw) return '';
-  if (/^https?:\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
+  const normalizeUploadPath = (pathValue: string) => {
+    if (pathValue.startsWith('/api/uploads/')) {
+      return `/uploads/${pathValue.slice('/api/uploads/'.length)}`;
+    }
+    if (pathValue.startsWith('/uploads/')) {
+      return pathValue;
+    }
+    return '';
+  };
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const parsed = new URL(raw);
+      const uploadPath = normalizeUploadPath(parsed.pathname);
+      if (!uploadPath) return raw;
+      const normalized = new URL(uploadPath, parsed.origin);
+      return normalized.toString();
+    } catch {
+      return raw;
+    }
+  }
+  if (raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
   const normalizedPath = raw.startsWith('/') ? raw : `/${raw}`;
-  const isUploadPath = normalizedPath.startsWith('/uploads/');
-  if (!isUploadPath) return raw;
+  const uploadPath = normalizeUploadPath(normalizedPath);
+  if (!uploadPath) return raw;
   try {
     const fallbackBase = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
     const apiBase = new URL(API_URL, fallbackBase);
-    return `${apiBase.origin}${normalizedPath}`;
+    return `${apiBase.origin}${uploadPath}`;
   } catch {
-    return normalizedPath;
+    return uploadPath;
   }
 };
 

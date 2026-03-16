@@ -182,6 +182,7 @@ export default function OrderSupportModal({
   const subtotalAmountRaw = Number(orderDetail?.subtotal ?? orderDetail?.subtotalAmount ?? 0);
   const shippingAmount = Number(orderDetail?.shippingCost ?? orderDetail?.shippingCostUsd ?? 0);
   const taxAmount = Number(orderDetail?.tax ?? orderDetail?.taxAmount ?? 0);
+  const createdAtLabel = orderDetail?.createdAt ? new Date(orderDetail.createdAt).toLocaleString() : '';
   const customerName = `${String(orderDetail?.customer?.firstName || '').trim()} ${String(orderDetail?.customer?.lastName || '').trim()}`.trim();
   const timeline = Array.isArray(orderDetail?.timeline) ? orderDetail.timeline : [];
   const shippingAddress = orderDetail?.shippingAddress && typeof orderDetail.shippingAddress === 'object' ? orderDetail.shippingAddress : {};
@@ -270,6 +271,10 @@ export default function OrderSupportModal({
                 <p className="font-medium text-gray-900">{orderNumber}</p>
               </div>
               <div className="rounded-lg border bg-gray-50 p-3">
+                <p className="text-xs text-gray-500">Invoice Date</p>
+                <p className="font-medium text-gray-900">{createdAtLabel || 'N/A'}</p>
+              </div>
+              <div className="rounded-lg border bg-gray-50 p-3">
                 <p className="text-xs text-gray-500">Status</p>
                 <p className="font-medium text-gray-900">{statusLabel(orderStatus)}</p>
               </div>
@@ -291,6 +296,9 @@ export default function OrderSupportModal({
 
             <div className="rounded-lg border p-3">
               <p className="text-sm font-semibold text-gray-900 mb-2">Shipping</p>
+              {String(shippingAddress.fullName || '').trim() ? (
+                <p className="text-sm text-gray-700">{String(shippingAddress.fullName || '').trim()}</p>
+              ) : null}
               <p className="text-sm text-gray-700">
                 {String(shippingAddress.addressLine1 || shippingAddress.address || '').trim() || 'N/A'}
               </p>
@@ -299,7 +307,9 @@ export default function OrderSupportModal({
               ) : null}
               <p className="text-xs text-gray-500 mt-1">
                 {String(shippingAddress.city || '').trim()}
-                {shippingAddress.city && shippingAddress.country ? ', ' : ''}
+                {shippingAddress.city && shippingAddress.state ? ', ' : ''}
+                {String(shippingAddress.state || '').trim()}
+                {shippingAddress.state && shippingAddress.country ? ', ' : ''}
                 {String(shippingAddress.country || '').trim()}
               </p>
               {String(shippingAddress.postalCode || '').trim() ? (

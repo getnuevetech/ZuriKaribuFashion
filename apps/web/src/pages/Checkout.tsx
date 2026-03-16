@@ -1451,7 +1451,8 @@ export default function Checkout() {
     },
   };
 
-  if (items.length === 0 && !(step === 'review' && completedCheckout)) {
+  // Keep customers on invoice/review after successful payment even after cart is cleared.
+  if (items.length === 0 && !completedCheckout) {
     navigate('/cart');
     return null;
   }
@@ -1889,6 +1890,71 @@ export default function Checkout() {
                         .join(', ')}
                     </p>
                     <p className="text-gray-600">{completedCheckout?.shippingAddress.country || shippingAddress.country}</p>
+                  </div>
+                  <div className="mt-3 border-t pt-3">
+                    <p className="font-medium text-gray-900 mb-2">Invoice Items</p>
+                    <div className="overflow-x-auto rounded border bg-white">
+                      <table className="min-w-full text-left text-xs">
+                        <thead className="bg-gray-50 text-gray-600">
+                          <tr>
+                            <th className="px-3 py-2 font-semibold">Item</th>
+                            <th className="px-3 py-2 font-semibold">Details</th>
+                            <th className="px-3 py-2 font-semibold text-right">Qty</th>
+                            <th className="px-3 py-2 font-semibold text-right">Unit</th>
+                            <th className="px-3 py-2 font-semibold text-right">Line Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {summaryItems.map((item, index) => {
+                            if (item.kind === 'READY_TO_WEAR') {
+                              const qty = Number(item.quantity || 1);
+                              const unit = Number(item.unitPrice || 0);
+                              return (
+                                <tr key={`invoice-row-${index}`} className="border-t">
+                                  <td className="px-3 py-2 font-medium text-gray-900">{item.productName}</td>
+                                  <td className="px-3 py-2 text-gray-600">
+                                    {[item.selectedSize ? `Size ${item.selectedSize}` : '', item.selectedColor ? `Color ${item.selectedColor}` : '']
+                                      .filter(Boolean)
+                                      .join(' • ') || 'Ready To Wear'}
+                                  </td>
+                                  <td className="px-3 py-2 text-right text-gray-700">{qty}</td>
+                                  <td className="px-3 py-2 text-right text-gray-700">{formatFromUsd(unit)}</td>
+                                  <td className="px-3 py-2 text-right font-medium text-gray-900">{formatFromUsd(unit * qty)}</td>
+                                </tr>
+                              );
+                            }
+                            if (item.kind === 'FABRIC_ONLY') {
+                              const qty = Number(item.yards || 0);
+                              const unit = Number(item.pricePerYard || 0);
+                              return (
+                                <tr key={`invoice-row-${index}`} className="border-t">
+                                  <td className="px-3 py-2 font-medium text-gray-900">{item.fabricName}</td>
+                                  <td className="px-3 py-2 text-gray-600">{item.sellerName || 'Fabric To Buy'}</td>
+                                  <td className="px-3 py-2 text-right text-gray-700">{qty} yd</td>
+                                  <td className="px-3 py-2 text-right text-gray-700">{formatFromUsd(unit)}</td>
+                                  <td className="px-3 py-2 text-right font-medium text-gray-900">{formatFromUsd(unit * qty)}</td>
+                                </tr>
+                              );
+                            }
+                            const ctwTotal = Number(item.totalPrice || 0);
+                            const ctwUnit = ctwTotal;
+                            return (
+                              <tr key={`invoice-row-${index}`} className="border-t">
+                                <td className="px-3 py-2 font-medium text-gray-900">{item.designName}</td>
+                                <td className="px-3 py-2 text-gray-600">
+                                  {item.fabricSelectionMode === 'DESIGNER_DECIDES' || !item.fabricId
+                                    ? 'Designer-selected fabric'
+                                    : `${item.fabricName || 'Selected fabric'} • ${Number(item.fabricMeters || 0)} yd`}
+                                </td>
+                                <td className="px-3 py-2 text-right text-gray-700">1</td>
+                                <td className="px-3 py-2 text-right text-gray-700">{formatFromUsd(ctwUnit)}</td>
+                                <td className="px-3 py-2 text-right font-medium text-gray-900">{formatFromUsd(ctwTotal)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                   <div className="mt-3 border-t pt-3">
                     <p className="font-medium text-gray-900 mb-2">Payment & Totals</p>

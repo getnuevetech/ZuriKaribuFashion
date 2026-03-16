@@ -146,11 +146,266 @@ const ensureBlogSchema = async () => {
   }
 };
 
+let homepageSectionContentSchemaEnsured = false;
+let homepageSectionContentSchemaPromise: Promise<void> | null = null;
+const ensureHomepageSectionContentSchema = async () => {
+  if (homepageSectionContentSchemaEnsured) return;
+  if (homepageSectionContentSchemaPromise) {
+    await homepageSectionContentSchemaPromise;
+    return;
+  }
+  homepageSectionContentSchemaPromise = (async () => {
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "CountryMarquee" (
+        "id" TEXT NOT NULL,
+        "name" TEXT NOT NULL DEFAULT '',
+        "flag" TEXT NOT NULL DEFAULT '',
+        "fabrics" TEXT NOT NULL DEFAULT '',
+        "image" TEXT NOT NULL DEFAULT '',
+        "displayOrder" INTEGER NOT NULL DEFAULT 0,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "CountryMarquee_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CountryMarquee" ADD COLUMN IF NOT EXISTS "name" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CountryMarquee" ADD COLUMN IF NOT EXISTS "flag" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CountryMarquee" ADD COLUMN IF NOT EXISTS "fabrics" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CountryMarquee" ADD COLUMN IF NOT EXISTS "image" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CountryMarquee" ADD COLUMN IF NOT EXISTS "displayOrder" INTEGER NOT NULL DEFAULT 0`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CountryMarquee" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CountryMarquee" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CountryMarquee" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+    await prisma.$executeRawUnsafe(`UPDATE "CountryMarquee" SET "name" = COALESCE(NULLIF(TRIM("name"), ''), 'Unknown')`);
+    await prisma.$executeRawUnsafe(`UPDATE "CountryMarquee" SET "flag" = COALESCE(NULLIF(TRIM("flag"), ''), '🌍')`);
+    await prisma.$executeRawUnsafe(`UPDATE "CountryMarquee" SET "fabrics" = COALESCE(NULLIF(TRIM("fabrics"), ''), 'African textiles')`);
+    await prisma.$executeRawUnsafe(`UPDATE "CountryMarquee" SET "image" = COALESCE(NULLIF(TRIM("image"), ''), '/placeholder.jpg')`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CountryMarquee" ALTER COLUMN "name" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CountryMarquee" ALTER COLUMN "flag" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CountryMarquee" ALTER COLUMN "fabrics" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CountryMarquee" ALTER COLUMN "image" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CountryMarquee_isActive_idx" ON "CountryMarquee"("isActive")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CountryMarquee_displayOrder_idx" ON "CountryMarquee"("displayOrder")`);
+
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "HowItWorksStep" (
+        "id" TEXT NOT NULL,
+        "stepNumber" INTEGER NOT NULL,
+        "title" TEXT NOT NULL DEFAULT '',
+        "subtitle" TEXT NOT NULL DEFAULT '',
+        "icon" TEXT NOT NULL DEFAULT 'Sparkles',
+        "displayOrder" INTEGER NOT NULL DEFAULT 0,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "HowItWorksStep_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HowItWorksStep" ADD COLUMN IF NOT EXISTS "stepNumber" INTEGER`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HowItWorksStep" ADD COLUMN IF NOT EXISTS "title" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HowItWorksStep" ADD COLUMN IF NOT EXISTS "subtitle" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HowItWorksStep" ADD COLUMN IF NOT EXISTS "icon" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HowItWorksStep" ADD COLUMN IF NOT EXISTS "displayOrder" INTEGER NOT NULL DEFAULT 0`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HowItWorksStep" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HowItWorksStep" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HowItWorksStep" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+    await prisma.$executeRawUnsafe(`UPDATE "HowItWorksStep" SET "stepNumber" = COALESCE("stepNumber", 1)`);
+    await prisma.$executeRawUnsafe(`UPDATE "HowItWorksStep" SET "title" = COALESCE(NULLIF(TRIM("title"), ''), 'Step')`);
+    await prisma.$executeRawUnsafe(`UPDATE "HowItWorksStep" SET "subtitle" = COALESCE(NULLIF(TRIM("subtitle"), ''), 'Describe this step')`);
+    await prisma.$executeRawUnsafe(`UPDATE "HowItWorksStep" SET "icon" = COALESCE(NULLIF(TRIM("icon"), ''), 'Sparkles')`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HowItWorksStep" ALTER COLUMN "stepNumber" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HowItWorksStep" ALTER COLUMN "title" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HowItWorksStep" ALTER COLUMN "subtitle" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HowItWorksStep" ALTER COLUMN "icon" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "HowItWorksStep_stepNumber_idx" ON "HowItWorksStep"("stepNumber")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "HowItWorksStep_isActive_idx" ON "HowItWorksStep"("isActive")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "HowItWorksStep_displayOrder_idx" ON "HowItWorksStep"("displayOrder")`);
+
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "ShopCategory" (
+        "id" TEXT NOT NULL,
+        "key" TEXT NOT NULL,
+        "title" TEXT NOT NULL DEFAULT '',
+        "description" TEXT NOT NULL DEFAULT '',
+        "image" TEXT NOT NULL DEFAULT '',
+        "ctaText" TEXT NOT NULL DEFAULT 'Shop Now',
+        "ctaLink" TEXT NOT NULL DEFAULT '#',
+        "displayOrder" INTEGER NOT NULL DEFAULT 0,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "ShopCategory_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ADD COLUMN IF NOT EXISTS "key" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ADD COLUMN IF NOT EXISTS "title" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ADD COLUMN IF NOT EXISTS "description" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ADD COLUMN IF NOT EXISTS "image" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ADD COLUMN IF NOT EXISTS "ctaText" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ADD COLUMN IF NOT EXISTS "ctaLink" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ADD COLUMN IF NOT EXISTS "displayOrder" INTEGER NOT NULL DEFAULT 0`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+    await prisma.$executeRawUnsafe(`UPDATE "ShopCategory" SET "key" = COALESCE(NULLIF(TRIM("key"), ''), CONCAT('category-', LEFT("id", 8)))`);
+    await prisma.$executeRawUnsafe(`UPDATE "ShopCategory" SET "title" = COALESCE(NULLIF(TRIM("title"), ''), 'Category')`);
+    await prisma.$executeRawUnsafe(`UPDATE "ShopCategory" SET "description" = COALESCE(NULLIF(TRIM("description"), ''), 'Category description')`);
+    await prisma.$executeRawUnsafe(`UPDATE "ShopCategory" SET "image" = COALESCE(NULLIF(TRIM("image"), ''), '/placeholder.jpg')`);
+    await prisma.$executeRawUnsafe(`UPDATE "ShopCategory" SET "ctaText" = COALESCE(NULLIF(TRIM("ctaText"), ''), 'Shop Now')`);
+    await prisma.$executeRawUnsafe(`UPDATE "ShopCategory" SET "ctaLink" = COALESCE(NULLIF(TRIM("ctaLink"), ''), '#')`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ALTER COLUMN "key" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ALTER COLUMN "title" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ALTER COLUMN "description" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ALTER COLUMN "image" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ALTER COLUMN "ctaText" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShopCategory" ALTER COLUMN "ctaLink" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ShopCategory_key_idx" ON "ShopCategory"("key")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ShopCategory_isActive_idx" ON "ShopCategory"("isActive")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ShopCategory_displayOrder_idx" ON "ShopCategory"("displayOrder")`);
+
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "DesignerSpotlight" (
+        "id" TEXT NOT NULL,
+        "designerId" TEXT NOT NULL DEFAULT '',
+        "quote" TEXT NOT NULL DEFAULT '',
+        "bio" TEXT NOT NULL DEFAULT '',
+        "image" TEXT NOT NULL DEFAULT '',
+        "displayOrder" INTEGER NOT NULL DEFAULT 0,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "DesignerSpotlight_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DesignerSpotlight" ADD COLUMN IF NOT EXISTS "designerId" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DesignerSpotlight" ADD COLUMN IF NOT EXISTS "quote" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DesignerSpotlight" ADD COLUMN IF NOT EXISTS "bio" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DesignerSpotlight" ADD COLUMN IF NOT EXISTS "image" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DesignerSpotlight" ADD COLUMN IF NOT EXISTS "displayOrder" INTEGER NOT NULL DEFAULT 0`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DesignerSpotlight" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DesignerSpotlight" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DesignerSpotlight" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+    await prisma.$executeRawUnsafe(
+      `UPDATE "DesignerSpotlight"
+       SET "designerId" = COALESCE(NULLIF(TRIM("designerId"), ''), '00000000-0000-0000-0000-000000000000')`
+    );
+    await prisma.$executeRawUnsafe(`UPDATE "DesignerSpotlight" SET "quote" = COALESCE(NULLIF(TRIM("quote"), ''), 'Designer quote')`);
+    await prisma.$executeRawUnsafe(`UPDATE "DesignerSpotlight" SET "bio" = COALESCE(NULLIF(TRIM("bio"), ''), 'Designer biography')`);
+    await prisma.$executeRawUnsafe(`UPDATE "DesignerSpotlight" SET "image" = COALESCE(NULLIF(TRIM("image"), ''), '/placeholder.jpg')`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DesignerSpotlight" ALTER COLUMN "designerId" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DesignerSpotlight" ALTER COLUMN "quote" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DesignerSpotlight" ALTER COLUMN "bio" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DesignerSpotlight" ALTER COLUMN "image" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DesignerSpotlight_isActive_idx" ON "DesignerSpotlight"("isActive")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DesignerSpotlight_displayOrder_idx" ON "DesignerSpotlight"("displayOrder")`);
+
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "HeritageSection" (
+        "id" TEXT NOT NULL,
+        "title" TEXT NOT NULL DEFAULT '',
+        "subtitle" TEXT NOT NULL DEFAULT '',
+        "image" TEXT NOT NULL DEFAULT '',
+        "ctaText" TEXT,
+        "ctaLink" TEXT,
+        "displayOrder" INTEGER NOT NULL DEFAULT 0,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "HeritageSection_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HeritageSection" ADD COLUMN IF NOT EXISTS "title" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HeritageSection" ADD COLUMN IF NOT EXISTS "subtitle" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HeritageSection" ADD COLUMN IF NOT EXISTS "image" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HeritageSection" ADD COLUMN IF NOT EXISTS "ctaText" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HeritageSection" ADD COLUMN IF NOT EXISTS "ctaLink" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HeritageSection" ADD COLUMN IF NOT EXISTS "displayOrder" INTEGER NOT NULL DEFAULT 0`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HeritageSection" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HeritageSection" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HeritageSection" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+    await prisma.$executeRawUnsafe(`UPDATE "HeritageSection" SET "title" = COALESCE(NULLIF(TRIM("title"), ''), 'Heritage')`);
+    await prisma.$executeRawUnsafe(`UPDATE "HeritageSection" SET "subtitle" = COALESCE(NULLIF(TRIM("subtitle"), ''), 'Our story')`);
+    await prisma.$executeRawUnsafe(`UPDATE "HeritageSection" SET "image" = COALESCE(NULLIF(TRIM("image"), ''), '/placeholder.jpg')`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HeritageSection" ALTER COLUMN "title" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HeritageSection" ALTER COLUMN "subtitle" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "HeritageSection" ALTER COLUMN "image" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "HeritageSection_isActive_idx" ON "HeritageSection"("isActive")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "HeritageSection_displayOrder_idx" ON "HeritageSection"("displayOrder")`);
+
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "Testimonial" (
+        "id" TEXT NOT NULL,
+        "name" TEXT NOT NULL DEFAULT '',
+        "initials" TEXT NOT NULL DEFAULT '',
+        "location" TEXT NOT NULL DEFAULT '',
+        "quote" TEXT NOT NULL DEFAULT '',
+        "avatar" TEXT,
+        "displayOrder" INTEGER NOT NULL DEFAULT 0,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "Testimonial_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Testimonial" ADD COLUMN IF NOT EXISTS "name" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Testimonial" ADD COLUMN IF NOT EXISTS "initials" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Testimonial" ADD COLUMN IF NOT EXISTS "location" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Testimonial" ADD COLUMN IF NOT EXISTS "quote" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Testimonial" ADD COLUMN IF NOT EXISTS "avatar" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Testimonial" ADD COLUMN IF NOT EXISTS "displayOrder" INTEGER NOT NULL DEFAULT 0`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Testimonial" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Testimonial" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Testimonial" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+    await prisma.$executeRawUnsafe(`UPDATE "Testimonial" SET "name" = COALESCE(NULLIF(TRIM("name"), ''), 'Customer')`);
+    await prisma.$executeRawUnsafe(`UPDATE "Testimonial" SET "initials" = COALESCE(NULLIF(TRIM("initials"), ''), 'CU')`);
+    await prisma.$executeRawUnsafe(`UPDATE "Testimonial" SET "location" = COALESCE(NULLIF(TRIM("location"), ''), 'Africa')`);
+    await prisma.$executeRawUnsafe(`UPDATE "Testimonial" SET "quote" = COALESCE(NULLIF(TRIM("quote"), ''), 'Great experience.')`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Testimonial" ALTER COLUMN "name" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Testimonial" ALTER COLUMN "initials" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Testimonial" ALTER COLUMN "location" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Testimonial" ALTER COLUMN "quote" SET NOT NULL`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Testimonial_isActive_idx" ON "Testimonial"("isActive")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Testimonial_displayOrder_idx" ON "Testimonial"("displayOrder")`);
+
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "FooterContent" (
+        "id" TEXT NOT NULL,
+        "companyName" TEXT NOT NULL DEFAULT 'AfriFashion',
+        "tagline" TEXT NOT NULL DEFAULT 'Wear the story of Africa.',
+        "email" TEXT NOT NULL DEFAULT 'hello@afrifashion.com',
+        "phone" TEXT NOT NULL DEFAULT '+1 (555) 123-4567',
+        "address" TEXT NOT NULL DEFAULT 'Lagos, Nigeria',
+        "socialLinks" TEXT,
+        "copyright" TEXT NOT NULL DEFAULT '© 2026 AfriFashion. All rights reserved.',
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "FooterContent_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(`ALTER TABLE "FooterContent" ADD COLUMN IF NOT EXISTS "companyName" TEXT NOT NULL DEFAULT 'AfriFashion'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "FooterContent" ADD COLUMN IF NOT EXISTS "tagline" TEXT NOT NULL DEFAULT 'Wear the story of Africa.'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "FooterContent" ADD COLUMN IF NOT EXISTS "email" TEXT NOT NULL DEFAULT 'hello@afrifashion.com'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "FooterContent" ADD COLUMN IF NOT EXISTS "phone" TEXT NOT NULL DEFAULT '+1 (555) 123-4567'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "FooterContent" ADD COLUMN IF NOT EXISTS "address" TEXT NOT NULL DEFAULT 'Lagos, Nigeria'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "FooterContent" ADD COLUMN IF NOT EXISTS "socialLinks" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "FooterContent" ADD COLUMN IF NOT EXISTS "copyright" TEXT NOT NULL DEFAULT '© 2026 AfriFashion. All rights reserved.'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "FooterContent" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+
+    homepageSectionContentSchemaEnsured = true;
+  })();
+  try {
+    await homepageSectionContentSchemaPromise;
+  } finally {
+    homepageSectionContentSchemaPromise = null;
+  }
+};
+
 router.use(async (_req, _res, next) => {
   try {
     await ensureHomepageSettingsSchema();
     await ensureSpotlightLinkSchema();
     await ensureBlogSchema();
+    await ensureHomepageSectionContentSchema();
   } catch (error) {
     console.error('Failed to ensure homepage settings schema:', error);
   }
