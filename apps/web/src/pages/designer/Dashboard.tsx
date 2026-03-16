@@ -188,7 +188,7 @@ interface DesignFormState {
   basePrice: string;
   imageUrls: string;
   selectedFabricIds: string[];
-  yardsByFabricId: Record<string, string>;
+  requiredFabricYards: string;
   selectedMeasurementNames: string[];
   priceCurrencyCode: string;
 }
@@ -472,6 +472,7 @@ const READY_COLOR_OPTIONS = [
   'YELLOW',
 ];
 const PREDOMINANT_COLOR_OPTIONS = READY_COLOR_OPTIONS.filter((entry) => entry !== 'DEFAULT');
+const FABRIC_YARD_OPTIONS = Array.from({ length: 20 }, (_, idx) => String(idx + 1));
 const ALL_DESIGN_EDITABLE_FIELDS = [
   'name',
   'description',
@@ -652,7 +653,7 @@ export default function DesignerDashboard() {
     basePrice: '',
     imageUrls: '',
     selectedFabricIds: [],
-    yardsByFabricId: {},
+    requiredFabricYards: '',
     selectedMeasurementNames: [],
     priceCurrencyCode: 'USD',
   });
@@ -1473,7 +1474,7 @@ export default function DesignerDashboard() {
       basePrice: '',
       imageUrls: '',
       selectedFabricIds: [],
-      yardsByFabricId: {},
+      requiredFabricYards: '',
       selectedMeasurementNames: defaultMeasurements,
       priceCurrencyCode: currencyOptions.defaultCurrency || 'USD',
     });
@@ -1524,10 +1525,11 @@ export default function DesignerDashboard() {
 
   const openEditDesignModal = (design: Design) => {
     if (!canEditDesignProduct) return;
-    const yardsByFabricId = (design.suitableFabrics || []).reduce<Record<string, string>>((acc, item) => {
-      if (item.fabricId) acc[item.fabricId] = String(item.yardsNeeded || 1);
-      return acc;
-    }, {});
+    const existingRequiredYards = Number(
+      (design.suitableFabrics || []).find((item) => Number(item.yardsNeeded || 0) > 0)?.yardsNeeded || 0
+    );
+    const requiredFabricYards =
+      existingRequiredYards > 0 ? String(Math.max(1, Math.floor(existingRequiredYards))) : '';
 
     setSelectedDesign(design);
     setIsEditMode(true);
@@ -1541,7 +1543,7 @@ export default function DesignerDashboard() {
       basePrice: String(design.listingLocalPrice || design.basePrice || ''),
       imageUrls: (design.images || []).join('\n'),
       selectedFabricIds: (design.suitableFabrics || []).map((item) => item.fabricId).filter(Boolean),
-      yardsByFabricId,
+      requiredFabricYards,
       selectedMeasurementNames: (design.measurementVariables || []).map((item) => item.name).filter(Boolean),
       priceCurrencyCode: String(design.listingCurrencyCode || currencyOptions.defaultCurrency || 'USD'),
     });
@@ -1761,25 +1763,16 @@ export default function DesignerDashboard() {
       return {
         ...prev,
         selectedFabricIds: [...prev.selectedFabricIds, fabricId],
-        yardsByFabricId: {
-          ...prev.yardsByFabricId,
-          [fabricId]: prev.yardsByFabricId[fabricId] || '1',
-        },
       };
     });
     setDesignSelectedFabricOptionId('');
   };
 
   const removeSelectedFabric = (fabricId: string) => {
-    setDesignForm((prev) => {
-      const yardsByFabricId = { ...prev.yardsByFabricId };
-      delete yardsByFabricId[fabricId];
-      return {
-        ...prev,
-        selectedFabricIds: prev.selectedFabricIds.filter((entry) => entry !== fabricId),
-        yardsByFabricId,
-      };
-    });
+    setDesignForm((prev) => ({
+      ...prev,
+      selectedFabricIds: prev.selectedFabricIds.filter((entry) => entry !== fabricId),
+    }));
   };
 
   const loadDesignFabricOptions = async () => {
@@ -1965,9 +1958,10 @@ export default function DesignerDashboard() {
         isRequired: true,
         instructions: item.instructions || undefined,
       }));
+    const requiredFabricYards = Math.max(1, Math.floor(Number(designForm.requiredFabricYards || 0)));
     const suitableFabricIds = designForm.selectedFabricIds.map((fabricId) => ({
       fabricId,
-      yardsNeeded: 1,
+      yardsNeeded: requiredFabricYards,
     }));
     const predominantColorToken = String(designForm.predominantColor || '').trim().toUpperCase();
     const isApprovedEdit = Boolean(isEditMode && selectedDesign && String(selectedDesign.status || '').toUpperCase() === 'APPROVED');
@@ -2022,6 +2016,10 @@ export default function DesignerDashboard() {
           setDesignError('Select at least one suitable fabric.');
           return;
         }
+        if (!Number.isFinite(Number(designForm.requiredFabricYards || 0)) || requiredFabricYards < 1) {
+          setDesignError('Select required minimum yards for primary fabric.');
+          return;
+        }
         if (suitableFabricIds.length > maxSuitableFabricsPerDesign) {
           setDesignError(`You can select up to ${maxSuitableFabricsPerDesign} suitable fabrics for each CTW product.`);
           return;
@@ -2065,6 +2063,10 @@ export default function DesignerDashboard() {
       }
       if (suitableFabricIds.length === 0) {
         setDesignError('Select at least one suitable fabric.');
+        return;
+      }
+      if (!Number.isFinite(Number(designForm.requiredFabricYards || 0)) || requiredFabricYards < 1) {
+        setDesignError('Select required minimum yards for primary fabric.');
         return;
       }
       if (suitableFabricIds.length > maxSuitableFabricsPerDesign) {
@@ -4658,6 +4660,36 @@ export default function DesignerDashboard() {
                     >
                       Add Fabric
                     </Button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-[280px_1fr]">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">
+                        Required Minimum Yard for Primary Fabric <span className="text-red-600">*</span>
+                      </label>
+                      <select
+                        value={designForm.requiredFabricYards}
+                        onChange={(event) =>
+                          setDesignForm((prev) => ({ ...prev, requiredFabricYards: event.target.value }))
+                        }
+                        className="w-full rounded-lg border px-3 py-2 text-sm"
+                        disabled={
+                          isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) ||
+                          isApprovedDesignFieldLocked('suitableFabricIds')
+                        }
+                      >
+                        <option value="">Select yards</option>
+                        {FABRIC_YARD_OPTIONS.map((yard) => (
+                          <option key={`yard-${yard}`} value={yard}>
+                            {yard} yard{yard === '1' ? '' : 's'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-end">
+                      <p className="text-xs text-gray-600">
+                        Selected fabrics: {designForm.selectedFabricIds.length}/{maxSuitableFabricsPerDesign}.
+                      </p>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     {selectedDesignFabricRows.length === 0 ? (

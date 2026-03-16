@@ -1482,7 +1482,7 @@ router.post('/designs', async (req, res, next) => {
       priceCurrencyCode: z.string().min(3).max(8).optional(),
       suitableFabricIds: z.array(z.object({
         fabricId: z.string().uuid(),
-        yardsNeeded: z.coerce.number().min(1).optional(),
+        yardsNeeded: z.coerce.number().min(1),
       })),
       measurementVariables: z.array(z.object({
         name: z.string(),
@@ -1690,7 +1690,7 @@ router.patch('/designs/:id', async (req, res, next) => {
         .array(
           z.object({
             fabricId: z.string().uuid(),
-            yardsNeeded: z.coerce.number().min(1).optional(),
+            yardsNeeded: z.coerce.number().min(1),
           })
         )
         .optional(),
