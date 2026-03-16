@@ -15,7 +15,10 @@ type ProviderForm = {
 export default function AdminAutomationAiConfigPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testingProviderId, setTestingProviderId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [testFunctionKey, setTestFunctionKey] = useState('text_grammar_enhancement');
+  const [testPrompt, setTestPrompt] = useState('');
   const [settings, setSettings] = useState<any>(null);
   const [newProvider, setNewProvider] = useState<ProviderForm>({
     id: '',
@@ -103,6 +106,31 @@ export default function AdminAutomationAiConfigPage() {
     });
   };
 
+  const testProvider = async (providerId: string) => {
+    try {
+      setTestingProviderId(providerId);
+      setMessage('');
+      const response = await api.admin.testAutomationProvider({
+        providerId,
+        functionKey: testFunctionKey || 'text_grammar_enhancement',
+        prompt: testPrompt || undefined,
+      });
+      if (response.success) {
+        setMessage(`Provider test passed: ${String(response?.data?.message || response?.message || 'OK')}`);
+      } else {
+        setMessage(`Provider test failed: ${String(response?.data?.message || response?.message || 'Unknown error')}`);
+      }
+    } catch (error: any) {
+      setMessage(
+        `Provider test failed: ${String(
+          error?.response?.data?.message || error?.response?.data?.data?.message || error?.message || 'Unknown error'
+        )}`
+      );
+    } finally {
+      setTestingProviderId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-80 items-center justify-center">
@@ -138,8 +166,26 @@ export default function AdminAutomationAiConfigPage() {
 
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-gray-900">AI Providers</h2>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <select
+            className="rounded border px-3 py-2 text-sm"
+            value={testFunctionKey}
+            onChange={(event) => setTestFunctionKey(event.target.value)}
+          >
+            <option value="text_grammar_enhancement">Text/Grammatical Correction</option>
+            <option value="image_verification">Image Verification</option>
+            <option value="image_regeneration">Image Regeneration</option>
+            <option value="document_ocr_analysis">Document OCR/Analysis</option>
+          </select>
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="Optional custom test prompt"
+            value={testPrompt}
+            onChange={(event) => setTestPrompt(event.target.value)}
+          />
+        </div>
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[820px] text-sm">
+          <table className="w-full min-w-[960px] text-sm">
             <thead className="bg-gray-50 text-left text-gray-500">
               <tr>
                 <th className="px-3 py-2">Name</th>
@@ -147,6 +193,7 @@ export default function AdminAutomationAiConfigPage() {
                 <th className="px-3 py-2">Base URL</th>
                 <th className="px-3 py-2">Model</th>
                 <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Test</th>
               </tr>
             </thead>
             <tbody>
@@ -157,11 +204,20 @@ export default function AdminAutomationAiConfigPage() {
                   <td className="px-3 py-2">{provider.baseUrl || '-'}</td>
                   <td className="px-3 py-2">{provider.model || '-'}</td>
                   <td className="px-3 py-2">{provider.isActive !== false ? 'Active' : 'Inactive'}</td>
+                  <td className="px-3 py-2">
+                    <Button
+                      variant="outline"
+                      disabled={testingProviderId === provider.id || provider.isActive === false}
+                      onClick={() => void testProvider(String(provider.id || ''))}
+                    >
+                      {testingProviderId === provider.id ? 'Testing...' : 'Test Provider'}
+                    </Button>
+                  </td>
                 </tr>
               ))}
               {providers.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-4 text-center text-sm text-gray-500" colSpan={5}>
+                  <td className="px-3 py-4 text-center text-sm text-gray-500" colSpan={6}>
                     No provider configured yet.
                   </td>
                 </tr>

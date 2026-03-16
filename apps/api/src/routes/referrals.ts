@@ -12,7 +12,6 @@ import {
   readResellerDashboard,
   saveReferralProgramSettings,
 } from '../utils/referral-program';
-const RESELLER_ROLE = 'RESELLER_INFLUENCER' as unknown as UserRole;
 
 const router = Router();
 router.use(async (_req, _res, next) => {
@@ -180,7 +179,7 @@ router.post('/resellers', authorizePermissions(Permissions.USERS_MANAGE), async 
         lastName: payload.lastName.trim(),
         phone: payload.phone?.trim() || null,
         password: hashedPassword,
-        role: RESELLER_ROLE,
+        role: UserRole.RESELLER_INFLUENCER,
         status: payload.status,
       },
       select: {
@@ -248,7 +247,7 @@ router.patch('/resellers/:userId', authorizePermissions(Permissions.USERS_MANAGE
       where: { id: userId },
       select: { id: true, role: true },
     });
-    if (!user || user.role !== RESELLER_ROLE) {
+    if (!user || user.role !== UserRole.RESELLER_INFLUENCER) {
       return res.status(404).json({ success: false, message: 'Reseller user not found.' });
     }
     if (payload.status || payload.phone !== undefined) {
@@ -293,7 +292,7 @@ router.patch('/resellers/:userId', authorizePermissions(Permissions.USERS_MANAGE
 
 router.get('/me', async (req, res, next) => {
   try {
-    if (req.user?.role !== RESELLER_ROLE) {
+    if (req.user?.role !== UserRole.RESELLER_INFLUENCER) {
       return res.status(403).json({
         success: false,
         message: 'Only reseller/influencer users can access this endpoint.',

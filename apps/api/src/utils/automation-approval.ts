@@ -440,6 +440,80 @@ const executeAutomationAiFunction = async (params: {
   return callTextExecutor(provider, params.prompt, params.systemPrompt);
 };
 
+export const testAutomationProviderBinding = async (input: {
+  providerId: string;
+  functionKey?: string;
+  prompt?: string;
+}) => {
+  const settings = (await readAutomationApprovalSettings()).settings;
+  const providerId = String(input.providerId || '').trim();
+  const functionKey = String(input.functionKey || 'text_grammar_enhancement').trim();
+  if (!providerId) {
+    return {
+      ok: false,
+      status: 'INVALID_INPUT' as const,
+      message: 'Provider ID is required.',
+    };
+  }
+  const provider = settings.aiProviders.find(
+    (entry) => entry.isActive !== false && String(entry.id || '').trim() === providerId
+  );
+  if (!provider) {
+    return {
+      ok: false,
+      status: 'NO_PROVIDER' as const,
+      message: 'Provider not found or inactive.',
+    };
+  }
+  const clonedSettings: AutomationApprovalSettings = {
+    ...settings,
+    functionBindings: [
+      ...(settings.functionBindings || []).filter((entry) => entry.functionKey !== functionKey),
+      {
+        id: randomUUID(),
+        functionKey,
+        functionLabel: functionKey,
+        providerId: provider.id,
+        isActive: true,
+      },
+    ],
+  };
+  const prompt =
+    String(input.prompt || '').trim() ||
+    `Provider connectivity test for ${provider.name}. Return a concise success acknowledgment.`;
+  const result = await executeAutomationAiFunction({
+    settings: clonedSettings,
+    functionKey,
+    prompt,
+    systemPrompt:
+      'You are running a provider connectivity test for an e-commerce automation control panel.',
+  });
+  if (result.status === 'OK') {
+    return {
+      ok: true,
+      status: 'OK' as const,
+      message: result.output,
+      provider: {
+        id: provider.id,
+        name: provider.name,
+        functionTag: provider.functionTag,
+      },
+      functionKey,
+    };
+  }
+  return {
+    ok: false,
+    status: result.status,
+    message: result.reason,
+    provider: {
+      id: provider.id,
+      name: provider.name,
+      functionTag: provider.functionTag,
+    },
+    functionKey,
+  };
+};
+
 const safeRatio = (a: number, b: number) => (b > 0 ? a / b : 0);
 
 export const evaluateProductAutomationChecks = async (input: {

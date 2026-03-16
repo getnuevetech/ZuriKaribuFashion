@@ -8,6 +8,7 @@ import {
   evaluateProductAutomationChecks,
   readAutomationApprovalSettings,
   saveAutomationApprovalSettings,
+  testAutomationProviderBinding,
 } from '../utils/automation-approval';
 
 const router = Router();
@@ -26,6 +27,11 @@ const evaluationRequestSchema = z.object({
   productType: z.nativeEnum(ProductType),
   productId: z.string().uuid(),
   applyDecision: z.boolean().default(false),
+});
+const providerTestSchema = z.object({
+  providerId: z.string().min(1),
+  functionKey: z.string().min(2).optional(),
+  prompt: z.string().max(2000).optional(),
 });
 
 router.get('/settings', async (_req, res, next) => {
@@ -184,6 +190,20 @@ router.get('/providers/suggestions', async (_req, res) => {
       },
     ],
   });
+});
+
+router.post('/providers/test', async (req, res, next) => {
+  try {
+    const payload = providerTestSchema.parse(req.body || {});
+    const result = await testAutomationProviderBinding(payload);
+    res.json({
+      success: result.ok,
+      data: result,
+      message: result.message,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 export default router;

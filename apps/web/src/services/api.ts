@@ -7015,6 +7015,9 @@ const adminApi = {
   getAutomationProviderSuggestions: () =>
     apiService.get<{ success: boolean; data: any[] }>('/admin/automation/providers/suggestions'),
 
+  testAutomationProvider: (data: { providerId: string; functionKey?: string; prompt?: string }) =>
+    apiService.post<{ success: boolean; data: any; message?: string }>('/admin/automation/providers/test', data),
+
   autoCloseOverdueOrders: () =>
     apiService.post<{ success: boolean; data: { closedCount: number }; message?: string }>(
       '/admin/order-workflow/auto-close-overdue'

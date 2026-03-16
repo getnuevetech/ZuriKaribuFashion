@@ -1,5 +1,4 @@
 import { UserRole } from './db';
-const RESELLER_ROLE = 'RESELLER_INFLUENCER' as unknown as UserRole;
 
 export const Permissions = {
   ADMIN_ACCESS: 'admin:access',
@@ -186,7 +185,7 @@ export const ROLE_HOME_ROUTE: Record<UserRole, string> = {
   [UserRole.CUSTOMER]: '/dashboard',
   [UserRole.FABRIC_SELLER]: '/seller',
   [UserRole.FASHION_DESIGNER]: '/designer',
-  [RESELLER_ROLE]: '/reseller',
+  [UserRole.RESELLER_INFLUENCER]: '/reseller',
   [UserRole.QA_TEAM]: '/qa',
   [UserRole.ADMINISTRATOR]: '/admin',
 };
@@ -212,7 +211,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, PermissionGrant[]> = {
     Permissions.ORDERS_UPDATE_SELF,
     Permissions.UPLOADS_CREATE,
   ],
-  [RESELLER_ROLE]: [
+  [UserRole.RESELLER_INFLUENCER]: [
     Permissions.RESELLER_ACCESS,
     Permissions.ORDERS_READ_SELF,
   ],

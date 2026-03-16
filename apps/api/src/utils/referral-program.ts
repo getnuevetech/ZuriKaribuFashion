@@ -1,6 +1,5 @@
 import { randomUUID } from 'crypto';
 import { prisma, UserRole, UserStatus } from '../db';
-const RESELLER_ROLE = 'RESELLER_INFLUENCER' as unknown as UserRole;
 
 export const REFERRAL_PROGRAM_SETTINGS_KEY = 'REFERRAL_PROGRAM_SETTINGS_V1';
 
@@ -78,7 +77,7 @@ const normalizeRole = (value: unknown): UserRole | null => {
   if (token === 'FABRIC_SELLER' || token === 'SELLER') return UserRole.FABRIC_SELLER;
   if (token === 'FASHION_DESIGNER' || token === 'DESIGNER') return UserRole.FASHION_DESIGNER;
   if (token === 'RESELLER_INFLUENCER' || token === 'RESELLER' || token === 'INFLUENCER') {
-    return RESELLER_ROLE;
+    return UserRole.RESELLER_INFLUENCER;
   }
   if (token === 'QA_TEAM' || token === 'QA') return UserRole.QA_TEAM;
   if (token === 'ADMINISTRATOR' || token === 'ADMIN') return UserRole.ADMINISTRATOR;
@@ -109,21 +108,27 @@ export const ensureReferralProgramSchema = async () => {
   await executeBestEffort(
     `CREATE UNIQUE INDEX IF NOT EXISTS "HomepageSectionSetting_key_key" ON "HomepageSectionSetting"("key")`
   );
-  await executeBestEffort(
-    `DO $$
-     BEGIN
-       IF NOT EXISTS (
-         SELECT 1
-         FROM pg_enum e
-         JOIN pg_type t ON t.oid = e.enumtypid
-         WHERE t.typname = 'UserRole'
-           AND e.enumlabel = 'RESELLER_INFLUENCER'
-       ) THEN
-         ALTER TYPE "UserRole" ADD VALUE 'RESELLER_INFLUENCER';
-       END IF;
-     END
-     $$;`
-  );
+  try {
+    await prisma.$executeRawUnsafe(
+      `DO $$
+       BEGIN
+         IF NOT EXISTS (
+           SELECT 1
+           FROM pg_enum e
+           JOIN pg_type t ON t.oid = e.enumtypid
+           WHERE t.typname = 'UserRole'
+             AND e.enumlabel = 'RESELLER_INFLUENCER'
+         ) THEN
+           ALTER TYPE "UserRole" ADD VALUE 'RESELLER_INFLUENCER';
+         END IF;
+       END
+       $$;`
+    );
+  } catch {
+    throw new Error(
+      'Referral system setup failed: database role enum does not include RESELLER_INFLUENCER and could not be auto-updated.'
+    );
+  }
   await executeBestEffort(
     `CREATE TABLE IF NOT EXISTS "ResellerInfluencerProfile" (
       "id" TEXT NOT NULL,
@@ -431,7 +436,7 @@ export const readResellerByReferralCode = async (referralCodeInput: unknown) => 
   const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
   if (!row) return null;
   if (row.isActive === false) return null;
-  if (normalizeRole(row.userRole) !== RESELLER_ROLE) return null;
+  if (normalizeRole(row.userRole) !== UserRole.RESELLER_INFLUENCER) return null;
   if (String(row.userStatus || '').toUpperCase() !== String(UserStatus.ACTIVE)) return null;
   return {
     id: String(row.id || ''),
