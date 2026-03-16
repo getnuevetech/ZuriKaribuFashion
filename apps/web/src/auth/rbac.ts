@@ -92,7 +92,14 @@ export function getAdminHomeRouteForPermissions(permissions: string[] | undefine
   return match?.route || '/admin';
 }
 
-export function getHomeRouteForUser(user: { role?: string | null; permissions?: string[] } | null | undefined): string {
+export function getHomeRouteForUser(user: {
+  role?: string | null;
+  permissions?: string[];
+  requirePasswordChange?: boolean;
+} | null | undefined): string {
+  if (user?.requirePasswordChange) {
+    return '/change-password-required';
+  }
   const role = normalizeRole(user?.role);
   if (!role) return '/';
   if (role === 'ADMINISTRATOR') {

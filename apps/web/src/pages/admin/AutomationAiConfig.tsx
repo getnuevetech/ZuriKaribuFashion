@@ -30,6 +30,12 @@ export default function AdminAutomationAiConfigPage() {
     isActive: true,
   });
   const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [newBinding, setNewBinding] = useState({
+    functionKey: '',
+    functionLabel: '',
+    providerId: '',
+    isActive: true,
+  });
 
   const loadData = async () => {
     try {
@@ -129,6 +135,38 @@ export default function AdminAutomationAiConfigPage() {
     } finally {
       setTestingProviderId(null);
     }
+  };
+
+  const addBinding = () => {
+    const functionKey = String(newBinding.functionKey || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '_');
+    const functionLabel = String(newBinding.functionLabel || '').trim();
+    if (!functionKey || !functionLabel) {
+      setMessage('Function key and label are required to add a binding.');
+      return;
+    }
+    const next = {
+      ...(settings || {}),
+      functionBindings: [
+        ...bindings,
+        {
+          id: crypto.randomUUID(),
+          functionKey,
+          functionLabel,
+          providerId: String(newBinding.providerId || '').trim(),
+          isActive: Boolean(newBinding.isActive),
+        },
+      ],
+    };
+    setSettings(next);
+    setNewBinding({
+      functionKey: '',
+      functionLabel: '',
+      providerId: '',
+      isActive: true,
+    });
   };
 
   if (loading) {
@@ -281,6 +319,43 @@ export default function AdminAutomationAiConfigPage() {
         <p className="text-xs text-gray-500">
           Bind each automation function to a configured provider. You can add/edit more functions in settings payload.
         </p>
+        <div className="mt-3 grid gap-2 rounded border p-3 md:grid-cols-[1fr_2fr_1fr_auto_auto]">
+          <input
+            className="rounded border px-2 py-1 text-sm"
+            placeholder="function_key"
+            value={newBinding.functionKey}
+            onChange={(event) => setNewBinding((prev) => ({ ...prev, functionKey: event.target.value }))}
+          />
+          <input
+            className="rounded border px-2 py-1 text-sm"
+            placeholder="Function label"
+            value={newBinding.functionLabel}
+            onChange={(event) => setNewBinding((prev) => ({ ...prev, functionLabel: event.target.value }))}
+          />
+          <select
+            className="rounded border px-2 py-1 text-sm"
+            value={newBinding.providerId}
+            onChange={(event) => setNewBinding((prev) => ({ ...prev, providerId: event.target.value }))}
+          >
+            <option value="">Unassigned</option>
+            {providers.map((provider: any) => (
+              <option key={provider.id} value={provider.id}>
+                {provider.name}
+              </option>
+            ))}
+          </select>
+          <label className="inline-flex items-center gap-2 rounded border px-2 py-1 text-xs">
+            <input
+              type="checkbox"
+              checked={newBinding.isActive}
+              onChange={(event) => setNewBinding((prev) => ({ ...prev, isActive: event.target.checked }))}
+            />
+            Active
+          </label>
+          <Button variant="outline" onClick={addBinding}>
+            Add
+          </Button>
+        </div>
         <div className="mt-3 space-y-2">
           {bindings.map((binding: any) => (
             <div key={binding.id} className="flex flex-wrap items-center gap-2 rounded border px-3 py-2 text-sm">
@@ -321,6 +396,18 @@ export default function AdminAutomationAiConfigPage() {
                 />
                 Active
               </label>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const next = {
+                    ...(settings || {}),
+                    functionBindings: bindings.filter((entry: any) => entry.id !== binding.id),
+                  };
+                  setSettings(next);
+                }}
+              >
+                Remove
+              </Button>
             </div>
           ))}
           {bindings.length === 0 ? <p className="text-sm text-gray-500">No function bindings available.</p> : null}

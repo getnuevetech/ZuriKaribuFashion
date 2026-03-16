@@ -68,6 +68,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Administrator Accounts', href: '/admin/administrator-accounts', icon: User },
     { label: 'Vendor Profiles', href: '/admin/vendor-profiles', icon: Tag },
     { label: 'Reseller/Influencers', href: '/admin/resellers', icon: Users },
+    { label: 'Referral Materials', href: '/admin/referrals/materials', icon: ImageIcon },
     { label: 'Traffic Report', href: '/admin/traffic', icon: Layers },
     { label: 'Measurement Templates', href: '/admin/measurement-templates', icon: Ruler },
     { label: 'Currency Matrix', href: '/admin/currency', icon: DollarSign },
@@ -116,6 +117,8 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Dashboard', href: '/reseller', icon: LayoutDashboard },
     { label: 'Referrals', href: '/reseller?tab=referrals', icon: Users },
     { label: 'Commissions', href: '/reseller?tab=commissions', icon: DollarSign },
+    { label: 'Profile', href: '/reseller/profile', icon: User },
+    { label: 'Materials', href: '/reseller/materials', icon: ImageIcon },
   ],
   qa: [
     { label: 'Dashboard', href: '/qa', icon: LayoutDashboard },
@@ -171,6 +174,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/roles': ['admin:roles:manage', 'users:read'],
       '/admin/vendor-profiles': ['vendor_profiles:read'],
       '/admin/resellers': ['users:manage'],
+      '/admin/referrals/materials': ['users:manage'],
       '/admin/activity-logs': ['session_audit:read'],
       '/admin/session-audit': ['session_audit:read'],
       '/admin/traffic': ['traffic:read'],
@@ -239,6 +243,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   ];
   const automationSubmenu = [
     { label: 'Automated Product Approval', href: '/admin/automation/approvals', icon: ChevronRight },
+    { label: 'Account Approval Automation', href: '/admin/automation/approvals?tab=account', icon: ChevronRight },
     { label: 'AI API Integrations', href: '/admin/automation/ai-integrations', icon: ChevronRight },
   ];
   const enterpriseSubmenu =

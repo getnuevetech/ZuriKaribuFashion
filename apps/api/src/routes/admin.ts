@@ -35,6 +35,7 @@ import {
 } from '../utils/pricing-rules';
 import { readCheckoutPricingSettings, saveCheckoutPricingSettings } from '../utils/checkout-pricing-settings';
 import { ensureResellerProfileForUser } from '../utils/referral-program';
+import { markTemporaryPasswordRequired } from '../utils/password-policy';
 
 const router = Router();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
@@ -1650,6 +1651,64 @@ const ensureAdminRbacSchema = async () => {
         bodyText: 'Hello,\n\nThere is an update on your order.',
         audienceRole: 'ALL',
       },
+      {
+        key: 'REFERRAL_ACCOUNT_CREATED',
+        title: 'Referral account created',
+        subject: 'Your reseller/referral account is ready',
+        bodyHtml:
+          '<p>Hello,</p><p>Your referral account has been created. Please sign in and change your temporary password immediately.</p>',
+        bodyText:
+          'Hello,\n\nYour referral account has been created. Please sign in and change your temporary password immediately.',
+        audienceRole: 'RESELLER_INFLUENCER',
+      },
+      {
+        key: 'REFERRAL_SIGNUP_ATTRIBUTED',
+        title: 'New signup attributed',
+        subject: 'A new user signed up with your referral code',
+        bodyHtml: '<p>Good news!</p><p>A new signup has been attributed to your referral code.</p>',
+        bodyText: 'Good news!\n\nA new signup has been attributed to your referral code.',
+        audienceRole: 'RESELLER_INFLUENCER',
+      },
+      {
+        key: 'REFERRAL_COMMISSION_EARNED',
+        title: 'Referral commission earned',
+        subject: 'You earned a new referral commission',
+        bodyHtml: '<p>Congratulations!</p><p>A new referral commission entry has been added to your ledger.</p>',
+        bodyText: 'Congratulations!\n\nA new referral commission entry has been added to your ledger.',
+        audienceRole: 'RESELLER_INFLUENCER',
+      },
+      {
+        key: 'AUTOMATION_PRODUCT_AUTO_APPROVED_VENDOR',
+        title: 'Automation approved your product',
+        subject: 'Product approved by automation checks',
+        bodyHtml: '<p>Hello Vendor,</p><p>Your product passed automation criteria and has been auto-approved.</p>',
+        bodyText: 'Hello Vendor,\n\nYour product passed automation criteria and has been auto-approved.',
+        audienceRole: 'VENDORS',
+      },
+      {
+        key: 'AUTOMATION_PRODUCT_AUTO_REJECTED_VENDOR',
+        title: 'Automation flagged your product',
+        subject: 'Product requires updates after automation checks',
+        bodyHtml: '<p>Hello Vendor,</p><p>Your product requires updates after automation validation.</p>',
+        bodyText: 'Hello Vendor,\n\nYour product requires updates after automation validation.',
+        audienceRole: 'VENDORS',
+      },
+      {
+        key: 'AUTOMATION_ACCOUNT_REVIEW_REQUIRED',
+        title: 'Automation requires account review',
+        subject: 'Account approval automation requires manual review',
+        bodyHtml: '<p>Hello Admin/QA,</p><p>An account approval automation result requires manual review.</p>',
+        bodyText: 'Hello Admin/QA,\n\nAn account approval automation result requires manual review.',
+        audienceRole: 'QA_TEAM',
+      },
+      {
+        key: 'TEMP_PASSWORD_CHANGE_REQUIRED',
+        title: 'Password change required',
+        subject: 'You must change your temporary password',
+        bodyHtml: '<p>Hello,</p><p>For security, you must change your temporary password at first login.</p>',
+        bodyText: 'Hello,\n\nFor security, you must change your temporary password at first login.',
+        audienceRole: 'ALL',
+      },
     ];
     for (const template of defaultNotificationTemplates) {
       await prisma.$executeRawUnsafe(
@@ -2013,6 +2072,7 @@ router.post('/users', async (req, res, next) => {
         displayName: `${created.firstName} ${created.lastName}`.trim(),
       });
     }
+    await markTemporaryPasswordRequired(created.id);
 
     res.status(201).json({
       success: true,
@@ -2158,6 +2218,7 @@ const handleCreateMinimalVendor = async (req: any, res: any, next: any) => {
         createdAt: true,
       },
     });
+    await markTemporaryPasswordRequired(user.id);
 
     if (role === UserRole.FABRIC_SELLER) {
       await prisma.fabricSellerProfile.create({
@@ -2406,6 +2467,7 @@ type NotificationAudienceRole =
   | 'FABRIC_SELLER'
   | 'FASHION_DESIGNER'
   | 'VENDORS'
+  | 'RESELLER_INFLUENCER'
   | 'ADMINISTRATOR'
   | 'QA_TEAM';
 const normalizeNotificationAudienceRole = (value: unknown): NotificationAudienceRole => {
@@ -2418,6 +2480,7 @@ const normalizeNotificationAudienceRole = (value: unknown): NotificationAudience
     normalized === 'FABRIC_SELLER' ||
     normalized === 'FASHION_DESIGNER' ||
     normalized === 'VENDORS' ||
+    normalized === 'RESELLER_INFLUENCER' ||
     normalized === 'ADMINISTRATOR' ||
     normalized === 'QA_TEAM'
   ) {
@@ -2432,6 +2495,7 @@ const normalizeRecipientRoleToken = (value: unknown): UserRole | null => {
   if (normalized === 'CUSTOMER') return UserRole.CUSTOMER;
   if (normalized === 'FABRIC_SELLER') return UserRole.FABRIC_SELLER;
   if (normalized === 'FASHION_DESIGNER') return UserRole.FASHION_DESIGNER;
+  if (normalized === 'RESELLER_INFLUENCER') return UserRole.RESELLER_INFLUENCER;
   if (normalized === 'ADMINISTRATOR') return UserRole.ADMINISTRATOR;
   if (normalized === 'QA_TEAM') return UserRole.QA_TEAM;
   return null;
@@ -2442,7 +2506,16 @@ const notificationTemplateSchema = z.object({
   bodyHtml: z.string().trim().min(4).max(20000),
   bodyText: z.string().trim().min(4).max(8000),
   audienceRole: z
-    .enum(['ALL', 'CUSTOMER', 'FABRIC_SELLER', 'FASHION_DESIGNER', 'VENDORS', 'ADMINISTRATOR', 'QA_TEAM'])
+    .enum([
+      'ALL',
+      'CUSTOMER',
+      'FABRIC_SELLER',
+      'FASHION_DESIGNER',
+      'VENDORS',
+      'RESELLER_INFLUENCER',
+      'ADMINISTRATOR',
+      'QA_TEAM',
+    ])
     .default('ALL'),
   channelEmail: z.boolean().default(true),
   channelPush: z.boolean().default(true),
@@ -2459,7 +2532,16 @@ const notificationDispatchSchema = z.object({
   bodyHtml: z.string().trim().min(4).max(20000).optional(),
   bodyText: z.string().trim().min(4).max(8000).optional(),
   audienceRole: z
-    .enum(['ALL', 'CUSTOMER', 'FABRIC_SELLER', 'FASHION_DESIGNER', 'VENDORS', 'ADMINISTRATOR', 'QA_TEAM'])
+    .enum([
+      'ALL',
+      'CUSTOMER',
+      'FABRIC_SELLER',
+      'FASHION_DESIGNER',
+      'VENDORS',
+      'RESELLER_INFLUENCER',
+      'ADMINISTRATOR',
+      'QA_TEAM',
+    ])
     .default('ALL'),
   recipientUserIds: z.array(z.string()).max(1000).default([]),
   channelEmail: z.boolean().optional(),
@@ -3820,7 +3902,18 @@ router.get('/notification-center/dispatches', async (req, res, next) => {
   try {
     const query = z
       .object({
-        role: z.enum(['ALL', 'CUSTOMER', 'FABRIC_SELLER', 'FASHION_DESIGNER', 'VENDORS', 'ADMINISTRATOR', 'QA_TEAM']).optional(),
+        role: z
+          .enum([
+            'ALL',
+            'CUSTOMER',
+            'FABRIC_SELLER',
+            'FASHION_DESIGNER',
+            'VENDORS',
+            'RESELLER_INFLUENCER',
+            'ADMINISTRATOR',
+            'QA_TEAM',
+          ])
+          .optional(),
         page: z.string().optional(),
         limit: z.string().optional(),
       })

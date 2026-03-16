@@ -24,6 +24,8 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import ChangePasswordRequired from './pages/ChangePasswordRequired';
+import ReferralCodeRedirect from './pages/ReferralCodeRedirect';
 import StoryPage from './pages/Story';
 import SellerStorefront from './pages/storefront/SellerStorefront';
 import DesignerStorefront from './pages/storefront/DesignerStorefront';
@@ -68,6 +70,7 @@ import AdminProductStockList from './pages/admin/ProductStockList';
 import AdminResellerInfluencers from './pages/admin/ResellerInfluencers';
 import AdminAutomationApprovals from './pages/admin/AutomationApprovals';
 import AdminAutomationAiConfig from './pages/admin/AutomationAiConfig';
+import AdminReferralMaterials from './pages/admin/ReferralMaterials';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -91,6 +94,8 @@ import QADashboard from './pages/qa/Dashboard';
 import QAMessagesPage from './pages/qa/Messages';
 import CustomerMessagesPage from './pages/customer/Messages';
 import ResellerDashboard from './pages/reseller/Dashboard';
+import ResellerProfilePage from './pages/reseller/Profile';
+import ResellerMaterialsPage from './pages/reseller/Materials';
 
 // Auth
 import ProtectedRoute from './components/ProtectedRoute';
@@ -151,6 +156,11 @@ function App() {
             <Route path="/register" element={
               isAuthenticated ? <Navigate to={authenticatedHomeRoute} replace /> : <Register />
             } />
+            <Route path="/:referralCode" element={<ReferralCodeRedirect />} />
+
+            <Route element={<ProtectedRoute />}>
+              <Route path="/change-password-required" element={<ChangePasswordRequired />} />
+            </Route>
 
             {/* Checkout - Requires Auth */}
             <Route element={<ProtectedRoute allowedRoles={['CUSTOMER']} />}>
@@ -383,6 +393,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/admin/referrals/materials"
+                  element={
+                    <AdminPermissionGuard required={['users:manage']}>
+                      <AdminReferralMaterials />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
                   path="/admin/automation/approvals"
                   element={
                     <AdminPermissionGuard required={['products:manage']}>
@@ -529,6 +547,8 @@ function App() {
                 }
               >
                 <Route index element={<ResellerDashboard />} />
+                <Route path="profile" element={<ResellerProfilePage />} />
+                <Route path="materials" element={<ResellerMaterialsPage />} />
                 <Route path="*" element={<Navigate to="/reseller" replace />} />
               </Route>
             </Route>

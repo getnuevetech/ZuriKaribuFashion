@@ -5,13 +5,19 @@ import { prisma, UserRole, UserStatus } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import {
+  createReferralMaterial,
+  deleteReferralMaterial,
   ensureReferralProgramSchema,
   ensureResellerProfileForUser,
+  listReferralMaterials,
   listResellerInfluencersWithMetrics,
   readReferralProgramSettings,
   readResellerDashboard,
+  updateReferralMaterial,
+  updateResellerProfileFromSelfService,
   saveReferralProgramSettings,
 } from '../utils/referral-program';
+import { markTemporaryPasswordRequired } from '../utils/password-policy';
 
 const router = Router();
 router.use(async (_req, _res, next) => {
@@ -41,6 +47,9 @@ const resellerCreateSchema = z.object({
 });
 
 const resellerUpdateSchema = z.object({
+  firstName: z.string().min(1).optional(),
+  lastName: z.string().min(1).optional(),
+  email: z.string().email().transform((value) => value.toLowerCase().trim()).optional(),
   displayName: z.string().max(120).optional(),
   isActive: z.boolean().optional(),
   commissionOverridePercent: z.preprocess(
@@ -52,18 +61,48 @@ const resellerUpdateSchema = z.object({
   ),
   status: z.nativeEnum(UserStatus).optional(),
   phone: z.string().nullable().optional(),
+  avatar: z.string().trim().url().nullable().optional(),
 });
 
 const referralSettingsSchema = z.object({
   enabled: z.boolean().optional(),
   registrationReferralEnabled: z.boolean().optional(),
   defaultReferralCode: z.string().trim().min(2).max(80).optional(),
+  codePrefix: z.string().trim().min(2).max(12).optional(),
+  codeDigits: z.number().int().min(4).max(12).optional(),
   sellerCommissionPercent: z.number().min(0).max(100).optional(),
   designerCommissionPercent: z.number().min(0).max(100).optional(),
+  customerCommissionPercent: z.number().min(0).max(100).optional(),
+  earnFromCustomerOrders: z.boolean().optional(),
   holdDays: z.number().int().min(0).max(365).optional(),
   minimumPayoutUsd: z.number().min(0).max(1_000_000).optional(),
   referralBaseUrl: z.string().trim().min(1).optional(),
+  profileEditableFields: z
+    .array(z.enum(['firstName', 'lastName', 'phone', 'avatar', 'displayName']))
+    .min(1)
+    .optional(),
 });
+
+const resellerSelfUpdateSchema = z.object({
+  firstName: z.string().min(1).optional(),
+  lastName: z.string().min(1).optional(),
+  phone: z.string().nullable().optional(),
+  avatar: z.string().trim().url().nullable().optional(),
+  displayName: z.string().max(120).optional(),
+});
+
+const referralMaterialCreateSchema = z.object({
+  title: z.string().trim().min(2).max(120),
+  description: z.string().trim().max(500).optional(),
+  imageUrl: z.string().trim().url().optional(),
+  targetUrl: z.string().trim().url().optional(),
+  widthPx: z.number().int().min(16).max(5000).optional(),
+  heightPx: z.number().int().min(16).max(5000).optional(),
+  sortOrder: z.number().int().min(0).max(10000).optional(),
+  isActive: z.boolean().optional(),
+});
+
+const referralMaterialUpdateSchema = referralMaterialCreateSchema.partial();
 
 router.get('/program/public', async (_req, res, next) => {
   try {
@@ -74,6 +113,8 @@ router.get('/program/public', async (_req, res, next) => {
         enabled: payload.settings.enabled,
         registrationReferralEnabled: payload.settings.registrationReferralEnabled,
         defaultReferralCode: payload.settings.defaultReferralCode,
+        codePrefix: payload.settings.codePrefix,
+        codeDigits: payload.settings.codeDigits,
       },
       source: payload.source,
       updatedAt: payload.updatedAt,
@@ -191,6 +232,7 @@ router.post('/resellers', authorizePermissions(Permissions.USERS_MANAGE), async 
         status: true,
       },
     });
+    await markTemporaryPasswordRequired(user.id);
     const profile = await ensureResellerProfileForUser({
       userId: user.id,
       createdById: req.user?.id || null,
@@ -250,12 +292,23 @@ router.patch('/resellers/:userId', authorizePermissions(Permissions.USERS_MANAGE
     if (!user || user.role !== UserRole.RESELLER_INFLUENCER) {
       return res.status(404).json({ success: false, message: 'Reseller user not found.' });
     }
-    if (payload.status || payload.phone !== undefined) {
+    if (
+      payload.status ||
+      payload.phone !== undefined ||
+      payload.firstName !== undefined ||
+      payload.lastName !== undefined ||
+      payload.email !== undefined ||
+      payload.avatar !== undefined
+    ) {
       await prisma.user.update({
         where: { id: userId },
         data: {
+          firstName: payload.firstName?.trim(),
+          lastName: payload.lastName?.trim(),
+          email: payload.email,
           status: payload.status,
           phone: payload.phone === undefined ? undefined : payload.phone,
+          avatar: payload.avatar === undefined ? undefined : payload.avatar,
         },
       });
     }
@@ -269,7 +322,7 @@ router.patch('/resellers/:userId', authorizePermissions(Permissions.USERS_MANAGE
         `UPDATE "ResellerInfluencerProfile"
          SET "displayName" = COALESCE($1, "displayName"),
              "isActive" = COALESCE($2, "isActive"),
-             "commissionOverridePercent" = $3,
+             "commissionOverridePercent" = COALESCE($3, "commissionOverridePercent"),
              "updatedAt" = NOW()
          WHERE "userId" = $4`,
         payload.displayName ?? null,
@@ -317,6 +370,175 @@ router.get('/me', async (req, res, next) => {
     res.json({
       success: true,
       data: dashboard,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/me/profile', async (req, res, next) => {
+  try {
+    if (req.user?.role !== UserRole.RESELLER_INFLUENCER) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only reseller/influencer users can access this endpoint.',
+      });
+    }
+    await ensureResellerProfileForUser({
+      userId: req.user.id,
+      displayName: `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim(),
+    });
+    const dashboard = await readResellerDashboard(req.user.id, { page: 1, limit: 1 });
+    const settings = (await readReferralProgramSettings()).settings;
+    return res.json({
+      success: true,
+      data: {
+        profile: dashboard?.profile || null,
+        editableFields: settings.profileEditableFields,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/me/profile', async (req, res, next) => {
+  try {
+    if (req.user?.role !== UserRole.RESELLER_INFLUENCER) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only reseller/influencer users can access this endpoint.',
+      });
+    }
+    const parsed = resellerSelfUpdateSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: parsed.error.issues[0]?.message || 'Invalid profile payload.',
+        errors: parsed.error.issues,
+      });
+    }
+    await updateResellerProfileFromSelfService(req.user.id, parsed.data);
+    const dashboard = await readResellerDashboard(req.user.id, { page: 1, limit: 1 });
+    const settings = (await readReferralProgramSettings()).settings;
+    return res.json({
+      success: true,
+      message: 'Profile updated successfully.',
+      data: {
+        profile: dashboard?.profile || null,
+        editableFields: settings.profileEditableFields,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/materials', async (req, res, next) => {
+  try {
+    if (req.user?.role !== UserRole.RESELLER_INFLUENCER) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only reseller/influencer users can access this endpoint.',
+      });
+    }
+    const dashboard = await readResellerDashboard(req.user.id, { page: 1, limit: 1 });
+    if (!dashboard?.profile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Reseller profile not found.',
+      });
+    }
+    const materials = await listReferralMaterials({ includeInactive: false });
+    return res.json({
+      success: true,
+      data: materials.map((material) => {
+        const target = material.targetUrl || dashboard.profile.referralLink;
+        const image = material.imageUrl || '';
+        const embedHtml = image
+          ? `<a href="${target}" target="_blank" rel="noopener noreferrer"><img src="${image}" alt="${String(
+              material.title || 'Referral banner'
+            )}" style="max-width:100%;height:auto;" /></a>`
+          : `<a href="${target}" target="_blank" rel="noopener noreferrer">${String(material.title || target)}</a>`;
+        return {
+          ...material,
+          targetUrl: target,
+          embedHtml,
+        };
+      }),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/materials/manage', authorizePermissions(Permissions.USERS_READ), async (_req, res, next) => {
+  try {
+    const materials = await listReferralMaterials({ includeInactive: true });
+    res.json({
+      success: true,
+      data: materials,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/materials/manage', authorizePermissions(Permissions.USERS_MANAGE), async (req, res, next) => {
+  try {
+    const parsed = referralMaterialCreateSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: parsed.error.issues[0]?.message || 'Invalid material payload.',
+        errors: parsed.error.issues,
+      });
+    }
+    await createReferralMaterial({
+      ...parsed.data,
+      createdById: req.user?.id || null,
+    });
+    const materials = await listReferralMaterials({ includeInactive: true });
+    res.status(201).json({
+      success: true,
+      message: 'Referral material created.',
+      data: materials,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/materials/manage/:id', authorizePermissions(Permissions.USERS_MANAGE), async (req, res, next) => {
+  try {
+    const parsed = referralMaterialUpdateSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: parsed.error.issues[0]?.message || 'Invalid material payload.',
+        errors: parsed.error.issues,
+      });
+    }
+    await updateReferralMaterial(String(req.params.id || ''), parsed.data);
+    const materials = await listReferralMaterials({ includeInactive: true });
+    res.json({
+      success: true,
+      message: 'Referral material updated.',
+      data: materials,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/materials/manage/:id', authorizePermissions(Permissions.USERS_MANAGE), async (req, res, next) => {
+  try {
+    await deleteReferralMaterial(String(req.params.id || ''));
+    const materials = await listReferralMaterials({ includeInactive: true });
+    res.json({
+      success: true,
+      message: 'Referral material deleted.',
+      data: materials,
     });
   } catch (error) {
     next(error);

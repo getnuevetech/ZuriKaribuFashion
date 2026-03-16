@@ -10,6 +10,10 @@ import { generateToken, authenticate } from '../middleware/auth';
 import { getRolePermissions, ROLE_HOME_ROUTE, sanitizePermissionGrants } from '../rbac';
 import { bootstrapAdminConfig } from '../bootstrap';
 import { attributeReferredUser } from '../utils/referral-program';
+import {
+  clearTemporaryPasswordRequirement,
+  readPasswordPolicyForUser,
+} from '../utils/password-policy';
 
 const router = Router();
 
@@ -1085,6 +1089,8 @@ router.post('/login', async (req, res, next) => {
     });
 
     const effectivePermissions = await resolveEffectivePermissions(user.id, user.role);
+    const passwordPolicy = await readPasswordPolicyForUser(user.id);
+    const requiresPasswordChange = passwordPolicy.requiresPasswordChange;
 
     res.json({
       success: true,
@@ -1098,10 +1104,11 @@ router.post('/login', async (req, res, next) => {
           role: user.role,
           status: user.status,
           permissions: effectivePermissions,
+          requirePasswordChange: requiresPasswordChange,
         },
         token,
         access: {
-          homeRoute: ROLE_HOME_ROUTE[user.role],
+          homeRoute: requiresPasswordChange ? '/change-password-required' : ROLE_HOME_ROUTE[user.role],
           permissions: effectivePermissions,
         },
       },
@@ -1210,6 +1217,7 @@ router.post('/reset-password', async (req, res, next) => {
         userId
       ),
     ]);
+    await clearTemporaryPasswordRequirement(userId);
 
     return res.json({
       success: true,
@@ -1380,6 +1388,8 @@ const handleGoogleLogin = async (req: any, res: any, next: any) => {
       sessionIssuedAt,
     });
     const effectivePermissions = await resolveEffectivePermissions(user.id, user.role);
+    const passwordPolicy = await readPasswordPolicyForUser(user.id);
+    const requiresPasswordChange = passwordPolicy.requiresPasswordChange;
 
     return res.json({
       success: true,
@@ -1393,10 +1403,11 @@ const handleGoogleLogin = async (req: any, res: any, next: any) => {
           role: user.role,
           status: user.status,
           permissions: effectivePermissions,
+          requirePasswordChange: requiresPasswordChange,
         },
         token,
         access: {
-          homeRoute: ROLE_HOME_ROUTE[user.role],
+          homeRoute: requiresPasswordChange ? '/change-password-required' : ROLE_HOME_ROUTE[user.role],
           permissions: effectivePermissions,
         },
       },
@@ -1539,6 +1550,8 @@ router.get('/me', authenticate, async (req, res, next) => {
     }
 
     const effectivePermissions = await resolveEffectivePermissions(user.id, user.role);
+    const passwordPolicy = await readPasswordPolicyForUser(user.id);
+    const requiresPasswordChange = passwordPolicy.requiresPasswordChange;
 
     res.json({
       success: true,
@@ -1551,9 +1564,10 @@ router.get('/me', authenticate, async (req, res, next) => {
         avatar: user.avatar,
         role: user.role,
         status: user.status,
+        requirePasswordChange: requiresPasswordChange,
         profile: user.customerProfile || user.fabricSellerProfile || user.designerProfile || user.qaProfile || user.adminProfile,
         access: {
-          homeRoute: ROLE_HOME_ROUTE[user.role],
+          homeRoute: requiresPasswordChange ? '/change-password-required' : ROLE_HOME_ROUTE[user.role],
           permissions: effectivePermissions,
         },
       },
@@ -1631,6 +1645,7 @@ router.post('/change-password', authenticate, async (req, res, next) => {
       where: { id: req.user!.id },
       data: { password: hashedPassword },
     });
+    await clearTemporaryPasswordRequirement(req.user!.id);
 
     res.json({
       success: true,

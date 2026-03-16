@@ -16,13 +16,30 @@ export default function AdminResellerInfluencersPage() {
     enabled: true,
     registrationReferralEnabled: true,
     defaultReferralCode: 'PLATFORM-DEFAULT',
+    codePrefix: 'ZKR-',
+    codeDigits: 6,
     sellerCommissionPercent: 5,
     designerCommissionPercent: 5,
+    customerCommissionPercent: 0,
+    earnFromCustomerOrders: false,
+    profileEditableFields: ['firstName', 'lastName', 'phone', 'avatar', 'displayName'],
     holdDays: 7,
     minimumPayoutUsd: 10,
     referralBaseUrl: '',
   });
   const [showCreate, setShowCreate] = useState(false);
+  const [editTarget, setEditTarget] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<any>({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    avatar: '',
+    displayName: '',
+    commissionOverridePercent: '',
+    status: 'ACTIVE',
+    isActive: true,
+  });
   const [createForm, setCreateForm] = useState({
     email: '',
     firstName: '',
@@ -147,6 +164,52 @@ export default function AdminResellerInfluencersPage() {
     }
   };
 
+  const openEdit = (row: any) => {
+    setEditTarget(row);
+    setEditForm({
+      firstName: String(row?.user?.firstName || ''),
+      lastName: String(row?.user?.lastName || ''),
+      email: String(row?.user?.email || ''),
+      phone: String(row?.user?.phone || ''),
+      avatar: String(row?.user?.avatar || ''),
+      displayName: String(row?.displayName || ''),
+      commissionOverridePercent:
+        row?.commissionOverridePercent == null ? '' : String(Number(row.commissionOverridePercent)),
+      status: String(row?.user?.status || 'ACTIVE'),
+      isActive: row?.isActive !== false,
+    });
+  };
+
+  const saveEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editTarget?.userId) return;
+    try {
+      setSavingUserId(String(editTarget.userId));
+      setMessage('');
+      await api.admin.updateResellerInfluencer(String(editTarget.userId), {
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        email: editForm.email.trim(),
+        phone: editForm.phone.trim() || null,
+        avatar: editForm.avatar.trim() || null,
+        displayName: editForm.displayName.trim() || undefined,
+        commissionOverridePercent:
+          String(editForm.commissionOverridePercent || '').trim() === ''
+            ? null
+            : Number(editForm.commissionOverridePercent),
+        status: editForm.status,
+        isActive: Boolean(editForm.isActive),
+      });
+      setEditTarget(null);
+      await loadData();
+      setMessage('Reseller profile updated.');
+    } catch (error: any) {
+      setMessage(readApiError(error, 'Failed to update reseller account.'));
+    } finally {
+      setSavingUserId(null);
+    }
+  };
+
   const copyText = async (value: string) => {
     if (!value) return;
     try {
@@ -194,6 +257,35 @@ export default function AdminResellerInfluencersPage() {
         <h2 className="text-sm font-semibold text-gray-900">Referral Program Settings</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-3">
           <label className="text-sm text-gray-700">
+            Referral code prefix
+            <input
+              type="text"
+              value={settings.codePrefix ?? ''}
+              onChange={(event) =>
+                setSettings((prev: any) => ({
+                  ...prev,
+                  codePrefix: String(event.target.value || '')
+                    .toUpperCase()
+                    .replace(/[^A-Z0-9-]/g, '')
+                    .slice(0, 12),
+                }))
+              }
+              className="mt-1 w-full rounded border px-3 py-2"
+              placeholder="ZKR-"
+            />
+          </label>
+          <label className="text-sm text-gray-700">
+            Referral code digits
+            <input
+              type="number"
+              min={4}
+              max={12}
+              value={settings.codeDigits ?? 6}
+              onChange={(event) => setSettings((prev: any) => ({ ...prev, codeDigits: Number(event.target.value || 6) }))}
+              className="mt-1 w-full rounded border px-3 py-2"
+            />
+          </label>
+          <label className="text-sm text-gray-700">
             Seller commission %
             <input
               type="number"
@@ -217,6 +309,20 @@ export default function AdminResellerInfluencersPage() {
               value={settings.designerCommissionPercent ?? 0}
               onChange={(event) =>
                 setSettings((prev: any) => ({ ...prev, designerCommissionPercent: Number(event.target.value || 0) }))
+              }
+              className="mt-1 w-full rounded border px-3 py-2"
+            />
+          </label>
+          <label className="text-sm text-gray-700">
+            Customer commission %
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              value={settings.customerCommissionPercent ?? 0}
+              onChange={(event) =>
+                setSettings((prev: any) => ({ ...prev, customerCommissionPercent: Number(event.target.value || 0) }))
               }
               className="mt-1 w-full rounded border px-3 py-2"
             />
@@ -273,6 +379,29 @@ export default function AdminResellerInfluencersPage() {
               className="mt-1 w-full rounded border px-3 py-2"
             />
           </label>
+          <div className="text-sm text-gray-700 md:col-span-3">
+            <p className="mb-1">Referral profile fields editable by referrals</p>
+            <div className="flex flex-wrap gap-3 rounded border p-2">
+              {['firstName', 'lastName', 'phone', 'avatar', 'displayName'].map((field) => (
+                <label key={field} className="inline-flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={Array.isArray(settings.profileEditableFields) && settings.profileEditableFields.includes(field)}
+                    onChange={(event) => {
+                      setSettings((prev: any) => {
+                        const current = Array.isArray(prev.profileEditableFields) ? prev.profileEditableFields : [];
+                        const next = event.target.checked
+                          ? Array.from(new Set([...current, field]))
+                          : current.filter((entry: string) => entry !== field);
+                        return { ...prev, profileEditableFields: next };
+                      });
+                    }}
+                  />
+                  {field}
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-4">
           <label className="inline-flex items-center gap-2 text-sm text-gray-700">
@@ -292,6 +421,16 @@ export default function AdminResellerInfluencersPage() {
               }
             />
             Enable referral attribution during registration
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={Boolean(settings.earnFromCustomerOrders)}
+              onChange={(event) =>
+                setSettings((prev: any) => ({ ...prev, earnFromCustomerOrders: event.target.checked }))
+              }
+            />
+            Allow customer-origin commissions
           </label>
           <Button onClick={saveSettings} disabled={savingSettings}>
             {savingSettings ? 'Saving...' : 'Save Program Settings'}
@@ -317,7 +456,7 @@ export default function AdminResellerInfluencersPage() {
             <thead className="bg-gray-50 text-left text-gray-500">
               <tr>
                 <th className="px-3 py-2">Reseller</th>
-                <th className="px-3 py-2">Referral ID</th>
+                <th className="px-3 py-2">Referral Code</th>
                 <th className="px-3 py-2">Referral Link</th>
                 <th className="px-3 py-2">Referrals</th>
                 <th className="px-3 py-2">Commission</th>
@@ -383,6 +522,13 @@ export default function AdminResellerInfluencersPage() {
                       disabled={savingUserId === String(row?.userId || '')}
                     >
                       {row?.isActive !== false ? 'Pause' : 'Activate'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => openEdit(row)}
+                      disabled={savingUserId === String(row?.userId || '')}
+                    >
+                      Edit
                     </Button>
                   </td>
                 </tr>
@@ -480,6 +626,102 @@ export default function AdminResellerInfluencersPage() {
                 </Button>
                 <Button type="submit" className="flex-1" disabled={savingCreate}>
                   {savingCreate ? 'Creating...' : 'Create Reseller'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {editTarget ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-2xl rounded-xl bg-white p-6">
+            <h3 className="text-xl font-semibold text-gray-900">Edit Reseller Account</h3>
+            <form onSubmit={saveEdit} className="mt-4 space-y-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  required
+                  className="rounded border px-3 py-2"
+                  placeholder="First name"
+                  value={editForm.firstName}
+                  onChange={(event) => setEditForm((prev: any) => ({ ...prev, firstName: event.target.value }))}
+                />
+                <input
+                  required
+                  className="rounded border px-3 py-2"
+                  placeholder="Last name"
+                  value={editForm.lastName}
+                  onChange={(event) => setEditForm((prev: any) => ({ ...prev, lastName: event.target.value }))}
+                />
+              </div>
+              <input
+                required
+                type="email"
+                className="w-full rounded border px-3 py-2"
+                placeholder="Email"
+                value={editForm.email}
+                onChange={(event) => setEditForm((prev: any) => ({ ...prev, email: event.target.value }))}
+              />
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  className="rounded border px-3 py-2"
+                  placeholder="Phone"
+                  value={editForm.phone}
+                  onChange={(event) => setEditForm((prev: any) => ({ ...prev, phone: event.target.value }))}
+                />
+                <input
+                  className="rounded border px-3 py-2"
+                  placeholder="Avatar URL"
+                  value={editForm.avatar}
+                  onChange={(event) => setEditForm((prev: any) => ({ ...prev, avatar: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <input
+                  className="rounded border px-3 py-2 md:col-span-2"
+                  placeholder="Display name"
+                  value={editForm.displayName}
+                  onChange={(event) => setEditForm((prev: any) => ({ ...prev, displayName: event.target.value }))}
+                />
+                <input
+                  className="rounded border px-3 py-2"
+                  placeholder="Override %"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                  value={editForm.commissionOverridePercent}
+                  onChange={(event) =>
+                    setEditForm((prev: any) => ({ ...prev, commissionOverridePercent: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <select
+                  className="rounded border px-3 py-2"
+                  value={editForm.status}
+                  onChange={(event) => setEditForm((prev: any) => ({ ...prev, status: event.target.value }))}
+                >
+                  <option value="ACTIVE">Active</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="SUSPENDED">Suspended</option>
+                  <option value="REJECTED">Rejected</option>
+                </select>
+                <label className="inline-flex items-center gap-2 rounded border px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(editForm.isActive)}
+                    onChange={(event) => setEditForm((prev: any) => ({ ...prev, isActive: event.target.checked }))}
+                  />
+                  Program Active
+                </label>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Button type="button" variant="outline" className="flex-1" onClick={() => setEditTarget(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="flex-1" disabled={savingUserId === String(editTarget?.userId || '')}>
+                  {savingUserId === String(editTarget?.userId || '') ? 'Saving...' : 'Save Changes'}
                 </Button>
               </div>
             </form>

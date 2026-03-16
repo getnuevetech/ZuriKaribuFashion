@@ -2946,6 +2946,10 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
               ]
             : []),
         ],
+        customerSale: {
+          customerUserId: customerId,
+          baseAmountUsd: Number(designPrice || 0) + Number(fabricPrice || 0),
+        },
         metadata: {
           orderType: 'CUSTOM_DESIGN',
         },
@@ -3338,6 +3342,10 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
           vendorRole: 'FASHION_DESIGNER' as const,
           baseAmountUsd: Number(item.lineTotal || 0),
         })),
+        customerSale: {
+          customerUserId: customerId,
+          baseAmountUsd: validatedItems.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0),
+        },
         metadata: {
           orderType: 'READY_TO_WEAR',
         },
@@ -3711,6 +3719,10 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
             baseAmountUsd: Number(subtotalBeforeDiscount || 0),
           },
         ],
+        customerSale: {
+          customerUserId: customerId,
+          baseAmountUsd: Number(subtotalBeforeDiscount || 0),
+        },
         metadata: {
           orderType: 'FABRIC_ONLY',
         },

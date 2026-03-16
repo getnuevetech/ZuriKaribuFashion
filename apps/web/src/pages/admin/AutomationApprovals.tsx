@@ -1,22 +1,40 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { api } from '../../services/api';
 
 type ProductType = 'FABRIC' | 'READY_TO_WEAR' | 'DESIGN';
+type CriteriaScope = ProductType | 'ACCOUNT_APPROVAL';
 
 export default function AdminAutomationApprovalsPage() {
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
   const [message, setMessage] = useState('');
   const [settings, setSettings] = useState<any>(null);
+  const [activeCriteriaScope, setActiveCriteriaScope] = useState<CriteriaScope>('FABRIC');
   const [evaluateForm, setEvaluateForm] = useState({
     productType: 'FABRIC' as ProductType,
     productId: '',
     applyDecision: false,
   });
+  const [accountEvaluateForm, setAccountEvaluateForm] = useState({
+    userId: '',
+    role: '',
+  });
+  const [newCriterion, setNewCriterion] = useState({
+    key: '',
+    label: '',
+    requiresAi: false,
+  });
   const [evaluationResult, setEvaluationResult] = useState<any>(null);
+
+  useEffect(() => {
+    const tab = String(searchParams.get('tab') || '').toLowerCase();
+    if (tab === 'account') setActiveCriteriaScope('ACCOUNT_APPROVAL');
+  }, [searchParams]);
 
   const loadSettings = async () => {
     try {
@@ -38,9 +56,9 @@ export default function AdminAutomationApprovalsPage() {
 
   const criteriaRows = useMemo(() => {
     if (!settings?.criteria) return [];
-    const list = settings.criteria[evaluateForm.productType] || [];
+    const list = settings.criteria[activeCriteriaScope] || [];
     return Array.isArray(list) ? list : [];
-  }, [settings, evaluateForm.productType]);
+  }, [settings, activeCriteriaScope]);
 
   const persist = async () => {
     try {
@@ -80,6 +98,64 @@ export default function AdminAutomationApprovalsPage() {
     } finally {
       setEvaluating(false);
     }
+  };
+
+  const runAccountEvaluation = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!accountEvaluateForm.userId.trim()) {
+      setMessage('Account user ID is required.');
+      return;
+    }
+    try {
+      setEvaluating(true);
+      setMessage('');
+      const response = await api.admin.evaluateAutomationAccount({
+        userId: accountEvaluateForm.userId.trim(),
+        role: accountEvaluateForm.role.trim() || undefined,
+      });
+      if (response.success) {
+        setEvaluationResult(response.data || null);
+      }
+    } catch (error: any) {
+      setMessage(error?.response?.data?.message || error?.message || 'Failed to evaluate account.');
+    } finally {
+      setEvaluating(false);
+    }
+  };
+
+  const addCriterion = () => {
+    const key = String(newCriterion.key || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '_');
+    const label = String(newCriterion.label || '').trim();
+    if (!key || !label) {
+      setMessage('Criterion key and label are required.');
+      return;
+    }
+    setSettings((prev: any) => {
+      const scopeRows = Array.isArray(prev?.criteria?.[activeCriteriaScope]) ? prev.criteria[activeCriteriaScope] : [];
+      if (scopeRows.some((entry: any) => String(entry?.key || '') === key)) {
+        setMessage('Criterion key already exists for this scope.');
+        return prev;
+      }
+      return {
+        ...(prev || {}),
+        criteria: {
+          ...(prev?.criteria || {}),
+          [activeCriteriaScope]: [
+            ...scopeRows,
+            {
+              key,
+              label,
+              enabled: true,
+              requiresAi: Boolean(newCriterion.requiresAi),
+            },
+          ],
+        },
+      };
+    });
+    setNewCriterion({ key: '', label: '', requiresAi: false });
   };
 
   if (loading) {
@@ -153,18 +229,49 @@ export default function AdminAutomationApprovalsPage() {
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-gray-900">Criteria Configuration</h2>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          {(['FABRIC', 'READY_TO_WEAR', 'DESIGN'] as ProductType[]).map((type) => (
+          {(['FABRIC', 'READY_TO_WEAR', 'DESIGN', 'ACCOUNT_APPROVAL'] as CriteriaScope[]).map((type) => (
             <button
               key={type}
               type="button"
-              onClick={() => setEvaluateForm((prev) => ({ ...prev, productType: type }))}
+              onClick={() => setActiveCriteriaScope(type)}
               className={`rounded-full px-3 py-1 text-xs font-medium ${
-                evaluateForm.productType === type ? 'bg-amber-100 text-amber-900' : 'bg-gray-100 text-gray-700'
+                activeCriteriaScope === type ? 'bg-amber-100 text-amber-900' : 'bg-gray-100 text-gray-700'
               }`}
             >
-              {type === 'FABRIC' ? 'FTB' : type === 'READY_TO_WEAR' ? 'RTW' : 'CTW'}
+              {type === 'FABRIC'
+                ? 'FTB'
+                : type === 'READY_TO_WEAR'
+                  ? 'RTW'
+                  : type === 'DESIGN'
+                    ? 'CTW'
+                    : 'Account Approval'}
             </button>
           ))}
+        </div>
+        <div className="mt-3 grid gap-2 rounded border p-3 md:grid-cols-[1fr_2fr_auto_auto]">
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="criterion_key"
+            value={newCriterion.key}
+            onChange={(event) => setNewCriterion((prev) => ({ ...prev, key: event.target.value }))}
+          />
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="Criterion label"
+            value={newCriterion.label}
+            onChange={(event) => setNewCriterion((prev) => ({ ...prev, label: event.target.value }))}
+          />
+          <label className="inline-flex items-center gap-2 rounded border px-3 py-2 text-xs">
+            <input
+              type="checkbox"
+              checked={newCriterion.requiresAi}
+              onChange={(event) => setNewCriterion((prev) => ({ ...prev, requiresAi: event.target.checked }))}
+            />
+            Requires AI
+          </label>
+          <Button variant="outline" onClick={addCriterion}>
+            Add Criterion
+          </Button>
         </div>
         <div className="mt-3 space-y-2">
           {criteriaRows.map((criterion: any) => (
@@ -184,7 +291,7 @@ export default function AdminAutomationApprovalsPage() {
                     ...(prev || {}),
                     criteria: {
                       ...(prev?.criteria || {}),
-                      [evaluateForm.productType]: (prev?.criteria?.[evaluateForm.productType] || []).map((row: any) =>
+                      [activeCriteriaScope]: (prev?.criteria?.[activeCriteriaScope] || []).map((row: any) =>
                         row.key === criterion.key ? { ...row, enabled: event.target.checked } : row
                       ),
                     },
@@ -237,6 +344,31 @@ export default function AdminAutomationApprovalsPage() {
               {evaluating ? 'Evaluating...' : 'Run Evaluation'}
             </Button>
           </div>
+        </form>
+        <form onSubmit={runAccountEvaluation} className="mt-4 space-y-3 border-t pt-4">
+          <h3 className="text-sm font-semibold text-gray-900">Run Account Approval Check</h3>
+          <div className="grid gap-3 md:grid-cols-3">
+            <input
+              className="rounded border px-3 py-2 md:col-span-2"
+              placeholder="User UUID"
+              value={accountEvaluateForm.userId}
+              onChange={(event) => setAccountEvaluateForm((prev) => ({ ...prev, userId: event.target.value }))}
+            />
+            <select
+              className="rounded border px-3 py-2"
+              value={accountEvaluateForm.role}
+              onChange={(event) => setAccountEvaluateForm((prev) => ({ ...prev, role: event.target.value }))}
+            >
+              <option value="">Role auto-detect</option>
+              <option value="CUSTOMER">Customer</option>
+              <option value="FABRIC_SELLER">Seller</option>
+              <option value="FASHION_DESIGNER">Designer</option>
+              <option value="RESELLER_INFLUENCER">Reseller</option>
+            </select>
+          </div>
+          <Button type="submit" disabled={evaluating}>
+            {evaluating ? 'Evaluating...' : 'Run Account Evaluation'}
+          </Button>
         </form>
       </div>
 

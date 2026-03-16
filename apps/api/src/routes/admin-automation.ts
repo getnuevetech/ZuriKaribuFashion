@@ -5,6 +5,7 @@ import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import {
   ensureAutomationSettingsSchema,
+  evaluateAccountAutomationChecks,
   evaluateProductAutomationChecks,
   readAutomationApprovalSettings,
   saveAutomationApprovalSettings,
@@ -32,6 +33,10 @@ const providerTestSchema = z.object({
   providerId: z.string().min(1),
   functionKey: z.string().min(2).optional(),
   prompt: z.string().max(2000).optional(),
+});
+const accountEvaluationRequestSchema = z.object({
+  userId: z.string().uuid(),
+  role: z.nativeEnum(UserRole).optional(),
 });
 
 router.get('/settings', async (_req, res, next) => {
@@ -158,6 +163,22 @@ router.post('/evaluate-product', async (req, res, next) => {
         ...evaluation,
         action,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/evaluate-account', async (req, res, next) => {
+  try {
+    const payload = accountEvaluationRequestSchema.parse(req.body || {});
+    const evaluation = await evaluateAccountAutomationChecks({
+      userId: payload.userId,
+      role: payload.role,
+    });
+    res.json({
+      success: true,
+      data: evaluation,
     });
   } catch (error) {
     next(error);

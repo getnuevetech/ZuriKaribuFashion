@@ -10,6 +10,7 @@ import {
   sanitizePermissionGrants,
 } from '../rbac';
 import { isEnterpriseSubscriptionActive, readEnterpriseActorContext } from '../utils/enterprise';
+import { readPasswordPolicyForUser } from '../utils/password-policy';
 
 // JWT Secret - must be set in production
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -74,6 +75,7 @@ declare global {
         enterpriseOwnerUserId?: string;
         enterpriseSubAccountId?: string;
         enterprisePermissions?: string[];
+        requirePasswordChange?: boolean;
       };
     }
   }
@@ -269,6 +271,20 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
         ? sanitizePermissionGrants((user as any)?.adminProfile?.permissions)
         : [];
     const effectivePermissions = adminUserPermissions.length > 0 ? adminUserPermissions : rolePermissions;
+    const passwordPolicy = await readPasswordPolicyForUser(user.id);
+    const requirePasswordChange = passwordPolicy.requiresPasswordChange;
+    const requestPath = String(req.originalUrl || req.url || '').split('?')[0].toLowerCase();
+    const allowPasswordResetBypass =
+      requestPath.startsWith('/api/auth/change-password') ||
+      requestPath.startsWith('/api/auth/me') ||
+      requestPath.startsWith('/api/auth/logout');
+    if (requirePasswordChange && !allowPasswordResetBypass) {
+      return res.status(428).json({
+        success: false,
+        message: 'Password change required before accessing this resource.',
+        code: 'PASSWORD_CHANGE_REQUIRED',
+      });
+    }
 
     let actorUserId = user.id;
     let effectiveUserId = user.id;
@@ -328,6 +344,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
       enterpriseOwnerUserId,
       enterpriseSubAccountId,
       enterprisePermissions,
+      requirePasswordChange,
     };
     next();
   } catch (error) {

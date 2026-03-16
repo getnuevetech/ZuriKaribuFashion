@@ -67,20 +67,26 @@ export default function CustomerOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 1 });
   const [ticketOrderId, setTicketOrderId] = useState<string | null>(null);
   const [ticketInitialTab, setTicketInitialTab] = useState<'details' | 'ticket'>('details');
   const { formatFromUsd } = useCurrencyStore();
 
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    fetchOrders(page);
+  }, [page]);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (nextPage = 1) => {
     try {
       setLoading(true);
-      const response = await api.customer.getOrders();
+      const response = await api.customer.getOrders({ page: nextPage, limit: pagination.limit });
       if (response.success) {
         setOrders((response.data.orders || response.data || []) as Order[]);
+        setPagination((prev) => ({
+          ...prev,
+          ...(response.data.pagination || {}),
+        }));
       }
     } catch (error) {
       console.error('Failed to fetch orders:', error);
@@ -268,6 +274,30 @@ export default function CustomerOrders() {
               </div>
             );
           })}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-white px-4 py-3">
+            <p className="text-sm text-gray-600">
+              Page {Number(pagination.page || page)} of {Math.max(1, Number(pagination.pages || 1))} · Total orders{' '}
+              {Number(pagination.total || orders.length)}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={Number(pagination.page || page) <= 1}
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={Number(pagination.page || page) >= Math.max(1, Number(pagination.pages || 1))}
+                onClick={() => setPage((prev) => Math.min(Math.max(1, Number(pagination.pages || 1)), prev + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </div>
       )}
       <OrderSupportModal

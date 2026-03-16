@@ -6023,11 +6023,16 @@ const adminApi = {
     enabled?: boolean;
     registrationReferralEnabled?: boolean;
     defaultReferralCode?: string;
+    codePrefix?: string;
+    codeDigits?: number;
     sellerCommissionPercent?: number;
     designerCommissionPercent?: number;
+    customerCommissionPercent?: number;
+    earnFromCustomerOrders?: boolean;
     holdDays?: number;
     minimumPayoutUsd?: number;
     referralBaseUrl?: string;
+    profileEditableFields?: Array<'firstName' | 'lastName' | 'phone' | 'avatar' | 'displayName'>;
   }) =>
     apiService.patch<{ success: boolean; data: any; message?: string }>('/admin/referrals/program/settings', data),
 
@@ -6048,14 +6053,49 @@ const adminApi = {
   updateResellerInfluencer: (
     userId: string,
     data: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
       displayName?: string;
       isActive?: boolean;
       commissionOverridePercent?: number | null;
       status?: 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'REJECTED';
       phone?: string | null;
+      avatar?: string | null;
     }
   ) =>
     apiService.patch<{ success: boolean; data: any; message?: string }>(`/admin/referrals/resellers/${userId}`, data),
+
+  getReferralMaterials: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/admin/referrals/materials/manage'),
+
+  createReferralMaterial: (data: {
+    title: string;
+    description?: string;
+    imageUrl?: string;
+    targetUrl?: string;
+    widthPx?: number;
+    heightPx?: number;
+    sortOrder?: number;
+    isActive?: boolean;
+  }) => apiService.post<{ success: boolean; data: any[]; message?: string }>('/admin/referrals/materials/manage', data),
+
+  updateReferralMaterial: (
+    id: string,
+    data: {
+      title?: string;
+      description?: string;
+      imageUrl?: string;
+      targetUrl?: string;
+      widthPx?: number;
+      heightPx?: number;
+      sortOrder?: number;
+      isActive?: boolean;
+    }
+  ) => apiService.patch<{ success: boolean; data: any[]; message?: string }>(`/admin/referrals/materials/manage/${id}`, data),
+
+  deleteReferralMaterial: (id: string) =>
+    apiService.delete<{ success: boolean; data: any[]; message?: string }>(`/admin/referrals/materials/manage/${id}`),
 
   createMinimalVendor: (data: {
     role: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
@@ -7011,6 +7051,9 @@ const adminApi = {
     productId: string;
     applyDecision?: boolean;
   }) => apiService.post<{ success: boolean; data: any }>('/admin/automation/evaluate-product', data),
+
+  evaluateAutomationAccount: (data: { userId: string; role?: string }) =>
+    apiService.post<{ success: boolean; data: any }>('/admin/automation/evaluate-account', data),
 
   getAutomationProviderSuggestions: () =>
     apiService.get<{ success: boolean; data: any[] }>('/admin/automation/providers/suggestions'),
@@ -9228,6 +9271,8 @@ const referralsApi = {
         enabled: boolean;
         registrationReferralEnabled: boolean;
         defaultReferralCode: string;
+        codePrefix?: string;
+        codeDigits?: number;
       };
       source?: string;
       updatedAt?: string | null;
@@ -9235,6 +9280,20 @@ const referralsApi = {
 
   getMyDashboard: (params?: { page?: number; limit?: number }) =>
     apiService.get<{ success: boolean; data: any }>('/referrals/me', { params }),
+
+  getMyProfile: () =>
+    apiService.get<{ success: boolean; data: { profile: any; editableFields: string[] } }>('/referrals/me/profile'),
+
+  updateMyProfile: (data: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string | null;
+    avatar?: string | null;
+    displayName?: string;
+  }) => apiService.patch<{ success: boolean; data: { profile: any; editableFields: string[] }; message?: string }>('/referrals/me/profile', data),
+
+  getMyMaterials: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/referrals/materials'),
 };
 
 // Export combined API

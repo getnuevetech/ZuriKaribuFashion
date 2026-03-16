@@ -18,6 +18,11 @@ export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
     return <Navigate to={loginPath} replace state={{ from: location }} />;
   }
 
+  const requiresPasswordChange = Boolean((user as any)?.requirePasswordChange);
+  if (requiresPasswordChange && location.pathname !== '/change-password-required') {
+    return <Navigate to="/change-password-required" replace />;
+  }
+
   if (allowedRoles) {
     if (!normalizedRole) {
       return <Navigate to={loginPath} replace state={{ from: location }} />;

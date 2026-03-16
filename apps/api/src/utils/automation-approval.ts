@@ -33,6 +33,7 @@ export type ProductAutomationCriteria = {
   FABRIC: AutomationCriterion[];
   READY_TO_WEAR: AutomationCriterion[];
   DESIGN: AutomationCriterion[];
+  ACCOUNT_APPROVAL: AutomationCriterion[];
 };
 
 export type AutomationApprovalSettings = {
@@ -126,6 +127,12 @@ const DEFAULT_CRITERIA: ProductAutomationCriteria = {
     { key: 'suitable_fabrics_count', label: 'Validate suitable fabrics selected (1-5)', enabled: true, requiresAi: false },
     { key: 'required_measurements', label: 'Validate required measurements selected', enabled: true, requiresAi: false },
   ],
+  ACCOUNT_APPROVAL: [
+    { key: 'identity_fields_complete', label: 'Validate required account identity fields', enabled: true, requiresAi: false },
+    { key: 'contact_fields_complete', label: 'Validate required contact fields', enabled: true, requiresAi: false },
+    { key: 'vendor_profile_minimum', label: 'Validate vendor profile minimum requirements', enabled: true, requiresAi: false },
+    { key: 'account_notes_grammar', label: 'AI grammar check for account notes/description', enabled: false, requiresAi: true },
+  ],
 };
 
 const DEFAULT_SETTINGS: AutomationApprovalSettings = {
@@ -199,6 +206,7 @@ export const normalizeAutomationApprovalSettings = (value: unknown): AutomationA
       FABRIC: normalizeCriteria(criteria.FABRIC, DEFAULT_CRITERIA.FABRIC),
       READY_TO_WEAR: normalizeCriteria(criteria.READY_TO_WEAR, DEFAULT_CRITERIA.READY_TO_WEAR),
       DESIGN: normalizeCriteria(criteria.DESIGN, DEFAULT_CRITERIA.DESIGN),
+      ACCOUNT_APPROVAL: normalizeCriteria(criteria.ACCOUNT_APPROVAL, DEFAULT_CRITERIA.ACCOUNT_APPROVAL),
     },
   };
 };
@@ -251,7 +259,14 @@ export const readAutomationApprovalSettings = async () => {
 export const saveAutomationApprovalSettings = async (value: unknown) => {
   await ensureAutomationSettingsSchema();
   const existing = await readAutomationApprovalSettings();
-  const next = normalizeAutomationApprovalSettings(value);
+  const next = normalizeAutomationApprovalSettings({
+    ...existing.settings,
+    ...parseObject(value),
+    criteria: {
+      ...(existing.settings.criteria || {}),
+      ...parseObject(parseObject(value).criteria),
+    },
+  });
   const payload = JSON.stringify(next);
   if (existing.rowId) {
     await prisma.$executeRawUnsafe(
@@ -932,6 +947,17 @@ Return concise analysis and correction guidance in plain text.`;
     });
   }
 
+  const seenKeys = new Set(report.map((entry) => entry.key));
+  for (const criterion of criteria) {
+    if (seenKeys.has(criterion.key)) continue;
+    report.push({
+      key: criterion.key,
+      label: criterion.label || criterion.key,
+      status: 'SKIPPED',
+      message: 'Custom criterion configured; add executor logic to enforce automatically.',
+    });
+  }
+
   const enhancedReport = await applyAiExecution();
   const hasFail = enhancedReport.some((entry) => entry.status === 'FAIL');
   const hasNeedsAi = enhancedReport.some((entry) => entry.status === 'NEEDS_AI');
@@ -940,5 +966,137 @@ Return concise analysis and correction guidance in plain text.`;
     canAutoApprove,
     status: canAutoApprove ? ('PASS' as const) : ('REVIEW_REQUIRED' as const),
     report: enhancedReport,
+  };
+};
+
+export const evaluateAccountAutomationChecks = async (input: {
+  userId: string;
+  role?: string | null;
+  settingsOverride?: AutomationApprovalSettings;
+}) => {
+  const settings = input.settingsOverride || (await readAutomationApprovalSettings()).settings;
+  const criteria = settings.criteria.ACCOUNT_APPROVAL || [];
+  if (!settings.enabled) {
+    return {
+      canAutoApprove: false,
+      status: 'AUTOMATION_DISABLED' as const,
+      report: [
+        {
+          key: 'automation_disabled',
+          label: 'Automation is disabled',
+          status: 'SKIPPED' as const,
+          message: 'Enable automation in settings to run account approval checks.',
+        },
+      ] as AutomationCheckReportRow[],
+    };
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: input.userId },
+    include: {
+      fabricSellerProfile: true,
+      designerProfile: true,
+    },
+  });
+  if (!user) {
+    return {
+      canAutoApprove: false,
+      status: 'ACCOUNT_NOT_FOUND' as const,
+      report: [
+        {
+          key: 'account_exists',
+          label: 'Account must exist',
+          status: 'FAIL' as const,
+          message: 'User account was not found.',
+        },
+      ],
+    };
+  }
+  const report: AutomationCheckReportRow[] = [];
+  const addResult = (row: AutomationCheckReportRow) => {
+    const criterion = criteria.find((entry) => entry.key === row.key);
+    if (criterion && !criterion.enabled) {
+      report.push({ ...row, status: 'SKIPPED', message: 'Disabled by admin automation settings.' });
+      return;
+    }
+    report.push(row);
+  };
+  const identityComplete =
+    String(user.firstName || '').trim().length > 1 &&
+    String(user.lastName || '').trim().length > 1 &&
+    String(user.email || '').trim().length > 3;
+  addResult({
+    key: 'identity_fields_complete',
+    label: 'Validate required account identity fields',
+    status: identityComplete ? 'PASS' : 'FAIL',
+    message: identityComplete ? 'Identity fields are complete.' : 'Missing first name, last name, or email.',
+  });
+  const contactComplete = String(user.phone || '').trim().length >= 5;
+  addResult({
+    key: 'contact_fields_complete',
+    label: 'Validate required contact fields',
+    status: contactComplete ? 'PASS' : 'FAIL',
+    message: contactComplete ? 'Contact fields are complete.' : 'Phone number is missing or too short.',
+  });
+  const normalizedRole = String(input.role || user.role || '').toUpperCase();
+  const vendorMinimumOk =
+    normalizedRole === 'FABRIC_SELLER'
+      ? Boolean(user.fabricSellerProfile?.businessName && user.fabricSellerProfile?.country && user.fabricSellerProfile?.city)
+      : normalizedRole === 'FASHION_DESIGNER'
+        ? Boolean(user.designerProfile?.businessName && user.designerProfile?.country && user.designerProfile?.city)
+        : true;
+  addResult({
+    key: 'vendor_profile_minimum',
+    label: 'Validate vendor profile minimum requirements',
+    status: vendorMinimumOk ? 'PASS' : 'FAIL',
+    message: vendorMinimumOk ? 'Vendor minimum fields check passed.' : 'Vendor profile is missing minimum fields.',
+  });
+  const aiCriterion = criteria.find((entry) => entry.key === 'account_notes_grammar' && entry.enabled && entry.requiresAi);
+  if (aiCriterion) {
+    const execution = await executeAutomationAiFunction({
+      settings,
+      functionKey: 'text_grammar_enhancement',
+      prompt: `Validate and improve this account summary grammar:\nRole: ${normalizedRole}\nName: ${user.firstName} ${user.lastName}\nEmail: ${user.email}\nPhone: ${user.phone || 'N/A'}`,
+      systemPrompt: 'You are reviewing account-approval summary grammar for an e-commerce admin.',
+    });
+    if (execution.status === 'OK') {
+      addResult({
+        key: 'account_notes_grammar',
+        label: 'AI grammar check for account notes/description',
+        status: 'PASS',
+        message: execution.output,
+      });
+    } else if (execution.status === 'NO_PROVIDER') {
+      addResult({
+        key: 'account_notes_grammar',
+        label: 'AI grammar check for account notes/description',
+        status: 'NEEDS_AI',
+        message: execution.reason,
+      });
+    } else {
+      addResult({
+        key: 'account_notes_grammar',
+        label: 'AI grammar check for account notes/description',
+        status: 'FAIL',
+        message: execution.reason,
+      });
+    }
+  }
+  const seenKeys = new Set(report.map((entry) => entry.key));
+  for (const criterion of criteria) {
+    if (seenKeys.has(criterion.key)) continue;
+    report.push({
+      key: criterion.key,
+      label: criterion.label || criterion.key,
+      status: 'SKIPPED',
+      message: 'Custom criterion configured; add executor logic to enforce automatically.',
+    });
+  }
+  const hasFail = report.some((entry) => entry.status === 'FAIL');
+  const hasNeedsAi = report.some((entry) => entry.status === 'NEEDS_AI');
+  const canAutoApprove = !hasFail && (!settings.failOnNeedsAi || !hasNeedsAi);
+  return {
+    canAutoApprove,
+    status: canAutoApprove ? ('PASS' as const) : ('REVIEW_REQUIRED' as const),
+    report,
   };
 };

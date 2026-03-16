@@ -7,11 +7,16 @@ export type ReferralProgramSettings = {
   enabled: boolean;
   registrationReferralEnabled: boolean;
   defaultReferralCode: string;
+  codePrefix: string;
+  codeDigits: number;
   sellerCommissionPercent: number;
   designerCommissionPercent: number;
+  customerCommissionPercent: number;
+  earnFromCustomerOrders: boolean;
   holdDays: number;
   minimumPayoutUsd: number;
   referralBaseUrl: string;
+  profileEditableFields: string[];
 };
 
 export type ReferralVendorSaleEntry = {
@@ -20,12 +25,21 @@ export type ReferralVendorSaleEntry = {
   baseAmountUsd: number;
 };
 
+export type ReferralCustomerSaleEntry = {
+  customerUserId: string;
+  baseAmountUsd: number;
+};
+
 const DEFAULT_REFERRAL_PROGRAM_SETTINGS: ReferralProgramSettings = {
   enabled: true,
   registrationReferralEnabled: true,
   defaultReferralCode: 'PLATFORM-DEFAULT',
+  codePrefix: 'ZKR-',
+  codeDigits: 6,
   sellerCommissionPercent: 5,
   designerCommissionPercent: 5,
+  customerCommissionPercent: 0,
+  earnFromCustomerOrders: false,
   holdDays: 7,
   minimumPayoutUsd: 10,
   referralBaseUrl: String(
@@ -36,6 +50,7 @@ const DEFAULT_REFERRAL_PROGRAM_SETTINGS: ReferralProgramSettings = {
   )
     .trim()
     .replace(/\/+$/, ''),
+  profileEditableFields: ['firstName', 'lastName', 'phone', 'avatar', 'displayName'],
 };
 
 const parseObject = (value: unknown): Record<string, unknown> => {
@@ -61,6 +76,38 @@ const toPercent = (value: unknown, fallback = 0) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Number(Math.max(0, Math.min(100, parsed)).toFixed(4));
+};
+
+const toIntegerInRange = (value: unknown, min: number, max: number, fallback: number) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(parsed)));
+};
+
+const normalizeCodePrefix = (value: unknown) => {
+  const compact = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, '')
+    .replace(/--+/g, '-')
+    .replace(/^-+/, '');
+  const withDash = compact.endsWith('-') ? compact : `${compact}-`;
+  const cleaned = withDash.replace(/^-+/, '');
+  if (!cleaned || cleaned === '-') return DEFAULT_REFERRAL_PROGRAM_SETTINGS.codePrefix;
+  return cleaned.slice(0, 12);
+};
+
+const normalizeProfileEditableFields = (value: unknown) => {
+  const allowed = new Set(['firstName', 'lastName', 'phone', 'avatar', 'displayName']);
+  const input = Array.isArray(value) ? value : DEFAULT_REFERRAL_PROGRAM_SETTINGS.profileEditableFields;
+  const normalized = Array.from(
+    new Set(
+      input
+        .map((entry) => String(entry || '').trim())
+        .filter((entry) => allowed.has(entry))
+    )
+  );
+  return normalized.length > 0 ? normalized : [...DEFAULT_REFERRAL_PROGRAM_SETTINGS.profileEditableFields];
 };
 const normalizeReferralCodeToken = (value: unknown, fallback = DEFAULT_REFERRAL_PROGRAM_SETTINGS.defaultReferralCode) => {
   const token = String(value || '')
@@ -168,7 +215,7 @@ export const ensureReferralProgramSchema = async () => {
   );
   await executeBestEffort(
     `UPDATE "ResellerInfluencerProfile"
-     SET "referralCode" = CONCAT('RI-', "numericRefId"::text)
+     SET "referralCode" = CONCAT('ZKR-', LPAD(COALESCE("numericRefId", 0)::text, 6, '0'))
      WHERE COALESCE(TRIM("referralCode"), '') = ''`
   );
   await executeBestEffort(
@@ -271,6 +318,43 @@ export const ensureReferralProgramSchema = async () => {
   await executeBestEffort(
     `CREATE INDEX IF NOT EXISTS "ReferralCommissionLedger_status_idx" ON "ReferralCommissionLedger"("status")`
   );
+  await executeBestEffort(
+    `CREATE TABLE IF NOT EXISTS "ReferralMaterial" (
+      "id" TEXT NOT NULL,
+      "title" TEXT NOT NULL,
+      "description" TEXT,
+      "imageUrl" TEXT,
+      "targetUrl" TEXT,
+      "widthPx" INTEGER,
+      "heightPx" INTEGER,
+      "sortOrder" INTEGER NOT NULL DEFAULT 0,
+      "isActive" BOOLEAN NOT NULL DEFAULT TRUE,
+      "createdById" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "ReferralMaterial_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await executeBestEffort(`ALTER TABLE "ReferralMaterial" ADD COLUMN IF NOT EXISTS "title" TEXT`);
+  await executeBestEffort(`ALTER TABLE "ReferralMaterial" ADD COLUMN IF NOT EXISTS "description" TEXT`);
+  await executeBestEffort(`ALTER TABLE "ReferralMaterial" ADD COLUMN IF NOT EXISTS "imageUrl" TEXT`);
+  await executeBestEffort(`ALTER TABLE "ReferralMaterial" ADD COLUMN IF NOT EXISTS "targetUrl" TEXT`);
+  await executeBestEffort(`ALTER TABLE "ReferralMaterial" ADD COLUMN IF NOT EXISTS "widthPx" INTEGER`);
+  await executeBestEffort(`ALTER TABLE "ReferralMaterial" ADD COLUMN IF NOT EXISTS "heightPx" INTEGER`);
+  await executeBestEffort(
+    `ALTER TABLE "ReferralMaterial" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0`
+  );
+  await executeBestEffort(
+    `ALTER TABLE "ReferralMaterial" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT TRUE`
+  );
+  await executeBestEffort(`ALTER TABLE "ReferralMaterial" ADD COLUMN IF NOT EXISTS "createdById" TEXT`);
+  await executeBestEffort(
+    `ALTER TABLE "ReferralMaterial" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
+  );
+  await executeBestEffort(
+    `ALTER TABLE "ReferralMaterial" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
+  );
+  await executeBestEffort(`CREATE INDEX IF NOT EXISTS "ReferralMaterial_sortOrder_idx" ON "ReferralMaterial"("sortOrder")`);
   referralSchemaEnsured = true;
 };
 
@@ -279,6 +363,8 @@ export const normalizeReferralProgramSettings = (value: unknown): ReferralProgra
   const baseUrl = String(source.referralBaseUrl || DEFAULT_REFERRAL_PROGRAM_SETTINGS.referralBaseUrl)
     .trim()
     .replace(/\/+$/, '');
+  const codePrefix = normalizeCodePrefix(source.codePrefix || DEFAULT_REFERRAL_PROGRAM_SETTINGS.codePrefix);
+  const codeDigits = toIntegerInRange(source.codeDigits, 4, 12, DEFAULT_REFERRAL_PROGRAM_SETTINGS.codeDigits);
   return {
     enabled: source.enabled !== false,
     registrationReferralEnabled: source.registrationReferralEnabled !== false,
@@ -286,6 +372,8 @@ export const normalizeReferralProgramSettings = (value: unknown): ReferralProgra
       source.defaultReferralCode,
       DEFAULT_REFERRAL_PROGRAM_SETTINGS.defaultReferralCode
     ),
+    codePrefix,
+    codeDigits,
     sellerCommissionPercent: toPercent(
       source.sellerCommissionPercent,
       DEFAULT_REFERRAL_PROGRAM_SETTINGS.sellerCommissionPercent
@@ -294,9 +382,15 @@ export const normalizeReferralProgramSettings = (value: unknown): ReferralProgra
       source.designerCommissionPercent,
       DEFAULT_REFERRAL_PROGRAM_SETTINGS.designerCommissionPercent
     ),
+    customerCommissionPercent: toPercent(
+      source.customerCommissionPercent,
+      DEFAULT_REFERRAL_PROGRAM_SETTINGS.customerCommissionPercent
+    ),
+    earnFromCustomerOrders: source.earnFromCustomerOrders === true,
     holdDays: Math.max(0, Math.min(365, Number(source.holdDays || DEFAULT_REFERRAL_PROGRAM_SETTINGS.holdDays))),
     minimumPayoutUsd: toMoney(source.minimumPayoutUsd ?? DEFAULT_REFERRAL_PROGRAM_SETTINGS.minimumPayoutUsd),
     referralBaseUrl: baseUrl || DEFAULT_REFERRAL_PROGRAM_SETTINGS.referralBaseUrl,
+    profileEditableFields: normalizeProfileEditableFields(source.profileEditableFields),
   };
 };
 
@@ -329,7 +423,10 @@ export const readReferralProgramSettings = async () => {
 export const saveReferralProgramSettings = async (value: unknown) => {
   await ensureReferralProgramSchema();
   const existing = await readReferralProgramSettings();
-  const next = normalizeReferralProgramSettings(value);
+  const next = normalizeReferralProgramSettings({
+    ...existing.settings,
+    ...parseObject(value),
+  });
   const payload = JSON.stringify(next);
   if (existing.rowId) {
     await prisma.$executeRawUnsafe(
@@ -348,14 +445,31 @@ export const saveReferralProgramSettings = async (value: unknown) => {
       payload
     );
   }
+  // Keep referral codes synchronized with current prefix/digit format.
+  const nextPrefix = normalizeCodePrefix(next.codePrefix);
+  const nextDigits = toIntegerInRange(next.codeDigits, 4, 12, DEFAULT_REFERRAL_PROGRAM_SETTINGS.codeDigits);
+  await prisma.$executeRawUnsafe(
+    `UPDATE "ResellerInfluencerProfile"
+     SET "referralCode" = CONCAT($1, LPAD(COALESCE("numericRefId", 0)::text, $2, '0')),
+         "updatedAt" = NOW()`,
+    nextPrefix,
+    nextDigits
+  );
   return (await readReferralProgramSettings()).settings;
 };
 
 const normalizeReferralCode = (value: unknown) => String(value || '').trim().toUpperCase();
 
+export const buildReferralCode = (numericRefId: number, settings?: ReferralProgramSettings) => {
+  const config = settings || DEFAULT_REFERRAL_PROGRAM_SETTINGS;
+  const prefix = normalizeCodePrefix(config.codePrefix || DEFAULT_REFERRAL_PROGRAM_SETTINGS.codePrefix);
+  const digits = toIntegerInRange(config.codeDigits, 4, 12, DEFAULT_REFERRAL_PROGRAM_SETTINGS.codeDigits);
+  return `${prefix}${String(Math.max(1, Math.trunc(Number(numericRefId) || 1))).padStart(digits, '0')}`;
+};
+
 export const buildReferralLink = (referralCode: string, settings?: ReferralProgramSettings) => {
   const config = settings || DEFAULT_REFERRAL_PROGRAM_SETTINGS;
-  return `${String(config.referralBaseUrl || DEFAULT_REFERRAL_PROGRAM_SETTINGS.referralBaseUrl).replace(/\/+$/, '')}/register?ref=${encodeURIComponent(
+  return `${String(config.referralBaseUrl || DEFAULT_REFERRAL_PROGRAM_SETTINGS.referralBaseUrl).replace(/\/+$/, '')}/${encodeURIComponent(
     referralCode
   )}`;
 };
@@ -366,6 +480,7 @@ export const ensureResellerProfileForUser = async (input: {
   displayName?: string | null;
 }) => {
   await ensureReferralProgramSchema();
+  const settings = (await readReferralProgramSettings()).settings;
   const existingRows = await prisma.$queryRawUnsafe<Array<any>>(
     `SELECT *
      FROM "ResellerInfluencerProfile"
@@ -375,24 +490,36 @@ export const ensureResellerProfileForUser = async (input: {
   );
   const existing = Array.isArray(existingRows) && existingRows.length > 0 ? existingRows[0] : null;
   if (existing) {
-    const settings = (await readReferralProgramSettings()).settings;
+    const numericRefId = Number(existing.numericRefId || 0);
+    const currentCode = String(existing.referralCode || '').trim().toUpperCase();
+    const preferredCode = buildReferralCode(numericRefId, settings);
+    const shouldRefreshCode = !currentCode || currentCode.startsWith('RI-');
+    if (shouldRefreshCode && numericRefId > 0) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "ResellerInfluencerProfile"
+         SET "referralCode" = $1, "updatedAt" = NOW()
+         WHERE "id" = $2`,
+        preferredCode,
+        String(existing.id || '')
+      );
+    }
     return {
       id: String(existing.id || ''),
       userId: String(existing.userId || ''),
-      numericRefId: Number(existing.numericRefId || 0),
-      referralCode: String(existing.referralCode || '').trim(),
+      numericRefId,
+      referralCode: shouldRefreshCode ? preferredCode : currentCode,
       displayName: String(existing.displayName || '').trim(),
       isActive: existing.isActive !== false,
       commissionOverridePercent:
         existing.commissionOverridePercent == null ? null : Number(existing.commissionOverridePercent),
-      referralLink: buildReferralLink(String(existing.referralCode || '').trim(), settings),
+      referralLink: buildReferralLink(shouldRefreshCode ? preferredCode : currentCode, settings),
     };
   }
   const rows = await prisma.$queryRawUnsafe<Array<{ maxId: number | null }>>(
     `SELECT MAX("numericRefId")::bigint AS "maxId" FROM "ResellerInfluencerProfile"`
   );
   const nextNumeric = Math.max(1, Number(rows?.[0]?.maxId || 0) + 1);
-  const referralCode = `RI-${nextNumeric}`;
+  const referralCode = buildReferralCode(nextNumeric, settings);
   const createdRows = await prisma.$queryRawUnsafe<Array<any>>(
     `INSERT INTO "ResellerInfluencerProfile"
       ("id","userId","numericRefId","referralCode","displayName","isActive","createdById","createdAt","updatedAt")
@@ -407,7 +534,6 @@ export const ensureResellerProfileForUser = async (input: {
     input.createdById || null
   );
   const created = createdRows[0];
-  const settings = (await readReferralProgramSettings()).settings;
   return {
     id: String(created.id || ''),
     userId: String(created.userId || ''),
@@ -502,6 +628,7 @@ export const recordReferralCommissionsForOrder = async (input: {
   orderId: string;
   orderNumber?: string | null;
   vendorSales: ReferralVendorSaleEntry[];
+  customerSale?: ReferralCustomerSaleEntry | null;
   metadata?: Record<string, unknown>;
 }) => {
   await ensureReferralProgramSchema();
@@ -509,7 +636,7 @@ export const recordReferralCommissionsForOrder = async (input: {
   if (!settings.enabled) return { created: 0 };
   const aggregatedByVendor = new Map<
     string,
-    { vendorUserId: string; vendorRole: 'FABRIC_SELLER' | 'FASHION_DESIGNER'; baseAmountUsd: number }
+    { vendorUserId: string; vendorRole: 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'CUSTOMER'; baseAmountUsd: number }
   >();
   (Array.isArray(input.vendorSales) ? input.vendorSales : [])
     .filter((entry) => entry && entry.vendorUserId && Number(entry.baseAmountUsd || 0) > 0)
@@ -529,6 +656,16 @@ export const recordReferralCommissionsForOrder = async (input: {
         existing.vendorRole = 'FASHION_DESIGNER';
       }
     });
+  if (settings.earnFromCustomerOrders && settings.customerCommissionPercent > 0 && input.customerSale?.customerUserId) {
+    const customerAmount = toMoney(input.customerSale.baseAmountUsd);
+    if (customerAmount > 0) {
+      aggregatedByVendor.set(String(input.customerSale.customerUserId), {
+        vendorUserId: String(input.customerSale.customerUserId),
+        vendorRole: 'CUSTOMER',
+        baseAmountUsd: customerAmount,
+      });
+    }
+  }
   let created = 0;
   for (const sale of aggregatedByVendor.values()) {
     const attributionRows = await prisma.$queryRawUnsafe<Array<any>>(
@@ -546,6 +683,8 @@ export const recordReferralCommissionsForOrder = async (input: {
         ? settings.designerCommissionPercent
         : roleToken === UserRole.FABRIC_SELLER
           ? settings.sellerCommissionPercent
+          : roleToken === UserRole.CUSTOMER
+            ? settings.customerCommissionPercent
           : 0;
     if (basePercent <= 0) continue;
     const profileRows = await prisma.$queryRawUnsafe<Array<any>>(
@@ -604,9 +743,10 @@ export const readResellerDashboard = async (resellerUserId: string, params?: { p
   await ensureReferralProgramSchema();
   const settings = (await readReferralProgramSettings()).settings;
   const profileRows = await prisma.$queryRawUnsafe<Array<any>>(
-    `SELECT *
-     FROM "ResellerInfluencerProfile"
-     WHERE "userId" = $1
+    `SELECT p.*, u."email", u."firstName", u."lastName", u."phone", u."avatar", u."status" as "userStatus"
+     FROM "ResellerInfluencerProfile" p
+     JOIN "User" u ON u."id" = p."userId"
+     WHERE p."userId" = $1
      LIMIT 1`,
     resellerUserId
   );
@@ -672,6 +812,12 @@ export const readResellerDashboard = async (resellerUserId: string, params?: { p
     profile: {
       id: String(profile.id || ''),
       userId: String(profile.userId || ''),
+      email: String(profile.email || ''),
+      firstName: String(profile.firstName || ''),
+      lastName: String(profile.lastName || ''),
+      phone: profile.phone == null ? null : String(profile.phone),
+      avatar: profile.avatar == null ? null : String(profile.avatar),
+      userStatus: String(profile.userStatus || ''),
       numericRefId: Number(profile.numericRefId || 0),
       referralCode: String(profile.referralCode || ''),
       displayName: String(profile.displayName || '').trim(),
@@ -749,7 +895,7 @@ export const listResellerInfluencersWithMetrics = async (params?: {
   const rows = await prisma.$queryRawUnsafe<Array<any>>(
     `SELECT
         r.*,
-        u."email", u."firstName", u."lastName", u."status" AS "userStatus",
+        u."email", u."firstName", u."lastName", u."phone", u."avatar", u."status" AS "userStatus",
         COALESCE(ref.total_referrals,0)::int AS "totalReferrals",
         COALESCE(comm.total_commission,0)::numeric AS "totalCommissionUsd",
         COALESCE(comm.pending_commission,0)::numeric AS "pendingCommissionUsd",
@@ -801,6 +947,8 @@ export const listResellerInfluencersWithMetrics = async (params?: {
         email: String(row.email || ''),
         firstName: String(row.firstName || ''),
         lastName: String(row.lastName || ''),
+        phone: row.phone == null ? null : String(row.phone),
+        avatar: row.avatar == null ? null : String(row.avatar),
         status: String(row.userStatus || ''),
       },
       metrics: {
@@ -817,4 +965,126 @@ export const listResellerInfluencersWithMetrics = async (params?: {
       pages: Math.max(1, Math.ceil(Number(countRows?.[0]?.total || 0) / limit)),
     },
   };
+};
+
+export type ReferralMaterialInput = {
+  title: string;
+  description?: string | null;
+  imageUrl?: string | null;
+  targetUrl?: string | null;
+  widthPx?: number | null;
+  heightPx?: number | null;
+  sortOrder?: number | null;
+  isActive?: boolean;
+};
+
+type ReferralMaterialUpdateInput = Partial<ReferralMaterialInput>;
+
+export const listReferralMaterials = async (options?: { includeInactive?: boolean }) => {
+  await ensureReferralProgramSchema();
+  const includeInactive = options?.includeInactive === true;
+  const rows = await prisma.$queryRawUnsafe<Array<any>>(
+    `SELECT *
+     FROM "ReferralMaterial"
+     ${includeInactive ? '' : 'WHERE "isActive" = TRUE'}
+     ORDER BY "sortOrder" ASC, "createdAt" DESC`
+  );
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    id: String(row.id || ''),
+    title: String(row.title || ''),
+    description: row.description == null ? null : String(row.description),
+    imageUrl: row.imageUrl == null ? null : String(row.imageUrl),
+    targetUrl: row.targetUrl == null ? null : String(row.targetUrl),
+    widthPx: row.widthPx == null ? null : Number(row.widthPx),
+    heightPx: row.heightPx == null ? null : Number(row.heightPx),
+    sortOrder: Number(row.sortOrder || 0),
+    isActive: row.isActive !== false,
+    createdById: row.createdById == null ? null : String(row.createdById),
+    createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
+    updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
+  }));
+};
+
+export const createReferralMaterial = async (input: ReferralMaterialInput & { createdById?: string | null }) => {
+  await ensureReferralProgramSchema();
+  const createdRows = await prisma.$queryRawUnsafe<Array<any>>(
+    `INSERT INTO "ReferralMaterial"
+      ("id","title","description","imageUrl","targetUrl","widthPx","heightPx","sortOrder","isActive","createdById","createdAt","updatedAt")
+     VALUES
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())
+     RETURNING *`,
+    randomUUID(),
+    String(input.title || '').trim(),
+    input.description ? String(input.description).trim() : null,
+    input.imageUrl ? String(input.imageUrl).trim() : null,
+    input.targetUrl ? String(input.targetUrl).trim() : null,
+    input.widthPx == null ? null : Number(input.widthPx),
+    input.heightPx == null ? null : Number(input.heightPx),
+    input.sortOrder == null ? 0 : Number(input.sortOrder),
+    input.isActive !== false,
+    input.createdById || null
+  );
+  return createdRows?.[0] || null;
+};
+
+export const updateReferralMaterial = async (id: string, input: ReferralMaterialUpdateInput) => {
+  await ensureReferralProgramSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<any>>(
+    `UPDATE "ReferralMaterial"
+     SET "title" = COALESCE($2, "title"),
+         "description" = COALESCE($3, "description"),
+         "imageUrl" = COALESCE($4, "imageUrl"),
+         "targetUrl" = COALESCE($5, "targetUrl"),
+         "widthPx" = COALESCE($6, "widthPx"),
+         "heightPx" = COALESCE($7, "heightPx"),
+         "sortOrder" = COALESCE($8, "sortOrder"),
+         "isActive" = COALESCE($9, "isActive"),
+         "updatedAt" = NOW()
+     WHERE "id" = $1
+     RETURNING *`,
+    id,
+    input.title == null ? null : String(input.title).trim(),
+    input.description == null ? null : String(input.description).trim(),
+    input.imageUrl == null ? null : String(input.imageUrl).trim(),
+    input.targetUrl == null ? null : String(input.targetUrl).trim(),
+    input.widthPx == null ? null : Number(input.widthPx),
+    input.heightPx == null ? null : Number(input.heightPx),
+    input.sortOrder == null ? null : Number(input.sortOrder),
+    input.isActive == null ? null : Boolean(input.isActive)
+  );
+  return rows?.[0] || null;
+};
+
+export const deleteReferralMaterial = async (id: string) => {
+  await ensureReferralProgramSchema();
+  await prisma.$executeRawUnsafe(`DELETE FROM "ReferralMaterial" WHERE "id" = $1`, id);
+};
+
+export const updateResellerProfileFromSelfService = async (
+  userId: string,
+  payload: { firstName?: string; lastName?: string; phone?: string | null; avatar?: string | null; displayName?: string }
+) => {
+  await ensureReferralProgramSchema();
+  const settings = (await readReferralProgramSettings()).settings;
+  const allowed = new Set(settings.profileEditableFields);
+  const userUpdates: Record<string, unknown> = {};
+  if (payload.firstName != null && allowed.has('firstName')) userUpdates.firstName = String(payload.firstName).trim();
+  if (payload.lastName != null && allowed.has('lastName')) userUpdates.lastName = String(payload.lastName).trim();
+  if (payload.phone !== undefined && allowed.has('phone')) userUpdates.phone = payload.phone == null ? null : String(payload.phone).trim();
+  if (payload.avatar !== undefined && allowed.has('avatar')) userUpdates.avatar = payload.avatar == null ? null : String(payload.avatar).trim();
+  if (Object.keys(userUpdates).length > 0) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: userUpdates,
+    });
+  }
+  if (payload.displayName != null && allowed.has('displayName')) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "ResellerInfluencerProfile"
+       SET "displayName" = $1, "updatedAt" = NOW()
+       WHERE "userId" = $2`,
+      String(payload.displayName).trim() || null,
+      userId
+    );
+  }
 };

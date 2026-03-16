@@ -8,6 +8,7 @@ type AudienceRole =
   | 'FABRIC_SELLER'
   | 'FASHION_DESIGNER'
   | 'VENDORS'
+  | 'RESELLER_INFLUENCER'
   | 'ADMINISTRATOR'
   | 'QA_TEAM';
 
@@ -17,6 +18,7 @@ const AUDIENCE_OPTIONS: Array<{ value: AudienceRole; label: string }> = [
   { value: 'VENDORS', label: 'All vendors (seller + designer)' },
   { value: 'FABRIC_SELLER', label: 'Sellers' },
   { value: 'FASHION_DESIGNER', label: 'Designers' },
+  { value: 'RESELLER_INFLUENCER', label: 'Resellers / Influencers' },
   { value: 'ADMINISTRATOR', label: 'Administrators' },
   { value: 'QA_TEAM', label: 'QA Team' },
 ];
