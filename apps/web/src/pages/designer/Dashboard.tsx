@@ -696,9 +696,12 @@ export default function DesignerDashboard() {
     DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE
   );
   const [searchParams, setSearchParams] = useSearchParams();
-  const [productSearch, setProductSearch] = useState('');
-  const [productStatusFilter, setProductStatusFilter] = useState('');
-  const [productCategoryFilter, setProductCategoryFilter] = useState('');
+  const [designProductSearch, setDesignProductSearch] = useState('');
+  const [designProductStatusFilter, setDesignProductStatusFilter] = useState('');
+  const [designProductCategoryFilter, setDesignProductCategoryFilter] = useState('');
+  const [readyProductSearch, setReadyProductSearch] = useState('');
+  const [readyProductStatusFilter, setReadyProductStatusFilter] = useState('');
+  const [readyProductCategoryFilter, setReadyProductCategoryFilter] = useState('');
   const [showReadyStockModal, setShowReadyStockModal] = useState(false);
   const [selectedReadyProduct, setSelectedReadyProduct] = useState<ReadyProduct | null>(null);
   const [readyStockDraft, setReadyStockDraft] = useState<Array<{ size: string; color: string; stock: string }>>([]);
@@ -2637,29 +2640,29 @@ export default function DesignerDashboard() {
     ...readyProducts.map((item) => ({ ...item, productType: 'READY_TO_WEAR' as const })),
   ];
   const filteredDesignRows = useMemo(() => {
-    const normalizedSearch = productSearch.trim().toLowerCase();
+    const normalizedSearch = designProductSearch.trim().toLowerCase();
     return designs.filter((item) => {
-      if (productStatusFilter && String(item.status || '').toUpperCase() !== productStatusFilter.toUpperCase()) return false;
-      if (productCategoryFilter && String(item.category?.name || '') !== productCategoryFilter) return false;
+      if (designProductStatusFilter && String(item.status || '').toUpperCase() !== designProductStatusFilter.toUpperCase()) return false;
+      if (designProductCategoryFilter && String(item.category?.name || '') !== designProductCategoryFilter) return false;
       if (!normalizedSearch) return true;
       return (
         String(item.name || '').toLowerCase().includes(normalizedSearch) ||
         String(item.category?.name || '').toLowerCase().includes(normalizedSearch)
       );
     });
-  }, [designs, productSearch, productStatusFilter, productCategoryFilter]);
+  }, [designs, designProductSearch, designProductStatusFilter, designProductCategoryFilter]);
   const filteredReadyRows = useMemo(() => {
-    const normalizedSearch = productSearch.trim().toLowerCase();
+    const normalizedSearch = readyProductSearch.trim().toLowerCase();
     return readyProducts.filter((item) => {
-      if (productStatusFilter && String(item.status || '').toUpperCase() !== productStatusFilter.toUpperCase()) return false;
-      if (productCategoryFilter && String(item.category?.name || '') !== productCategoryFilter) return false;
+      if (readyProductStatusFilter && String(item.status || '').toUpperCase() !== readyProductStatusFilter.toUpperCase()) return false;
+      if (readyProductCategoryFilter && String(item.category?.name || '') !== readyProductCategoryFilter) return false;
       if (!normalizedSearch) return true;
       return (
         String(item.name || '').toLowerCase().includes(normalizedSearch) ||
         String(item.category?.name || '').toLowerCase().includes(normalizedSearch)
       );
     });
-  }, [readyProducts, productSearch, productStatusFilter, productCategoryFilter]);
+  }, [readyProducts, readyProductSearch, readyProductStatusFilter, readyProductCategoryFilter]);
   const featuredRows = productRows.filter((item) => item.isFeatured);
   const pendingOrders = orders.filter(o => o.status === 'PENDING');
   const activeProfileFields = useMemo(
@@ -3503,57 +3506,98 @@ export default function DesignerDashboard() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <div className="w-full md:w-[320px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search products..."
-                  value={productSearch}
-                  onChange={(event) => setProductSearch(event.target.value)}
-                  className="w-full rounded-lg border py-2 pl-10 pr-4"
-                />
-              </div>
-            </div>
-            <select
-              value={productStatusFilter}
-              onChange={(event) => setProductStatusFilter(event.target.value)}
-              className="rounded-lg border px-4 py-2"
-            >
-              <option value="">All Status</option>
-              <option value="DRAFT">Draft</option>
-              <option value="PENDING_REVIEW">Pending Review</option>
-              <option value="APPROVED">Approved</option>
-              <option value="REJECTED">Rejected</option>
-              <option value="ARCHIVED">Archived</option>
-            </select>
-            <select
-              value={productCategoryFilter}
-              onChange={(event) => setProductCategoryFilter(event.target.value)}
-              className="rounded-lg border px-4 py-2"
-            >
-              <option value="">All Styles</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.name}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-            <Button variant="outline" onClick={() => setProductSearch((prev) => prev.trimStart())}>
-              <Filter className="mr-2 h-4 w-4" />
-              Filter
-            </Button>
-          </div>
-
           {dashboardGovernance.sections.productsTable !== false ? (
             <div className="space-y-5">
               <section className="space-y-2">
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Custom To Wear</h3>
+                <div className="flex flex-wrap gap-3">
+                  <div className="w-full md:w-[320px]">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search custom-to-wear..."
+                        value={designProductSearch}
+                        onChange={(event) => setDesignProductSearch(event.target.value)}
+                        className="w-full rounded-lg border py-2 pl-10 pr-4"
+                      />
+                    </div>
+                  </div>
+                  <select
+                    value={designProductStatusFilter}
+                    onChange={(event) => setDesignProductStatusFilter(event.target.value)}
+                    className="rounded-lg border px-4 py-2"
+                  >
+                    <option value="">All Status</option>
+                    <option value="DRAFT">Draft</option>
+                    <option value="PENDING_REVIEW">Pending Review</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="REJECTED">Rejected</option>
+                    <option value="ARCHIVED">Archived</option>
+                  </select>
+                  <select
+                    value={designProductCategoryFilter}
+                    onChange={(event) => setDesignProductCategoryFilter(event.target.value)}
+                    className="rounded-lg border px-4 py-2"
+                  >
+                    <option value="">All Styles</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.name}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button variant="outline" onClick={() => setDesignProductSearch((prev) => prev.trimStart())}>
+                    <Filter className="mr-2 h-4 w-4" />
+                    Filter
+                  </Button>
+                </div>
                 {renderProductsTable(filteredDesignRows, 'CUSTOM_TO_WEAR')}
               </section>
               <section className="space-y-2">
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Ready To Wear</h3>
+                <div className="flex flex-wrap gap-3">
+                  <div className="w-full md:w-[320px]">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search ready-to-wear..."
+                        value={readyProductSearch}
+                        onChange={(event) => setReadyProductSearch(event.target.value)}
+                        className="w-full rounded-lg border py-2 pl-10 pr-4"
+                      />
+                    </div>
+                  </div>
+                  <select
+                    value={readyProductStatusFilter}
+                    onChange={(event) => setReadyProductStatusFilter(event.target.value)}
+                    className="rounded-lg border px-4 py-2"
+                  >
+                    <option value="">All Status</option>
+                    <option value="DRAFT">Draft</option>
+                    <option value="PENDING_REVIEW">Pending Review</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="REJECTED">Rejected</option>
+                    <option value="ARCHIVED">Archived</option>
+                  </select>
+                  <select
+                    value={readyProductCategoryFilter}
+                    onChange={(event) => setReadyProductCategoryFilter(event.target.value)}
+                    className="rounded-lg border px-4 py-2"
+                  >
+                    <option value="">All Styles</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.name}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button variant="outline" onClick={() => setReadyProductSearch((prev) => prev.trimStart())}>
+                    <Filter className="mr-2 h-4 w-4" />
+                    Filter
+                  </Button>
+                </div>
                 {renderProductsTable(filteredReadyRows, 'READY_TO_WEAR')}
               </section>
             </div>
