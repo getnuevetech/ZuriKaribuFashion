@@ -366,21 +366,40 @@ const DEFAULT_SETTINGS: AutomationApprovalSettings = {
   criteria: DEFAULT_CRITERIA,
 };
 
+const STRICT_AUTO_EDIT_DEFAULT_KEYS = new Set([
+  'name_grammar',
+  'description_grammar',
+  'image_quality',
+  'predominant_color_match',
+]);
+
 const normalizeCriteria = (value: unknown, fallback: AutomationCriterion[]) => {
   const fallbackRows = fallback.map((entry) => ({
     ...entry,
-    allowAiEdits: entry.allowAiEdits === true,
+    allowAiEdits:
+      typeof entry.allowAiEdits === 'boolean'
+        ? entry.allowAiEdits
+        : entry.requiresAi === true && STRICT_AUTO_EDIT_DEFAULT_KEYS.has(String(entry.key || '').trim()),
   }));
   if (!Array.isArray(value)) return fallbackRows;
   const rows = value
     .map((entry) => parseObject(entry))
-    .map((row) => ({
-      key: String(row.key || '').trim(),
-      label: String(row.label || '').trim(),
-      enabled: row.enabled !== false,
-      requiresAi: row.requiresAi === true,
-      allowAiEdits: row.allowAiEdits === true,
-    }))
+    .map((row) => {
+      const key = String(row.key || '').trim();
+      const requiresAi = row.requiresAi === true;
+      const allowAiEditsRaw = row.allowAiEdits;
+      const allowAiEdits =
+        typeof allowAiEditsRaw === 'boolean'
+          ? allowAiEditsRaw
+          : requiresAi && STRICT_AUTO_EDIT_DEFAULT_KEYS.has(key);
+      return {
+        key,
+        label: String(row.label || '').trim(),
+        enabled: row.enabled !== false,
+        requiresAi,
+        allowAiEdits,
+      };
+    })
     .filter((row) => row.key.length > 0);
   return rows.length > 0 ? rows : fallbackRows;
 };
@@ -1199,12 +1218,48 @@ Rules:
             : `AI edit execution failed: ${execution.reason}`,
       };
     }
+    const parseLabeledValue = (raw: string) => {
+      const source = String(raw || '').trim();
+      if (!source) return '';
+      const sanitized = source.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+      const lineMatch =
+        sanitized.match(/(?:updated\s*value|updated\s*text|new\s*value)\s*[:=-]\s*["“]?([\s\S]+)/i) ||
+        sanitized.match(/(?:title|description)\s*[:=-]\s*["“]?([\s\S]+)/i);
+      const extracted = lineMatch?.[1] ? String(lineMatch[1]) : sanitized;
+      return extracted
+        .replace(/["”]\s*$/g, '')
+        .replace(/\n+(reason|notes?)\s*[:=-][\s\S]*$/i, '')
+        .trim();
+    };
     const parsed = parseFirstJsonObject(execution.output);
     if (rule.kind === 'text') {
-      const candidate =
-        String(parsed?.updatedValue || parsed?.value || parsed?.updated || '').trim() ||
-        String(execution.output || '').trim();
-      const normalized = candidate.replace(/\s+/g, ' ').trim().slice(0, rule.maxLength);
+      const getNormalizedTextCandidate = (raw: string, parsedPayload: Record<string, unknown> | null) =>
+        (
+          String(parsedPayload?.updatedValue || parsedPayload?.value || parsedPayload?.updated || '').trim() ||
+          parseLabeledValue(raw)
+        )
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, rule.maxLength);
+      let normalized = getNormalizedTextCandidate(String(execution.output || ''), parsed);
+      if ((normalized.length < rule.minLength || normalized === before) && params.row.status === 'FAIL') {
+        const retry = await executeAutomationAiFunction({
+          settings,
+          functionKey: 'text_grammar_enhancement',
+          prompt: `Rewrite ONLY the ${rule.field} value for this failed criterion.
+
+Criterion: ${params.row.label}
+Current value:
+"""${before}"""
+
+Return ONLY the improved ${rule.field} text.
+No explanations, no labels, no JSON, no markdown.`,
+          systemPrompt: 'You rewrite product fields. Return only the updated value.',
+        });
+        if (retry.status === 'OK') {
+          normalized = getNormalizedTextCandidate(String(retry.output || ''), parseFirstJsonObject(String(retry.output || '')));
+        }
+      }
       if (normalized.length < rule.minLength) {
         return {
           applied: false,
@@ -1318,14 +1373,7 @@ Return STRICT JSON only:
         reason: 'AI did not return a valid regenerated image URL.',
       };
     }
-    if (urlCandidate === sourceUrl) {
-      return {
-        applied: false,
-        before: sourceUrl,
-        after: sourceUrl,
-        reason: 'AI returned the same image URL.',
-      };
-    }
+    const candidateIsSameUrl = urlCandidate === sourceUrl;
     const parseBool = (value: unknown) => {
       if (typeof value === 'boolean') return value;
       const text = String(value || '').trim().toLowerCase();
@@ -1372,12 +1420,32 @@ Rules:
             : `Image consistency verification failed: ${verification.reason}`,
       };
     }
-    const verificationParsed = parseFirstJsonObject(String(verification.output || '').trim());
-    const sameProduct = parseBool(verificationParsed?.sameProduct);
-    const sameSubject = parseBool(verificationParsed?.sameSubject);
-    const sameDesignPattern = parseBool(verificationParsed?.sameDesignPattern);
-    const onlyEnhancement = parseBool(verificationParsed?.isOnlyEnhancement);
+    const verificationOutput = String(verification.output || '').trim();
+    const verificationParsed = parseFirstJsonObject(verificationOutput);
+    let sameProduct = parseBool(verificationParsed?.sameProduct);
+    let sameSubject = parseBool(verificationParsed?.sameSubject);
+    let sameDesignPattern = parseBool(verificationParsed?.sameDesignPattern);
+    let onlyEnhancement = parseBool(verificationParsed?.isOnlyEnhancement);
     const confidence = Number(verificationParsed?.confidence ?? Number.NaN);
+    if (
+      sameProduct === null &&
+      sameSubject === null &&
+      sameDesignPattern === null &&
+      onlyEnhancement === null &&
+      verificationOutput
+    ) {
+      const text = verificationOutput.toLowerCase();
+      const reject =
+        /different product|not same|different scene|different model|identity changed|replacement/i.test(text);
+      const accept =
+        /same product|same subject|preserved|enhancement|exact regeneration|faithful|consistent/i.test(text);
+      if (!reject && accept) {
+        sameProduct = true;
+        sameSubject = true;
+        sameDesignPattern = true;
+        onlyEnhancement = true;
+      }
+    }
     const isSafe =
       sameProduct === true &&
       sameSubject === true &&
@@ -1395,14 +1463,18 @@ Rules:
         reason: `Rejected image replacement: ${verifyReason}`,
       };
     }
-    const nextImages = [...existingImages];
-    nextImages[0] = urlCandidate;
-    stagedImageUrls = nextImages;
+    if (!candidateIsSameUrl) {
+      const nextImages = [...existingImages];
+      nextImages[0] = urlCandidate;
+      stagedImageUrls = nextImages;
+    }
     return {
       applied: true,
       before: sourceUrl,
       after: urlCandidate,
-      reason: 'AI applied enhancement/exact regeneration and passed strict image consistency verification.',
+      reason: candidateIsSameUrl
+        ? 'AI enhancement verified on the same source image URL (in-place enhancement).'
+        : 'AI applied enhancement/exact regeneration and passed strict image consistency verification.',
     };
   };
 
@@ -1490,12 +1562,22 @@ Return concise analysis and correction guidance in plain text.`;
         };
       }
       const canApplyAiEdits = criterion.allowAiEdits === true && criterion.requiresAi === true;
+      if (!canApplyAiEdits && nextRow.status === 'FAIL') {
+        const mappedRule = resolveCriterionEditRule(row.key);
+        const isImageMapped = imageEditKeys.has(row.key);
+        if (mappedRule || isImageMapped) {
+          nextRow = {
+            ...nextRow,
+            message: `${nextRow.message} Auto-edit not applied because "Allow AI edits" is disabled for this criterion.`,
+          };
+        }
+      }
       if (canApplyAiEdits) {
         const textRule = resolveCriterionEditRule(row.key);
         const shouldAttemptTextEdit =
           Boolean(textRule) &&
           Boolean(persistStagedProductEdits) &&
-          (nextRow.status === 'FAIL' || strictEditKeys.has(row.key));
+          nextRow.status === 'FAIL';
         if (shouldAttemptTextEdit) {
           const editResult = await requestAiFieldEdit({ row: nextRow });
           if (editResult && textRule) {
@@ -1541,7 +1623,7 @@ Return concise analysis and correction guidance in plain text.`;
         const shouldAttemptImageEdit =
           imageEditKeys.has(row.key) &&
           Boolean(persistStagedImageEdits) &&
-          (nextRow.status === 'FAIL' || strictEditKeys.has(row.key));
+          nextRow.status === 'FAIL';
         if (shouldAttemptImageEdit) {
           const imageResult = await requestAiImageEdit({ row: nextRow });
           if (imageResult.applied) {
