@@ -1007,15 +1007,50 @@ export const evaluateProductAutomationChecks = async (input: {
 
   const changeReport: AutomationAppliedChange[] = [];
   const stagedProductFields: Record<string, string> = {};
+  let stagedImageUrls: string[] = [];
   let persistStagedProductEdits: null | ((updates: Record<string, string>) => Promise<void>) = null;
+  let persistStagedImageEdits: null | ((urls: string[]) => Promise<void>) = null;
   const readStagedProductField = (field: string) => String(stagedProductFields[field] || '');
-  const criterionEditRule: Record<string, { field: 'name' | 'description'; minLength: number; maxLength: number }> = {
-    name_grammar: { field: 'name', minLength: 3, maxLength: 160 },
-    description_grammar: { field: 'description', minLength: 24, maxLength: 4000 },
+  const readStagedImageUrls = () => [...stagedImageUrls];
+  type EditableFieldKey =
+    | 'name'
+    | 'description'
+    | 'finalPrice'
+    | 'basePrice'
+    | 'minYards'
+    | 'stockYards';
+  type CriterionFieldEditRule =
+    | { field: EditableFieldKey; kind: 'text'; minLength: number; maxLength: number }
+    | { field: EditableFieldKey; kind: 'number'; minNumber: number; maxNumber: number };
+  const resolveCriterionEditRule = (criterionKey: string): CriterionFieldEditRule | null => {
+    switch (criterionKey) {
+      case 'name_grammar':
+        return { field: 'name', kind: 'text', minLength: 3, maxLength: 160 };
+      case 'description_grammar':
+        return { field: 'description', kind: 'text', minLength: 24, maxLength: 4000 };
+      case 'price_outlier':
+      case 'currency_sanity':
+        return {
+          field: input.productType === ProductType.FABRIC ? 'finalPrice' : 'basePrice',
+          kind: 'number',
+          minNumber: 1,
+          maxNumber: 1000000,
+        };
+      case 'minimum_yards':
+        return input.productType === ProductType.FABRIC
+          ? { field: 'minYards', kind: 'number', minNumber: 1, maxNumber: 100000 }
+          : null;
+      case 'stock_vs_minimum':
+        return input.productType === ProductType.FABRIC
+          ? { field: 'stockYards', kind: 'number', minNumber: 1, maxNumber: 1000000 }
+          : null;
+      default:
+        return null;
+    }
   };
 
   const requestAiFieldEdit = async (params: { row: AutomationCheckReportRow }) => {
-    const rule = criterionEditRule[params.row.key];
+    const rule = resolveCriterionEditRule(params.row.key);
     if (!rule) {
       return null as {
         applied: boolean;
@@ -1031,7 +1066,9 @@ export const evaluateProductAutomationChecks = async (input: {
     const execution = await executeAutomationAiFunction({
       settings,
       functionKey: 'text_grammar_enhancement',
-      prompt: `You are correcting a product ${rule.field} field.
+      prompt:
+        rule.kind === 'text'
+          ? `You are correcting a product ${rule.field} field.
 
 Criterion: ${params.row.label}
 Current value:
@@ -1043,7 +1080,20 @@ Rules:
 - Keep original meaning and product intent.
 - Avoid adding claims not present in the original text.
 - Keep concise, sales-friendly wording.
-- Do not exceed ${rule.maxLength} characters.`,
+- Do not exceed ${rule.maxLength} characters.`
+          : `You are correcting a product numeric field.
+
+Criterion: ${params.row.label}
+Field: ${rule.field}
+Current numeric value: ${before}
+Validation message: ${params.row.message}
+
+Return STRICT JSON only:
+{"updatedValue":123.45,"reason":"<short reason>"}
+Rules:
+- Output a number between ${rule.minNumber} and ${rule.maxNumber}.
+- Keep value realistic and compliant with validation message.
+- Do not include currency symbols.`,
       systemPrompt: 'You are a product content correction assistant. Return strict JSON only.',
     });
     if (execution.status !== 'OK') {
@@ -1058,38 +1108,146 @@ Rules:
       };
     }
     const parsed = parseFirstJsonObject(execution.output);
-    const candidate =
-      String(parsed?.updatedValue || parsed?.value || parsed?.updated || '').trim() ||
-      String(execution.output || '').trim();
-    const normalized = candidate.replace(/\s+/g, ' ').trim().slice(0, rule.maxLength);
-    if (normalized.length < rule.minLength) {
+    if (rule.kind === 'text') {
+      const candidate =
+        String(parsed?.updatedValue || parsed?.value || parsed?.updated || '').trim() ||
+        String(execution.output || '').trim();
+      const normalized = candidate.replace(/\s+/g, ' ').trim().slice(0, rule.maxLength);
+      if (normalized.length < rule.minLength) {
+        return {
+          applied: false,
+          before,
+          after: before,
+          reason: `AI suggestion too short for ${rule.field}.`,
+        };
+      }
+      if (normalized === before) {
+        return {
+          applied: false,
+          before,
+          after: before,
+          reason: 'AI suggestion is identical to current value.',
+        };
+      }
+      const reason = String(parsed?.reason || '').trim() || `AI updated ${rule.field}.`;
       return {
-        applied: false,
+        applied: true,
         before,
-        after: before,
-        reason: `AI suggestion too short for ${rule.field}.`,
+        after: normalized,
+        reason,
       };
     }
-    if (normalized === before) {
+    const parsedNumeric = Number(parsed?.updatedValue ?? parsed?.value ?? parsed?.updated ?? Number.NaN);
+    const fallbackNumeric = Number(String(execution.output || '').match(/-?\d+(\.\d+)?/)?.[0] || Number.NaN);
+    const numericCandidate = Number.isFinite(parsedNumeric) ? parsedNumeric : fallbackNumeric;
+    if (!Number.isFinite(numericCandidate)) {
       return {
         applied: false,
         before,
         after: before,
-        reason: 'AI suggestion is identical to current value.',
+        reason: `AI did not return a valid numeric value for ${rule.field}.`,
+      };
+    }
+    const normalizedNumber = Math.min(rule.maxNumber, Math.max(rule.minNumber, numericCandidate));
+    const after = String(Number(normalizedNumber.toFixed(2)));
+    if (after === before) {
+      return {
+        applied: false,
+        before,
+        after: before,
+        reason: 'AI suggestion is identical to current numeric value.',
       };
     }
     const reason = String(parsed?.reason || '').trim() || `AI updated ${rule.field}.`;
     return {
       applied: true,
       before,
-      after: normalized,
+      after,
       reason,
+    };
+  };
+
+  const requestAiImageEdit = async (params: { row: AutomationCheckReportRow }) => {
+    const existingImages = readStagedImageUrls();
+    if (existingImages.length === 0) {
+      return {
+        applied: false,
+        before: '',
+        after: '',
+        reason: 'No existing images available for AI replacement.',
+      };
+    }
+    const execution = await executeAutomationAiFunction({
+      settings,
+      functionKey: 'image_regeneration',
+      prompt: `Improve product image quality and consistency for criterion "${params.row.label}".
+
+Product context:
+${aiContextSummary || 'No extra product context provided.'}
+
+Primary image URL:
+${existingImages[0]}
+
+Return an improved image. Prefer returning a direct URL.`,
+      systemPrompt: 'You are an e-commerce image regeneration assistant.',
+    });
+    if (execution.status !== 'OK') {
+      return {
+        applied: false,
+        before: existingImages[0] || '',
+        after: existingImages[0] || '',
+        reason:
+          execution.status === 'NO_PROVIDER'
+            ? execution.reason
+            : `AI image regeneration failed: ${execution.reason}`,
+      };
+    }
+    const output = String(execution.output || '').trim();
+    const parsed = parseFirstJsonObject(output);
+    const urlCandidate =
+      String(parsed?.url || parsed?.imageUrl || '').trim() ||
+      (() => {
+        const match = output.match(/https?:\/\/[^\s"'<>]+/i);
+        return match ? String(match[0]).trim() : '';
+      })();
+    if (!urlCandidate || !/^https?:\/\//i.test(urlCandidate)) {
+      return {
+        applied: false,
+        before: existingImages[0] || '',
+        after: existingImages[0] || '',
+        reason: 'AI did not return a valid regenerated image URL.',
+      };
+    }
+    if (urlCandidate === existingImages[0]) {
+      return {
+        applied: false,
+        before: existingImages[0] || '',
+        after: existingImages[0] || '',
+        reason: 'AI returned the same image URL.',
+      };
+    }
+    const nextImages = [...existingImages];
+    nextImages[0] = urlCandidate;
+    stagedImageUrls = nextImages;
+    return {
+      applied: true,
+      before: existingImages[0] || '',
+      after: urlCandidate,
+      reason: 'AI regenerated and replaced the primary product image.',
     };
   };
 
   const applyAiExecution = async () => {
     const enhanced: AutomationCheckReportRow[] = [];
     const pendingUpdates: Record<string, string> = {};
+    let hasPendingImageUpdate = false;
+    const strictEditKeys = new Set([
+      'name_grammar',
+      'description_grammar',
+      'image_quality',
+      'predominant_color_match',
+    ]);
+    const imageEditKeys = new Set(['image_quality', 'predominant_color_match']);
     for (const row of report) {
       const criterion = criteria.find((entry) => entry.key === row.key);
       if (!criterion || !criterion.requiresAi || row.status === 'SKIPPED') {
@@ -1162,41 +1320,93 @@ Return concise analysis and correction guidance in plain text.`;
           message: `${row.message} AI verification: ${execution.output}`,
         };
       }
-      if (
-        criterion.allowAiEdits === true &&
-        criterion.requiresAi === true &&
-        nextRow.status === 'FAIL' &&
-        persistStagedProductEdits
-      ) {
-        const editResult = await requestAiFieldEdit({ row: nextRow });
-        if (editResult) {
-          const rule = criterionEditRule[row.key];
-          if (editResult.applied && rule) {
-            pendingUpdates[rule.field] = editResult.after;
-            stagedProductFields[rule.field] = editResult.after;
+      const canApplyAiEdits = criterion.allowAiEdits === true && criterion.requiresAi === true;
+      if (canApplyAiEdits) {
+        const textRule = resolveCriterionEditRule(row.key);
+        const shouldAttemptTextEdit =
+          Boolean(textRule) &&
+          Boolean(persistStagedProductEdits) &&
+          (nextRow.status === 'FAIL' || strictEditKeys.has(row.key));
+        if (shouldAttemptTextEdit) {
+          const editResult = await requestAiFieldEdit({ row: nextRow });
+          if (editResult && textRule) {
+            if (editResult.applied) {
+              pendingUpdates[textRule.field] = editResult.after;
+              stagedProductFields[textRule.field] = editResult.after;
+              nextRow = {
+                ...nextRow,
+                status: 'PASS',
+                message: `${nextRow.message} AI auto-edit applied to ${textRule.field}.`,
+              };
+              changeReport.push({
+                key: row.key,
+                label: row.label,
+                field: textRule.field,
+                beforeValue: editResult.before,
+                afterValue: editResult.after,
+                status: 'APPLIED',
+                reason: editResult.reason,
+              });
+            } else {
+              const strictFailed = strictEditKeys.has(row.key);
+              if (strictFailed) {
+                nextRow = {
+                  ...nextRow,
+                  status: 'FAIL',
+                  message: `${nextRow.message} Strict AI edit required for ${textRule.field}: ${editResult.reason}`,
+                };
+              }
+              changeReport.push({
+                key: row.key,
+                label: row.label,
+                field: textRule.field,
+                beforeValue: editResult.before,
+                afterValue: editResult.after,
+                status: 'SKIPPED',
+                reason: editResult.reason,
+              });
+            }
+          }
+        }
+
+        const shouldAttemptImageEdit =
+          imageEditKeys.has(row.key) &&
+          Boolean(persistStagedImageEdits) &&
+          (nextRow.status === 'FAIL' || strictEditKeys.has(row.key));
+        if (shouldAttemptImageEdit) {
+          const imageResult = await requestAiImageEdit({ row: nextRow });
+          if (imageResult.applied) {
+            hasPendingImageUpdate = true;
             nextRow = {
               ...nextRow,
               status: 'PASS',
-              message: `${nextRow.message} AI auto-edit applied to ${rule.field}.`,
+              message: `${nextRow.message} AI auto-edit applied to primary image.`,
             };
             changeReport.push({
               key: row.key,
               label: row.label,
-              field: rule.field,
-              beforeValue: editResult.before,
-              afterValue: editResult.after,
+              field: 'images[0]',
+              beforeValue: imageResult.before,
+              afterValue: imageResult.after,
               status: 'APPLIED',
-              reason: editResult.reason,
+              reason: imageResult.reason,
             });
-          } else if (rule) {
+          } else {
+            if (strictEditKeys.has(row.key)) {
+              nextRow = {
+                ...nextRow,
+                status: 'FAIL',
+                message: `${nextRow.message} Strict AI edit required for images: ${imageResult.reason}`,
+              };
+            }
             changeReport.push({
               key: row.key,
               label: row.label,
-              field: rule.field,
-              beforeValue: editResult.before,
-              afterValue: editResult.after,
+              field: 'images[0]',
+              beforeValue: imageResult.before,
+              afterValue: imageResult.after,
               status: 'SKIPPED',
-              reason: editResult.reason,
+              reason: imageResult.reason,
             });
           }
         }
@@ -1205,6 +1415,9 @@ Return concise analysis and correction guidance in plain text.`;
     }
     if (persistStagedProductEdits && Object.keys(pendingUpdates).length > 0) {
       await persistStagedProductEdits(pendingUpdates);
+    }
+    if (persistStagedImageEdits && hasPendingImageUpdate) {
+      await persistStagedImageEdits(readStagedImageUrls());
     }
     return enhanced;
   };
@@ -1246,15 +1459,44 @@ Return concise analysis and correction guidance in plain text.`;
     const platformMinYards = Math.max(1, Number(workflow.orderLimits?.minFabricYardsPerOrder || 3));
     stagedProductFields.name = String(product.name || '').trim();
     stagedProductFields.description = String(product.description || '').trim();
+    stagedProductFields.finalPrice = String(Number(product.finalPrice || 0));
+    stagedProductFields.minYards = String(Number(product.minYards || 0));
+    stagedProductFields.stockYards = String(Number(product.stockYards || 0));
+    const existingFabricImages = [...product.images].sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+    stagedImageUrls = existingFabricImages.map((entry) => String(entry.url || '').trim()).filter(Boolean);
     persistStagedProductEdits = async (updates) => {
       const payload: Record<string, unknown> = {};
       if (typeof updates.name === 'string') payload.name = updates.name;
       if (typeof updates.description === 'string') payload.description = updates.description;
+      if (typeof updates.finalPrice === 'string' && Number.isFinite(Number(updates.finalPrice))) {
+        payload.finalPrice = Number(updates.finalPrice);
+      }
+      if (typeof updates.minYards === 'string' && Number.isFinite(Number(updates.minYards))) {
+        payload.minYards = Number(updates.minYards);
+      }
+      if (typeof updates.stockYards === 'string' && Number.isFinite(Number(updates.stockYards))) {
+        payload.stockYards = Number(updates.stockYards);
+      }
       if (Object.keys(payload).length === 0) return;
       await prisma.fabric.update({
         where: { id: product.id },
         data: payload as any,
       });
+    };
+    persistStagedImageEdits = async (urls) => {
+      const cleanUrls = urls.map((entry) => String(entry || '').trim()).filter(Boolean);
+      if (cleanUrls.length === 0) return;
+      await prisma.$transaction([
+        prisma.fabricImage.deleteMany({ where: { fabricId: product.id } }),
+        prisma.fabricImage.createMany({
+          data: cleanUrls.map((url, idx) => ({
+            fabricId: product.id,
+            url,
+            alt: existingFabricImages[idx]?.alt || null,
+            sortOrder: idx,
+          })),
+        }),
+      ]);
     };
     aiContextSummary = JSON.stringify({
       productType: 'FABRIC',
@@ -1367,15 +1609,38 @@ Return concise analysis and correction guidance in plain text.`;
     const peerAverage = Number(peerAvgRows?.[0]?.avgPrice || 0);
     stagedProductFields.name = String(product.name || '').trim();
     stagedProductFields.description = String(product.description || '').trim();
+    stagedProductFields.basePrice = String(Number(product.basePrice || 0));
+    const existingReadyToWearImages = [...product.images].sort(
+      (a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0)
+    );
+    stagedImageUrls = existingReadyToWearImages.map((entry) => String(entry.url || '').trim()).filter(Boolean);
     persistStagedProductEdits = async (updates) => {
       const payload: Record<string, unknown> = {};
       if (typeof updates.name === 'string') payload.name = updates.name;
       if (typeof updates.description === 'string') payload.description = updates.description;
+      if (typeof updates.basePrice === 'string' && Number.isFinite(Number(updates.basePrice))) {
+        payload.basePrice = Number(updates.basePrice);
+      }
       if (Object.keys(payload).length === 0) return;
       await prisma.readyToWear.update({
         where: { id: product.id },
         data: payload as any,
       });
+    };
+    persistStagedImageEdits = async (urls) => {
+      const cleanUrls = urls.map((entry) => String(entry || '').trim()).filter(Boolean);
+      if (cleanUrls.length === 0) return;
+      await prisma.$transaction([
+        prisma.readyToWearImage.deleteMany({ where: { readyToWearId: product.id } }),
+        prisma.readyToWearImage.createMany({
+          data: cleanUrls.map((url, idx) => ({
+            readyToWearId: product.id,
+            url,
+            alt: existingReadyToWearImages[idx]?.alt || null,
+            sortOrder: idx,
+          })),
+        }),
+      ]);
     };
     aiContextSummary = JSON.stringify({
       productType: 'READY_TO_WEAR',
@@ -1477,15 +1742,36 @@ Return concise analysis and correction guidance in plain text.`;
     const peerAverage = Number(peerAvgRows?.[0]?.avgPrice || 0);
     stagedProductFields.name = String(product.name || '').trim();
     stagedProductFields.description = String(product.description || '').trim();
+    stagedProductFields.basePrice = String(Number(product.basePrice || 0));
+    const existingDesignImages = [...product.images].sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+    stagedImageUrls = existingDesignImages.map((entry) => String(entry.url || '').trim()).filter(Boolean);
     persistStagedProductEdits = async (updates) => {
       const payload: Record<string, unknown> = {};
       if (typeof updates.name === 'string') payload.name = updates.name;
       if (typeof updates.description === 'string') payload.description = updates.description;
+      if (typeof updates.basePrice === 'string' && Number.isFinite(Number(updates.basePrice))) {
+        payload.basePrice = Number(updates.basePrice);
+      }
       if (Object.keys(payload).length === 0) return;
       await prisma.design.update({
         where: { id: product.id },
         data: payload as any,
       });
+    };
+    persistStagedImageEdits = async (urls) => {
+      const cleanUrls = urls.map((entry) => String(entry || '').trim()).filter(Boolean);
+      if (cleanUrls.length === 0) return;
+      await prisma.$transaction([
+        prisma.designImage.deleteMany({ where: { designId: product.id } }),
+        prisma.designImage.createMany({
+          data: cleanUrls.map((url, idx) => ({
+            designId: product.id,
+            url,
+            alt: existingDesignImages[idx]?.alt || null,
+            sortOrder: idx,
+          })),
+        }),
+      ]);
     };
     aiContextSummary = JSON.stringify({
       productType: 'DESIGN',

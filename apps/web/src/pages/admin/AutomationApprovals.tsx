@@ -362,6 +362,8 @@ export default function AdminAutomationApprovalsPage() {
               {criterion.allowAiEdits === true ? (
                 <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
                   AI can directly update mapped product fields for this criterion and include before/after comparison.
+                  For title/description/image criteria, strict mode is enforced: if AI cannot apply a real change, the
+                  criterion remains failed.
                 </p>
               ) : null}
             </div>
