@@ -30,7 +30,7 @@ const registerSchema = z.object({
   city: z.string().optional(),
   address: z.string().optional(),
   bio: z.string().optional(),
-  referralCode: z.string().trim().max(80).optional(),
+  referralCode: z.string().trim().min(2, 'Referral code is required').max(80),
 });
 
 const loginSchema = z.object({

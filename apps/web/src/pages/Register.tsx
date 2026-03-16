@@ -17,6 +17,12 @@ import { normalizePhoneWithCountryPrefix } from '../utils/phone';
 import { useAuthPageSettings } from '../hooks/useAuthPageSettings';
 
 type UserRole = 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+const DEFAULT_REFERRAL_CODE = 'PLATFORM-DEFAULT';
+const normalizeReferralCodeInput = (value: string) =>
+  String(value || '')
+    .toUpperCase()
+    .replace(/\s+/g, '-')
+    .slice(0, 80);
 
 interface RoleOption {
   value: UserRole;
@@ -51,6 +57,7 @@ export default function Register() {
   const [searchParams] = useSearchParams();
   const { login } = useAuthStore();
   const { settings: authPageSettings } = useAuthPageSettings();
+  const referralCodeFromQuery = normalizeReferralCodeInput(String(searchParams.get('ref') || '').trim());
   const [selectedRole, setSelectedRole] = useState<UserRole>('CUSTOMER');
   const [formData, setFormData] = useState({
     fullName: '',
@@ -61,6 +68,7 @@ export default function Register() {
     country: '',
     city: '',
     businessName: '',
+    referralCode: referralCodeFromQuery || DEFAULT_REFERRAL_CODE,
     agreeTerms: false,
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -78,7 +86,36 @@ export default function Register() {
       : allCountryOptions;
   const selectedCountryCode = resolveCountryCode(formData.country);
   const cityOptions = getCityOptionsByCountryCode(selectedCountryCode);
-  const referralCode = String(searchParams.get('ref') || '').trim();
+  useEffect(() => {
+    if (!referralCodeFromQuery) return;
+    setFormData((prev) => ({ ...prev, referralCode: referralCodeFromQuery }));
+  }, [referralCodeFromQuery]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPublicReferralConfig = async () => {
+      try {
+        const response = await api.referrals.getPublicProgramSettings();
+        if (!response.success || cancelled) return;
+        const defaultCode = normalizeReferralCodeInput(String(response.data?.defaultReferralCode || DEFAULT_REFERRAL_CODE));
+        if (!defaultCode) return;
+        setFormData((prev) => {
+          if (referralCodeFromQuery) return prev;
+          const current = normalizeReferralCodeInput(prev.referralCode || '');
+          if (!current || current === DEFAULT_REFERRAL_CODE) {
+            return { ...prev, referralCode: defaultCode };
+          }
+          return prev;
+        });
+      } catch {
+        // Keep local fallback code when route is unavailable.
+      }
+    };
+    void loadPublicReferralConfig();
+    return () => {
+      cancelled = true;
+    };
+  }, [referralCodeFromQuery]);
 
   useEffect(() => {
     if (selectedRole !== 'FABRIC_SELLER' && selectedRole !== 'FASHION_DESIGNER') return;
@@ -120,7 +157,7 @@ export default function Register() {
         firstName,
         lastName,
         role: selectedRole,
-        referralCode: referralCode || undefined,
+        referralCode: normalizeReferralCodeInput(formData.referralCode),
       });
 
       if (response.success) {
@@ -240,9 +277,9 @@ export default function Register() {
                 {notice}
               </div>
             ) : null}
-            {referralCode ? (
+            {referralCodeFromQuery ? (
               <div className="border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                Referral applied: <span className="font-semibold">{referralCode}</span>
+                Referral applied: <span className="font-semibold">{referralCodeFromQuery}</span>
               </div>
             ) : null}
 
@@ -378,6 +415,22 @@ export default function Register() {
                     </select>
                   </>
                 ) : null}
+
+                <div className="sm:col-span-2">
+                  <input
+                    type="text"
+                    required
+                    value={formData.referralCode}
+                    onChange={(e) =>
+                      setFormData({ ...formData, referralCode: normalizeReferralCodeInput(e.target.value) })
+                    }
+                    className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
+                    placeholder="Referral code"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Referral code is required. If you do not have one, keep the default code.
+                  </p>
+                </div>
               </div>
 
               <label htmlFor="terms" className="inline-flex items-start gap-2 text-sm text-gray-600">

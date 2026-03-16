@@ -6022,6 +6022,7 @@ const adminApi = {
   updateReferralProgramSettings: (data: {
     enabled?: boolean;
     registrationReferralEnabled?: boolean;
+    defaultReferralCode?: string;
     sellerCommissionPercent?: number;
     designerCommissionPercent?: number;
     holdDays?: number;
@@ -9217,6 +9218,18 @@ const enterpriseApi = {
 };
 
 const referralsApi = {
+  getPublicProgramSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        enabled: boolean;
+        registrationReferralEnabled: boolean;
+        defaultReferralCode: string;
+      };
+      source?: string;
+      updatedAt?: string | null;
+    }>('/referrals/program/public'),
+
   getMyDashboard: (params?: { page?: number; limit?: number }) =>
     apiService.get<{ success: boolean; data: any }>('/referrals/me', { params }),
 };

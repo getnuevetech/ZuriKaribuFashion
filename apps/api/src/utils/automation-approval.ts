@@ -273,11 +273,171 @@ export const saveAutomationApprovalSettings = async (value: unknown) => {
   return (await readAutomationApprovalSettings()).settings;
 };
 
-const hasActiveAiProviderBinding = (settings: AutomationApprovalSettings, criterionKey: string) => {
-  const binding = settings.functionBindings.find((entry) => entry.isActive && entry.functionKey.includes(criterionKey));
-  if (!binding?.providerId) return false;
-  const provider = settings.aiProviders.find((entry) => entry.id === binding.providerId && entry.isActive);
-  return Boolean(provider && provider.baseUrl && provider.apiKey);
+const CRITERION_AI_FUNCTION_MAP: Record<string, string> = {
+  name_grammar: 'text_grammar_enhancement',
+  description_grammar: 'text_grammar_enhancement',
+  material_match: 'image_verification',
+  style_match: 'image_verification',
+  predominant_color_match: 'image_verification',
+  image_quality: 'image_verification',
+};
+
+type AiExecutionResult =
+  | { status: 'OK'; output: string }
+  | { status: 'NO_PROVIDER'; reason: string }
+  | { status: 'ERROR'; reason: string };
+
+const normalizeEndpoint = (baseUrl: string, suffix: string) => {
+  const trimmed = String(baseUrl || '').trim().replace(/\/+$/, '');
+  if (!trimmed) return '';
+  if (trimmed.toLowerCase().endsWith(suffix.toLowerCase())) return trimmed;
+  return `${trimmed}${suffix.startsWith('/') ? '' : '/'}${suffix}`;
+};
+
+const readNestedString = (payload: any, path: string[]): string => {
+  let node = payload;
+  for (const key of path) {
+    if (!node || typeof node !== 'object') return '';
+    node = node[key];
+  }
+  return typeof node === 'string' ? node : '';
+};
+
+const resolveProviderForFunction = (settings: AutomationApprovalSettings, functionKey: string) => {
+  const binding = settings.functionBindings.find(
+    (entry) => entry.isActive !== false && String(entry.functionKey || '').trim() === functionKey
+  );
+  if (!binding?.providerId) return null;
+  const provider = settings.aiProviders.find(
+    (entry) => entry.isActive !== false && String(entry.id || '').trim() === String(binding.providerId || '').trim()
+  );
+  if (!provider) return null;
+  if (!String(provider.baseUrl || '').trim() || !String(provider.apiKey || '').trim()) return null;
+  return provider;
+};
+
+const callTextExecutor = async (
+  provider: AutomationAiProvider,
+  prompt: string,
+  system: string
+): Promise<AiExecutionResult> => {
+  const endpoint = normalizeEndpoint(provider.baseUrl, '/chat/completions');
+  if (!endpoint) {
+    return { status: 'ERROR', reason: 'Missing provider endpoint.' } as AiExecutionResult;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25_000);
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${String(provider.apiKey || '').trim()}`,
+      },
+      body: JSON.stringify({
+        model: String(provider.model || '').trim() || 'gpt-4o-mini',
+        temperature: 0.2,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: prompt },
+        ],
+      }),
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      return {
+        status: 'ERROR',
+        reason: `Provider returned ${response.status}: ${String(text || '').slice(0, 200)}`,
+      };
+    }
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(text || '{}');
+    } catch {
+      parsed = {};
+    }
+    const output =
+      readNestedString(parsed, ['choices', '0', 'message', 'content']) ||
+      readNestedString(parsed, ['output_text']) ||
+      String(text || '').trim();
+    if (!output) {
+      return { status: 'ERROR', reason: 'Provider returned an empty completion.' };
+    }
+    return { status: 'OK', output: String(output).trim().slice(0, 1000) };
+  } catch (error: any) {
+    return { status: 'ERROR', reason: String(error?.message || 'Network error while calling provider.') };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const callImageRegenerationExecutor = async (
+  provider: AutomationAiProvider,
+  prompt: string
+): Promise<AiExecutionResult> => {
+  const endpoint = normalizeEndpoint(provider.baseUrl, '/images/generations');
+  if (!endpoint) {
+    return { status: 'ERROR', reason: 'Missing provider endpoint.' } as AiExecutionResult;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${String(provider.apiKey || '').trim()}`,
+      },
+      body: JSON.stringify({
+        model: String(provider.model || '').trim() || 'gpt-image-1',
+        prompt,
+        size: '1024x1024',
+      }),
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      return {
+        status: 'ERROR',
+        reason: `Image generation returned ${response.status}: ${String(text || '').slice(0, 200)}`,
+      };
+    }
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(text || '{}');
+    } catch {
+      parsed = {};
+    }
+    const imageUrl = readNestedString(parsed, ['data', '0', 'url']);
+    if (imageUrl) return { status: 'OK', output: `Regenerated image URL: ${imageUrl}` };
+    const hasB64 = readNestedString(parsed, ['data', '0', 'b64_json']);
+    if (hasB64) return { status: 'OK', output: 'Regenerated image payload received (base64).' };
+    return { status: 'ERROR', reason: 'No regenerated image output returned.' };
+  } catch (error: any) {
+    return { status: 'ERROR', reason: String(error?.message || 'Network error while regenerating image.') };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const executeAutomationAiFunction = async (params: {
+  settings: AutomationApprovalSettings;
+  functionKey: string;
+  prompt: string;
+  systemPrompt: string;
+}): Promise<AiExecutionResult> => {
+  const provider = resolveProviderForFunction(params.settings, params.functionKey);
+  if (!provider) {
+    return {
+      status: 'NO_PROVIDER',
+      reason: `No active provider binding for ${params.functionKey}.`,
+    } as AiExecutionResult;
+  }
+  if (params.functionKey === 'image_regeneration') {
+    return callImageRegenerationExecutor(provider, params.prompt);
+  }
+  return callTextExecutor(provider, params.prompt, params.systemPrompt);
 };
 
 const safeRatio = (a: number, b: number) => (b > 0 ? a / b : 0);
@@ -290,6 +450,7 @@ export const evaluateProductAutomationChecks = async (input: {
   const settings = input.settingsOverride || (await readAutomationApprovalSettings()).settings;
   const criteria = settings.criteria[input.productType];
   const report: AutomationCheckReportRow[] = [];
+  let aiContextSummary = '';
   if (!settings.enabled) {
     return {
       canAutoApprove: false,
@@ -311,21 +472,82 @@ export const evaluateProductAutomationChecks = async (input: {
       report.push({ ...row, status: 'SKIPPED', message: 'Disabled by admin automation settings.' });
       return;
     }
-    if (criterion?.requiresAi) {
-      const aiReady = hasActiveAiProviderBinding(settings, row.key);
-      if (!aiReady) {
-        report.push({
-          key: row.key,
-          label: row.label,
-          status: 'NEEDS_AI',
-          message: 'AI function is required but no active provider binding is configured.',
-        });
-        return;
-      }
-      report.push({ ...row, status: row.status === 'FAIL' ? 'FAIL' : 'PASS' });
-      return;
-    }
     report.push(row);
+  };
+
+  const applyAiExecution = async () => {
+    const enhanced: AutomationCheckReportRow[] = [];
+    for (const row of report) {
+      const criterion = criteria.find((entry) => entry.key === row.key);
+      if (!criterion || !criterion.requiresAi || row.status === 'SKIPPED') {
+        enhanced.push(row);
+        continue;
+      }
+      const functionKey = CRITERION_AI_FUNCTION_MAP[row.key] || 'text_grammar_enhancement';
+      const prompt = `Automation criterion: ${row.label}
+
+Current check status: ${row.status}
+Current check message: ${row.message}
+
+Product context:
+${aiContextSummary || 'No extra product context provided.'}
+
+Return concise analysis and correction guidance in plain text.`;
+      const execution = await executeAutomationAiFunction({
+        settings,
+        functionKey,
+        prompt,
+        systemPrompt:
+          'You are an e-commerce quality automation evaluator. Return concise actionable analysis only.',
+      });
+      if (execution.status === 'NO_PROVIDER') {
+        enhanced.push({
+          ...row,
+          status: 'NEEDS_AI',
+          message: `AI provider missing: ${execution.reason}`,
+        });
+        continue;
+      }
+      if (execution.status === 'ERROR') {
+        if (row.key === 'image_quality') {
+          const regenerate = await executeAutomationAiFunction({
+            settings,
+            functionKey: 'image_regeneration',
+            prompt: `Regenerate product images with improved quality and preserve original content. Context: ${aiContextSummary}`,
+            systemPrompt:
+              'You are an image regeneration assistant for e-commerce catalog quality improvement.',
+          });
+          if (regenerate.status === 'OK') {
+            enhanced.push({
+              ...row,
+              status: row.status === 'FAIL' ? 'FAIL' : 'PASS',
+              message: `${row.message} AI regeneration fallback: ${regenerate.output}`,
+            });
+            continue;
+          }
+        }
+        enhanced.push({
+          ...row,
+          status: 'FAIL',
+          message: `${row.message} AI execution error: ${execution.reason}`,
+        });
+        continue;
+      }
+      if (row.status === 'FAIL') {
+        enhanced.push({
+          ...row,
+          status: 'FAIL',
+          message: `${row.message} AI guidance: ${execution.output}`,
+        });
+        continue;
+      }
+      enhanced.push({
+        ...row,
+        status: 'PASS',
+        message: `${row.message} AI verification: ${execution.output}`,
+      });
+    }
+    return enhanced;
   };
 
   if (input.productType === ProductType.FABRIC) {
@@ -362,6 +584,16 @@ export const evaluateProductAutomationChecks = async (input: {
     const peerAverage = Number(peerAvgRows?.[0]?.avgPrice || 0);
     const workflow = await readOrderWorkflowSettings();
     const platformMinYards = Math.max(1, Number(workflow.orderLimits?.minFabricYardsPerOrder || 3));
+    aiContextSummary = JSON.stringify({
+      productType: 'FABRIC',
+      id: product.id,
+      name: product.name,
+      materialType: product.materialType?.name || null,
+      finalPrice: Number(product.finalPrice || 0),
+      minYards: Number(product.minYards || 0),
+      stockYards: Number(product.stockYards || 0),
+      imageCount: product.images.length,
+    });
     addResult({
       key: 'name_grammar',
       label: 'Check fabric name/title grammar and improve wording',
@@ -460,6 +692,15 @@ export const evaluateProductAutomationChecks = async (input: {
       product.id
     );
     const peerAverage = Number(peerAvgRows?.[0]?.avgPrice || 0);
+    aiContextSummary = JSON.stringify({
+      productType: 'READY_TO_WEAR',
+      id: product.id,
+      name: product.name,
+      category: product.category?.name || null,
+      basePrice: Number(product.basePrice || 0),
+      variants: product.sizeVariations.length,
+      imageCount: product.images.length,
+    });
     addResult({
       key: 'name_grammar',
       label: 'Check design name/title grammar and improve wording',
@@ -548,6 +789,16 @@ export const evaluateProductAutomationChecks = async (input: {
       product.id
     );
     const peerAverage = Number(peerAvgRows?.[0]?.avgPrice || 0);
+    aiContextSummary = JSON.stringify({
+      productType: 'DESIGN',
+      id: product.id,
+      name: product.name,
+      category: product.category?.name || null,
+      basePrice: Number(product.basePrice || 0),
+      suitableFabrics: product.suitableFabrics.length,
+      requiredMeasurements: product.measurementVariables.filter((row) => row.isRequired !== false).length,
+      imageCount: product.images.length,
+    });
     addResult({
       key: 'name_grammar',
       label: 'Check design name/title grammar and improve wording',
@@ -607,12 +858,13 @@ export const evaluateProductAutomationChecks = async (input: {
     });
   }
 
-  const hasFail = report.some((entry) => entry.status === 'FAIL');
-  const hasNeedsAi = report.some((entry) => entry.status === 'NEEDS_AI');
+  const enhancedReport = await applyAiExecution();
+  const hasFail = enhancedReport.some((entry) => entry.status === 'FAIL');
+  const hasNeedsAi = enhancedReport.some((entry) => entry.status === 'NEEDS_AI');
   const canAutoApprove = !hasFail && (!settings.failOnNeedsAi || !hasNeedsAi);
   return {
     canAutoApprove,
     status: canAutoApprove ? ('PASS' as const) : ('REVIEW_REQUIRED' as const),
-    report,
+    report: enhancedReport,
   };
 };

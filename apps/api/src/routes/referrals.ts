@@ -15,7 +15,6 @@ import {
 const RESELLER_ROLE = 'RESELLER_INFLUENCER' as unknown as UserRole;
 
 const router = Router();
-router.use(authenticate);
 router.use(async (_req, _res, next) => {
   try {
     await ensureReferralProgramSchema();
@@ -31,15 +30,27 @@ const resellerCreateSchema = z.object({
   lastName: z.string().min(1),
   password: z.string().min(8),
   phone: z.string().optional(),
-  status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
+  status: z.nativeEnum(UserStatus).optional().default(UserStatus.ACTIVE),
   displayName: z.string().max(120).optional(),
-  commissionOverridePercent: z.number().min(0).max(100).nullable().optional(),
+  commissionOverridePercent: z.preprocess(
+    (value) => {
+      if (value === '' || value === null || value === undefined) return undefined;
+      return Number(value);
+    },
+    z.number().min(0).max(100).optional()
+  ),
 });
 
 const resellerUpdateSchema = z.object({
   displayName: z.string().max(120).optional(),
   isActive: z.boolean().optional(),
-  commissionOverridePercent: z.number().min(0).max(100).nullable().optional(),
+  commissionOverridePercent: z.preprocess(
+    (value) => {
+      if (value === '' || value === null || value === undefined) return undefined;
+      return Number(value);
+    },
+    z.number().min(0).max(100).optional()
+  ),
   status: z.nativeEnum(UserStatus).optional(),
   phone: z.string().nullable().optional(),
 });
@@ -47,12 +58,33 @@ const resellerUpdateSchema = z.object({
 const referralSettingsSchema = z.object({
   enabled: z.boolean().optional(),
   registrationReferralEnabled: z.boolean().optional(),
+  defaultReferralCode: z.string().trim().min(2).max(80).optional(),
   sellerCommissionPercent: z.number().min(0).max(100).optional(),
   designerCommissionPercent: z.number().min(0).max(100).optional(),
   holdDays: z.number().int().min(0).max(365).optional(),
   minimumPayoutUsd: z.number().min(0).max(1_000_000).optional(),
   referralBaseUrl: z.string().trim().min(1).optional(),
 });
+
+router.get('/program/public', async (_req, res, next) => {
+  try {
+    const payload = await readReferralProgramSettings();
+    res.json({
+      success: true,
+      data: {
+        enabled: payload.settings.enabled,
+        registrationReferralEnabled: payload.settings.registrationReferralEnabled,
+        defaultReferralCode: payload.settings.defaultReferralCode,
+      },
+      source: payload.source,
+      updatedAt: payload.updatedAt,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.use(authenticate);
 
 router.get(
   '/program/settings',
@@ -77,7 +109,15 @@ router.patch(
   authorizePermissions(Permissions.USERS_MANAGE),
   async (req, res, next) => {
     try {
-      const payload = referralSettingsSchema.parse(req.body || {});
+      const parsed = referralSettingsSchema.safeParse(req.body || {});
+      if (!parsed.success) {
+        return res.status(400).json({
+          success: false,
+          message: parsed.error.issues[0]?.message || 'Invalid referral settings payload.',
+          errors: parsed.error.issues,
+        });
+      }
+      const payload = parsed.data;
       const saved = await saveReferralProgramSettings(payload);
       res.json({
         success: true,
@@ -111,7 +151,15 @@ router.get('/resellers', authorizePermissions(Permissions.USERS_READ), async (re
 
 router.post('/resellers', authorizePermissions(Permissions.USERS_MANAGE), async (req, res, next) => {
   try {
-    const payload = resellerCreateSchema.parse(req.body || {});
+    const parsed = resellerCreateSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: parsed.error.issues[0]?.message || 'Invalid reseller payload.',
+        errors: parsed.error.issues,
+      });
+    }
+    const payload = parsed.data;
     const existing = await prisma.user.findFirst({
       where: {
         email: { equals: payload.email, mode: 'insensitive' },
@@ -183,7 +231,15 @@ router.post('/resellers', authorizePermissions(Permissions.USERS_MANAGE), async 
 
 router.patch('/resellers/:userId', authorizePermissions(Permissions.USERS_MANAGE), async (req, res, next) => {
   try {
-    const payload = resellerUpdateSchema.parse(req.body || {});
+    const parsed = resellerUpdateSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: parsed.error.issues[0]?.message || 'Invalid reseller update payload.',
+        errors: parsed.error.issues,
+      });
+    }
+    const payload = parsed.data;
     const userId = String(req.params.userId || '').trim();
     if (!userId) {
       return res.status(400).json({ success: false, message: 'User ID is required.' });

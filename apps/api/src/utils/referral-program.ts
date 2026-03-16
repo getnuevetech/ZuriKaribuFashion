@@ -7,6 +7,7 @@ export const REFERRAL_PROGRAM_SETTINGS_KEY = 'REFERRAL_PROGRAM_SETTINGS_V1';
 export type ReferralProgramSettings = {
   enabled: boolean;
   registrationReferralEnabled: boolean;
+  defaultReferralCode: string;
   sellerCommissionPercent: number;
   designerCommissionPercent: number;
   holdDays: number;
@@ -23,6 +24,7 @@ export type ReferralVendorSaleEntry = {
 const DEFAULT_REFERRAL_PROGRAM_SETTINGS: ReferralProgramSettings = {
   enabled: true,
   registrationReferralEnabled: true,
+  defaultReferralCode: 'PLATFORM-DEFAULT',
   sellerCommissionPercent: 5,
   designerCommissionPercent: 5,
   holdDays: 7,
@@ -60,6 +62,14 @@ const toPercent = (value: unknown, fallback = 0) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Number(Math.max(0, Math.min(100, parsed)).toFixed(4));
+};
+const normalizeReferralCodeToken = (value: unknown, fallback = DEFAULT_REFERRAL_PROGRAM_SETTINGS.defaultReferralCode) => {
+  const token = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '-')
+    .slice(0, 80);
+  return token || fallback;
 };
 
 const normalizeRole = (value: unknown): UserRole | null => {
@@ -267,6 +277,10 @@ export const normalizeReferralProgramSettings = (value: unknown): ReferralProgra
   return {
     enabled: source.enabled !== false,
     registrationReferralEnabled: source.registrationReferralEnabled !== false,
+    defaultReferralCode: normalizeReferralCodeToken(
+      source.defaultReferralCode,
+      DEFAULT_REFERRAL_PROGRAM_SETTINGS.defaultReferralCode
+    ),
     sellerCommissionPercent: toPercent(
       source.sellerCommissionPercent,
       DEFAULT_REFERRAL_PROGRAM_SETTINGS.sellerCommissionPercent
@@ -439,6 +453,10 @@ export const attributeReferredUser = async (input: {
   await ensureReferralProgramSchema();
   const settings = (await readReferralProgramSettings()).settings;
   if (!settings.enabled || !settings.registrationReferralEnabled) return { attributed: false as const };
+  const referralCode = normalizeReferralCode(input.referralCode || '');
+  if (!referralCode || referralCode === normalizeReferralCode(settings.defaultReferralCode)) {
+    return { attributed: false as const };
+  }
   const referredRole = normalizeRole(input.referredRole);
   if (!referredRole) return { attributed: false as const };
   if (
@@ -448,7 +466,7 @@ export const attributeReferredUser = async (input: {
   ) {
     return { attributed: false as const };
   }
-  const profile = await readResellerByReferralCode(input.referralCode || '');
+  const profile = await readResellerByReferralCode(referralCode);
   if (!profile) return { attributed: false as const };
   if (String(profile.userId) === String(input.referredUserId)) return { attributed: false as const };
   await prisma.$executeRawUnsafe(

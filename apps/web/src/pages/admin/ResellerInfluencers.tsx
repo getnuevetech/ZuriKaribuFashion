@@ -15,6 +15,7 @@ export default function AdminResellerInfluencersPage() {
   const [settings, setSettings] = useState<any>({
     enabled: true,
     registrationReferralEnabled: true,
+    defaultReferralCode: 'PLATFORM-DEFAULT',
     sellerCommissionPercent: 5,
     designerCommissionPercent: 5,
     holdDays: 7,
@@ -33,6 +34,12 @@ export default function AdminResellerInfluencersPage() {
     status: 'ACTIVE',
   });
 
+  const readApiError = (error: any, fallback: string) => {
+    const issues = Array.isArray(error?.response?.data?.errors) ? error.response.data.errors : [];
+    const firstIssue = issues.length > 0 ? String(issues[0]?.message || '').trim() : '';
+    return firstIssue || error?.response?.data?.message || error?.message || fallback;
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -44,7 +51,7 @@ export default function AdminResellerInfluencersPage() {
       if (settingsRes.success) setSettings(settingsRes.data || settings);
       if (rowsRes.success) setRows(Array.isArray(rowsRes.data) ? rowsRes.data : []);
     } catch (error: any) {
-      setMessage(error?.response?.data?.message || error?.message || 'Failed to load reseller referral data.');
+      setMessage(readApiError(error, 'Failed to load reseller referral data.'));
     } finally {
       setLoading(false);
     }
@@ -76,7 +83,7 @@ export default function AdminResellerInfluencersPage() {
         setMessage('Referral program settings saved.');
       }
     } catch (error: any) {
-      setMessage(error?.response?.data?.message || error?.message || 'Failed to save settings.');
+      setMessage(readApiError(error, 'Failed to save settings.'));
     } finally {
       setSavingSettings(false);
     }
@@ -117,7 +124,7 @@ export default function AdminResellerInfluencersPage() {
         await loadData();
       }
     } catch (error: any) {
-      setMessage(error?.response?.data?.message || error?.message || 'Failed to create reseller account.');
+      setMessage(readApiError(error, 'Failed to create reseller account.'));
     } finally {
       setSavingCreate(false);
     }
@@ -134,7 +141,7 @@ export default function AdminResellerInfluencersPage() {
         )
       );
     } catch (error: any) {
-      setMessage(error?.response?.data?.message || error?.message || 'Failed to update reseller status.');
+      setMessage(readApiError(error, 'Failed to update reseller status.'));
     } finally {
       setSavingUserId(null);
     }
@@ -233,6 +240,24 @@ export default function AdminResellerInfluencersPage() {
               onChange={(event) => setSettings((prev: any) => ({ ...prev, referralBaseUrl: event.target.value }))}
               className="mt-1 w-full rounded border px-3 py-2"
               placeholder="https://your-domain.com"
+            />
+          </label>
+          <label className="text-sm text-gray-700">
+            Default referral code
+            <input
+              type="text"
+              value={settings.defaultReferralCode ?? ''}
+              onChange={(event) =>
+                setSettings((prev: any) => ({
+                  ...prev,
+                  defaultReferralCode: String(event.target.value || '')
+                    .toUpperCase()
+                    .replace(/\s+/g, '-')
+                    .slice(0, 80),
+                }))
+              }
+              className="mt-1 w-full rounded border px-3 py-2"
+              placeholder="PLATFORM-DEFAULT"
             />
           </label>
           <label className="text-sm text-gray-700">
