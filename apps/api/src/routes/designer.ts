@@ -627,7 +627,9 @@ async function getDesignerProfileCompletion(userId: string) {
   writeAliasValue(profileData, PROFILE_FIELD_ALIASES.bio, profile.bio || '', fieldKeys);
   const status = submission
     ? normalizeVendorProfileStatus(submission.profileStatus)
-    : 'INCOMPLETE';
+    : profile.isVerified
+      ? 'APPROVED'
+      : 'INCOMPLETE';
   const rejectionType = normalizeVendorRejectionType(submission?.rejectionType);
   const canUpload = status === 'APPROVED';
   const canResubmitProfile = status !== 'REJECTED' || rejectionType !== 'PERMANENT';
