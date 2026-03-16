@@ -26,6 +26,21 @@ interface Product {
   image?: string | null;
   images?: string[];
   sizeVariations?: Array<{ id?: string; size: string; color?: string; variantKey?: string; price: number; stock: number }>;
+  measurements?: Array<{ name: string; unit?: string; isRequired?: boolean; description?: string }>;
+  suitableFabrics?: Array<{
+    id?: string;
+    minMeters?: number;
+    maxMeters?: number;
+    yardsNeeded?: number;
+    fabric?: {
+      id: string;
+      name: string;
+      images?: string[];
+      seller?: { businessName?: string; country?: string };
+    };
+  }>;
+  requiredFabricYards?: number;
+  predominantColor?: string | null;
   isFeatured?: boolean;
   featuredSections?: string[];
   createdAt: string;
@@ -824,6 +839,32 @@ export default function AdminProducts() {
             image: detailImages[0] || sourceProduct.image || null,
             images: detailImages,
             sizeVariations: Array.isArray((detail.data as any).sizeVariations) ? (detail.data as any).sizeVariations : [],
+          };
+        }
+      } catch (error) {
+        // Fall back to table row payload if detail hydration fails.
+      }
+    } else if (product.type === 'DESIGN') {
+      try {
+        const detail = await api.products.getDesignById(product.id);
+        if (detail?.success && detail.data) {
+          const detailImages = normalizeImageUrlList((detail.data as any).images);
+          sourceProduct = {
+            ...sourceProduct,
+            ...(detail.data as any),
+            categoryId: String((detail.data as any).categoryId || sourceProduct.categoryId || ''),
+            category: (detail.data as any).category?.name || sourceProduct.category,
+            finalPrice: Number((detail.data as any).finalPrice || (detail.data as any).basePrice || sourceProduct.finalPrice || 0),
+            image: detailImages[0] || sourceProduct.image || null,
+            images: detailImages,
+            measurements: Array.isArray((detail.data as any).measurements)
+              ? (detail.data as any).measurements
+              : Array.isArray((detail.data as any).measurementVariables)
+                ? (detail.data as any).measurementVariables
+                : [],
+            suitableFabrics: Array.isArray((detail.data as any).suitableFabrics) ? (detail.data as any).suitableFabrics : [],
+            requiredFabricYards: Number((detail.data as any).requiredFabricYards || (detail.data as any).yardsNeeded || 0),
+            predominantColor: String((detail.data as any).predominantColor || sourceProduct.predominantColor || ''),
           };
         }
       } catch (error) {
@@ -2089,6 +2130,72 @@ export default function AdminProducts() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              ) : null}
+              {(editing?.type || form.type) === 'DESIGN' && editing ? (
+                <div className="space-y-3 rounded-lg border p-3">
+                  <p className="text-sm font-medium text-gray-800">Design Details (full detail view)</p>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="rounded border bg-gray-50 px-3 py-2 text-sm">
+                      <p className="text-xs text-gray-500">Predominant color</p>
+                      <p className="font-medium text-gray-900">{String((editing as any).predominantColor || 'Not set')}</p>
+                    </div>
+                    <div className="rounded border bg-gray-50 px-3 py-2 text-sm">
+                      <p className="text-xs text-gray-500">Required minimum yard (primary fabric)</p>
+                      <p className="font-medium text-gray-900">
+                        {Number((editing as any).requiredFabricYards || 0) > 0
+                          ? `${Number((editing as any).requiredFabricYards).toFixed(2)} yards`
+                          : 'Not set'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="rounded border p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">
+                      Required Measurements
+                    </p>
+                    {Array.isArray((editing as any).measurements) && (editing as any).measurements.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {(editing as any).measurements.map((row: any, index: number) => (
+                          <span
+                            key={`${String(row?.name || 'measurement')}-${index}`}
+                            className="rounded border bg-white px-2 py-1 text-xs text-gray-700"
+                          >
+                            {String(row?.name || 'Measurement')}
+                            {row?.unit ? ` (${String(row.unit)})` : ''}
+                            {row?.isRequired === false ? ' • Optional' : ' • Required'}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">No measurement variables configured.</p>
+                    )}
+                  </div>
+                  <div className="rounded border p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">Suitable Fabrics</p>
+                    {Array.isArray((editing as any).suitableFabrics) && (editing as any).suitableFabrics.length > 0 ? (
+                      <div className="space-y-2">
+                        {(editing as any).suitableFabrics.map((row: any, index: number) => {
+                          const minMeters = Number(row?.minMeters ?? row?.yardsNeeded ?? 0);
+                          const maxMeters = Number(row?.maxMeters ?? row?.yardsNeeded ?? 0);
+                          return (
+                            <div key={`${String(row?.fabric?.id || index)}`} className="rounded border bg-white px-3 py-2">
+                              <p className="text-sm font-medium text-gray-900">{String(row?.fabric?.name || `Fabric ${index + 1}`)}</p>
+                              <p className="text-xs text-gray-500">
+                                {String(row?.fabric?.seller?.businessName || 'Seller')} • {String(row?.fabric?.seller?.country || 'Country not set')}
+                              </p>
+                              <p className="text-xs text-gray-600">
+                                Required range: {Number.isFinite(minMeters) ? minMeters.toFixed(2) : '0.00'}
+                                {' - '}
+                                {Number.isFinite(maxMeters) ? Math.max(maxMeters, minMeters).toFixed(2) : '0.00'} yards
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">No suitable fabrics configured for this design.</p>
+                    )}
                   </div>
                 </div>
               ) : null}

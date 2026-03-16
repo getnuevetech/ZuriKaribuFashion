@@ -12,15 +12,57 @@ import {
 } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useCurrencyStore } from '../store/currencyStore';
+import { api } from '../services/api';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
+
+type CartPromoPreview = {
+  code: string;
+  discountType: 'PERCENTAGE' | 'FIXED';
+  discountValue: number;
+  discountUsd: number;
+};
+
+const toMoney = (value: unknown) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Number(parsed.toFixed(2));
+};
+
+const normalizePromoPreview = (raw: any, requestedCode: string, subtotalUsd: number): CartPromoPreview => {
+  const code = String(raw?.code || raw?.promoCode || requestedCode || '')
+    .trim()
+    .toUpperCase();
+  const discountTypeRaw = String(raw?.discountType || raw?.type || 'PERCENTAGE')
+    .trim()
+    .toUpperCase();
+  const discountType = discountTypeRaw === 'FIXED' || discountTypeRaw === 'AMOUNT' ? 'FIXED' : 'PERCENTAGE';
+  const discountValue = Math.max(
+    0,
+    toMoney(
+      discountType === 'FIXED'
+        ? raw?.discountValue ?? raw?.fixedAmount ?? raw?.amountOff ?? raw?.value
+        : raw?.discountValue ?? raw?.discountPercent ?? raw?.percentage ?? raw?.percentOff ?? raw?.value
+    )
+  );
+  const directDiscount = toMoney(raw?.discountUsd ?? raw?.discount ?? raw?.discountAmountUsd ?? raw?.amountOffUsd);
+  const eligibleSubtotal = Math.max(
+    0,
+    toMoney(raw?.eligibleSubtotalUsd ?? raw?.eligibleSubtotal ?? raw?.subtotalUsd ?? raw?.subtotal ?? subtotalUsd)
+  );
+  const computedDiscount = discountType === 'FIXED' ? discountValue : (eligibleSubtotal * discountValue) / 100;
+  const discountUsd = Math.max(0, Math.min(eligibleSubtotal, toMoney(directDiscount > 0 ? directDiscount : computedDiscount)));
+  return { code, discountType, discountValue, discountUsd };
+};
 
 export default function Cart() {
   const navigate = useNavigate();
   const { items, removeItem, updateItem, clearCart, totalPrice, itemCount } = useCartStore();
   const { formatFromUsd } = useCurrencyStore();
   const [promoCode, setPromoCode] = useState('');
-  const [promoApplied, setPromoApplied] = useState(false);
+  const [promoPreview, setPromoPreview] = useState<CartPromoPreview | null>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoMessage, setPromoMessage] = useState('');
 
   const resolveCartItemPath = (item: any) => {
     if (item.kind === 'READY_TO_WEAR' && item.readyToWearId) return `/ready-to-wear/${item.readyToWearId}`;
@@ -29,13 +71,70 @@ export default function Cart() {
     return '';
   };
 
-  const handleApplyPromo = () => {
-    if (promoCode.trim()) {
-      setPromoApplied(true);
+  const handleApplyPromo = async () => {
+    const requestedCode = String(promoCode || '').trim().toUpperCase();
+    if (!requestedCode) return;
+    try {
+      setPromoLoading(true);
+      setPromoMessage('');
+      const payloadItems = items
+        .map((item) => {
+          if (item.kind === 'READY_TO_WEAR') {
+            return {
+              productType: 'READY_TO_WEAR' as const,
+              productId: item.readyToWearId,
+              unitPrice: Number(item.unitPrice || 0),
+              quantity: Number(item.quantity || 1),
+            };
+          }
+          if (item.kind === 'FABRIC_ONLY') {
+            return {
+              productType: 'FABRIC' as const,
+              productId: item.fabricId,
+              unitPrice: Number(item.pricePerYard || 0),
+              quantity: Number(item.yards || 1),
+            };
+          }
+          return {
+            productType: 'DESIGN' as const,
+            productId: item.designId,
+            unitPrice: Number(item.totalPrice || 0),
+            quantity: 1,
+          };
+        })
+        .filter((entry) => String(entry.productId || '').trim().length > 0);
+
+      const response = await api.promotions.preview({
+        code: requestedCode,
+        items: payloadItems,
+      });
+      if (!response.success || !response.data) {
+        throw new Error(response.message || 'Promo code could not be validated.');
+      }
+      const normalized = normalizePromoPreview(response.data, requestedCode, Number(totalPrice || 0));
+      if (
+        String(normalized.code || '').toUpperCase() !== requestedCode ||
+        Number(normalized.discountUsd || 0) <= 0 ||
+        Number(normalized.discountValue || 0) <= 0
+      ) {
+        throw new Error('Promo response is invalid for this code. Please verify backend promo routes and code setup.');
+      }
+      setPromoPreview(normalized);
+      setPromoCode(normalized.code);
+      setPromoMessage(
+        normalized.discountType === 'PERCENTAGE'
+          ? `${normalized.discountValue}% discount applied.`
+          : `${formatFromUsd(normalized.discountValue)} fixed discount applied.`
+      );
+    } catch (error: any) {
+      setPromoPreview(null);
+      setPromoMessage(String(error?.response?.data?.message || error?.message || 'Failed to apply promo code.'));
+    } finally {
+      setPromoLoading(false);
     }
   };
 
-  const discount = promoApplied ? totalPrice * 0.1 : 0;
+  const discount = Math.max(0, Math.min(Number(totalPrice || 0), Number(promoPreview?.discountUsd || 0)));
   const shipping = totalPrice > 200 ? 0 : 25;
   const finalTotal = totalPrice - discount + shipping;
 
@@ -351,7 +450,13 @@ export default function Cart() {
                   <input
                     type="text"
                     value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value)}
+                    onChange={(e) => {
+                      const nextCode = String(e.target.value || '').toUpperCase();
+                      setPromoCode(nextCode);
+                      if (promoPreview && String(promoPreview.code || '').toUpperCase() !== nextCode.trim()) {
+                        setPromoPreview(null);
+                      }
+                    }}
                     placeholder="Enter code"
                     className="flex-1 px-3 py-2 border rounded-lg text-sm"
                   />
@@ -359,14 +464,14 @@ export default function Cart() {
                     variant="outline" 
                     size="sm"
                     onClick={handleApplyPromo}
-                    disabled={!promoCode.trim() || promoApplied}
+                    disabled={!promoCode.trim() || promoLoading}
                   >
-                    Apply
+                    {promoLoading ? 'Applying...' : 'Apply'}
                   </Button>
                 </div>
-                {promoApplied && (
-                  <p className="text-sm text-green-600 mt-1">10% discount applied!</p>
-                )}
+                {promoMessage ? (
+                  <p className={`text-sm mt-1 ${promoPreview ? 'text-green-600' : 'text-red-600'}`}>{promoMessage}</p>
+                ) : null}
               </div>
 
               {/* Cost Breakdown */}
@@ -375,9 +480,16 @@ export default function Cart() {
                   <span className="text-gray-600">Subtotal ({itemCount} items)</span>
                   <span className="font-medium">{formatFromUsd(totalPrice)}</span>
                 </div>
-                {promoApplied && (
+                {discount > 0 && (
                   <div className="flex justify-between text-sm text-green-600">
-                    <span>Discount (10%)</span>
+                    <span>
+                      Discount
+                      {promoPreview?.discountType === 'PERCENTAGE'
+                        ? ` (${promoPreview.discountValue}%)`
+                        : promoPreview?.code
+                          ? ` (${promoPreview.code})`
+                          : ''}
+                    </span>
                     <span>-{formatFromUsd(discount)}</span>
                   </div>
                 )}

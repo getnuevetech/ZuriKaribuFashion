@@ -237,6 +237,7 @@ type SellerDashboardGovernance = {
     productName: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     productDescription: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     materialType: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    predominantColor: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     sellerPrice: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     listingCurrency: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     minYards: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
@@ -278,6 +279,7 @@ const DEFAULT_SELLER_DASHBOARD_GOVERNANCE: SellerDashboardGovernance = {
     productName: 'ENABLED',
     productDescription: 'ENABLED',
     materialType: 'ENABLED',
+    predominantColor: 'ENABLED',
     sellerPrice: 'ENABLED',
     listingCurrency: 'ENABLED',
     minYards: 'ENABLED',
@@ -305,6 +307,9 @@ const normalizeSellerDashboardGovernance = (input: any): SellerDashboardGovernan
       input?.fields?.productDescription ?? DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields.productDescription
     ),
     materialType: normalizeFieldMode(input?.fields?.materialType ?? DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields.materialType),
+    predominantColor: normalizeFieldMode(
+      input?.fields?.predominantColor ?? DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields.predominantColor
+    ),
     sellerPrice: normalizeFieldMode(input?.fields?.sellerPrice ?? DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields.sellerPrice),
     listingCurrency: normalizeFieldMode(
       input?.fields?.listingCurrency ?? DEFAULT_SELLER_DASHBOARD_GOVERNANCE.fields.listingCurrency
@@ -2757,13 +2762,13 @@ export default function SellerDashboard() {
                   ))}
                 </select>
               </div>
-              <div className={isFieldHidden(dashboardGovernance.fields.materialType) ? 'hidden' : ''}>
+              <div className={isFieldHidden(dashboardGovernance.fields.predominantColor) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Predominant Fabric Color</label>
                 <select
                   value={productForm.predominantColor}
                   onChange={(e) => setProductForm((prev) => ({ ...prev, predominantColor: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={isFieldReadOnly(dashboardGovernance.fields.materialType) || isApprovedFieldLocked('predominantColor')}
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.predominantColor) || isApprovedFieldLocked('predominantColor')}
                 >
                   {FABRIC_COLOR_OPTIONS.map((color) => (
                     <option key={color} value={color}>

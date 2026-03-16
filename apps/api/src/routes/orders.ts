@@ -752,6 +752,79 @@ const decodeReadyToWearVariantKey = (variantKey: unknown) => {
   };
 };
 
+const ORDER_NUMBER_BASE_REGEX = /^(?:[A-Z0-9]+-)?([A-Z0-9]+)(?:-(\d+))?$/;
+const sanitizeOrderPrefix = (value: unknown, fallback: string) => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '');
+  if (!normalized) return fallback;
+  return normalized.slice(0, 8);
+};
+const extractOrderBaseToken = (orderNumber: string | null | undefined) => {
+  const normalized = String(orderNumber || '')
+    .trim()
+    .toUpperCase();
+  if (!normalized) return '';
+  const matched = normalized.match(ORDER_NUMBER_BASE_REGEX);
+  return matched?.[1] || '';
+};
+const generateRandomOrderBaseToken = (length = 8) => {
+  const tokenLength = Math.max(6, Math.min(16, Number(length || 8)));
+  const randomToken = Math.random().toString(36).replace(/[^a-z0-9]+/gi, '').toUpperCase();
+  const timestampToken = Date.now().toString(36).toUpperCase();
+  return `${timestampToken}${randomToken}`.replace(/[^A-Z0-9]+/g, '').slice(0, tokenLength) || timestampToken.slice(0, tokenLength);
+};
+const resolveOrderTypePrefix = (
+  orderType: OrderType,
+  workflowSettings: Awaited<ReturnType<typeof readOrderWorkflowSettings>>
+) => {
+  const prefixes = workflowSettings.orderNumbering?.categoryPrefixes || {
+    READY_TO_WEAR: 'RTW',
+    CUSTOM_DESIGN: 'CTW',
+    FABRIC_ONLY: 'FTB',
+  };
+  if (orderType === OrderType.READY_TO_WEAR) {
+    return sanitizeOrderPrefix(prefixes.READY_TO_WEAR, 'RTW');
+  }
+  if (orderType === OrderType.FABRIC_ONLY) {
+    return sanitizeOrderPrefix(prefixes.FABRIC_ONLY, 'FTB');
+  }
+  return sanitizeOrderPrefix(prefixes.CUSTOM_DESIGN, 'CTW');
+};
+async function generateManagedOrderNumber(params: {
+  orderType: OrderType;
+  customerId: string;
+  paymentIntentId?: string | null;
+  workflowSettings: Awaited<ReturnType<typeof readOrderWorkflowSettings>>;
+}) {
+  const prefix = resolveOrderTypePrefix(params.orderType, params.workflowSettings);
+  const tokenLength = Math.max(6, Math.min(16, Number(params.workflowSettings.orderNumbering?.baseTokenLength || 8)));
+  const paymentIntentId = String(params.paymentIntentId || '').trim();
+  if (!paymentIntentId) {
+    return `${prefix}-${generateRandomOrderBaseToken(tokenLength)}`;
+  }
+  const existingOrders = await prisma.order.findMany({
+    where: {
+      customerId: params.customerId,
+      paymentIntentId,
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { orderNumber: true },
+  });
+  const existingBaseToken =
+    existingOrders.length > 0
+      ? extractOrderBaseToken(String(existingOrders[0]?.orderNumber || ''))
+      : '';
+  const baseToken = existingBaseToken || generateRandomOrderBaseToken(tokenLength);
+  const variant = existingOrders.length + 1;
+  const shouldUseVariantSuffix = params.workflowSettings.orderNumbering?.useVariantSuffix !== false || variant > 1;
+  if (shouldUseVariantSuffix) {
+    return `${prefix}-${baseToken}-${variant}`;
+  }
+  return `${prefix}-${baseToken}`;
+}
+
 router.use(authenticate);
 
 router.get('/limits', async (_req, res, next) => {
@@ -829,6 +902,8 @@ async function sendOrderConfirmationEmail(params: {
   orderType: string;
   total: number;
   itemCount: number;
+  subtotalUsd?: number | null;
+  taxUsd?: number | null;
   paymentMethod?: string | null;
   shippingAddress?: string | null;
   promoCode?: string | null;
@@ -842,6 +917,8 @@ async function sendOrderConfirmationEmail(params: {
     return;
   }
   const totalText = Number(params.total || 0).toFixed(2);
+  const subtotalText = Number(params.subtotalUsd || 0).toFixed(2);
+  const taxText = Number(params.taxUsd || 0).toFixed(2);
   const postCheckoutOfferLines = await getPostCheckoutOfferLines(3);
   const safeItemLines = Array.isArray(params.itemLines)
     ? params.itemLines
@@ -855,12 +932,6 @@ async function sendOrderConfirmationEmail(params: {
           params.promoCode ? ` (${String(params.promoCode).toUpperCase()})` : ''
         }`
       : '';
-  const shippingText =
-    Number(params.shippingCostUsd || 0) > 0
-      ? `\nShipping: $${Number(params.shippingCostUsd || 0).toFixed(2)}`
-      : Number(params.shippingCostUsd || 0) === 0
-        ? '\nShipping: FREE'
-        : '';
   const paymentMethodText = params.paymentMethod ? `\nPayment Method: ${String(params.paymentMethod)}` : '';
   const shippingAddressText = params.shippingAddress ? `\nShipping Address: ${String(params.shippingAddress)}` : '';
   const itemListText = safeItemLines.length > 0 ? `\nItems:\n- ${safeItemLines.join('\n- ')}` : '';
@@ -870,15 +941,17 @@ async function sendOrderConfirmationEmail(params: {
     from,
     to: params.to,
     subject: `Order Confirmation: ${params.orderNumber}`,
-    text: `Thank you for your order!\n\nOrder Number: ${params.orderNumber}\nOrder Type: ${params.orderType}\nItems: ${params.itemCount}\nTotal: $${totalText}${discountText}${shippingText}${paymentMethodText}${shippingAddressText}${itemListText}${offerListText}\n\nYour order has been received and is now being processed.`,
+    text: `Thank you for your order!\n\nOrder Number: ${params.orderNumber}\nOrder Type: ${params.orderType}\nItems: ${params.itemCount}\nSubtotal: $${subtotalText}${discountText}\nShipping: ${Number(params.shippingCostUsd || 0) === 0 ? 'FREE' : `$${Number(params.shippingCostUsd || 0).toFixed(2)}`}\nTax: $${taxText}\nGrand Total: $${totalText}${paymentMethodText}${shippingAddressText}${itemListText}${offerListText}\n\nYour order has been received and is now being processed.`,
     html: `
       <p>Thank you for your order.</p>
       <p><strong>Order Number:</strong> ${params.orderNumber}</p>
       <p><strong>Order Type:</strong> ${params.orderType}</p>
       <p><strong>Items:</strong> ${params.itemCount}</p>
-      <p><strong>Total:</strong> $${totalText}</p>
+      <p><strong>Subtotal:</strong> $${subtotalText}</p>
       ${Number(params.discountUsd || 0) > 0 ? `<p><strong>Promo Discount:</strong> -$${Number(params.discountUsd || 0).toFixed(2)}${params.promoCode ? ` (${String(params.promoCode).toUpperCase()})` : ''}</p>` : ''}
-      ${Number(params.shippingCostUsd || 0) > 0 || Number(params.shippingCostUsd || 0) === 0 ? `<p><strong>Shipping:</strong> ${Number(params.shippingCostUsd || 0) === 0 ? 'FREE' : `$${Number(params.shippingCostUsd || 0).toFixed(2)}`}</p>` : ''}
+      ${Number(params.shippingCostUsd || 0) > 0 || Number(params.shippingCostUsd || 0) === 0 ? `<p><strong>Shipping:</strong> ${Number(params.shippingCostUsd || 0) === 0 ? 'FREE' : `$${Number(params.shippingCostUsd || 0).toFixed(2)}`}</p>` : '<p><strong>Shipping:</strong> N/A</p>'}
+      <p><strong>Tax:</strong> $${taxText}</p>
+      <p><strong>Grand Total:</strong> $${totalText}</p>
       ${params.paymentMethod ? `<p><strong>Payment Method:</strong> ${String(params.paymentMethod)}</p>` : ''}
       ${params.shippingAddress ? `<p><strong>Shipping Address:</strong> ${String(params.shippingAddress)}</p>` : ''}
       ${safeItemLines.length > 0 ? `<p><strong>Items:</strong></p><ul>${safeItemLines.map((line) => `<li>${line}</li>`).join('')}</ul>` : ''}
@@ -2292,8 +2365,12 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       settings: effectiveWorkflowSettings,
     });
 
-    // Generate order number
-    const orderNumber = `AF-${Date.now().toString(36).toUpperCase()}`;
+    const orderNumber = await generateManagedOrderNumber({
+      orderType: OrderType.CUSTOM_DESIGN,
+      customerId,
+      paymentIntentId: data.paymentIntentId,
+      workflowSettings,
+    });
 
     const shippingSnapshot = appendWorkflowMetadataToShippingAddress({
       shippingAddress: {
@@ -2402,6 +2479,8 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       orderType: 'Custom Design',
       total,
       itemCount: 1,
+      subtotalUsd: subtotal,
+      taxUsd: tax,
       paymentMethod: data.paymentMethod,
       shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
       promoCode: data.promoCode || undefined,
@@ -2627,7 +2706,12 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
     });
 
     // Generate order number
-    const orderNumber = `AF-${Date.now().toString(36).toUpperCase()}`;
+    const orderNumber = await generateManagedOrderNumber({
+      orderType: OrderType.READY_TO_WEAR,
+      customerId,
+      paymentIntentId: data.paymentIntentId,
+      workflowSettings,
+    });
 
     const shippingSnapshot = appendWorkflowMetadataToShippingAddress({
       shippingAddress: {
@@ -2709,6 +2793,8 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       orderType: 'Ready To Wear',
       total,
       itemCount: validatedItems.reduce((count, item) => count + Number(item.quantity || 0), 0),
+      subtotalUsd: subtotal,
+      taxUsd: tax,
       paymentMethod: data.paymentMethod,
       shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
       promoCode: data.promoCode || undefined,
@@ -2859,7 +2945,12 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
       hasFabricOrder: true,
       settings: effectiveWorkflowSettings,
     });
-    const orderNumber = `AF-${Date.now().toString(36).toUpperCase()}`;
+    const orderNumber = await generateManagedOrderNumber({
+      orderType: OrderType.FABRIC_ONLY,
+      customerId,
+      paymentIntentId: data.paymentIntentId,
+      workflowSettings,
+    });
 
     const shippingSnapshot = appendWorkflowMetadataToShippingAddress({
       shippingAddress: {
@@ -2939,6 +3030,8 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
       orderType: 'Fabric To Buy',
       total,
       itemCount: data.yards,
+      subtotalUsd: subtotal,
+      taxUsd: tax,
       paymentMethod: data.paymentMethod,
       shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
       promoCode: data.promoCode || undefined,

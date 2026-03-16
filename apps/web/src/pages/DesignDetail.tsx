@@ -738,117 +738,126 @@ export default function DesignDetail() {
                       />
                     ) : null}
                   </div>
-                  <p className="text-sm text-gray-600">
-                    Select a fabric for your design. All fabrics are from sellers in the same country as your designer.
-                  </p>
-                  {design.suitableFabrics.length === 0 ? (
+                  {fabricSelectionMode === 'DESIGNER_DECIDES' ? (
                     <div className="rounded border border-dashed border-gray-300 bg-white p-4 text-sm text-gray-600">
-                      No suitable fabrics are available for this design yet. You can still continue with
-                      &nbsp;<span className="font-semibold">Let designer/tailor choose fabric</span>.
+                      Suitable fabrics are hidden because you selected{' '}
+                      <span className="font-semibold">Let designer/tailor choose fabric</span>. You can continue below.
                     </div>
                   ) : (
                     <>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                        {design.suitableFabrics.map(({ fabric }) => (
-                          <button
-                            key={fabric.id}
-                            type="button"
-                            onClick={() => setSelectedFabric(fabric.id)}
-                            className={`flex items-center gap-2 border px-2 py-2 text-left transition-colors ${
-                              selectedFabric === fabric.id
-                                ? 'border-black bg-black text-white'
-                                : 'border-gray-200 bg-white text-gray-800 hover:border-black'
-                            }`}
-                          >
-                            <img
-                              src={fabric.images[0]}
-                              alt={fabric.name}
-                              className="h-10 w-10 flex-shrink-0 object-cover"
-                            />
-                            <span className="line-clamp-2 text-xs font-medium">{fabric.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                      {(() => {
-                        const selectedRow = design.suitableFabrics.find((entry) => entry.fabric.id === selectedFabric);
-                        if (!selectedRow) {
-                          return (
-                            <p className="text-sm text-gray-600">
-                              Select a fabric thumbnail to view details and set quantity.
-                            </p>
-                          );
-                        }
-                        const { fabric, minMeters, maxMeters } = selectedRow;
-                        const minYards = Math.max(1, Number(minMeters || 1));
-                        const maxYards = Math.max(minYards, Number(maxMeters || minYards));
-                        const currentYards = clampWithin(
-                          Number(fabricMeters[fabric.id] || minYards),
-                          minYards,
-                          maxYards
-                        );
-                        const minDisplay = convertYardsToUnit(minYards, fabricUnit);
-                        const maxDisplay = convertYardsToUnit(maxYards, fabricUnit);
-                        const currentDisplay = convertYardsToUnit(currentYards, fabricUnit);
-                        const displayDecimals = fabricUnit === 'CENTIMETERS' ? 0 : 2;
-                        const pricePerYard = Number(fabric.pricePerMeter || 0);
-                        const requiredFabricPrice = pricePerYard * currentYards;
-                        return (
-                          <div className="border bg-white p-4">
-                            <div className="flex gap-4">
-                              <img
-                                src={fabric.images[0]}
-                                alt={fabric.name}
-                                className="h-20 w-20 object-cover"
-                              />
-                              <div className="flex-1">
-                                <div className="flex items-start justify-between">
-                                  <div>
-                                    <h4 className="font-semibold text-gray-900">{fabric.name}</h4>
-                                    <p className="text-sm text-gray-500">{fabric.seller.businessName}</p>
-                                    <p className="text-sm text-gray-500">{fabric.seller.country}</p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="font-semibold text-black">
-                                      {formatFromUsd(pricePerYard)}/yard
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                      {minYards.toFixed(2)}-{maxYards.toFixed(2)} yards needed
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="mt-3 border-t border-gray-200 pt-3">
-                                  <div className="grid grid-cols-1 gap-2 md:grid-cols-[180px_1fr]">
-                                    <div>
-                                      <label className="mb-1 block text-xs font-medium text-gray-600">Unit</label>
-                                      <select
-                                        value={fabricUnit}
-                                        onChange={(event) => setFabricUnit(event.target.value as FabricLengthUnit)}
-                                        className="w-full border px-2 py-2 text-sm"
-                                      >
-                                        <option value="YARDS">Yards</option>
-                                        <option value="METERS">Meters</option>
-                                        <option value="CENTIMETERS">Centimeters</option>
-                                      </select>
+                      <p className="text-sm text-gray-600">
+                        Select a fabric for your design. All fabrics are from sellers in the same country as your designer.
+                      </p>
+                      {design.suitableFabrics.length === 0 ? (
+                        <div className="rounded border border-dashed border-gray-300 bg-white p-4 text-sm text-gray-600">
+                          No suitable fabrics are available for this design yet. You can still continue with
+                          &nbsp;<span className="font-semibold">Let designer/tailor choose fabric</span>.
+                        </div>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            {design.suitableFabrics.map(({ fabric }) => (
+                              <button
+                                key={fabric.id}
+                                type="button"
+                                onClick={() => setSelectedFabric(fabric.id)}
+                                className={`flex items-center gap-2 border px-2 py-2 text-left transition-colors ${
+                                  selectedFabric === fabric.id
+                                    ? 'border-black bg-black text-white'
+                                    : 'border-gray-200 bg-white text-gray-800 hover:border-black'
+                                }`}
+                              >
+                                <img
+                                  src={fabric.images[0]}
+                                  alt={fabric.name}
+                                  className="h-10 w-10 flex-shrink-0 object-cover"
+                                />
+                                <span className="line-clamp-2 text-xs font-medium">{fabric.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                          {(() => {
+                            const selectedRow = design.suitableFabrics.find((entry) => entry.fabric.id === selectedFabric);
+                            if (!selectedRow) {
+                              return (
+                                <p className="text-sm text-gray-600">
+                                  Select a fabric thumbnail to view details and set quantity.
+                                </p>
+                              );
+                            }
+                            const { fabric, minMeters, maxMeters } = selectedRow;
+                            const minYards = Math.max(1, Number(minMeters || 1));
+                            const maxYards = Math.max(minYards, Number(maxMeters || minYards));
+                            const currentYards = clampWithin(
+                              Number(fabricMeters[fabric.id] || minYards),
+                              minYards,
+                              maxYards
+                            );
+                            const minDisplay = convertYardsToUnit(minYards, fabricUnit);
+                            const maxDisplay = convertYardsToUnit(maxYards, fabricUnit);
+                            const currentDisplay = convertYardsToUnit(currentYards, fabricUnit);
+                            const displayDecimals = fabricUnit === 'CENTIMETERS' ? 0 : 2;
+                            const pricePerYard = Number(fabric.pricePerMeter || 0);
+                            const requiredFabricPrice = pricePerYard * currentYards;
+                            return (
+                              <div className="border bg-white p-4">
+                                <div className="flex gap-4">
+                                  <img
+                                    src={fabric.images[0]}
+                                    alt={fabric.name}
+                                    className="h-20 w-20 object-cover"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="flex items-start justify-between">
+                                      <div>
+                                        <h4 className="font-semibold text-gray-900">{fabric.name}</h4>
+                                        <p className="text-sm text-gray-500">{fabric.seller.businessName}</p>
+                                        <p className="text-sm text-gray-500">{fabric.seller.country}</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="font-semibold text-black">
+                                          {formatFromUsd(pricePerYard)}/yard
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                          {minYards.toFixed(2)}-{maxYards.toFixed(2)} yards needed
+                                        </p>
+                                      </div>
                                     </div>
-                                    <div className="space-y-1">
-                                      <p className="text-xs font-medium text-gray-600">
-                                        Required quantity ({unitLabel(fabricUnit)})
-                                      </p>
-                                      <p className="border bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-900">
-                                        {currentDisplay.toFixed(displayDecimals)} {unitLabel(fabricUnit)}
-                                      </p>
-                                      <p className="text-xs text-gray-600">
-                                        Fabric total: {currentYards.toFixed(2)} yard{currentYards === 1 ? '' : 's'} ×{' '}
-                                        {formatFromUsd(pricePerYard)}/yard = <span className="font-semibold">{formatFromUsd(requiredFabricPrice)}</span>
-                                      </p>
+                                    <div className="mt-3 border-t border-gray-200 pt-3">
+                                      <div className="grid grid-cols-1 gap-2 md:grid-cols-[180px_1fr]">
+                                        <div>
+                                          <label className="mb-1 block text-xs font-medium text-gray-600">Unit</label>
+                                          <select
+                                            value={fabricUnit}
+                                            onChange={(event) => setFabricUnit(event.target.value as FabricLengthUnit)}
+                                            className="w-full border px-2 py-2 text-sm"
+                                          >
+                                            <option value="YARDS">Yards</option>
+                                            <option value="METERS">Meters</option>
+                                            <option value="CENTIMETERS">Centimeters</option>
+                                          </select>
+                                        </div>
+                                        <div className="space-y-1">
+                                          <p className="text-xs font-medium text-gray-600">
+                                            Required quantity ({unitLabel(fabricUnit)})
+                                          </p>
+                                          <p className="border bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-900">
+                                            {currentDisplay.toFixed(displayDecimals)} {unitLabel(fabricUnit)}
+                                          </p>
+                                          <p className="text-xs text-gray-600">
+                                            Fabric total: {currentYards.toFixed(2)} yard{currentYards === 1 ? '' : 's'} ×{' '}
+                                            {formatFromUsd(pricePerYard)}/yard = <span className="font-semibold">{formatFromUsd(requiredFabricPrice)}</span>
+                                          </p>
+                                        </div>
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
                               </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
+                            );
+                          })()}
+                        </>
+                      )}
                     </>
                   )}
                   <div className="pt-2">

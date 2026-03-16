@@ -581,6 +581,118 @@ export default function AdminOrders() {
               </label>
             </div>
           </div>
+          <div className="rounded-lg border border-gray-200 p-3">
+            <h3 className="text-sm font-semibold text-gray-900">Order Numbering</h3>
+            <p className="mt-1 text-xs text-gray-600">
+              Configure category prefixes and numbering style used during checkout order creation.
+            </p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+              <label className="text-sm text-gray-700">
+                RTW prefix
+                <input
+                  type="text"
+                  maxLength={8}
+                  value={String(workflowSettings.orderNumbering?.categoryPrefixes?.READY_TO_WEAR || 'RTW')}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderNumbering: {
+                        ...(prev?.orderNumbering || {}),
+                        categoryPrefixes: {
+                          ...(prev?.orderNumbering?.categoryPrefixes || {}),
+                          READY_TO_WEAR: String(event.target.value || 'RTW')
+                            .toUpperCase()
+                            .replace(/[^A-Z0-9]+/g, ''),
+                        },
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                CTW prefix
+                <input
+                  type="text"
+                  maxLength={8}
+                  value={String(workflowSettings.orderNumbering?.categoryPrefixes?.CUSTOM_DESIGN || 'CTW')}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderNumbering: {
+                        ...(prev?.orderNumbering || {}),
+                        categoryPrefixes: {
+                          ...(prev?.orderNumbering?.categoryPrefixes || {}),
+                          CUSTOM_DESIGN: String(event.target.value || 'CTW')
+                            .toUpperCase()
+                            .replace(/[^A-Z0-9]+/g, ''),
+                        },
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                FTB prefix
+                <input
+                  type="text"
+                  maxLength={8}
+                  value={String(workflowSettings.orderNumbering?.categoryPrefixes?.FABRIC_ONLY || 'FTB')}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderNumbering: {
+                        ...(prev?.orderNumbering || {}),
+                        categoryPrefixes: {
+                          ...(prev?.orderNumbering?.categoryPrefixes || {}),
+                          FABRIC_ONLY: String(event.target.value || 'FTB')
+                            .toUpperCase()
+                            .replace(/[^A-Z0-9]+/g, ''),
+                        },
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                Base token length
+                <input
+                  type="number"
+                  min={6}
+                  max={16}
+                  value={Number(workflowSettings.orderNumbering?.baseTokenLength || 8)}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderNumbering: {
+                        ...(prev?.orderNumbering || {}),
+                        baseTokenLength: Number(event.target.value || 8),
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="inline-flex items-center gap-2 self-end rounded-lg border px-3 py-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={workflowSettings.orderNumbering?.useVariantSuffix !== false}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderNumbering: {
+                        ...(prev?.orderNumbering || {}),
+                        useVariantSuffix: event.target.checked,
+                      },
+                    }))
+                  }
+                />
+                Use suffix for split orders (-1, -2)
+              </label>
+            </div>
+          </div>
           {workflowMessage ? <p className="text-xs text-emerald-700">{workflowMessage}</p> : null}
         </div>
       ) : null}

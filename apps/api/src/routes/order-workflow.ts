@@ -59,6 +59,19 @@ const updateWorkflowSchema = z
         maxFabricYardsPerOrder: z.number().int().min(1).max(5000).optional(),
       })
       .optional(),
+    orderNumbering: z
+      .object({
+        baseTokenLength: z.number().int().min(6).max(16).optional(),
+        useVariantSuffix: z.boolean().optional(),
+        categoryPrefixes: z
+          .object({
+            READY_TO_WEAR: z.string().trim().min(2).max(8).optional(),
+            CUSTOM_DESIGN: z.string().trim().min(2).max(8).optional(),
+            FABRIC_ONLY: z.string().trim().min(2).max(8).optional(),
+          })
+          .optional(),
+      })
+      .optional(),
   })
   .strict();
 

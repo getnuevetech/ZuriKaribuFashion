@@ -102,6 +102,31 @@ const workflowSettingsSchema = z.object({
       minFabricYardsPerOrder: 3,
       maxFabricYardsPerOrder: 200,
     }),
+  orderNumbering: z
+    .object({
+      baseTokenLength: z.number().int().min(6).max(16).default(8),
+      useVariantSuffix: z.boolean().default(true),
+      categoryPrefixes: z
+        .object({
+          READY_TO_WEAR: z.string().trim().min(2).max(8).default('RTW'),
+          CUSTOM_DESIGN: z.string().trim().min(2).max(8).default('CTW'),
+          FABRIC_ONLY: z.string().trim().min(2).max(8).default('FTB'),
+        })
+        .default({
+          READY_TO_WEAR: 'RTW',
+          CUSTOM_DESIGN: 'CTW',
+          FABRIC_ONLY: 'FTB',
+        }),
+    })
+    .default({
+      baseTokenLength: 8,
+      useVariantSuffix: true,
+      categoryPrefixes: {
+        READY_TO_WEAR: 'RTW',
+        CUSTOM_DESIGN: 'CTW',
+        FABRIC_ONLY: 'FTB',
+      },
+    }),
 });
 
 export type OrderWorkflowSettings = z.infer<typeof workflowSettingsSchema>;
@@ -123,6 +148,15 @@ type PartialWorkflowSettingsInput = Partial<{
   adminNotifyStatuses: OrderStatus[];
   qaChecklistTemplate: Array<{ key: string; label: string; required?: boolean }>;
   orderLimits: Partial<OrderWorkflowSettings['orderLimits']>;
+  orderNumbering: {
+    baseTokenLength?: number;
+    useVariantSuffix?: boolean;
+    categoryPrefixes?: {
+      READY_TO_WEAR?: string;
+      CUSTOM_DESIGN?: string;
+      FABRIC_ONLY?: string;
+    };
+  };
 }>;
 
 const parseObject = (value: unknown): Record<string, unknown> => {
@@ -175,6 +209,15 @@ const normalizeChecklistTemplate = (
     .filter((entry): entry is { key: string; label: string; required: boolean } => Boolean(entry))
     .slice(0, 30);
   return normalized.length > 0 ? normalized : fallback;
+};
+
+const normalizeOrderPrefixToken = (value: unknown, fallback: string) => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '');
+  if (!normalized) return fallback;
+  return normalized.slice(0, 8);
 };
 
 function normalizeOrderWorkflowSettings(input: unknown): OrderWorkflowSettings {
@@ -244,6 +287,33 @@ function normalizeOrderWorkflowSettings(input: unknown): OrderWorkflowSettings {
         Math.min(5000, Number(parseObject(row.orderLimits).maxFabricYardsPerOrder || defaults.orderLimits.maxFabricYardsPerOrder))
       ),
     },
+    orderNumbering: {
+      baseTokenLength: Math.max(
+        6,
+        Math.min(
+          16,
+          Number(parseObject(row.orderNumbering).baseTokenLength || defaults.orderNumbering.baseTokenLength)
+        )
+      ),
+      useVariantSuffix:
+        parseObject(row.orderNumbering).useVariantSuffix === undefined
+          ? defaults.orderNumbering.useVariantSuffix
+          : Boolean(parseObject(row.orderNumbering).useVariantSuffix),
+      categoryPrefixes: {
+        READY_TO_WEAR: normalizeOrderPrefixToken(
+          parseObject(parseObject(row.orderNumbering).categoryPrefixes).READY_TO_WEAR,
+          defaults.orderNumbering.categoryPrefixes.READY_TO_WEAR
+        ),
+        CUSTOM_DESIGN: normalizeOrderPrefixToken(
+          parseObject(parseObject(row.orderNumbering).categoryPrefixes).CUSTOM_DESIGN,
+          defaults.orderNumbering.categoryPrefixes.CUSTOM_DESIGN
+        ),
+        FABRIC_ONLY: normalizeOrderPrefixToken(
+          parseObject(parseObject(row.orderNumbering).categoryPrefixes).FABRIC_ONLY,
+          defaults.orderNumbering.categoryPrefixes.FABRIC_ONLY
+        ),
+      },
+    },
   };
 }
 
@@ -291,6 +361,14 @@ function mergeWorkflowSettings(current: OrderWorkflowSettings, patch: PartialWor
     orderLimits: {
       ...current.orderLimits,
       ...(patch.orderLimits || {}),
+    },
+    orderNumbering: {
+      ...current.orderNumbering,
+      ...(patch.orderNumbering || {}),
+      categoryPrefixes: {
+        ...current.orderNumbering.categoryPrefixes,
+        ...(patch.orderNumbering?.categoryPrefixes || {}),
+      },
     },
   };
   return normalizeOrderWorkflowSettings(merged);

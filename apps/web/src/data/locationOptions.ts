@@ -1,3 +1,5 @@
+import { City, Country, State } from 'country-state-city';
+
 export interface CountryOption {
   code: string;
   name: string;
@@ -101,9 +103,20 @@ const AFRICAN_COUNTRY_CODES = new Set<string>([
   'NG', 'RW', 'ST', 'SN', 'SC', 'SL', 'SO', 'ZA', 'SS', 'SD', 'TZ', 'TG', 'TN', 'UG', 'ZM', 'ZW',
 ]);
 
-const ALL_COUNTRIES: CountryOption[] = COUNTRY_ROWS.map((row) => ({ code: row.code, name: row.name })).sort((a, b) =>
-  a.name.localeCompare(b.name)
-);
+const libraryCountryRows: CountryOption[] = Country.getAllCountries()
+  .map((row) => ({
+    code: String(row.isoCode || '').trim().toUpperCase(),
+    name: String(row.name || '').trim(),
+  }))
+  .filter((row) => Boolean(row.code && row.name));
+const countryMap = new Map<string, CountryOption>();
+for (const row of libraryCountryRows) {
+  countryMap.set(row.code, row);
+}
+for (const row of COUNTRY_ROWS) {
+  countryMap.set(row.code, { code: row.code, name: row.name });
+}
+const ALL_COUNTRIES: CountryOption[] = Array.from(countryMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
 const COUNTRY_BY_CODE = new Map(ALL_COUNTRIES.map((country) => [country.code, country]));
 const COUNTRY_BY_NAME = new Map(ALL_COUNTRIES.map((country) => [country.name.toLowerCase(), country]));
@@ -185,6 +198,46 @@ const COUNTRY_STATES_BY_CODE = new Map<string, StateCityRow[]>([
 ]);
 const CITY_CACHE = new Map<string, string[]>();
 const STATE_CACHE = new Map<string, string[]>();
+const LIBRARY_STATES_CACHE = new Map<string, Array<{ name: string; isoCode: string }>>();
+const LIBRARY_STATE_CITY_CACHE = new Map<string, string[]>();
+
+const dedupeAndSortText = (input: Array<string | null | undefined>) =>
+  Array.from(new Set(input.map((row) => String(row || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+
+const readLibraryStates = (countryCode: string) => {
+  const normalizedCode = resolveCountryCode(countryCode);
+  if (!normalizedCode) return [] as Array<{ name: string; isoCode: string }>;
+  const cached = LIBRARY_STATES_CACHE.get(normalizedCode);
+  if (cached) return cached;
+  const rows = State.getStatesOfCountry(normalizedCode)
+    .map((entry) => ({
+      name: String(entry.name || '').trim(),
+      isoCode: String(entry.isoCode || '').trim().toUpperCase(),
+    }))
+    .filter((entry) => Boolean(entry.name && entry.isoCode));
+  LIBRARY_STATES_CACHE.set(normalizedCode, rows);
+  return rows;
+};
+
+const readLibraryCitiesForState = (countryCode: string, stateIsoCode: string) => {
+  const normalizedCode = resolveCountryCode(countryCode);
+  const normalizedStateIsoCode = String(stateIsoCode || '').trim().toUpperCase();
+  if (!normalizedCode || !normalizedStateIsoCode) return [] as string[];
+  const cacheKey = `${normalizedCode}:${normalizedStateIsoCode}`;
+  const cached = LIBRARY_STATE_CITY_CACHE.get(cacheKey);
+  if (cached) return cached;
+  const rows = dedupeAndSortText(
+    City.getCitiesOfState(normalizedCode, normalizedStateIsoCode).map((entry) => String(entry.name || '').trim())
+  );
+  LIBRARY_STATE_CITY_CACHE.set(cacheKey, rows);
+  return rows;
+};
+
+const readLibraryCitiesByCountry = (countryCode: string) => {
+  const normalizedCode = resolveCountryCode(countryCode);
+  if (!normalizedCode) return [] as string[];
+  return dedupeAndSortText(City.getCitiesOfCountry(normalizedCode).map((entry) => String(entry.name || '').trim()));
+};
 
 export function getCountryOptions() {
   return ALL_COUNTRIES;
@@ -217,8 +270,11 @@ export function getCityOptionsByCountryCode(countryCode: string | null | undefin
   if (!normalizedCode) return [];
   const cached = CITY_CACHE.get(normalizedCode);
   if (cached) return cached;
-  const cities = (COUNTRY_CITIES_BY_CODE.get(normalizedCode) || []).map((row) => String(row || '').trim()).filter(Boolean);
-  const uniqueSorted = Array.from(new Set(cities)).sort((a, b) => a.localeCompare(b));
+  const cities = [
+    ...(COUNTRY_CITIES_BY_CODE.get(normalizedCode) || []).map((row) => String(row || '').trim()),
+    ...readLibraryCitiesByCountry(normalizedCode),
+  ];
+  const uniqueSorted = dedupeAndSortText(cities);
   CITY_CACHE.set(normalizedCode, uniqueSorted);
   return uniqueSorted;
 }
@@ -230,11 +286,12 @@ export function getStateOptionsByCountryCode(countryCode: string | null | undefi
   if (cached) return cached;
 
   const explicitStates = COUNTRY_STATES_BY_CODE.get(normalizedCode) || [];
+  const libraryStates = readLibraryStates(normalizedCode).map((entry) => entry.name);
   const derivedFallbackStates =
-    explicitStates.length > 0 ? explicitStates.map((entry) => entry.name) : getCityOptionsByCountryCode(normalizedCode);
-  const uniqueSorted = Array.from(new Set(derivedFallbackStates.map((row) => String(row || '').trim()).filter(Boolean))).sort(
-    (a, b) => a.localeCompare(b)
-  );
+    explicitStates.length > 0 || libraryStates.length > 0
+      ? [...explicitStates.map((entry) => entry.name), ...libraryStates]
+      : getCityOptionsByCountryCode(normalizedCode);
+  const uniqueSorted = dedupeAndSortText(derivedFallbackStates);
   STATE_CACHE.set(normalizedCode, uniqueSorted);
   return uniqueSorted;
 }
@@ -248,20 +305,28 @@ export function getCityOptionsByCountryAndState(
   if (!normalizedCode) return [];
 
   const states = COUNTRY_STATES_BY_CODE.get(normalizedCode) || [];
-  if (states.length === 0) {
+  const libraryStates = readLibraryStates(normalizedCode);
+  if (states.length === 0 && libraryStates.length === 0) {
     return getCityOptionsByCountryCode(normalizedCode);
   }
 
   if (!normalizedState) {
-    const allCities = states.flatMap((entry) => entry.cities || []);
-    return Array.from(new Set(allCities.map((row) => String(row || '').trim()).filter(Boolean))).sort((a, b) =>
-      a.localeCompare(b)
-    );
+    const explicitCities = states.flatMap((entry) => entry.cities || []);
+    const libraryCities = readLibraryCitiesByCountry(normalizedCode);
+    return dedupeAndSortText([...explicitCities, ...libraryCities]);
   }
 
   const matchedState = states.find((entry) => String(entry.name || '').trim().toLowerCase() === normalizedState);
-  if (!matchedState) return [];
-  return Array.from(new Set((matchedState.cities || []).map((row) => String(row || '').trim()).filter(Boolean))).sort(
-    (a, b) => a.localeCompare(b)
+  const matchedLibraryState = libraryStates.find(
+    (entry) => String(entry.name || '').trim().toLowerCase() === normalizedState
   );
+  const explicitCities = matchedState?.cities || [];
+  const libraryCities = matchedLibraryState
+    ? readLibraryCitiesForState(normalizedCode, matchedLibraryState.isoCode)
+    : [];
+  const combined = dedupeAndSortText([...explicitCities, ...libraryCities]);
+  if (combined.length > 0) {
+    return combined;
+  }
+  return getCityOptionsByCountryCode(normalizedCode);
 }

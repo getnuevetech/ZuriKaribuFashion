@@ -309,14 +309,17 @@ type DesignerDashboardGovernance = {
     designStyle: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     designBasePrice: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     designListingCurrency: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    designPredominantColor: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     designImages: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     designSuitableFabrics: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    designRequiredFabricYards: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     designMeasurementVariables: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     readyName: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     readyDescription: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     readyStyle: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     readyBasePrice: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     readyListingCurrency: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
+    readyPredominantColor: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     readyImages: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
     readyVariants: 'ENABLED' | 'READ_ONLY' | 'HIDDEN';
   };
@@ -357,14 +360,17 @@ const DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE: DesignerDashboardGovernance = {
     designStyle: 'ENABLED',
     designBasePrice: 'ENABLED',
     designListingCurrency: 'ENABLED',
+    designPredominantColor: 'ENABLED',
     designImages: 'ENABLED',
     designSuitableFabrics: 'ENABLED',
+    designRequiredFabricYards: 'ENABLED',
     designMeasurementVariables: 'ENABLED',
     readyName: 'ENABLED',
     readyDescription: 'ENABLED',
     readyStyle: 'ENABLED',
     readyBasePrice: 'ENABLED',
     readyListingCurrency: 'ENABLED',
+    readyPredominantColor: 'ENABLED',
     readyImages: 'ENABLED',
     readyVariants: 'ENABLED',
   },
@@ -395,9 +401,15 @@ const normalizeDesignerDashboardGovernance = (input: any): DesignerDashboardGove
     designListingCurrency: normalizeFieldMode(
       input?.fields?.designListingCurrency ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.designListingCurrency
     ),
+    designPredominantColor: normalizeFieldMode(
+      input?.fields?.designPredominantColor ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.designPredominantColor
+    ),
     designImages: normalizeFieldMode(input?.fields?.designImages ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.designImages),
     designSuitableFabrics: normalizeFieldMode(
       input?.fields?.designSuitableFabrics ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.designSuitableFabrics
+    ),
+    designRequiredFabricYards: normalizeFieldMode(
+      input?.fields?.designRequiredFabricYards ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.designRequiredFabricYards
     ),
     designMeasurementVariables: normalizeFieldMode(
       input?.fields?.designMeasurementVariables ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.designMeasurementVariables
@@ -412,6 +424,9 @@ const normalizeDesignerDashboardGovernance = (input: any): DesignerDashboardGove
     ),
     readyListingCurrency: normalizeFieldMode(
       input?.fields?.readyListingCurrency ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.readyListingCurrency
+    ),
+    readyPredominantColor: normalizeFieldMode(
+      input?.fields?.readyPredominantColor ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.readyPredominantColor
     ),
     readyImages: normalizeFieldMode(input?.fields?.readyImages ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.readyImages),
     readyVariants: normalizeFieldMode(input?.fields?.readyVariants ?? DEFAULT_DESIGNER_DASHBOARD_GOVERNANCE.fields.readyVariants),
@@ -3915,13 +3930,16 @@ export default function DesignerDashboard() {
                 </select>
               </div>
 
-              <div>
+              <div className={isFieldHidden(dashboardGovernance.fields.readyPredominantColor) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Predominant Color</label>
                 <select
                   value={readyForm.predominantColor}
                   onChange={(e) => setReadyForm((prev) => ({ ...prev, predominantColor: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={isApprovedReadyFieldLocked('predominantColor')}
+                  disabled={
+                    isFieldReadOnly(dashboardGovernance.fields.readyPredominantColor) ||
+                    isApprovedReadyFieldLocked('predominantColor')
+                  }
                 >
                   <option value="">Select color</option>
                   {PREDOMINANT_COLOR_OPTIONS.map((color) => (
@@ -4384,13 +4402,16 @@ export default function DesignerDashboard() {
                 </select>
               </div>
 
-              <div>
+              <div className={isFieldHidden(dashboardGovernance.fields.designPredominantColor) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Predominant Color</label>
                 <select
                   value={designForm.predominantColor}
                   onChange={(e) => setDesignForm((prev) => ({ ...prev, predominantColor: e.target.value }))}
                   className="w-full px-4 py-2 border rounded-lg"
-                  disabled={isApprovedDesignFieldLocked('predominantColor')}
+                  disabled={
+                    isFieldReadOnly(dashboardGovernance.fields.designPredominantColor) ||
+                    isApprovedDesignFieldLocked('predominantColor')
+                  }
                 >
                   <option value="">Select color</option>
                   {PREDOMINANT_COLOR_OPTIONS.map((color) => (
@@ -4662,7 +4683,7 @@ export default function DesignerDashboard() {
                     </Button>
                   </div>
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-[280px_1fr]">
-                    <div>
+                    <div className={isFieldHidden(dashboardGovernance.fields.designRequiredFabricYards) ? 'hidden' : ''}>
                       <label className="mb-1 block text-xs font-medium text-gray-600">
                         Required Minimum Yard for Primary Fabric <span className="text-red-600">*</span>
                       </label>
@@ -4673,7 +4694,7 @@ export default function DesignerDashboard() {
                         }
                         className="w-full rounded-lg border px-3 py-2 text-sm"
                         disabled={
-                          isFieldReadOnly(dashboardGovernance.fields.designSuitableFabrics) ||
+                          isFieldReadOnly(dashboardGovernance.fields.designRequiredFabricYards) ||
                           isApprovedDesignFieldLocked('suitableFabricIds')
                         }
                       >

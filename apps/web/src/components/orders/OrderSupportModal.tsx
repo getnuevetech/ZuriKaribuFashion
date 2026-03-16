@@ -179,9 +179,54 @@ export default function OrderSupportModal({
   const orderNumber = String(orderDetail?.orderNumber || thread?.orderNumber || 'Order');
   const orderStatus = String(orderDetail?.status || 'PENDING');
   const totalAmount = Number(orderDetail?.totalAmount ?? orderDetail?.total ?? 0);
+  const subtotalAmountRaw = Number(orderDetail?.subtotal ?? orderDetail?.subtotalAmount ?? 0);
+  const shippingAmount = Number(orderDetail?.shippingCost ?? orderDetail?.shippingCostUsd ?? 0);
+  const taxAmount = Number(orderDetail?.tax ?? orderDetail?.taxAmount ?? 0);
   const customerName = `${String(orderDetail?.customer?.firstName || '').trim()} ${String(orderDetail?.customer?.lastName || '').trim()}`.trim();
   const timeline = Array.isArray(orderDetail?.timeline) ? orderDetail.timeline : [];
   const shippingAddress = orderDetail?.shippingAddress && typeof orderDetail.shippingAddress === 'object' ? orderDetail.shippingAddress : {};
+  const readyToWearItems = Array.isArray(orderDetail?.readyToWearItems) ? orderDetail.readyToWearItems : [];
+  const invoiceLineItems: Array<{ label: string; meta: string; quantity: number; unitPrice: number; lineTotal: number }> = [];
+  if (Array.isArray(readyToWearItems) && readyToWearItems.length > 0) {
+    for (const row of readyToWearItems) {
+      const quantity = Math.max(1, Number(row?.quantity || 1));
+      const unitPrice = Number(row?.price || row?.unitPrice || 0);
+      const size = String(row?.size || '').trim();
+      const color = String(row?.color || '').trim();
+      invoiceLineItems.push({
+        label: String(row?.readyToWear?.name || 'Ready To Wear'),
+        meta: [size ? `Size ${size}` : '', color ? `Color ${color}` : ''].filter(Boolean).join(' • '),
+        quantity,
+        unitPrice,
+        lineTotal: Number.isFinite(unitPrice) ? unitPrice * quantity : 0,
+      });
+    }
+  }
+  if (orderDetail?.designOrder) {
+    const designPrice = Number(orderDetail?.designOrder?.price || 0);
+    invoiceLineItems.push({
+      label: String(orderDetail?.designOrder?.design?.name || 'Custom Design'),
+      meta: 'Custom To Wear',
+      quantity: 1,
+      unitPrice: designPrice,
+      lineTotal: designPrice,
+    });
+  }
+  if (orderDetail?.fabricOrder) {
+    const yards = Math.max(1, Number(orderDetail?.fabricOrder?.yards || 1));
+    const unitPrice = Number(orderDetail?.fabricOrder?.pricePerYard || 0);
+    const explicitTotal = Number(orderDetail?.fabricOrder?.totalPrice || 0);
+    const computedTotal = Number.isFinite(explicitTotal) && explicitTotal > 0 ? explicitTotal : unitPrice * yards;
+    invoiceLineItems.push({
+      label: String(orderDetail?.fabricOrder?.fabric?.name || 'Fabric'),
+      meta: `${yards} yard${yards === 1 ? '' : 's'}`,
+      quantity: yards,
+      unitPrice,
+      lineTotal: computedTotal,
+    });
+  }
+  const computedLineSubtotal = invoiceLineItems.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0);
+  const subtotalAmount = subtotalAmountRaw > 0 ? subtotalAmountRaw : computedLineSubtotal;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
@@ -219,7 +264,11 @@ export default function OrderSupportModal({
           <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
         ) : activeTab === 'details' ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+              <div className="rounded-lg border bg-gray-50 p-3">
+                <p className="text-xs text-gray-500">Order Number</p>
+                <p className="font-medium text-gray-900">{orderNumber}</p>
+              </div>
               <div className="rounded-lg border bg-gray-50 p-3">
                 <p className="text-xs text-gray-500">Status</p>
                 <p className="font-medium text-gray-900">{statusLabel(orderStatus)}</p>
@@ -232,6 +281,12 @@ export default function OrderSupportModal({
                 <p className="text-xs text-gray-500">Customer</p>
                 <p className="font-medium text-gray-900">{customerName || 'Customer'}</p>
               </div>
+              <div className="rounded-lg border bg-gray-50 p-3">
+                <p className="text-xs text-gray-500">Payment</p>
+                <p className="font-medium text-gray-900">
+                  {String(orderDetail?.paymentStatus || 'PENDING').toUpperCase()} • {String(orderDetail?.paymentMethod || 'N/A')}
+                </p>
+              </div>
             </div>
 
             <div className="rounded-lg border p-3">
@@ -239,11 +294,59 @@ export default function OrderSupportModal({
               <p className="text-sm text-gray-700">
                 {String(shippingAddress.addressLine1 || shippingAddress.address || '').trim() || 'N/A'}
               </p>
+              {String(shippingAddress.addressLine2 || '').trim() ? (
+                <p className="text-sm text-gray-700">{String(shippingAddress.addressLine2 || '').trim()}</p>
+              ) : null}
               <p className="text-xs text-gray-500 mt-1">
                 {String(shippingAddress.city || '').trim()}
                 {shippingAddress.city && shippingAddress.country ? ', ' : ''}
                 {String(shippingAddress.country || '').trim()}
               </p>
+              {String(shippingAddress.postalCode || '').trim() ? (
+                <p className="text-xs text-gray-500">Postal code: {String(shippingAddress.postalCode || '').trim()}</p>
+              ) : null}
+              {String(shippingAddress.phone || '').trim() ? (
+                <p className="text-xs text-gray-500">Phone: {String(shippingAddress.phone || '').trim()}</p>
+              ) : null}
+            </div>
+
+            <div className="rounded-lg border p-3">
+              <p className="text-sm font-semibold text-gray-900 mb-2">Invoice Items</p>
+              {invoiceLineItems.length > 0 ? (
+                <div className="space-y-2">
+                  {invoiceLineItems.map((item, index) => (
+                    <div key={`${item.label}-${index}`} className="rounded border bg-gray-50 p-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-gray-900">{item.label}</p>
+                        <p className="text-sm font-semibold text-gray-900">${Number(item.lineTotal || 0).toFixed(2)}</p>
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        {item.meta || 'Item'} • Qty {item.quantity} • Unit ${Number(item.unitPrice || 0).toFixed(2)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No item rows available for this order.</p>
+              )}
+              <div className="mt-3 border-t pt-3 text-sm text-gray-700">
+                <div className="flex items-center justify-between">
+                  <span>Subtotal</span>
+                  <span>${Number(subtotalAmount || 0).toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Shipping</span>
+                  <span>{Number(shippingAmount || 0) === 0 ? 'FREE' : `$${Number(shippingAmount || 0).toFixed(2)}`}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Tax</span>
+                  <span>${Number(taxAmount || 0).toFixed(2)}</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between font-semibold text-gray-900">
+                  <span>Grand Total</span>
+                  <span>${Number(totalAmount || 0).toFixed(2)}</span>
+                </div>
+              </div>
             </div>
 
             <div className="rounded-lg border p-3">
