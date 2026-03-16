@@ -1046,6 +1046,7 @@ router.post('/fabrics', async (req, res, next) => {
             productType: ProductType.FABRIC as any,
             productId: fabric.id,
             report: evaluation.report,
+            changeReport: evaluation.changeReport,
             outcome: automationOutcome,
           });
         } else {
@@ -1092,6 +1093,7 @@ router.post('/fabrics', async (req, res, next) => {
         productType: ProductType.FABRIC as any,
         productId: fabric.id,
         report: [errorRow],
+        changeReport: [],
         outcome: automationOutcome,
         errorMessage: automationMessage,
       });

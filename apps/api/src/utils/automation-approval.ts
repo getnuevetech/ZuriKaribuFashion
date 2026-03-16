@@ -120,6 +120,34 @@ const parseReportRows = (value: unknown): AutomationCheckReportRow[] => {
   return [];
 };
 
+const parseChangeReportRows = (value: unknown): AutomationAppliedChange[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => parseObject(entry))
+      .map((entry) => {
+        const status = String(entry.status || '').toUpperCase();
+        return {
+          key: String(entry.key || '').trim(),
+          label: String(entry.label || entry.key || '').trim(),
+          field: String(entry.field || '').trim(),
+          beforeValue: String(entry.beforeValue || ''),
+          afterValue: String(entry.afterValue || ''),
+          status: status === 'APPLIED' || status === 'SKIPPED' ? (status as 'APPLIED' | 'SKIPPED') : 'SKIPPED',
+          reason: String(entry.reason || '').trim(),
+        } satisfies AutomationAppliedChange;
+      })
+      .filter((entry) => entry.key.length > 0);
+  }
+  if (typeof value === 'string') {
+    try {
+      return parseChangeReportRows(JSON.parse(value));
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
 const truncateText = (value: string, max = 280) => {
   const normalized = String(value || '').trim();
   if (normalized.length <= max) return normalized;
@@ -165,6 +193,61 @@ const buildAutomationSummaryMessage = (report: AutomationCheckReportRow[], fallb
   const parts = rows.map((entry) => truncateText(entry.message || entry.label || entry.key, 100)).filter(Boolean);
   const suffix = correctionRowsFromReport(report).length > rows.length ? ' (+more)' : '';
   return truncateText(`Needs correction: ${parts.join(' | ')}${suffix}`, 400);
+};
+
+const buildVendorAiRecommendations = (input: {
+  report: AutomationCheckReportRow[];
+  changeReport: AutomationAppliedChange[];
+}) => {
+  const recommendations: string[] = [];
+  const seen = new Set<string>();
+  const add = (text: string) => {
+    const normalized = truncateText(String(text || '').replace(/\s+/g, ' ').trim(), 220);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    recommendations.push(normalized);
+  };
+
+  for (const entry of input.changeReport) {
+    if (entry.status !== 'SKIPPED') continue;
+    const field = String(entry.field || '').trim();
+    const label = String(entry.label || entry.key || '').trim();
+    const reason = String(entry.reason || '').trim();
+    if (field === 'images[0]') {
+      add(
+        `Upload a clearer image of the exact same product/angle (enhancement only). AI note: ${reason || 'Regeneration must preserve original product identity.'}`
+      );
+    } else if (field === 'name') {
+      add(`Revise product title for grammar and clarity. AI note: ${reason || 'Title edit was required but not applied.'}`);
+    } else if (field === 'description') {
+      add(
+        `Revise product description for grammar, readability, and sales clarity. AI note: ${reason || 'Description edit was required but not applied.'}`
+      );
+    } else if (field) {
+      add(`Update ${field}. AI note: ${reason || `${label} requires correction.`}`);
+    }
+  }
+
+  for (const row of input.report) {
+    if (row.status !== 'FAIL' && row.status !== 'NEEDS_AI') continue;
+    const guidanceMatch = String(row.message || '').match(/AI guidance:\s*([\s\S]+)/i);
+    if (guidanceMatch?.[1]) {
+      add(`${row.label || row.key}: ${guidanceMatch[1]}`);
+    }
+    if (/strict ai edit required/i.test(String(row.message || ''))) {
+      if (row.key === 'image_quality' || row.key === 'predominant_color_match') {
+        add('Keep original product subject unchanged; only improve sharpness, color balance, and lighting.');
+      } else if (row.key === 'name_grammar') {
+        add('Update title while preserving original product meaning and style intent.');
+      } else if (row.key === 'description_grammar') {
+        add('Update description while preserving factual claims from the original listing.');
+      }
+    }
+  }
+
+  return recommendations.slice(0, 8);
 };
 
 const normalizeProvider = (value: unknown): AutomationAiProvider | null => {
@@ -590,6 +673,7 @@ export const notifyVendorAboutProductAutomationFailure = async (input: {
   productType: ProductType;
   productId: string;
   report?: unknown;
+  changeReport?: unknown;
   outcome?: ProductAutomationOutcome | null;
   errorMessage?: string;
 }) => {
@@ -600,12 +684,14 @@ export const notifyVendorAboutProductAutomationFailure = async (input: {
     });
     if (!recipient) return;
     const report = parseReportRows(input.report);
+    const changeReport = parseChangeReportRows(input.changeReport);
     const severity = input.outcome?.failureSeverity || resolveProductAutomationFailureSeverity(report);
     const summary = truncateText(
       String(input.outcome?.summaryMessage || '').trim() ||
         buildAutomationSummaryMessage(report, input.errorMessage || 'Automation checks require updates.'),
       400
     );
+    const aiRecommendations = buildVendorAiRecommendations({ report, changeReport });
     const vendorName = `${recipient.firstName} ${recipient.lastName}`.trim() || 'Vendor';
     const title =
       severity === 'MAJOR'
@@ -618,7 +704,7 @@ export const notifyVendorAboutProductAutomationFailure = async (input: {
         userId: recipient.userId,
         type: 'PRODUCT_REJECTED' as any,
         title,
-        message: `${recipient.productName}: ${summary}`,
+        message: `${recipient.productName}: ${summary}${aiRecommendations.length ? ` | AI recommendations: ${truncateText(aiRecommendations[0], 140)}` : ''}`,
         relatedType: 'PRODUCT',
         relatedId: input.productId,
       },
@@ -636,11 +722,17 @@ export const notifyVendorAboutProductAutomationFailure = async (input: {
             )
             .join('')
         : `<li>${summary}</li>`;
+      const recommendationText = aiRecommendations.length
+        ? aiRecommendations.map((entry) => `- ${entry}`).join('\n')
+        : '- Review the failed checks and apply corrections before resubmitting.';
+      const recommendationHtml = aiRecommendations.length
+        ? aiRecommendations.map((entry) => `<li>${entry}</li>`).join('')
+        : '<li>Review the failed checks and apply corrections before resubmitting.</li>';
       await sendAutomationEmail({
         to: recipient.email,
         subject: `[Action Required] ${recipient.productName} needs correction`,
-        text: `Hello ${vendorName},\n\nYour product "${recipient.productName}" did not pass automation checks.\n\n${summary}\n\nItems to correct:\n${bulletText}\n\nPlease update the product and resubmit.\n`,
-        html: `<p>Hello ${vendorName},</p><p>Your product <strong>${recipient.productName}</strong> did not pass automation checks.</p><p>${summary}</p><p><strong>Items to correct:</strong></p><ul>${bulletHtml}</ul><p>Please update the product and resubmit.</p>`,
+        text: `Hello ${vendorName},\n\nYour product "${recipient.productName}" did not pass automation checks.\n\n${summary}\n\nItems to correct:\n${bulletText}\n\nAI recommendations:\n${recommendationText}\n\nPlease update the product and resubmit.\n`,
+        html: `<p>Hello ${vendorName},</p><p>Your product <strong>${recipient.productName}</strong> did not pass automation checks.</p><p>${summary}</p><p><strong>Items to correct:</strong></p><ul>${bulletHtml}</ul><p><strong>AI recommendations:</strong></p><ul>${recommendationHtml}</ul><p>Please update the product and resubmit.</p>`,
       });
     }
     await prisma.$executeRawUnsafe(
@@ -1177,25 +1269,33 @@ Rules:
         reason: 'No existing images available for AI replacement.',
       };
     }
+    const sourceUrl = existingImages[0] || '';
     const execution = await executeAutomationAiFunction({
       settings,
       functionKey: 'image_regeneration',
-      prompt: `Improve product image quality and consistency for criterion "${params.row.label}".
+      prompt: `Enhance the uploaded product image for criterion "${params.row.label}".
 
 Product context:
 ${aiContextSummary || 'No extra product context provided.'}
 
-Primary image URL:
-${existingImages[0]}
+Source image URL:
+${sourceUrl}
 
-Return an improved image. Prefer returning a direct URL.`,
+STRICT requirements:
+- Keep the exact same product identity, shape, pattern, and styling.
+- Keep composition and viewpoint as close as possible.
+- Do NOT replace with a different product, model, or scene.
+- Only improve quality (sharpness, exposure, color balance, cleanup) or regenerate the same image faithfully.
+
+Return STRICT JSON only:
+{"imageUrl":"https://...","changeType":"ENHANCEMENT_OR_EXACT_REGEN","reason":"short reason"}`,
       systemPrompt: 'You are an e-commerce image regeneration assistant.',
     });
     if (execution.status !== 'OK') {
       return {
         applied: false,
-        before: existingImages[0] || '',
-        after: existingImages[0] || '',
+        before: sourceUrl,
+        after: sourceUrl,
         reason:
           execution.status === 'NO_PROVIDER'
             ? execution.reason
@@ -1213,17 +1313,86 @@ Return an improved image. Prefer returning a direct URL.`,
     if (!urlCandidate || !/^https?:\/\//i.test(urlCandidate)) {
       return {
         applied: false,
-        before: existingImages[0] || '',
-        after: existingImages[0] || '',
+        before: sourceUrl,
+        after: sourceUrl,
         reason: 'AI did not return a valid regenerated image URL.',
       };
     }
-    if (urlCandidate === existingImages[0]) {
+    if (urlCandidate === sourceUrl) {
       return {
         applied: false,
-        before: existingImages[0] || '',
-        after: existingImages[0] || '',
+        before: sourceUrl,
+        after: sourceUrl,
         reason: 'AI returned the same image URL.',
+      };
+    }
+    const parseBool = (value: unknown) => {
+      if (typeof value === 'boolean') return value;
+      const text = String(value || '').trim().toLowerCase();
+      if (text === 'true' || text === 'yes' || text === '1') return true;
+      if (text === 'false' || text === 'no' || text === '0') return false;
+      return null;
+    };
+    const verification = await executeAutomationAiFunction({
+      settings,
+      functionKey: 'image_verification',
+      prompt: `Verify if candidate image is an enhancement or exact regeneration of the source product image.
+
+Source image URL:
+${sourceUrl}
+
+Candidate image URL:
+${urlCandidate}
+
+Product context:
+${aiContextSummary || 'No extra product context provided.'}
+
+Return STRICT JSON only:
+{
+  "sameProduct": true,
+  "sameSubject": true,
+  "sameDesignPattern": true,
+  "isOnlyEnhancement": true,
+  "confidence": 0.0,
+  "reason": "short reason"
+}
+Rules:
+- Mark false if candidate appears to be a different product/model/scene.
+- Mark false if major visual identity changed.`,
+      systemPrompt: 'You are a strict e-commerce image consistency verifier. Return strict JSON only.',
+    });
+    if (verification.status !== 'OK') {
+      return {
+        applied: false,
+        before: sourceUrl,
+        after: sourceUrl,
+        reason:
+          verification.status === 'NO_PROVIDER'
+            ? `Image consistency verification unavailable: ${verification.reason}`
+            : `Image consistency verification failed: ${verification.reason}`,
+      };
+    }
+    const verificationParsed = parseFirstJsonObject(String(verification.output || '').trim());
+    const sameProduct = parseBool(verificationParsed?.sameProduct);
+    const sameSubject = parseBool(verificationParsed?.sameSubject);
+    const sameDesignPattern = parseBool(verificationParsed?.sameDesignPattern);
+    const onlyEnhancement = parseBool(verificationParsed?.isOnlyEnhancement);
+    const confidence = Number(verificationParsed?.confidence ?? Number.NaN);
+    const isSafe =
+      sameProduct === true &&
+      sameSubject === true &&
+      sameDesignPattern !== false &&
+      onlyEnhancement === true &&
+      (Number.isFinite(confidence) ? confidence >= 0.7 : true);
+    if (!isSafe) {
+      const verifyReason =
+        String(verificationParsed?.reason || '').trim() ||
+        'Candidate image was not verified as enhancement/exact regeneration of the source image.';
+      return {
+        applied: false,
+        before: sourceUrl,
+        after: sourceUrl,
+        reason: `Rejected image replacement: ${verifyReason}`,
       };
     }
     const nextImages = [...existingImages];
@@ -1231,9 +1400,9 @@ Return an improved image. Prefer returning a direct URL.`,
     stagedImageUrls = nextImages;
     return {
       applied: true,
-      before: existingImages[0] || '',
+      before: sourceUrl,
       after: urlCandidate,
-      reason: 'AI regenerated and replaced the primary product image.',
+      reason: 'AI applied enhancement/exact regeneration and passed strict image consistency verification.',
     };
   };
 
@@ -1283,7 +1452,7 @@ Return concise analysis and correction guidance in plain text.`;
           const regenerate = await executeAutomationAiFunction({
             settings,
             functionKey: 'image_regeneration',
-            prompt: `Regenerate product images with improved quality and preserve original content. Context: ${aiContextSummary}`,
+            prompt: `Enhance product image quality while preserving exact original product identity, composition, and styling. Do not replace with a different product. Context: ${aiContextSummary}`,
             systemPrompt:
               'You are an image regeneration assistant for e-commerce catalog quality improvement.',
           });

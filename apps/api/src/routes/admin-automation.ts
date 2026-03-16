@@ -179,6 +179,7 @@ router.post('/evaluate-product', async (req, res, next) => {
           productType: payload.productType as any,
           productId: payload.productId,
           report: evaluation.report,
+          changeReport: evaluation.changeReport,
           outcome: automationOutcome,
         });
       }

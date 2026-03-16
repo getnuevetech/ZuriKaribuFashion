@@ -1719,6 +1719,7 @@ router.post('/designs', async (req, res, next) => {
             productType: ProductType.DESIGN as any,
             productId: design.id,
             report: evaluation.report,
+            changeReport: evaluation.changeReport,
             outcome: automationOutcome,
           });
         } else {
@@ -1765,6 +1766,7 @@ router.post('/designs', async (req, res, next) => {
         productType: ProductType.DESIGN as any,
         productId: design.id,
         report: [errorRow],
+        changeReport: [],
         outcome: automationOutcome,
         errorMessage: automationMessage,
       });
@@ -2409,6 +2411,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
             productType: ProductType.READY_TO_WEAR as any,
             productId: product.id,
             report: evaluation.report,
+            changeReport: evaluation.changeReport,
             outcome: automationOutcome,
           });
         } else {
@@ -2455,6 +2458,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
         productType: ProductType.READY_TO_WEAR as any,
         productId: product.id,
         report: [errorRow],
+        changeReport: [],
         outcome: automationOutcome,
         errorMessage: automationMessage,
       });
