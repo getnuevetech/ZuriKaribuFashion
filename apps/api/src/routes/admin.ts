@@ -33,6 +33,7 @@ import {
   readPricingScopeFromDescription,
   stripPricingScopeTag,
 } from '../utils/pricing-rules';
+import { readCheckoutPricingSettings, saveCheckoutPricingSettings } from '../utils/checkout-pricing-settings';
 
 const router = Router();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
@@ -5789,6 +5790,37 @@ const normalizePricingScopeInput = (value: unknown): 'CATALOG' | 'CHECKOUT' => {
   const token = String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
   return token === 'CHECKOUT' || token === 'CHECKOUT_PRICING' ? 'CHECKOUT' : 'CATALOG';
 };
+
+router.get('/pricing-rules/checkout-settings', async (_req, res, next) => {
+  try {
+    const { settings, source, updatedAt } = await readCheckoutPricingSettings();
+    res.json({
+      success: true,
+      data: settings,
+      source,
+      updatedAt,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/pricing-rules/checkout-settings', async (req, res, next) => {
+  try {
+    const schema = z.object({
+      label: z.string().trim().min(1).max(80),
+    });
+    const payload = schema.parse(req.body || {});
+    const settings = await saveCheckoutPricingSettings(payload);
+    res.json({
+      success: true,
+      message: 'Checkout pricing settings updated successfully.',
+      data: settings,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // Get all pricing rules
 router.get('/pricing-rules', async (req, res, next) => {

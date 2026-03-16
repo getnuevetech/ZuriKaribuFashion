@@ -99,6 +99,7 @@ interface CheckoutPricingAppliedRule {
 }
 
 interface CheckoutPricingPreviewResult {
+  label: string;
   baseSubtotalUsd: number;
   totalAdjustmentUsd: number;
   finalSubtotalUsd: number;
@@ -115,6 +116,7 @@ interface CompletedCheckoutSummary {
   subtotalUsd: number;
   promoCode?: string;
   promoDiscountUsd: number;
+  checkoutPricingLabel: string;
   checkoutPricingAdjustmentUsd: number;
   checkoutPricingAppliedRules: CheckoutPricingAppliedRule[];
   shippingUsd: number;
@@ -405,12 +407,21 @@ export default function Checkout() {
     step === 'review' && completedCheckout
       ? Number(completedCheckout.checkoutPricingAdjustmentUsd || 0)
       : checkoutPricingAdjustment;
+  const summaryCheckoutPricingLabel =
+    step === 'review' && completedCheckout
+      ? String(completedCheckout.checkoutPricingLabel || checkoutPricingPreview?.label || 'Checkout Pricing')
+      : String(checkoutPricingPreview?.label || 'Checkout Pricing');
   const summaryCheckoutPricingRules =
     step === 'review' && completedCheckout
       ? completedCheckout.checkoutPricingAppliedRules || []
       : checkoutPricingPreview?.appliedRules || [];
   const summaryShipping = step === 'review' && completedCheckout ? Number(completedCheckout.shippingUsd || 0) : shipping;
   const summaryTotal = step === 'review' && completedCheckout ? Number(completedCheckout.totalUsd || 0) : finalTotal;
+  const formatCheckoutPricingAdjustment = (amountUsd: number, adjustmentType?: string) => {
+    const normalizedType = String(adjustmentType || '').toUpperCase();
+    const isMarkdown = normalizedType.includes('DISCOUNT') || Number(amountUsd || 0) < 0;
+    return `${isMarkdown ? '-' : ''}${formatFromUsd(Math.abs(Number(amountUsd || 0)))}`;
+  };
 
   useEffect(() => {
     if (step !== 'review') return;
@@ -460,13 +471,14 @@ export default function Checkout() {
       .then((response) => {
         if (cancelled || !response.success || !response.data) return;
         setCheckoutPricingPreview({
+          label: String(response.data.label || 'Checkout Pricing'),
           baseSubtotalUsd: Number(response.data.baseSubtotalUsd || 0),
           totalAdjustmentUsd: Number(response.data.totalAdjustmentUsd || 0),
           finalSubtotalUsd: Number(response.data.finalSubtotalUsd || 0),
           appliedRules: Array.isArray(response.data.appliedRules)
             ? response.data.appliedRules.map((rule) => ({
                 ruleId: String(rule.ruleId || ''),
-                ruleName: String(rule.ruleName || 'Checkout pricing'),
+                ruleName: String(rule.ruleName || response.data.label || 'Checkout Pricing'),
                 adjustmentType: String(rule.adjustmentType || ''),
                 value: Number(rule.value || 0),
                 amountUsd: Number(rule.amountUsd || 0),
@@ -1348,6 +1360,7 @@ export default function Checkout() {
         subtotalUsd: Number(totalPrice || 0),
         promoCode: promoPreview?.code || undefined,
         promoDiscountUsd: Number(promoPreview?.discountUsd || 0),
+        checkoutPricingLabel: String(activeCheckoutPricingPreview?.label || 'Checkout Pricing'),
         checkoutPricingAdjustmentUsd: Number(activeCheckoutPricingPreview?.totalAdjustmentUsd || 0),
         checkoutPricingAppliedRules: Array.isArray(activeCheckoutPricingPreview?.appliedRules)
           ? activeCheckoutPricingPreview.appliedRules
@@ -1430,7 +1443,22 @@ export default function Checkout() {
     }
     const pendingCheckoutPricingPreview =
       pending.checkoutPricingPreview && typeof pending.checkoutPricingPreview === 'object'
-        ? (pending.checkoutPricingPreview as CheckoutPricingPreviewResult)
+        ? ({
+            label: String((pending.checkoutPricingPreview as any).label || 'Checkout Pricing'),
+            baseSubtotalUsd: Number((pending.checkoutPricingPreview as any).baseSubtotalUsd || 0),
+            totalAdjustmentUsd: Number((pending.checkoutPricingPreview as any).totalAdjustmentUsd || 0),
+            finalSubtotalUsd: Number((pending.checkoutPricingPreview as any).finalSubtotalUsd || 0),
+            appliedRules: Array.isArray((pending.checkoutPricingPreview as any).appliedRules)
+              ? (pending.checkoutPricingPreview as any).appliedRules.map((rule: any) => ({
+                  ruleId: String(rule?.ruleId || ''),
+                  ruleName: String(rule?.ruleName || ''),
+                  adjustmentType: String(rule?.adjustmentType || ''),
+                  value: Number(rule?.value || 0),
+                  amountUsd: Number(rule?.amountUsd || 0),
+                  occurrences: Number(rule?.occurrences || 1),
+                }))
+              : [],
+          } as CheckoutPricingPreviewResult)
         : null;
     if (pendingCheckoutPricingPreview) {
       setCheckoutPricingPreview(pendingCheckoutPricingPreview);
@@ -2088,10 +2116,9 @@ export default function Checkout() {
                       <p>Subtotal: {formatFromUsd(summarySubtotal)}</p>
                       {Math.abs(summaryCheckoutPricingAdjustment) > 0 ? (
                         <p>
-                          Checkout Pricing:{' '}
+                          {summaryCheckoutPricingLabel}:{' '}
                           <span className={summaryCheckoutPricingAdjustment >= 0 ? '' : 'text-green-700'}>
-                            {summaryCheckoutPricingAdjustment >= 0 ? '+' : '-'}
-                            {formatFromUsd(Math.abs(summaryCheckoutPricingAdjustment))}
+                            {formatCheckoutPricingAdjustment(summaryCheckoutPricingAdjustment)}
                           </span>
                         </p>
                       ) : null}
@@ -2101,12 +2128,11 @@ export default function Checkout() {
                     </div>
                     {summaryCheckoutPricingRules.length > 0 ? (
                       <div className="mt-2 rounded border bg-white p-2">
-                        <p className="text-xs font-semibold text-gray-700">Checkout Pricing Breakdown</p>
+                        <p className="text-xs font-semibold text-gray-700">{summaryCheckoutPricingLabel} Breakdown</p>
                         <div className="mt-1 space-y-1">
                           {summaryCheckoutPricingRules.map((rule) => (
                             <p key={`checkout-pricing-rule-${rule.ruleId}`} className="text-xs text-gray-600">
-                              {rule.ruleName}: {rule.amountUsd >= 0 ? '+' : '-'}
-                              {formatFromUsd(Math.abs(Number(rule.amountUsd || 0)))}
+                              {rule.ruleName}: {formatCheckoutPricingAdjustment(rule.amountUsd, rule.adjustmentType)}
                             </p>
                           ))}
                         </div>
@@ -2227,10 +2253,9 @@ export default function Checkout() {
                 </div>
                 {Math.abs(summaryCheckoutPricingAdjustment) > 0 ? (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Checkout Pricing</span>
+                    <span className="text-gray-600">{summaryCheckoutPricingLabel}</span>
                     <span className={summaryCheckoutPricingAdjustment >= 0 ? 'font-medium' : 'font-medium text-green-700'}>
-                      {summaryCheckoutPricingAdjustment >= 0 ? '+' : '-'}
-                      {formatFromUsd(Math.abs(summaryCheckoutPricingAdjustment))}
+                      {formatCheckoutPricingAdjustment(summaryCheckoutPricingAdjustment)}
                     </span>
                   </div>
                 ) : null}

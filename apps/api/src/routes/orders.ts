@@ -19,6 +19,7 @@ import {
   readActivePricingRules,
   type PricingProductType,
 } from '../utils/pricing-rules';
+import { readCheckoutPricingSettings } from '../utils/checkout-pricing-settings';
 
 const router = Router();
 
@@ -913,6 +914,7 @@ router.post('/checkout-pricing/preview', async (req, res, next) => {
     });
     const payload = schema.parse(req.body || {});
     const checkoutRules = await readActivePricingRules(new Date(), 'CHECKOUT');
+    const checkoutPricingSettings = await readCheckoutPricingSettings();
     const normalizedSegments = (Array.isArray(payload.segments) ? payload.segments : [])
       .map((entry) => ({
         productType: entry.productType as PricingProductType,
@@ -963,6 +965,7 @@ router.post('/checkout-pricing/preview', async (req, res, next) => {
     res.json({
       success: true,
       data: {
+        label: checkoutPricingSettings.settings.label,
         baseSubtotalUsd: Number(baseSubtotalUsd.toFixed(2)),
         totalAdjustmentUsd,
         finalSubtotalUsd,

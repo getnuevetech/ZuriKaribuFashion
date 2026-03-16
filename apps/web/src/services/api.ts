@@ -4738,6 +4738,7 @@ const ordersApi = {
     apiService.post<{
       success: boolean;
       data: {
+        label: string;
         baseSubtotalUsd: number;
         totalAdjustmentUsd: number;
         finalSubtotalUsd: number;
@@ -6685,6 +6686,12 @@ const adminApi = {
     apiService.get<{ success: boolean; data: any[] }>('/admin/pricing-rules', {
       params: { scope },
     }),
+
+  getCheckoutPricingSettings: () =>
+    apiService.get<{ success: boolean; data: { label: string } }>('/admin/pricing-rules/checkout-settings'),
+
+  updateCheckoutPricingSettings: (data: { label: string }) =>
+    apiService.patch<{ success: boolean; data: { label: string } }>('/admin/pricing-rules/checkout-settings', data),
 
   createPricingRule: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/admin/pricing-rules', data),

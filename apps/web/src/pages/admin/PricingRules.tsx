@@ -35,6 +35,9 @@ export default function AdminPricingRules() {
   const [editingRule, setEditingRule] = useState<PricingRule | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [checkoutPricingLabel, setCheckoutPricingLabel] = useState('Checkout Pricing');
+  const [checkoutPricingLabelLoading, setCheckoutPricingLabelLoading] = useState(false);
+  const [checkoutPricingLabelSaving, setCheckoutPricingLabelSaving] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -50,6 +53,11 @@ export default function AdminPricingRules() {
 
   useEffect(() => {
     void fetchRules(activeScope);
+  }, [activeScope]);
+
+  useEffect(() => {
+    if (activeScope !== 'CHECKOUT') return;
+    void fetchCheckoutPricingLabel();
   }, [activeScope]);
 
   const fetchRules = async (scope: 'CATALOG' | 'CHECKOUT') => {
@@ -101,6 +109,43 @@ export default function AdminPricingRules() {
       setError('Failed to fetch pricing rules.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCheckoutPricingLabel = async () => {
+    try {
+      setCheckoutPricingLabelLoading(true);
+      const response = await api.admin.getCheckoutPricingSettings();
+      if (response.success) {
+        setCheckoutPricingLabel(String(response.data?.label || 'Checkout Pricing'));
+      }
+    } catch (err) {
+      console.error('Failed to fetch checkout pricing settings:', err);
+    } finally {
+      setCheckoutPricingLabelLoading(false);
+    }
+  };
+
+  const handleSaveCheckoutPricingLabel = async () => {
+    const normalized = String(checkoutPricingLabel || '').trim();
+    if (!normalized) {
+      setError('Checkout pricing label cannot be empty.');
+      return;
+    }
+    try {
+      setCheckoutPricingLabelSaving(true);
+      setError('');
+      setSuccess('');
+      const response = await api.admin.updateCheckoutPricingSettings({ label: normalized });
+      if (response.success) {
+        setCheckoutPricingLabel(String(response.data?.label || normalized));
+        setSuccess('Checkout pricing label updated successfully.');
+      }
+    } catch (err) {
+      console.error('Failed to save checkout pricing settings:', err);
+      setError('Failed to save checkout pricing label.');
+    } finally {
+      setCheckoutPricingLabelSaving(false);
     }
   };
 
@@ -287,6 +332,33 @@ export default function AdminPricingRules() {
           Checkout Pricing
         </button>
       </div>
+
+      {activeScope === 'CHECKOUT' ? (
+        <div className="rounded-xl border bg-white p-4 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-900">Checkout Pricing Label</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            This text is shown at checkout for checkout pricing adjustments.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <input
+              type="text"
+              value={checkoutPricingLabel}
+              onChange={(event) => setCheckoutPricingLabel(event.target.value)}
+              disabled={checkoutPricingLabelLoading || checkoutPricingLabelSaving}
+              maxLength={80}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              placeholder="e.g., Service Adjustment"
+            />
+            <Button
+              type="button"
+              onClick={handleSaveCheckoutPricingLabel}
+              disabled={checkoutPricingLabelLoading || checkoutPricingLabelSaving}
+            >
+              {checkoutPricingLabelSaving ? 'Saving...' : 'Save Label'}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Form */}
       {showForm && (
