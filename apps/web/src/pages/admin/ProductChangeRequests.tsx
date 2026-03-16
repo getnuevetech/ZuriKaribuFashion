@@ -5,6 +5,7 @@ import Button from '../../components/ui/Button';
 
 type ProductType = 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
 type VendorRole = 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+type AdminProductChangeTab = 'REQUESTS' | 'POLICY';
 
 type FieldCatalogEntry = {
   key: string;
@@ -23,6 +24,7 @@ const PRODUCT_TYPES: ProductType[] = ['FABRIC', 'DESIGN', 'READY_TO_WEAR'];
 const VENDOR_ROLES: VendorRole[] = ['FABRIC_SELLER', 'FASHION_DESIGNER'];
 
 export default function AdminProductChangeRequestsPage() {
+  const [activeTab, setActiveTab] = useState<AdminProductChangeTab>('REQUESTS');
   const [loading, setLoading] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
@@ -38,7 +40,6 @@ export default function AdminProductChangeRequestsPage() {
   });
   const [requests, setRequests] = useState<any[]>([]);
   const [reviewDrafts, setReviewDrafts] = useState<Record<string, ReviewDraft>>({});
-  const [statusFilter, setStatusFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [search, setSearch] = useState('');
 
@@ -86,7 +87,7 @@ export default function AdminProductChangeRequestsPage() {
 
   const loadRequests = async () => {
     const response = await api.productChangeRequests.listAdminRequests({
-      status: statusFilter || undefined,
+      status: 'PENDING',
       role: (roleFilter as VendorRole) || undefined,
       search: search || undefined,
       page: 1,
@@ -128,7 +129,7 @@ export default function AdminProductChangeRequestsPage() {
 
   useEffect(() => {
     void loadRequests();
-  }, [statusFilter, roleFilter]);
+  }, [roleFilter]);
 
   const togglePolicyField = (role: VendorRole, productType: ProductType, fieldKey: string) => {
     setAllowedFieldsByRole((prev) => {
@@ -215,12 +216,40 @@ export default function AdminProductChangeRequestsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Product Change Request</h1>
-        <p className="text-sm text-gray-600">Review vendor edit-access requests and manage default editable fields per role.</p>
+        <p className="text-sm text-gray-600">Review pending vendor edit-access requests and manage default editable fields per role.</p>
+      </div>
+
+      <div className="rounded-xl border bg-white p-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('REQUESTS')}
+            className={`rounded border px-3 py-1.5 text-sm ${
+              activeTab === 'REQUESTS'
+                ? 'border-black bg-black text-white'
+                : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+            }`}
+          >
+            Change Request List
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('POLICY')}
+            className={`rounded border px-3 py-1.5 text-sm ${
+              activeTab === 'POLICY'
+                ? 'border-black bg-black text-white'
+                : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+            }`}
+          >
+            Default Vendor Edit Policy
+          </button>
+        </div>
       </div>
 
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
       {success ? <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div> : null}
 
+      {activeTab === 'POLICY' ? (
       <div className="rounded-xl border bg-white p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900">Default Vendor Edit Policy</h2>
@@ -267,18 +296,14 @@ export default function AdminProductChangeRequestsPage() {
           ))}
         </div>
       </div>
+      ) : null}
 
+      {activeTab === 'REQUESTS' ? (
       <div className="rounded-xl border bg-white p-5">
+        <p className="mb-3 text-xs text-gray-500">
+          Showing only <span className="font-semibold text-gray-700">pending</span> requests. Approved/rejected requests are logged under Activity Logs.
+        </p>
         <div className="mb-3 flex flex-wrap items-end gap-3">
-          <label className="text-sm text-gray-700">
-            Status
-            <select className="mt-1 rounded-lg border px-3 py-2" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="">All</option>
-              <option value="PENDING">Pending</option>
-              <option value="APPROVED">Approved</option>
-              <option value="REJECTED">Rejected</option>
-            </select>
-          </label>
           <label className="text-sm text-gray-700">
             Role
             <select className="mt-1 rounded-lg border px-3 py-2" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
@@ -431,6 +456,7 @@ export default function AdminProductChangeRequestsPage() {
           </div>
         )}
       </div>
+      ) : null}
     </div>
   );
 }

@@ -361,10 +361,9 @@ router.get('/admin/requests', authorizePermissions(Permissions.PRODUCTS_MANAGE),
     const pagination = parsePagination(query.page, query.limit, 20);
     const values: any[] = [];
     const whereClauses: string[] = ['1=1'];
-    if (query.status) {
-      values.push(String(query.status).toUpperCase());
-      whereClauses.push(`UPPER(r."status") = $${values.length}`);
-    }
+    const statusFilter = String(query.status || 'PENDING').toUpperCase();
+    values.push(statusFilter);
+    whereClauses.push(`UPPER(r."status") = $${values.length}`);
     if (query.role) {
       values.push(query.role);
       whereClauses.push(`r."requesterRole" = $${values.length}`);
@@ -577,6 +576,41 @@ router.patch('/admin/requests/:id/review', authorizePermissions(Permissions.PROD
               : payload.reviewNote || 'Your product change request was rejected.',
           relatedType: 'PRODUCT',
           relatedId: requestId,
+        },
+      })
+      .catch(() => undefined);
+
+    const reviewerDetails = {
+      requestId,
+      requesterUserId: String(existing.requesterUserId || ''),
+      requesterRole: String(existing.requesterRole || ''),
+      productType,
+      productId: String(existing.productId || ''),
+      status: payload.status,
+      reviewNote: payload.reviewNote || null,
+      grantAllChanges,
+      grantedFields,
+      grantStartsAt: grantStartsAt ? grantStartsAt.toISOString() : null,
+      grantEndsAt: grantEndsAt ? grantEndsAt.toISOString() : null,
+    };
+    await prisma.activityLog
+      .create({
+        data: {
+          userId: req.user!.id,
+          action: 'PRODUCT_CHANGE_REQUEST_REVIEWED',
+          details: reviewerDetails as any,
+        },
+      })
+      .catch(() => undefined);
+    await prisma.activityLog
+      .create({
+        data: {
+          userId: String(existing.requesterUserId || ''),
+          action: payload.status === 'APPROVED' ? 'PRODUCT_CHANGE_REQUEST_APPROVED' : 'PRODUCT_CHANGE_REQUEST_REJECTED',
+          details: {
+            ...reviewerDetails,
+            reviewedByUserId: req.user!.id,
+          } as any,
         },
       })
       .catch(() => undefined);
