@@ -16,6 +16,7 @@ import Badge from '../../components/ui/Badge';
 interface PricingRule {
   id: string;
   name: string;
+  pricingScope?: 'CATALOG' | 'CHECKOUT';
   type: 'MARKUP' | 'MARKDOWN';
   targetType: 'PRODUCT_TYPE' | 'COUNTRY' | 'DATE_RANGE';
   targetValue: string;
@@ -27,6 +28,7 @@ interface PricingRule {
 }
 
 export default function AdminPricingRules() {
+  const [activeScope, setActiveScope] = useState<'CATALOG' | 'CHECKOUT'>('CATALOG');
   const [rules, setRules] = useState<PricingRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -47,14 +49,14 @@ export default function AdminPricingRules() {
   });
 
   useEffect(() => {
-    fetchRules();
-  }, []);
+    void fetchRules(activeScope);
+  }, [activeScope]);
 
-  const fetchRules = async () => {
+  const fetchRules = async (scope: 'CATALOG' | 'CHECKOUT') => {
     try {
       setLoading(true);
       setError('');
-      const response = await api.admin.getPricingRules();
+      const response = await api.admin.getPricingRules(scope);
       if (response.success) {
         const mapped = (response.data || []).map((item: any): PricingRule => {
           const targetType: PricingRule['targetType'] =
@@ -70,6 +72,7 @@ export default function AdminPricingRules() {
           return {
             id: item.id,
             name: item.name,
+            pricingScope: String(item.pricingScope || scope).toUpperCase() === 'CHECKOUT' ? 'CHECKOUT' : 'CATALOG',
             type,
             targetType,
             targetValue:
@@ -132,6 +135,7 @@ export default function AdminPricingRules() {
             : 'PERCENTAGE_MARKUP';
       const payload = {
         name: formData.name,
+        pricingScope: activeScope,
         description: formData.targetType === 'DATE_RANGE' ? formData.targetValue || formData.name : undefined,
         ruleType:
           formData.targetType === 'COUNTRY'
@@ -163,8 +167,12 @@ export default function AdminPricingRules() {
       setShowForm(false);
       setEditingRule(null);
       resetForm();
-      setSuccess(editingRule ? 'Pricing rule updated successfully.' : 'Pricing rule created successfully.');
-      fetchRules();
+      setSuccess(
+        editingRule
+          ? `${activeScope === 'CHECKOUT' ? 'Checkout pricing' : 'Pricing'} rule updated successfully.`
+          : `${activeScope === 'CHECKOUT' ? 'Checkout pricing' : 'Pricing'} rule created successfully.`
+      );
+      fetchRules(activeScope);
     } catch (error) {
       console.error('Failed to save pricing rule:', error);
       setError('Failed to save pricing rule.');
@@ -176,7 +184,7 @@ export default function AdminPricingRules() {
     try {
       await api.admin.deletePricingRule(id);
       setSuccess('Pricing rule deleted successfully.');
-      fetchRules();
+      fetchRules(activeScope);
     } catch (error) {
       console.error('Failed to delete pricing rule:', error);
       setError('Failed to delete pricing rule.');
@@ -235,7 +243,11 @@ export default function AdminPricingRules() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Pricing Rules</h1>
-          <p className="text-gray-500 mt-1">Manage dynamic pricing for products and regions</p>
+          <p className="text-gray-500 mt-1">
+            {activeScope === 'CHECKOUT'
+              ? 'Manage checkout-only pricing adjustments shown in checkout breakdown.'
+              : 'Manage dynamic catalog pricing for products and regions.'}
+          </p>
         </div>
         <Button onClick={() => { resetForm(); setShowForm(true); }}>
           <Plus className="w-4 h-4 mr-2" />
@@ -247,6 +259,34 @@ export default function AdminPricingRules() {
           {error || success}
         </div>
       )}
+      <div className="inline-flex rounded-lg border bg-white p-1">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveScope('CATALOG');
+            setShowForm(false);
+            setEditingRule(null);
+          }}
+          className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+            activeScope === 'CATALOG' ? 'bg-black text-white' : 'text-gray-700 hover:bg-gray-100'
+          }`}
+        >
+          Price Rule
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveScope('CHECKOUT');
+            setShowForm(false);
+            setEditingRule(null);
+          }}
+          className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+            activeScope === 'CHECKOUT' ? 'bg-black text-white' : 'text-gray-700 hover:bg-gray-100'
+          }`}
+        >
+          Checkout Pricing
+        </button>
+      </div>
 
       {/* Form */}
       {showForm && (

@@ -28,6 +28,11 @@ import {
   syncProductAvailabilityByType,
   writeStockMonitorSettings,
 } from '../utils/product-stock-monitor';
+import {
+  normalizePricingRuleDescriptionForScope,
+  readPricingScopeFromDescription,
+  stripPricingScopeTag,
+} from '../utils/pricing-rules';
 
 const router = Router();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
@@ -5780,17 +5785,32 @@ router.delete('/materials/:id', async (req, res, next) => {
 });
 
 // ==================== PRICING RULES ====================
+const normalizePricingScopeInput = (value: unknown): 'CATALOG' | 'CHECKOUT' => {
+  const token = String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+  return token === 'CHECKOUT' || token === 'CHECKOUT_PRICING' ? 'CHECKOUT' : 'CATALOG';
+};
 
 // Get all pricing rules
 router.get('/pricing-rules', async (req, res, next) => {
   try {
+    const scope = normalizePricingScopeInput(req.query.scope);
     const rules = await prisma.pricingRule.findMany({
       orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
     });
+    const normalizedRules = rules
+      .map((rule) => {
+        const pricingScope = readPricingScopeFromDescription(rule.description);
+        return {
+          ...rule,
+          pricingScope,
+          description: stripPricingScopeTag(rule.description),
+        };
+      })
+      .filter((rule) => rule.pricingScope === scope);
 
     res.json({
       success: true,
-      data: rules,
+      data: normalizedRules,
     });
   } catch (error) {
     next(error);
@@ -5812,13 +5832,17 @@ router.post('/pricing-rules', async (req, res, next) => {
       adjustmentType: z.enum(['PERCENTAGE_MARKUP', 'PERCENTAGE_DISCOUNT', 'FIXED_MARKUP', 'FIXED_DISCOUNT']),
       value: z.number().positive(),
       priority: z.number().default(0),
+      pricingScope: z.enum(['CATALOG', 'CHECKOUT']).optional(),
     });
 
     const data = schema.parse(req.body);
+    const pricingScope = normalizePricingScopeInput(data.pricingScope);
+    const { pricingScope: _ignoredScope, ...rulePayload } = data;
 
     const rule = await prisma.pricingRule.create({
       data: {
-        ...data,
+        ...rulePayload,
+        description: normalizePricingRuleDescriptionForScope(data.description, pricingScope),
         startDate: data.startDate ? new Date(data.startDate) : null,
         endDate: data.endDate ? new Date(data.endDate) : null,
         createdById: req.user!.id,
@@ -5839,7 +5863,7 @@ router.post('/pricing-rules', async (req, res, next) => {
 router.patch('/pricing-rules/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const updateData = { ...(req.body || {}) } as Record<string, any>;
 
     if (updateData.startDate) {
       updateData.startDate = new Date(updateData.startDate);
@@ -5847,6 +5871,16 @@ router.patch('/pricing-rules/:id', async (req, res, next) => {
     if (updateData.endDate) {
       updateData.endDate = new Date(updateData.endDate);
     }
+    const current = await prisma.pricingRule.findUnique({
+      where: { id },
+      select: { description: true },
+    });
+    const nextScope = normalizePricingScopeInput(updateData.pricingScope ?? readPricingScopeFromDescription(current?.description));
+    updateData.description = normalizePricingRuleDescriptionForScope(
+      updateData.description ?? current?.description ?? '',
+      nextScope
+    );
+    delete updateData.pricingScope;
 
     const rule = await prisma.pricingRule.update({
       where: { id },

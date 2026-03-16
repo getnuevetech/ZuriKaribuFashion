@@ -89,6 +89,22 @@ interface PaymentSessionDebugInfo {
   timestamp: string;
 }
 
+interface CheckoutPricingAppliedRule {
+  ruleId: string;
+  ruleName: string;
+  adjustmentType: string;
+  value: number;
+  amountUsd: number;
+  occurrences: number;
+}
+
+interface CheckoutPricingPreviewResult {
+  baseSubtotalUsd: number;
+  totalAdjustmentUsd: number;
+  finalSubtotalUsd: number;
+  appliedRules: CheckoutPricingAppliedRule[];
+}
+
 interface CompletedCheckoutSummary {
   createdAt: string;
   orderNumbers: string[];
@@ -99,6 +115,8 @@ interface CompletedCheckoutSummary {
   subtotalUsd: number;
   promoCode?: string;
   promoDiscountUsd: number;
+  checkoutPricingAdjustmentUsd: number;
+  checkoutPricingAppliedRules: CheckoutPricingAppliedRule[];
   shippingUsd: number;
   totalUsd: number;
 }
@@ -332,6 +350,7 @@ export default function Checkout() {
   const [promoCode, setPromoCode] = useState('');
   const [promoPreview, setPromoPreview] = useState<PromoPreviewResult | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
+  const [checkoutPricingPreview, setCheckoutPricingPreview] = useState<CheckoutPricingPreviewResult | null>(null);
   const [cardPromoHint, setCardPromoHint] = useState('');
   const [paymentDebugInfo, setPaymentDebugInfo] = useState<PaymentSessionDebugInfo | null>(null);
   const [runtimeStripeReloading, setRuntimeStripeReloading] = useState(false);
@@ -369,8 +388,9 @@ export default function Checkout() {
   const selectedShippingQuote =
     shippingQuotes.find((entry) => entry.id === selectedShippingQuoteId) || null;
   const shipping = selectedShippingQuote ? Number(selectedShippingQuote.priceUsd || 0) : fallbackShipping;
+  const checkoutPricingAdjustment = Number(checkoutPricingPreview?.totalAdjustmentUsd || 0);
   const promoDiscount = Number(promoPreview?.discountUsd || 0);
-  const finalTotal = Math.max(0, totalPrice - promoDiscount + shipping);
+  const finalTotal = Math.max(0, totalPrice + checkoutPricingAdjustment - promoDiscount + shipping);
   const selectedProvider = paymentProviders.find((entry) => entry.providerKey === selectedPaymentProvider) || null;
   const currentStepSummary =
     step === 'shipping'
@@ -381,6 +401,14 @@ export default function Checkout() {
   const summaryItems = step === 'review' && completedCheckout ? completedCheckout.items : items;
   const summarySubtotal = step === 'review' && completedCheckout ? Number(completedCheckout.subtotalUsd || 0) : totalPrice;
   const summaryPromoDiscount = step === 'review' && completedCheckout ? Number(completedCheckout.promoDiscountUsd || 0) : promoDiscount;
+  const summaryCheckoutPricingAdjustment =
+    step === 'review' && completedCheckout
+      ? Number(completedCheckout.checkoutPricingAdjustmentUsd || 0)
+      : checkoutPricingAdjustment;
+  const summaryCheckoutPricingRules =
+    step === 'review' && completedCheckout
+      ? completedCheckout.checkoutPricingAppliedRules || []
+      : checkoutPricingPreview?.appliedRules || [];
   const summaryShipping = step === 'review' && completedCheckout ? Number(completedCheckout.shippingUsd || 0) : shipping;
   const summaryTotal = step === 'review' && completedCheckout ? Number(completedCheckout.totalUsd || 0) : finalTotal;
 
@@ -400,6 +428,60 @@ export default function Checkout() {
       cancelled = true;
     };
   }, [step]);
+
+  useEffect(() => {
+    if (!Array.isArray(items) || items.length === 0) {
+      setCheckoutPricingPreview(null);
+      return;
+    }
+    let cancelled = false;
+    const readySubtotal = items
+      .filter((item) => item.kind === 'READY_TO_WEAR')
+      .reduce((sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 1), 0);
+    const fabricSubtotal = items
+      .filter((item) => item.kind === 'FABRIC_ONLY')
+      .reduce((sum, item) => sum + Number(item.pricePerYard || 0) * Number(item.yards || 0), 0);
+    const designSubtotal = items
+      .filter((item) => item.kind === 'CUSTOM_DESIGN')
+      .reduce((sum, item) => sum + Number(item.totalPrice || 0), 0);
+    const segments: Array<{ productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; subtotalUsd: number }> = [];
+    if (readySubtotal > 0) segments.push({ productType: 'READY_TO_WEAR', subtotalUsd: Number(readySubtotal.toFixed(2)) });
+    if (fabricSubtotal > 0) segments.push({ productType: 'FABRIC', subtotalUsd: Number(fabricSubtotal.toFixed(2)) });
+    if (designSubtotal > 0) segments.push({ productType: 'DESIGN', subtotalUsd: Number(designSubtotal.toFixed(2)) });
+    if (segments.length === 0) {
+      setCheckoutPricingPreview(null);
+      return;
+    }
+    api.orders
+      .previewCheckoutPricing({
+        country: shippingAddress.country || undefined,
+        segments,
+      })
+      .then((response) => {
+        if (cancelled || !response.success || !response.data) return;
+        setCheckoutPricingPreview({
+          baseSubtotalUsd: Number(response.data.baseSubtotalUsd || 0),
+          totalAdjustmentUsd: Number(response.data.totalAdjustmentUsd || 0),
+          finalSubtotalUsd: Number(response.data.finalSubtotalUsd || 0),
+          appliedRules: Array.isArray(response.data.appliedRules)
+            ? response.data.appliedRules.map((rule) => ({
+                ruleId: String(rule.ruleId || ''),
+                ruleName: String(rule.ruleName || 'Checkout pricing'),
+                adjustmentType: String(rule.adjustmentType || ''),
+                value: Number(rule.value || 0),
+                amountUsd: Number(rule.amountUsd || 0),
+                occurrences: Number(rule.occurrences || 1),
+              }))
+            : [],
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setCheckoutPricingPreview(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [items, shippingAddress.country]);
 
   useEffect(() => {
     api.payments
@@ -952,6 +1034,7 @@ export default function Checkout() {
             shippingQuote: selectedShippingQuote,
             promoPreview,
             promoCode,
+            checkoutPricingPreview,
             createdAt: Date.now(),
           })
         );
@@ -1027,7 +1110,8 @@ export default function Checkout() {
     paymentIntentId: string,
     paymentMethod: string,
     shippingQuote: ShippingQuoteOption | null = selectedShippingQuote,
-    shippingAddressIdOverride?: string | null
+    shippingAddressIdOverride?: string | null,
+    checkoutPricingPreviewOverride?: CheckoutPricingPreviewResult | null
   ) => {
     try {
       const resolveServerShippingAddressId = async () => {
@@ -1107,6 +1191,7 @@ export default function Checkout() {
       const customItems = items.filter((item) => item.kind === 'CUSTOM_DESIGN');
       const readyToWearItems = items.filter((item) => item.kind === 'READY_TO_WEAR');
       const fabricOnlyItems = items.filter((item) => item.kind === 'FABRIC_ONLY');
+      const activeCheckoutPricingPreview = checkoutPricingPreviewOverride || checkoutPricingPreview;
       const groupedFabricItems = Array.from(
         fabricOnlyItems.reduce((map, item) => {
           const fabricId = String(item.fabricId || '').trim();
@@ -1145,6 +1230,7 @@ export default function Checkout() {
       const allSegments = [...customSegments, ...(readySegment.subtotal > 0 ? [readySegment] : []), ...fabricSegments];
       const totalSegmentSubtotal = allSegments.reduce((sum, entry) => sum + Number(entry.subtotal || 0), 0);
       const allocatedDiscount = new Map<string, number>();
+      const allocatedCheckoutPricing = new Map<string, number>();
       let remaining = discountBudget;
       allSegments.forEach((segment, index) => {
         if (remaining <= 0 || totalSegmentSubtotal <= 0) {
@@ -1162,6 +1248,24 @@ export default function Checkout() {
         allocatedDiscount.set(segment.key, Number(amount.toFixed(2)));
         remaining = Number((remaining - amount).toFixed(2));
       });
+      const checkoutPricingBudget = Number(activeCheckoutPricingPreview?.totalAdjustmentUsd || 0);
+      let remainingCheckoutPricing = checkoutPricingBudget;
+      allSegments.forEach((segment, index) => {
+        if (totalSegmentSubtotal <= 0) {
+          allocatedCheckoutPricing.set(segment.key, 0);
+          return;
+        }
+        if (index === allSegments.length - 1) {
+          const finalAmount = Number(remainingCheckoutPricing.toFixed(2));
+          allocatedCheckoutPricing.set(segment.key, finalAmount);
+          remainingCheckoutPricing = Number((remainingCheckoutPricing - finalAmount).toFixed(2));
+          return;
+        }
+        const share = (checkoutPricingBudget * segment.subtotal) / totalSegmentSubtotal;
+        const amount = Number(share.toFixed(2));
+        allocatedCheckoutPricing.set(segment.key, amount);
+        remainingCheckoutPricing = Number((remainingCheckoutPricing - amount).toFixed(2));
+      });
 
       if (readyToWearItems.length > 0) {
         const readyOrderResponse = await api.orders.createReadyToWearOrder({
@@ -1176,6 +1280,7 @@ export default function Checkout() {
           paymentIntentId,
           promoCode: promoPreview?.code || undefined,
           discountUsd: allocatedDiscount.get('ready') || 0,
+          checkoutPricingAdjustmentUsd: allocatedCheckoutPricing.get('ready') || 0,
           ...shippingPayload,
         });
         if (readyOrderResponse.success && readyOrderResponse.data?.orderNumber) {
@@ -1193,6 +1298,7 @@ export default function Checkout() {
           paymentIntentId,
           promoCode: promoPreview?.code || undefined,
           discountUsd: allocatedDiscount.get(item.key) || 0,
+          checkoutPricingAdjustmentUsd: allocatedCheckoutPricing.get(item.key) || 0,
           ...shippingPayload,
         });
         if (fabricOrderResponse.success && fabricOrderResponse.data?.orderNumber) {
@@ -1219,6 +1325,7 @@ export default function Checkout() {
           paymentIntentId,
           promoCode: promoPreview?.code || undefined,
           discountUsd: allocatedDiscount.get(`custom-${index}`) || 0,
+          checkoutPricingAdjustmentUsd: allocatedCheckoutPricing.get(`custom-${index}`) || 0,
           ...shippingPayload,
         });
         if (orderResponse.success && orderResponse.data?.orderNumber) {
@@ -1241,9 +1348,19 @@ export default function Checkout() {
         subtotalUsd: Number(totalPrice || 0),
         promoCode: promoPreview?.code || undefined,
         promoDiscountUsd: Number(promoPreview?.discountUsd || 0),
+        checkoutPricingAdjustmentUsd: Number(activeCheckoutPricingPreview?.totalAdjustmentUsd || 0),
+        checkoutPricingAppliedRules: Array.isArray(activeCheckoutPricingPreview?.appliedRules)
+          ? activeCheckoutPricingPreview.appliedRules
+          : [],
         shippingUsd: Number(shippingPayload.shippingCostUsd || 0),
         totalUsd: Number(
-          Math.max(0, Number(totalPrice || 0) - Number(promoPreview?.discountUsd || 0) + Number(shippingPayload.shippingCostUsd || 0))
+          Math.max(
+            0,
+            Number(totalPrice || 0) +
+              Number(activeCheckoutPricingPreview?.totalAdjustmentUsd || 0) -
+              Number(promoPreview?.discountUsd || 0) +
+              Number(shippingPayload.shippingCostUsd || 0)
+          )
         ),
       });
       if (typeof window !== 'undefined') {
@@ -1311,6 +1428,13 @@ export default function Checkout() {
     if (pending.promoCode) {
       setPromoCode(String(pending.promoCode || ''));
     }
+    const pendingCheckoutPricingPreview =
+      pending.checkoutPricingPreview && typeof pending.checkoutPricingPreview === 'object'
+        ? (pending.checkoutPricingPreview as CheckoutPricingPreviewResult)
+        : null;
+    if (pendingCheckoutPricingPreview) {
+      setCheckoutPricingPreview(pendingCheckoutPricingPreview);
+    }
     const pendingShippingQuote =
       pending.shippingQuote && typeof pending.shippingQuote === 'object'
         ? ({
@@ -1353,7 +1477,8 @@ export default function Checkout() {
             ? String(pending.validatedShippingAddressId)
             : pending?.selectedSavedAddressId
               ? String(pending.selectedSavedAddressId)
-              : undefined
+              : undefined,
+          pendingCheckoutPricingPreview
         );
       })
       .catch((err: any) => {
@@ -1961,10 +2086,32 @@ export default function Checkout() {
                     <div className="space-y-1 text-gray-700">
                       <p>Payment Method: {completedCheckout?.paymentMethod || selectedPaymentProvider}</p>
                       <p>Subtotal: {formatFromUsd(summarySubtotal)}</p>
+                      {Math.abs(summaryCheckoutPricingAdjustment) > 0 ? (
+                        <p>
+                          Checkout Pricing:{' '}
+                          <span className={summaryCheckoutPricingAdjustment >= 0 ? '' : 'text-green-700'}>
+                            {summaryCheckoutPricingAdjustment >= 0 ? '+' : '-'}
+                            {formatFromUsd(Math.abs(summaryCheckoutPricingAdjustment))}
+                          </span>
+                        </p>
+                      ) : null}
                       {summaryPromoDiscount > 0 ? <p>Discount: -{formatFromUsd(summaryPromoDiscount)}</p> : null}
                       <p>Shipping: {summaryShipping === 0 ? 'FREE' : formatFromUsd(summaryShipping)}</p>
                       <p className="font-semibold text-gray-900">Grand Total: {formatFromUsd(summaryTotal)}</p>
                     </div>
+                    {summaryCheckoutPricingRules.length > 0 ? (
+                      <div className="mt-2 rounded border bg-white p-2">
+                        <p className="text-xs font-semibold text-gray-700">Checkout Pricing Breakdown</p>
+                        <div className="mt-1 space-y-1">
+                          {summaryCheckoutPricingRules.map((rule) => (
+                            <p key={`checkout-pricing-rule-${rule.ruleId}`} className="text-xs text-gray-600">
+                              {rule.ruleName}: {rule.amountUsd >= 0 ? '+' : '-'}
+                              {formatFromUsd(Math.abs(Number(rule.amountUsd || 0)))}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                   {postCheckoutOffers.length > 0 ? (
                     <div className="mt-3 border-t pt-3">
@@ -2078,6 +2225,15 @@ export default function Checkout() {
                   <span className="text-gray-600">Subtotal</span>
                   <span className="font-medium">{formatFromUsd(summarySubtotal)}</span>
                 </div>
+                {Math.abs(summaryCheckoutPricingAdjustment) > 0 ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Checkout Pricing</span>
+                    <span className={summaryCheckoutPricingAdjustment >= 0 ? 'font-medium' : 'font-medium text-green-700'}>
+                      {summaryCheckoutPricingAdjustment >= 0 ? '+' : '-'}
+                      {formatFromUsd(Math.abs(summaryCheckoutPricingAdjustment))}
+                    </span>
+                  </div>
+                ) : null}
                 <div className="rounded-lg border bg-gray-50 p-3">
                   <p className="mb-2 text-xs font-medium text-gray-700">Promo Code</p>
                   <div className="flex gap-2">

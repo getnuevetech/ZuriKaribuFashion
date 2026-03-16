@@ -4731,6 +4731,27 @@ const ordersApi = {
       };
     }>('/orders/limits'),
 
+  previewCheckoutPricing: (data: {
+    country?: string;
+    segments: Array<{ productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; subtotalUsd: number }>;
+  }) =>
+    apiService.post<{
+      success: boolean;
+      data: {
+        baseSubtotalUsd: number;
+        totalAdjustmentUsd: number;
+        finalSubtotalUsd: number;
+        appliedRules: Array<{
+          ruleId: string;
+          ruleName: string;
+          adjustmentType: string;
+          value: number;
+          amountUsd: number;
+          occurrences: number;
+        }>;
+      };
+    }>('/orders/checkout-pricing/preview', data),
+
   getOrderTicketThread: (orderId: string) =>
     apiService.get<{
       success: boolean;
@@ -6660,8 +6681,10 @@ const adminApi = {
   deleteMaterial: (id: string) =>
     apiService.delete(`/admin/materials/${id}`),
 
-  getPricingRules: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/admin/pricing-rules'),
+  getPricingRules: (scope: 'CATALOG' | 'CHECKOUT' = 'CATALOG') =>
+    apiService.get<{ success: boolean; data: any[] }>('/admin/pricing-rules', {
+      params: { scope },
+    }),
 
   createPricingRule: (data: any) =>
     apiService.post<{ success: boolean; data: any }>('/admin/pricing-rules', data),

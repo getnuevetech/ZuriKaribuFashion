@@ -14,6 +14,11 @@ import {
 } from '../utils/order-workflow';
 import { emitPartnerOrderEvent } from '../utils/partner-api';
 import { syncFabricAvailabilityById, syncReadyToWearAvailabilityById } from '../utils/product-stock-monitor';
+import {
+  applyActivePricingRulesWithBreakdown,
+  readActivePricingRules,
+  type PricingProductType,
+} from '../utils/pricing-rules';
 
 const router = Router();
 
@@ -893,6 +898,84 @@ router.get('/limits', async (_req, res, next) => {
   }
 });
 
+router.post('/checkout-pricing/preview', async (req, res, next) => {
+  try {
+    const schema = z.object({
+      country: z.string().trim().optional(),
+      segments: z
+        .array(
+          z.object({
+            productType: z.enum(['FABRIC', 'DESIGN', 'READY_TO_WEAR']),
+            subtotalUsd: z.number().min(0),
+          })
+        )
+        .default([]),
+    });
+    const payload = schema.parse(req.body || {});
+    const checkoutRules = await readActivePricingRules(new Date(), 'CHECKOUT');
+    const normalizedSegments = (Array.isArray(payload.segments) ? payload.segments : [])
+      .map((entry) => ({
+        productType: entry.productType as PricingProductType,
+        subtotalUsd: Number(entry.subtotalUsd || 0),
+      }))
+      .filter((entry) => Number.isFinite(entry.subtotalUsd) && entry.subtotalUsd > 0);
+    const baseSubtotalUsd = normalizedSegments.reduce((sum, entry) => sum + Number(entry.subtotalUsd || 0), 0);
+    const aggregatedRules = new Map<
+      string,
+      {
+        ruleId: string;
+        ruleName: string;
+        adjustmentType: string;
+        value: number;
+        amountUsd: number;
+        occurrences: number;
+      }
+    >();
+    let finalSubtotalUsd = 0;
+    for (const segment of normalizedSegments) {
+      const applied = applyActivePricingRulesWithBreakdown(
+        Number(segment.subtotalUsd || 0),
+        { productType: segment.productType, country: payload.country || undefined },
+        checkoutRules
+      );
+      finalSubtotalUsd += Number(applied.finalPriceUsd || 0);
+      for (const row of applied.appliedRules) {
+        const key = String(row.ruleId || row.ruleName || '').trim();
+        if (!key) continue;
+        const current = aggregatedRules.get(key);
+        if (!current) {
+          aggregatedRules.set(key, {
+            ruleId: row.ruleId,
+            ruleName: row.ruleName,
+            adjustmentType: row.adjustmentType,
+            value: Number(row.value || 0),
+            amountUsd: Number(row.amountUsd || 0),
+            occurrences: 1,
+          });
+          continue;
+        }
+        current.amountUsd = Number((Number(current.amountUsd || 0) + Number(row.amountUsd || 0)).toFixed(2));
+        current.occurrences += 1;
+      }
+    }
+    finalSubtotalUsd = Number(finalSubtotalUsd.toFixed(2));
+    const totalAdjustmentUsd = Number((finalSubtotalUsd - Number(baseSubtotalUsd || 0)).toFixed(2));
+    res.json({
+      success: true,
+      data: {
+        baseSubtotalUsd: Number(baseSubtotalUsd.toFixed(2)),
+        totalAdjustmentUsd,
+        finalSubtotalUsd,
+        appliedRules: Array.from(aggregatedRules.values()).sort(
+          (a, b) => Math.abs(Number(b.amountUsd || 0)) - Math.abs(Number(a.amountUsd || 0))
+        ),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 let cachedTransporter: nodemailer.Transporter | null | undefined;
 
 function getOrderMailer(): nodemailer.Transporter | null {
@@ -961,6 +1044,7 @@ async function sendOrderConfirmationEmail(params: {
   promoCode?: string | null;
   discountUsd?: number | null;
   shippingCostUsd?: number | null;
+  checkoutPricingAdjustmentUsd?: number | null;
   itemLines?: string[];
   itemRows?: Array<{
     label: string;
@@ -1012,6 +1096,12 @@ async function sendOrderConfirmationEmail(params: {
       ? `\nPromo Discount: -$${Number(params.discountUsd || 0).toFixed(2)}${
           params.promoCode ? ` (${String(params.promoCode).toUpperCase()})` : ''
         }`
+      : '';
+  const checkoutPricingText =
+    Math.abs(Number(params.checkoutPricingAdjustmentUsd || 0)) > 0
+      ? `\nCheckout Pricing: ${Number(params.checkoutPricingAdjustmentUsd || 0) >= 0 ? '+' : '-'}$${Math.abs(
+          Number(params.checkoutPricingAdjustmentUsd || 0)
+        ).toFixed(2)}`
       : '';
   const paymentMethodText = params.paymentMethod ? `\nPayment Method: ${String(params.paymentMethod)}` : '';
   const shippingAddressText = params.shippingAddress ? `\nShipping Address: ${String(params.shippingAddress)}` : '';
@@ -1065,7 +1155,7 @@ async function sendOrderConfirmationEmail(params: {
     from,
     to: params.to,
     subject: `Order Confirmation: ${params.orderNumber}`,
-    text: `Thank you for your order!\n\nOrder Number: ${params.orderNumber}\nOrder Type: ${params.orderType}\nInvoice Date: ${invoiceDateText}\nItems: ${params.itemCount}\nSubtotal: $${subtotalText}${discountText}\nShipping: ${Number(params.shippingCostUsd || 0) === 0 ? 'FREE' : `$${Number(params.shippingCostUsd || 0).toFixed(2)}`}\nTax: $${taxText}\nGrand Total: $${totalText}${paymentMethodText}${shippingAddressText}${itemListText}${offerListText}\n\nYour order has been received and is now being processed.`,
+    text: `Thank you for your order!\n\nOrder Number: ${params.orderNumber}\nOrder Type: ${params.orderType}\nInvoice Date: ${invoiceDateText}\nItems: ${params.itemCount}\nSubtotal: $${subtotalText}${checkoutPricingText}${discountText}\nShipping: ${Number(params.shippingCostUsd || 0) === 0 ? 'FREE' : `$${Number(params.shippingCostUsd || 0).toFixed(2)}`}\nTax: $${taxText}\nGrand Total: $${totalText}${paymentMethodText}${shippingAddressText}${itemListText}${offerListText}\n\nYour order has been received and is now being processed.`,
     html: `
       <p>Thank you for your order.</p>
       <p><strong>Order Number:</strong> ${params.orderNumber}</p>
@@ -1073,6 +1163,7 @@ async function sendOrderConfirmationEmail(params: {
       <p><strong>Invoice Date:</strong> ${invoiceDateText}</p>
       <p><strong>Items:</strong> ${params.itemCount}</p>
       <p><strong>Subtotal:</strong> $${subtotalText}</p>
+      ${Math.abs(Number(params.checkoutPricingAdjustmentUsd || 0)) > 0 ? `<p><strong>Checkout Pricing:</strong> ${Number(params.checkoutPricingAdjustmentUsd || 0) >= 0 ? '+' : '-'}$${Math.abs(Number(params.checkoutPricingAdjustmentUsd || 0)).toFixed(2)}</p>` : ''}
       ${Number(params.discountUsd || 0) > 0 ? `<p><strong>Promo Discount:</strong> -$${Number(params.discountUsd || 0).toFixed(2)}${params.promoCode ? ` (${String(params.promoCode).toUpperCase()})` : ''}</p>` : ''}
       ${Number(params.shippingCostUsd || 0) > 0 || Number(params.shippingCostUsd || 0) === 0 ? `<p><strong>Shipping:</strong> ${Number(params.shippingCostUsd || 0) === 0 ? 'FREE' : `$${Number(params.shippingCostUsd || 0).toFixed(2)}`}</p>` : '<p><strong>Shipping:</strong> N/A</p>'}
       <p><strong>Tax:</strong> $${taxText}</p>
@@ -2309,6 +2400,7 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       shippingEtaMaxDays: z.number().min(0).optional(),
       promoCode: z.string().trim().max(30).optional(),
       discountUsd: z.number().min(0).optional(),
+      checkoutPricingAdjustmentUsd: z.number().optional(),
     });
 
     const data = schema.parse(req.body);
@@ -2475,8 +2567,12 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
     const fabricPrice = hasCustomerSelectedFabric && fabric ? Number(fabric.finalPrice) * selectedYards : 0;
     const designPrice = Number(design.finalPrice);
     const subtotalBeforeDiscount = fabricPrice + designPrice;
-    const discountUsd = Math.max(0, Math.min(Number(data.discountUsd || 0), subtotalBeforeDiscount));
-    const subtotal = subtotalBeforeDiscount - discountUsd;
+    const checkoutPricingAdjustmentUsd = Number.isFinite(Number(data.checkoutPricingAdjustmentUsd))
+      ? Number(data.checkoutPricingAdjustmentUsd)
+      : 0;
+    const subtotalAfterCheckoutPricing = Math.max(0, subtotalBeforeDiscount + checkoutPricingAdjustmentUsd);
+    const discountUsd = Math.max(0, Math.min(Number(data.discountUsd || 0), subtotalAfterCheckoutPricing));
+    const subtotal = subtotalAfterCheckoutPricing - discountUsd;
     const shippingCost = Number.isFinite(Number(data.shippingCostUsd)) ? Number(data.shippingCostUsd) : 25;
     const tax = subtotal * 0.08; // 8% tax
     const total = subtotal + shippingCost + tax;
@@ -2491,6 +2587,7 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       designPrice,
       fabricPrice,
       subtotalBeforeDiscount,
+      checkoutPricingAdjustmentUsd,
       discountUsd,
       subtotal,
       paymentIntentId: String(data.paymentIntentId || ''),
@@ -2534,6 +2631,7 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
         shippingServiceName: data.shippingServiceName || null,
         shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
         shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
+        checkoutPricingAdjustmentUsd,
       },
       settings: effectiveWorkflowSettings,
       status: initialStatus,
@@ -2735,6 +2833,7 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
       paymentMethod: data.paymentMethod,
       shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
       promoCode: data.promoCode || undefined,
+      checkoutPricingAdjustmentUsd,
       discountUsd,
       shippingCostUsd: shippingCost,
       itemRows: [
@@ -2810,6 +2909,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       shippingEtaMaxDays: z.number().min(0).optional(),
       promoCode: z.string().trim().max(30).optional(),
       discountUsd: z.number().min(0).optional(),
+      checkoutPricingAdjustmentUsd: z.number().optional(),
     });
 
     const data = schema.parse(req.body);
@@ -2967,8 +3067,12 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
     }
 
     // Calculate totals
-    const discountUsd = Math.max(0, Math.min(Number(data.discountUsd || 0), subtotal));
-    subtotal = subtotal - discountUsd;
+    const checkoutPricingAdjustmentUsd = Number.isFinite(Number(data.checkoutPricingAdjustmentUsd))
+      ? Number(data.checkoutPricingAdjustmentUsd)
+      : 0;
+    const subtotalAfterCheckoutPricing = Math.max(0, subtotal + checkoutPricingAdjustmentUsd);
+    const discountUsd = Math.max(0, Math.min(Number(data.discountUsd || 0), subtotalAfterCheckoutPricing));
+    subtotal = subtotalAfterCheckoutPricing - discountUsd;
     const shippingCost = Number.isFinite(Number(data.shippingCostUsd)) ? Number(data.shippingCostUsd) : 15;
     const tax = subtotal * 0.08;
     const total = subtotal + shippingCost + tax;
@@ -3009,6 +3113,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
         shippingServiceName: data.shippingServiceName || null,
         shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
         shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
+        checkoutPricingAdjustmentUsd,
       },
       settings: effectiveWorkflowSettings,
       status: initialStatus,
@@ -3091,6 +3196,7 @@ router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), a
       paymentMethod: data.paymentMethod,
       shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
       promoCode: data.promoCode || undefined,
+      checkoutPricingAdjustmentUsd,
       discountUsd,
       shippingCostUsd: shippingCost,
       itemRows: readyInvoiceRows,
@@ -3127,6 +3233,7 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
       shippingEtaMaxDays: z.number().min(0).optional(),
       promoCode: z.string().trim().max(30).optional(),
       discountUsd: z.number().min(0).optional(),
+      checkoutPricingAdjustmentUsd: z.number().optional(),
     });
 
     const data = schema.parse(req.body);
@@ -3220,8 +3327,12 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
     }
 
     const subtotalBeforeDiscount = Number(fabric.finalPrice) * data.yards;
-    const discountUsd = Math.max(0, Math.min(Number(data.discountUsd || 0), subtotalBeforeDiscount));
-    const subtotal = subtotalBeforeDiscount - discountUsd;
+    const checkoutPricingAdjustmentUsd = Number.isFinite(Number(data.checkoutPricingAdjustmentUsd))
+      ? Number(data.checkoutPricingAdjustmentUsd)
+      : 0;
+    const subtotalAfterCheckoutPricing = Math.max(0, subtotalBeforeDiscount + checkoutPricingAdjustmentUsd);
+    const discountUsd = Math.max(0, Math.min(Number(data.discountUsd || 0), subtotalAfterCheckoutPricing));
+    const subtotal = subtotalAfterCheckoutPricing - discountUsd;
     const shippingCost = Number.isFinite(Number(data.shippingCostUsd)) ? Number(data.shippingCostUsd) : 15;
     const tax = subtotal * 0.08;
     const total = subtotal + shippingCost + tax;
@@ -3232,6 +3343,7 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
       yards: Number(data.yards || 0),
       pricePerYard: Number(fabric.finalPrice || 0),
       subtotalBeforeDiscount,
+      checkoutPricingAdjustmentUsd,
       discountUsd,
       subtotal,
       paymentIntentId: String(data.paymentIntentId || ''),
@@ -3274,6 +3386,7 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
         shippingServiceName: data.shippingServiceName || null,
         shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
         shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
+        checkoutPricingAdjustmentUsd,
       },
       settings: effectiveWorkflowSettings,
       status: initialStatus,
@@ -3424,6 +3537,7 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
       paymentMethod: data.paymentMethod,
       shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
       promoCode: data.promoCode || undefined,
+      checkoutPricingAdjustmentUsd,
       discountUsd,
       shippingCostUsd: shippingCost,
       itemRows: [

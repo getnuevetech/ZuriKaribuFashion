@@ -1,11 +1,47 @@
 import { prisma, type PricingRule } from '../db';
 
 export type PricingProductType = 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+export type PricingScope = 'CATALOG' | 'CHECKOUT';
 
-type ActivePricingRule = Pick<
+export type ActivePricingRule = Pick<
   PricingRule,
-  'id' | 'ruleType' | 'productType' | 'country' | 'adjustmentType' | 'value' | 'priority' | 'isSale'
+  'id' | 'name' | 'description' | 'ruleType' | 'productType' | 'country' | 'adjustmentType' | 'value' | 'priority' | 'isSale'
 >;
+
+const CHECKOUT_PRICING_SCOPE_TAG = '[CHECKOUT_PRICING]';
+const CATALOG_PRICING_SCOPE_TAG = '[CATALOG_PRICING]';
+const PRICING_SCOPE_TAG_PATTERN = /\[(CHECKOUT_PRICING|CATALOG_PRICING)\]/gi;
+
+const normalizeScopeToken = (value: unknown): PricingScope => {
+  const token = String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+  return token === 'CHECKOUT' || token === 'CHECKOUT_PRICING' ? 'CHECKOUT' : 'CATALOG';
+};
+
+const containsScopeTag = (description: unknown, scope: PricingScope) => {
+  const normalized = String(description || '').toUpperCase();
+  return scope === 'CHECKOUT'
+    ? normalized.includes(CHECKOUT_PRICING_SCOPE_TAG)
+    : normalized.includes(CATALOG_PRICING_SCOPE_TAG);
+};
+
+const resolveRuleScope = (description: unknown): PricingScope =>
+  containsScopeTag(description, 'CHECKOUT') ? 'CHECKOUT' : 'CATALOG';
+
+export const stripPricingScopeTag = (description: unknown) =>
+  String(description || '')
+    .replace(PRICING_SCOPE_TAG_PATTERN, '')
+    .trim();
+
+export const normalizePricingRuleDescriptionForScope = (description: unknown, scopeInput?: unknown) => {
+  const scope = normalizeScopeToken(scopeInput);
+  const base = stripPricingScopeTag(description);
+  if (scope === 'CHECKOUT') {
+    return `${CHECKOUT_PRICING_SCOPE_TAG} ${base}`.trim();
+  }
+  return base;
+};
+
+export const readPricingScopeFromDescription = (description: unknown): PricingScope => resolveRuleScope(description);
 
 const COUNTRY_NAME_TO_CODE: Record<string, string> = {
   algeria: 'DZ',
@@ -166,7 +202,8 @@ const countryMatches = (
   });
 };
 
-export async function readActivePricingRules(now = new Date()): Promise<ActivePricingRule[]> {
+export async function readActivePricingRules(now = new Date(), scopeInput: PricingScope | string = 'CATALOG'): Promise<ActivePricingRule[]> {
+  const scope = normalizeScopeToken(scopeInput);
   const rows = await prisma.pricingRule.findMany({
     where: {
       isActive: true,
@@ -175,6 +212,8 @@ export async function readActivePricingRules(now = new Date()): Promise<ActivePr
     orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
     select: {
       id: true,
+      name: true,
+      description: true,
       ruleType: true,
       productType: true,
       country: true,
@@ -184,7 +223,12 @@ export async function readActivePricingRules(now = new Date()): Promise<ActivePr
       isSale: true,
     },
   });
-  return rows;
+  return rows
+    .filter((row) => resolveRuleScope(row.description) === scope)
+    .map((row) => ({
+      ...row,
+      description: stripPricingScopeTag(row.description),
+    }));
 }
 
 const ruleApplies = (
@@ -245,4 +289,61 @@ export function hasActiveMarkdownPricingRule(
     const adjustment = normalizeAdjustmentToken(rule.adjustmentType);
     return Boolean(rule.isSale) || adjustment === 'PERCENTAGE_DISCOUNT' || adjustment === 'FIXED_DISCOUNT';
   });
+}
+
+export function applyActivePricingRulesWithBreakdown(
+  basePriceUsd: number,
+  context: { productType: PricingProductType; country?: string | null },
+  rules: ActivePricingRule[]
+) {
+  const base = Number(basePriceUsd || 0);
+  if (!Number.isFinite(base) || base <= 0) {
+    return {
+      finalPriceUsd: 0,
+      appliedRules: [] as Array<{
+        ruleId: string;
+        ruleName: string;
+        adjustmentType: string;
+        value: number;
+        beforeUsd: number;
+        afterUsd: number;
+        amountUsd: number;
+      }>,
+    };
+  }
+  const scoped = rules.filter((rule) => ruleApplies(rule, context));
+  let running = Number(base.toFixed(2));
+  const appliedRules: Array<{
+    ruleId: string;
+    ruleName: string;
+    adjustmentType: string;
+    value: number;
+    beforeUsd: number;
+    afterUsd: number;
+    amountUsd: number;
+  }> = [];
+  for (const rule of scoped) {
+    const before = running;
+    const adjusted = applyRuleAdjustment(before, rule);
+    const after = Number(Math.max(0, adjusted).toFixed(2));
+    const amount = Number((after - before).toFixed(2));
+    if (Math.abs(amount) <= 0) {
+      running = after;
+      continue;
+    }
+    appliedRules.push({
+      ruleId: String(rule.id),
+      ruleName: String(rule.name || 'Pricing rule'),
+      adjustmentType: String(rule.adjustmentType || ''),
+      value: Number(rule.value || 0),
+      beforeUsd: before,
+      afterUsd: after,
+      amountUsd: amount,
+    });
+    running = after;
+  }
+  return {
+    finalPriceUsd: Number(Math.max(0, running).toFixed(2)),
+    appliedRules,
+  };
 }
