@@ -265,6 +265,36 @@ const normalizeDashboardGovernance = (input: any): DashboardGovernanceSettings =
   designer: mergeRoleGovernance(DEFAULT_DASHBOARD_GOVERNANCE_SETTINGS.designer, input?.designer),
 });
 
+const REVIEW_HIDDEN_STATUSES = new Set(['APPROVED', 'REJECTED']);
+const shouldHideFromReviewList = (status: unknown) =>
+  REVIEW_HIDDEN_STATUSES.has(String(status || '').trim().toUpperCase());
+
+const isDownloadableLink = (value: unknown) => {
+  const text = String(value || '').trim();
+  if (!text) return false;
+  return text.startsWith('http://') || text.startsWith('https://') || text.startsWith('/uploads/');
+};
+
+const extractDownloadLinks = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry || '').trim()).filter((entry) => isDownloadableLink(entry));
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map((entry) => String(entry || '').trim()).filter((entry) => isDownloadableLink(entry));
+      }
+    } catch {
+      // Non-JSON string; continue to direct link handling below.
+    }
+    return isDownloadableLink(trimmed) ? [trimmed] : [];
+  }
+  return [];
+};
+
 export default function AdminVendorProfiles() {
   const [tab, setTab] = useState<'fields' | 'reviews' | 'dashboard' | 'sellerAccounts' | 'designerAccounts' | 'enterprise'>('fields');
   const [role, setRole] = useState<VendorRole>('FABRIC_SELLER');
@@ -369,7 +399,8 @@ export default function AdminVendorProfiles() {
         limit: 100,
       });
       if (res.success) {
-        setProfiles(res.data?.profiles || []);
+        const rows = Array.isArray(res.data?.profiles) ? res.data.profiles : [];
+        setProfiles(rows.filter((row: any) => !shouldHideFromReviewList(row?.profileStatus)));
       }
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to load vendor profile submissions.');
@@ -1008,11 +1039,9 @@ export default function AdminVendorProfiles() {
                 onChange={(e) => setStatusFilter(e.target.value as VendorProfileStatus | '')}
                 className="rounded border px-3 py-2 text-sm"
               >
-                <option value="">All statuses</option>
+                <option value="">All pending statuses</option>
                 <option value="INCOMPLETE">INCOMPLETE</option>
                 <option value="SUBMITTED">SUBMITTED</option>
-                <option value="APPROVED">APPROVED</option>
-                <option value="REJECTED">REJECTED</option>
               </select>
             </div>
           </div>
@@ -1741,19 +1770,32 @@ export default function AdminVendorProfiles() {
               {(selectedProfile.fields || []).map((field: any) => {
                 const value = selectedProfile.profile?.profileData?.[field.key];
                 const display = Array.isArray(value) ? value.join(', ') : String(value || '');
-                const isLink = typeof value === 'string' && (value.startsWith('http') || value.startsWith('/uploads/'));
+                const downloadLinks = extractDownloadLinks(value);
+                const isLink = downloadLinks.length > 0;
+                const fileNameFromUrl = (url: string) => {
+                  const cleaned = String(url || '').split('?')[0];
+                  const bits = cleaned.split('/').filter(Boolean);
+                  return bits[bits.length - 1] || cleaned || 'file';
+                };
                 return (
                   <div key={field.id || field.key} className="rounded-lg border p-3">
                     <p className="text-xs font-semibold uppercase text-gray-500">{field.label}</p>
                     {isLink ? (
-                      <a
-                        href={String(value)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm text-blue-600 underline break-all"
-                      >
-                        {display || '-'}
-                      </a>
+                      <div className="space-y-1">
+                        {downloadLinks.map((link) => (
+                          <a
+                            key={`${field.key}-${link}`}
+                            href={link}
+                            target="_blank"
+                            rel="noreferrer"
+                            download
+                            className="block text-sm text-blue-600 underline break-all"
+                            title="Open / download document"
+                          >
+                            {fileNameFromUrl(link)}
+                          </a>
+                        ))}
+                      </div>
                     ) : (
                       <p className="text-sm text-gray-800 break-words">{display || '-'}</p>
                     )}
