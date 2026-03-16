@@ -4424,7 +4424,7 @@ export default function DesignerDashboard() {
 
               <div className={isFieldHidden(dashboardGovernance.fields.designBasePrice) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Base Price ({selectedListingCurrency})
+                  Design Price ({selectedListingCurrency})
                 </label>
                 <input
                   type="number"

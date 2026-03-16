@@ -29,6 +29,8 @@ interface ReadyToWearProduct {
     country: string;
     rating: number;
     reviewCount: number;
+    profileImage?: string;
+    user?: { avatar?: string };
   };
   category?: { id: string; name: string };
   sizeVariations?: Array<{ id?: string; size: string; color?: string; variantKey?: string; price: number; stock?: number }>;
@@ -305,6 +307,9 @@ export default function ReadyToWearDetail() {
   }
 
   const flagCode = resolveCountryCode(product.designer?.country);
+  const designerProfileImage = String(
+    product.designer?.profileImage || product.designer?.user?.avatar || ''
+  ).trim();
   const storefrontPath = product.designer?.id
     ? `/store/designer/${product.designer.id}/${encodeURIComponent(
         String(product.designer.businessName || 'designer')
@@ -474,6 +479,14 @@ export default function ReadyToWearDetail() {
                   alt={product.name}
                   className="h-full w-full object-cover"
                 />
+                {flagCode ? (
+                  <img
+                    src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
+                    alt={`${product.designer?.country || 'Country'} flag`}
+                    className="absolute bottom-3 right-3 h-8 w-11 rounded-sm object-cover shadow-lg"
+                    loading="lazy"
+                  />
+                ) : null}
 
                 {(product.images?.length || 0) > 1 ? (
                   <>
@@ -729,7 +742,13 @@ export default function ReadyToWearDetail() {
               <div className="border border-gray-200 bg-white p-3">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 overflow-hidden bg-gray-100">
-                    {flagCode ? (
+                    {designerProfileImage ? (
+                      <img
+                        src={designerProfileImage}
+                        alt={product.designer?.businessName || 'Designer'}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : flagCode ? (
                       <img
                         src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
                         alt={`${product.designer?.country || 'Country'} flag`}
@@ -860,12 +879,12 @@ export default function ReadyToWearDetail() {
         </section>
 
         <section className="mt-6 rounded-2xl border border-gray-200 bg-white px-4 py-5 sm:px-6">
-          <h2 className="mb-4 text-2xl font-semibold text-gray-900">You may also love</h2>
+          <h2 className="mb-4 text-2xl font-semibold text-gray-900">You May Also Like</h2>
           {discoverProducts.length === 0 ? (
             <p className="text-sm text-gray-500">No recommendations available yet.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              {discoverProducts.slice(0, 4).map((entry) => {
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {discoverProducts.map((entry) => {
                 const href =
                   entry.productType === 'DESIGN'
                     ? `/designs/${entry.id}`
@@ -873,7 +892,11 @@ export default function ReadyToWearDetail() {
                       ? `/fabrics/${entry.id}`
                       : `/ready-to-wear/${entry.id}`;
                 return (
-                  <Link key={`${entry.productType}-${entry.id}`} to={href} className="group">
+                  <Link
+                    key={`${entry.productType}-${entry.id}`}
+                    to={href}
+                    className="group min-w-[220px] max-w-[220px]"
+                  >
                     <div className="overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
                       <img
                         src={entry.image || '/images/placeholder.jpg'}

@@ -132,6 +132,7 @@ export default function Designs() {
   const [designs, setDesigns] = useState<Design[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [allCountries, setAllCountries] = useState<string[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([]);
   const [settings, setSettings] = useState<CategoryPageSettings>(DEFAULT_SETTINGS);
@@ -146,12 +147,15 @@ export default function Designs() {
     () =>
       Array.from(
         new Set(
-          designs
-            .map((design) => String(design.designer?.country || '').trim())
-            .filter(Boolean)
+          [
+            ...allCountries,
+            ...designs
+              .map((design) => String(design.designer?.country || '').trim())
+              .filter(Boolean),
+          ].filter(Boolean)
         )
       ).sort((a, b) => a.localeCompare(b)),
-    [designs]
+    [allCountries, designs]
   );
 
   const productGridClass = useMemo(() => {
@@ -204,15 +208,27 @@ export default function Designs() {
   useEffect(() => {
     const loadTaxonomy = async () => {
       try {
-        const [categoryResponse, materialResponse] = await Promise.all([
+        const [categoryResponse, materialResponse, countryResponse] = await Promise.all([
           api.products.getCategories(),
           api.products.getMaterials(),
+          api.products.getCountries(),
         ]);
         if (categoryResponse.success && Array.isArray(categoryResponse.data)) {
           setCategories(categoryResponse.data);
         }
         if (materialResponse.success && Array.isArray(materialResponse.data)) {
           setMaterials(materialResponse.data);
+        }
+        if (countryResponse.success && Array.isArray(countryResponse.data)) {
+          setAllCountries(
+            Array.from(
+              new Set(
+                countryResponse.data
+                  .map((entry: any) => String(entry || '').trim())
+                  .filter(Boolean)
+              )
+            ).sort((a, b) => a.localeCompare(b))
+          );
         }
       } catch (categoriesError) {
         console.error('Failed to load categories:', categoriesError);

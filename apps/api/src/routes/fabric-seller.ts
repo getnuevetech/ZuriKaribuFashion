@@ -16,6 +16,7 @@ import { readTryOnInsights } from '../utils/try-on-insights';
 import { readTryOnSettings } from '../utils/try-on-settings';
 import { readVendorDashboardGovernanceSettings } from '../utils/vendor-dashboard-governance';
 import { readFabricPredominantColorMap, writeFabricPredominantColor } from '../utils/fabric-attributes';
+import { applyActivePricingRules, readActivePricingRules } from '../utils/pricing-rules';
 import {
   getAllowedFieldsForApprovedProduct,
   getFieldKeysForProductType,
@@ -451,31 +452,8 @@ async function assertSellerMutationAllowed(userId: string) {
 }
 
 async function computeFinalFabricPrice(baseSellerPrice: number, sellerCountry: string) {
-  const markupRule = await prisma.pricingRule.findFirst({
-    where: {
-      ruleType: 'GLOBAL_MARKUP',
-      isActive: true,
-    },
-  });
-
-  let finalPrice = baseSellerPrice;
-  if (markupRule && markupRule.adjustmentType === 'PERCENTAGE_MARKUP') {
-    finalPrice = baseSellerPrice * (1 + Number(markupRule.value) / 100);
-  }
-
-  const countryRule = await prisma.pricingRule.findFirst({
-    where: {
-      ruleType: 'COUNTRY_MARKUP',
-      country: sellerCountry,
-      isActive: true,
-    },
-  });
-
-  if (countryRule && countryRule.adjustmentType === 'PERCENTAGE_MARKUP') {
-    finalPrice = finalPrice * (1 + Number(countryRule.value) / 100);
-  }
-
-  return finalPrice;
+  const activeRules = await readActivePricingRules();
+  return applyActivePricingRules(baseSellerPrice, { productType: 'FABRIC', country: sellerCountry }, activeRules);
 }
 
 // Get seller dashboard

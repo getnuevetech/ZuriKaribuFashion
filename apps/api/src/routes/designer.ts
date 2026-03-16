@@ -35,6 +35,7 @@ import {
   writeDesignPredominantColor,
   writeReadyToWearPredominantColor,
 } from '../utils/fabric-attributes';
+import { applyActivePricingRules, readActivePricingRules } from '../utils/pricing-rules';
 
 const router = Router();
 let designerGovernanceSchemaEnsured = false;
@@ -707,23 +708,8 @@ async function assertDesignerMutationAllowed(userId: string) {
 }
 
 async function computeFinalDesignPrice(basePrice: number, designerCountry: string) {
-  let finalPrice = basePrice;
-  const markupRule = await prisma.pricingRule.findFirst({
-    where: { ruleType: 'GLOBAL_MARKUP', isActive: true },
-  });
-
-  if (markupRule?.adjustmentType === 'PERCENTAGE_MARKUP') {
-    finalPrice = basePrice * (1 + Number(markupRule.value) / 100);
-  }
-
-  const countryRule = await prisma.pricingRule.findFirst({
-    where: { ruleType: 'COUNTRY_MARKUP', country: designerCountry, isActive: true },
-  });
-
-  if (countryRule?.adjustmentType === 'PERCENTAGE_MARKUP') {
-    finalPrice = finalPrice * (1 + Number(countryRule.value) / 100);
-  }
-  return finalPrice;
+  const activeRules = await readActivePricingRules();
+  return applyActivePricingRules(basePrice, { productType: 'DESIGN', country: designerCountry }, activeRules);
 }
 
 async function readMaxSuitableFabricsPerDesign(): Promise<number> {

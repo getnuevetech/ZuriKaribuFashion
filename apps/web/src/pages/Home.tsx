@@ -1058,7 +1058,7 @@ export default function Home() {
               {countries.map((country) => (
                 <Link
                   key={country.name}
-                  to={`/designs?country=${encodeURIComponent(country.name)}`}
+                  to={`/country-products?country=${encodeURIComponent(country.name)}`}
                   className="bg-white/95 backdrop-blur-sm px-4 py-3 rounded-lg flex items-center gap-3 card-hover cursor-pointer flex-shrink-0"
                 >
                   {country.flagCode ? (

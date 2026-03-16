@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
+import { applyActivePricingRules, readActivePricingRules } from '../utils/pricing-rules';
 
 const router = Router();
 const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
@@ -469,7 +470,8 @@ function buildProductLabels(params: {
 const hydrateFeaturedProduct = async (
   fp: FeaturedProductRow,
   labelSettings: ReturnType<typeof normalizeProductLabelSettings>,
-  markdownRules: ActiveMarkdownRule[]
+  markdownRules: ActiveMarkdownRule[],
+  pricingRules: Awaited<ReturnType<typeof readActivePricingRules>>
 ) => {
   if (fp.productType === 'DESIGN') {
     const product = await prisma.design.findUnique({
@@ -489,11 +491,15 @@ const hydrateFeaturedProduct = async (
     });
 
     if (!product) return null;
+    const adjustedPrice = applyActivePricingRules(Number(product.basePrice ?? product.finalPrice ?? 0), {
+      productType: 'DESIGN',
+      country: product.designer?.country || '',
+    }, pricingRules);
     return {
       id: product.id,
       name: fp.customTitle || product.name,
       description: fp.customDescription || product.description,
-      price: Number(product.finalPrice ?? product.basePrice ?? 0),
+      price: adjustedPrice,
       image: Array.isArray(product.images) ? product.images[0]?.url || '/images/placeholder.jpg' : '/images/placeholder.jpg',
       designer: product.designer?.businessName || 'Designer',
       country: product.designer?.country || '',
@@ -502,7 +508,7 @@ const hydrateFeaturedProduct = async (
         productType: 'DESIGN',
         productId: product.id,
         createdAt: product.createdAt,
-        isOnSale: Number(product.finalPrice ?? 0) < Number(product.basePrice ?? 0),
+        isOnSale: adjustedPrice < Number(product.basePrice ?? 0),
         saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
           productType: 'DESIGN',
           country: product.designer?.country || '',
@@ -530,11 +536,15 @@ const hydrateFeaturedProduct = async (
     });
 
     if (!product) return null;
+    const adjustedPrice = applyActivePricingRules(Number(product.sellerPrice ?? product.finalPrice ?? 0), {
+      productType: 'FABRIC',
+      country: product.seller?.country || '',
+    }, pricingRules);
     return {
       id: product.id,
       name: fp.customTitle || product.name,
       description: fp.customDescription || product.description,
-      price: Number(product.finalPrice ?? product.sellerPrice ?? 0),
+      price: adjustedPrice,
       image: Array.isArray(product.images) ? product.images[0]?.url || '/images/placeholder.jpg' : '/images/placeholder.jpg',
       designer: product.seller?.businessName || 'Fabric Seller',
       country: product.seller?.country || '',
@@ -543,7 +553,7 @@ const hydrateFeaturedProduct = async (
         productType: 'FABRIC',
         productId: product.id,
         createdAt: product.createdAt,
-        isOnSale: Number(product.finalPrice ?? 0) < Number(product.sellerPrice ?? 0),
+        isOnSale: adjustedPrice < Number(product.sellerPrice ?? 0),
         saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
           productType: 'FABRIC',
           country: product.seller?.country || '',
@@ -574,11 +584,15 @@ const hydrateFeaturedProduct = async (
     });
 
     if (!product) return null;
+    const adjustedBasePrice = applyActivePricingRules(Number(product.basePrice || 0), {
+      productType: 'READY_TO_WEAR',
+      country: product.designer?.country || '',
+    }, pricingRules);
     return {
       id: product.id,
       name: fp.customTitle || product.name,
       description: fp.customDescription || product.description,
-      price: Number(product.basePrice || 0),
+      price: adjustedBasePrice,
       image: Array.isArray(product.images) ? product.images[0]?.url || '/images/placeholder.jpg' : '/images/placeholder.jpg',
       designer: product.designer?.businessName || 'Designer',
       country: product.designer?.country || '',
@@ -587,7 +601,13 @@ const hydrateFeaturedProduct = async (
         productType: 'READY_TO_WEAR',
         productId: product.id,
         createdAt: product.createdAt,
-        isOnSale: (product.sizeVariations || []).some((row) => Number(row.price || 0) < Number(product.basePrice || 0)),
+        isOnSale: (product.sizeVariations || []).some((row) => {
+          const adjustedVariantPrice = applyActivePricingRules(Number(row.price || 0), {
+            productType: 'READY_TO_WEAR',
+            country: product.designer?.country || '',
+          }, pricingRules);
+          return adjustedVariantPrice < adjustedBasePrice;
+        }),
         saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
           productType: 'READY_TO_WEAR',
           country: product.designer?.country || '',
@@ -864,12 +884,13 @@ router.get('/featured/:section', async (req, res) => {
   try {
     const { section } = req.params;
     const featuredProducts = await readFeaturedRowsWithFallback(String(section || '').trim(), 12);
-    const [labelSettings, markdownRules] = await Promise.all([
+    const [labelSettings, markdownRules, pricingRules] = await Promise.all([
       readProductLabelSettings(),
       readActiveMarkdownPricingRules(),
+      readActivePricingRules(),
     ]);
     const productsWithDetails = await Promise.all(
-      featuredProducts.map((fp) => hydrateFeaturedProduct(fp, labelSettings, markdownRules))
+      featuredProducts.map((fp) => hydrateFeaturedProduct(fp, labelSettings, markdownRules, pricingRules))
     );
 
     // Filter out nulls (products that no longer exist)
@@ -893,15 +914,16 @@ router.get('/featured', async (req, res) => {
   try {
     const sections = ['FEATURED_DESIGNS', 'FEATURED_FABRICS', 'FEATURED_READY_TO_WEAR', 'TRENDING_NOW'];
     const result: Record<string, any[]> = {};
-    const [labelSettings, markdownRules] = await Promise.all([
+    const [labelSettings, markdownRules, pricingRules] = await Promise.all([
       readProductLabelSettings(),
       readActiveMarkdownPricingRules(),
+      readActivePricingRules(),
     ]);
 
     for (const section of sections) {
       const featuredProducts = await readFeaturedRowsWithFallback(section, 6);
       const productsWithDetails = await Promise.all(
-        featuredProducts.map((fp) => hydrateFeaturedProduct(fp, labelSettings, markdownRules))
+        featuredProducts.map((fp) => hydrateFeaturedProduct(fp, labelSettings, markdownRules, pricingRules))
       );
 
       result[section] = productsWithDetails.filter((p) => p !== null);

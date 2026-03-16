@@ -486,6 +486,7 @@ export default function DesignDetail() {
   }
 
   const designerFlagCode = resolveCountryCode(design.designer?.country);
+  const designerProfileImage = String(design.designer?.profileImage || '').trim();
   const hasRequiredMeasurementConfig = design.measurements.some((measurement) => measurement.isRequired !== false);
   const storefrontPath = design.designer?.id
     ? `/store/designer/${design.designer.id}/${encodeURIComponent(
@@ -515,7 +516,7 @@ export default function DesignDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           {/* Image Gallery */}
             <div ref={productFlowTabsRef} className="space-y-4">
-            <div className="relative bg-gray-100 overflow-hidden" style={{ aspectRatio: '4/5' }}>
+            <div className="relative overflow-hidden rounded-xl bg-gray-100" style={{ aspectRatio: '4/5' }}>
               <img
                 src={design.images[selectedImage]}
                 alt={design.name}
@@ -546,6 +547,13 @@ export default function DesignDetail() {
               <div className="absolute top-4 left-4 rounded-full bg-black/65 px-2 py-1 text-xs font-medium text-white">
                 {likeCount} likes
               </div>
+              {designerFlagCode ? (
+                <img
+                  src={`https://flagcdn.com/w80/${designerFlagCode.toLowerCase()}.png`}
+                  alt={`${design.designer.country} flag`}
+                  className="absolute bottom-4 right-4 h-8 w-11 rounded-sm object-cover shadow-lg"
+                />
+              ) : null}
             </div>
             
             {/* Thumbnails */}
@@ -555,7 +563,7 @@ export default function DesignDetail() {
                   <button
                     key={idx}
                     onClick={() => setSelectedImage(idx)}
-                    className={`flex-shrink-0 w-20 h-20 overflow-hidden border-2 transition-colors ${
+                    className={`flex-shrink-0 w-20 h-20 overflow-hidden rounded-lg border-2 transition-colors ${
                       selectedImage === idx ? 'border-black' : 'border-transparent'
                     }`}
                   >
@@ -612,7 +620,13 @@ export default function DesignDetail() {
             {/* Designer Info */}
             <div className="flex items-center gap-4 border bg-white p-4">
               <div className="flex h-14 w-14 items-center justify-center overflow-hidden bg-gray-100">
-                {designerFlagCode ? (
+                {designerProfileImage ? (
+                  <img
+                    src={designerProfileImage}
+                    alt={design.designer.businessName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : designerFlagCode ? (
                   <img
                     src={`https://flagcdn.com/w80/${designerFlagCode.toLowerCase()}.png`}
                     alt={`${design.designer.country} flag`}
@@ -648,7 +662,7 @@ export default function DesignDetail() {
                 <span className="text-gray-500">total price</span>
               </div>
               <p className="text-sm text-gray-600 mt-1">
-                Base: {formatFromUsd(design.basePrice)} + Fabric (varies by selection)
+                Design Price: {formatFromUsd(design.basePrice)} + Fabric (varies by selection)
               </p>
             </div>
 
@@ -1068,7 +1082,7 @@ export default function DesignDetail() {
           {discoverProducts.length === 0 ? (
             <p className="text-sm text-gray-500">No recommendations available yet.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+            <div className="flex gap-4 overflow-x-auto pb-2">
               {discoverProducts.map((entry) => {
                 const href =
                   entry.productType === 'DESIGN'
@@ -1077,8 +1091,12 @@ export default function DesignDetail() {
                       ? `/fabrics/${entry.id}`
                       : `/ready-to-wear/${entry.id}`;
                 return (
-                  <Link key={`${entry.productType}-${entry.id}`} to={href} className="group overflow-hidden border bg-white">
-                    <div className="relative aspect-[3/4] overflow-hidden bg-gray-100">
+                  <Link
+                    key={`${entry.productType}-${entry.id}`}
+                    to={href}
+                    className="group min-w-[220px] max-w-[220px] overflow-hidden rounded-xl border bg-white"
+                  >
+                    <div className="relative aspect-[3/4] overflow-hidden rounded-t-xl bg-gray-100">
                       <img
                         src={entry.image || '/images/placeholder.jpg'}
                         alt={entry.name}

@@ -129,6 +129,7 @@ export default function Fabrics() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [fabrics, setFabrics] = useState<Fabric[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [allCountries, setAllCountries] = useState<string[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -147,12 +148,15 @@ export default function Fabrics() {
     () =>
       Array.from(
         new Set(
-          fabrics
-            .map((fabric) => String(fabric.seller?.country || '').trim())
-            .filter(Boolean)
+          [
+            ...allCountries,
+            ...fabrics
+              .map((fabric) => String(fabric.seller?.country || '').trim())
+              .filter(Boolean),
+          ].filter(Boolean)
         )
       ).sort((a, b) => a.localeCompare(b)),
-    [fabrics]
+    [allCountries, fabrics]
   );
 
   const productGridClass = useMemo(() => {
@@ -199,11 +203,29 @@ export default function Fabrics() {
   useEffect(() => {
     const loadMaterials = async () => {
       try {
-        const response = await api.products.getMaterials();
-        if (!response.success || !Array.isArray(response.data)) return;
-        setMaterials(response.data.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Material') })));
+        const [materialResponse, countryResponse] = await Promise.all([
+          api.products.getMaterials(),
+          api.products.getCountries(),
+        ]);
+        if (materialResponse.success && Array.isArray(materialResponse.data)) {
+          setMaterials(
+            materialResponse.data.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Material') }))
+          );
+        }
+        if (countryResponse.success && Array.isArray(countryResponse.data)) {
+          setAllCountries(
+            Array.from(
+              new Set(
+                countryResponse.data
+                  .map((entry: any) => String(entry || '').trim())
+                  .filter(Boolean)
+              )
+            ).sort((a, b) => a.localeCompare(b))
+          );
+        }
       } catch {
         setMaterials([]);
+        setAllCountries([]);
       }
     };
     void loadMaterials();

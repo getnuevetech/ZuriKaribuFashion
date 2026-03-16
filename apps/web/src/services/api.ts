@@ -4261,6 +4261,9 @@ const normalizeFabricDetailPayload = (raw: any) => {
 const normalizeDesignDetailPayload = (raw: any) => {
   const images = normalizeImageUrls(raw?.images);
   const basePrice = toFiniteNumber(raw?.finalPrice, raw?.basePrice, raw?.price);
+  const designerProfileImage = resolveApiAssetUrl(
+    raw?.designer?.profileImage || raw?.designer?.user?.avatar || raw?.designer?.avatar
+  );
   const suitableFabrics = (Array.isArray(raw?.suitableFabrics) ? raw.suitableFabrics : []).map((entry: any) => {
     const fabricImages = normalizeImageUrls(entry?.fabric?.images);
     const fabricPricePerMeter = toFiniteNumber(
@@ -4297,12 +4300,21 @@ const normalizeDesignDetailPayload = (raw: any) => {
     images,
     basePrice,
     finalPrice: toFiniteNumber(raw?.finalPrice, basePrice),
+    designer: raw?.designer
+      ? {
+          ...raw.designer,
+          profileImage: designerProfileImage || raw?.designer?.profileImage || '',
+        }
+      : raw?.designer,
     suitableFabrics,
     measurements,
   };
 };
 
 const normalizeReadyToWearDetailPayload = (raw: any) => {
+  const designerProfileImage = resolveApiAssetUrl(
+    raw?.designer?.profileImage || raw?.designer?.user?.avatar || raw?.designer?.avatar
+  );
   const sizeVariations = (Array.isArray(raw?.sizeVariations) ? raw.sizeVariations : []).map((entry: any) => ({
     ...(entry || {}),
     price: toFiniteNumber(entry?.price, raw?.finalPrice, raw?.basePrice, raw?.price),
@@ -4316,6 +4328,12 @@ const normalizeReadyToWearDetailPayload = (raw: any) => {
   return {
     ...(raw || {}),
     images: normalizeImageObjects(raw?.images),
+    designer: raw?.designer
+      ? {
+          ...raw.designer,
+          profileImage: designerProfileImage || raw?.designer?.profileImage || '',
+        }
+      : raw?.designer,
     sizeVariations,
     basePrice: toFiniteNumber(raw?.basePrice, raw?.finalPrice, firstVariantPrice, price),
     finalPrice: toFiniteNumber(raw?.finalPrice, price),

@@ -770,8 +770,12 @@ export default function Checkout() {
         1,
         Number((limitsResponse as any)?.data?.maxCustomToWearItemsPerCheckout || 3)
       );
-      const maxFabricYardsPerOrder = Math.max(
+      const minFabricYardsPerOrder = Math.max(
         1,
+        Number((limitsResponse as any)?.data?.minFabricYardsPerOrder || 3)
+      );
+      const maxFabricYardsPerOrder = Math.max(
+        minFabricYardsPerOrder,
         Number((limitsResponse as any)?.data?.maxFabricYardsPerOrder || 200)
       );
       const readyToWearUnits = items
@@ -795,6 +799,68 @@ export default function Checkout() {
         throw new Error(
           `A maximum of ${maxFabricYardsPerOrder} Fabric To Buy yard(s) is allowed per checkout. Please reduce yards.`
         );
+      }
+      if (requiresFabricOnlyOrder && totalFabricYards < minFabricYardsPerOrder) {
+        throw new Error(
+          `A minimum of ${minFabricYardsPerOrder} Fabric To Buy yard(s) is required per checkout.`
+        );
+      }
+      const fabricOnlyItems = items.filter((entry: any) => entry?.kind === 'FABRIC_ONLY');
+      if (fabricOnlyItems.length > 0) {
+        const uniqueFabricIds = Array.from(
+          new Set(
+            fabricOnlyItems
+              .map((entry: any) => String(entry?.fabricId || '').trim())
+              .filter(Boolean)
+          )
+        );
+        const fabricResponses = await Promise.all(
+          uniqueFabricIds.map(async (fabricId) => {
+            try {
+              const response = await api.products.getFabric(fabricId);
+              return { fabricId, response };
+            } catch {
+              return { fabricId, response: null };
+            }
+          })
+        );
+        const minYardsByFabricId = new Map<string, number>();
+        for (const row of fabricResponses) {
+          const minByProduct = Math.max(
+            1,
+            Number((row.response as any)?.data?.minOrderMeters || (row.response as any)?.data?.minYards || 0)
+          );
+          minYardsByFabricId.set(row.fabricId, Math.max(minFabricYardsPerOrder, minByProduct || minFabricYardsPerOrder));
+        }
+        for (const item of fabricOnlyItems) {
+          const fabricId = String((item as any)?.fabricId || '').trim();
+          const requestedYards = Math.max(0, Number((item as any)?.yards || 0));
+          const effectiveMinimum = Math.max(
+            minFabricYardsPerOrder,
+            Number(minYardsByFabricId.get(fabricId) || minFabricYardsPerOrder)
+          );
+          if (requestedYards < effectiveMinimum) {
+            const fabricName = String((item as any)?.fabricName || 'this fabric').trim() || 'this fabric';
+            throw new Error(
+              `${fabricName} has a strict minimum order of ${effectiveMinimum} yard(s). Increase quantity to continue checkout.`
+            );
+          }
+        }
+      }
+      const invalidReadyItem = items.find(
+        (entry: any) => entry?.kind === 'READY_TO_WEAR' && Number(entry?.quantity || 0) < 1
+      );
+      if (invalidReadyItem) {
+        throw new Error('Ready To Wear quantity must be at least 1 for every product.');
+      }
+      const invalidCustomFabricQuantity = items.find(
+        (entry: any) =>
+          entry?.kind === 'CUSTOM_DESIGN' &&
+          String(entry?.fabricSelectionMode || '').toUpperCase() !== 'DESIGNER_DECIDES' &&
+          Number(entry?.fabricMeters || 0) < 1
+      );
+      if (invalidCustomFabricQuantity) {
+        throw new Error('Custom To Wear selected fabric quantity must be at least 1 yard.');
       }
       if (totalProductUnits <= 0) {
         throw new Error('No valid products were found in this checkout.');

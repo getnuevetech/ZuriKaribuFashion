@@ -249,7 +249,7 @@ export default function FabricDetail() {
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Images */}
           <div className="space-y-4">
-            <div className="relative aspect-square overflow-hidden bg-gray-100">
+            <div className="relative aspect-square overflow-hidden rounded-xl bg-gray-100">
               <img
                 src={fabric.images?.[selectedImage]?.url || '/images/placeholder.jpg'}
                 alt={fabric.name}
@@ -272,7 +272,7 @@ export default function FabricDetail() {
                   <button
                     key={idx}
                     onClick={() => setSelectedImage(idx)}
-                    className={`h-20 w-20 overflow-hidden border-2 ${
+                    className={`h-20 w-20 overflow-hidden rounded-lg border-2 ${
                       selectedImage === idx ? 'border-black' : 'border-transparent'
                     }`}
                   >
@@ -487,7 +487,7 @@ export default function FabricDetail() {
           {discoverProducts.length === 0 ? (
             <p className="text-sm text-gray-500">No recommendations available yet.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+            <div className="flex gap-4 overflow-x-auto pb-2">
               {discoverProducts.map((entry) => {
                 const href =
                   entry.productType === 'DESIGN'
@@ -496,7 +496,11 @@ export default function FabricDetail() {
                       ? `/fabrics/${entry.id}`
                       : `/ready-to-wear/${entry.id}`;
                 return (
-                  <Link key={`${entry.productType}-${entry.id}`} to={href} className="group overflow-hidden border bg-white">
+                  <Link
+                    key={`${entry.productType}-${entry.id}`}
+                    to={href}
+                    className="group min-w-[220px] max-w-[220px] overflow-hidden rounded-xl border bg-white"
+                  >
                     <div className="relative aspect-[3/4] overflow-hidden bg-gray-100">
                       <img
                         src={entry.image || '/images/placeholder.jpg'}

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { readFabricPredominantColorMap } from '../utils/fabric-attributes';
 import { readCategoryPageSettings, type CategoryPageType } from '../utils/category-page-settings';
 import { readOrderWorkflowSettings } from '../utils/order-workflow';
+import { applyActivePricingRules, readActivePricingRules } from '../utils/pricing-rules';
 
 const router = Router();
 const HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE';
@@ -747,18 +748,27 @@ router.get('/fabrics', async (req, res, next) => {
       prisma.fabric.count({ where }),
     ]);
     const colorMap = await readFabricPredominantColorMap(fabrics.map((item) => item.id));
-    const [labelSettings, markdownRules] = await Promise.all([
+    const [labelSettings, markdownRules, pricingRules] = await Promise.all([
       readProductLabelSettings(),
       readActiveMarkdownPricingRules(),
+      readActivePricingRules(),
     ]);
     const withLabels = fabrics.map((item) => ({
       ...item,
+      finalPrice: applyActivePricingRules(Number(item.sellerPrice || item.finalPrice || 0), {
+        productType: 'FABRIC',
+        country: item.seller?.country || '',
+      }, pricingRules),
       predominantColor: colorMap[item.id] || null,
       productLabels: buildProductLabels({
         productType: 'FABRIC',
         productId: item.id,
         createdAt: item.createdAt,
-        isOnSale: Number(item.finalPrice || 0) < Number(item.sellerPrice || 0),
+        isOnSale:
+          applyActivePricingRules(Number(item.sellerPrice || item.finalPrice || 0), {
+            productType: 'FABRIC',
+            country: item.seller?.country || '',
+          }, pricingRules) < Number(item.sellerPrice || 0),
         saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
           productType: 'FABRIC',
           country: item.seller?.country || '',
@@ -823,22 +833,28 @@ router.get('/fabrics/:id', async (req, res, next) => {
         message: 'Fabric not found.',
       });
     }
-    const [labelSettings, markdownRules] = await Promise.all([
+    const [labelSettings, markdownRules, pricingRules] = await Promise.all([
       readProductLabelSettings(),
       readActiveMarkdownPricingRules(),
+      readActivePricingRules(),
     ]);
     const colorMap = await readFabricPredominantColorMap([fabric.id]);
+    const adjustedFinalPrice = applyActivePricingRules(Number(fabric.sellerPrice || fabric.finalPrice || 0), {
+      productType: 'FABRIC',
+      country: fabric.seller?.country || '',
+    }, pricingRules);
 
     res.json({
       success: true,
       data: {
         ...fabric,
+        finalPrice: adjustedFinalPrice,
         predominantColor: colorMap[fabric.id] || null,
         productLabels: buildProductLabels({
           productType: 'FABRIC',
           productId: fabric.id,
           createdAt: fabric.createdAt,
-          isOnSale: Number(fabric.finalPrice || 0) < Number(fabric.sellerPrice || 0),
+          isOnSale: adjustedFinalPrice < Number(fabric.sellerPrice || 0),
           saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
             productType: 'FABRIC',
             country: fabric.seller?.country || '',
@@ -908,6 +924,7 @@ router.get('/designs', async (req, res, next) => {
               country: true,
               city: true,
               rating: true,
+              user: { select: { avatar: true } },
             },
           },
           images: true,
@@ -932,21 +949,45 @@ router.get('/designs', async (req, res, next) => {
       }),
       prisma.design.count({ where }),
     ]);
-    const [labelSettings, markdownRules, maxSuitableFabricsPerDesign] = await Promise.all([
+    const [labelSettings, markdownRules, maxSuitableFabricsPerDesign, pricingRules] = await Promise.all([
       readProductLabelSettings(),
       readActiveMarkdownPricingRules(),
       readMaxSuitableFabricsPerDesign(),
+      readActivePricingRules(),
     ]);
     const withLabels = designs.map((item) => ({
       ...item,
+      finalPrice: applyActivePricingRules(Number(item.basePrice || item.finalPrice || 0), {
+        productType: 'DESIGN',
+        country: item.designer?.country || '',
+      }, pricingRules),
       suitableFabrics: Array.isArray(item.suitableFabrics)
-        ? item.suitableFabrics.slice(0, maxSuitableFabricsPerDesign)
+        ? item.suitableFabrics.slice(0, maxSuitableFabricsPerDesign).map((entry: any) => ({
+            ...entry,
+            fabric: entry?.fabric
+              ? {
+                  ...entry.fabric,
+                  finalPrice: applyActivePricingRules(
+                    Number(entry.fabric.sellerPrice || entry.fabric.finalPrice || 0),
+                    {
+                      productType: 'FABRIC',
+                      country: entry.fabric?.seller?.country || '',
+                    },
+                    pricingRules
+                  ),
+                }
+              : entry?.fabric,
+          }))
         : [],
       productLabels: buildProductLabels({
         productType: 'DESIGN',
         productId: item.id,
         createdAt: item.createdAt,
-        isOnSale: Number(item.finalPrice || 0) < Number(item.basePrice || 0),
+        isOnSale:
+          applyActivePricingRules(Number(item.basePrice || item.finalPrice || 0), {
+            productType: 'DESIGN',
+            country: item.designer?.country || '',
+          }, pricingRules) < Number(item.basePrice || 0),
         saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
           productType: 'DESIGN',
           country: item.designer?.country || '',
@@ -989,6 +1030,7 @@ router.get('/designs/:id', async (req, res, next) => {
             country: true,
             city: true,
             rating: true,
+            user: { select: { avatar: true } },
           },
         },
         images: true,
@@ -1021,23 +1063,44 @@ router.get('/designs/:id', async (req, res, next) => {
         message: 'Design not found.',
       });
     }
-    const [labelSettings, markdownRules, maxSuitableFabricsPerDesign] = await Promise.all([
+    const [labelSettings, markdownRules, maxSuitableFabricsPerDesign, pricingRules] = await Promise.all([
       readProductLabelSettings(),
       readActiveMarkdownPricingRules(),
       readMaxSuitableFabricsPerDesign(),
+      readActivePricingRules(),
     ]);
-    const suitableFabrics = await resolveDesignSuitableFabricsForCustomer(design, maxSuitableFabricsPerDesign);
+    const suitableFabrics = (await resolveDesignSuitableFabricsForCustomer(design, maxSuitableFabricsPerDesign)).map((entry: any) => ({
+      ...entry,
+      fabric: entry?.fabric
+        ? {
+            ...entry.fabric,
+            finalPrice: applyActivePricingRules(
+              Number(entry.fabric.sellerPrice || entry.fabric.finalPrice || 0),
+              {
+                productType: 'FABRIC',
+                country: entry.fabric?.seller?.country || '',
+              },
+              pricingRules
+            ),
+          }
+        : entry?.fabric,
+    }));
+    const adjustedDesignPrice = applyActivePricingRules(Number(design.basePrice || design.finalPrice || 0), {
+      productType: 'DESIGN',
+      country: design.designer?.country || '',
+    }, pricingRules);
 
     res.json({
       success: true,
       data: {
         ...design,
+        finalPrice: adjustedDesignPrice,
         suitableFabrics,
         productLabels: buildProductLabels({
           productType: 'DESIGN',
           productId: design.id,
           createdAt: design.createdAt,
-          isOnSale: Number(design.finalPrice || 0) < Number(design.basePrice || 0),
+          isOnSale: adjustedDesignPrice < Number(design.basePrice || 0),
           saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
             productType: 'DESIGN',
             country: design.designer?.country || '',
@@ -1126,6 +1189,7 @@ router.get('/ready-to-wear', async (req, res, next) => {
               country: true,
               city: true,
               rating: true,
+              user: { select: { avatar: true } },
             },
           },
           images: true,
@@ -1137,17 +1201,26 @@ router.get('/ready-to-wear', async (req, res, next) => {
       }),
       prisma.readyToWear.count({ where }),
     ]);
-    const [labelSettings, markdownRules] = await Promise.all([
+    const [labelSettings, markdownRules, pricingRules] = await Promise.all([
       readProductLabelSettings(),
       readActiveMarkdownPricingRules(),
+      readActivePricingRules(),
     ]);
     const withLabels = products.map((item) => ({
       ...item,
+      basePrice: applyActivePricingRules(Number(item.basePrice || 0), {
+        productType: 'READY_TO_WEAR',
+        country: item.designer?.country || '',
+      }, pricingRules),
       sizeVariations: Array.isArray(item.sizeVariations)
         ? item.sizeVariations.map((variation: any) => {
             const decoded = decodeReadyToWearVariantKey(variation?.size);
             return {
               ...variation,
+              price: applyActivePricingRules(Number(variation?.price || 0), {
+                productType: 'READY_TO_WEAR',
+                country: item.designer?.country || '',
+              }, pricingRules),
               size: decoded.size,
               color: decoded.color,
               variantKey: decoded.variantKey,
@@ -1166,7 +1239,17 @@ router.get('/ready-to-wear', async (req, res, next) => {
         productType: 'READY_TO_WEAR',
         productId: item.id,
         createdAt: item.createdAt,
-        isOnSale: (item.sizeVariations || []).some((row: any) => Number(row.price || 0) < Number(item.basePrice || 0)),
+        isOnSale: (item.sizeVariations || []).some((row: any) => {
+          const adjustedPrice = applyActivePricingRules(Number(row.price || 0), {
+            productType: 'READY_TO_WEAR',
+            country: item.designer?.country || '',
+          }, pricingRules);
+          const adjustedBase = applyActivePricingRules(Number(item.basePrice || 0), {
+            productType: 'READY_TO_WEAR',
+            country: item.designer?.country || '',
+          }, pricingRules);
+          return adjustedPrice < adjustedBase;
+        }),
         saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
           productType: 'READY_TO_WEAR',
           country: item.designer?.country || '',
@@ -1209,6 +1292,7 @@ router.get('/ready-to-wear/:id', async (req, res, next) => {
             country: true,
             city: true,
             rating: true,
+            user: { select: { avatar: true } },
           },
         },
         images: true,
@@ -1222,20 +1306,30 @@ router.get('/ready-to-wear/:id', async (req, res, next) => {
         message: 'Product not found.',
       });
     }
-    const [labelSettings, markdownRules] = await Promise.all([
+    const [labelSettings, markdownRules, pricingRules] = await Promise.all([
       readProductLabelSettings(),
       readActiveMarkdownPricingRules(),
+      readActivePricingRules(),
     ]);
+    const adjustedBasePrice = applyActivePricingRules(Number(product.basePrice || 0), {
+      productType: 'READY_TO_WEAR',
+      country: product.designer?.country || '',
+    }, pricingRules);
 
     res.json({
       success: true,
       data: {
         ...product,
+        basePrice: adjustedBasePrice,
         sizeVariations: Array.isArray(product.sizeVariations)
           ? product.sizeVariations.map((variation: any) => {
               const decoded = decodeReadyToWearVariantKey(variation?.size);
               return {
                 ...variation,
+                price: applyActivePricingRules(Number(variation?.price || 0), {
+                  productType: 'READY_TO_WEAR',
+                  country: product.designer?.country || '',
+                }, pricingRules),
                 size: decoded.size,
                 color: decoded.color,
                 variantKey: decoded.variantKey,
@@ -1254,7 +1348,13 @@ router.get('/ready-to-wear/:id', async (req, res, next) => {
           productType: 'READY_TO_WEAR',
           productId: product.id,
           createdAt: product.createdAt,
-          isOnSale: (product.sizeVariations || []).some((row: any) => Number(row.price || 0) < Number(product.basePrice || 0)),
+          isOnSale: (product.sizeVariations || []).some((row: any) => {
+            const adjustedPrice = applyActivePricingRules(Number(row.price || 0), {
+              productType: 'READY_TO_WEAR',
+              country: product.designer?.country || '',
+            }, pricingRules);
+            return adjustedPrice < adjustedBasePrice;
+          }),
           saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
             productType: 'READY_TO_WEAR',
             country: product.designer?.country || '',
@@ -1274,18 +1374,17 @@ router.get('/countries', async (req, res, next) => {
     const [fabricCountries, designerCountries] = await Promise.all([
       prisma.fabricSellerProfile.groupBy({
         by: ['country'],
-        where: { isVerified: true },
       }),
       prisma.designerProfile.groupBy({
         by: ['country'],
-        where: { isVerified: true },
       }),
     ]);
 
-    const countries = Array.from(new Set([
-      ...fabricCountries.map((c) => c.country),
-      ...designerCountries.map((c) => c.country),
-    ])).sort();
+    const countries = Array.from(
+      new Set(
+        [...fabricCountries.map((c) => String(c.country || '').trim()), ...designerCountries.map((c) => String(c.country || '').trim())].filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
 
     res.json({
       success: true,
@@ -1334,18 +1433,27 @@ router.get('/featured', async (req, res, next) => {
         orderBy: { totalSold: 'desc' },
       }),
     ]);
-    const [labelSettings, markdownRules] = await Promise.all([
+    const [labelSettings, markdownRules, pricingRules] = await Promise.all([
       readProductLabelSettings(),
       readActiveMarkdownPricingRules(),
+      readActivePricingRules(),
     ]);
     const withLabels = {
       fabrics: fabrics.map((item) => ({
         ...item,
+        finalPrice: applyActivePricingRules(Number(item.sellerPrice || item.finalPrice || 0), {
+          productType: 'FABRIC',
+          country: item.seller?.country || '',
+        }, pricingRules),
         productLabels: buildProductLabels({
           productType: 'FABRIC',
           productId: item.id,
           createdAt: item.createdAt,
-          isOnSale: Number(item.finalPrice || 0) < Number(item.sellerPrice || 0),
+          isOnSale:
+            applyActivePricingRules(Number(item.sellerPrice || item.finalPrice || 0), {
+              productType: 'FABRIC',
+              country: item.seller?.country || '',
+            }, pricingRules) < Number(item.sellerPrice || 0),
           saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
             productType: 'FABRIC',
             country: item.seller?.country || '',
@@ -1355,11 +1463,19 @@ router.get('/featured', async (req, res, next) => {
       })),
       designs: designs.map((item) => ({
         ...item,
+        finalPrice: applyActivePricingRules(Number(item.basePrice || item.finalPrice || 0), {
+          productType: 'DESIGN',
+          country: item.designer?.country || '',
+        }, pricingRules),
         productLabels: buildProductLabels({
           productType: 'DESIGN',
           productId: item.id,
           createdAt: item.createdAt,
-          isOnSale: Number(item.finalPrice || 0) < Number(item.basePrice || 0),
+          isOnSale:
+            applyActivePricingRules(Number(item.basePrice || item.finalPrice || 0), {
+              productType: 'DESIGN',
+              country: item.designer?.country || '',
+            }, pricingRules) < Number(item.basePrice || 0),
           saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
             productType: 'DESIGN',
             country: item.designer?.country || '',
@@ -1369,11 +1485,34 @@ router.get('/featured', async (req, res, next) => {
       })),
       readyToWear: readyToWear.map((item) => ({
         ...item,
+        basePrice: applyActivePricingRules(Number(item.basePrice || 0), {
+          productType: 'READY_TO_WEAR',
+          country: item.designer?.country || '',
+        }, pricingRules),
+        sizeVariations: Array.isArray(item.sizeVariations)
+          ? item.sizeVariations.map((row: any) => ({
+              ...row,
+              price: applyActivePricingRules(Number(row.price || 0), {
+                productType: 'READY_TO_WEAR',
+                country: item.designer?.country || '',
+              }, pricingRules),
+            }))
+          : [],
         productLabels: buildProductLabels({
           productType: 'READY_TO_WEAR',
           productId: item.id,
           createdAt: item.createdAt,
-          isOnSale: (item.sizeVariations || []).some((row: any) => Number(row.price || 0) < Number(item.basePrice || 0)),
+          isOnSale: (item.sizeVariations || []).some((row: any) => {
+            const adjustedPrice = applyActivePricingRules(Number(row.price || 0), {
+              productType: 'READY_TO_WEAR',
+              country: item.designer?.country || '',
+            }, pricingRules);
+            const adjustedBase = applyActivePricingRules(Number(item.basePrice || 0), {
+              productType: 'READY_TO_WEAR',
+              country: item.designer?.country || '',
+            }, pricingRules);
+            return adjustedPrice < adjustedBase;
+          }),
           saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
             productType: 'READY_TO_WEAR',
             country: item.designer?.country || '',
@@ -1494,6 +1633,7 @@ router.get('/:productType/:id/reviews', async (req, res, next) => {
     }
     const productId = String(req.params.id || '');
     const limitRaw = Number.parseInt(String(req.query.limit ?? '12'), 10) || 12;
+    const pricingRules = await readActivePricingRules();
     const limit = Math.min(50, Math.max(1, limitRaw));
     const rows = await prisma.review.findMany({
       where: { productType, productId },
@@ -1587,6 +1727,7 @@ router.get('/:productType/:id/discover', async (req, res, next) => {
     }
     const productId = String(req.params.id || '');
     const limitRaw = Number.parseInt(String(req.query.limit ?? '12'), 10) || 12;
+    const pricingRules = await readActivePricingRules();
     const pageType = DISCOVER_PAGE_TYPE_BY_PRODUCT_TYPE[productType];
     const pageSettingsSnapshot = await readCategoryPageSettings(pageType);
     const recommendationProductIds = Array.from(
@@ -1658,7 +1799,10 @@ router.get('/:productType/:id/discover', async (req, res, next) => {
               id: row.id,
               name: row.name,
               image: row.images?.[0]?.url || '',
-              priceUsd: Number(row.finalPrice || row.basePrice || 0),
+              priceUsd: applyActivePricingRules(Number(row.basePrice || row.finalPrice || 0), {
+                productType: 'DESIGN',
+                country,
+              }, pricingRules),
               country: country || 'Unknown',
               ownerName: row.designer?.businessName || 'Designer',
               productType: 'DESIGN' as const,
@@ -1739,7 +1883,10 @@ router.get('/:productType/:id/discover', async (req, res, next) => {
               id: row.id,
               name: row.name,
               image: row.images?.[0]?.url || '',
-              priceUsd: Number(row.finalPrice || row.sellerPrice || 0),
+              priceUsd: applyActivePricingRules(Number(row.sellerPrice || row.finalPrice || 0), {
+                productType: 'FABRIC',
+                country,
+              }, pricingRules),
               country: country || 'Unknown',
               ownerName: row.seller?.businessName || 'Seller',
               productType: 'FABRIC' as const,
@@ -1818,9 +1965,20 @@ router.get('/:productType/:id/discover', async (req, res, next) => {
         .map((row) => {
           const country = String(row.designer?.country || '').trim();
           const variationPrices = (row.sizeVariations || [])
-            .map((entry) => Number(entry.price || 0))
+            .map((entry) =>
+              applyActivePricingRules(Number(entry.price || 0), {
+                productType: 'READY_TO_WEAR',
+                country,
+              }, pricingRules)
+            )
             .filter((value) => Number.isFinite(value) && value > 0);
-          const priceUsd = variationPrices.length > 0 ? Math.min(...variationPrices) : Number(row.basePrice || 0);
+          const priceUsd =
+            variationPrices.length > 0
+              ? Math.min(...variationPrices)
+              : applyActivePricingRules(Number(row.basePrice || 0), {
+                  productType: 'READY_TO_WEAR',
+                  country,
+                }, pricingRules);
           return {
             id: row.id,
             name: row.name,

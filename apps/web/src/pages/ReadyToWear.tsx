@@ -178,6 +178,7 @@ export default function ReadyToWear() {
   const [products, setProducts] = useState<ReadyToWearProduct[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [materials, setMaterials] = useState<MaterialType[]>([]);
+  const [allCountries, setAllCountries] = useState<string[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([]);
   const [rotatingProducts, setRotatingProducts] = useState<FeaturedProduct[]>([]);
@@ -215,12 +216,15 @@ export default function ReadyToWear() {
     () =>
       Array.from(
         new Set(
-          products
-            .map((product) => String(product.designer?.country || '').trim())
-            .filter(Boolean)
+          [
+            ...allCountries,
+            ...products
+              .map((product) => String(product.designer?.country || '').trim())
+              .filter(Boolean),
+          ].filter(Boolean)
         )
       ).sort((a, b) => a.localeCompare(b)),
-    [products]
+    [allCountries, products]
   );
 
   const sizeOptions = useMemo(
@@ -257,9 +261,10 @@ export default function ReadyToWear() {
   useEffect(() => {
     const loadTaxonomy = async () => {
       try {
-        const [categoryResponse, materialResponse] = await Promise.all([
+        const [categoryResponse, materialResponse, countryResponse] = await Promise.all([
           api.products.getCategories(),
           api.products.getMaterials(),
+          api.products.getCountries(),
         ]);
         if (categoryResponse.success && Array.isArray(categoryResponse.data)) {
           setCategories(categoryResponse.data);
@@ -270,6 +275,17 @@ export default function ReadyToWear() {
               id: String(entry.id || '').trim(),
               name: String(entry.name || '').trim(),
             }))
+          );
+        }
+        if (countryResponse.success && Array.isArray(countryResponse.data)) {
+          setAllCountries(
+            Array.from(
+              new Set(
+                countryResponse.data
+                  .map((entry: any) => String(entry || '').trim())
+                  .filter(Boolean)
+              )
+            ).sort((a, b) => a.localeCompare(b))
           );
         }
       } catch (loadError) {
