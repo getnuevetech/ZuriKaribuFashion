@@ -848,11 +848,18 @@ const normalizeEndpoint = (baseUrl: string, suffix: string) => {
 const isGeminiBaseUrl = (baseUrl: string) => /generativelanguage\.googleapis\.com/i.test(String(baseUrl || ''));
 const isGeminiOpenAiCompatUrl = (baseUrl: string) =>
   isGeminiBaseUrl(baseUrl) && /\/openai(?:\/|$)/i.test(String(baseUrl || ''));
+const toGeminiNativeBaseUrl = (baseUrl: string) =>
+  String(baseUrl || '')
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/openai$/i, '');
 const normalizeGeminiModel = (value: string) =>
   String(value || '')
     .trim()
     .replace(/^models\//i, '')
     .replace(/^\/+|\/+$/g, '');
+const isQuotaExceededError = (status: number, body: string) =>
+  status === 429 || /quota|rate\s*limit|exceeded your current quota|billing/i.test(String(body || ''));
 
 const readNestedString = (payload: any, path: string[]): string => {
   let node = payload;
@@ -947,6 +954,14 @@ const callTextExecutor = async (
         });
         const text = await response.text();
         if (!response.ok) {
+          if (isQuotaExceededError(response.status, text)) {
+            return {
+              ok: false,
+              reason:
+                'Gemini quota exceeded (429). Check AI Studio/GCP billing, API key project quota, and rate limits.',
+              modelError: false,
+            };
+          }
           return {
             ok: false,
             reason: `Provider returned ${response.status}: ${String(text || '').slice(0, 260)}`,
@@ -1074,6 +1089,13 @@ const callTextExecutor = async (
     });
     const text = await response.text();
     if (!response.ok) {
+      if (isQuotaExceededError(response.status, text) && isGeminiBaseUrl(provider.baseUrl)) {
+        return {
+          status: 'ERROR',
+          reason:
+            'Gemini quota exceeded (429). Check AI Studio/GCP billing, API key project quota, and rate limits.',
+        };
+      }
       return {
         status: 'ERROR',
         reason: `Provider returned ${response.status}: ${String(text || '').slice(0, 200)}`,
@@ -1094,7 +1116,19 @@ const callTextExecutor = async (
     }
     return { status: 'OK', output: String(output).trim().slice(0, 1000) };
   } catch (error: any) {
-    return { status: 'ERROR', reason: String(error?.message || 'Network error while calling provider.') };
+    const message = String(error?.message || 'Network error while calling provider.');
+    if (isGeminiOpenAiCompatUrl(provider.baseUrl)) {
+      const nativeBaseUrl = toGeminiNativeBaseUrl(provider.baseUrl);
+      if (nativeBaseUrl && nativeBaseUrl !== String(provider.baseUrl || '').trim().replace(/\/+$/, '')) {
+        const fallback = await callTextExecutor({ ...provider, baseUrl: nativeBaseUrl }, prompt, system);
+        if (fallback.status === 'OK') return fallback;
+        return {
+          status: 'ERROR',
+          reason: `OpenAI-compatible Gemini endpoint failed (${message}). Native fallback failed: ${fallback.reason}`,
+        };
+      }
+    }
+    return { status: 'ERROR', reason: message };
   } finally {
     clearTimeout(timeout);
   }

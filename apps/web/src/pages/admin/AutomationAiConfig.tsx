@@ -310,6 +310,11 @@ export default function AdminAutomationAiConfigPage() {
             or
             <code className="mx-1 rounded bg-white px-1">gemini-2.0-flash</code>.
           </p>
+          <p className="mt-1">
+            If you see
+            <code className="mx-1 rounded bg-white px-1">429 quota exceeded</code>
+            , the key is valid but usage/billing limit is reached.
+          </p>
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <select
