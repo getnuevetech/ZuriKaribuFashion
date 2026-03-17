@@ -2128,6 +2128,58 @@ Rules:
     };
   };
 
+  const normalizeAiVerdict = (value: unknown): AutomationCheckReportRow['status'] | null => {
+    const token = String(value || '').trim().toUpperCase();
+    if (token === 'PASS' || token === 'FAIL' || token === 'NEEDS_AI') return token;
+    return null;
+  };
+
+  const extractAiEvaluation = (
+    output: string,
+    fallback: AutomationCheckReportRow['status']
+  ): { verdict: AutomationCheckReportRow['status']; guidance: string } => {
+    const raw = String(output || '').trim();
+    const parsed = parseFirstJsonObject(raw);
+    const parsedVerdict =
+      normalizeAiVerdict(parsed?.verdict) ||
+      normalizeAiVerdict(parsed?.status) ||
+      normalizeAiVerdict(parsed?.result) ||
+      normalizeAiVerdict(parsed?.decision);
+    const parsedGuidance = normalizeReadableLine(
+      String(parsed?.guidance || parsed?.recommendation || parsed?.reason || parsed?.analysis || ''),
+      2000
+    );
+    if (parsedVerdict) {
+      return { verdict: parsedVerdict, guidance: parsedGuidance || normalizeReadableLine(raw, 2000) };
+    }
+    const lower = raw.toLowerCase();
+    const failHints = [
+      'false positive',
+      'incorrect pass',
+      'check failed',
+      'should fail',
+      'does not match',
+      'mismatch',
+      'invalid',
+      'suspiciously low',
+      'must be corrected',
+      'flag for review',
+      'data error',
+    ];
+    if (failHints.some((entry) => lower.includes(entry))) {
+      return { verdict: 'FAIL', guidance: normalizeReadableLine(raw, 2000) };
+    }
+    const needsAiHints = ['manual review', 'cannot determine', 'insufficient context', 'needs ai', 'uncertain'];
+    if (needsAiHints.some((entry) => lower.includes(entry))) {
+      return { verdict: 'NEEDS_AI', guidance: normalizeReadableLine(raw, 2000) };
+    }
+    const passHints = ['no correction needed', 'performing as expected', 'check passed', 'valid and consistent'];
+    if (passHints.some((entry) => lower.includes(entry))) {
+      return { verdict: 'PASS', guidance: normalizeReadableLine(raw, 2000) };
+    }
+    return { verdict: fallback, guidance: normalizeReadableLine(raw, 2000) };
+  };
+
   const applyAiExecution = async () => {
     const enhanced: AutomationCheckReportRow[] = [];
     const pendingUpdates: Record<string, string> = {};
@@ -2154,13 +2206,17 @@ Current check message: ${row.message}
 Product context:
 ${aiContextSummary || 'No extra product context provided.'}
 
-Return concise analysis and correction guidance in plain text.`;
+Return STRICT JSON only:
+{"verdict":"PASS|FAIL|NEEDS_AI","guidance":"concise correction guidance"}
+Rules:
+- Mark FAIL when the criterion should not pass.
+- Mark NEEDS_AI when confidence is low or manual review is required.
+- Keep guidance specific and actionable.`;
       const execution = await executeAutomationAiFunction({
         settings,
         functionKey,
         prompt,
-        systemPrompt:
-          'You are an e-commerce quality automation evaluator. Return concise actionable analysis only.',
+        systemPrompt: 'You are an e-commerce quality automation evaluator. Return strict JSON only.',
       });
       let nextRow: AutomationCheckReportRow;
       if (execution.status === 'NO_PROVIDER') {
@@ -2199,16 +2255,18 @@ Return concise analysis and correction guidance in plain text.`;
           };
         }
       } else if (row.status === 'FAIL') {
+        const aiEval = extractAiEvaluation(execution.output, 'FAIL');
         nextRow = {
           ...row,
-          status: 'FAIL',
-          message: `${row.message} AI guidance: ${execution.output}`,
+          status: aiEval.verdict === 'PASS' ? 'PASS' : aiEval.verdict,
+          message: `${row.message} AI guidance: ${aiEval.guidance}`,
         };
       } else {
+        const aiEval = extractAiEvaluation(execution.output, row.status === 'NEEDS_AI' ? 'NEEDS_AI' : 'PASS');
         nextRow = {
           ...row,
-          status: 'PASS',
-          message: `${row.message} AI verification: ${execution.output}`,
+          status: aiEval.verdict,
+          message: `${row.message} AI verification: ${aiEval.guidance}`,
         };
       }
       const canApplyAiEdits = criterion.allowAiEdits === true && criterion.requiresAi === true;
