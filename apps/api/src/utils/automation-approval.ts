@@ -889,6 +889,23 @@ const toHumanFieldLabel = (field: string) => {
   return HUMAN_FIELD_LABELS[normalized] || normalized;
 };
 
+const toFriendlyCheckStatus = (status: string) => {
+  const token = String(status || '').trim().toUpperCase();
+  if (token === 'PASS') return 'Passed';
+  if (token === 'FAIL') return 'Needs correction';
+  if (token === 'NEEDS_AI') return 'Needs manual review';
+  if (token === 'SKIPPED') return 'Skipped';
+  if (token === 'INFO') return 'Information';
+  return token || 'Information';
+};
+
+const toFriendlyEditStatus = (status: string) => {
+  const token = String(status || '').trim().toUpperCase();
+  if (token === 'APPLIED') return 'Applied successfully';
+  if (token === 'SKIPPED') return 'Skipped (no change applied)';
+  return token || '';
+};
+
 const escapeHtml = (value: string) =>
   String(value || '')
     .replace(/&/g, '&amp;')
@@ -938,8 +955,10 @@ const buildVendorAutomationMessageBundle = (input: {
               fieldLabel: toHumanFieldLabel(field),
               criterionLabel,
               status,
+              statusLabel: toFriendlyCheckStatus(status),
               messageLines,
               editStatus: relatedChange ? String(relatedChange.status || '').toUpperCase() : '',
+              editStatusLabel: relatedChange ? toFriendlyEditStatus(String(relatedChange.status || '').toUpperCase()) : '',
               beforeValue: relatedChange ? normalizeReadableLine(String(relatedChange.beforeValue || ''), 180) : '',
               afterValue: relatedChange ? normalizeReadableLine(String(relatedChange.afterValue || ''), 180) : '',
               editReason: relatedChange ? normalizeReadableLine(String(relatedChange.reason || ''), 240) : '',
@@ -952,8 +971,10 @@ const buildVendorAutomationMessageBundle = (input: {
             fieldLabel: 'General',
             criterionLabel: 'Automation summary',
             status: 'INFO',
+            statusLabel: toFriendlyCheckStatus('INFO'),
             messageLines: summaryLines.length > 0 ? summaryLines : ['Requires review'],
             editStatus: '',
+            editStatusLabel: '',
             beforeValue: '',
             afterValue: '',
             editReason: '',
@@ -981,10 +1002,10 @@ const buildVendorAutomationMessageBundle = (input: {
     ...fieldItems.flatMap((entry, index) => [
       `${index + 1}. FIELD: ${entry.fieldLabel}`,
       `   CHECK: ${entry.criterionLabel}`,
-      `   STATUS: ${entry.status}`,
+      `   STATUS: ${entry.statusLabel}`,
       `   AI COMMENT: ${entry.messageLines[0] || 'Requires review'}`,
       ...entry.messageLines.slice(1).map((line) => `   AI COMMENT (CONT.): ${line}`),
-      ...(entry.editStatus ? [`   AI EDIT RESULT: ${entry.editStatus}`] : []),
+      ...(entry.editStatusLabel ? [`   AI EDIT RESULT: ${entry.editStatusLabel}`] : []),
       ...(entry.beforeValue ? [`   BEFORE: ${entry.beforeValue}`] : []),
       ...(entry.afterValue ? [`   AFTER: ${entry.afterValue}`] : []),
       ...(entry.editReason ? [`   EDIT NOTE: ${entry.editReason}`] : []),
@@ -1013,10 +1034,10 @@ const buildVendorAutomationMessageBundle = (input: {
           `<li>
             <p><strong>Field:</strong> ${escapeHtml(entry.fieldLabel)}</p>
             <p><strong>Check:</strong> ${escapeHtml(entry.criterionLabel)}</p>
-            <p><strong>Status:</strong> ${escapeHtml(entry.status)}</p>
+            <p><strong>Status:</strong> ${escapeHtml(entry.statusLabel)}</p>
             <p><strong>AI comment:</strong></p>
             <ul>${entry.messageLines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>
-            ${entry.editStatus ? `<p><strong>AI edit result:</strong> ${escapeHtml(entry.editStatus)}</p>` : ''}
+            ${entry.editStatusLabel ? `<p><strong>AI edit result:</strong> ${escapeHtml(entry.editStatusLabel)}</p>` : ''}
             ${entry.beforeValue ? `<p><strong>Before:</strong> ${escapeHtml(entry.beforeValue)}</p>` : ''}
             ${entry.afterValue ? `<p><strong>After:</strong> ${escapeHtml(entry.afterValue)}</p>` : ''}
             ${entry.editReason ? `<p><strong>Edit note:</strong> ${escapeHtml(entry.editReason)}</p>` : ''}

@@ -28,6 +28,31 @@ const DEFAULT_AI_FUNCTION_BY_CRITERION: Record<string, string> = {
 const resolveDefaultAiFunctionKey = (criterionKey: string) =>
   DEFAULT_AI_FUNCTION_BY_CRITERION[String(criterionKey || '').trim().toLowerCase()] || 'text_grammar_enhancement';
 
+const friendlyAutomationStatus = (status: string) => {
+  const token = String(status || '').trim().toUpperCase();
+  if (token === 'PASS') return 'Passed';
+  if (token === 'FAIL') return 'Needs correction';
+  if (token === 'NEEDS_AI') return 'Needs manual review';
+  if (token === 'SKIPPED') return 'Skipped';
+  return token || 'Unknown';
+};
+
+const friendlyAutomationAction = (action: string) => {
+  const token = String(action || '').trim().toUpperCase();
+  if (token === 'AUTO_APPROVED') return 'Automatically approved';
+  if (token === 'AUTO_REJECTED') return 'Automatically rejected';
+  if (token === 'ERROR') return 'Automation error';
+  if (token === 'NONE') return 'No automatic decision';
+  return action || 'No automatic decision';
+};
+
+const friendlyEditStatus = (status: string) => {
+  const token = String(status || '').trim().toUpperCase();
+  if (token === 'APPLIED') return 'Applied successfully';
+  if (token === 'SKIPPED') return 'Skipped (no change)';
+  return token || 'Unknown';
+};
+
 export default function AdminAutomationApprovalsPage() {
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -610,11 +635,11 @@ export default function AdminAutomationApprovalsPage() {
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-semibold text-gray-900">Evaluation Report</h2>
             <Badge variant={evaluationResult.canAutoApprove ? 'green' : 'yellow'}>
-              {evaluationResult.canAutoApprove ? 'PASS' : 'REVIEW REQUIRED'}
+              {evaluationResult.canAutoApprove ? 'Ready for auto-approval' : 'Review required'}
             </Badge>
             {evaluationResult.action && evaluationResult.action !== 'NONE' ? (
               <Badge variant={evaluationResult.action === 'AUTO_APPROVED' ? 'green' : 'red'}>
-                {evaluationResult.action}
+                {friendlyAutomationAction(evaluationResult.action)}
               </Badge>
             ) : null}
           </div>
@@ -646,7 +671,7 @@ export default function AdminAutomationApprovalsPage() {
                               : 'gray'
                       }
                     >
-                      {row.status}
+                      {friendlyAutomationStatus(String(row.status || ''))}
                     </Badge>
                   </div>
                 </div>
@@ -674,7 +699,7 @@ export default function AdminAutomationApprovalsPage() {
                         {entry.label || entry.key} • Field: {entry.field}
                       </p>
                       <Badge variant={String(entry.status || '').toUpperCase() === 'APPLIED' ? 'green' : 'yellow'}>
-                        {String(entry.status || '').toUpperCase()}
+                        {friendlyEditStatus(String(entry.status || ''))}
                       </Badge>
                     </div>
                     <p className="mt-1 text-gray-600">
