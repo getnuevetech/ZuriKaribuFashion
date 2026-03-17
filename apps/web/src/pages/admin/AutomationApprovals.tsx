@@ -77,6 +77,35 @@ export default function AdminAutomationApprovalsPage() {
     return map;
   }, [evaluationResult]);
 
+  const aiEditFieldsByKey = useMemo(() => {
+    const map = new Map<string, string[]>();
+    const rows = Array.isArray(evaluationResult?.changeReport) ? evaluationResult.changeReport : [];
+    for (const entry of rows) {
+      const key = String(entry?.key || '').trim();
+      const field = String(entry?.field || '').trim();
+      if (!key || !field) continue;
+      const current = map.get(key) || [];
+      if (!current.includes(field)) current.push(field);
+      map.set(key, current);
+    }
+    return map;
+  }, [evaluationResult]);
+
+  const fallbackFieldByCriterionKey = useMemo(
+    () =>
+      ({
+        name_grammar: ['name'],
+        description_grammar: ['description'],
+        image_quality: ['images[0]'],
+        predominant_color_match: ['images[0]'],
+        price_outlier: ['finalPrice/basePrice'],
+        currency_sanity: ['finalPrice/basePrice'],
+        minimum_yards: ['minYards'],
+        stock_vs_minimum: ['stockYards'],
+      }) as Record<string, string[]>,
+    []
+  );
+
   const persist = async () => {
     try {
       setSaving(true);
@@ -502,6 +531,13 @@ export default function AdminAutomationApprovalsPage() {
                   </div>
                 </div>
                 <p className="mt-1 text-xs text-gray-600">{row.message}</p>
+                <p className="mt-1 text-[11px] text-gray-500">
+                  Edit source field used:{' '}
+                  {(aiEditFieldsByKey.get(String(row.key || '').trim()) ||
+                    fallbackFieldByCriterionKey[String(row.key || '').trim()] ||
+                    ['not-mapped'])
+                    .join(', ')}
+                </p>
               </div>
             ))}
           </div>

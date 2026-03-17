@@ -1233,15 +1233,44 @@ Rules:
     };
     const parsed = parseFirstJsonObject(execution.output);
     if (rule.kind === 'text') {
-      const getNormalizedTextCandidate = (raw: string, parsedPayload: Record<string, unknown> | null) =>
-        (
-          String(parsedPayload?.updatedValue || parsedPayload?.value || parsedPayload?.updated || '').trim() ||
-          parseLabeledValue(raw)
-        )
+      const normalizeCandidate = (value: string) =>
+        String(value || '')
           .replace(/\s+/g, ' ')
           .trim()
+          .replace(/^["“]+|["”]+$/g, '')
           .slice(0, rule.maxLength);
+      const extractGuidedCandidateFromMessage = (message: string) => {
+        const raw = String(message || '');
+        if (!raw.trim()) return '';
+        const quotedCandidates = Array.from(raw.matchAll(/["“]([^"”]{3,240})["”]/g))
+          .map((match) => normalizeCandidate(match[1] || ''))
+          .filter(Boolean);
+        const directCandidates = [
+          ...quotedCandidates,
+          normalizeCandidate(String(raw.match(/rephras(?:e|ing)\s+to\s+([^\.\n]+)/i)?.[1] || '')),
+          normalizeCandidate(String(raw.match(/suggest(?:ion|ed)?\s*:\s*([^\n]+)/i)?.[1] || '')),
+        ].filter(Boolean);
+        return (
+          directCandidates.find(
+            (candidate) =>
+              candidate.length >= rule.minLength && candidate.length <= rule.maxLength && candidate !== before
+          ) || ''
+        );
+      };
+      const getNormalizedTextCandidate = (raw: string, parsedPayload: Record<string, unknown> | null) =>
+        normalizeCandidate(
+          String(parsedPayload?.updatedValue || parsedPayload?.value || parsedPayload?.updated || '').trim() ||
+            parseLabeledValue(raw)
+        );
+      let usedGuidanceCandidate = false;
       let normalized = getNormalizedTextCandidate(String(execution.output || ''), parsed);
+      if (normalized.length < rule.minLength || normalized === before) {
+        const guidanceCandidate = extractGuidedCandidateFromMessage(params.row.message);
+        if (guidanceCandidate) {
+          normalized = guidanceCandidate;
+          usedGuidanceCandidate = true;
+        }
+      }
       if ((normalized.length < rule.minLength || normalized === before) && params.row.status === 'FAIL') {
         const retry = await executeAutomationAiFunction({
           settings,
@@ -1251,13 +1280,25 @@ Rules:
 Criterion: ${params.row.label}
 Current value:
 """${before}"""
+Automation analysis message:
+"""${String(params.row.message || '')}"""
 
 Return ONLY the improved ${rule.field} text.
 No explanations, no labels, no JSON, no markdown.`,
           systemPrompt: 'You rewrite product fields. Return only the updated value.',
         });
         if (retry.status === 'OK') {
-          normalized = getNormalizedTextCandidate(String(retry.output || ''), parseFirstJsonObject(String(retry.output || '')));
+          normalized = getNormalizedTextCandidate(
+            String(retry.output || ''),
+            parseFirstJsonObject(String(retry.output || ''))
+          );
+          if (normalized.length < rule.minLength || normalized === before) {
+            const guidanceCandidate = extractGuidedCandidateFromMessage(params.row.message);
+            if (guidanceCandidate) {
+              normalized = guidanceCandidate;
+              usedGuidanceCandidate = true;
+            }
+          }
         }
       }
       if (normalized.length < rule.minLength) {
@@ -1276,7 +1317,12 @@ No explanations, no labels, no JSON, no markdown.`,
           reason: 'AI suggestion is identical to current value.',
         };
       }
-      const reason = String(parsed?.reason || '').trim() || `AI updated ${rule.field}.`;
+      const reason =
+        (usedGuidanceCandidate ? `AI updated ${rule.field} from evaluation guidance.` : '') ||
+        String(parsed?.reason || '').trim() ||
+        (/ai guidance:/i.test(String(params.row.message || ''))
+          ? `AI updated ${rule.field} from evaluation guidance.`
+          : `AI updated ${rule.field}.`);
       return {
         applied: true,
         before,
