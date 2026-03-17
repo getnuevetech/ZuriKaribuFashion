@@ -894,60 +894,156 @@ const callTextExecutor = async (
   system: string
 ): Promise<AiExecutionResult> => {
   if (isGeminiBaseUrl(provider.baseUrl) && !isGeminiOpenAiCompatUrl(provider.baseUrl)) {
-    const model = normalizeGeminiModel(String(provider.model || '').trim() || 'gemini-1.5-flash');
+    const configuredModel = normalizeGeminiModel(String(provider.model || '').trim() || 'gemini-2.0-flash');
     const apiKey = String(provider.apiKey || '').trim();
-    const base = String(provider.baseUrl || '').trim().replace(/\/+$/, '');
-    const endpoint = `${base}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25_000);
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: `${String(system || '').trim()}\n\n${String(prompt || '').trim()}`.trim() }],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.2,
-          },
-        }),
-        signal: controller.signal,
-      });
-      const text = await response.text();
-      if (!response.ok) {
-        return {
-          status: 'ERROR',
-          reason: `Provider returned ${response.status}: ${String(text || '').slice(0, 260)}`,
-        };
-      }
-      let parsed: any = {};
-      try {
-        parsed = JSON.parse(text || '{}');
-      } catch {
-        parsed = {};
-      }
-      const output =
-        (Array.isArray(parsed?.candidates) ? parsed.candidates : [])
-          .flatMap((candidate: any) => (Array.isArray(candidate?.content?.parts) ? candidate.content.parts : []))
-          .map((part: any) => String(part?.text || '').trim())
-          .filter(Boolean)
-          .join('\n')
-          .trim() || String(text || '').trim();
-      if (!output) {
-        return { status: 'ERROR', reason: 'Provider returned an empty completion.' };
-      }
-      return { status: 'OK', output: output.slice(0, 1000) };
-    } catch (error: any) {
-      return { status: 'ERROR', reason: String(error?.message || 'Network error while calling provider.') };
-    } finally {
-      clearTimeout(timeout);
+    if (!apiKey) {
+      return { status: 'ERROR', reason: 'Missing provider API key.' };
     }
+    const base = String(provider.baseUrl || '').trim().replace(/\/+$/, '');
+    const parseJsonSafe = (value: string) => {
+      try {
+        return JSON.parse(value || '{}');
+      } catch {
+        return {};
+      }
+    };
+    const extractGeminiOutput = (parsed: any, rawText: string) =>
+      ((Array.isArray(parsed?.candidates) ? parsed.candidates : [])
+        .flatMap((candidate: any) => (Array.isArray(candidate?.content?.parts) ? candidate.content.parts : []))
+        .map((part: any) => String(part?.text || '').trim())
+        .filter(Boolean)
+        .join('\n')
+        .trim() || String(rawText || '').trim()) as string;
+    const isModelAvailabilityError = (status: number, body: string) =>
+      status === 404 ||
+      status === 400 ||
+      /unexpected model name format|is not found|not supported for generatecontent|invalid_argument|not_found/i.test(
+        String(body || '')
+      );
+    const invokeGemini = async (
+      model: string
+    ): Promise<{ ok: boolean; output?: string; reason?: string; modelError?: boolean }> => {
+      const endpoint = `${base}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 25_000);
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: `${String(system || '').trim()}\n\n${String(prompt || '').trim()}`.trim() }],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.2,
+            },
+          }),
+          signal: controller.signal,
+        });
+        const text = await response.text();
+        if (!response.ok) {
+          return {
+            ok: false,
+            reason: `Provider returned ${response.status}: ${String(text || '').slice(0, 260)}`,
+            modelError: isModelAvailabilityError(response.status, text),
+          };
+        }
+        const parsed = parseJsonSafe(text);
+        const output = extractGeminiOutput(parsed, text);
+        if (!output) {
+          return { ok: false, reason: 'Provider returned an empty completion.', modelError: false };
+        }
+        return { ok: true, output: output.slice(0, 1000) };
+      } catch (error: any) {
+        return { ok: false, reason: String(error?.message || 'Network error while calling provider.'), modelError: false };
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+    const listGeminiGenerateModels = async (): Promise<string[]> => {
+      const endpoint = `${base}/models?key=${encodeURIComponent(apiKey)}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12_000);
+      try {
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+        });
+        const text = await response.text();
+        if (!response.ok) return [];
+        const parsed = parseJsonSafe(text);
+        const rows = Array.isArray(parsed?.models) ? parsed.models : [];
+        const names = rows
+          .filter((row: any) => {
+            const methods = Array.isArray(row?.supportedGenerationMethods) ? row.supportedGenerationMethods : [];
+            return methods.length === 0 || methods.includes('generateContent');
+          })
+          .map((row: any) => normalizeGeminiModel(String(row?.name || '')))
+          .filter((name: string) => name.length > 0);
+        return Array.from(new Set(names));
+      } catch {
+        return [];
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+    const primaryCandidates = Array.from(
+      new Set(
+        [
+          configuredModel,
+          configuredModel.endsWith('-latest') ? configuredModel.replace(/-latest$/i, '') : `${configuredModel}-latest`,
+          'gemini-2.0-flash',
+          'gemini-2.0-flash-lite',
+          'gemini-1.5-flash',
+          'gemini-1.5-flash-8b',
+          'gemini-1.5-pro',
+        ]
+          .map((entry) => normalizeGeminiModel(entry))
+          .filter(Boolean)
+      )
+    );
+    const attemptedModels: string[] = [];
+    let lastModelErrorReason = '';
+    for (const model of primaryCandidates) {
+      attemptedModels.push(model);
+      const result = await invokeGemini(model);
+      if (result.ok && result.output) {
+        return { status: 'OK', output: result.output };
+      }
+      if (result.modelError) {
+        lastModelErrorReason = String(result.reason || '');
+        continue;
+      }
+      return { status: 'ERROR', reason: String(result.reason || 'Gemini request failed.') };
+    }
+    const discovered = await listGeminiGenerateModels();
+    for (const model of discovered) {
+      if (attemptedModels.includes(model)) continue;
+      attemptedModels.push(model);
+      const result = await invokeGemini(model);
+      if (result.ok && result.output) {
+        return { status: 'OK', output: result.output };
+      }
+      if (result.modelError) {
+        lastModelErrorReason = String(result.reason || lastModelErrorReason);
+        continue;
+      }
+      return { status: 'ERROR', reason: String(result.reason || 'Gemini request failed.') };
+    }
+    return {
+      status: 'ERROR',
+      reason: `${lastModelErrorReason || 'Gemini model is unavailable for generateContent.'}${
+        discovered.length > 0
+          ? ` Available models: ${discovered.slice(0, 6).join(', ')}${discovered.length > 6 ? '…' : ''}`
+          : ''
+      }`,
+    };
   }
 
   const endpoint = normalizeEndpoint(provider.baseUrl, '/chat/completions');

@@ -297,7 +297,7 @@ export default function AdminAutomationAiConfigPage() {
             Gemini native (recommended for text): Base URL
             <code className="mx-1 rounded bg-white px-1">https://generativelanguage.googleapis.com/v1beta</code>
             with model
-            <code className="mx-1 rounded bg-white px-1">gemini-1.5-flash</code>
+            <code className="mx-1 rounded bg-white px-1">gemini-2.0-flash</code>
             (do not prefix model with
             <code className="mx-1 rounded bg-white px-1">models/</code>
             ).
