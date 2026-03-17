@@ -5109,6 +5109,265 @@ router.get('/products', async (req, res, next) => {
   }
 });
 
+router.get('/products/price-compare', authorizePermissions(Permissions.PRODUCTS_MANAGE), async (req, res, next) => {
+  try {
+    const querySchema = z.object({
+      search: z.string().optional(),
+      status: z.nativeEnum(ProductStatus).optional(),
+      type: adminProductTypeSchema.optional(),
+      severity: z.enum(['AMBER', 'RED']).optional(),
+      page: z.string().optional(),
+      limit: z.string().optional(),
+      minMarginPercent: z.string().optional(),
+    });
+    const query = querySchema.parse(req.query || {});
+    const pagination = parsePagination(query.page, query.limit, 30);
+    const search = String(query.search || '').trim();
+    const minMarginPercent = Math.max(30, Number(query.minMarginPercent || 30) || 30);
+
+    const [fabricPeers, designPeers, readyPeers, fabrics, designs, readyToWear] = await Promise.all([
+      prisma.fabric.findMany({
+        where: {
+          status: ProductStatus.APPROVED,
+          finalPrice: { gt: 0 },
+        },
+        select: { materialTypeId: true, finalPrice: true },
+      }),
+      prisma.design.findMany({
+        where: {
+          status: ProductStatus.APPROVED,
+          basePrice: { gt: 0 },
+        },
+        select: { categoryId: true, basePrice: true },
+      }),
+      prisma.readyToWear.findMany({
+        where: {
+          status: ProductStatus.APPROVED,
+          basePrice: { gt: 0 },
+        },
+        select: { categoryId: true, basePrice: true },
+      }),
+      !query.type || query.type === ProductType.FABRIC
+        ? prisma.fabric.findMany({
+            where: {
+              ...(query.status ? { status: query.status } : {}),
+              ...(search
+                ? {
+                    OR: [
+                      { name: { contains: search, mode: 'insensitive' } },
+                      { description: { contains: search, mode: 'insensitive' } },
+                    ],
+                  }
+                : {}),
+            },
+            include: {
+              seller: { select: { businessName: true, country: true } },
+              materialType: { select: { name: true } },
+              images: { select: { url: true }, orderBy: { sortOrder: 'asc' } },
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        : Promise.resolve([]),
+      !query.type || query.type === ProductType.DESIGN
+        ? prisma.design.findMany({
+            where: {
+              ...(query.status ? { status: query.status } : {}),
+              ...(search
+                ? {
+                    OR: [
+                      { name: { contains: search, mode: 'insensitive' } },
+                      { description: { contains: search, mode: 'insensitive' } },
+                    ],
+                  }
+                : {}),
+            },
+            include: {
+              designer: { select: { businessName: true, country: true } },
+              category: { select: { id: true, name: true } },
+              images: { select: { url: true }, orderBy: { sortOrder: 'asc' } },
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        : Promise.resolve([]),
+      !query.type || query.type === ProductType.READY_TO_WEAR
+        ? prisma.readyToWear.findMany({
+            where: {
+              ...(query.status ? { status: query.status } : {}),
+              ...(search
+                ? {
+                    OR: [
+                      { name: { contains: search, mode: 'insensitive' } },
+                      { description: { contains: search, mode: 'insensitive' } },
+                    ],
+                  }
+                : {}),
+            },
+            include: {
+              designer: { select: { businessName: true, country: true } },
+              category: { select: { id: true, name: true } },
+              images: { select: { url: true }, orderBy: { sortOrder: 'asc' } },
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const buildAvgMap = (rows: Array<{ groupKey: string; price: number }>) => {
+      const map = new Map<string, { sum: number; count: number; avg: number }>();
+      for (const row of rows) {
+        const key = String(row.groupKey || '').trim();
+        const price = Number(row.price || 0);
+        if (!key || !Number.isFinite(price) || price <= 0) continue;
+        const current = map.get(key) || { sum: 0, count: 0, avg: 0 };
+        current.sum += price;
+        current.count += 1;
+        current.avg = current.count > 0 ? current.sum / current.count : 0;
+        map.set(key, current);
+      }
+      return map;
+    };
+
+    const fabricAvgByMaterial = buildAvgMap(
+      fabricPeers.map((entry) => ({
+        groupKey: String(entry.materialTypeId || ''),
+        price: Number(entry.finalPrice || 0),
+      }))
+    );
+    const designAvgByCategory = buildAvgMap(
+      designPeers.map((entry) => ({
+        groupKey: String(entry.categoryId || ''),
+        price: Number(entry.basePrice || 0),
+      }))
+    );
+    const readyAvgByCategory = buildAvgMap(
+      readyPeers.map((entry) => ({
+        groupKey: String(entry.categoryId || ''),
+        price: Number(entry.basePrice || 0),
+      }))
+    );
+
+    const rows: Array<any> = [];
+    const pushRow = (input: {
+      productId: string;
+      productType: ProductType;
+      name: string;
+      status: string;
+      isAvailable: boolean;
+      ownerName: string;
+      ownerCountry: string;
+      category: string;
+      currentPrice: number;
+      peerAveragePrice: number;
+      image: string | null;
+      createdAt: Date | string;
+    }) => {
+      const currentPrice = Number(input.currentPrice || 0);
+      const peerAveragePrice = Number(input.peerAveragePrice || 0);
+      if (!Number.isFinite(currentPrice) || !Number.isFinite(peerAveragePrice) || currentPrice <= 0 || peerAveragePrice <= 0) {
+        return;
+      }
+      const diffAmount = currentPrice - peerAveragePrice;
+      const diffPercent = (diffAmount / peerAveragePrice) * 100;
+      const absDiffPercent = Math.abs(diffPercent);
+      if (absDiffPercent < minMarginPercent) return;
+      const severity: 'AMBER' | 'RED' = absDiffPercent >= 60 ? 'RED' : 'AMBER';
+      if (query.severity && query.severity !== severity) return;
+      rows.push({
+        ...input,
+        currentPrice,
+        peerAveragePrice,
+        diffAmount,
+        diffPercent,
+        absDiffPercent,
+        direction: diffPercent >= 0 ? 'ABOVE' : 'BELOW',
+        severity,
+      });
+    };
+
+    for (const item of fabrics) {
+      const materialTypeId = String((item as any).materialTypeId || '').trim();
+      const avg = fabricAvgByMaterial.get(materialTypeId)?.avg || 0;
+      pushRow({
+        productId: item.id,
+        productType: ProductType.FABRIC,
+        name: item.name,
+        status: String(item.status || ''),
+        isAvailable: item.isAvailable === true,
+        ownerName: item.seller?.businessName || 'Fabric Seller',
+        ownerCountry: item.seller?.country || '',
+        category: item.materialType?.name || 'Material',
+        currentPrice: Number(item.finalPrice || 0),
+        peerAveragePrice: avg,
+        image: item.images?.[0]?.url || null,
+        createdAt: item.createdAt,
+      });
+    }
+    for (const item of designs) {
+      const categoryId = String((item as any).categoryId || '').trim();
+      const avg = designAvgByCategory.get(categoryId)?.avg || 0;
+      pushRow({
+        productId: item.id,
+        productType: ProductType.DESIGN,
+        name: item.name,
+        status: String(item.status || ''),
+        isAvailable: item.isAvailable === true,
+        ownerName: item.designer?.businessName || 'Designer',
+        ownerCountry: item.designer?.country || '',
+        category: item.category?.name || 'Category',
+        currentPrice: Number(item.basePrice || 0),
+        peerAveragePrice: avg,
+        image: item.images?.[0]?.url || null,
+        createdAt: item.createdAt,
+      });
+    }
+    for (const item of readyToWear) {
+      const categoryId = String((item as any).categoryId || '').trim();
+      const avg = readyAvgByCategory.get(categoryId)?.avg || 0;
+      pushRow({
+        productId: item.id,
+        productType: ProductType.READY_TO_WEAR,
+        name: item.name,
+        status: String(item.status || ''),
+        isAvailable: item.isAvailable === true,
+        ownerName: item.designer?.businessName || 'Designer',
+        ownerCountry: item.designer?.country || '',
+        category: item.category?.name || 'Category',
+        currentPrice: Number(item.basePrice || 0),
+        peerAveragePrice: avg,
+        image: item.images?.[0]?.url || null,
+        createdAt: item.createdAt,
+      });
+    }
+
+    rows.sort((a, b) => Number(b.absDiffPercent || 0) - Number(a.absDiffPercent || 0));
+    const paged = rows.slice(pagination.skip, pagination.skip + pagination.limit);
+    res.json({
+      success: true,
+      data: {
+        rows: paged,
+        summary: {
+          total: rows.length,
+          amberCount: rows.filter((entry) => entry.severity === 'AMBER').length,
+          redCount: rows.filter((entry) => entry.severity === 'RED').length,
+          byType: {
+            FABRIC: rows.filter((entry) => entry.productType === ProductType.FABRIC).length,
+            DESIGN: rows.filter((entry) => entry.productType === ProductType.DESIGN).length,
+            READY_TO_WEAR: rows.filter((entry) => entry.productType === ProductType.READY_TO_WEAR).length,
+          },
+        },
+        pagination: {
+          page: pagination.page,
+          limit: pagination.limit,
+          total: rows.length,
+          pages: Math.max(1, Math.ceil(rows.length / pagination.limit)),
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/products/stock-monitor', async (_req, res, next) => {
   try {
     const [settingsBundle, syncSummary] = await Promise.all([

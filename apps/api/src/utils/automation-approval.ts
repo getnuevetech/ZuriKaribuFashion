@@ -193,8 +193,14 @@ const parseFirstJsonObject = (value: string): Record<string, unknown> | null => 
   return null;
 };
 
+const NON_BLOCKING_PRODUCT_CRITERIA_KEYS = new Set(['price_outlier']);
+
 const correctionRowsFromReport = (report: AutomationCheckReportRow[]) =>
-  report.filter((entry) => entry.status === 'FAIL' || entry.status === 'NEEDS_AI' || entry.status === 'SKIPPED');
+  report.filter(
+    (entry) =>
+      !NON_BLOCKING_PRODUCT_CRITERIA_KEYS.has(String(entry.key || '').trim()) &&
+      (entry.status === 'FAIL' || entry.status === 'NEEDS_AI' || entry.status === 'SKIPPED')
+  );
 
 const isDisabledByAdminReportRow = (row: { status?: string; message?: string }) => {
   const message = String(row?.message || '').trim().toLowerCase();
@@ -2812,6 +2818,13 @@ Rules:
           message: `${row.message} AI verification: ${aiEval.guidance}`,
         };
       }
+      if (row.key === 'price_outlier' && nextRow.status !== 'PASS') {
+        nextRow = {
+          ...nextRow,
+          status: 'NEEDS_AI',
+          message: `${nextRow.message} Price comparison alert is recommendation-only and does not block approval.`,
+        };
+      }
       if (row.key === 'predominant_color_match' && nextRow.status === 'NEEDS_AI' && Boolean(persistStagedProductEdits)) {
         const fallbackColor = 'MULTI';
         const beforeColor = String(readStagedProductField('predominantColor') || '').trim().toUpperCase();
@@ -3109,13 +3122,27 @@ Rules:
       key: 'price_outlier',
       label: 'Flag price when 30%+ below/above peers',
       status:
-        peerAverage <= 0 || safeRatio(Number(product.finalPrice || 0), peerAverage) <= 1.3
-          ? 'PASS'
-          : 'FAIL',
+        peerAverage > 0 &&
+        (safeRatio(Number(product.finalPrice || 0), peerAverage) >= 1.3 ||
+          safeRatio(Number(product.finalPrice || 0), peerAverage) <= 0.7)
+          ? 'NEEDS_AI'
+          : 'PASS',
       message:
         peerAverage <= 0
-          ? 'No peer baseline available yet.'
-          : `Current $${Number(product.finalPrice || 0).toFixed(2)} vs peer avg $${peerAverage.toFixed(2)}.`,
+          ? 'Price comparison unavailable because there are not enough similar approved products yet.'
+          : (() => {
+              const current = Number(product.finalPrice || 0);
+              const diffPercent = ((current - peerAverage) / peerAverage) * 100;
+              const isOutlier = Math.abs(diffPercent) >= 30;
+              if (!isOutlier) {
+                return `Price is within expected category range (current $${current.toFixed(2)} vs average $${peerAverage.toFixed(2)}).`;
+              }
+              return `Recommendation: price is ${Math.abs(diffPercent).toFixed(1)}% ${
+                diffPercent >= 0 ? 'above' : 'below'
+              } similar products in this category (current $${current.toFixed(2)} vs average $${peerAverage.toFixed(
+                2
+              )}). This alert does not block approval.`;
+            })(),
     });
     addResult({
       key: 'currency_sanity',
@@ -3263,11 +3290,28 @@ Rules:
     addResult({
       key: 'price_outlier',
       label: 'Flag price when 30%+ below/above peers',
-      status: peerAverage <= 0 || safeRatio(Number(product.basePrice || 0), peerAverage) <= 1.3 ? 'PASS' : 'FAIL',
+      status:
+        peerAverage > 0 &&
+        (safeRatio(Number(product.basePrice || 0), peerAverage) >= 1.3 ||
+          safeRatio(Number(product.basePrice || 0), peerAverage) <= 0.7)
+          ? 'NEEDS_AI'
+          : 'PASS',
       message:
         peerAverage <= 0
-          ? 'No peer baseline available yet.'
-          : `Current $${Number(product.basePrice || 0).toFixed(2)} vs peer avg $${peerAverage.toFixed(2)}.`,
+          ? 'Price comparison unavailable because there are not enough similar approved products yet.'
+          : (() => {
+              const current = Number(product.basePrice || 0);
+              const diffPercent = ((current - peerAverage) / peerAverage) * 100;
+              const isOutlier = Math.abs(diffPercent) >= 30;
+              if (!isOutlier) {
+                return `Price is within expected category range (current $${current.toFixed(2)} vs average $${peerAverage.toFixed(2)}).`;
+              }
+              return `Recommendation: price is ${Math.abs(diffPercent).toFixed(1)}% ${
+                diffPercent >= 0 ? 'above' : 'below'
+              } similar products in this category (current $${current.toFixed(2)} vs average $${peerAverage.toFixed(
+                2
+              )}). This alert does not block approval.`;
+            })(),
     });
     addResult({
       key: 'currency_sanity',
@@ -3408,11 +3452,28 @@ Rules:
     addResult({
       key: 'price_outlier',
       label: 'Flag price when 30%+ below/above peers',
-      status: peerAverage <= 0 || safeRatio(Number(product.basePrice || 0), peerAverage) <= 1.3 ? 'PASS' : 'FAIL',
+      status:
+        peerAverage > 0 &&
+        (safeRatio(Number(product.basePrice || 0), peerAverage) >= 1.3 ||
+          safeRatio(Number(product.basePrice || 0), peerAverage) <= 0.7)
+          ? 'NEEDS_AI'
+          : 'PASS',
       message:
         peerAverage <= 0
-          ? 'No peer baseline available yet.'
-          : `Current $${Number(product.basePrice || 0).toFixed(2)} vs peer avg $${peerAverage.toFixed(2)}.`,
+          ? 'Price comparison unavailable because there are not enough similar approved products yet.'
+          : (() => {
+              const current = Number(product.basePrice || 0);
+              const diffPercent = ((current - peerAverage) / peerAverage) * 100;
+              const isOutlier = Math.abs(diffPercent) >= 30;
+              if (!isOutlier) {
+                return `Price is within expected category range (current $${current.toFixed(2)} vs average $${peerAverage.toFixed(2)}).`;
+              }
+              return `Recommendation: price is ${Math.abs(diffPercent).toFixed(1)}% ${
+                diffPercent >= 0 ? 'above' : 'below'
+              } similar products in this category (current $${current.toFixed(2)} vs average $${peerAverage.toFixed(
+                2
+              )}). This alert does not block approval.`;
+            })(),
     });
     addResult({
       key: 'currency_sanity',
@@ -3457,7 +3518,12 @@ Rules:
     const criterion = criteria.find((item) => item.key === entry.key);
     return criterion ? criterion.enabled !== false : true;
   });
-  const canAutoApprove = requiredRows.length > 0 && requiredRows.every((entry) => entry.status === 'PASS');
+  const canAutoApprove =
+    requiredRows.length > 0 &&
+    requiredRows.every((entry) => {
+      if (NON_BLOCKING_PRODUCT_CRITERIA_KEYS.has(String(entry.key || '').trim())) return true;
+      return entry.status === 'PASS';
+    });
   return {
     canAutoApprove,
     status: canAutoApprove ? ('PASS' as const) : ('REVIEW_REQUIRED' as const),

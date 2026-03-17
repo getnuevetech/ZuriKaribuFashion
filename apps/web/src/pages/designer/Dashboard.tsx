@@ -440,6 +440,13 @@ const getOutcomeSeverity = (outcome?: ProductAutomationOutcome | null) =>
       ? 'MID'
       : 'NONE';
 
+const hasPriceCompareRecommendation = (outcome?: ProductAutomationOutcome | null) =>
+  Boolean(
+    (outcome?.report || []).some(
+      (row) => String(row?.key || '').trim() === 'price_outlier' && String(row?.status || '').toUpperCase() !== 'PASS'
+    )
+  );
+
 const normalizeFieldMode = (value: unknown): 'ENABLED' | 'READ_ONLY' | 'HIDDEN' => {
   const normalized = String(value || '').trim().toUpperCase();
   if (normalized === 'READ_ONLY') return 'READ_ONLY';
@@ -3966,7 +3973,9 @@ export default function DesignerDashboard() {
               Configure variant rows by size, color, and quantity to manage stock accurately. Minimum stock per
               variant: {minReadyVariantStock}.
             </p>
-            {isReadyEditMode && selectedReadyForEdit?.automationOutcome?.needsCorrection ? (
+            {isReadyEditMode &&
+            (selectedReadyForEdit?.automationOutcome?.needsCorrection ||
+              hasPriceCompareRecommendation(selectedReadyForEdit?.automationOutcome)) ? (
               <div
                 className={`mb-5 rounded-lg border p-3 ${
                   getOutcomeSeverity(selectedReadyForEdit.automationOutcome) === 'MAJOR'
@@ -3981,8 +3990,11 @@ export default function DesignerDashboard() {
                       : 'text-amber-700'
                   }`}
                 >
-                  Automation flagged this product for correction (
-                  {getOutcomeSeverity(selectedReadyForEdit.automationOutcome) === 'MAJOR' ? 'Major' : 'Mid'} severity)
+                  {selectedReadyForEdit.automationOutcome?.needsCorrection
+                    ? `Automation flagged this product for correction (${
+                        getOutcomeSeverity(selectedReadyForEdit.automationOutcome) === 'MAJOR' ? 'Major' : 'Mid'
+                      } severity)`
+                    : 'Pricing recommendation for this product (amber alert)'}
                 </p>
                 {selectedReadyForEdit.automationOutcome.summaryMessage ? (
                   <p className="mt-1 text-xs text-gray-700">{selectedReadyForEdit.automationOutcome.summaryMessage}</p>
@@ -4477,7 +4489,9 @@ export default function DesignerDashboard() {
             <p className="text-sm text-gray-500 mb-5">
               Custom-to-wear designs require 4 to 6 images and at least one suitable fabric.
             </p>
-            {isEditMode && selectedDesign?.automationOutcome?.needsCorrection ? (
+            {isEditMode &&
+            (selectedDesign?.automationOutcome?.needsCorrection ||
+              hasPriceCompareRecommendation(selectedDesign?.automationOutcome)) ? (
               <div
                 className={`mb-5 rounded-lg border p-3 ${
                   getOutcomeSeverity(selectedDesign.automationOutcome) === 'MAJOR'
@@ -4492,8 +4506,11 @@ export default function DesignerDashboard() {
                       : 'text-amber-700'
                   }`}
                 >
-                  Automation flagged this product for correction (
-                  {getOutcomeSeverity(selectedDesign.automationOutcome) === 'MAJOR' ? 'Major' : 'Mid'} severity)
+                  {selectedDesign.automationOutcome?.needsCorrection
+                    ? `Automation flagged this product for correction (${
+                        getOutcomeSeverity(selectedDesign.automationOutcome) === 'MAJOR' ? 'Major' : 'Mid'
+                      } severity)`
+                    : 'Pricing recommendation for this product (amber alert)'}
                 </p>
                 {selectedDesign.automationOutcome.summaryMessage ? (
                   <p className="mt-1 text-xs text-gray-700">{selectedDesign.automationOutcome.summaryMessage}</p>

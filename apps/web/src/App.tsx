@@ -67,6 +67,7 @@ import AdminNotificationCenter from './pages/admin/NotificationCenter';
 import AdminBackups from './pages/admin/Backups';
 import AdminProductChangeRequests from './pages/admin/ProductChangeRequests';
 import AdminProductStockList from './pages/admin/ProductStockList';
+import AdminProductPriceCompare from './pages/admin/ProductPriceCompare';
 import AdminResellerInfluencers from './pages/admin/ResellerInfluencers';
 import AdminAutomationApprovals from './pages/admin/AutomationApprovals';
 import AdminAutomationAiConfig from './pages/admin/AutomationAiConfig';
@@ -305,6 +306,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['products:manage']}>
                       <AdminProductStockList />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/products/price-compare"
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminProductPriceCompare />
                     </AdminPermissionGuard>
                   }
                 />

@@ -218,6 +218,13 @@ const getOutcomeSeverity = (outcome?: ProductAutomationOutcome | null) =>
       ? 'MID'
       : 'NONE';
 
+const hasPriceCompareRecommendation = (outcome?: ProductAutomationOutcome | null) =>
+  Boolean(
+    (outcome?.report || []).some(
+      (row) => String(row?.key || '').trim() === 'price_outlier' && String(row?.status || '').toUpperCase() !== 'PASS'
+    )
+  );
+
 interface VendorProfileField {
   key: string;
   label: string;
@@ -2801,7 +2808,9 @@ export default function SellerDashboard() {
               {isEditMode ? 'Update Fabric Product' : 'Add Fabric Product'}
             </h3>
             <p className="text-sm text-gray-500 mb-5">Fabrics require 3 to 4 image URLs.</p>
-            {isEditMode && selectedFabric?.automationOutcome?.needsCorrection ? (
+            {isEditMode &&
+            (selectedFabric?.automationOutcome?.needsCorrection ||
+              hasPriceCompareRecommendation(selectedFabric?.automationOutcome)) ? (
               <div
                 className={`mb-5 rounded-lg border p-3 ${
                   getOutcomeSeverity(selectedFabric.automationOutcome) === 'MAJOR'
@@ -2814,8 +2823,11 @@ export default function SellerDashboard() {
                     getOutcomeSeverity(selectedFabric.automationOutcome) === 'MAJOR' ? 'text-red-700' : 'text-amber-700'
                   }`}
                 >
-                  Automation flagged this product for correction (
-                  {getOutcomeSeverity(selectedFabric.automationOutcome) === 'MAJOR' ? 'Major' : 'Mid'} severity)
+                  {selectedFabric.automationOutcome?.needsCorrection
+                    ? `Automation flagged this product for correction (${
+                        getOutcomeSeverity(selectedFabric.automationOutcome) === 'MAJOR' ? 'Major' : 'Mid'
+                      } severity)`
+                    : 'Pricing recommendation for this product (amber alert)'}
                 </p>
                 {selectedFabric.automationOutcome.summaryMessage ? (
                   <p className="mt-1 text-xs text-gray-700">{selectedFabric.automationOutcome.summaryMessage}</p>

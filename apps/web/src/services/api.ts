@@ -6228,6 +6228,47 @@ const adminApi = {
       };
     }>('/admin/products/stock-monitor'),
 
+  getProductPriceCompare: (params?: {
+    search?: string;
+    status?: string;
+    type?: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+    severity?: 'AMBER' | 'RED';
+    page?: number;
+    limit?: number;
+    minMarginPercent?: number;
+  }) =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        rows: Array<{
+          productId: string;
+          productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+          name: string;
+          status: string;
+          isAvailable: boolean;
+          ownerName: string;
+          ownerCountry: string;
+          category: string;
+          currentPrice: number;
+          peerAveragePrice: number;
+          diffAmount: number;
+          diffPercent: number;
+          absDiffPercent: number;
+          direction: 'ABOVE' | 'BELOW';
+          severity: 'AMBER' | 'RED';
+          image: string | null;
+          createdAt: string;
+        }>;
+        summary: {
+          total: number;
+          amberCount: number;
+          redCount: number;
+          byType: { FABRIC: number; DESIGN: number; READY_TO_WEAR: number };
+        };
+        pagination: { page: number; limit: number; total: number; pages: number };
+      };
+    }>('/admin/products/price-compare', { params }),
+
   updateProductStockMonitor: (payload: { threshold: number }) =>
     apiService.patch<{
       success: boolean;
