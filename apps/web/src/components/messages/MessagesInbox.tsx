@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Mail, MailOpen, RefreshCw } from 'lucide-react';
+import { Mail, MailOpen, RefreshCw, X } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../ui/Button';
 
@@ -29,6 +29,7 @@ export default function MessagesInbox({ heading, description }: MessagesInboxPro
   const [error, setError] = useState('');
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [selectedMessage, setSelectedMessage] = useState<InboxMessage | null>(null);
 
   const load = async () => {
     try {
@@ -122,13 +123,22 @@ export default function MessagesInbox({ heading, description }: MessagesInboxPro
                         {message.title || message.subject || 'Message'}
                       </p>
                     </div>
-                    <p className="mt-1 text-sm text-gray-600">{message.body || '—'}</p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {String(message.body || '').length > 340
+                        ? `${String(message.body || '').slice(0, 340).trimEnd()}…`
+                        : message.body || '—'}
+                    </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
                       <span>{new Date(message.createdAt).toLocaleString()}</span>
                       <span className="rounded border px-1.5 py-0.5">{message.source}</span>
                       {message.sentEmail ? <span className="rounded border px-1.5 py-0.5">Email</span> : null}
                       {message.sentPush ? <span className="rounded border px-1.5 py-0.5">Push</span> : null}
                       {message.sentInApp ? <span className="rounded border px-1.5 py-0.5">In-app</span> : null}
+                    </div>
+                    <div className="mt-3">
+                      <Button variant="outline" onClick={() => setSelectedMessage(message)}>
+                        View full message
+                      </Button>
                     </div>
                   </div>
                   {!message.isRead ? (
@@ -142,6 +152,37 @@ export default function MessagesInbox({ heading, description }: MessagesInboxPro
           </div>
         )}
       </div>
+
+      {selectedMessage ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-3xl rounded-xl bg-white shadow-xl">
+            <div className="flex items-start justify-between border-b px-5 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {selectedMessage.title || selectedMessage.subject || 'Message'}
+                </h3>
+                <p className="mt-1 text-xs text-gray-500">{new Date(selectedMessage.createdAt).toLocaleString()}</p>
+              </div>
+              <button
+                type="button"
+                className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                onClick={() => setSelectedMessage(null)}
+                aria-label="Close message popup"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
+              <p className="whitespace-pre-wrap break-words text-sm text-gray-700">{selectedMessage.body || '—'}</p>
+            </div>
+            <div className="flex justify-end gap-2 border-t px-5 py-3">
+              <Button variant="outline" onClick={() => setSelectedMessage(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

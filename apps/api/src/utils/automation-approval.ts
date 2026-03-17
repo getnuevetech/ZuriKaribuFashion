@@ -481,6 +481,39 @@ export const ensureProductAutomationOutcomeSchema = async () => {
   productAutomationOutcomeSchemaEnsured = true;
 };
 
+let notificationDispatchSchemaEnsured = false;
+const ensureNotificationDispatchSchema = async () => {
+  if (notificationDispatchSchemaEnsured) return;
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "NotificationDispatch" (
+      "id" TEXT NOT NULL,
+      "templateKey" TEXT,
+      "title" TEXT NOT NULL,
+      "subject" TEXT NOT NULL,
+      "bodyHtml" TEXT NOT NULL,
+      "bodyText" TEXT NOT NULL,
+      "recipientRole" TEXT NOT NULL DEFAULT 'ALL',
+      "recipientUserId" TEXT,
+      "sentEmail" BOOLEAN NOT NULL DEFAULT false,
+      "sentPush" BOOLEAN NOT NULL DEFAULT false,
+      "sentInApp" BOOLEAN NOT NULL DEFAULT false,
+      "deliveryStatus" TEXT NOT NULL DEFAULT 'SENT',
+      "createdById" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "NotificationDispatch_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "NotificationDispatch_recipientRole_idx"
+     ON "NotificationDispatch"("recipientRole")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "NotificationDispatch_createdAt_idx"
+     ON "NotificationDispatch"("createdAt")`
+  );
+  notificationDispatchSchemaEnsured = true;
+};
+
 let cachedTransporter: nodemailer.Transporter | null | undefined;
 const getMailer = (): nodemailer.Transporter | null => {
   if (cachedTransporter !== undefined) return cachedTransporter;
@@ -688,6 +721,116 @@ const resolveAutomationRecipient = async (input: { productType: ProductType; pro
     : null;
 };
 
+const normalizeReadableLine = (value: string, max = 1200) => {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  return normalized.length > max ? `${normalized.slice(0, Math.max(0, max - 1)).trimEnd()}…` : normalized;
+};
+
+const escapeHtml = (value: string) =>
+  String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const buildVendorAutomationMessageBundle = (input: {
+  productName: string;
+  severity: AutomationFailureSeverity;
+  summary: string;
+  report: AutomationCheckReportRow[];
+  aiRecommendations: string[];
+}) => {
+  const severityLabel = input.severity === 'MAJOR' ? 'Major' : input.severity === 'MID' ? 'Mid' : 'Low';
+  const rows = correctionRowsFromReport(input.report);
+  const checkItems =
+    rows.length > 0
+      ? rows.map((entry, index) => ({
+          index: index + 1,
+          label: normalizeReadableLine(entry.label || entry.key, 220),
+          status: String(entry.status || 'FAIL').toUpperCase(),
+          message: normalizeReadableLine(entry.message || 'Requires review', 1800),
+        }))
+      : [{ index: 1, label: 'Automation summary', status: 'INFO', message: normalizeReadableLine(input.summary, 1800) }];
+  const recommendationItems =
+    input.aiRecommendations.length > 0
+      ? input.aiRecommendations.map((entry, index) => ({
+          index: index + 1,
+          message: normalizeReadableLine(entry, 1500),
+        }))
+      : [{ index: 1, message: 'Review each failed check, update the product, and resubmit for automation review.' }];
+  const plain = [
+    `Product: ${input.productName}`,
+    `Severity: ${severityLabel}`,
+    `Summary: ${normalizeReadableLine(input.summary, 2000)}`,
+    '',
+    'Required corrections:',
+    ...checkItems.flatMap((entry) => [`${entry.index}. [${entry.status}] ${entry.label}`, `   ${entry.message}`]),
+    '',
+    'AI recommendations:',
+    ...recommendationItems.map((entry) => `${entry.index}. ${entry.message}`),
+    '',
+    'Communication channels sent:',
+    '- In-app notification',
+    '- Inbox message',
+    '- Email (if your account email is available)',
+  ].join('\n');
+  const html = [
+    `<p><strong>Product:</strong> ${escapeHtml(input.productName)}</p>`,
+    `<p><strong>Severity:</strong> ${escapeHtml(severityLabel)}</p>`,
+    `<p><strong>Summary:</strong> ${escapeHtml(normalizeReadableLine(input.summary, 2000))}</p>`,
+    '<p><strong>Required corrections:</strong></p>',
+    `<ol>${checkItems
+      .map(
+        (entry) =>
+          `<li><strong>[${escapeHtml(entry.status)}] ${escapeHtml(entry.label)}</strong><br/>${escapeHtml(entry.message)}</li>`
+      )
+      .join('')}</ol>`,
+    '<p><strong>AI recommendations:</strong></p>',
+    `<ol>${recommendationItems.map((entry) => `<li>${escapeHtml(entry.message)}</li>`).join('')}</ol>`,
+    '<p><strong>Communication channels sent:</strong></p>',
+    '<ul><li>In-app notification</li><li>Inbox message</li><li>Email (if your account email is available)</li></ul>',
+  ].join('');
+  const inApp = [
+    `${input.productName}`,
+    `Severity: ${severityLabel}`,
+    `Summary: ${normalizeReadableLine(input.summary, 500)}`,
+    'Open your Messages inbox to read full automated analysis details.',
+  ].join('\n');
+  return { plain, html, inApp };
+};
+
+const saveVendorAutomationDispatch = async (input: {
+  recipientRole: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+  recipientUserId: string;
+  title: string;
+  subject: string;
+  bodyHtml: string;
+  bodyText: string;
+  sentEmail: boolean;
+}) => {
+  await ensureNotificationDispatchSchema();
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "NotificationDispatch"
+      ("id","templateKey","title","subject","bodyHtml","bodyText","recipientRole","recipientUserId","sentEmail","sentPush","sentInApp","deliveryStatus","createdById","createdAt")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())`,
+    randomUUID(),
+    'AUTOMATION_PRODUCT_AUTO_REJECTED_VENDOR',
+    String(input.title || '').trim() || 'Automation product feedback',
+    String(input.subject || '').trim() || 'Automation feedback',
+    String(input.bodyHtml || '').trim(),
+    String(input.bodyText || '').trim(),
+    input.recipientRole,
+    input.recipientUserId,
+    input.sentEmail === true,
+    false,
+    true,
+    'SENT',
+    null
+  );
+};
+
 export const notifyVendorAboutProductAutomationFailure = async (input: {
   productType: ProductType;
   productId: string;
@@ -712,48 +855,52 @@ export const notifyVendorAboutProductAutomationFailure = async (input: {
     );
     const aiRecommendations = buildVendorAiRecommendations({ report, changeReport });
     const vendorName = `${recipient.firstName} ${recipient.lastName}`.trim() || 'Vendor';
+    const recipientRole = input.productType === ProductType.FABRIC ? 'FABRIC_SELLER' : 'FASHION_DESIGNER';
     const title =
       severity === 'MAJOR'
         ? 'Product requires major corrections'
         : severity === 'MID'
           ? 'Product requires additional corrections'
           : 'Product automation update';
+    const subject = `[Action Required] ${recipient.productName} needs correction`;
+    const bundle = buildVendorAutomationMessageBundle({
+      productName: recipient.productName,
+      severity,
+      summary,
+      report,
+      aiRecommendations,
+    });
+    const deliveryText = `Hello ${vendorName},\n\n${bundle.plain}\n\nPlease update your product and resubmit for review.\n`;
+    const deliveryHtml = `<p>Hello ${escapeHtml(vendorName)},</p>${bundle.html}<p>Please update your product and resubmit for review.</p>`;
     await prisma.notification.create({
       data: {
         userId: recipient.userId,
         type: 'PRODUCT_REJECTED' as any,
         title,
-        message: `${recipient.productName}: ${summary}${aiRecommendations.length ? ` | AI recommendations: ${truncateText(aiRecommendations[0], 140)}` : ''}`,
+        message: bundle.inApp,
         relatedType: 'PRODUCT',
         relatedId: input.productId,
       },
     });
+    let emailSent = false;
     if (recipient.email) {
-      const topRows = correctionRowsFromReport(report).slice(0, 6);
-      const bulletText = topRows.length
-        ? topRows.map((entry) => `- ${entry.label || entry.key}: ${truncateText(entry.message || 'Requires review', 140)}`).join('\n')
-        : `- ${summary}`;
-      const bulletHtml = topRows.length
-        ? topRows
-            .map(
-              (entry) =>
-                `<li><strong>${entry.label || entry.key}:</strong> ${truncateText(entry.message || 'Requires review', 180)}</li>`
-            )
-            .join('')
-        : `<li>${summary}</li>`;
-      const recommendationText = aiRecommendations.length
-        ? aiRecommendations.map((entry) => `- ${entry}`).join('\n')
-        : '- Review the failed checks and apply corrections before resubmitting.';
-      const recommendationHtml = aiRecommendations.length
-        ? aiRecommendations.map((entry) => `<li>${entry}</li>`).join('')
-        : '<li>Review the failed checks and apply corrections before resubmitting.</li>';
       await sendAutomationEmail({
         to: recipient.email,
-        subject: `[Action Required] ${recipient.productName} needs correction`,
-        text: `Hello ${vendorName},\n\nYour product "${recipient.productName}" did not pass automation checks.\n\n${summary}\n\nItems to correct:\n${bulletText}\n\nAI recommendations:\n${recommendationText}\n\nPlease update the product and resubmit.\n`,
-        html: `<p>Hello ${vendorName},</p><p>Your product <strong>${recipient.productName}</strong> did not pass automation checks.</p><p>${summary}</p><p><strong>Items to correct:</strong></p><ul>${bulletHtml}</ul><p><strong>AI recommendations:</strong></p><ul>${recommendationHtml}</ul><p>Please update the product and resubmit.</p>`,
+        subject,
+        text: deliveryText,
+        html: deliveryHtml,
       });
+      emailSent = true;
     }
+    await saveVendorAutomationDispatch({
+      recipientRole,
+      recipientUserId: recipient.userId,
+      title,
+      subject,
+      bodyHtml: deliveryHtml,
+      bodyText: deliveryText,
+      sentEmail: emailSent,
+    });
     await prisma.$executeRawUnsafe(
       `UPDATE "ProductAutomationOutcome"
        SET "notifiedAt" = NOW(), "updatedAt" = NOW()
