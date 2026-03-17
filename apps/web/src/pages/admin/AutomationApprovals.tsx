@@ -61,6 +61,22 @@ export default function AdminAutomationApprovalsPage() {
     return Array.isArray(list) ? list : [];
   }, [settings, activeCriteriaScope]);
 
+  const aiEditStatusByKey = useMemo(() => {
+    const map = new Map<string, { attempted: number; applied: number; skipped: number }>();
+    const rows = Array.isArray(evaluationResult?.changeReport) ? evaluationResult.changeReport : [];
+    for (const entry of rows) {
+      const key = String(entry?.key || '').trim();
+      if (!key) continue;
+      const status = String(entry?.status || '').toUpperCase();
+      const current = map.get(key) || { attempted: 0, applied: 0, skipped: 0 };
+      current.attempted += 1;
+      if (status === 'APPLIED') current.applied += 1;
+      else current.skipped += 1;
+      map.set(key, current);
+    }
+    return map;
+  }, [evaluationResult]);
+
   const persist = async () => {
     try {
       setSaving(true);
@@ -458,19 +474,32 @@ export default function AdminAutomationApprovalsPage() {
               <div key={`${row.key}-${index}`} className="rounded border px-3 py-2 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-medium text-gray-900">{row.label || row.key}</p>
-                  <Badge
-                    variant={
-                      row.status === 'PASS'
-                        ? 'green'
-                        : row.status === 'FAIL'
-                          ? 'red'
-                          : row.status === 'NEEDS_AI'
-                            ? 'yellow'
-                            : 'gray'
-                    }
-                  >
-                    {row.status}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const editStatus = aiEditStatusByKey.get(String(row.key || '').trim());
+                      if (!editStatus || editStatus.attempted < 1) return null;
+                      if (editStatus.applied > 0 && editStatus.skipped < 1) {
+                        return <Badge variant="blue">AI EDIT APPLIED</Badge>;
+                      }
+                      if (editStatus.applied > 0 && editStatus.skipped > 0) {
+                        return <Badge variant="yellow">AI EDIT PARTIAL</Badge>;
+                      }
+                      return <Badge variant="yellow">AI EDIT SKIPPED</Badge>;
+                    })()}
+                    <Badge
+                      variant={
+                        row.status === 'PASS'
+                          ? 'green'
+                          : row.status === 'FAIL'
+                            ? 'red'
+                            : row.status === 'NEEDS_AI'
+                              ? 'yellow'
+                              : 'gray'
+                      }
+                    >
+                      {row.status}
+                    </Badge>
+                  </div>
                 </div>
                 <p className="mt-1 text-xs text-gray-600">{row.message}</p>
               </div>
