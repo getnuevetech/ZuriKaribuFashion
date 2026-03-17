@@ -129,6 +129,13 @@ router.post('/evaluate-product', async (req, res, next) => {
           needsCorrection: false,
           summaryMessage: 'All automation checks passed. Product auto-approved.',
         });
+        await notifyVendorAboutProductAutomationFailure({
+          productType: payload.productType as any,
+          productId: payload.productId,
+          report: evaluation.report,
+          changeReport: evaluation.changeReport,
+          outcome: automationOutcome,
+        });
       } else {
         if (payload.productType === ProductType.FABRIC) {
           await prisma.fabric.update({
@@ -193,6 +200,13 @@ router.post('/evaluate-product', async (req, res, next) => {
         failureSeverity: evaluation.canAutoApprove ? 'NONE' : undefined,
         needsCorrection: evaluation.canAutoApprove ? false : undefined,
         summaryMessage: evaluation.canAutoApprove ? 'Automation checks passed.' : undefined,
+      });
+      await notifyVendorAboutProductAutomationFailure({
+        productType: payload.productType as any,
+        productId: payload.productId,
+        report: evaluation.report,
+        changeReport: evaluation.changeReport,
+        outcome: automationOutcome,
       });
     }
     res.json({

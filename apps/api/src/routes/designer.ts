@@ -1696,6 +1696,13 @@ router.post('/designs', async (req, res, next) => {
             needsCorrection: false,
             summaryMessage: 'All automation checks passed. Product auto-approved.',
           });
+          await notifyVendorAboutProductAutomationFailure({
+            productType: ProductType.DESIGN as any,
+            productId: design.id,
+            report: evaluation.report,
+            changeReport: evaluation.changeReport,
+            outcome: automationOutcome,
+          });
         } else if (!evaluation.canAutoApprove) {
           await prisma.design.update({
             where: { id: design.id },
@@ -1733,6 +1740,13 @@ router.post('/designs', async (req, res, next) => {
             failureSeverity: 'NONE',
             needsCorrection: false,
             summaryMessage: 'Automation checks passed. Pending manual approval because auto-approve is disabled.',
+          });
+          await notifyVendorAboutProductAutomationFailure({
+            productType: ProductType.DESIGN as any,
+            productId: design.id,
+            report: evaluation.report,
+            changeReport: evaluation.changeReport,
+            outcome: automationOutcome,
           });
         }
       }
@@ -2388,6 +2402,13 @@ router.post('/ready-to-wear', async (req, res, next) => {
             needsCorrection: false,
             summaryMessage: 'All automation checks passed. Product auto-approved.',
           });
+          await notifyVendorAboutProductAutomationFailure({
+            productType: ProductType.READY_TO_WEAR as any,
+            productId: product.id,
+            report: evaluation.report,
+            changeReport: evaluation.changeReport,
+            outcome: automationOutcome,
+          });
         } else if (!evaluation.canAutoApprove) {
           await prisma.readyToWear.update({
             where: { id: product.id },
@@ -2425,6 +2446,13 @@ router.post('/ready-to-wear', async (req, res, next) => {
             failureSeverity: 'NONE',
             needsCorrection: false,
             summaryMessage: 'Automation checks passed. Pending manual approval because auto-approve is disabled.',
+          });
+          await notifyVendorAboutProductAutomationFailure({
+            productType: ProductType.READY_TO_WEAR as any,
+            productId: product.id,
+            report: evaluation.report,
+            changeReport: evaluation.changeReport,
+            outcome: automationOutcome,
           });
         }
       }

@@ -1023,6 +1023,13 @@ router.post('/fabrics', async (req, res, next) => {
             needsCorrection: false,
             summaryMessage: 'All automation checks passed. Product auto-approved.',
           });
+          await notifyVendorAboutProductAutomationFailure({
+            productType: ProductType.FABRIC as any,
+            productId: fabric.id,
+            report: evaluation.report,
+            changeReport: evaluation.changeReport,
+            outcome: automationOutcome,
+          });
         } else if (!evaluation.canAutoApprove) {
           await prisma.fabric.update({
             where: { id: fabric.id },
@@ -1060,6 +1067,13 @@ router.post('/fabrics', async (req, res, next) => {
             failureSeverity: 'NONE',
             needsCorrection: false,
             summaryMessage: 'Automation checks passed. Pending manual approval because auto-approve is disabled.',
+          });
+          await notifyVendorAboutProductAutomationFailure({
+            productType: ProductType.FABRIC as any,
+            productId: fabric.id,
+            report: evaluation.report,
+            changeReport: evaluation.changeReport,
+            outcome: automationOutcome,
           });
         }
       }

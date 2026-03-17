@@ -838,8 +838,8 @@ const buildVendorAutomationMessageBundle = (input: {
   changeReport: AutomationAppliedChange[];
   aiRecommendations: string[];
 }) => {
-  const severityLabel = input.severity === 'MAJOR' ? 'Major' : input.severity === 'MID' ? 'Mid' : 'Low';
-  const rows = correctionRowsFromReport(input.report);
+  const severityLabel = input.severity === 'MAJOR' ? 'Major' : input.severity === 'MID' ? 'Mid' : 'None';
+  const rows = Array.isArray(input.report) && input.report.length > 0 ? input.report : correctionRowsFromReport(input.report);
   const summaryLines =
     formatAutomationMessageLines(input.summary, 280, 4).map((line) => line.replace(/^•\s*/, '')) || [];
   const changeRowsByCriterionKey = new Map<string, AutomationAppliedChange[]>();
@@ -1029,7 +1029,9 @@ export const notifyVendorAboutProductAutomationFailure = async (input: {
     if (!recipient) return;
     const report = parseReportRows(input.report);
     const changeReport = parseChangeReportRows(input.changeReport);
-    const severity = input.outcome?.failureSeverity || resolveProductAutomationFailureSeverity(report);
+    const resolvedSeverity = input.outcome?.failureSeverity || resolveProductAutomationFailureSeverity(report);
+    const hasCriticalRows = report.some((row) => row.status === 'FAIL' || row.status === 'NEEDS_AI' || row.status === 'SKIPPED');
+    const severity = hasCriticalRows ? resolvedSeverity : 'NONE';
     const summary = truncateText(
       String(input.outcome?.summaryMessage || '').trim() ||
         buildAutomationSummaryMessage(report, input.errorMessage || 'Automation checks require updates.'),
@@ -1038,13 +1040,19 @@ export const notifyVendorAboutProductAutomationFailure = async (input: {
     const aiRecommendations = buildVendorAiRecommendations({ report, changeReport });
     const vendorName = `${recipient.firstName} ${recipient.lastName}`.trim() || 'Vendor';
     const recipientRole = input.productType === ProductType.FABRIC ? 'FABRIC_SELLER' : 'FASHION_DESIGNER';
-    const title =
-      severity === 'MAJOR'
+    const autoApproved = String(input.outcome?.action || '').toUpperCase() === 'AUTO_APPROVED';
+    const title = hasCriticalRows
+      ? severity === 'MAJOR'
         ? 'Product requires major corrections'
-        : severity === 'MID'
-          ? 'Product requires additional corrections'
-          : 'Product automation update';
-    const subject = `[Action Required] ${recipient.productName} needs correction`;
+        : 'Product requires additional corrections'
+      : autoApproved
+        ? 'Product passed automation checks'
+        : 'Product automation report';
+    const subject = hasCriticalRows
+      ? `[Action Required] ${recipient.productName} needs correction`
+      : autoApproved
+        ? `[Automation Passed] ${recipient.productName}`
+        : `[Automation Report] ${recipient.productName}`;
     const bundle = buildVendorAutomationMessageBundle({
       productName: recipient.productName,
       severity,
@@ -1053,12 +1061,17 @@ export const notifyVendorAboutProductAutomationFailure = async (input: {
       changeReport,
       aiRecommendations,
     });
-    const deliveryText = `Hello ${vendorName},\n\n${bundle.plain}\n\nPlease update your product and resubmit for review.\n`;
-    const deliveryHtml = `<p>Hello ${escapeHtml(vendorName)},</p>${bundle.html}<p>Please update your product and resubmit for review.</p>`;
+    const footerText = hasCriticalRows
+      ? 'Please update your product and resubmit for review.'
+      : autoApproved
+        ? 'No correction is required. Your product passed automation checks.'
+        : 'No correction is required from automation checks. Product approval may still follow your platform workflow.';
+    const deliveryText = `Hello ${vendorName},\n\n${bundle.plain}\n\n${footerText}\n`;
+    const deliveryHtml = `<p>Hello ${escapeHtml(vendorName)},</p>${bundle.html}<p>${escapeHtml(footerText)}</p>`;
     await prisma.notification.create({
       data: {
         userId: recipient.userId,
-        type: 'PRODUCT_REJECTED' as any,
+        type: hasCriticalRows ? ('PRODUCT_REJECTED' as any) : ('SYSTEM' as any),
         title,
         message: bundle.inApp,
         relatedType: 'PRODUCT',
