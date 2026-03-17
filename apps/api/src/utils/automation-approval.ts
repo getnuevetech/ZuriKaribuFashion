@@ -755,6 +755,35 @@ const normalizeReadableLine = (value: string, max = 1200) => {
   return normalized.length > max ? `${normalized.slice(0, Math.max(0, max - 1)).trimEnd()}…` : normalized;
 };
 
+const normalizeProviderExecutionReason = (value: string, max = 320) => {
+  const raw = String(value || '').trim();
+  if (!raw) return 'Provider execution failed.';
+  const parsed = parseFirstJsonObject(raw);
+  const nestedMessage =
+    String((parsed as any)?.error?.message || (parsed as any)?.message || '').trim() ||
+    (Array.isArray((parsed as any)?.errors) ? String((parsed as any).errors[0] || '').trim() : '');
+  const statusMatch = raw.match(/\b(4\d\d|5\d\d)\b/);
+  const statusCode = statusMatch ? Number(statusMatch[1]) : 0;
+  const lower = raw.toLowerCase();
+  const permissionDenied =
+    statusCode === 401 ||
+    statusCode === 403 ||
+    /permission_denied|permission denied|not open|unauthorized|forbidden/.test(lower);
+  if (permissionDenied) {
+    const detail = normalizeReadableLine(nestedMessage || 'API key does not have access to this endpoint.', 220);
+    return `Provider permission denied${statusCode ? ` (${statusCode})` : ''}: ${detail}`;
+  }
+  if (statusCode === 404) {
+    const detail = normalizeReadableLine(nestedMessage || 'Endpoint not found.', 220);
+    return `Provider endpoint not found (404): ${detail}`;
+  }
+  if (statusCode === 429 || /quota|rate limit|exceeded/i.test(lower)) {
+    const detail = normalizeReadableLine(nestedMessage || 'Quota/rate limit reached.', 220);
+    return `Provider quota/rate limit issue${statusCode ? ` (${statusCode})` : ''}: ${detail}`;
+  }
+  return normalizeReadableLine(nestedMessage || raw, max);
+};
+
 const normalizeReadableBlock = (value: string, max = 2200) => {
   const normalized = String(value || '')
     .replace(/\r\n/g, '\n')
@@ -2076,7 +2105,7 @@ Rules:
         reason:
           execution.status === 'NO_PROVIDER'
             ? execution.reason
-            : `AI edit execution failed: ${execution.reason}`,
+            : `AI edit execution failed: ${normalizeProviderExecutionReason(execution.reason)}`,
       };
     }
     const parseLabeledValue = (raw: string) => {
@@ -2256,6 +2285,7 @@ Return STRICT JSON only:
       providerOverrideId: params.providerOverrideId,
     });
     if (execution.status !== 'OK') {
+      const normalizedReason = normalizeProviderExecutionReason(execution.reason);
       return {
         applied: false,
         before: sourceUrl,
@@ -2263,7 +2293,7 @@ Return STRICT JSON only:
         reason:
           execution.status === 'NO_PROVIDER'
             ? execution.reason
-            : `AI image regeneration failed: ${execution.reason}`,
+            : `AI image regeneration failed: ${normalizedReason}`,
       };
     }
     const output = String(execution.output || '').trim();
@@ -2533,10 +2563,11 @@ Rules:
             };
           }
         } else {
+          const normalizedExecutionReason = normalizeProviderExecutionReason(execution.reason);
           nextRow = {
             ...row,
             status: 'FAIL',
-            message: `${row.message} AI execution error: ${execution.reason}`,
+            message: `${row.message} AI execution error: ${normalizedExecutionReason}`,
           };
         }
       } else if (row.status === 'FAIL') {
@@ -2651,10 +2682,15 @@ Rules:
             });
           } else {
             if (strictEditKeys.has(row.key)) {
+              const alreadyMentioned = nextRow.message
+                .toLowerCase()
+                .includes(String(imageResult.reason || '').trim().toLowerCase());
               nextRow = {
                 ...nextRow,
                 status: 'FAIL',
-                message: `${nextRow.message} Strict AI edit required for images: ${imageResult.reason}`,
+                message: alreadyMentioned
+                  ? `${nextRow.message} Strict AI edit required for images; provider issue blocked the edit.`
+                  : `${nextRow.message} Strict AI edit required for images: ${imageResult.reason}`,
               };
             }
             changeReport.push({
