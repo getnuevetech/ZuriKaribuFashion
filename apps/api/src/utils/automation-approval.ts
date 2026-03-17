@@ -2406,11 +2406,20 @@ Rules:
       normalizeAiVerdict(parsed?.result) ||
       normalizeAiVerdict(parsed?.decision);
     const parsedGuidance = normalizeReadableLine(
-      String(parsed?.guidance || parsed?.recommendation || parsed?.reason || parsed?.analysis || ''),
+      String(parsed?.guidance || parsed?.recommendation || parsed?.reason || parsed?.analysis || parsed?.message || ''),
       2000
     );
     if (parsedVerdict) {
-      return { verdict: parsedVerdict, guidance: parsedGuidance || normalizeReadableLine(raw, 2000) };
+      if (parsedGuidance) {
+        return { verdict: parsedVerdict, guidance: parsedGuidance };
+      }
+      if (parsedVerdict === 'PASS') {
+        return { verdict: parsedVerdict, guidance: 'AI confirmed this check passed.' };
+      }
+      if (parsedVerdict === 'NEEDS_AI') {
+        return { verdict: parsedVerdict, guidance: 'AI requested manual review for this check.' };
+      }
+      return { verdict: parsedVerdict, guidance: 'AI flagged this check for correction.' };
     }
     const lower = raw.toLowerCase();
     const failHints = [
@@ -2751,6 +2760,7 @@ Rules:
       productType: 'FABRIC',
       id: product.id,
       name: product.name,
+      descriptionPreview: truncateText(String(product.description || ''), 500),
       materialType: product.materialType?.name || null,
       finalPrice: Number(product.finalPrice || 0),
       minYards: Number(product.minYards || 0),
@@ -2898,6 +2908,7 @@ Rules:
       productType: 'READY_TO_WEAR',
       id: product.id,
       name: product.name,
+      descriptionPreview: truncateText(String(product.description || ''), 500),
       category: product.category?.name || null,
       basePrice: Number(product.basePrice || 0),
       variants: product.sizeVariations.length,
@@ -3032,6 +3043,7 @@ Rules:
       productType: 'DESIGN',
       id: product.id,
       name: product.name,
+      descriptionPreview: truncateText(String(product.description || ''), 500),
       category: product.category?.name || null,
       basePrice: Number(product.basePrice || 0),
       suitableFabrics: product.suitableFabrics.length,
