@@ -2,6 +2,14 @@ import { randomUUID } from 'crypto';
 import nodemailer from 'nodemailer';
 import { prisma, ProductType } from '../db';
 import { readOrderWorkflowSettings } from './order-workflow';
+import {
+  readDesignPredominantColor,
+  readFabricPredominantColor,
+  readReadyToWearPredominantColor,
+  writeDesignPredominantColor,
+  writeFabricPredominantColor,
+  writeReadyToWearPredominantColor,
+} from './fabric-attributes';
 
 export const AUTOMATION_SETTINGS_KEY = 'AUTOMATION_APPROVAL_SETTINGS_V1';
 
@@ -850,7 +858,7 @@ const FIELD_FALLBACK_BY_CRITERION_KEY: Record<string, string[]> = {
   name_grammar: ['name'],
   description_grammar: ['description'],
   image_quality: ['images[0]'],
-  predominant_color_match: ['images[0]'],
+  predominant_color_match: ['predominantColor'],
   material_match: ['images[0]'],
   style_match: ['name', 'description'],
   price_outlier: ['finalPrice/basePrice'],
@@ -870,6 +878,7 @@ const HUMAN_FIELD_LABELS: Record<string, string> = {
   'finalPrice/basePrice': 'Product pricing',
   minYards: 'Minimum order (yards)',
   stockYards: 'Stock quantity (yards)',
+  predominantColor: 'Predominant color',
   suitableFabrics: 'Suitable fabrics',
   requiredMeasurements: 'Required measurements',
 };
@@ -2047,7 +2056,8 @@ export const evaluateProductAutomationChecks = async (input: {
     | 'finalPrice'
     | 'basePrice'
     | 'minYards'
-    | 'stockYards';
+    | 'stockYards'
+    | 'predominantColor';
   type CriterionFieldEditRule =
     | { field: EditableFieldKey; kind: 'text'; minLength: number; maxLength: number }
     | { field: EditableFieldKey; kind: 'number'; minNumber: number; maxNumber: number };
@@ -2077,8 +2087,7 @@ export const evaluateProductAutomationChecks = async (input: {
         return null;
     }
   };
-  const imageFieldForCriterion = (criterionKey: string) =>
-    criterionKey === 'image_quality' || criterionKey === 'predominant_color_match' ? 'images[0]' : '';
+  const imageFieldForCriterion = (criterionKey: string) => (criterionKey === 'image_quality' ? 'images[0]' : '');
   const normalizeComparableAutomationFieldValue = (field: string, value: string) => {
     const normalizedField = String(field || '').trim();
     const raw = String(value || '').trim();
@@ -2577,7 +2586,8 @@ Rules:
       const criterionProviderOverrideId = String(criterion.aiProviderId || '').trim() || undefined;
       const canApplyAiEdits = criterion.allowAiEdits === true && criterion.requiresAi === true;
       const mappedTextRule = resolveCriterionEditRule(row.key);
-      const mappedField = mappedTextRule?.field || imageFieldForCriterion(row.key);
+      const mappedField =
+        row.key === 'predominant_color_match' ? 'predominantColor' : mappedTextRule?.field || imageFieldForCriterion(row.key);
       if (canApplyAiEdits && mappedField) {
         const previousApplied =
           previousAppliedEditByCriterionField.byCriterionField.get(`${row.key}::${mappedField}`) ||
@@ -2683,6 +2693,43 @@ Rules:
           status: aiEval.verdict,
           message: `${row.message} AI verification: ${aiEval.guidance}`,
         };
+      }
+      if (row.key === 'predominant_color_match' && nextRow.status === 'NEEDS_AI' && Boolean(persistStagedProductEdits)) {
+        const fallbackColor = 'MULTI';
+        const beforeColor = String(readStagedProductField('predominantColor') || '').trim().toUpperCase();
+        if (beforeColor === fallbackColor) {
+          nextRow = {
+            ...nextRow,
+            status: 'PASS',
+            message: `${nextRow.message} Predominant color already set to MULTI; fallback review skipped.`,
+          };
+          changeReport.push({
+            key: row.key,
+            label: row.label,
+            field: 'predominantColor',
+            beforeValue: beforeColor,
+            afterValue: beforeColor,
+            status: 'SKIPPED',
+            reason: 'Fallback color MULTI already set from previous automation run.',
+          });
+        } else {
+          pendingUpdates.predominantColor = fallbackColor;
+          stagedProductFields.predominantColor = fallbackColor;
+          nextRow = {
+            ...nextRow,
+            status: 'PASS',
+            message: `${nextRow.message} Unable to determine a single dominant color; automation fallback set predominant color to MULTI.`,
+          };
+          changeReport.push({
+            key: row.key,
+            label: row.label,
+            field: 'predominantColor',
+            beforeValue: beforeColor,
+            afterValue: fallbackColor,
+            status: 'APPLIED',
+            reason: 'AI could not determine a dominant single color; fallback policy set predominantColor=MULTI.',
+          });
+        }
       }
       if (!canApplyAiEdits && nextRow.status === 'FAIL') {
         const mappedRule = resolveCriterionEditRule(row.key);
@@ -2849,15 +2896,19 @@ Rules:
     const peerAverage = Number(peerAvgRows?.[0]?.avgPrice || 0);
     const workflow = await readOrderWorkflowSettings();
     const platformMinYards = Math.max(1, Number(workflow.orderLimits?.minFabricYardsPerOrder || 3));
+    const currentPredominantColor = String((await readFabricPredominantColor(product.id)) || '').trim().toUpperCase();
     stagedProductFields.name = String(product.name || '').trim();
     stagedProductFields.description = String(product.description || '').trim();
     stagedProductFields.finalPrice = String(Number(product.finalPrice || 0));
     stagedProductFields.minYards = String(Number(product.minYards || 0));
     stagedProductFields.stockYards = String(Number(product.stockYards || 0));
+    stagedProductFields.predominantColor = currentPredominantColor;
     const existingFabricImages = [...product.images].sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
     stagedImageUrls = existingFabricImages.map((entry) => String(entry.url || '').trim()).filter(Boolean);
     persistStagedProductEdits = async (updates) => {
       const payload: Record<string, unknown> = {};
+      const predominantColorUpdate =
+        typeof updates.predominantColor === 'string' ? String(updates.predominantColor || '').trim().toUpperCase() : null;
       if (typeof updates.name === 'string') payload.name = updates.name;
       if (typeof updates.description === 'string') payload.description = updates.description;
       if (typeof updates.finalPrice === 'string' && Number.isFinite(Number(updates.finalPrice))) {
@@ -2869,11 +2920,15 @@ Rules:
       if (typeof updates.stockYards === 'string' && Number.isFinite(Number(updates.stockYards))) {
         payload.stockYards = Number(updates.stockYards);
       }
-      if (Object.keys(payload).length === 0) return;
-      await prisma.fabric.update({
-        where: { id: product.id },
-        data: payload as any,
-      });
+      if (Object.keys(payload).length > 0) {
+        await prisma.fabric.update({
+          where: { id: product.id },
+          data: payload as any,
+        });
+      }
+      if (predominantColorUpdate) {
+        await writeFabricPredominantColor(product.id, predominantColorUpdate);
+      }
     };
     persistStagedImageEdits = async (urls) => {
       const cleanUrls = urls.map((entry) => String(entry || '').trim()).filter(Boolean);
@@ -2896,6 +2951,7 @@ Rules:
       name: product.name,
       descriptionPreview: truncateText(String(product.description || ''), 500),
       materialType: product.materialType?.name || null,
+      predominantColor: currentPredominantColor || null,
       finalPrice: Number(product.finalPrice || 0),
       minYards: Number(product.minYards || 0),
       stockYards: Number(product.stockYards || 0),
@@ -3003,25 +3059,35 @@ Rules:
       product.id
     );
     const peerAverage = Number(peerAvgRows?.[0]?.avgPrice || 0);
+    const currentPredominantColor = String((await readReadyToWearPredominantColor(product.id)) || '')
+      .trim()
+      .toUpperCase();
     stagedProductFields.name = String(product.name || '').trim();
     stagedProductFields.description = String(product.description || '').trim();
     stagedProductFields.basePrice = String(Number(product.basePrice || 0));
+    stagedProductFields.predominantColor = currentPredominantColor;
     const existingReadyToWearImages = [...product.images].sort(
       (a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0)
     );
     stagedImageUrls = existingReadyToWearImages.map((entry) => String(entry.url || '').trim()).filter(Boolean);
     persistStagedProductEdits = async (updates) => {
       const payload: Record<string, unknown> = {};
+      const predominantColorUpdate =
+        typeof updates.predominantColor === 'string' ? String(updates.predominantColor || '').trim().toUpperCase() : null;
       if (typeof updates.name === 'string') payload.name = updates.name;
       if (typeof updates.description === 'string') payload.description = updates.description;
       if (typeof updates.basePrice === 'string' && Number.isFinite(Number(updates.basePrice))) {
         payload.basePrice = Number(updates.basePrice);
       }
-      if (Object.keys(payload).length === 0) return;
-      await prisma.readyToWear.update({
-        where: { id: product.id },
-        data: payload as any,
-      });
+      if (Object.keys(payload).length > 0) {
+        await prisma.readyToWear.update({
+          where: { id: product.id },
+          data: payload as any,
+        });
+      }
+      if (predominantColorUpdate) {
+        await writeReadyToWearPredominantColor(product.id, predominantColorUpdate);
+      }
     };
     persistStagedImageEdits = async (urls) => {
       const cleanUrls = urls.map((entry) => String(entry || '').trim()).filter(Boolean);
@@ -3042,6 +3108,7 @@ Rules:
       productType: 'READY_TO_WEAR',
       id: product.id,
       name: product.name,
+      predominantColor: currentPredominantColor || null,
       descriptionPreview: truncateText(String(product.description || ''), 500),
       category: product.category?.name || null,
       basePrice: Number(product.basePrice || 0),
@@ -3140,23 +3207,31 @@ Rules:
       product.id
     );
     const peerAverage = Number(peerAvgRows?.[0]?.avgPrice || 0);
+    const currentPredominantColor = String((await readDesignPredominantColor(product.id)) || '').trim().toUpperCase();
     stagedProductFields.name = String(product.name || '').trim();
     stagedProductFields.description = String(product.description || '').trim();
     stagedProductFields.basePrice = String(Number(product.basePrice || 0));
+    stagedProductFields.predominantColor = currentPredominantColor;
     const existingDesignImages = [...product.images].sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
     stagedImageUrls = existingDesignImages.map((entry) => String(entry.url || '').trim()).filter(Boolean);
     persistStagedProductEdits = async (updates) => {
       const payload: Record<string, unknown> = {};
+      const predominantColorUpdate =
+        typeof updates.predominantColor === 'string' ? String(updates.predominantColor || '').trim().toUpperCase() : null;
       if (typeof updates.name === 'string') payload.name = updates.name;
       if (typeof updates.description === 'string') payload.description = updates.description;
       if (typeof updates.basePrice === 'string' && Number.isFinite(Number(updates.basePrice))) {
         payload.basePrice = Number(updates.basePrice);
       }
-      if (Object.keys(payload).length === 0) return;
-      await prisma.design.update({
-        where: { id: product.id },
-        data: payload as any,
-      });
+      if (Object.keys(payload).length > 0) {
+        await prisma.design.update({
+          where: { id: product.id },
+          data: payload as any,
+        });
+      }
+      if (predominantColorUpdate) {
+        await writeDesignPredominantColor(product.id, predominantColorUpdate);
+      }
     };
     persistStagedImageEdits = async (urls) => {
       const cleanUrls = urls.map((entry) => String(entry || '').trim()).filter(Boolean);
@@ -3177,6 +3252,7 @@ Rules:
       productType: 'DESIGN',
       id: product.id,
       name: product.name,
+      predominantColor: currentPredominantColor || null,
       descriptionPreview: truncateText(String(product.description || ''), 500),
       category: product.category?.name || null,
       basePrice: Number(product.basePrice || 0),
