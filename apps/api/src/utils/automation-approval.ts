@@ -1178,6 +1178,33 @@ const normalizeEndpoint = (baseUrl: string, suffix: string) => {
   if (trimmed.toLowerCase().endsWith(suffix.toLowerCase())) return trimmed;
   return `${trimmed}${suffix.startsWith('/') ? '' : '/'}${suffix}`;
 };
+const resolveOpenAiCompatEndpoints = (baseUrl: string, suffix: string) => {
+  const trimmed = String(baseUrl || '').trim().replace(/\/+$/, '');
+  if (!trimmed) return [] as string[];
+  const endpoints = new Set<string>();
+  const primary = normalizeEndpoint(trimmed, suffix);
+  if (primary) endpoints.add(primary);
+  const hasVersionSegment = /\/v\d+(?:alpha|beta)?(?:\d+)?(?:\/|$)/i.test(trimmed);
+  const endsWithOpenAi = /\/openai(?:\/|$)/i.test(trimmed);
+  if (!hasVersionSegment && !endsWithOpenAi) {
+    const v1Endpoint = normalizeEndpoint(`${trimmed}/v1`, suffix);
+    if (v1Endpoint) endpoints.add(v1Endpoint);
+  }
+  return Array.from(endpoints);
+};
+const isLikelyEndpointNotFound = (status: number, body: string) => {
+  if (status !== 404) return false;
+  const text = String(body || '').trim().toLowerCase();
+  if (!text) return true;
+  if (
+    /model|quota|billing|api key|apikey|auth|unauthorized|forbidden|permission|rate limit|exceeded|insufficient/i.test(
+      text
+    )
+  ) {
+    return false;
+  }
+  return /not found|cannot post|no route|no such endpoint|<html|<!doctype/i.test(text);
+};
 
 const isGeminiBaseUrl = (baseUrl: string) => /generativelanguage\.googleapis\.com/i.test(String(baseUrl || ''));
 const isGeminiOpenAiCompatUrl = (baseUrl: string) =>
@@ -1453,8 +1480,8 @@ const callTextExecutor = async (
     };
   }
 
-  const endpoint = normalizeEndpoint(provider.baseUrl, '/chat/completions');
-  if (!endpoint) {
+  const endpoints = resolveOpenAiCompatEndpoints(provider.baseUrl, '/chat/completions');
+  if (endpoints.length < 1) {
     return { status: 'ERROR', reason: 'Missing provider endpoint.' } as AiExecutionResult;
   }
   const resolvedModel = isGeminiBaseUrl(provider.baseUrl)
@@ -1471,65 +1498,78 @@ const callTextExecutor = async (
       reason: `${cause}. Native fallback failed: ${fallback.reason}`,
     };
   };
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25_000);
-  try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${String(provider.apiKey || '').trim()}`,
-      },
-      body: JSON.stringify({
-        model: resolvedModel,
-        temperature: 0.2,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: prompt },
-        ],
-      }),
-      signal: controller.signal,
-    });
-    const text = await response.text();
-    if (!response.ok) {
-      if (isQuotaExceededError(response.status, text) && isGeminiBaseUrl(provider.baseUrl)) {
+  const triedEndpoints: string[] = [];
+  for (const endpoint of endpoints) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25_000);
+    try {
+      triedEndpoints.push(endpoint);
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${String(provider.apiKey || '').trim()}`,
+        },
+        body: JSON.stringify({
+          model: resolvedModel,
+          temperature: 0.2,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: prompt },
+          ],
+        }),
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        if (isQuotaExceededError(response.status, text) && isGeminiBaseUrl(provider.baseUrl)) {
+          return {
+            status: 'ERROR',
+            reason:
+              'Gemini quota exceeded (429). Check AI Studio/GCP billing, API key project quota, and rate limits.',
+          };
+        }
+        const fallback = await tryGeminiNativeFallback(
+          `OpenAI-compatible Gemini endpoint returned ${response.status}: ${String(text || '').slice(0, 200)}`
+        );
+        if (fallback) return fallback;
+        if (isLikelyEndpointNotFound(response.status, text)) {
+          continue;
+        }
         return {
           status: 'ERROR',
-          reason:
-            'Gemini quota exceeded (429). Check AI Studio/GCP billing, API key project quota, and rate limits.',
+          reason: `Provider returned ${response.status}: ${String(text || '').slice(0, 200)}`,
         };
       }
-      const fallback = await tryGeminiNativeFallback(
-        `OpenAI-compatible Gemini endpoint returned ${response.status}: ${String(text || '').slice(0, 200)}`
-      );
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(text || '{}');
+      } catch {
+        parsed = {};
+      }
+      const output =
+        readNestedString(parsed, ['choices', '0', 'message', 'content']) ||
+        readNestedString(parsed, ['output_text']) ||
+        String(text || '').trim();
+      if (!output) {
+        return { status: 'ERROR', reason: 'Provider returned an empty completion.' };
+      }
+      return { status: 'OK', output: String(output).trim().slice(0, 1000) };
+    } catch (error: any) {
+      const message = String(error?.message || 'Network error while calling provider.');
+      const fallback = await tryGeminiNativeFallback(`OpenAI-compatible Gemini endpoint failed (${message})`);
       if (fallback) return fallback;
-      return {
-        status: 'ERROR',
-        reason: `Provider returned ${response.status}: ${String(text || '').slice(0, 200)}`,
-      };
+      return { status: 'ERROR', reason: message };
+    } finally {
+      clearTimeout(timeout);
     }
-    let parsed: any = {};
-    try {
-      parsed = JSON.parse(text || '{}');
-    } catch {
-      parsed = {};
-    }
-    const output =
-      readNestedString(parsed, ['choices', '0', 'message', 'content']) ||
-      readNestedString(parsed, ['output_text']) ||
-      String(text || '').trim();
-    if (!output) {
-      return { status: 'ERROR', reason: 'Provider returned an empty completion.' };
-    }
-    return { status: 'OK', output: String(output).trim().slice(0, 1000) };
-  } catch (error: any) {
-    const message = String(error?.message || 'Network error while calling provider.');
-    const fallback = await tryGeminiNativeFallback(`OpenAI-compatible Gemini endpoint failed (${message})`);
-    if (fallback) return fallback;
-    return { status: 'ERROR', reason: message };
-  } finally {
-    clearTimeout(timeout);
   }
+  return {
+    status: 'ERROR',
+    reason: `Provider returned 404 on tested endpoints. Tried: ${triedEndpoints
+      .map((entry) => entry.replace(/^https?:\/\//i, ''))
+      .join(' , ')}. Use the provider API root (not website URL) or exact chat endpoint.`,
+  };
 };
 
 const callImageRegenerationExecutor = async (
@@ -1733,49 +1773,60 @@ const callImageRegenerationExecutor = async (
         'Gemini native base URL does not support /images/generations. Use Gemini OpenAI-compatible base URL (/v1beta/openai) or bind image regeneration to another provider.',
     };
   }
-  const endpoint = normalizeEndpoint(provider.baseUrl, '/images/generations');
-  if (!endpoint) {
+  const endpoints = resolveOpenAiCompatEndpoints(provider.baseUrl, '/images/generations');
+  if (endpoints.length < 1) {
     return { status: 'ERROR', reason: 'Missing provider endpoint.' } as AiExecutionResult;
   }
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
-  try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${String(provider.apiKey || '').trim()}`,
-      },
-      body: JSON.stringify({
-        model: String(provider.model || '').trim() || 'gpt-image-1',
-        prompt,
-        size: '1024x1024',
-      }),
-      signal: controller.signal,
-    });
-    const text = await response.text();
-    if (!response.ok) {
-      return {
-        status: 'ERROR',
-        reason: `Image generation returned ${response.status}: ${String(text || '').slice(0, 200)}`,
-      };
-    }
-    let parsed: any = {};
+  const triedEndpoints: string[] = [];
+  for (const endpoint of endpoints) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
     try {
-      parsed = JSON.parse(text || '{}');
-    } catch {
-      parsed = {};
+      triedEndpoints.push(endpoint);
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${String(provider.apiKey || '').trim()}`,
+        },
+        body: JSON.stringify({
+          model: String(provider.model || '').trim() || 'gpt-image-1',
+          prompt,
+          size: '1024x1024',
+        }),
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        if (isLikelyEndpointNotFound(response.status, text)) continue;
+        return {
+          status: 'ERROR',
+          reason: `Image generation returned ${response.status}: ${String(text || '').slice(0, 200)}`,
+        };
+      }
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(text || '{}');
+      } catch {
+        parsed = {};
+      }
+      const imageUrl = readNestedString(parsed, ['data', '0', 'url']);
+      if (imageUrl) return { status: 'OK', output: `Regenerated image URL: ${imageUrl}` };
+      const hasB64 = readNestedString(parsed, ['data', '0', 'b64_json']);
+      if (hasB64) return { status: 'OK', output: 'Regenerated image payload received (base64).' };
+      return { status: 'ERROR', reason: 'No regenerated image output returned.' };
+    } catch (error: any) {
+      return { status: 'ERROR', reason: String(error?.message || 'Network error while regenerating image.') };
+    } finally {
+      clearTimeout(timeout);
     }
-    const imageUrl = readNestedString(parsed, ['data', '0', 'url']);
-    if (imageUrl) return { status: 'OK', output: `Regenerated image URL: ${imageUrl}` };
-    const hasB64 = readNestedString(parsed, ['data', '0', 'b64_json']);
-    if (hasB64) return { status: 'OK', output: 'Regenerated image payload received (base64).' };
-    return { status: 'ERROR', reason: 'No regenerated image output returned.' };
-  } catch (error: any) {
-    return { status: 'ERROR', reason: String(error?.message || 'Network error while regenerating image.') };
-  } finally {
-    clearTimeout(timeout);
   }
+  return {
+    status: 'ERROR',
+    reason: `Image generation endpoint not found (404). Tried: ${triedEndpoints
+      .map((entry) => entry.replace(/^https?:\/\//i, ''))
+      .join(' , ')}. Use provider API root or exact image endpoint.`,
+  };
 };
 
 const executeAutomationAiFunction = async (params: {

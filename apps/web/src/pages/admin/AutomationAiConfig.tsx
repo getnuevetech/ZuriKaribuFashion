@@ -418,7 +418,9 @@ export default function AdminAutomationAiConfigPage() {
             <code className="mx-1 rounded bg-white px-1">/chat/completions</code>
             and
             <code className="mx-1 rounded bg-white px-1">/images/generations</code>
-            automatically).
+            automatically (and also tries
+            <code className="mx-1 rounded bg-white px-1">/v1/...</code>
+            fallback routes for 404 errors).
           </p>
           <p className="mt-1">
             Example: OpenAI-compatible Base URL
@@ -457,6 +459,11 @@ export default function AdminAutomationAiConfigPage() {
             and test/bind with
             <code className="mx-1 rounded bg-white px-1">image_regeneration</code>
             (text/chat functions are not supported by Stability in this automation path).
+          </p>
+          <p className="mt-1">
+            If you see
+            <code className="mx-1 rounded bg-white px-1">404 Not Found</code>
+            , make sure you entered the provider API URL (not the marketing website URL), or paste the exact endpoint.
           </p>
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
