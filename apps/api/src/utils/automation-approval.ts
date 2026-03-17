@@ -1577,7 +1577,7 @@ Return concise analysis and correction guidance in plain text.`;
         const shouldAttemptTextEdit =
           Boolean(textRule) &&
           Boolean(persistStagedProductEdits) &&
-          nextRow.status === 'FAIL';
+          (nextRow.status === 'FAIL' || strictEditKeys.has(row.key));
         if (shouldAttemptTextEdit) {
           const editResult = await requestAiFieldEdit({ row: nextRow });
           if (editResult && textRule) {
