@@ -1692,6 +1692,7 @@ router.post('/designs', async (req, res, next) => {
             evaluationStatus: evaluation.status,
             action: 'AUTO_APPROVED',
             report: evaluation.report,
+            changeReport: evaluation.changeReport,
             failureSeverity: 'NONE',
             needsCorrection: false,
             summaryMessage: 'All automation checks passed. Product auto-approved.',
@@ -1721,6 +1722,7 @@ router.post('/designs', async (req, res, next) => {
             evaluationStatus: evaluation.status,
             action: 'AUTO_REJECTED',
             report: evaluation.report,
+            changeReport: evaluation.changeReport,
           });
           await notifyVendorAboutProductAutomationFailure({
             productType: ProductType.DESIGN as any,
@@ -1737,6 +1739,7 @@ router.post('/designs', async (req, res, next) => {
             evaluationStatus: evaluation.status,
             action: 'NONE',
             report: evaluation.report,
+            changeReport: evaluation.changeReport,
             failureSeverity: 'NONE',
             needsCorrection: false,
             summaryMessage: 'Automation checks passed. Pending manual approval because auto-approve is disabled.',
@@ -1772,6 +1775,7 @@ router.post('/designs', async (req, res, next) => {
         evaluationStatus: 'AUTOMATION_ERROR',
         action: 'ERROR',
         report: [errorRow],
+        changeReport: [],
         failureSeverity: 'MAJOR',
         needsCorrection: true,
         summaryMessage: automationMessage,
@@ -2398,6 +2402,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
             evaluationStatus: evaluation.status,
             action: 'AUTO_APPROVED',
             report: evaluation.report,
+            changeReport: evaluation.changeReport,
             failureSeverity: 'NONE',
             needsCorrection: false,
             summaryMessage: 'All automation checks passed. Product auto-approved.',
@@ -2427,6 +2432,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
             evaluationStatus: evaluation.status,
             action: 'AUTO_REJECTED',
             report: evaluation.report,
+            changeReport: evaluation.changeReport,
           });
           await notifyVendorAboutProductAutomationFailure({
             productType: ProductType.READY_TO_WEAR as any,
@@ -2443,6 +2449,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
             evaluationStatus: evaluation.status,
             action: 'NONE',
             report: evaluation.report,
+            changeReport: evaluation.changeReport,
             failureSeverity: 'NONE',
             needsCorrection: false,
             summaryMessage: 'Automation checks passed. Pending manual approval because auto-approve is disabled.',
@@ -2478,6 +2485,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
         evaluationStatus: 'AUTOMATION_ERROR',
         action: 'ERROR',
         report: [errorRow],
+        changeReport: [],
         failureSeverity: 'MAJOR',
         needsCorrection: true,
         summaryMessage: automationMessage,

@@ -125,6 +125,7 @@ router.post('/evaluate-product', async (req, res, next) => {
           evaluationStatus: evaluation.status,
           action,
           report: evaluation.report,
+          changeReport: evaluation.changeReport,
           failureSeverity: 'NONE',
           needsCorrection: false,
           summaryMessage: 'All automation checks passed. Product auto-approved.',
@@ -181,6 +182,7 @@ router.post('/evaluate-product', async (req, res, next) => {
           evaluationStatus: evaluation.status,
           action,
           report: evaluation.report,
+          changeReport: evaluation.changeReport,
         });
         await notifyVendorAboutProductAutomationFailure({
           productType: payload.productType as any,
@@ -197,6 +199,7 @@ router.post('/evaluate-product', async (req, res, next) => {
         evaluationStatus: evaluation.status,
         action: 'NONE',
         report: evaluation.report,
+        changeReport: evaluation.changeReport,
         failureSeverity: evaluation.canAutoApprove ? 'NONE' : undefined,
         needsCorrection: evaluation.canAutoApprove ? false : undefined,
         summaryMessage: evaluation.canAutoApprove ? 'Automation checks passed.' : undefined,

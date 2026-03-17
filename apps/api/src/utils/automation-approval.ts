@@ -75,6 +75,7 @@ export type ProductAutomationOutcome = {
   needsCorrection: boolean;
   summaryMessage: string;
   report: AutomationCheckReportRow[];
+  changeReport: AutomationAppliedChange[];
   updatedAt: string | null;
 };
 
@@ -488,11 +489,16 @@ export const ensureProductAutomationOutcomeSchema = async () => {
       "needsCorrection" BOOLEAN NOT NULL DEFAULT false,
       "summaryMessage" TEXT NOT NULL DEFAULT '',
       "report" JSONB NOT NULL DEFAULT '[]'::jsonb,
+      "changeReport" JSONB NOT NULL DEFAULT '[]'::jsonb,
       "notifiedAt" TIMESTAMP(3),
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "ProductAutomationOutcome_pkey" PRIMARY KEY ("id")
     )`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "ProductAutomationOutcome"
+     ADD COLUMN IF NOT EXISTS "changeReport" JSONB NOT NULL DEFAULT '[]'::jsonb`
   );
   await prisma.$executeRawUnsafe(
     `CREATE UNIQUE INDEX IF NOT EXISTS "ProductAutomationOutcome_productType_productId_key"
@@ -588,6 +594,7 @@ const mapProductAutomationOutcomeRow = (row: any): ProductAutomationOutcome => (
   needsCorrection: Boolean(row?.needsCorrection),
   summaryMessage: String(row?.summaryMessage || ''),
   report: parseReportRows(row?.report),
+  changeReport: parseChangeReportRows(row?.changeReport),
   updatedAt: row?.updatedAt ? new Date(row.updatedAt).toISOString() : null,
 });
 
@@ -597,6 +604,7 @@ export const saveProductAutomationOutcome = async (input: {
   evaluationStatus: string;
   action?: string;
   report?: unknown;
+  changeReport?: unknown;
   summaryMessage?: string;
   failureSeverity?: AutomationFailureSeverity;
   needsCorrection?: boolean;
@@ -604,14 +612,15 @@ export const saveProductAutomationOutcome = async (input: {
 }) => {
   await ensureProductAutomationOutcomeSchema();
   const report = parseReportRows(input.report);
+  const changeReport = parseChangeReportRows(input.changeReport);
   const derivedSeverity = input.failureSeverity || resolveProductAutomationFailureSeverity(report);
   const needsCorrection = input.needsCorrection ?? derivedSeverity !== 'NONE';
   const summaryMessage =
     String(input.summaryMessage || '').trim() || buildAutomationSummaryMessage(report, needsCorrection ? 'Needs correction.' : 'Passed');
   await prisma.$executeRawUnsafe(
     `INSERT INTO "ProductAutomationOutcome"
-      ("id","productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","notifiedAt","createdAt","updatedAt")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,NOW(),NOW())
+      ("id","productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","changeReport","notifiedAt","createdAt","updatedAt")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11,NOW(),NOW())
      ON CONFLICT ("productType","productId")
      DO UPDATE SET
        "evaluationStatus" = EXCLUDED."evaluationStatus",
@@ -620,6 +629,7 @@ export const saveProductAutomationOutcome = async (input: {
        "needsCorrection" = EXCLUDED."needsCorrection",
        "summaryMessage" = EXCLUDED."summaryMessage",
        "report" = EXCLUDED."report",
+       "changeReport" = EXCLUDED."changeReport",
        "notifiedAt" = COALESCE(EXCLUDED."notifiedAt","ProductAutomationOutcome"."notifiedAt"),
        "updatedAt" = NOW()`,
     randomUUID(),
@@ -631,10 +641,11 @@ export const saveProductAutomationOutcome = async (input: {
     Boolean(needsCorrection),
     summaryMessage,
     JSON.stringify(report),
+    JSON.stringify(changeReport),
     input.notifiedAt || null
   );
   const rows = await prisma.$queryRawUnsafe<Array<any>>(
-    `SELECT "productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","updatedAt"
+    `SELECT "productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","changeReport","updatedAt"
      FROM "ProductAutomationOutcome"
      WHERE "productType" = $1 AND "productId" = $2
      LIMIT 1`,
@@ -642,6 +653,24 @@ export const saveProductAutomationOutcome = async (input: {
     input.productId
   );
   return rows.length > 0 ? mapProductAutomationOutcomeRow(rows[0]) : null;
+};
+
+const readProductAutomationOutcomeForProduct = async (input: {
+  productType: ProductType;
+  productId: string;
+}): Promise<ProductAutomationOutcome | null> => {
+  await ensureProductAutomationOutcomeSchema();
+  const productId = String(input.productId || '').trim();
+  if (!productId) return null;
+  const rows = await prisma.$queryRawUnsafe<Array<any>>(
+    `SELECT "productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","changeReport","updatedAt"
+     FROM "ProductAutomationOutcome"
+     WHERE "productType" = $1 AND "productId" = $2
+     LIMIT 1`,
+    input.productType,
+    productId
+  );
+  return Array.isArray(rows) && rows.length > 0 ? mapProductAutomationOutcomeRow(rows[0]) : null;
 };
 
 export const clearProductAutomationOutcome = async (input: { productType: ProductType; productId: string }) => {
@@ -665,7 +694,7 @@ export const readProductAutomationOutcomesForProducts = async (input: {
   const ids = Array.from(new Set((input.productIds || []).map((entry) => String(entry || '').trim()).filter(Boolean)));
   if (ids.length === 0) return {} as Record<string, ProductAutomationOutcome>;
   const rows = await prisma.$queryRawUnsafe<Array<any>>(
-    `SELECT "productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","updatedAt"
+    `SELECT "productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","changeReport","updatedAt"
      FROM "ProductAutomationOutcome"
      WHERE "productType" = $1
        AND "productId" = ANY($2::text[])`,
@@ -1991,6 +2020,10 @@ export const evaluateProductAutomationChecks = async (input: {
       changeReport: [] as AutomationAppliedChange[],
     };
   }
+  const previousOutcome = await readProductAutomationOutcomeForProduct({
+    productType: input.productType,
+    productId: input.productId,
+  });
 
   const addResult = (row: AutomationCheckReportRow) => {
     const criterion = criteria.find((entry) => entry.key === row.key);
@@ -2044,6 +2077,37 @@ export const evaluateProductAutomationChecks = async (input: {
         return null;
     }
   };
+  const imageFieldForCriterion = (criterionKey: string) =>
+    criterionKey === 'image_quality' || criterionKey === 'predominant_color_match' ? 'images[0]' : '';
+  const normalizeComparableAutomationFieldValue = (field: string, value: string) => {
+    const normalizedField = String(field || '').trim();
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (
+      normalizedField === 'finalPrice' ||
+      normalizedField === 'basePrice' ||
+      normalizedField === 'minYards' ||
+      normalizedField === 'stockYards'
+    ) {
+      const numeric = Number(raw);
+      return Number.isFinite(numeric) ? String(Number(numeric.toFixed(6))) : raw;
+    }
+    if (normalizedField === 'images[0]') return raw;
+    return raw.replace(/\s+/g, ' ').trim();
+  };
+  const previousAppliedEditByCriterionField = (() => {
+    const map = new Map<string, AutomationAppliedChange>();
+    const fieldMap = new Map<string, AutomationAppliedChange>();
+    for (const row of Array.isArray(previousOutcome?.changeReport) ? previousOutcome!.changeReport : []) {
+      if (row.status !== 'APPLIED') continue;
+      const key = String(row.key || '').trim();
+      const field = String(row.field || '').trim();
+      if (!key || !field) continue;
+      map.set(`${key}::${field}`, row);
+      fieldMap.set(field, row);
+    }
+    return { byCriterionField: map, byField: fieldMap };
+  })();
 
   const requestAiFieldEdit = async (params: {
     row: AutomationCheckReportRow;
@@ -2511,6 +2575,41 @@ Rules:
         row.key
       );
       const criterionProviderOverrideId = String(criterion.aiProviderId || '').trim() || undefined;
+      const canApplyAiEdits = criterion.allowAiEdits === true && criterion.requiresAi === true;
+      const mappedTextRule = resolveCriterionEditRule(row.key);
+      const mappedField = mappedTextRule?.field || imageFieldForCriterion(row.key);
+      if (canApplyAiEdits && mappedField) {
+        const previousApplied =
+          previousAppliedEditByCriterionField.byCriterionField.get(`${row.key}::${mappedField}`) ||
+          previousAppliedEditByCriterionField.byField.get(mappedField);
+        if (previousApplied) {
+          const currentRawValue =
+            mappedField === 'images[0]' ? String(readStagedImageUrls()[0] || '').trim() : readStagedProductField(mappedField);
+          const currentComparable = normalizeComparableAutomationFieldValue(mappedField, currentRawValue);
+          const previousComparable = normalizeComparableAutomationFieldValue(
+            mappedField,
+            String(previousApplied.afterValue || '')
+          );
+          if (currentComparable && previousComparable && currentComparable === previousComparable) {
+            const skipReason = `AI rerun skipped for ${mappedField}: current value matches previous AI-applied value.`;
+            enhanced.push({
+              ...row,
+              status: 'PASS',
+              message: `${row.message} ${skipReason}`,
+            });
+            changeReport.push({
+              key: row.key,
+              label: row.label,
+              field: mappedField,
+              beforeValue: String(previousApplied.afterValue || ''),
+              afterValue: String(currentRawValue || ''),
+              status: 'SKIPPED',
+              reason: 'AI rerun skipped because field is unchanged from previous AI-applied edit.',
+            });
+            continue;
+          }
+        }
+      }
       const prompt = `Automation criterion: ${row.label}
 
 Current check status: ${row.status}
@@ -2585,7 +2684,6 @@ Rules:
           message: `${row.message} AI verification: ${aiEval.guidance}`,
         };
       }
-      const canApplyAiEdits = criterion.allowAiEdits === true && criterion.requiresAi === true;
       if (!canApplyAiEdits && nextRow.status === 'FAIL') {
         const mappedRule = resolveCriterionEditRule(row.key);
         const isImageMapped = imageEditKeys.has(row.key);

@@ -1019,6 +1019,7 @@ router.post('/fabrics', async (req, res, next) => {
             evaluationStatus: evaluation.status,
             action: 'AUTO_APPROVED',
             report: evaluation.report,
+            changeReport: evaluation.changeReport,
             failureSeverity: 'NONE',
             needsCorrection: false,
             summaryMessage: 'All automation checks passed. Product auto-approved.',
@@ -1048,6 +1049,7 @@ router.post('/fabrics', async (req, res, next) => {
             evaluationStatus: evaluation.status,
             action: 'AUTO_REJECTED',
             report: evaluation.report,
+            changeReport: evaluation.changeReport,
           });
           await notifyVendorAboutProductAutomationFailure({
             productType: ProductType.FABRIC as any,
@@ -1064,6 +1066,7 @@ router.post('/fabrics', async (req, res, next) => {
             evaluationStatus: evaluation.status,
             action: 'NONE',
             report: evaluation.report,
+            changeReport: evaluation.changeReport,
             failureSeverity: 'NONE',
             needsCorrection: false,
             summaryMessage: 'Automation checks passed. Pending manual approval because auto-approve is disabled.',
@@ -1099,6 +1102,7 @@ router.post('/fabrics', async (req, res, next) => {
         evaluationStatus: 'AUTOMATION_ERROR',
         action: 'ERROR',
         report: [errorRow],
+        changeReport: [],
         failureSeverity: 'MAJOR',
         needsCorrection: true,
         summaryMessage: automationMessage,
