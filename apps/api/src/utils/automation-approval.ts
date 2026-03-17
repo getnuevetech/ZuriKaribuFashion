@@ -1068,6 +1068,17 @@ const callTextExecutor = async (
   const resolvedModel = isGeminiBaseUrl(provider.baseUrl)
     ? normalizeGeminiModel(String(provider.model || '').trim() || 'gemini-1.5-flash')
     : String(provider.model || '').trim() || 'gpt-4o-mini';
+  const tryGeminiNativeFallback = async (cause: string): Promise<AiExecutionResult | null> => {
+    if (!isGeminiOpenAiCompatUrl(provider.baseUrl)) return null;
+    const nativeBaseUrl = toGeminiNativeBaseUrl(provider.baseUrl);
+    if (!nativeBaseUrl || nativeBaseUrl === String(provider.baseUrl || '').trim().replace(/\/+$/, '')) return null;
+    const fallback = await callTextExecutor({ ...provider, baseUrl: nativeBaseUrl }, prompt, system);
+    if (fallback.status === 'OK') return fallback;
+    return {
+      status: 'ERROR',
+      reason: `${cause}. Native fallback failed: ${fallback.reason}`,
+    };
+  };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25_000);
   try {
@@ -1096,6 +1107,10 @@ const callTextExecutor = async (
             'Gemini quota exceeded (429). Check AI Studio/GCP billing, API key project quota, and rate limits.',
         };
       }
+      const fallback = await tryGeminiNativeFallback(
+        `OpenAI-compatible Gemini endpoint returned ${response.status}: ${String(text || '').slice(0, 200)}`
+      );
+      if (fallback) return fallback;
       return {
         status: 'ERROR',
         reason: `Provider returned ${response.status}: ${String(text || '').slice(0, 200)}`,
@@ -1117,17 +1132,8 @@ const callTextExecutor = async (
     return { status: 'OK', output: String(output).trim().slice(0, 1000) };
   } catch (error: any) {
     const message = String(error?.message || 'Network error while calling provider.');
-    if (isGeminiOpenAiCompatUrl(provider.baseUrl)) {
-      const nativeBaseUrl = toGeminiNativeBaseUrl(provider.baseUrl);
-      if (nativeBaseUrl && nativeBaseUrl !== String(provider.baseUrl || '').trim().replace(/\/+$/, '')) {
-        const fallback = await callTextExecutor({ ...provider, baseUrl: nativeBaseUrl }, prompt, system);
-        if (fallback.status === 'OK') return fallback;
-        return {
-          status: 'ERROR',
-          reason: `OpenAI-compatible Gemini endpoint failed (${message}). Native fallback failed: ${fallback.reason}`,
-        };
-      }
-    }
+    const fallback = await tryGeminiNativeFallback(`OpenAI-compatible Gemini endpoint failed (${message})`);
+    if (fallback) return fallback;
     return { status: 'ERROR', reason: message };
   } finally {
     clearTimeout(timeout);
