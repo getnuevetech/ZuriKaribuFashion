@@ -245,7 +245,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   ];
   const productManagementSubmenu = [
     { label: 'Product', href: '/admin/products', icon: ChevronRight },
-    { label: 'Stock List', href: '/admin/products/stock-list', icon: ChevronRight },
+    { label: 'Stock Level Analysis', href: '/admin/products/stock-list', icon: ChevronRight },
     { label: 'Product Price Compare', href: '/admin/products/price-compare', icon: ChevronRight },
     { label: 'Failed AI Approval', href: '/admin/products/failed-ai-approvals', icon: ChevronRight },
     { label: 'Product Configuration', href: '/admin/products/configuration', icon: ChevronRight },
