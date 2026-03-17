@@ -1217,18 +1217,17 @@ const callImageRegenerationExecutor = async (
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 30_000);
       try {
+        const form = new FormData();
+        form.append('prompt', String(prompt || '').trim());
+        form.append('output_format', 'png');
+        form.append('aspect_ratio', '1:1');
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
             Accept: 'application/json',
             Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
           },
-          body: new URLSearchParams({
-            prompt: String(prompt || '').trim(),
-            output_format: 'png',
-            aspect_ratio: '1:1',
-          }).toString(),
+          body: form,
           signal: controller.signal,
         });
         const text = await response.text();
