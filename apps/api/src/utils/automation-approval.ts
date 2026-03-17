@@ -755,6 +755,39 @@ const normalizeReadableLine = (value: string, max = 1200) => {
   return normalized.length > max ? `${normalized.slice(0, Math.max(0, max - 1)).trimEnd()}…` : normalized;
 };
 
+const normalizeReadableBlock = (value: string, max = 2200) => {
+  const normalized = String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trim();
+  if (!normalized) return '';
+  const compact = normalized
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n');
+  return compact.length > max ? `${compact.slice(0, Math.max(0, max - 1)).trimEnd()}…` : compact;
+};
+
+const formatAutomationMessageLines = (value: string, maxLineLength = 520, maxLines = 8) => {
+  const prepared = String(value || '')
+    .replace(/\s+\|\s+/g, '\n• ')
+    .replace(/\s+(AI guidance:)/gi, '\n$1')
+    .replace(/\s+(AI verification:)/gi, '\n$1')
+    .replace(/\s+(AI execution error:)/gi, '\n$1')
+    .replace(/\s+(AI recommendations?:)/gi, '\n$1')
+    .replace(/\s+(Strict AI edit required[^:]*:)/gi, '\n$1')
+    .replace(/\s+(Correction Guidance:)/gi, '\n$1')
+    .replace(/\s+(Analysis:)/gi, '\n$1');
+  const normalized = normalizeReadableBlock(prepared, 5000);
+  if (!normalized) return ['Requires review'];
+  return normalized
+    .split('\n')
+    .map((line) => normalizeReadableLine(line, maxLineLength))
+    .filter(Boolean)
+    .slice(0, maxLines);
+};
+
 const escapeHtml = (value: string) =>
   String(value || '')
     .replace(/&/g, '&amp;')
@@ -772,34 +805,48 @@ const buildVendorAutomationMessageBundle = (input: {
 }) => {
   const severityLabel = input.severity === 'MAJOR' ? 'Major' : input.severity === 'MID' ? 'Mid' : 'Low';
   const rows = correctionRowsFromReport(input.report);
+  const summaryLines =
+    formatAutomationMessageLines(input.summary, 280, 4).map((line) => line.replace(/^•\s*/, '')) || [];
   const checkItems =
     rows.length > 0
       ? rows.map((entry, index) => ({
           index: index + 1,
           label: normalizeReadableLine(entry.label || entry.key, 220),
           status: String(entry.status || 'FAIL').toUpperCase(),
-          message: normalizeReadableLine(entry.message || 'Requires review', 1800),
+          messageLines: formatAutomationMessageLines(entry.message || 'Requires review', 420, 8),
         }))
-      : [{ index: 1, label: 'Automation summary', status: 'INFO', message: normalizeReadableLine(input.summary, 1800) }];
+      : [{ index: 1, label: 'Automation summary', status: 'INFO', messageLines: summaryLines }];
   const recommendationItems =
     input.aiRecommendations.length > 0
       ? input.aiRecommendations.map((entry, index) => ({
           index: index + 1,
-          message: normalizeReadableLine(entry, 1500),
+          messageLines: formatAutomationMessageLines(entry, 420, 5),
         }))
-      : [{ index: 1, message: 'Review each failed check, update the product, and resubmit for automation review.' }];
+      : [
+          {
+            index: 1,
+            messageLines: ['Review each failed check, update the product details, then resubmit for automation review.'],
+          },
+        ];
   const plain = [
-    `Product: ${input.productName}`,
-    `Severity: ${severityLabel}`,
-    `Summary: ${normalizeReadableLine(input.summary, 2000)}`,
+    `PRODUCT: ${input.productName}`,
+    `SEVERITY: ${severityLabel.toUpperCase()}`,
+    'SUMMARY:',
+    ...summaryLines.map((line) => `- ${line}`),
     '',
-    'Required corrections:',
-    ...checkItems.flatMap((entry) => [`${entry.index}. [${entry.status}] ${entry.label}`, `   ${entry.message}`]),
+    'REQUIRED CORRECTIONS:',
+    ...checkItems.flatMap((entry) => [
+      `${entry.index}. [${entry.status}] ${entry.label}`,
+      ...entry.messageLines.map((line) => `   - ${line}`),
+    ]),
     '',
-    'AI recommendations:',
-    ...recommendationItems.map((entry) => `${entry.index}. ${entry.message}`),
+    'AI RECOMMENDATIONS:',
+    ...recommendationItems.flatMap((entry) => [
+      `${entry.index}. ${entry.messageLines[0] || 'Review this correction item.'}`,
+      ...entry.messageLines.slice(1).map((line) => `   - ${line}`),
+    ]),
     '',
-    'Communication channels sent:',
+    'COMMUNICATION CHANNELS SENT:',
     '- In-app notification',
     '- Inbox message',
     '- Email (if your account email is available)',
@@ -807,23 +854,39 @@ const buildVendorAutomationMessageBundle = (input: {
   const html = [
     `<p><strong>Product:</strong> ${escapeHtml(input.productName)}</p>`,
     `<p><strong>Severity:</strong> ${escapeHtml(severityLabel)}</p>`,
-    `<p><strong>Summary:</strong> ${escapeHtml(normalizeReadableLine(input.summary, 2000))}</p>`,
-    '<p><strong>Required corrections:</strong></p>',
+    '<p><strong>Summary</strong></p>',
+    `<ul>${summaryLines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`,
+    '<p><strong>Required corrections</strong></p>',
     `<ol>${checkItems
       .map(
         (entry) =>
-          `<li><strong>[${escapeHtml(entry.status)}] ${escapeHtml(entry.label)}</strong><br/>${escapeHtml(entry.message)}</li>`
+          `<li><strong>[${escapeHtml(entry.status)}] ${escapeHtml(entry.label)}</strong><ul>${entry.messageLines
+            .map((line) => `<li>${escapeHtml(line)}</li>`)
+            .join('')}</ul></li>`
       )
       .join('')}</ol>`,
-    '<p><strong>AI recommendations:</strong></p>',
-    `<ol>${recommendationItems.map((entry) => `<li>${escapeHtml(entry.message)}</li>`).join('')}</ol>`,
-    '<p><strong>Communication channels sent:</strong></p>',
+    '<p><strong>AI recommendations</strong></p>',
+    `<ol>${recommendationItems
+      .map(
+        (entry) =>
+          `<li>${escapeHtml(entry.messageLines[0] || 'Review this correction item.')}<ul>${entry.messageLines
+            .slice(1)
+            .map((line) => `<li>${escapeHtml(line)}</li>`)
+            .join('')}</ul></li>`
+      )
+      .join('')}</ol>`,
+    '<p><strong>Communication channels sent</strong></p>',
     '<ul><li>In-app notification</li><li>Inbox message</li><li>Email (if your account email is available)</li></ul>',
   ].join('');
+  const inAppTopCorrections = checkItems.slice(0, 2).map((entry) => {
+    const firstLine = entry.messageLines[0] || 'Requires review.';
+    return `- ${entry.label}: ${firstLine}`;
+  });
   const inApp = [
     `${input.productName}`,
     `Severity: ${severityLabel}`,
-    `Summary: ${normalizeReadableLine(input.summary, 500)}`,
+    `Summary: ${summaryLines[0] || normalizeReadableLine(input.summary, 300)}`,
+    ...(inAppTopCorrections.length > 0 ? ['Top corrections:', ...inAppTopCorrections] : []),
     'Open your Messages inbox to read full automated analysis details.',
   ].join('\n');
   return { plain, html, inApp };

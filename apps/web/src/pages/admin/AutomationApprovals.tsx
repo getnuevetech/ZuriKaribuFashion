@@ -13,7 +13,20 @@ const SYSTEM_FUNCTION_OPTIONS = [
   { key: 'image_regeneration', label: 'Image Regeneration' },
   { key: 'document_ocr_analysis', label: 'Document OCR/Analysis' },
 ] as const;
-const SYSTEM_FUNCTION_KEY_SET = new Set(SYSTEM_FUNCTION_OPTIONS.map((entry) => entry.key));
+const FUNCTION_LABEL_BY_KEY = SYSTEM_FUNCTION_OPTIONS.reduce<Record<string, string>>((acc, entry) => {
+  acc[entry.key] = entry.label;
+  return acc;
+}, {});
+const DEFAULT_AI_FUNCTION_BY_CRITERION: Record<string, string> = {
+  name_grammar: 'text_grammar_enhancement',
+  description_grammar: 'text_grammar_enhancement',
+  material_match: 'image_verification',
+  style_match: 'image_verification',
+  predominant_color_match: 'image_verification',
+  image_quality: 'image_verification',
+};
+const resolveDefaultAiFunctionKey = (criterionKey: string) =>
+  DEFAULT_AI_FUNCTION_BY_CRITERION[String(criterionKey || '').trim().toLowerCase()] || 'text_grammar_enhancement';
 
 export default function AdminAutomationApprovalsPage() {
   const [searchParams] = useSearchParams();
@@ -37,7 +50,6 @@ export default function AdminAutomationApprovalsPage() {
     label: '',
     requiresAi: false,
     allowAiEdits: false,
-    aiFunctionKey: SYSTEM_FUNCTION_OPTIONS[0].key,
     aiProviderId: '',
   });
   const [evaluationResult, setEvaluationResult] = useState<any>(null);
@@ -74,6 +86,27 @@ export default function AdminAutomationApprovalsPage() {
     () => (Array.isArray(settings?.aiProviders) ? settings.aiProviders : []),
     [settings]
   );
+  const providerNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const provider of providerOptions) {
+      const id = String(provider?.id || '').trim();
+      if (!id) continue;
+      const name = String(provider?.name || '').trim() || id;
+      map.set(id, name);
+    }
+    return map;
+  }, [providerOptions]);
+  const globalProviderByFunctionKey = useMemo(() => {
+    const map = new Map<string, string>();
+    const rows = Array.isArray(settings?.functionBindings) ? settings.functionBindings : [];
+    for (const row of rows) {
+      const functionKey = String(row?.functionKey || '').trim().toLowerCase();
+      const providerId = String(row?.providerId || '').trim();
+      if (!functionKey || !providerId) continue;
+      map.set(functionKey, providerNameById.get(providerId) || providerId);
+    }
+    return map;
+  }, [settings, providerNameById]);
 
   const aiEditStatusByKey = useMemo(() => {
     const map = new Map<string, { attempted: number; applied: number; skipped: number }>();
@@ -193,10 +226,7 @@ export default function AdminAutomationApprovalsPage() {
       setMessage('Criterion key and label are required.');
       return;
     }
-    const normalizedFunctionKey = String(newCriterion.aiFunctionKey || '').trim().toLowerCase();
-    const aiFunctionKey = SYSTEM_FUNCTION_KEY_SET.has(normalizedFunctionKey as any)
-      ? normalizedFunctionKey
-      : SYSTEM_FUNCTION_OPTIONS[0].key;
+    const aiFunctionKey = resolveDefaultAiFunctionKey(key);
     const aiProviderId = String(newCriterion.aiProviderId || '').trim();
     setSettings((prev: any) => {
       const scopeRows = Array.isArray(prev?.criteria?.[activeCriteriaScope]) ? prev.criteria[activeCriteriaScope] : [];
@@ -228,7 +258,6 @@ export default function AdminAutomationApprovalsPage() {
       label: '',
       requiresAi: false,
       allowAiEdits: false,
-      aiFunctionKey: SYSTEM_FUNCTION_OPTIONS[0].key,
       aiProviderId: '',
     });
   };
@@ -323,7 +352,7 @@ export default function AdminAutomationApprovalsPage() {
             </button>
           ))}
         </div>
-        <div className="mt-3 grid gap-2 rounded border p-3 md:grid-cols-[1fr_2fr_auto_auto_1fr_1fr_auto]">
+        <div className="mt-3 grid gap-2 rounded border p-3 md:grid-cols-[1fr_2fr_auto_auto_1fr_auto]">
           <input
             className="rounded border px-3 py-2 text-sm"
             placeholder="criterion_key"
@@ -354,23 +383,11 @@ export default function AdminAutomationApprovalsPage() {
           </label>
           <select
             className="rounded border px-3 py-2 text-xs"
-            value={newCriterion.aiFunctionKey}
-            disabled={!newCriterion.requiresAi}
-            onChange={(event) => setNewCriterion((prev) => ({ ...prev, aiFunctionKey: event.target.value }))}
-          >
-            {SYSTEM_FUNCTION_OPTIONS.map((option) => (
-              <option key={option.key} value={option.key}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <select
-            className="rounded border px-3 py-2 text-xs"
             value={newCriterion.aiProviderId}
             disabled={!newCriterion.requiresAi}
             onChange={(event) => setNewCriterion((prev) => ({ ...prev, aiProviderId: event.target.value }))}
           >
-            <option value="">Fallback to function binding</option>
+            <option value="">AI provider (optional override)</option>
             {providerOptions.map((provider: any) => (
               <option key={provider.id} value={provider.id}>
                 {provider.name}
@@ -393,7 +410,7 @@ export default function AdminAutomationApprovalsPage() {
                   <p className="font-mono text-[11px] text-gray-500">{criterion.key}</p>
                   <p className="text-xs text-gray-500">{criterion.requiresAi ? 'Requires AI provider' : 'Rule-based check'}</p>
                 </div>
-                <div className="grid gap-2 text-xs md:grid-cols-5">
+                <div className="grid gap-2 text-xs md:grid-cols-4">
                   <label className="inline-flex items-center gap-2 rounded border px-2 py-1">
                     <input
                       type="checkbox"
@@ -458,36 +475,6 @@ export default function AdminAutomationApprovalsPage() {
                   </label>
                   <select
                     className="rounded border px-2 py-1"
-                    value={String(criterion.aiFunctionKey || SYSTEM_FUNCTION_OPTIONS[0].key)}
-                    disabled={criterion.requiresAi !== true}
-                    onChange={(event) => {
-                      const nextFunctionKey = String(event.target.value || '').trim().toLowerCase();
-                      setSettings((prev: any) => ({
-                        ...(prev || {}),
-                        criteria: {
-                          ...(prev?.criteria || {}),
-                          [activeCriteriaScope]: (prev?.criteria?.[activeCriteriaScope] || []).map((row: any) =>
-                            row.key === criterion.key
-                              ? {
-                                  ...row,
-                                  aiFunctionKey: SYSTEM_FUNCTION_KEY_SET.has(nextFunctionKey as any)
-                                    ? nextFunctionKey
-                                    : SYSTEM_FUNCTION_OPTIONS[0].key,
-                                }
-                              : row
-                          ),
-                        },
-                      }));
-                    }}
-                  >
-                    {SYSTEM_FUNCTION_OPTIONS.map((option) => (
-                      <option key={option.key} value={option.key}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="rounded border px-2 py-1"
                     value={String(criterion.aiProviderId || '')}
                     disabled={criterion.requiresAi !== true}
                     onChange={(event) => {
@@ -520,16 +507,28 @@ export default function AdminAutomationApprovalsPage() {
               ) : null}
               {criterion.requiresAi === true ? (
                 <p className="mt-2 text-[11px] text-gray-500">
-                  AI routing: function <span className="font-mono">{String(criterion.aiFunctionKey || 'text_grammar_enhancement')}</span>
-                  {criterion.aiProviderId ? (
-                    <>
-                      {' '}
-                      with provider override <span className="font-mono">{String(criterion.aiProviderId)}</span>
-                    </>
-                  ) : (
-                    ' using global function bindings'
-                  )}
-                  .
+                  {(() => {
+                    const functionKey =
+                      String(criterion.aiFunctionKey || '').trim().toLowerCase() ||
+                      resolveDefaultAiFunctionKey(String(criterion.key || ''));
+                    const functionLabel = FUNCTION_LABEL_BY_KEY[functionKey] || functionKey;
+                    if (criterion.aiProviderId) {
+                      const providerName = providerNameById.get(String(criterion.aiProviderId)) || String(criterion.aiProviderId);
+                      return (
+                        <>
+                          AI routing: <span className="font-medium">{providerName}</span> (criterion override). Global fallback
+                          function key remains <span className="font-mono">{functionKey}</span> ({functionLabel}).
+                        </>
+                      );
+                    }
+                    const globalProviderName = globalProviderByFunctionKey.get(functionKey) || 'No AI provider bound';
+                    return (
+                      <>
+                        AI routing: <span className="font-medium">{globalProviderName}</span> via global function key{' '}
+                        <span className="font-mono">{functionKey}</span> ({functionLabel}).
+                      </>
+                    );
+                  })()}
                 </p>
               ) : null}
             </div>
