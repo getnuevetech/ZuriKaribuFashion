@@ -36,6 +36,8 @@ export type AutomationCriterion = {
   enabled: boolean;
   requiresAi: boolean;
   allowAiEdits?: boolean;
+  aiFunctionKey?: string;
+  aiProviderId?: string;
 };
 
 export type ProductAutomationCriteria = {
@@ -380,6 +382,21 @@ const STRICT_AUTO_EDIT_DEFAULT_KEYS = new Set([
   'predominant_color_match',
 ]);
 
+const defaultAiFunctionForCriterionKey = (criterionKey: string) => {
+  const key = String(criterionKey || '').trim().toLowerCase();
+  if (key === 'name_grammar' || key === 'description_grammar') return 'text_grammar_enhancement';
+  if (key === 'material_match' || key === 'style_match' || key === 'predominant_color_match' || key === 'image_quality') {
+    return 'image_verification';
+  }
+  return 'text_grammar_enhancement';
+};
+
+const normalizeCriterionFunctionKey = (value: unknown, criterionKey: string) => {
+  const normalized = normalizeAutomationFunctionKey(value);
+  if (normalized && SYSTEM_AUTOMATION_FUNCTION_KEYS.has(normalized)) return normalized;
+  return defaultAiFunctionForCriterionKey(criterionKey);
+};
+
 const normalizeCriteria = (value: unknown, fallback: AutomationCriterion[]) => {
   const fallbackRows = fallback.map((entry) => ({
     ...entry,
@@ -387,6 +404,8 @@ const normalizeCriteria = (value: unknown, fallback: AutomationCriterion[]) => {
       typeof entry.allowAiEdits === 'boolean'
         ? entry.allowAiEdits
         : entry.requiresAi === true && STRICT_AUTO_EDIT_DEFAULT_KEYS.has(String(entry.key || '').trim()),
+    aiFunctionKey: normalizeCriterionFunctionKey(entry.aiFunctionKey, String(entry.key || '').trim()),
+    aiProviderId: String(entry.aiProviderId || '').trim(),
   }));
   if (!Array.isArray(value)) return fallbackRows;
   const rows = value
@@ -405,6 +424,8 @@ const normalizeCriteria = (value: unknown, fallback: AutomationCriterion[]) => {
         enabled: row.enabled !== false,
         requiresAi,
         allowAiEdits,
+        aiFunctionKey: normalizeCriterionFunctionKey(row.aiFunctionKey, key),
+        aiProviderId: String(row.aiProviderId || '').trim(),
       };
     })
     .filter((row) => row.key.length > 0);
@@ -978,15 +999,6 @@ export const saveAutomationApprovalSettings = async (value: unknown) => {
   return (await readAutomationApprovalSettings()).settings;
 };
 
-const CRITERION_AI_FUNCTION_MAP: Record<string, string> = {
-  name_grammar: 'text_grammar_enhancement',
-  description_grammar: 'text_grammar_enhancement',
-  material_match: 'image_verification',
-  style_match: 'image_verification',
-  predominant_color_match: 'image_verification',
-  image_quality: 'image_verification',
-};
-
 type AiExecutionResult =
   | { status: 'OK'; output: string }
   | { status: 'NO_PROVIDER'; reason: string }
@@ -1070,7 +1082,11 @@ const readNestedString = (payload: any, path: string[]): string => {
   return typeof node === 'string' ? node : '';
 };
 
-const resolveProviderForFunction = (settings: AutomationApprovalSettings, functionKey: string) => {
+const resolveProviderForFunction = (
+  settings: AutomationApprovalSettings,
+  functionKey: string,
+  providerOverrideId?: string
+) => {
   const targetKey = normalizeAutomationFunctionKey(functionKey);
   if (!targetKey) return null;
   const activeProviders = new Map(
@@ -1084,6 +1100,12 @@ const resolveProviderForFunction = (settings: AutomationApprovalSettings, functi
       )
       .map((entry) => [String(entry.id || '').trim(), entry] as const)
   );
+  const overrideId = String(providerOverrideId || '').trim();
+  if (overrideId) {
+    const overrideProvider = activeProviders.get(overrideId);
+    if (overrideProvider) return overrideProvider;
+    return null;
+  }
   for (const binding of settings.functionBindings || []) {
     if (binding.isActive === false) continue;
     if (normalizeAutomationFunctionKey(binding.functionKey) !== targetKey) continue;
@@ -1593,13 +1615,17 @@ const executeAutomationAiFunction = async (params: {
   functionKey: string;
   prompt: string;
   systemPrompt: string;
+  providerOverrideId?: string;
 }): Promise<AiExecutionResult> => {
   const normalizedFunctionKey = normalizeAutomationFunctionKey(params.functionKey);
-  const provider = resolveProviderForFunction(params.settings, normalizedFunctionKey);
+  const provider = resolveProviderForFunction(params.settings, normalizedFunctionKey, params.providerOverrideId);
   if (!provider) {
+    const overrideHint = String(params.providerOverrideId || '').trim();
     return {
       status: 'NO_PROVIDER',
-      reason: `No active provider binding for ${normalizedFunctionKey || params.functionKey}.`,
+      reason: overrideHint
+        ? `Configured criterion provider (${overrideHint}) is inactive/missing for ${normalizedFunctionKey || params.functionKey}.`
+        : `No active provider binding for ${normalizedFunctionKey || params.functionKey}.`,
     } as AiExecutionResult;
   }
   if (isStabilityBaseUrl(provider.baseUrl) && normalizedFunctionKey !== 'image_regeneration') {
@@ -1771,7 +1797,11 @@ export const evaluateProductAutomationChecks = async (input: {
     }
   };
 
-  const requestAiFieldEdit = async (params: { row: AutomationCheckReportRow }) => {
+  const requestAiFieldEdit = async (params: {
+    row: AutomationCheckReportRow;
+    functionKey?: string;
+    providerOverrideId?: string;
+  }) => {
     const rule = resolveCriterionEditRule(params.row.key);
     if (!rule) {
       return null as {
@@ -1787,7 +1817,7 @@ export const evaluateProductAutomationChecks = async (input: {
     }
     const execution = await executeAutomationAiFunction({
       settings,
-      functionKey: 'text_grammar_enhancement',
+      functionKey: params.functionKey || 'text_grammar_enhancement',
       prompt:
         rule.kind === 'text'
           ? `You are correcting a product ${rule.field} field.
@@ -1817,6 +1847,7 @@ Rules:
 - Keep value realistic and compliant with validation message.
 - Do not include currency symbols.`,
       systemPrompt: 'You are a product content correction assistant. Return strict JSON only.',
+      providerOverrideId: params.providerOverrideId,
     });
     if (execution.status !== 'OK') {
       return {
@@ -1885,7 +1916,7 @@ Rules:
       if ((normalized.length < rule.minLength || normalized === before) && params.row.status === 'FAIL') {
         const retry = await executeAutomationAiFunction({
           settings,
-          functionKey: 'text_grammar_enhancement',
+          functionKey: params.functionKey || 'text_grammar_enhancement',
           prompt: `Rewrite ONLY the ${rule.field} value for this failed criterion.
 
 Criterion: ${params.row.label}
@@ -1897,6 +1928,7 @@ Automation analysis message:
 Return ONLY the improved ${rule.field} text.
 No explanations, no labels, no JSON, no markdown.`,
           systemPrompt: 'You rewrite product fields. Return only the updated value.',
+          providerOverrideId: params.providerOverrideId,
         });
         if (retry.status === 'OK') {
           normalized = getNormalizedTextCandidate(
@@ -1971,7 +2003,7 @@ No explanations, no labels, no JSON, no markdown.`,
     };
   };
 
-  const requestAiImageEdit = async (params: { row: AutomationCheckReportRow }) => {
+  const requestAiImageEdit = async (params: { row: AutomationCheckReportRow; providerOverrideId?: string }) => {
     const existingImages = readStagedImageUrls();
     if (existingImages.length === 0) {
       return {
@@ -2002,6 +2034,7 @@ STRICT requirements:
 Return STRICT JSON only:
 {"imageUrl":"https://...","changeType":"ENHANCEMENT_OR_EXACT_REGEN","reason":"short reason"}`,
       systemPrompt: 'You are an e-commerce image regeneration assistant.',
+      providerOverrideId: params.providerOverrideId,
     });
     if (execution.status !== 'OK') {
       return {
@@ -2065,6 +2098,7 @@ Rules:
 - Mark false if candidate appears to be a different product/model/scene.
 - Mark false if major visual identity changed.`,
       systemPrompt: 'You are a strict e-commerce image consistency verifier. Return strict JSON only.',
+      providerOverrideId: params.providerOverrideId,
     });
     if (verification.status !== 'OK') {
       return {
@@ -2204,7 +2238,11 @@ Rules:
         enhanced.push(row);
         continue;
       }
-      const functionKey = CRITERION_AI_FUNCTION_MAP[row.key] || 'text_grammar_enhancement';
+      const criterionFunctionKey = normalizeCriterionFunctionKey(
+        criterion.aiFunctionKey,
+        row.key
+      );
+      const criterionProviderOverrideId = String(criterion.aiProviderId || '').trim() || undefined;
       const prompt = `Automation criterion: ${row.label}
 
 Current check status: ${row.status}
@@ -2221,9 +2259,10 @@ Rules:
 - Keep guidance specific and actionable.`;
       const execution = await executeAutomationAiFunction({
         settings,
-        functionKey,
+        functionKey: criterionFunctionKey,
         prompt,
         systemPrompt: 'You are an e-commerce quality automation evaluator. Return strict JSON only.',
+        providerOverrideId: criterionProviderOverrideId,
       });
       let nextRow: AutomationCheckReportRow;
       if (execution.status === 'NO_PROVIDER') {
@@ -2240,6 +2279,7 @@ Rules:
             prompt: `Enhance product image quality while preserving exact original product identity, composition, and styling. Do not replace with a different product. Context: ${aiContextSummary}`,
             systemPrompt:
               'You are an image regeneration assistant for e-commerce catalog quality improvement.',
+            providerOverrideId: criterionProviderOverrideId,
           });
           if (regenerate.status === 'OK') {
             nextRow = {
@@ -2294,7 +2334,11 @@ Rules:
           Boolean(persistStagedProductEdits) &&
           (nextRow.status === 'FAIL' || strictEditKeys.has(row.key));
         if (shouldAttemptTextEdit) {
-          const editResult = await requestAiFieldEdit({ row: nextRow });
+          const editResult = await requestAiFieldEdit({
+            row: nextRow,
+            functionKey: criterionFunctionKey,
+            providerOverrideId: criterionProviderOverrideId,
+          });
           if (editResult && textRule) {
             if (editResult.applied) {
               pendingUpdates[textRule.field] = editResult.after;
@@ -2340,7 +2384,10 @@ Rules:
           Boolean(persistStagedImageEdits) &&
           nextRow.status === 'FAIL';
         if (shouldAttemptImageEdit) {
-          const imageResult = await requestAiImageEdit({ row: nextRow });
+          const imageResult = await requestAiImageEdit({
+            row: nextRow,
+            providerOverrideId: criterionProviderOverrideId,
+          });
           if (imageResult.applied) {
             hasPendingImageUpdate = true;
             nextRow = {
