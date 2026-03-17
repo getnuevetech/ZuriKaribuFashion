@@ -859,13 +859,50 @@ const normalizeGeminiModel = (value: string) =>
     .trim()
     .replace(/^models\//i, '')
     .replace(/^\/+|\/+$/g, '');
-const resolveStabilityImageEndpoint = (baseUrl: string) => {
+const tryParseUrlOrigin = (value: string) => {
+  try {
+    return new URL(String(value || '').trim()).origin;
+  } catch {
+    return '';
+  }
+};
+const resolveStabilityV2ImageEndpoints = (baseUrl: string) => {
+  const trimmed = String(baseUrl || '').trim().replace(/\/+$/, '');
+  if (!trimmed) return [] as string[];
+  const origin = tryParseUrlOrigin(trimmed);
+  const endpoints = new Set<string>();
+  if (/\/stable-image\/generate\/(core|ultra|sd3)$/i.test(trimmed)) {
+    endpoints.add(trimmed);
+  }
+  if (/\/stable-image\/generate$/i.test(trimmed)) {
+    endpoints.add(`${trimmed}/core`);
+  }
+  if (/\/v2beta(?:\/|$)/i.test(trimmed)) {
+    endpoints.add(`${trimmed}/stable-image/generate/core`);
+    endpoints.add(`${trimmed}/stable-image/generate/ultra`);
+    endpoints.add(`${trimmed}/stable-image/generate/sd3`);
+    const root = trimmed.replace(/\/v2beta(?:\/.*)?$/i, '');
+    if (root) {
+      endpoints.add(`${root}/v2beta/stable-image/generate/core`);
+      endpoints.add(`${root}/v2beta/stable-image/generate/ultra`);
+      endpoints.add(`${root}/v2beta/stable-image/generate/sd3`);
+    }
+  }
+  if (origin) {
+    endpoints.add(`${origin}/v2beta/stable-image/generate/core`);
+    endpoints.add(`${origin}/v2beta/stable-image/generate/ultra`);
+    endpoints.add(`${origin}/v2beta/stable-image/generate/sd3`);
+  }
+  if (endpoints.size === 0) {
+    endpoints.add(`${trimmed}/v2beta/stable-image/generate/core`);
+  }
+  return Array.from(endpoints).filter(Boolean);
+};
+const resolveStabilityV1BaseUrl = (baseUrl: string) => {
   const trimmed = String(baseUrl || '').trim().replace(/\/+$/, '');
   if (!trimmed) return '';
-  if (/\/stable-image\/generate\/core$/i.test(trimmed)) return trimmed;
-  if (/\/stable-image\/generate$/i.test(trimmed)) return `${trimmed}/core`;
-  if (/\/v2beta(?:\/|$)/i.test(trimmed)) return `${trimmed}/stable-image/generate/core`;
-  return `${trimmed}/v2beta/stable-image/generate/core`;
+  const origin = tryParseUrlOrigin(trimmed);
+  return origin || trimmed;
 };
 const isQuotaExceededError = (status: number, body: string) =>
   status === 429 || /quota|rate\s*limit|exceeded your current quota|billing/i.test(String(body || ''));
@@ -1156,52 +1193,195 @@ const callImageRegenerationExecutor = async (
   prompt: string
 ): Promise<AiExecutionResult> => {
   if (isStabilityBaseUrl(provider.baseUrl)) {
-    const endpoint = resolveStabilityImageEndpoint(provider.baseUrl);
-    if (!endpoint) {
-      return { status: 'ERROR', reason: 'Missing Stability AI endpoint.' };
-    }
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30_000);
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${String(provider.apiKey || '').trim()}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          prompt: String(prompt || '').trim(),
-          output_format: 'png',
-          aspect_ratio: '1:1',
-        }).toString(),
-        signal: controller.signal,
-      });
-      const text = await response.text();
-      if (!response.ok) {
-        return {
-          status: 'ERROR',
-          reason: `Stability returned ${response.status}: ${String(text || '').slice(0, 260)}`,
-        };
-      }
-      let parsed: any = {};
+    const apiKey = String(provider.apiKey || '').trim();
+    if (!apiKey) return { status: 'ERROR', reason: 'Missing Stability API key.' };
+    const parseJsonSafe = (value: string) => {
       try {
-        parsed = JSON.parse(text || '{}');
+        return JSON.parse(value || '{}');
       } catch {
-        parsed = {};
+        return {};
       }
+    };
+    const extractStabilityImage = (parsed: any) => {
       const imageUrl = String(parsed?.url || parsed?.imageUrl || '').trim();
-      if (imageUrl) return { status: 'OK', output: `Regenerated image URL: ${imageUrl}` };
+      if (imageUrl) return { kind: 'url' as const, value: imageUrl };
       const imageB64 =
         String(parsed?.image || '').trim() ||
         String(parsed?.artifacts?.[0]?.base64 || parsed?.artifacts?.[0]?.b64_json || '').trim();
-      if (imageB64) return { status: 'OK', output: 'Regenerated image payload received (base64).' };
-      return { status: 'ERROR', reason: 'No regenerated image output returned from Stability.' };
-    } catch (error: any) {
-      return { status: 'ERROR', reason: String(error?.message || 'Network error while calling Stability.') };
-    } finally {
-      clearTimeout(timeout);
+      if (imageB64) return { kind: 'b64' as const, value: imageB64 };
+      return null;
+    };
+    const callV2 = async (
+      endpoint: string
+    ): Promise<{ ok: boolean; retry404?: boolean; reason?: string; output?: string }> => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30_000);
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            prompt: String(prompt || '').trim(),
+            output_format: 'png',
+            aspect_ratio: '1:1',
+          }).toString(),
+          signal: controller.signal,
+        });
+        const text = await response.text();
+        if (!response.ok) {
+          if (isQuotaExceededError(response.status, text)) {
+            return {
+              ok: false,
+              reason: 'Stability quota/rate limit reached (429). Check your Stability account credits and limits.',
+            };
+          }
+          if (response.status === 404) {
+            return {
+              ok: false,
+              retry404: true,
+              reason: `Stability endpoint not found at ${endpoint}.`,
+            };
+          }
+          return {
+            ok: false,
+            reason: `Stability returned ${response.status}: ${String(text || '').slice(0, 260)}`,
+          };
+        }
+        const parsed = parseJsonSafe(text);
+        const image = extractStabilityImage(parsed);
+        if (!image) return { ok: false, reason: 'No regenerated image output returned from Stability.' };
+        return {
+          ok: true,
+          output: image.kind === 'url' ? `Regenerated image URL: ${image.value}` : 'Regenerated image payload received (base64).',
+        };
+      } catch (error: any) {
+        return { ok: false, reason: String(error?.message || 'Network error while calling Stability.') };
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+    const v2Endpoints = resolveStabilityV2ImageEndpoints(provider.baseUrl);
+    const v2NotFound: string[] = [];
+    for (const endpoint of v2Endpoints) {
+      const result = await callV2(endpoint);
+      if (result.ok && result.output) return { status: 'OK', output: result.output };
+      if (result.retry404) {
+        v2NotFound.push(endpoint);
+        continue;
+      }
+      return { status: 'ERROR', reason: String(result.reason || 'Stability request failed.') };
     }
+
+    // Legacy v1 fallback for accounts configured against older Stability endpoints.
+    const v1Base = resolveStabilityV1BaseUrl(provider.baseUrl);
+    if (!v1Base) {
+      return {
+        status: 'ERROR',
+        reason:
+          'Unable to resolve Stability base URL. Use base URL https://api.stability.ai (or direct v2beta endpoint) and retry.',
+      };
+    }
+    const fetchEngineIds = async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12_000);
+      try {
+        const response = await fetch(`${v1Base}/v1/engines/list`, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          signal: controller.signal,
+        });
+        const text = await response.text();
+        if (!response.ok) return [] as string[];
+        const parsed = parseJsonSafe(text);
+        const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.engines) ? parsed.engines : [];
+        return rows
+          .map((row: any) => String(row?.id || '').trim())
+          .filter(Boolean);
+      } catch {
+        return [] as string[];
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+    const discoveredEngines = await fetchEngineIds();
+    const engineCandidates = Array.from(
+      new Set([
+        ...discoveredEngines,
+        'stable-diffusion-xl-1024-v1-0',
+        'stable-diffusion-v1-6',
+      ])
+    );
+    const callV1 = async (
+      engineId: string
+    ): Promise<{ ok: boolean; retry404?: boolean; reason?: string; output?: string }> => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30_000);
+      try {
+        const response = await fetch(`${v1Base}/v1/generation/${encodeURIComponent(engineId)}/text-to-image`, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            text_prompts: [{ text: String(prompt || '').trim() }],
+            cfg_scale: 7,
+            height: 1024,
+            width: 1024,
+            samples: 1,
+            steps: 30,
+          }),
+          signal: controller.signal,
+        });
+        const text = await response.text();
+        if (!response.ok) {
+          if (isQuotaExceededError(response.status, text)) {
+            return {
+              ok: false,
+              reason: 'Stability quota/rate limit reached (429). Check your Stability account credits and limits.',
+            };
+          }
+          if (response.status === 404) {
+            return { ok: false, retry404: true, reason: `Stability v1 engine route not found for ${engineId}.` };
+          }
+          return {
+            ok: false,
+            reason: `Stability v1 returned ${response.status}: ${String(text || '').slice(0, 260)}`,
+          };
+        }
+        const parsed = parseJsonSafe(text);
+        const image = extractStabilityImage(parsed);
+        if (!image) return { ok: false, reason: 'No regenerated image output returned from Stability v1.' };
+        return {
+          ok: true,
+          output: image.kind === 'url' ? `Regenerated image URL: ${image.value}` : 'Regenerated image payload received (base64).',
+        };
+      } catch (error: any) {
+        return { ok: false, reason: String(error?.message || 'Network error while calling Stability v1.') };
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+    for (const engineId of engineCandidates) {
+      const result = await callV1(engineId);
+      if (result.ok && result.output) return { status: 'OK', output: result.output };
+      if (result.retry404) continue;
+      return { status: 'ERROR', reason: String(result.reason || 'Stability v1 request failed.') };
+    }
+    return {
+      status: 'ERROR',
+      reason: `Stability returned 404 for available endpoints. Tried v2 endpoints: ${v2NotFound
+        .slice(0, 3)
+        .join(', ')}${v2NotFound.length > 3 ? '…' : ''}. Use base URL https://api.stability.ai and verify API key access.`,
+    };
   }
   if (isGeminiBaseUrl(provider.baseUrl) && !isGeminiOpenAiCompatUrl(provider.baseUrl)) {
     return {
