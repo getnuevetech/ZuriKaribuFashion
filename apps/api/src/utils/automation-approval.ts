@@ -2433,7 +2433,17 @@ Rules:
     if (needsAiHints.some((entry) => lower.includes(entry))) {
       return { verdict: 'NEEDS_AI', guidance: normalizeReadableLine(raw, 2000) };
     }
-    const passHints = ['no correction needed', 'performing as expected', 'check passed', 'valid and consistent'];
+    const passHints = [
+      'no correction needed',
+      'no improvements are needed',
+      'no change needed',
+      'no update needed',
+      'already correct',
+      'already grammatically correct',
+      'performing as expected',
+      'check passed',
+      'valid and consistent',
+    ];
     if (passHints.some((entry) => lower.includes(entry))) {
       return { verdict: 'PASS', guidance: normalizeReadableLine(raw, 2000) };
     }
@@ -2577,12 +2587,19 @@ Rules:
                 reason: editResult.reason,
               });
             } else {
-              const strictFailed = strictEditKeys.has(row.key);
+              const identicalNoChangeAccepted =
+                editResult.reason === 'AI suggestion is identical to current value.' && nextRow.status === 'PASS';
+              const strictFailed = strictEditKeys.has(row.key) && nextRow.status !== 'PASS';
               if (strictFailed) {
                 nextRow = {
                   ...nextRow,
                   status: 'FAIL',
                   message: `${nextRow.message} Strict AI edit required for ${textRule.field}: ${editResult.reason}`,
+                };
+              } else if (identicalNoChangeAccepted) {
+                nextRow = {
+                  ...nextRow,
+                  message: `${nextRow.message} AI confirmed current ${textRule.field} is already acceptable; no text change applied.`,
                 };
               }
               changeReport.push({
@@ -2591,8 +2608,8 @@ Rules:
                 field: textRule.field,
                 beforeValue: editResult.before,
                 afterValue: editResult.after,
-                status: 'SKIPPED',
-                reason: editResult.reason,
+                status: identicalNoChangeAccepted ? 'APPLIED' : 'SKIPPED',
+                reason: identicalNoChangeAccepted ? 'AI verified no change was required.' : editResult.reason,
               });
             }
           }
@@ -2744,7 +2761,10 @@ Rules:
       key: 'name_grammar',
       label: 'Check fabric name/title grammar and improve wording',
       status: String(product.name || '').trim().length >= 3 ? 'PASS' : 'FAIL',
-      message: String(product.name || '').trim().length >= 3 ? 'Name is populated.' : 'Name is too short.',
+      message:
+        String(product.name || '').trim().length >= 3
+          ? 'Name length is acceptable; AI grammar review will verify wording quality.'
+          : 'Name is too short.',
     });
     addResult({
       key: 'description_grammar',
@@ -2887,7 +2907,10 @@ Rules:
       key: 'name_grammar',
       label: 'Check design name/title grammar and improve wording',
       status: String(product.name || '').trim().length >= 3 ? 'PASS' : 'FAIL',
-      message: String(product.name || '').trim().length >= 3 ? 'Name is populated.' : 'Name is too short.',
+      message:
+        String(product.name || '').trim().length >= 3
+          ? 'Name length is acceptable; AI grammar review will verify wording quality.'
+          : 'Name is too short.',
     });
     addResult({
       key: 'description_grammar',
@@ -3019,7 +3042,10 @@ Rules:
       key: 'name_grammar',
       label: 'Check design name/title grammar and improve wording',
       status: String(product.name || '').trim().length >= 3 ? 'PASS' : 'FAIL',
-      message: String(product.name || '').trim().length >= 3 ? 'Name is populated.' : 'Name is too short.',
+      message:
+        String(product.name || '').trim().length >= 3
+          ? 'Name length is acceptable; AI grammar review will verify wording quality.'
+          : 'Name is too short.',
     });
     addResult({
       key: 'description_grammar',
