@@ -278,7 +278,7 @@ export default function AdminAutomationAiConfigPage() {
         <div className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           <p className="font-semibold">Base URL and Model guide</p>
           <p className="mt-1">
-            Base URL should be the API root used by your provider (the system appends
+            Base URL should be the API root used by your provider. For OpenAI-compatible providers, the system appends
             <code className="mx-1 rounded bg-white px-1">/chat/completions</code>
             and
             <code className="mx-1 rounded bg-white px-1">/images/generations</code>
@@ -292,6 +292,23 @@ export default function AdminAutomationAiConfigPage() {
             for text and
             <code className="mx-1 rounded bg-white px-1">gpt-image-1</code>
             for image generation.
+          </p>
+          <p className="mt-1">
+            Gemini native (recommended for text): Base URL
+            <code className="mx-1 rounded bg-white px-1">https://generativelanguage.googleapis.com/v1beta</code>
+            with model
+            <code className="mx-1 rounded bg-white px-1">gemini-1.5-flash</code>
+            (do not prefix model with
+            <code className="mx-1 rounded bg-white px-1">models/</code>
+            ).
+          </p>
+          <p className="mt-1">
+            Gemini OpenAI-compatible: Base URL
+            <code className="mx-1 rounded bg-white px-1">https://generativelanguage.googleapis.com/v1beta/openai</code>
+            with model
+            <code className="mx-1 rounded bg-white px-1">gemini-1.5-flash</code>
+            or
+            <code className="mx-1 rounded bg-white px-1">gemini-2.0-flash</code>.
           </p>
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -351,7 +368,7 @@ export default function AdminAutomationAiConfigPage() {
                         className="w-full rounded border px-2 py-1"
                         value={draft.baseUrl}
                         onChange={(event) => updateProviderDraft(providerId, { baseUrl: event.target.value })}
-                        placeholder="https://api.openai.com/v1"
+                        placeholder="https://api.openai.com/v1 or https://generativelanguage.googleapis.com/v1beta"
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -359,7 +376,7 @@ export default function AdminAutomationAiConfigPage() {
                         className="w-full rounded border px-2 py-1"
                         value={draft.model}
                         onChange={(event) => updateProviderDraft(providerId, { model: event.target.value })}
-                        placeholder="gpt-4o-mini"
+                        placeholder="gpt-4o-mini or gemini-1.5-flash"
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -439,13 +456,13 @@ export default function AdminAutomationAiConfigPage() {
           />
           <input
             className="rounded border px-3 py-2"
-            placeholder="Base URL (endpoint)"
+            placeholder="Base URL (e.g., https://api.openai.com/v1 or .../v1beta)"
             value={newProvider.baseUrl}
             onChange={(event) => setNewProvider((prev) => ({ ...prev, baseUrl: event.target.value }))}
           />
           <input
             className="rounded border px-3 py-2"
-            placeholder="Model"
+            placeholder="Model (e.g., gpt-4o-mini or gemini-1.5-flash)"
             value={newProvider.model}
             onChange={(event) => setNewProvider((prev) => ({ ...prev, model: event.target.value }))}
           />

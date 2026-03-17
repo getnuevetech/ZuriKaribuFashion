@@ -845,6 +845,15 @@ const normalizeEndpoint = (baseUrl: string, suffix: string) => {
   return `${trimmed}${suffix.startsWith('/') ? '' : '/'}${suffix}`;
 };
 
+const isGeminiBaseUrl = (baseUrl: string) => /generativelanguage\.googleapis\.com/i.test(String(baseUrl || ''));
+const isGeminiOpenAiCompatUrl = (baseUrl: string) =>
+  isGeminiBaseUrl(baseUrl) && /\/openai(?:\/|$)/i.test(String(baseUrl || ''));
+const normalizeGeminiModel = (value: string) =>
+  String(value || '')
+    .trim()
+    .replace(/^models\//i, '')
+    .replace(/^\/+|\/+$/g, '');
+
 const readNestedString = (payload: any, path: string[]): string => {
   let node = payload;
   for (const key of path) {
@@ -884,10 +893,70 @@ const callTextExecutor = async (
   prompt: string,
   system: string
 ): Promise<AiExecutionResult> => {
+  if (isGeminiBaseUrl(provider.baseUrl) && !isGeminiOpenAiCompatUrl(provider.baseUrl)) {
+    const model = normalizeGeminiModel(String(provider.model || '').trim() || 'gemini-1.5-flash');
+    const apiKey = String(provider.apiKey || '').trim();
+    const base = String(provider.baseUrl || '').trim().replace(/\/+$/, '');
+    const endpoint = `${base}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25_000);
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: `${String(system || '').trim()}\n\n${String(prompt || '').trim()}`.trim() }],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.2,
+          },
+        }),
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        return {
+          status: 'ERROR',
+          reason: `Provider returned ${response.status}: ${String(text || '').slice(0, 260)}`,
+        };
+      }
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(text || '{}');
+      } catch {
+        parsed = {};
+      }
+      const output =
+        (Array.isArray(parsed?.candidates) ? parsed.candidates : [])
+          .flatMap((candidate: any) => (Array.isArray(candidate?.content?.parts) ? candidate.content.parts : []))
+          .map((part: any) => String(part?.text || '').trim())
+          .filter(Boolean)
+          .join('\n')
+          .trim() || String(text || '').trim();
+      if (!output) {
+        return { status: 'ERROR', reason: 'Provider returned an empty completion.' };
+      }
+      return { status: 'OK', output: output.slice(0, 1000) };
+    } catch (error: any) {
+      return { status: 'ERROR', reason: String(error?.message || 'Network error while calling provider.') };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   const endpoint = normalizeEndpoint(provider.baseUrl, '/chat/completions');
   if (!endpoint) {
     return { status: 'ERROR', reason: 'Missing provider endpoint.' } as AiExecutionResult;
   }
+  const resolvedModel = isGeminiBaseUrl(provider.baseUrl)
+    ? normalizeGeminiModel(String(provider.model || '').trim() || 'gemini-1.5-flash')
+    : String(provider.model || '').trim() || 'gpt-4o-mini';
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25_000);
   try {
@@ -898,7 +967,7 @@ const callTextExecutor = async (
         Authorization: `Bearer ${String(provider.apiKey || '').trim()}`,
       },
       body: JSON.stringify({
-        model: String(provider.model || '').trim() || 'gpt-4o-mini',
+        model: resolvedModel,
         temperature: 0.2,
         messages: [
           { role: 'system', content: system },
@@ -939,6 +1008,13 @@ const callImageRegenerationExecutor = async (
   provider: AutomationAiProvider,
   prompt: string
 ): Promise<AiExecutionResult> => {
+  if (isGeminiBaseUrl(provider.baseUrl) && !isGeminiOpenAiCompatUrl(provider.baseUrl)) {
+    return {
+      status: 'ERROR',
+      reason:
+        'Gemini native base URL does not support /images/generations. Use Gemini OpenAI-compatible base URL (/v1beta/openai) or bind image regeneration to another provider.',
+    };
+  }
   const endpoint = normalizeEndpoint(provider.baseUrl, '/images/generations');
   if (!endpoint) {
     return { status: 'ERROR', reason: 'Missing provider endpoint.' } as AiExecutionResult;
