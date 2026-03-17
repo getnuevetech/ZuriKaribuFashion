@@ -30,6 +30,14 @@ A full-stack eCommerce platform connecting African fashion designers, fabric sel
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/your-template)
 
+### Option 3: Deploy to AWS
+
+AWS migration assets are available in:
+
+- `deploy/aws/README.md`
+- `apps/api/Dockerfile`
+- `apps/web/Dockerfile`
+
 ## 🤖 Cloud Agent Environment Setup
 
 To prepare cloud agents quickly (install dependencies in both apps and generate Prisma client), run:
@@ -100,6 +108,7 @@ After database seeding:
 ## 📖 Documentation
 
 - [Deployment Guide](DEPLOY.md) - Detailed deployment instructions
+- [AWS Migration Guide](deploy/aws/README.md) - AWS migration runbook
 - [API Documentation](apps/api/README.md) - Backend API docs
 
 ## 📝 License

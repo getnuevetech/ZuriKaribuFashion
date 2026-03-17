@@ -75,6 +75,24 @@ git push heroku main
 
 ---
 
+## Option 4: Deploy to AWS (Production Recommended)
+
+AWS migration assets are now included in this repository:
+
+- `deploy/aws/README.md` (full migration runbook)
+- `apps/api/Dockerfile` (ECS-ready API image)
+- `apps/web/Dockerfile` + `apps/web/nginx.conf` (containerized web option)
+- `apps/api/.env.aws.example`
+- `apps/web/.env.aws.example`
+
+Recommended AWS target:
+- Frontend: **S3 + CloudFront**
+- API: **ECS Fargate + ALB**
+- DB: **RDS PostgreSQL**
+- Uploads: **S3** (`AWS_UPLOADS_ENABLED=true`)
+
+---
+
 ## 🔑 Required Environment Variables
 
 | Variable | Description | Where to Get |

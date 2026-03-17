@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 
@@ -24,7 +25,22 @@ const allMimeTypes: Record<string, string> = {
   ...documentMimeTypes,
 };
 
-const storage = multer.diskStorage({
+const uploadBucket = String(process.env.AWS_UPLOADS_BUCKET || '').trim();
+const uploadRegion = String(process.env.AWS_UPLOADS_REGION || process.env.AWS_REGION || 'us-east-1').trim();
+const uploadBaseUrl = String(process.env.AWS_UPLOADS_BASE_URL || '').trim().replace(/\/+$/, '');
+const uploadPrefixRaw = String(process.env.AWS_UPLOADS_PREFIX || 'uploads').trim();
+const uploadPrefix = uploadPrefixRaw ? uploadPrefixRaw.replace(/^\/+/, '').replace(/\/+$/, '') : 'uploads';
+const useS3Uploads =
+  ['1', 'true', 'yes', 'on'].includes(String(process.env.AWS_UPLOADS_ENABLED || '').trim().toLowerCase()) &&
+  Boolean(uploadBucket);
+
+const s3Client = useS3Uploads
+  ? new S3Client({
+      region: uploadRegion,
+    })
+  : null;
+
+const localDiskStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, 'uploads/');
   },
@@ -34,6 +50,54 @@ const storage = multer.diskStorage({
     cb(null, uniqueName);
   },
 });
+const storage = useS3Uploads ? multer.memoryStorage() : localDiskStorage;
+
+const resolveFileExtension = (file: Express.Multer.File) =>
+  allMimeTypes[file.mimetype] || path.extname(String(file.originalname || '')) || '.bin';
+
+const resolveS3ObjectKey = (filename: string) => `${uploadPrefix}/${filename}`;
+
+const resolveUploadedUrl = (filename: string) => {
+  if (!useS3Uploads) {
+    return `/uploads/${filename}`;
+  }
+  const key = resolveS3ObjectKey(filename);
+  if (uploadBaseUrl) {
+    return `${uploadBaseUrl}/${key}`;
+  }
+  return `https://${uploadBucket}.s3.${uploadRegion}.amazonaws.com/${key}`;
+};
+
+const persistUploadedFile = async (file: Express.Multer.File) => {
+  const extension = resolveFileExtension(file);
+  const filename = useS3Uploads ? `${uuidv4()}${extension}` : String(file.filename || `${uuidv4()}${extension}`);
+  if (useS3Uploads) {
+    if (!s3Client || !uploadBucket) {
+      throw new Error('AWS S3 upload is enabled but bucket/client is not configured.');
+    }
+    const bodyBuffer = file.buffer;
+    if (!bodyBuffer) {
+      throw new Error('Uploaded file buffer is missing for S3 upload.');
+    }
+    const objectKey = resolveS3ObjectKey(filename);
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: uploadBucket,
+        Key: objectKey,
+        Body: bodyBuffer,
+        ContentType: file.mimetype,
+        CacheControl: /^image\//i.test(String(file.mimetype || ''))
+          ? 'public, max-age=31536000, immutable'
+          : 'private, max-age=0, no-cache',
+      })
+    );
+  }
+  return {
+    url: resolveUploadedUrl(filename),
+    filename,
+    size: file.size,
+  };
+};
 
 const createUpload = (allowedMap: Record<string, string>, fileSizeMb: number, rejectedMessage: string) =>
   multer({
@@ -66,94 +130,88 @@ const mixedUpload = createUpload(
   'Only approved image or document files are allowed.'
 );
 
-const sendSingleUploadResponse = (res: any, file: Express.Multer.File, successMessage: string) => {
+const sendSingleUploadResponse = async (res: any, file: Express.Multer.File, successMessage: string) => {
+  const persisted = await persistUploadedFile(file);
   res.json({
     success: true,
     message: successMessage,
-    data: {
-      url: `/uploads/${file.filename}`,
-      filename: file.filename,
-      size: file.size,
-    },
+    data: persisted,
   });
 };
 
-const sendMultiUploadResponse = (res: any, files: Express.Multer.File[], label: string) => {
+const sendMultiUploadResponse = async (res: any, files: Express.Multer.File[], label: string) => {
+  const persisted = await Promise.all(files.map((file) => persistUploadedFile(file)));
   res.json({
     success: true,
     message: `${files.length} ${label}(s) uploaded successfully.`,
-    data: files.map((file) => ({
-      url: `/uploads/${file.filename}`,
-      filename: file.filename,
-      size: file.size,
-    })),
+    data: persisted,
   });
 };
 
-router.post('/image', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), imageUpload.single('image'), (req, res) => {
+router.post('/image', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), imageUpload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No image file provided.' });
     }
-    sendSingleUploadResponse(res, req.file, 'Image uploaded successfully.');
+    await sendSingleUploadResponse(res, req.file, 'Image uploaded successfully.');
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Failed to upload image.' });
   }
 });
 
-router.post('/images', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), imageUpload.array('images', 10), (req, res) => {
+router.post('/images', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), imageUpload.array('images', 10), async (req, res) => {
   try {
     const files = (req.files as Express.Multer.File[]) || [];
     if (files.length === 0) {
       return res.status(400).json({ success: false, message: 'No image files provided.' });
     }
-    sendMultiUploadResponse(res, files, 'image');
+    await sendMultiUploadResponse(res, files, 'image');
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Failed to upload images.' });
   }
 });
 
-router.post('/document', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), documentUpload.single('document'), (req, res) => {
+router.post('/document', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), documentUpload.single('document'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No document file provided.' });
     }
-    sendSingleUploadResponse(res, req.file, 'Document uploaded successfully.');
+    await sendSingleUploadResponse(res, req.file, 'Document uploaded successfully.');
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Failed to upload document.' });
   }
 });
 
-router.post('/documents', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), documentUpload.array('documents', 10), (req, res) => {
+router.post('/documents', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), documentUpload.array('documents', 10), async (req, res) => {
   try {
     const files = (req.files as Express.Multer.File[]) || [];
     if (files.length === 0) {
       return res.status(400).json({ success: false, message: 'No document files provided.' });
     }
-    sendMultiUploadResponse(res, files, 'document');
+    await sendMultiUploadResponse(res, files, 'document');
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Failed to upload documents.' });
   }
 });
 
-router.post('/file', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), mixedUpload.single('file'), (req, res) => {
+router.post('/file', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), mixedUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file provided.' });
     }
-    sendSingleUploadResponse(res, req.file, 'File uploaded successfully.');
+    await sendSingleUploadResponse(res, req.file, 'File uploaded successfully.');
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Failed to upload file.' });
   }
 });
 
-router.post('/files', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), mixedUpload.array('files', 10), (req, res) => {
+router.post('/files', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), mixedUpload.array('files', 10), async (req, res) => {
   try {
     const files = (req.files as Express.Multer.File[]) || [];
     if (files.length === 0) {
       return res.status(400).json({ success: false, message: 'No files provided.' });
     }
-    sendMultiUploadResponse(res, files, 'file');
+    await sendMultiUploadResponse(res, files, 'file');
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Failed to upload files.' });
   }
