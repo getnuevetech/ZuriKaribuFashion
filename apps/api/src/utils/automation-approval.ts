@@ -2172,6 +2172,8 @@ export const evaluateProductAutomationChecks = async (input: {
         return input.productType === ProductType.FABRIC
           ? { field: 'stockYards', kind: 'number', minNumber: 1, maxNumber: 1000000 }
           : null;
+      case 'predominant_color_match':
+        return { field: 'predominantColor', kind: 'text', minLength: 3, maxLength: 40 };
       default:
         return null;
     }
@@ -2222,7 +2224,7 @@ export const evaluateProductAutomationChecks = async (input: {
       } | null;
     }
     const before = readStagedProductField(rule.field);
-    if (!before.trim()) {
+    if (!before.trim() && rule.field !== 'predominantColor') {
       return { applied: false, before, after: before, reason: 'No existing value available for AI edit.' };
     }
     const execution = await executeAutomationAiFunction({
@@ -2242,7 +2244,8 @@ Rules:
 - Keep original meaning and product intent.
 - Avoid adding claims not present in the original text.
 - Keep concise, sales-friendly wording.
-- Do not exceed ${rule.maxLength} characters.`
+- Do not exceed ${rule.maxLength} characters.
+${rule.field === 'predominantColor' ? '- For predominantColor, return ONE uppercase color token only (e.g., BLACK, BLUE, GREEN, RED, WHITE, YELLOW, MULTI).' : ''}`
           : `You are correcting a product numeric field.
 
 Criterion: ${params.row.label}
@@ -2316,11 +2319,21 @@ Rules:
         );
       let usedGuidanceCandidate = false;
       let normalized = getNormalizedTextCandidate(String(execution.output || ''), parsed);
+      if (rule.field === 'predominantColor') {
+        const tokenMatch = normalized.toUpperCase().match(/\b(BLACK|BLUE|BROWN|GOLD|GREEN|GREY|MULTI|ORANGE|PINK|PURPLE|RED|WHITE|YELLOW)\b/);
+        normalized = tokenMatch ? tokenMatch[1] : normalized.toUpperCase().replace(/[^A-Z]/g, '');
+      }
       if (normalized.length < rule.minLength || normalized === before) {
         const guidanceCandidate = extractGuidedCandidateFromMessage(params.row.message);
         if (guidanceCandidate) {
           normalized = guidanceCandidate;
           usedGuidanceCandidate = true;
+          if (rule.field === 'predominantColor') {
+            const tokenMatch = normalized
+              .toUpperCase()
+              .match(/\b(BLACK|BLUE|BROWN|GOLD|GREEN|GREY|MULTI|ORANGE|PINK|PURPLE|RED|WHITE|YELLOW)\b/);
+            normalized = tokenMatch ? tokenMatch[1] : normalized.toUpperCase().replace(/[^A-Z]/g, '');
+          }
         }
       }
       if ((normalized.length < rule.minLength || normalized === before) && params.row.status === 'FAIL') {
@@ -2345,14 +2358,30 @@ No explanations, no labels, no JSON, no markdown.`,
             String(retry.output || ''),
             parseFirstJsonObject(String(retry.output || ''))
           );
+          if (rule.field === 'predominantColor') {
+            const tokenMatch = normalized
+              .toUpperCase()
+              .match(/\b(BLACK|BLUE|BROWN|GOLD|GREEN|GREY|MULTI|ORANGE|PINK|PURPLE|RED|WHITE|YELLOW)\b/);
+            normalized = tokenMatch ? tokenMatch[1] : normalized.toUpperCase().replace(/[^A-Z]/g, '');
+          }
           if (normalized.length < rule.minLength || normalized === before) {
             const guidanceCandidate = extractGuidedCandidateFromMessage(params.row.message);
             if (guidanceCandidate) {
               normalized = guidanceCandidate;
               usedGuidanceCandidate = true;
+              if (rule.field === 'predominantColor') {
+                const tokenMatch = normalized
+                  .toUpperCase()
+                  .match(/\b(BLACK|BLUE|BROWN|GOLD|GREEN|GREY|MULTI|ORANGE|PINK|PURPLE|RED|WHITE|YELLOW)\b/);
+                normalized = tokenMatch ? tokenMatch[1] : normalized.toUpperCase().replace(/[^A-Z]/g, '');
+              }
             }
           }
         }
+      }
+      if (rule.field === 'predominantColor' && !normalized) {
+        normalized = 'MULTI';
+        usedGuidanceCandidate = true;
       }
       if (normalized.length < rule.minLength) {
         return {
@@ -2661,7 +2690,7 @@ Rules:
       'image_quality',
       'predominant_color_match',
     ]);
-    const imageEditKeys = new Set(['image_quality', 'predominant_color_match']);
+    const imageEditKeys = new Set(['image_quality']);
     for (const row of report) {
       const criterion = criteria.find((entry) => entry.key === row.key);
       if (!criterion || !criterion.requiresAi || row.status === 'SKIPPED') {
