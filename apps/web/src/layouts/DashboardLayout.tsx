@@ -96,6 +96,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
   seller: [
     { label: 'Dashboard', href: '/seller', icon: LayoutDashboard },
     { label: 'Product Lists', href: '/seller?tab=fabrics', icon: Package },
+    { label: 'Failed Product Approval', href: '/seller/failed-product-approvals', icon: ClipboardCheck },
     { label: '3D TryON', href: '/seller?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/seller?tab=orders', icon: ShoppingBag },
     { label: 'Messages', href: '/seller/messages', icon: Mail },
@@ -106,6 +107,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
   designer: [
     { label: 'Dashboard', href: '/designer', icon: LayoutDashboard },
     { label: 'Product Lists', href: '/designer?tab=designs', icon: Package },
+    { label: 'Failed Product Approval', href: '/designer/failed-product-approvals', icon: ClipboardCheck },
     { label: 'Measurements', href: '/designer/measurements', icon: Ruler },
     { label: '3D TryON', href: '/designer?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/designer?tab=orders', icon: ShoppingBag },
@@ -189,6 +191,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/products/configuration': ['products:manage'],
       '/admin/products/stock-list': ['products:manage'],
       '/admin/products/price-compare': ['products:manage'],
+      '/admin/products/failed-ai-approvals': ['products:manage'],
       '/admin/product-labels': ['products:manage'],
       '/admin/product-change-requests': ['products:manage'],
       '/admin/automation/approvals': ['products:manage'],
@@ -244,6 +247,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Product', href: '/admin/products', icon: ChevronRight },
     { label: 'Stock List', href: '/admin/products/stock-list', icon: ChevronRight },
     { label: 'Product Price Compare', href: '/admin/products/price-compare', icon: ChevronRight },
+    { label: 'Failed AI Approval', href: '/admin/products/failed-ai-approvals', icon: ChevronRight },
     { label: 'Product Configuration', href: '/admin/products/configuration', icon: ChevronRight },
     { label: 'Product Labels', href: '/admin/product-labels', icon: ChevronRight },
     { label: 'Product Change Request', href: '/admin/product-change-requests', icon: ChevronRight },
@@ -652,6 +656,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                   location.pathname === '/admin/products/configuration' ||
                   location.pathname === '/admin/products/stock-list' ||
                   location.pathname === '/admin/products/price-compare' ||
+                  location.pathname === '/admin/products/failed-ai-approvals' ||
                   location.pathname === '/admin/product-labels' ||
                   location.pathname === '/admin/product-change-requests';
                 const visibleProductSubmenu = productManagementSubmenu.filter((subItem) =>

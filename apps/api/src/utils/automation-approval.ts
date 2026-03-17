@@ -10,6 +10,7 @@ import {
   writeFabricPredominantColor,
   writeReadyToWearPredominantColor,
 } from './fabric-attributes';
+import { syncFailedProductApprovalTicketFromOutcome } from './failed-product-approval';
 
 export const AUTOMATION_SETTINGS_KEY = 'AUTOMATION_APPROVAL_SETTINGS_V1';
 
@@ -84,6 +85,10 @@ export type ProductAutomationOutcome = {
   summaryMessage: string;
   report: AutomationCheckReportRow[];
   changeReport: AutomationAppliedChange[];
+  technicalFailure: boolean;
+  technicalFailureReason: string;
+  autoRetryCount: number;
+  retryExhausted: boolean;
   updatedAt: string | null;
 };
 
@@ -136,6 +141,55 @@ const parseReportRows = (value: unknown): AutomationCheckReportRow[] => {
     }
   }
   return [];
+};
+
+type AutomationTechnicalFailureInfo = {
+  hasTechnicalFailure: boolean;
+  reason: string;
+  rowKeys: string[];
+};
+
+const TECHNICAL_AUTOMATION_ERROR_PATTERNS = [
+  /\bexecution error\b/i,
+  /\bprovider returned\b/i,
+  /\bfetch failed\b/i,
+  /\bnetwork\b/i,
+  /\btimeout\b/i,
+  /\btimed out\b/i,
+  /\baborted\b/i,
+  /\bquota\b/i,
+  /\bpermission[_\s-]?denied\b/i,
+  /\bprovider endpoint not found\b/i,
+  /\bmodel.+not found\b/i,
+  /\breturned\s+404\b/i,
+  /\bendpoint\b/i,
+  /\btechnical issue\b/i,
+  /\bhttp\s*(4\d\d|5\d\d)\b/i,
+  /\b(429|500|502|503|504)\b/i,
+];
+
+const isTechnicalAutomationFailureMessage = (message: string) => {
+  const normalized = String(message || '').trim();
+  if (!normalized) return false;
+  return TECHNICAL_AUTOMATION_ERROR_PATTERNS.some((pattern) => pattern.test(normalized));
+};
+
+export const detectTechnicalAutomationFailure = (reportInput: unknown): AutomationTechnicalFailureInfo => {
+  const report = parseReportRows(reportInput);
+  const failedRows = report.filter((row) => {
+    const status = String(row.status || '').toUpperCase();
+    if (status === 'PASS') return false;
+    return isTechnicalAutomationFailureMessage(row.message);
+  });
+  if (failedRows.length === 0) {
+    return { hasTechnicalFailure: false, reason: '', rowKeys: [] };
+  }
+  const first = failedRows[0];
+  return {
+    hasTechnicalFailure: true,
+    reason: truncateText(first.message || 'Automation execution failed due to a technical issue.', 500),
+    rowKeys: Array.from(new Set(failedRows.map((row) => String(row.key || '').trim()).filter(Boolean))),
+  };
 };
 
 const parseChangeReportRows = (value: unknown): AutomationAppliedChange[] => {
@@ -546,6 +600,10 @@ export const ensureProductAutomationOutcomeSchema = async () => {
       "summaryMessage" TEXT NOT NULL DEFAULT '',
       "report" JSONB NOT NULL DEFAULT '[]'::jsonb,
       "changeReport" JSONB NOT NULL DEFAULT '[]'::jsonb,
+      "technicalFailure" BOOLEAN NOT NULL DEFAULT false,
+      "technicalFailureReason" TEXT NOT NULL DEFAULT '',
+      "autoRetryCount" INTEGER NOT NULL DEFAULT 0,
+      "retryExhausted" BOOLEAN NOT NULL DEFAULT false,
       "notifiedAt" TIMESTAMP(3),
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -555,6 +613,22 @@ export const ensureProductAutomationOutcomeSchema = async () => {
   await prisma.$executeRawUnsafe(
     `ALTER TABLE "ProductAutomationOutcome"
      ADD COLUMN IF NOT EXISTS "changeReport" JSONB NOT NULL DEFAULT '[]'::jsonb`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "ProductAutomationOutcome"
+     ADD COLUMN IF NOT EXISTS "technicalFailure" BOOLEAN NOT NULL DEFAULT false`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "ProductAutomationOutcome"
+     ADD COLUMN IF NOT EXISTS "technicalFailureReason" TEXT NOT NULL DEFAULT ''`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "ProductAutomationOutcome"
+     ADD COLUMN IF NOT EXISTS "autoRetryCount" INTEGER NOT NULL DEFAULT 0`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "ProductAutomationOutcome"
+     ADD COLUMN IF NOT EXISTS "retryExhausted" BOOLEAN NOT NULL DEFAULT false`
   );
   await prisma.$executeRawUnsafe(
     `CREATE UNIQUE INDEX IF NOT EXISTS "ProductAutomationOutcome_productType_productId_key"
@@ -651,6 +725,10 @@ const mapProductAutomationOutcomeRow = (row: any): ProductAutomationOutcome => (
   summaryMessage: String(row?.summaryMessage || ''),
   report: parseReportRows(row?.report),
   changeReport: parseChangeReportRows(row?.changeReport),
+  technicalFailure: Boolean(row?.technicalFailure),
+  technicalFailureReason: String(row?.technicalFailureReason || ''),
+  autoRetryCount: Math.max(0, Number(row?.autoRetryCount || 0)),
+  retryExhausted: Boolean(row?.retryExhausted),
   updatedAt: row?.updatedAt ? new Date(row.updatedAt).toISOString() : null,
 });
 
@@ -685,19 +763,30 @@ export const saveProductAutomationOutcome = async (input: {
   summaryMessage?: string;
   failureSeverity?: AutomationFailureSeverity;
   needsCorrection?: boolean;
+  technicalFailure?: boolean;
+  technicalFailureReason?: string;
+  autoRetryCount?: number;
+  retryExhausted?: boolean;
   notifiedAt?: Date | null;
 }) => {
   await ensureProductAutomationOutcomeSchema();
   const report = parseReportRows(input.report);
   const changeReport = parseChangeReportRows(input.changeReport);
+  const technicalFromReport = detectTechnicalAutomationFailure(report);
   const derivedSeverity = input.failureSeverity || resolveProductAutomationFailureSeverity(report);
   const needsCorrection = input.needsCorrection ?? derivedSeverity !== 'NONE';
   const summaryMessage =
     String(input.summaryMessage || '').trim() || buildAutomationSummaryMessage(report, needsCorrection ? 'Needs correction.' : 'Passed');
+  const technicalFailure = input.technicalFailure ?? technicalFromReport.hasTechnicalFailure;
+  const technicalFailureReason = String(input.technicalFailureReason || technicalFromReport.reason || '').trim();
+  const autoRetryCount = Math.max(0, Math.min(1, Number(input.autoRetryCount || 0) || 0));
+  const retryExhausted =
+    input.retryExhausted ??
+    (technicalFailure && autoRetryCount >= 1 && needsCorrection);
   await prisma.$executeRawUnsafe(
     `INSERT INTO "ProductAutomationOutcome"
-      ("id","productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","changeReport","notifiedAt","createdAt","updatedAt")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11,NOW(),NOW())
+      ("id","productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","changeReport","technicalFailure","technicalFailureReason","autoRetryCount","retryExhausted","notifiedAt","createdAt","updatedAt")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11,$12,$13,$14,$15,NOW(),NOW())
      ON CONFLICT ("productType","productId")
      DO UPDATE SET
        "evaluationStatus" = EXCLUDED."evaluationStatus",
@@ -707,6 +796,10 @@ export const saveProductAutomationOutcome = async (input: {
        "summaryMessage" = EXCLUDED."summaryMessage",
        "report" = EXCLUDED."report",
        "changeReport" = EXCLUDED."changeReport",
+       "technicalFailure" = EXCLUDED."technicalFailure",
+       "technicalFailureReason" = EXCLUDED."technicalFailureReason",
+       "autoRetryCount" = EXCLUDED."autoRetryCount",
+       "retryExhausted" = EXCLUDED."retryExhausted",
        "notifiedAt" = COALESCE(EXCLUDED."notifiedAt","ProductAutomationOutcome"."notifiedAt"),
        "updatedAt" = NOW()`,
     randomUUID(),
@@ -719,17 +812,32 @@ export const saveProductAutomationOutcome = async (input: {
     summaryMessage,
     JSON.stringify(report),
     JSON.stringify(changeReport),
+    technicalFailure,
+    technicalFailureReason,
+    autoRetryCount,
+    Boolean(retryExhausted),
     input.notifiedAt || null
   );
   const rows = await prisma.$queryRawUnsafe<Array<any>>(
-    `SELECT "productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","changeReport","updatedAt"
+    `SELECT "productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","changeReport","technicalFailure","technicalFailureReason","autoRetryCount","retryExhausted","updatedAt"
      FROM "ProductAutomationOutcome"
      WHERE "productType" = $1 AND "productId" = $2
      LIMIT 1`,
     input.productType,
     input.productId
   );
-  return rows.length > 0 ? mapProductAutomationOutcomeRow(rows[0]) : null;
+  const mapped = rows.length > 0 ? mapProductAutomationOutcomeRow(rows[0]) : null;
+  if (mapped) {
+    await syncFailedProductApprovalTicketFromOutcome({
+      productType: mapped.productType,
+      productId: mapped.productId,
+      technicalFailure: mapped.technicalFailure,
+      needsCorrection: mapped.needsCorrection,
+      reason: mapped.technicalFailureReason || mapped.summaryMessage,
+      createdById: null,
+    });
+  }
+  return mapped;
 };
 
 const readProductAutomationOutcomeForProduct = async (input: {
@@ -740,7 +848,7 @@ const readProductAutomationOutcomeForProduct = async (input: {
   const productId = String(input.productId || '').trim();
   if (!productId) return null;
   const rows = await prisma.$queryRawUnsafe<Array<any>>(
-    `SELECT "productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","changeReport","updatedAt"
+    `SELECT "productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","changeReport","technicalFailure","technicalFailureReason","autoRetryCount","retryExhausted","updatedAt"
      FROM "ProductAutomationOutcome"
      WHERE "productType" = $1 AND "productId" = $2
      LIMIT 1`,
@@ -772,7 +880,7 @@ export const readProductAutomationOutcomesForProducts = async (input: {
   const ids = Array.from(new Set((input.productIds || []).map((entry) => String(entry || '').trim()).filter(Boolean)));
   if (ids.length === 0) return {} as Record<string, ProductAutomationOutcome>;
   const rows = await prisma.$queryRawUnsafe<Array<any>>(
-    `SELECT "productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","changeReport","updatedAt"
+    `SELECT "productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","changeReport","technicalFailure","technicalFailureReason","autoRetryCount","retryExhausted","updatedAt"
      FROM "ProductAutomationOutcome"
      WHERE "productType" = $1
        AND "productId" = ANY($2::text[])`,
@@ -2101,11 +2209,25 @@ export const testAutomationProviderBinding = async (input: {
 
 const safeRatio = (a: number, b: number) => (b > 0 ? a / b : 0);
 
+export type ProductAutomationEvaluation = {
+  canAutoApprove: boolean;
+  status: 'PASS' | 'REVIEW_REQUIRED' | 'AUTOMATION_DISABLED' | 'PRODUCT_NOT_FOUND';
+  report: AutomationCheckReportRow[];
+  changeReport: AutomationAppliedChange[];
+  technicalFailure?: boolean;
+  technicalFailureReason?: string;
+  autoRetryCount?: number;
+  retriedAfterTechnicalFailure?: boolean;
+  retryExhausted?: boolean;
+};
+
 export const evaluateProductAutomationChecks = async (input: {
   productType: ProductType;
   productId: string;
   settingsOverride?: AutomationApprovalSettings;
-}) => {
+  __autoRetryAttempt?: number;
+}): Promise<ProductAutomationEvaluation> => {
+  const autoRetryAttempt = Math.max(0, Math.min(1, Number(input.__autoRetryAttempt || 0) || 0));
   const settings = input.settingsOverride || (await readAutomationApprovalSettings()).settings;
   const criteria = settings.criteria[input.productType];
   const report: AutomationCheckReportRow[] = [];
@@ -3524,11 +3646,28 @@ Rules:
       if (NON_BLOCKING_PRODUCT_CRITERIA_KEYS.has(String(entry.key || '').trim())) return true;
       return entry.status === 'PASS';
     });
+  const technicalFailureInfo = detectTechnicalAutomationFailure(enhancedReport);
+  if (technicalFailureInfo.hasTechnicalFailure && autoRetryAttempt < 1) {
+    const rerun: ProductAutomationEvaluation = await evaluateProductAutomationChecks({
+      ...input,
+      __autoRetryAttempt: autoRetryAttempt + 1,
+    });
+    return {
+      ...rerun,
+      autoRetryCount: Math.max(1, Number((rerun as any)?.autoRetryCount || 1)),
+      retriedAfterTechnicalFailure: true,
+    };
+  }
   return {
     canAutoApprove,
     status: canAutoApprove ? ('PASS' as const) : ('REVIEW_REQUIRED' as const),
     report: enhancedReport,
     changeReport,
+    technicalFailure: technicalFailureInfo.hasTechnicalFailure,
+    technicalFailureReason: technicalFailureInfo.reason,
+    autoRetryCount: autoRetryAttempt,
+    retriedAfterTechnicalFailure: autoRetryAttempt > 0,
+    retryExhausted: technicalFailureInfo.hasTechnicalFailure && autoRetryAttempt >= 1,
   };
 };
 

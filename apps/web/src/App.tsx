@@ -68,6 +68,7 @@ import AdminBackups from './pages/admin/Backups';
 import AdminProductChangeRequests from './pages/admin/ProductChangeRequests';
 import AdminProductStockList from './pages/admin/ProductStockList';
 import AdminProductPriceCompare from './pages/admin/ProductPriceCompare';
+import AdminFailedAiApproval from './pages/admin/FailedAiApproval';
 import AdminResellerInfluencers from './pages/admin/ResellerInfluencers';
 import AdminAutomationApprovals from './pages/admin/AutomationApprovals';
 import AdminAutomationAiConfig from './pages/admin/AutomationAiConfig';
@@ -83,6 +84,7 @@ import SellerProfilePage from './pages/seller/Profile';
 import SellerEnterprisePage from './pages/seller/Enterprise';
 import SellerEnterpriseRoleManagementPage from './pages/seller/EnterpriseRoleManagement';
 import SellerMessagesPage from './pages/seller/Messages';
+import SellerFailedProductApprovalPage from './pages/seller/FailedProductApproval';
 
 // Designer Pages
 import DesignerDashboard from './pages/designer/Dashboard';
@@ -92,6 +94,7 @@ import DesignerEnterprisePage from './pages/designer/Enterprise';
 import DesignerEnterpriseRoleManagementPage from './pages/designer/EnterpriseRoleManagement';
 import DesignerMessagesPage from './pages/designer/Messages';
 import DesignerMeasurementsPage from './pages/designer/Measurements';
+import DesignerFailedProductApprovalPage from './pages/designer/FailedProductApproval';
 
 // QA Pages
 import QADashboard from './pages/qa/Dashboard';
@@ -318,6 +321,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/admin/products/failed-ai-approvals"
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminFailedAiApproval />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
                   path="/admin/orders"
                   element={
                     <AdminPermissionGuard required={['orders:manage']}>
@@ -525,6 +536,7 @@ function App() {
                 <Route path="enterprise" element={<SellerEnterprisePage />} />
                 <Route path="enterprise/role-management" element={<SellerEnterpriseRoleManagementPage />} />
                 <Route path="messages" element={<SellerMessagesPage />} />
+                <Route path="failed-product-approvals" element={<SellerFailedProductApprovalPage />} />
                 <Route path="*" element={<Navigate to="/seller" replace />} />
               </Route>
             </Route>
@@ -547,6 +559,7 @@ function App() {
                 <Route path="enterprise" element={<DesignerEnterprisePage />} />
                 <Route path="enterprise/role-management" element={<DesignerEnterpriseRoleManagementPage />} />
                 <Route path="messages" element={<DesignerMessagesPage />} />
+                <Route path="failed-product-approvals" element={<DesignerFailedProductApprovalPage />} />
                 <Route path="*" element={<Navigate to="/designer" replace />} />
               </Route>
             </Route>

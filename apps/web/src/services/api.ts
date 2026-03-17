@@ -6269,6 +6269,93 @@ const adminApi = {
       };
     }>('/admin/products/price-compare', { params }),
 
+  getFailedProductApprovals: (params?: {
+    search?: string;
+    productType?: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+    category?: string;
+    page?: number;
+    limit?: number;
+  }) =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        rows: Array<{
+          id: string;
+          productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+          productId: string;
+          productName: string;
+          productCategory: string;
+          ownerUserId: string;
+          ownerRole: 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+          ownerName: string;
+          latestFailureReason: string;
+          status: 'OPEN' | 'RESOLVED';
+          createdAt: string;
+          updatedAt: string;
+          messageCount: number;
+        }>;
+        categories: string[];
+        pagination: { page: number; limit: number; total: number; pages: number };
+      };
+    }>('/failed-product-approvals/admin', { params }),
+
+  rerunFailedProductApprovals: (
+    items: Array<{ productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; productId: string }>,
+    applyDecision = true
+  ) =>
+    apiService.post<{
+      success: boolean;
+      data: {
+        results: Array<{
+          productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+          productId: string;
+          action: 'NONE' | 'AUTO_APPROVED' | 'AUTO_REJECTED';
+          canAutoApprove: boolean;
+          status: string;
+          summaryMessage: string;
+          technicalFailure: boolean;
+          technicalFailureReason: string;
+          retryExhausted: boolean;
+          autoRetryCount: number;
+          success: boolean;
+          error?: string;
+        }>;
+        summary: { total: number; successCount: number; failedCount: number };
+      };
+    }>('/failed-product-approvals/admin/rerun', { items, applyDecision }),
+
+  getFailedProductApprovalTicketMessages: (ticketId: string) =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        ticket: any;
+        messages: Array<{
+          id: string;
+          ticketId: string;
+          senderUserId: string;
+          senderRole: string;
+          body: string;
+          createdAt: string;
+        }>;
+      };
+    }>(`/failed-product-approvals/admin/tickets/${encodeURIComponent(String(ticketId || '').trim())}/messages`),
+
+  sendFailedProductApprovalTicketMessage: (ticketId: string, body: string) =>
+    apiService.post<{
+      success: boolean;
+      message?: string;
+      data?: {
+        id: string;
+        ticketId: string;
+        senderUserId: string;
+        senderRole: string;
+        body: string;
+        createdAt: string;
+      };
+    }>(`/failed-product-approvals/admin/tickets/${encodeURIComponent(String(ticketId || '').trim())}/messages`, {
+      body,
+    }),
+
   updateProductStockMonitor: (payload: { threshold: number }) =>
     apiService.patch<{
       success: boolean;
@@ -7542,6 +7629,33 @@ const sellerApi = {
       `/fabric-seller/orders/${orderId}/status`,
       `/seller/orders/${orderId}/status`,
     ]),
+
+  getFailedProductApprovals: (params?: {
+    search?: string;
+    category?: string;
+    page?: number;
+    limit?: number;
+  }) =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        rows: Array<any>;
+        categories: string[];
+        pagination: { page: number; limit: number; total: number; pages: number };
+      };
+    }>('/failed-product-approvals/my', { params }),
+
+  getFailedProductApprovalTicketMessages: (ticketId: string) =>
+    apiService.get<{
+      success: boolean;
+      data: { ticket: any; messages: Array<any> };
+    }>(`/failed-product-approvals/my/tickets/${encodeURIComponent(String(ticketId || '').trim())}/messages`),
+
+  sendFailedProductApprovalTicketMessage: (ticketId: string, body: string) =>
+    apiService.post<{ success: boolean; message?: string; data?: any }>(
+      `/failed-product-approvals/my/tickets/${encodeURIComponent(String(ticketId || '').trim())}/messages`,
+      { body }
+    ),
 };
 
 // Designer API
@@ -7626,6 +7740,33 @@ const designerApi = {
       data?: any;
       message?: string;
     }>(payload),
+
+  getFailedProductApprovals: (params?: {
+    search?: string;
+    category?: string;
+    page?: number;
+    limit?: number;
+  }) =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        rows: Array<any>;
+        categories: string[];
+        pagination: { page: number; limit: number; total: number; pages: number };
+      };
+    }>('/failed-product-approvals/my', { params }),
+
+  getFailedProductApprovalTicketMessages: (ticketId: string) =>
+    apiService.get<{
+      success: boolean;
+      data: { ticket: any; messages: Array<any> };
+    }>(`/failed-product-approvals/my/tickets/${encodeURIComponent(String(ticketId || '').trim())}/messages`),
+
+  sendFailedProductApprovalTicketMessage: (ticketId: string, body: string) =>
+    apiService.post<{ success: boolean; message?: string; data?: any }>(
+      `/failed-product-approvals/my/tickets/${encodeURIComponent(String(ticketId || '').trim())}/messages`,
+      { body }
+    ),
 
   updateProfileCompletion: (data: any) =>
     writeDesignerProfileCompletionWithFallback<{ success: boolean; data: any; message?: string }>(data),

@@ -171,7 +171,7 @@ router.post('/evaluate-product', async (req, res, next) => {
               productType: payload.productType,
               productId: payload.productId,
               status: evaluation.status,
-              failures: evaluation.report.filter((row) => row.status === 'FAIL' || row.status === 'NEEDS_AI'),
+              failures: evaluation.report.filter((row: any) => row.status === 'FAIL' || row.status === 'NEEDS_AI'),
             },
           },
         });
