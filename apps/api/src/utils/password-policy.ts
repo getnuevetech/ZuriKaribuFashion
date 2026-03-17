@@ -71,17 +71,27 @@ export const clearTemporaryPasswordRequirement = async (userId: string) => {
 
 export const readPasswordPolicyForUser = async (userId: string) => {
   await ensurePasswordPolicySchema();
-  const rows = await prisma.$queryRawUnsafe<Array<PasswordPolicyRow>>(
-    `SELECT "userId","requiresPasswordChange","temporaryPassword","updatedAt"
-     FROM "UserPasswordPolicy"
-     WHERE "userId" = $1
-     LIMIT 1`,
-    userId
-  );
-  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-  return {
-    requiresPasswordChange: row?.requiresPasswordChange === true,
-    temporaryPassword: row?.temporaryPassword === true,
-    updatedAt: row?.updatedAt ? new Date(row.updatedAt).toISOString() : null,
-  };
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<PasswordPolicyRow>>(
+      `SELECT "userId","requiresPasswordChange","temporaryPassword","updatedAt"
+       FROM "UserPasswordPolicy"
+       WHERE "userId" = $1
+       LIMIT 1`,
+      userId
+    );
+    const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+    return {
+      requiresPasswordChange: row?.requiresPasswordChange === true,
+      temporaryPassword: row?.temporaryPassword === true,
+      updatedAt: row?.updatedAt ? new Date(row.updatedAt).toISOString() : null,
+    };
+  } catch {
+    // Restricted DB roles may block bootstrap DDL and table queries.
+    // Do not break login flow if password-policy table is unavailable.
+    return {
+      requiresPasswordChange: false,
+      temporaryPassword: false,
+      updatedAt: null,
+    };
+  }
 };
