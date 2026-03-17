@@ -848,6 +848,7 @@ const normalizeEndpoint = (baseUrl: string, suffix: string) => {
 const isGeminiBaseUrl = (baseUrl: string) => /generativelanguage\.googleapis\.com/i.test(String(baseUrl || ''));
 const isGeminiOpenAiCompatUrl = (baseUrl: string) =>
   isGeminiBaseUrl(baseUrl) && /\/openai(?:\/|$)/i.test(String(baseUrl || ''));
+const isStabilityBaseUrl = (baseUrl: string) => /stability\.ai/i.test(String(baseUrl || ''));
 const toGeminiNativeBaseUrl = (baseUrl: string) =>
   String(baseUrl || '')
     .trim()
@@ -858,6 +859,14 @@ const normalizeGeminiModel = (value: string) =>
     .trim()
     .replace(/^models\//i, '')
     .replace(/^\/+|\/+$/g, '');
+const resolveStabilityImageEndpoint = (baseUrl: string) => {
+  const trimmed = String(baseUrl || '').trim().replace(/\/+$/, '');
+  if (!trimmed) return '';
+  if (/\/stable-image\/generate\/core$/i.test(trimmed)) return trimmed;
+  if (/\/stable-image\/generate$/i.test(trimmed)) return `${trimmed}/core`;
+  if (/\/v2beta(?:\/|$)/i.test(trimmed)) return `${trimmed}/stable-image/generate/core`;
+  return `${trimmed}/v2beta/stable-image/generate/core`;
+};
 const isQuotaExceededError = (status: number, body: string) =>
   status === 429 || /quota|rate\s*limit|exceeded your current quota|billing/i.test(String(body || ''));
 
@@ -1146,6 +1155,54 @@ const callImageRegenerationExecutor = async (
   provider: AutomationAiProvider,
   prompt: string
 ): Promise<AiExecutionResult> => {
+  if (isStabilityBaseUrl(provider.baseUrl)) {
+    const endpoint = resolveStabilityImageEndpoint(provider.baseUrl);
+    if (!endpoint) {
+      return { status: 'ERROR', reason: 'Missing Stability AI endpoint.' };
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${String(provider.apiKey || '').trim()}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          prompt: String(prompt || '').trim(),
+          output_format: 'png',
+          aspect_ratio: '1:1',
+        }).toString(),
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        return {
+          status: 'ERROR',
+          reason: `Stability returned ${response.status}: ${String(text || '').slice(0, 260)}`,
+        };
+      }
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(text || '{}');
+      } catch {
+        parsed = {};
+      }
+      const imageUrl = String(parsed?.url || parsed?.imageUrl || '').trim();
+      if (imageUrl) return { status: 'OK', output: `Regenerated image URL: ${imageUrl}` };
+      const imageB64 =
+        String(parsed?.image || '').trim() ||
+        String(parsed?.artifacts?.[0]?.base64 || parsed?.artifacts?.[0]?.b64_json || '').trim();
+      if (imageB64) return { status: 'OK', output: 'Regenerated image payload received (base64).' };
+      return { status: 'ERROR', reason: 'No regenerated image output returned from Stability.' };
+    } catch (error: any) {
+      return { status: 'ERROR', reason: String(error?.message || 'Network error while calling Stability.') };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
   if (isGeminiBaseUrl(provider.baseUrl) && !isGeminiOpenAiCompatUrl(provider.baseUrl)) {
     return {
       status: 'ERROR',
@@ -1211,6 +1268,13 @@ const executeAutomationAiFunction = async (params: {
       status: 'NO_PROVIDER',
       reason: `No active provider binding for ${normalizedFunctionKey || params.functionKey}.`,
     } as AiExecutionResult;
+  }
+  if (isStabilityBaseUrl(provider.baseUrl) && normalizedFunctionKey !== 'image_regeneration') {
+    return {
+      status: 'ERROR',
+      reason:
+        'Stability AI provider currently supports image_regeneration only in this automation engine. Choose image_regeneration for provider tests/bindings.',
+    };
   }
   if (normalizedFunctionKey === 'image_regeneration') {
     return callImageRegenerationExecutor(provider, params.prompt);

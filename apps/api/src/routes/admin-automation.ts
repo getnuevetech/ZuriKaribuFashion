@@ -241,7 +241,7 @@ router.get('/providers/suggestions', async (_req, res) => {
       {
         providerKey: 'STABILITY_AI',
         label: 'Stability AI',
-        recommendedFunctions: ['image_regeneration', 'image_verification'],
+        recommendedFunctions: ['image_regeneration'],
       },
       {
         providerKey: 'AZURE_DOCUMENT_INTELLIGENCE',

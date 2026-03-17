@@ -187,13 +187,25 @@ export default function AdminAutomationAiConfigPage() {
     try {
       setTestingProviderId(providerId);
       setMessage('');
+      const provider = providers.find((entry: any) => String(entry?.id || '') === providerId);
+      const providerBaseUrl = String(
+        providerDrafts[providerId]?.baseUrl || provider?.baseUrl || ''
+      ).toLowerCase();
+      const isStability = providerBaseUrl.includes('stability.ai');
+      const resolvedFunctionKey = isStability
+        ? 'image_regeneration'
+        : testFunctionKey || 'text_grammar_enhancement';
       const response = await api.admin.testAutomationProvider({
         providerId,
-        functionKey: testFunctionKey || 'text_grammar_enhancement',
+        functionKey: resolvedFunctionKey,
         prompt: testPrompt || undefined,
       });
       if (response.success) {
-        setMessage(`Provider test passed: ${String(response?.data?.message || response?.message || 'OK')}`);
+        setMessage(
+          `Provider test passed${isStability ? ' (using image_regeneration for Stability)' : ''}: ${String(
+            response?.data?.message || response?.message || 'OK'
+          )}`
+        );
       } else {
         setMessage(`Provider test failed: ${String(response?.data?.message || response?.message || 'Unknown error')}`);
       }
@@ -314,6 +326,13 @@ export default function AdminAutomationAiConfigPage() {
             If you see
             <code className="mx-1 rounded bg-white px-1">429 quota exceeded</code>
             , the key is valid but usage/billing limit is reached.
+          </p>
+          <p className="mt-1">
+            Stability AI: use Base URL
+            <code className="mx-1 rounded bg-white px-1">https://api.stability.ai</code>
+            and test/bind with
+            <code className="mx-1 rounded bg-white px-1">image_regeneration</code>
+            (text/chat functions are not supported by Stability in this automation path).
           </p>
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
