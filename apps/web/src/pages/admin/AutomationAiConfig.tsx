@@ -12,6 +12,8 @@ type ProviderForm = {
   isActive: boolean;
 };
 
+type MessageTone = 'info' | 'success' | 'error';
+
 const toProviderForm = (value: any): ProviderForm => ({
   id: String(value?.id || ''),
   name: String(value?.name || ''),
@@ -27,6 +29,7 @@ export default function AdminAutomationAiConfigPage() {
   const [saving, setSaving] = useState(false);
   const [testingProviderId, setTestingProviderId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [messageTone, setMessageTone] = useState<MessageTone>('info');
   const [testFunctionKey, setTestFunctionKey] = useState('text_grammar_enhancement');
   const [testPrompt, setTestPrompt] = useState('');
   const [settings, setSettings] = useState<any>(null);
@@ -51,6 +54,7 @@ export default function AdminAutomationAiConfigPage() {
   const loadData = async () => {
     try {
       setLoading(true);
+      setMessageTone('info');
       setMessage('');
       const [settingsRes, suggestionsRes] = await Promise.all([
         api.admin.getAutomationSettings(),
@@ -63,6 +67,7 @@ export default function AdminAutomationAiConfigPage() {
         setSuggestions(Array.isArray(suggestionsRes.data) ? suggestionsRes.data : []);
       }
     } catch (error: any) {
+      setMessageTone('error');
       setMessage(error?.response?.data?.message || error?.message || 'Failed to load automation AI settings.');
     } finally {
       setLoading(false);
@@ -92,13 +97,16 @@ export default function AdminAutomationAiConfigPage() {
   const persist = async (next: any) => {
     try {
       setSaving(true);
+      setMessageTone('info');
       setMessage('');
       const response = await api.admin.updateAutomationSettings(next);
       if (response.success) {
         setSettings(response.data || next);
+        setMessageTone('success');
         setMessage('Automation AI settings saved.');
       }
     } catch (error: any) {
+      setMessageTone('error');
       setMessage(error?.response?.data?.message || error?.message || 'Failed to save automation AI settings.');
     } finally {
       setSaving(false);
@@ -107,6 +115,7 @@ export default function AdminAutomationAiConfigPage() {
 
   const addProvider = async () => {
     if (!newProvider.name.trim()) {
+      setMessageTone('error');
       setMessage('Provider name is required.');
       return;
     }
@@ -146,6 +155,7 @@ export default function AdminAutomationAiConfigPage() {
   const saveProviderRow = async (providerId: string) => {
     const draft = providerDrafts[providerId];
     if (!draft || !String(draft.name || '').trim()) {
+      setMessageTone('error');
       setMessage('Provider name is required.');
       return;
     }
@@ -186,6 +196,7 @@ export default function AdminAutomationAiConfigPage() {
   const testProvider = async (providerId: string) => {
     try {
       setTestingProviderId(providerId);
+      setMessageTone('info');
       setMessage('');
       const provider = providers.find((entry: any) => String(entry?.id || '') === providerId);
       const providerBaseUrl = String(
@@ -201,15 +212,18 @@ export default function AdminAutomationAiConfigPage() {
         prompt: testPrompt || undefined,
       });
       if (response.success) {
+        setMessageTone('success');
         setMessage(
           `Provider test passed${isStability ? ' (using image_regeneration for Stability)' : ''}: ${String(
             response?.data?.message || response?.message || 'OK'
           )}`
         );
       } else {
+        setMessageTone('error');
         setMessage(`Provider test failed: ${String(response?.data?.message || response?.message || 'Unknown error')}`);
       }
     } catch (error: any) {
+      setMessageTone('error');
       setMessage(
         `Provider test failed: ${String(
           error?.response?.data?.message || error?.response?.data?.data?.message || error?.message || 'Unknown error'
@@ -227,6 +241,7 @@ export default function AdminAutomationAiConfigPage() {
       .replace(/[^a-z0-9_]/g, '_');
     const functionLabel = String(newBinding.functionLabel || '').trim();
     if (!functionKey || !functionLabel) {
+      setMessageTone('error');
       setMessage('Function key and label are required to add a binding.');
       return;
     }
@@ -270,7 +285,17 @@ export default function AdminAutomationAiConfigPage() {
       </div>
 
       {message ? (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">{message}</div>
+        <div
+          className={`rounded-lg border px-3 py-2 text-sm ${
+            messageTone === 'success'
+              ? 'border-green-200 bg-green-50 text-green-800'
+              : messageTone === 'error'
+                ? 'border-red-200 bg-red-50 text-red-800'
+                : 'border-gray-200 bg-gray-50 text-gray-700'
+          }`}
+        >
+          {message}
+        </div>
       ) : null}
 
       <div className="rounded-xl border bg-white p-4 shadow-sm">
