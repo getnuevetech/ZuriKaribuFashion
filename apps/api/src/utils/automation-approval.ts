@@ -788,6 +788,40 @@ const formatAutomationMessageLines = (value: string, maxLineLength = 520, maxLin
     .slice(0, maxLines);
 };
 
+const FIELD_FALLBACK_BY_CRITERION_KEY: Record<string, string[]> = {
+  name_grammar: ['name'],
+  description_grammar: ['description'],
+  image_quality: ['images[0]'],
+  predominant_color_match: ['images[0]'],
+  material_match: ['images[0]'],
+  style_match: ['name', 'description'],
+  price_outlier: ['finalPrice/basePrice'],
+  currency_sanity: ['finalPrice/basePrice'],
+  minimum_yards: ['minYards'],
+  stock_vs_minimum: ['stockYards'],
+  suitable_fabrics_count: ['suitableFabrics'],
+  required_measurements: ['requiredMeasurements'],
+};
+
+const HUMAN_FIELD_LABELS: Record<string, string> = {
+  name: 'Product title',
+  description: 'Product description',
+  'images[0]': 'Primary product image',
+  finalPrice: 'Final price',
+  basePrice: 'Base price',
+  'finalPrice/basePrice': 'Product pricing',
+  minYards: 'Minimum order (yards)',
+  stockYards: 'Stock quantity (yards)',
+  suitableFabrics: 'Suitable fabrics',
+  requiredMeasurements: 'Required measurements',
+};
+
+const toHumanFieldLabel = (field: string) => {
+  const normalized = String(field || '').trim();
+  if (!normalized) return 'General';
+  return HUMAN_FIELD_LABELS[normalized] || normalized;
+};
+
 const escapeHtml = (value: string) =>
   String(value || '')
     .replace(/&/g, '&amp;')
@@ -801,21 +835,63 @@ const buildVendorAutomationMessageBundle = (input: {
   severity: AutomationFailureSeverity;
   summary: string;
   report: AutomationCheckReportRow[];
+  changeReport: AutomationAppliedChange[];
   aiRecommendations: string[];
 }) => {
   const severityLabel = input.severity === 'MAJOR' ? 'Major' : input.severity === 'MID' ? 'Mid' : 'Low';
   const rows = correctionRowsFromReport(input.report);
   const summaryLines =
     formatAutomationMessageLines(input.summary, 280, 4).map((line) => line.replace(/^•\s*/, '')) || [];
-  const checkItems =
+  const changeRowsByCriterionKey = new Map<string, AutomationAppliedChange[]>();
+  for (const change of input.changeReport) {
+    const key = String(change.key || '').trim();
+    if (!key) continue;
+    const current = changeRowsByCriterionKey.get(key) || [];
+    current.push(change);
+    changeRowsByCriterionKey.set(key, current);
+  }
+  const fieldItems =
     rows.length > 0
-      ? rows.map((entry, index) => ({
-          index: index + 1,
-          label: normalizeReadableLine(entry.label || entry.key, 220),
-          status: String(entry.status || 'FAIL').toUpperCase(),
-          messageLines: formatAutomationMessageLines(entry.message || 'Requires review', 420, 8),
-        }))
-      : [{ index: 1, label: 'Automation summary', status: 'INFO', messageLines: summaryLines }];
+      ? rows.flatMap((entry) => {
+          const key = String(entry.key || '').trim();
+          const criterionLabel = normalizeReadableLine(entry.label || key, 220);
+          const status = String(entry.status || 'FAIL').toUpperCase();
+          const messageLines = formatAutomationMessageLines(entry.message || 'Requires review', 420, 8);
+          const mappedChangeRows = changeRowsByCriterionKey.get(key) || [];
+          const fallbackFields = FIELD_FALLBACK_BY_CRITERION_KEY[key] || [];
+          const fields = Array.from(
+            new Set([...mappedChangeRows.map((row) => String(row.field || '').trim()).filter(Boolean), ...fallbackFields])
+          );
+          const resolvedFields = fields.length > 0 ? fields : ['general'];
+          return resolvedFields.map((field) => {
+            const relatedChange =
+              mappedChangeRows.find((row) => String(row.field || '').trim() === field) || mappedChangeRows[0] || null;
+            return {
+              field,
+              fieldLabel: toHumanFieldLabel(field),
+              criterionLabel,
+              status,
+              messageLines,
+              editStatus: relatedChange ? String(relatedChange.status || '').toUpperCase() : '',
+              beforeValue: relatedChange ? normalizeReadableLine(String(relatedChange.beforeValue || ''), 180) : '',
+              afterValue: relatedChange ? normalizeReadableLine(String(relatedChange.afterValue || ''), 180) : '',
+              editReason: relatedChange ? normalizeReadableLine(String(relatedChange.reason || ''), 240) : '',
+            };
+          });
+        })
+      : [
+          {
+            field: 'general',
+            fieldLabel: 'General',
+            criterionLabel: 'Automation summary',
+            status: 'INFO',
+            messageLines: summaryLines.length > 0 ? summaryLines : ['Requires review'],
+            editStatus: '',
+            beforeValue: '',
+            afterValue: '',
+            editReason: '',
+          },
+        ];
   const recommendationItems =
     input.aiRecommendations.length > 0
       ? input.aiRecommendations.map((entry, index) => ({
@@ -834,10 +910,17 @@ const buildVendorAutomationMessageBundle = (input: {
     'SUMMARY:',
     ...summaryLines.map((line) => `- ${line}`),
     '',
-    'REQUIRED CORRECTIONS:',
-    ...checkItems.flatMap((entry) => [
-      `${entry.index}. [${entry.status}] ${entry.label}`,
-      ...entry.messageLines.map((line) => `   - ${line}`),
+    'FIELD-BY-FIELD AI COMMENTS:',
+    ...fieldItems.flatMap((entry, index) => [
+      `${index + 1}. FIELD: ${entry.fieldLabel}`,
+      `   CHECK: ${entry.criterionLabel}`,
+      `   STATUS: ${entry.status}`,
+      `   AI COMMENT: ${entry.messageLines[0] || 'Requires review'}`,
+      ...entry.messageLines.slice(1).map((line) => `   AI COMMENT (CONT.): ${line}`),
+      ...(entry.editStatus ? [`   AI EDIT RESULT: ${entry.editStatus}`] : []),
+      ...(entry.beforeValue ? [`   BEFORE: ${entry.beforeValue}`] : []),
+      ...(entry.afterValue ? [`   AFTER: ${entry.afterValue}`] : []),
+      ...(entry.editReason ? [`   EDIT NOTE: ${entry.editReason}`] : []),
     ]),
     '',
     'AI RECOMMENDATIONS:',
@@ -856,13 +939,21 @@ const buildVendorAutomationMessageBundle = (input: {
     `<p><strong>Severity:</strong> ${escapeHtml(severityLabel)}</p>`,
     '<p><strong>Summary</strong></p>',
     `<ul>${summaryLines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`,
-    '<p><strong>Required corrections</strong></p>',
-    `<ol>${checkItems
+    '<p><strong>Field-by-field AI comments</strong></p>',
+    `<ol>${fieldItems
       .map(
         (entry) =>
-          `<li><strong>[${escapeHtml(entry.status)}] ${escapeHtml(entry.label)}</strong><ul>${entry.messageLines
-            .map((line) => `<li>${escapeHtml(line)}</li>`)
-            .join('')}</ul></li>`
+          `<li>
+            <p><strong>Field:</strong> ${escapeHtml(entry.fieldLabel)}</p>
+            <p><strong>Check:</strong> ${escapeHtml(entry.criterionLabel)}</p>
+            <p><strong>Status:</strong> ${escapeHtml(entry.status)}</p>
+            <p><strong>AI comment:</strong></p>
+            <ul>${entry.messageLines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>
+            ${entry.editStatus ? `<p><strong>AI edit result:</strong> ${escapeHtml(entry.editStatus)}</p>` : ''}
+            ${entry.beforeValue ? `<p><strong>Before:</strong> ${escapeHtml(entry.beforeValue)}</p>` : ''}
+            ${entry.afterValue ? `<p><strong>After:</strong> ${escapeHtml(entry.afterValue)}</p>` : ''}
+            ${entry.editReason ? `<p><strong>Edit note:</strong> ${escapeHtml(entry.editReason)}</p>` : ''}
+          </li>`
       )
       .join('')}</ol>`,
     '<p><strong>AI recommendations</strong></p>',
@@ -878,9 +969,9 @@ const buildVendorAutomationMessageBundle = (input: {
     '<p><strong>Communication channels sent</strong></p>',
     '<ul><li>In-app notification</li><li>Inbox message</li><li>Email (if your account email is available)</li></ul>',
   ].join('');
-  const inAppTopCorrections = checkItems.slice(0, 2).map((entry) => {
+  const inAppTopCorrections = fieldItems.slice(0, 2).map((entry) => {
     const firstLine = entry.messageLines[0] || 'Requires review.';
-    return `- ${entry.label}: ${firstLine}`;
+    return `- Field: ${entry.fieldLabel} | AI: ${firstLine}`;
   });
   const inApp = [
     `${input.productName}`,
@@ -959,6 +1050,7 @@ export const notifyVendorAboutProductAutomationFailure = async (input: {
       severity,
       summary,
       report,
+      changeReport,
       aiRecommendations,
     });
     const deliveryText = `Hello ${vendorName},\n\n${bundle.plain}\n\nPlease update your product and resubmit for review.\n`;

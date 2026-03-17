@@ -77,6 +77,34 @@ export default function MessagesInbox({ heading, description }: MessagesInboxPro
     }
   };
 
+  const renderMessageBody = (value: string) => {
+    const normalized = String(value || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const lines = normalized.split('\n');
+    return lines.map((rawLine, index) => {
+      const line = rawLine.trimEnd();
+      if (!line.trim()) {
+        return <div key={`line-${index}`} className="h-3" />;
+      }
+      const bullet = line.match(/^[-*]\s+(.*)$/);
+      const content = bullet?.[1] || line;
+      const headerMatch = content.match(/^([A-Za-z][A-Za-z0-9 /_()\-]{1,48}):\s*(.*)$/);
+      if (headerMatch) {
+        return (
+          <p key={`line-${index}`} className="mb-1 break-words text-sm text-gray-700">
+            {bullet ? <span className="mr-1">•</span> : null}
+            <strong>{headerMatch[1]}:</strong> {headerMatch[2] || ''}
+          </p>
+        );
+      }
+      return (
+        <p key={`line-${index}`} className="mb-1 break-words text-sm text-gray-700">
+          {bullet ? <span className="mr-1">•</span> : null}
+          {content}
+        </p>
+      );
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl border bg-white p-5">
@@ -173,7 +201,7 @@ export default function MessagesInbox({ heading, description }: MessagesInboxPro
               </button>
             </div>
             <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
-              <p className="whitespace-pre-wrap break-words text-sm text-gray-700">{selectedMessage.body || '—'}</p>
+              <div className="whitespace-pre-wrap">{renderMessageBody(selectedMessage.body || '—')}</div>
             </div>
             <div className="flex justify-end gap-2 border-t px-5 py-3">
               <Button variant="outline" onClick={() => setSelectedMessage(null)}>
