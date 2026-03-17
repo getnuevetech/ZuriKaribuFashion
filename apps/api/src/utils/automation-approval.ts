@@ -901,7 +901,7 @@ const callTextExecutor = async (
   system: string
 ): Promise<AiExecutionResult> => {
   if (isGeminiBaseUrl(provider.baseUrl) && !isGeminiOpenAiCompatUrl(provider.baseUrl)) {
-    const configuredModel = normalizeGeminiModel(String(provider.model || '').trim() || 'gemini-2.0-flash');
+    const configuredModel = normalizeGeminiModel(String(provider.model || '').trim() || 'gemini-2.5-flash');
     const apiKey = String(provider.apiKey || '').trim();
     if (!apiKey) {
       return { status: 'ERROR', reason: 'Missing provider API key.' };
@@ -1013,6 +1013,8 @@ const callTextExecutor = async (
         [
           configuredModel,
           configuredModel.endsWith('-latest') ? configuredModel.replace(/-latest$/i, '') : `${configuredModel}-latest`,
+          'gemini-2.5-flash',
+          'gemini-2.5-pro',
           'gemini-2.0-flash',
           'gemini-2.0-flash-lite',
           'gemini-1.5-flash',
@@ -1066,7 +1068,7 @@ const callTextExecutor = async (
     return { status: 'ERROR', reason: 'Missing provider endpoint.' } as AiExecutionResult;
   }
   const resolvedModel = isGeminiBaseUrl(provider.baseUrl)
-    ? normalizeGeminiModel(String(provider.model || '').trim() || 'gemini-1.5-flash')
+    ? normalizeGeminiModel(String(provider.model || '').trim() || 'gemini-2.5-flash')
     : String(provider.model || '').trim() || 'gpt-4o-mini';
   const tryGeminiNativeFallback = async (cause: string): Promise<AiExecutionResult | null> => {
     if (!isGeminiOpenAiCompatUrl(provider.baseUrl)) return null;

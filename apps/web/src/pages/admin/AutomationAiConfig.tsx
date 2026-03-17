@@ -297,7 +297,7 @@ export default function AdminAutomationAiConfigPage() {
             Gemini native (recommended for text): Base URL
             <code className="mx-1 rounded bg-white px-1">https://generativelanguage.googleapis.com/v1beta</code>
             with model
-            <code className="mx-1 rounded bg-white px-1">gemini-2.0-flash</code>
+            <code className="mx-1 rounded bg-white px-1">gemini-2.5-flash</code>
             (do not prefix model with
             <code className="mx-1 rounded bg-white px-1">models/</code>
             ).
@@ -306,9 +306,9 @@ export default function AdminAutomationAiConfigPage() {
             Gemini OpenAI-compatible: Base URL
             <code className="mx-1 rounded bg-white px-1">https://generativelanguage.googleapis.com/v1beta/openai</code>
             with model
-            <code className="mx-1 rounded bg-white px-1">gemini-1.5-flash</code>
+            <code className="mx-1 rounded bg-white px-1">gemini-2.5-flash</code>
             or
-            <code className="mx-1 rounded bg-white px-1">gemini-2.0-flash</code>.
+            <code className="mx-1 rounded bg-white px-1">gemini-2.5-pro</code>.
           </p>
           <p className="mt-1">
             If you see
@@ -381,7 +381,7 @@ export default function AdminAutomationAiConfigPage() {
                         className="w-full rounded border px-2 py-1"
                         value={draft.model}
                         onChange={(event) => updateProviderDraft(providerId, { model: event.target.value })}
-                        placeholder="gpt-4o-mini or gemini-1.5-flash"
+                        placeholder="gpt-4o-mini or gemini-2.5-flash"
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -467,7 +467,7 @@ export default function AdminAutomationAiConfigPage() {
           />
           <input
             className="rounded border px-3 py-2"
-            placeholder="Model (e.g., gpt-4o-mini or gemini-1.5-flash)"
+            placeholder="Model (e.g., gpt-4o-mini or gemini-2.5-flash)"
             value={newProvider.model}
             onChange={(event) => setNewProvider((prev) => ({ ...prev, model: event.target.value }))}
           />
