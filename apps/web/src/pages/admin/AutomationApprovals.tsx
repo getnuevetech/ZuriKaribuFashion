@@ -53,6 +53,15 @@ const friendlyEditStatus = (status: string) => {
   return token || 'Unknown';
 };
 
+const toReadableAutomationMessage = (value: string) =>
+  String(value || '')
+    .replace(/\bAI verification:\s*/gi, 'Review note: ')
+    .replace(/\bAI guidance:\s*/gi, 'Recommended update: ')
+    .replace(/\bAI execution error:\s*/gi, 'Processing error: ')
+    .replace(/\bAI\b/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
 export default function AdminAutomationApprovalsPage() {
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -675,7 +684,7 @@ export default function AdminAutomationApprovalsPage() {
                     </Badge>
                   </div>
                 </div>
-                <p className="mt-1 text-xs text-gray-600">{row.message}</p>
+                <p className="mt-1 text-xs text-gray-600">{toReadableAutomationMessage(String(row.message || ''))}</p>
                 <p className="mt-1 text-[11px] text-gray-500">
                   Edit source field used:{' '}
                   {(aiEditFieldsByKey.get(String(row.key || '').trim()) ||
@@ -710,7 +719,8 @@ export default function AdminAutomationApprovalsPage() {
                     </p>
                     {entry.reason ? (
                       <p className="mt-1 text-gray-500">
-                        <span className="font-medium text-gray-700">Reason:</span> {String(entry.reason)}
+                        <span className="font-medium text-gray-700">Reason:</span>{' '}
+                        {toReadableAutomationMessage(String(entry.reason || ''))}
                       </p>
                     ) : null}
                   </div>

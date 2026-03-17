@@ -134,6 +134,15 @@ interface DesignOrder {
   priority: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
+const toReadableAutomationMessage = (value: string) =>
+  String(value || '')
+    .replace(/\bAI verification:\s*/gi, 'Review note: ')
+    .replace(/\bAI guidance:\s*/gi, 'Recommended update: ')
+    .replace(/\bAI execution error:\s*/gi, 'Processing error: ')
+    .replace(/\bAI\b/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
 interface FeaturedRequest {
   id: string;
   requestStatus: string;
@@ -402,8 +411,15 @@ const normalizeAutomationOutcome = (value: any): ProductAutomationOutcome | null
         key: String(row?.key || '').trim(),
         label: String(row?.label || row?.key || '').trim(),
         status: String(row?.status || 'SKIPPED').toUpperCase(),
-        message: String(row?.message || '').trim(),
+        message: toReadableAutomationMessage(String(row?.message || '').trim()),
       }))
+        .filter(
+          (row: any) =>
+            !(
+              String(row?.status || '').toUpperCase() === 'SKIPPED' &&
+              /disabled by admin automation settings/i.test(String(row?.message || ''))
+            )
+        )
     : [];
   const severity = String(value.failureSeverity || 'NONE').toUpperCase();
   return {
@@ -411,7 +427,7 @@ const normalizeAutomationOutcome = (value: any): ProductAutomationOutcome | null
     action: String(value.action || 'NONE'),
     failureSeverity: severity === 'MAJOR' ? 'MAJOR' : severity === 'MID' ? 'MID' : 'NONE',
     needsCorrection: Boolean(value.needsCorrection),
-    summaryMessage: String(value.summaryMessage || '').trim(),
+    summaryMessage: toReadableAutomationMessage(String(value.summaryMessage || '').trim()),
     report,
     updatedAt: value.updatedAt ? String(value.updatedAt) : null,
   };

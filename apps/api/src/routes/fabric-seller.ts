@@ -617,6 +617,7 @@ router.get('/fabrics', async (req, res, next) => {
       readProductAutomationOutcomesForProducts({
         productType: ProductType.FABRIC as any,
         productIds: fabrics.map((item) => item.id),
+        userFacing: true,
       }),
     ]);
     const metadataByFabricId = new Map<string, any>(metadataRows);

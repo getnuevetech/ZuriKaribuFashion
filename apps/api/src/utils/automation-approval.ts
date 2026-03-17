@@ -196,6 +196,37 @@ const parseFirstJsonObject = (value: string): Record<string, unknown> | null => 
 const correctionRowsFromReport = (report: AutomationCheckReportRow[]) =>
   report.filter((entry) => entry.status === 'FAIL' || entry.status === 'NEEDS_AI' || entry.status === 'SKIPPED');
 
+const isDisabledByAdminReportRow = (row: { status?: string; message?: string }) => {
+  const message = String(row?.message || '').trim().toLowerCase();
+  const status = String(row?.status || '').trim().toUpperCase();
+  return status === 'SKIPPED' && /disabled by admin automation settings/.test(message);
+};
+
+const toUserFacingAutomationMessage = (value: string, max = 1600) => {
+  const normalized = String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return '';
+  const plain = normalized
+    .replace(/\bAI verification:\s*/gi, 'Review note: ')
+    .replace(/\bAI guidance:\s*/gi, 'Recommended update: ')
+    .replace(/\bAI execution error:\s*/gi, 'Processing error: ')
+    .replace(/\bAI image regeneration failed:\s*/gi, 'Image processing failed: ')
+    .replace(/\bAI edit execution failed:\s*/gi, 'Automatic correction failed: ')
+    .replace(/\bAI auto-edit applied to\b/gi, 'Automatic correction applied to')
+    .replace(/\bStrict AI edit required for\b/gi, 'Required correction for')
+    .replace(
+      /Auto-edit not applied because "Allow AI edits" is disabled for this criterion\./gi,
+      'Automatic correction is turned off for this check in admin settings.'
+    )
+    .replace(/\bAI\b/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return truncateText(plain, max);
+};
+
 export const resolveProductAutomationFailureSeverity = (
   report: AutomationCheckReportRow[]
 ): AutomationFailureSeverity => {
@@ -206,11 +237,18 @@ export const resolveProductAutomationFailureSeverity = (
 };
 
 const buildAutomationSummaryMessage = (report: AutomationCheckReportRow[], fallback = '') => {
-  const rows = correctionRowsFromReport(report).slice(0, 3);
-  if (rows.length === 0) return truncateText(fallback || 'Automation checks passed.', 400);
-  const parts = rows.map((entry) => truncateText(entry.message || entry.label || entry.key, 100)).filter(Boolean);
-  const suffix = correctionRowsFromReport(report).length > rows.length ? ' (+more)' : '';
-  return truncateText(`Needs correction: ${parts.join(' | ')}${suffix}`, 400);
+  const rows = correctionRowsFromReport(report).filter((entry) => !isDisabledByAdminReportRow(entry));
+  if (rows.length === 0) return truncateText(fallback || 'All review checks passed.', 400);
+  const labels = rows
+    .slice(0, 3)
+    .map((entry) => String(entry.label || entry.key || '').trim())
+    .filter(Boolean);
+  const extraCount = Math.max(0, rows.length - labels.length);
+  const detailSuffix = extraCount > 0 ? ` and ${extraCount} more check${extraCount > 1 ? 's' : ''}` : '';
+  return truncateText(
+    `This product needs updates in ${rows.length} check${rows.length > 1 ? 's' : ''}: ${labels.join('; ')}${detailSuffix}.`,
+    400
+  );
 };
 
 const buildVendorAiRecommendations = (input: {
@@ -235,22 +273,26 @@ const buildVendorAiRecommendations = (input: {
     const reason = String(entry.reason || '').trim();
     if (field === 'images[0]') {
       add(
-        `Upload a clearer image of the exact same product/angle (enhancement only). AI note: ${reason || 'Regeneration must preserve original product identity.'}`
+        `Upload a clearer image of the exact same product/angle (enhancement only). Note: ${
+          reason || 'Regeneration must preserve original product identity.'
+        }`
       );
     } else if (field === 'name') {
-      add(`Revise product title for grammar and clarity. AI note: ${reason || 'Title edit was required but not applied.'}`);
+      add(`Revise product title for grammar and clarity. Note: ${reason || 'Title edit was required but not applied.'}`);
     } else if (field === 'description') {
       add(
-        `Revise product description for grammar, readability, and sales clarity. AI note: ${reason || 'Description edit was required but not applied.'}`
+        `Revise product description for grammar, readability, and sales clarity. Note: ${
+          reason || 'Description edit was required but not applied.'
+        }`
       );
     } else if (field) {
-      add(`Update ${field}. AI note: ${reason || `${label} requires correction.`}`);
+      add(`Update ${field}. Note: ${reason || `${label} requires correction.`}`);
     }
   }
 
   for (const row of input.report) {
     if (row.status !== 'FAIL' && row.status !== 'NEEDS_AI') continue;
-    const guidanceMatch = String(row.message || '').match(/AI guidance:\s*([\s\S]+)/i);
+    const guidanceMatch = String(row.message || '').match(/(?:AI guidance|Recommended update|Review note):\s*([\s\S]+)/i);
     if (guidanceMatch?.[1]) {
       add(`${row.label || row.key}: ${guidanceMatch[1]}`);
     }
@@ -606,6 +648,27 @@ const mapProductAutomationOutcomeRow = (row: any): ProductAutomationOutcome => (
   updatedAt: row?.updatedAt ? new Date(row.updatedAt).toISOString() : null,
 });
 
+const toUserFacingAutomationOutcome = (outcome: ProductAutomationOutcome): ProductAutomationOutcome => {
+  const report = (Array.isArray(outcome.report) ? outcome.report : [])
+    .filter((row) => !isDisabledByAdminReportRow(row))
+    .map((row) => ({
+      ...row,
+      message: toUserFacingAutomationMessage(row.message, 1800),
+    }));
+  const summaryFallback = outcome.needsCorrection ? 'This product needs updates before it can go live.' : 'All review checks passed.';
+  return {
+    ...outcome,
+    summaryMessage: buildAutomationSummaryMessage(report, summaryFallback),
+    report,
+    changeReport: (Array.isArray(outcome.changeReport) ? outcome.changeReport : [])
+      .filter((row) => !/disabled by admin automation settings/i.test(String(row.reason || '')))
+      .map((row) => ({
+        ...row,
+        reason: toUserFacingAutomationMessage(row.reason, 1200),
+      })),
+  };
+};
+
 export const saveProductAutomationOutcome = async (input: {
   productType: ProductType;
   productId: string;
@@ -697,6 +760,7 @@ export const clearProductAutomationOutcome = async (input: { productType: Produc
 export const readProductAutomationOutcomesForProducts = async (input: {
   productType: ProductType;
   productIds: string[];
+  userFacing?: boolean;
 }) => {
   await ensureProductAutomationOutcomeSchema();
   const ids = Array.from(new Set((input.productIds || []).map((entry) => String(entry || '').trim()).filter(Boolean)));
@@ -710,7 +774,8 @@ export const readProductAutomationOutcomesForProducts = async (input: {
     ids
   );
   return (Array.isArray(rows) ? rows : []).reduce<Record<string, ProductAutomationOutcome>>((acc, row) => {
-    const mapped = mapProductAutomationOutcomeRow(row);
+    const mappedRaw = mapProductAutomationOutcomeRow(row);
+    const mapped = input.userFacing ? toUserFacingAutomationOutcome(mappedRaw) : mappedRaw;
     if (mapped.productId) acc[mapped.productId] = mapped;
     return acc;
   }, {});
@@ -923,9 +988,13 @@ const buildVendorAutomationMessageBundle = (input: {
   aiRecommendations: string[];
 }) => {
   const severityLabel = input.severity === 'MAJOR' ? 'Major' : input.severity === 'MID' ? 'Mid' : 'None';
-  const rows = Array.isArray(input.report) && input.report.length > 0 ? input.report : correctionRowsFromReport(input.report);
+  const rows = (Array.isArray(input.report) && input.report.length > 0 ? input.report : correctionRowsFromReport(input.report)).filter(
+    (entry) => !isDisabledByAdminReportRow(entry)
+  );
   const summaryLines =
-    formatAutomationMessageLines(input.summary, 280, 4).map((line) => line.replace(/^•\s*/, '')) || [];
+    formatAutomationMessageLines(toUserFacingAutomationMessage(input.summary, 1200), 280, 4).map((line) =>
+      line.replace(/^•\s*/, '')
+    ) || [];
   const changeRowsByCriterionKey = new Map<string, AutomationAppliedChange[]>();
   for (const change of input.changeReport) {
     const key = String(change.key || '').trim();
@@ -940,7 +1009,7 @@ const buildVendorAutomationMessageBundle = (input: {
           const key = String(entry.key || '').trim();
           const criterionLabel = normalizeReadableLine(entry.label || key, 220);
           const status = String(entry.status || 'FAIL').toUpperCase();
-          const messageLines = formatAutomationMessageLines(entry.message || 'Requires review', 420, 8);
+          const messageLines = formatAutomationMessageLines(toUserFacingAutomationMessage(entry.message || 'Requires review', 2200), 420, 8);
           const mappedChangeRows = changeRowsByCriterionKey.get(key) || [];
           const fallbackFields = FIELD_FALLBACK_BY_CRITERION_KEY[key] || [];
           const fields = Array.from(
@@ -998,20 +1067,20 @@ const buildVendorAutomationMessageBundle = (input: {
     'SUMMARY:',
     ...summaryLines.map((line) => `- ${line}`),
     '',
-    'FIELD-BY-FIELD AI COMMENTS:',
+    'FIELD-BY-FIELD REVIEW COMMENTS:',
     ...fieldItems.flatMap((entry, index) => [
       `${index + 1}. FIELD: ${entry.fieldLabel}`,
       `   CHECK: ${entry.criterionLabel}`,
       `   STATUS: ${entry.statusLabel}`,
-      `   AI COMMENT: ${entry.messageLines[0] || 'Requires review'}`,
-      ...entry.messageLines.slice(1).map((line) => `   AI COMMENT (CONT.): ${line}`),
-      ...(entry.editStatusLabel ? [`   AI EDIT RESULT: ${entry.editStatusLabel}`] : []),
+      `   COMMENT: ${entry.messageLines[0] || 'Requires review'}`,
+      ...entry.messageLines.slice(1).map((line) => `   COMMENT (CONT.): ${line}`),
+      ...(entry.editStatusLabel ? [`   EDIT RESULT: ${entry.editStatusLabel}`] : []),
       ...(entry.beforeValue ? [`   BEFORE: ${entry.beforeValue}`] : []),
       ...(entry.afterValue ? [`   AFTER: ${entry.afterValue}`] : []),
       ...(entry.editReason ? [`   EDIT NOTE: ${entry.editReason}`] : []),
     ]),
     '',
-    'AI RECOMMENDATIONS:',
+    'RECOMMENDED UPDATES:',
     ...recommendationItems.flatMap((entry) => [
       `${entry.index}. ${entry.messageLines[0] || 'Review this correction item.'}`,
       ...entry.messageLines.slice(1).map((line) => `   - ${line}`),
@@ -1027,7 +1096,7 @@ const buildVendorAutomationMessageBundle = (input: {
     `<p><strong>Severity:</strong> ${escapeHtml(severityLabel)}</p>`,
     '<p><strong>Summary</strong></p>',
     `<ul>${summaryLines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`,
-    '<p><strong>Field-by-field AI comments</strong></p>',
+    '<p><strong>Field-by-field review comments</strong></p>',
     `<ol>${fieldItems
       .map(
         (entry) =>
@@ -1035,16 +1104,16 @@ const buildVendorAutomationMessageBundle = (input: {
             <p><strong>Field:</strong> ${escapeHtml(entry.fieldLabel)}</p>
             <p><strong>Check:</strong> ${escapeHtml(entry.criterionLabel)}</p>
             <p><strong>Status:</strong> ${escapeHtml(entry.statusLabel)}</p>
-            <p><strong>AI comment:</strong></p>
+            <p><strong>Comment:</strong></p>
             <ul>${entry.messageLines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>
-            ${entry.editStatusLabel ? `<p><strong>AI edit result:</strong> ${escapeHtml(entry.editStatusLabel)}</p>` : ''}
+            ${entry.editStatusLabel ? `<p><strong>Edit result:</strong> ${escapeHtml(entry.editStatusLabel)}</p>` : ''}
             ${entry.beforeValue ? `<p><strong>Before:</strong> ${escapeHtml(entry.beforeValue)}</p>` : ''}
             ${entry.afterValue ? `<p><strong>After:</strong> ${escapeHtml(entry.afterValue)}</p>` : ''}
             ${entry.editReason ? `<p><strong>Edit note:</strong> ${escapeHtml(entry.editReason)}</p>` : ''}
           </li>`
       )
       .join('')}</ol>`,
-    '<p><strong>AI recommendations</strong></p>',
+    '<p><strong>Recommended updates</strong></p>',
     `<ol>${recommendationItems
       .map(
         (entry) =>
@@ -1059,7 +1128,7 @@ const buildVendorAutomationMessageBundle = (input: {
   ].join('');
   const inAppTopCorrections = fieldItems.slice(0, 2).map((entry) => {
     const firstLine = entry.messageLines[0] || 'Requires review.';
-    return `- Field: ${entry.fieldLabel} | AI: ${firstLine}`;
+    return `- Field: ${entry.fieldLabel} | Note: ${firstLine}`;
   });
   const inApp = [
     `${input.productName}`,
@@ -2058,7 +2127,6 @@ export const evaluateProductAutomationChecks = async (input: {
   const addResult = (row: AutomationCheckReportRow) => {
     const criterion = criteria.find((entry) => entry.key === row.key);
     if (criterion && !criterion.enabled) {
-      report.push({ ...row, status: 'SKIPPED', message: 'Disabled by admin automation settings.' });
       return;
     }
     report.push(row);
@@ -3345,6 +3413,7 @@ Rules:
 
   const seenKeys = new Set(report.map((entry) => entry.key));
   for (const criterion of criteria) {
+    if (criterion.enabled === false) continue;
     if (seenKeys.has(criterion.key)) continue;
     report.push({
       key: criterion.key,
@@ -3482,6 +3551,7 @@ export const evaluateAccountAutomationChecks = async (input: {
   }
   const seenKeys = new Set(report.map((entry) => entry.key));
   for (const criterion of criteria) {
+    if (criterion.enabled === false) continue;
     if (seenKeys.has(criterion.key)) continue;
     report.push({
       key: criterion.key,

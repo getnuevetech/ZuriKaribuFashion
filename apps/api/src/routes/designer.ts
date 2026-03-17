@@ -1215,6 +1215,7 @@ router.get('/designs', async (req, res, next) => {
       readProductAutomationOutcomesForProducts({
         productType: ProductType.DESIGN as any,
         productIds: designs.map((item) => item.id),
+        userFacing: true,
       }),
     ]);
     const metadataByDesignId = new Map<string, any>(metadataRows);
@@ -2190,6 +2191,7 @@ router.get('/ready-to-wear', async (req, res, next) => {
       readProductAutomationOutcomesForProducts({
         productType: ProductType.READY_TO_WEAR as any,
         productIds: products.map((item) => item.id),
+        userFacing: true,
       }),
     ]);
     const metadataByProductId = new Map<string, any>(metadataRows);
