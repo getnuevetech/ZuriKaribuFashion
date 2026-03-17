@@ -14,6 +14,20 @@ type ProviderForm = {
 
 type MessageTone = 'info' | 'success' | 'error';
 
+const SYSTEM_FUNCTION_OPTIONS = [
+  { key: 'text_grammar_enhancement', label: 'Text/Grammatical Correction' },
+  { key: 'image_verification', label: 'Image Verification' },
+  { key: 'image_regeneration', label: 'Image Regeneration' },
+  { key: 'document_ocr_analysis', label: 'Document OCR/Analysis' },
+] as const;
+
+const SYSTEM_FUNCTION_KEY_SET = new Set(SYSTEM_FUNCTION_OPTIONS.map((entry) => entry.key));
+
+const FUNCTION_LABEL_BY_KEY = SYSTEM_FUNCTION_OPTIONS.reduce<Record<string, string>>((acc, entry) => {
+  acc[entry.key] = entry.label;
+  return acc;
+}, {});
+
 const toProviderForm = (value: any): ProviderForm => ({
   id: String(value?.id || ''),
   name: String(value?.name || ''),
@@ -45,11 +59,11 @@ export default function AdminAutomationAiConfigPage() {
   });
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [newBinding, setNewBinding] = useState({
-    functionKey: '',
-    functionLabel: '',
+    functionKey: SYSTEM_FUNCTION_OPTIONS[0].key,
     providerId: '',
     isActive: true,
   });
+  const [providerFunctionSelections, setProviderFunctionSelections] = useState<Record<string, string[]>>({});
 
   const loadData = async () => {
     try {
@@ -92,7 +106,18 @@ export default function AdminAutomationAiConfigPage() {
       return acc;
     }, {});
     setProviderDrafts(nextDrafts);
-  }, [providers]);
+    const nextSelections = (providers || []).reduce<Record<string, string[]>>((acc, provider: any) => {
+      const id = String(provider?.id || '').trim();
+      if (!id) return acc;
+      const linkedFunctionKeys = bindings
+        .filter((binding: any) => String(binding?.providerId || '').trim() === id)
+        .map((binding: any) => String(binding?.functionKey || '').trim().toLowerCase())
+        .filter((key: string) => SYSTEM_FUNCTION_KEY_SET.has(key as any));
+      acc[id] = Array.from(new Set(linkedFunctionKeys));
+      return acc;
+    }, {});
+    setProviderFunctionSelections(nextSelections);
+  }, [providers, bindings]);
 
   const persist = async (next: any) => {
     try {
@@ -152,6 +177,21 @@ export default function AdminAutomationAiConfigPage() {
     }));
   };
 
+  const toggleProviderFunctionSelection = (providerId: string, functionKey: string, checked: boolean) => {
+    const normalized = String(functionKey || '').trim().toLowerCase();
+    if (!SYSTEM_FUNCTION_KEY_SET.has(normalized as any)) return;
+    setProviderFunctionSelections((prev) => {
+      const current = Array.isArray(prev[providerId]) ? prev[providerId] : [];
+      const next = checked
+        ? Array.from(new Set([...current, normalized]))
+        : current.filter((entry) => entry !== normalized);
+      return {
+        ...prev,
+        [providerId]: next,
+      };
+    });
+  };
+
   const saveProviderRow = async (providerId: string) => {
     const draft = providerDrafts[providerId];
     if (!draft || !String(draft.name || '').trim()) {
@@ -168,9 +208,34 @@ export default function AdminAutomationAiConfigPage() {
           }
         : entry
     );
+    const selectedFunctionKeys = Array.from(
+      new Set(
+        (providerFunctionSelections[providerId] || [])
+          .map((entry) => String(entry || '').trim().toLowerCase())
+          .filter((entry) => SYSTEM_FUNCTION_KEY_SET.has(entry as any))
+      )
+    );
+    const providerExistingBindings = bindings.filter(
+      (entry: any) => String(entry?.providerId || '').trim() === providerId
+    );
+    const otherBindings = bindings.filter((entry: any) => String(entry?.providerId || '').trim() !== providerId);
+    const nextProviderBindings = selectedFunctionKeys.map((functionKey) => {
+      const existing = providerExistingBindings.find(
+        (entry: any) => String(entry?.functionKey || '').trim().toLowerCase() === functionKey
+      );
+      return {
+        ...(existing || {}),
+        id: existing?.id || crypto.randomUUID(),
+        functionKey,
+        functionLabel: FUNCTION_LABEL_BY_KEY[functionKey] || functionKey,
+        providerId,
+        isActive: existing?.isActive !== false,
+      };
+    });
     const nextSettings = {
       ...(settings || {}),
       aiProviders: nextProviders,
+      functionBindings: [...otherBindings, ...nextProviderBindings],
     };
     await persist(nextSettings);
   };
@@ -187,6 +252,11 @@ export default function AdminAutomationAiConfigPage() {
     };
     await persist(nextSettings);
     setProviderDrafts((prev) => {
+      const next = { ...prev };
+      delete next[providerId];
+      return next;
+    });
+    setProviderFunctionSelections((prev) => {
       const next = { ...prev };
       delete next[providerId];
       return next;
@@ -239,10 +309,20 @@ export default function AdminAutomationAiConfigPage() {
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9_]/g, '_');
-    const functionLabel = String(newBinding.functionLabel || '').trim();
-    if (!functionKey || !functionLabel) {
+    if (!functionKey || !SYSTEM_FUNCTION_KEY_SET.has(functionKey as any)) {
       setMessageTone('error');
-      setMessage('Function key and label are required to add a binding.');
+      setMessage('Please select a valid system function key.');
+      return;
+    }
+    if (
+      bindings.some(
+        (entry: any) =>
+          String(entry?.functionKey || '').trim().toLowerCase() === functionKey &&
+          String(entry?.providerId || '').trim() === String(newBinding.providerId || '').trim()
+      )
+    ) {
+      setMessageTone('error');
+      setMessage('Binding already exists for this function key and provider.');
       return;
     }
     const next = {
@@ -252,7 +332,7 @@ export default function AdminAutomationAiConfigPage() {
         {
           id: crypto.randomUUID(),
           functionKey,
-          functionLabel,
+          functionLabel: FUNCTION_LABEL_BY_KEY[functionKey] || functionKey,
           providerId: String(newBinding.providerId || '').trim(),
           isActive: Boolean(newBinding.isActive),
         },
@@ -260,8 +340,7 @@ export default function AdminAutomationAiConfigPage() {
     };
     setSettings(next);
     setNewBinding({
-      functionKey: '',
-      functionLabel: '',
+      functionKey: SYSTEM_FUNCTION_OPTIONS[0].key,
       providerId: '',
       isActive: true,
     });
@@ -379,7 +458,7 @@ export default function AdminAutomationAiConfigPage() {
           />
         </div>
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[1200px] text-sm">
+          <table className="w-full min-w-[1400px] text-sm">
             <thead className="bg-gray-50 text-left text-gray-500">
               <tr>
                 <th className="px-3 py-2">Name</th>
@@ -387,6 +466,7 @@ export default function AdminAutomationAiConfigPage() {
                 <th className="px-3 py-2">Base URL</th>
                 <th className="px-3 py-2">Model</th>
                 <th className="px-3 py-2">API Key</th>
+                <th className="px-3 py-2">Function Keys</th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2">Test</th>
                 <th className="px-3 py-2">Actions</th>
@@ -437,6 +517,25 @@ export default function AdminAutomationAiConfigPage() {
                       />
                     </td>
                     <td className="px-3 py-2">
+                      <div className="grid gap-1">
+                        {SYSTEM_FUNCTION_OPTIONS.map((option) => {
+                          const selected = (providerFunctionSelections[providerId] || []).includes(option.key);
+                          return (
+                            <label key={`${providerId}-${option.key}`} className="inline-flex items-center gap-2 text-xs text-gray-700">
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={(event) =>
+                                  toggleProviderFunctionSelection(providerId, option.key, event.target.checked)
+                                }
+                              />
+                              {option.label}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
                       <label className="inline-flex items-center gap-2 text-xs text-gray-700">
                         <input
                           type="checkbox"
@@ -478,7 +577,7 @@ export default function AdminAutomationAiConfigPage() {
               })}
               {providers.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-4 text-center text-sm text-gray-500" colSpan={8}>
+                  <td className="px-3 py-4 text-center text-sm text-gray-500" colSpan={9}>
                     No provider configured yet.
                   </td>
                 </tr>
@@ -540,21 +639,20 @@ export default function AdminAutomationAiConfigPage() {
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-gray-900">Function Bindings</h2>
         <p className="text-xs text-gray-500">
-          Bind each automation function to a configured provider. You can add/edit more functions in settings payload.
+          Bind system-defined automation functions to configured providers.
         </p>
-        <div className="mt-3 grid gap-2 rounded border p-3 md:grid-cols-[1fr_2fr_1fr_auto_auto]">
-          <input
+        <div className="mt-3 grid gap-2 rounded border p-3 md:grid-cols-[1fr_1fr_auto_auto]">
+          <select
             className="rounded border px-2 py-1 text-sm"
-            placeholder="function_key"
             value={newBinding.functionKey}
             onChange={(event) => setNewBinding((prev) => ({ ...prev, functionKey: event.target.value }))}
-          />
-          <input
-            className="rounded border px-2 py-1 text-sm"
-            placeholder="Function label"
-            value={newBinding.functionLabel}
-            onChange={(event) => setNewBinding((prev) => ({ ...prev, functionLabel: event.target.value }))}
-          />
+          >
+            {SYSTEM_FUNCTION_OPTIONS.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
           <select
             className="rounded border px-2 py-1 text-sm"
             value={newBinding.providerId}

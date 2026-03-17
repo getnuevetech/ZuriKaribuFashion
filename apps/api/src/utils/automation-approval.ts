@@ -23,6 +23,13 @@ export type AutomationFunctionBinding = {
   isActive: boolean;
 };
 
+const SYSTEM_AUTOMATION_FUNCTION_KEYS = new Set([
+  'text_grammar_enhancement',
+  'image_verification',
+  'image_regeneration',
+  'document_ocr_analysis',
+]);
+
 export type AutomationCriterion = {
   key: string;
   label: string;
@@ -268,7 +275,7 @@ const normalizeProvider = (value: unknown): AutomationAiProvider | null => {
 const normalizeBinding = (value: unknown): AutomationFunctionBinding | null => {
   const row = parseObject(value);
   const functionKey = normalizeAutomationFunctionKey(row.functionKey);
-  if (!functionKey) return null;
+  if (!functionKey || !SYSTEM_AUTOMATION_FUNCTION_KEYS.has(functionKey)) return null;
   return {
     id: String(row.id || randomUUID()),
     functionKey,
