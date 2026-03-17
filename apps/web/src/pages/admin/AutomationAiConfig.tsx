@@ -97,6 +97,26 @@ export default function AdminAutomationAiConfigPage() {
     () => (Array.isArray(settings?.functionBindings) ? settings.functionBindings : []),
     [settings]
   );
+  const providerTagOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    const add = (value: string, label: string) => {
+      const normalized = String(value || '').trim();
+      if (!normalized) return;
+      if (!options.has(normalized)) options.set(normalized, String(label || normalized).trim() || normalized);
+    };
+    add('OPENAI', 'OpenAI');
+    add('GEMINI', 'Google Gemini');
+    add('STABILITY_AI', 'Stability AI');
+    add('AZURE_DOCUMENT_INTELLIGENCE', 'Azure Document Intelligence');
+    for (const row of suggestions || []) {
+      add(String(row?.providerKey || ''), String(row?.label || row?.providerKey || ''));
+    }
+    for (const row of providers || []) {
+      const tag = String(row?.functionTag || '').trim();
+      if (tag) add(tag, tag);
+    }
+    return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
+  }, [suggestions, providers]);
 
   useEffect(() => {
     const nextDrafts = (providers || []).reduce<Record<string, ProviderForm>>((acc, provider: any) => {
@@ -486,11 +506,18 @@ export default function AdminAutomationAiConfigPage() {
                       />
                     </td>
                     <td className="px-3 py-2">
-                      <input
+                      <select
                         className="w-full rounded border px-2 py-1"
                         value={draft.functionTag}
                         onChange={(event) => updateProviderDraft(providerId, { functionTag: event.target.value })}
-                      />
+                      >
+                        <option value="">Select provider tag</option>
+                        {providerTagOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                     <td className="px-3 py-2">
                       <input
@@ -596,12 +623,18 @@ export default function AdminAutomationAiConfigPage() {
             value={newProvider.name}
             onChange={(event) => setNewProvider((prev) => ({ ...prev, name: event.target.value }))}
           />
-          <input
+          <select
             className="rounded border px-3 py-2"
-            placeholder="Function tag (e.g., Text/Grammatical AI)"
             value={newProvider.functionTag}
             onChange={(event) => setNewProvider((prev) => ({ ...prev, functionTag: event.target.value }))}
-          />
+          >
+            <option value="">Provider tag (select)</option>
+            {providerTagOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
           <input
             className="rounded border px-3 py-2"
             placeholder="Base URL (e.g., https://api.openai.com/v1 or .../v1beta)"
