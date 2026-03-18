@@ -176,6 +176,14 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
 
   const items = navItems[userType] || [];
   const userPermissions = Array.isArray(user?.permissions) ? user.permissions : [];
+  const hasPermissionRequirement = (requirement: string) => {
+    const alternatives = String(requirement || '')
+      .split('|')
+      .map((token) => token.trim())
+      .filter(Boolean);
+    if (alternatives.length === 0) return true;
+    return alternatives.some((permission) => userPermissions.includes(permission));
+  };
   const canAccessAdminNav = (href: string) => {
     if (userType !== 'admin') return true;
     if (!userPermissions || userPermissions.length === 0 || userPermissions.includes('*')) return true;
@@ -220,7 +228,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/tickets': ['orders:manage'],
       '/admin/customer-service/chat': ['customer_service:chat:manage'],
       '/admin/customer-service/settings': ['customer_service:settings:manage'],
-      '/admin/voip': ['voip:manage'],
+      '/admin/voip': ['voip:manage|orders:manage'],
       '/admin/banners': ['banners:manage'],
       '/admin/homepage': ['homepage:manage'],
       '/admin/homepage-visibility': ['homepage:manage'],
@@ -230,7 +238,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     };
     const required = permissionByHref[href] || [];
     if (required.length === 0) return true;
-    return required.every((permission) => userPermissions.includes(permission));
+    return required.every((requirement) => hasPermissionRequirement(requirement));
   };
   const visibleItems = items.filter((item) => canAccessAdminNav(item.href));
   const roleLabel = roleLabels[userType] || 'User';

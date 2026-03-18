@@ -8,6 +8,15 @@ interface AdminPermissionGuardProps {
   children: ReactNode;
 }
 
+const hasPermissionRequirement = (grants: string[], requirement: string) => {
+  const alternatives = String(requirement || '')
+    .split('|')
+    .map((token) => token.trim())
+    .filter(Boolean);
+  if (alternatives.length === 0) return true;
+  return alternatives.some((permission) => grants.includes(permission));
+};
+
 export default function AdminPermissionGuard({ required = [], children }: AdminPermissionGuardProps) {
   const { user } = useAuthStore();
   const location = useLocation();
@@ -25,7 +34,7 @@ export default function AdminPermissionGuard({ required = [], children }: AdminP
     return <>{children}</>;
   }
 
-  const allowed = required.every((permission) => grants.includes(permission));
+  const allowed = required.every((requirement) => hasPermissionRequirement(grants, requirement));
   if (!allowed) {
     const fallbackRoute = getAdminHomeRouteForPermissions(grants);
     if (fallbackRoute === location.pathname) {

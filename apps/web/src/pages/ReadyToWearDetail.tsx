@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Heart, Star, MapPin, Truck, Check, Loader2, Sparkles, Ruler, X } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Heart, Star, MapPin, Truck, Check, Loader2, Sparkles, Ruler, X, Share2, ChevronLeft, ChevronRight } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { api } from '../services/api';
 import { useCartStore } from '../store/cartStore';
@@ -449,29 +449,15 @@ export default function ReadyToWearDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-28 pt-28 md:pb-8 md:pt-32">
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-          <Link to="/" className="hover:text-black">
-            Home
-          </Link>
-          <span>&gt;</span>
-          <Link to="/ready-to-wear" className="hover:text-black">
-            Shop
-          </Link>
-          <span>&gt;</span>
-          <span className="text-gray-700">Ready to Wear</span>
-          <span>&gt;</span>
-          <span className="font-medium text-gray-800">{product.name}</span>
-        </div>
-
-        <Link to="/ready-to-wear" className="mb-5 inline-flex items-center text-sm text-gray-500 hover:text-black">
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
+        <Link to="/ready-to-wear" className="mb-6 inline-flex items-center text-gray-500 hover:text-black">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Ready to Wear
         </Link>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 lg:p-8">
-          <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="contents">
             <div className="space-y-4">
               <div className="relative overflow-hidden rounded-xl bg-gray-100" style={{ aspectRatio: '3/4' }}>
                 <img
@@ -493,19 +479,30 @@ export default function ReadyToWearDetail() {
                     <button
                       type="button"
                       onClick={() => canGoPrevImage && setSelectedImage((prev) => Math.max(0, prev - 1))}
-                      className="absolute left-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center bg-white/90 text-gray-700 shadow hover:bg-white"
+                      className="absolute left-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-white/90 text-gray-700 shadow-lg hover:bg-white"
                     >
-                      ‹
+                      <ChevronLeft className="h-5 w-5" />
                     </button>
                     <button
                       type="button"
                       onClick={() => canGoNextImage && setSelectedImage((prev) => Math.min((product.images?.length || 1) - 1, prev + 1))}
-                      className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center bg-white/90 text-gray-700 shadow hover:bg-white"
+                      className="absolute right-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-white/90 text-gray-700 shadow-lg hover:bg-white"
                     >
-                      ›
+                      <ChevronRight className="h-5 w-5" />
                     </button>
                   </>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={handleToggleLike}
+                  className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center bg-white/90 shadow-lg transition-colors hover:bg-white"
+                  aria-label="Save to wishlist"
+                >
+                  <Heart className={`h-5 w-5 ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
+                </button>
+                <div className="absolute left-4 top-4 rounded-full bg-black/65 px-2 py-1 text-xs font-medium text-white">
+                  {likeCount} likes
+                </div>
               </div>
 
               {(product.images?.length || 0) > 1 ? (
@@ -542,16 +539,26 @@ export default function ReadyToWearDetail() {
             </div>
 
             <div className="space-y-5">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                {flagCode ? (
-                  <img
-                    src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
-                    alt={`${product.designer?.country || 'Country'} flag`}
-                    className="h-4 w-6 rounded-sm object-cover"
-                    loading="lazy"
-                  />
-                ) : null}
-                <span>Made in {product.designer?.country || 'Africa'}</span>
+              <div className="flex items-start justify-between">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                    {product.category?.name || 'Ready to Wear'}
+                  </span>
+                  {flagCode ? (
+                    <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                      <img
+                        src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
+                        alt={`${product.designer?.country || 'Country'} flag`}
+                        className="h-3.5 w-5 rounded-sm object-cover"
+                        loading="lazy"
+                      />
+                      {product.designer?.country || 'Africa'}
+                    </span>
+                  ) : null}
+                </div>
+                <button type="button" className="p-2 hover:bg-gray-100 transition-colors" aria-label="Share product">
+                  <Share2 className="h-5 w-5 text-gray-600" />
+                </button>
               </div>
 
               <div>
@@ -712,6 +719,14 @@ export default function ReadyToWearDetail() {
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <Button
+                  variant="ghost"
+                  className="w-full rounded-none border-0 bg-black py-3 text-white hover:bg-gray-800"
+                  onClick={openTryOnModal}
+                >
+                  <Sparkles className="mr-1.5 h-4 w-4" />
+                  3D TryOn
+                </Button>
+                <Button
                   className="w-full rounded-none py-3"
                   onClick={() => void handleAddToCart()}
                   disabled={!effectiveSelectedSize || !isSelectedVariantInStock}
@@ -719,20 +734,7 @@ export default function ReadyToWearDetail() {
                   <ShoppingCart className="mr-2 h-4 w-4" />
                   Add to Cart
                 </Button>
-                <Button
-                  variant="ghost"
-                  onClick={handleToggleLike}
-                  className={`w-full rounded-none border-0 bg-black py-3 text-white hover:bg-gray-800 ${isWishlisted ? 'bg-gray-800' : ''}`}
-                >
-                  <Heart className={`mr-2 h-4 w-4 ${isWishlisted ? 'fill-current' : ''}`} />
-                  {isWishlisted ? 'Saved' : 'Save to Wishlist'}
-                </Button>
               </div>
-
-              <Button variant="ghost" className="w-full rounded-none border-0 bg-black py-2.5 text-sm text-white hover:bg-gray-800" onClick={openTryOnModal}>
-                <Sparkles className="mr-1.5 h-4 w-4" />
-                Virtual Try-On
-              </Button>
 
               <div className="flex items-center gap-2 bg-gray-100 px-3 py-2 text-sm text-gray-700">
                 <Check className="h-4 w-4" />

@@ -377,7 +377,7 @@ function App() {
                 <Route
                   path="/admin/voip"
                   element={
-                    <AdminPermissionGuard required={['voip:manage']}>
+                    <AdminPermissionGuard required={['voip:manage|orders:manage']}>
                       <AdminVoipConfiguration />
                     </AdminPermissionGuard>
                   }

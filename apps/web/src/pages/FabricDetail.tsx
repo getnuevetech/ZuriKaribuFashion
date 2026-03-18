@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Heart, Star, MapPin, Ruler, Loader2 } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Heart, Star, MapPin, Ruler, Loader2, Share2, ChevronLeft, ChevronRight } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { api } from '../services/api';
 import { useCurrencyStore } from '../store/currencyStore';
@@ -78,6 +78,7 @@ export default function FabricDetail() {
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [discoverProducts, setDiscoverProducts] = useState<DiscoverProduct[]>([]);
   const [cartMessage, setCartMessage] = useState('');
+  const [activeTab, setActiveTab] = useState<'details' | 'specs' | 'reviews'>('details');
   const { formatFromUsd } = useCurrencyStore();
 
   useEffect(() => {
@@ -175,6 +176,9 @@ export default function FabricDetail() {
           .replace(/^-+|-+$/g, '') || 'seller'
       )}`
     : null;
+  const canGoPrevImage = selectedImage > 0;
+  const canGoNextImage = selectedImage < Math.max(0, (fabric.images?.length || 1) - 1);
+  const minimumYards = Math.max(3, Number(fabric.minOrderMeters || 3));
 
   const handleAddToCart = () => {
     if (!fabric) return;
@@ -182,7 +186,7 @@ export default function FabricDetail() {
       fabricId: fabric.id,
       fabricName: fabric.name,
       fabricImage: fabric.images?.[selectedImage]?.url || fabric.images?.[0]?.url || '/images/placeholder.jpg',
-      yards: Math.max(3, Number(quantity || 3)),
+      yards: Math.max(minimumYards, Number(quantity || minimumYards)),
       pricePerYard: Number(fabric.pricePerMeter || 0),
       sellerName: fabric.seller?.businessName || 'Seller',
     });
@@ -246,7 +250,7 @@ export default function FabricDetail() {
           Back to Fabrics
         </Link>
 
-        <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
+        <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
           {/* Images */}
           <div className="space-y-4">
             <div className="relative aspect-square overflow-hidden rounded-xl bg-gray-100">
@@ -265,14 +269,42 @@ export default function FabricDetail() {
                   />
                 ) : null}
               </div>
+              {fabric.images && fabric.images.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => canGoPrevImage && setSelectedImage((prev) => Math.max(0, prev - 1))}
+                    className="absolute left-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-white/90 shadow-lg transition-colors hover:bg-white"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => canGoNextImage && setSelectedImage((prev) => Math.min((fabric.images?.length || 1) - 1, prev + 1))}
+                    className="absolute right-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center bg-white/90 shadow-lg transition-colors hover:bg-white"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleToggleLike}
+                className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center bg-white/90 shadow-lg transition-colors hover:bg-white"
+              >
+                <Heart className={`h-5 w-5 ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
+              </button>
+              <div className="absolute left-4 top-4 rounded-full bg-black/65 px-2 py-1 text-xs font-medium text-white">
+                {likeCount} likes
+              </div>
             </div>
             {fabric.images && fabric.images.length > 1 && (
-              <div className="flex gap-3">
+              <div className="flex gap-2 overflow-x-auto">
                 {fabric.images.map((img, idx) => (
                   <button
                     key={idx}
                     onClick={() => setSelectedImage(idx)}
-                    className={`h-20 w-20 overflow-hidden rounded-lg border-2 ${
+                    className={`h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg border-2 transition-colors ${
                       selectedImage === idx ? 'border-black' : 'border-transparent'
                     }`}
                   >
@@ -286,21 +318,16 @@ export default function FabricDetail() {
           {/* Details */}
           <div className="space-y-6">
             <div>
-              <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-                <MapPin className="w-4 h-4" />
-                {fabric.seller?.country || 'Unknown'}
-                <span className="mx-2">•</span>
-                <span>{fabric.materialType?.name || 'Unknown Material'}</span>
-                {fabric.predominantColor ? (
-                  <>
-                    <span className="mx-2">•</span>
-                    <span>{String(fabric.predominantColor).toUpperCase()}</span>
-                  </>
-                ) : null}
-              </div>
-              <h1 className="text-3xl font-bold text-gray-900">{fabric.name}</h1>
-              {(fabric.productLabels || []).length > 0 ? (
-                <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="mb-2 flex items-start justify-between">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                    {fabric.materialType?.name || 'Fabric'}
+                  </span>
+                  {fabric.predominantColor ? (
+                    <span className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                      {String(fabric.predominantColor).toUpperCase()}
+                    </span>
+                  ) : null}
                   {(fabric.productLabels || []).map((label) => (
                     <span
                       key={`${fabric.id}-detail-label-${label.id}`}
@@ -319,6 +346,13 @@ export default function FabricDetail() {
                     </span>
                   ))}
                 </div>
+                <button type="button" className="p-2 hover:bg-gray-100 transition-colors" aria-label="Share fabric">
+                  <Share2 className="h-5 w-5 text-gray-600" />
+                </button>
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900">{fabric.name}</h1>
+              {(fabric.productLabels || []).length > 0 ? (
+                <div className="mt-2 text-xs text-gray-500">Tagged by merchandising</div>
               ) : null}
               <div className="flex items-center gap-4 mt-3">
                 <div className="flex items-center gap-1">
@@ -326,161 +360,213 @@ export default function FabricDetail() {
                   <span className="font-medium">{reviewAverage > 0 ? reviewAverage.toFixed(1) : Number(fabric.seller?.rating || 0).toFixed(1)}</span>
                   <span className="text-gray-500">({reviewCount || Number(fabric.seller?.reviewCount || 0)} reviews)</span>
                 </div>
+                <span className="text-gray-300">|</span>
+                <span className="text-sm text-gray-600">{Number(fabric.stockMeters || 0)} yards available</span>
               </div>
             </div>
-
-            <p className="text-3xl font-bold text-black">
-              {formatFromUsd(fabric.pricePerMeter)}<span className="text-lg text-gray-500 font-normal">/yard</span>
-            </p>
-
-            <p className="text-gray-600 leading-relaxed">{fabric.description}</p>
-
-            {/* Quantity Selector */}
-            <div className="flex items-center gap-4">
-              <span className="font-medium">Quantity (yards):</span>
-              <div className="flex items-center border">
-                <button
-                  onClick={() => setQuantity(Math.max(Math.max(3, Number(fabric.minOrderMeters || 3)), quantity - 1))}
-                  className="px-4 py-2 hover:bg-gray-100"
-                >
-                  -
-                </button>
-                <span className="px-4 py-2 font-medium w-16 text-center">{quantity}</span>
-                <button
-                  onClick={() => setQuantity(quantity + 1)}
-                  className="px-4 py-2 hover:bg-gray-100"
-                >
-                  +
-                </button>
-              </div>
-              <span className="text-sm text-gray-500">Min: {Math.max(3, Number(fabric.minOrderMeters || 3))} yd</span>
-            </div>
-
-            {/* Total */}
-            <div className="bg-gray-100 p-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Total:</span>
-                <span className="text-2xl font-bold text-black">{formatFromUsd(fabric.pricePerMeter * quantity)}</span>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-4">
-              <Button className="flex-1 rounded-none py-4" onClick={handleAddToCart}>
-                <ShoppingCart className="w-5 h-5 mr-2" />
-                Add to Cart
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={handleToggleLike}
-                className={`border-0 bg-black px-4 text-white hover:bg-gray-800 ${isWishlisted ? 'bg-gray-800' : ''}`}
-              >
-                <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-current' : ''}`} />
-                <span className="ml-2 text-sm">{likeCount}</span>
-              </Button>
-            </div>
-            {cartMessage ? <p className="text-sm text-emerald-700">{cartMessage}</p> : null}
 
             {/* Seller Info */}
-            <div className="border-t pt-6">
-              <h3 className="font-semibold mb-3">Sold by</h3>
+            <div className="border bg-white p-4">
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden bg-gray-100">
+                <div className="flex h-14 w-14 items-center justify-center overflow-hidden bg-gray-100">
                   {flagCode ? (
                     <img
                       src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
                       alt={`${fabric.seller?.country || 'Country'} flag`}
                       className="h-full w-full object-cover"
                     />
-                  ) : null}
+                  ) : (
+                    <span className="text-xl font-bold text-black">
+                      {(fabric.seller?.businessName || 'S').charAt(0)}
+                    </span>
+                  )}
                 </div>
                 <div>
                   {storefrontPath ? (
-                    <Link to={storefrontPath} className="font-medium text-black hover:underline">
+                    <Link to={storefrontPath} className="font-semibold text-gray-900 hover:underline">
                       {fabric.seller?.businessName || 'Unknown Seller'}
                     </Link>
                   ) : (
-                    <p className="font-medium">{fabric.seller?.businessName || 'Unknown Seller'}</p>
+                    <h3 className="font-semibold text-gray-900">{fabric.seller?.businessName || 'Unknown Seller'}</h3>
                   )}
-                  <p className="text-sm text-gray-500">{fabric.seller?.country || 'Unknown'}</p>
+                  <div className="flex items-center gap-1 text-sm text-gray-500">
+                    <MapPin className="h-4 w-4" />
+                    {fabric.seller?.country || 'Unknown'}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Info */}
-            <div className="border-t pt-6 space-y-3">
-              <div className="flex items-start gap-3">
-                <Ruler className="w-5 h-5 text-gray-400 mt-0.5" />
-                <div>
-                  <p className="font-medium">Fabric Width</p>
-                  <p className="text-sm text-gray-500">120cm (47 inches)</p>
-                </div>
+            {/* Price */}
+            <div className="bg-gray-100 p-4">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold text-black">
+                  {formatFromUsd(fabric.pricePerMeter * Math.max(minimumYards, Number(quantity || minimumYards)))}
+                </span>
+                <span className="text-gray-500">total price</span>
               </div>
-              {fabric.careInstructions && (
-                <div>
-                  <p className="font-medium">Care Instructions</p>
-                  <p className="text-sm text-gray-500">{fabric.careInstructions}</p>
+              <p className="mt-1 text-sm text-gray-600">
+                Fabric Price: {formatFromUsd(fabric.pricePerMeter)} / yard
+              </p>
+            </div>
+
+            {/* Tabs */}
+            <div className="border-b">
+              <div className="flex gap-6">
+                {[
+                  { key: 'details' as const, label: 'Details' },
+                  { key: 'specs' as const, label: 'Specifications' },
+                  { key: 'reviews' as const, label: 'Reviews' },
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`relative pb-3 text-sm font-medium transition-colors ${
+                      activeTab === tab.key ? 'text-black' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {tab.label}
+                    {activeTab === tab.key ? <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" /> : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tab content */}
+            <div className="min-h-[220px]">
+              {activeTab === 'details' ? (
+                <div className="space-y-4">
+                  <p className="leading-relaxed text-gray-600">{fabric.description}</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-3 rounded-lg border bg-white p-3">
+                      <Ruler className="h-5 w-5 text-black" />
+                      <div>
+                        <p className="text-sm font-medium">Minimum Order</p>
+                        <p className="text-xs text-gray-500">{minimumYards} yards</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 rounded-lg border bg-white p-3">
+                      <ShoppingCart className="h-5 w-5 text-black" />
+                      <div>
+                        <p className="text-sm font-medium">Stock Available</p>
+                        <p className="text-xs text-gray-500">{Number(fabric.stockMeters || 0)} yards</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              )}
-              {fabric.shippingInfo && (
-                <div>
-                  <p className="font-medium">Shipping</p>
-                  <p className="text-sm text-gray-500">{fabric.shippingInfo}</p>
+              ) : null}
+
+              {activeTab === 'specs' ? (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Ruler className="mt-0.5 h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="font-medium">Fabric Width</p>
+                      <p className="text-sm text-gray-500">120cm (47 inches)</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-medium">Care Instructions</p>
+                    <p className="text-sm text-gray-500">
+                      {fabric.careInstructions || 'Handle with care; dry clean recommended for premium finish.'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-medium">Shipping</p>
+                    <p className="text-sm text-gray-500">
+                      {fabric.shippingInfo || 'Shipping options are calculated at checkout based on destination.'}
+                    </p>
+                  </div>
                 </div>
-              )}
+              ) : null}
+
+              {activeTab === 'reviews' ? (
+                <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Your Rating</label>
+                    <select
+                      value={reviewRating}
+                      onChange={(event) => setReviewRating(Number(event.target.value))}
+                      className="w-full border px-3 py-2 text-sm"
+                    >
+                      {[5, 4, 3, 2, 1].map((value) => (
+                        <option key={value} value={value}>
+                          {value} Star{value > 1 ? 's' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <textarea
+                      value={reviewComment}
+                      onChange={(event) => setReviewComment(event.target.value)}
+                      className="h-24 w-full border px-3 py-2 text-sm"
+                      placeholder="Share your experience with this fabric..."
+                    />
+                    <Button onClick={handleSubmitReview} disabled={reviewSubmitting || !reviewComment.trim()} className="w-full">
+                      {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
+                    </Button>
+                  </div>
+                  <div className="space-y-3">
+                    {reviews.length === 0 ? (
+                      <p className="text-sm text-gray-500">No reviews yet. Be the first to review this product.</p>
+                    ) : (
+                      reviews.map((review) => (
+                        <div key={review.id} className="border p-3">
+                          <div className="mb-1 flex items-center justify-between">
+                            <p className="text-sm font-semibold text-gray-900">{review.customer?.name || 'Customer'}</p>
+                            <p className="text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</p>
+                          </div>
+                          <p className="text-xs font-medium text-gray-700">{'★'.repeat(Math.max(1, Math.min(5, Number(review.rating || 0))))}</p>
+                          <p className="mt-1 text-sm text-gray-700">{review.comment}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Quantity Selector + CTA */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-4">
+                <span className="font-medium">Quantity (yards):</span>
+                <div className="flex items-center border">
+                  <button
+                    type="button"
+                    onClick={() => setQuantity(Math.max(minimumYards, quantity - 1))}
+                    className="px-4 py-2 hover:bg-gray-100"
+                  >
+                    -
+                  </button>
+                  <span className="w-16 px-4 py-2 text-center font-medium">{quantity}</span>
+                  <button
+                    type="button"
+                    onClick={() => setQuantity(quantity + 1)}
+                    className="px-4 py-2 hover:bg-gray-100"
+                  >
+                    +
+                  </button>
+                </div>
+                <span className="text-sm text-gray-500">Min: {minimumYards} yd</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Button className="w-full rounded-none py-3" onClick={handleAddToCart}>
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  Add Fabric
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={handleToggleLike}
+                  className={`w-full rounded-none border-0 bg-black py-3 text-white hover:bg-gray-800 ${isWishlisted ? 'bg-gray-800' : ''}`}
+                >
+                  <Heart className={`mr-2 h-4 w-4 ${isWishlisted ? 'fill-current' : ''}`} />
+                  Save
+                </Button>
+              </div>
+              {cartMessage ? <p className="text-sm text-emerald-700">{cartMessage}</p> : null}
             </div>
           </div>
         </div>
-
-        <section className="mt-10 rounded-xl border bg-white p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">Customer Reviews</h2>
-            <p className="text-sm text-gray-500">
-              {reviewCount} reviews • {reviewAverage > 0 ? reviewAverage.toFixed(1) : '0.0'} avg
-            </p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Your Rating</label>
-              <select
-                value={reviewRating}
-                onChange={(event) => setReviewRating(Number(event.target.value))}
-                className="w-full border px-3 py-2 text-sm"
-              >
-                {[5, 4, 3, 2, 1].map((value) => (
-                  <option key={value} value={value}>
-                    {value} Star{value > 1 ? 's' : ''}
-                  </option>
-                ))}
-              </select>
-              <textarea
-                value={reviewComment}
-                onChange={(event) => setReviewComment(event.target.value)}
-                className="h-24 w-full border px-3 py-2 text-sm"
-                placeholder="Share your experience with this fabric..."
-              />
-              <Button onClick={handleSubmitReview} disabled={reviewSubmitting || !reviewComment.trim()} className="w-full">
-                {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
-              </Button>
-            </div>
-            <div className="space-y-3">
-              {reviews.length === 0 ? (
-                <p className="text-sm text-gray-500">No reviews yet. Be the first to review this product.</p>
-              ) : (
-                reviews.map((review) => (
-                  <div key={review.id} className="border p-3">
-                    <div className="mb-1 flex items-center justify-between">
-                      <p className="text-sm font-semibold text-gray-900">{review.customer?.name || 'Customer'}</p>
-                      <p className="text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</p>
-                    </div>
-                    <p className="text-xs font-medium text-gray-700">{'★'.repeat(Math.max(1, Math.min(5, Number(review.rating || 0))))}</p>
-                    <p className="mt-1 text-sm text-gray-700">{review.comment}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </section>
 
         <section className="mt-8">
           <h2 className="mb-4 text-xl font-semibold text-gray-900">You May Also Like</h2>
