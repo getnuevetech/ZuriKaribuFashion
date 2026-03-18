@@ -391,12 +391,14 @@ async function ensureSchema() {
       await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "SupportTicket_ticketNumber_key" ON "SupportTicket"("ticketNumber") WHERE "ticketNumber" IS NOT NULL`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SupportTicket_lookup_idx" ON "SupportTicket"("source","status","updatedAt")`);
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SupportTicketMessage" ("id" TEXT PRIMARY KEY, "ticketId" TEXT NOT NULL, "senderUserId" TEXT, "senderRole" TEXT NOT NULL, "senderDisplayName" TEXT, "body" TEXT NOT NULL, "attachments" JSONB NOT NULL DEFAULT '[]'::jsonb, "sourceLanguage" TEXT NOT NULL DEFAULT 'en', "visibleToCustomer" BOOLEAN NOT NULL DEFAULT true, "isInternal" BOOLEAN NOT NULL DEFAULT false, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "SupportTicketMessage" ADD COLUMN IF NOT EXISTS "senderDisplayName" TEXT`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SupportTicketMessage_ticket_idx" ON "SupportTicketMessage"("ticketId","createdAt")`);
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SupportChatSession" ("id" TEXT PRIMARY KEY, "status" TEXT NOT NULL DEFAULT 'OPEN', "departmentId" TEXT, "issueType" TEXT, "source" TEXT NOT NULL DEFAULT 'WIDGET', "customerUserId" TEXT, "guestName" TEXT, "guestEmail" TEXT, "guestPhone" TEXT, "guestToken" TEXT, "preferredLanguage" TEXT NOT NULL DEFAULT 'en', "assignedAdminUserId" TEXT, "assignedAdminRoleId" TEXT, "assignedGroupId" TEXT, "primaryAgentUserId" TEXT, "metadata" JSONB NOT NULL DEFAULT '{}'::jsonb, "lastMessageAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SupportChatSession_status_idx" ON "SupportChatSession"("status","updatedAt")`);
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SupportChatParticipant" ("id" TEXT PRIMARY KEY, "sessionId" TEXT NOT NULL, "userId" TEXT, "displayName" TEXT, "role" TEXT NOT NULL, "preferredLanguage" TEXT NOT NULL DEFAULT 'en', "isVisibleToCustomer" BOOLEAN NOT NULL DEFAULT true, "isPrimary" BOOLEAN NOT NULL DEFAULT false, "joinedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "leftAt" TIMESTAMP(3))`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SupportChatParticipant_session_idx" ON "SupportChatParticipant"("sessionId","joinedAt")`);
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SupportChatMessage" ("id" TEXT PRIMARY KEY, "sessionId" TEXT NOT NULL, "senderParticipantId" TEXT, "senderRole" TEXT NOT NULL, "senderDisplayName" TEXT, "body" TEXT NOT NULL, "attachments" JSONB NOT NULL DEFAULT '[]'::jsonb, "isInternal" BOOLEAN NOT NULL DEFAULT false, "sourceLanguage" TEXT NOT NULL DEFAULT 'en', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "SupportChatMessage" ADD COLUMN IF NOT EXISTS "senderDisplayName" TEXT`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SupportChatMessage_session_idx" ON "SupportChatMessage"("sessionId","createdAt")`);
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SupportVoipCall" ("id" TEXT PRIMARY KEY, "contextType" TEXT NOT NULL, "contextId" TEXT, "fromUserId" TEXT, "toUserId" TEXT, "status" TEXT NOT NULL DEFAULT 'INITIATED', "provider" TEXT, "callLink" TEXT, "metadata" JSONB NOT NULL DEFAULT '{}'::jsonb, "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "endedAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
       await prisma.$executeRawUnsafe(`ALTER TABLE "SupportVoipCall" ADD COLUMN IF NOT EXISTS "routeId" TEXT`);
@@ -414,6 +416,11 @@ async function ensureSchema() {
       );
       await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "callerId" TEXT`);
       await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "User_callerId_key" ON "User"("callerId") WHERE "callerId" IS NOT NULL`);
+      try {
+        await prisma.$executeRawUnsafe(`ALTER TABLE "OrderTicketMessage" ADD COLUMN IF NOT EXISTS "senderDisplayName" TEXT`);
+      } catch {
+        // ignore if order ticketing table is not available yet in this deployment stage
+      }
 
       const defaults = [
         ['Customer Service', 'CUSTOMER_SERVICE', 'General customer service requests.'],
@@ -1552,6 +1559,7 @@ router.get(
   authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
+      await ensureSchema();
       const ticketRef = String(req.params.ticketRef || '').trim();
       if (ticketRef.startsWith('ORDER:')) {
         const ticketId = ticketRef.slice('ORDER:'.length);

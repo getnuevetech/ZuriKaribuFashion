@@ -483,6 +483,9 @@ async function ensureOrderTicketingSchema() {
     `ALTER TABLE "OrderTicketMessage" ADD COLUMN IF NOT EXISTS "attachments" JSONB NOT NULL DEFAULT '[]'::jsonb`
   );
   await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicketMessage" ADD COLUMN IF NOT EXISTS "senderDisplayName" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
     `ALTER TABLE "OrderTicketMessage" ADD COLUMN IF NOT EXISTS "sourceLanguage" TEXT NOT NULL DEFAULT 'en'`
   );
   await prisma.$executeRawUnsafe(
