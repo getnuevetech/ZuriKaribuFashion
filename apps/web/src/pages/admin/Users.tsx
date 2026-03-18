@@ -5,6 +5,7 @@ import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { useAuthStore } from '../../store/authStore';
+import { getCountryOptions, resolveCountryCode, resolveCountryName } from '../../data/locationOptions';
 
 interface User {
   id: string;
@@ -71,12 +72,15 @@ export default function AdminUsers() {
     adminRoleId: '',
   });
   const authUser = useAuthStore((state) => state.user);
+  const countryOptions = useMemo(() => getCountryOptions(), []);
   const isSuperAdmin = useMemo(() => {
     const grants = Array.isArray(authUser?.permissions) ? authUser.permissions : [];
     const normalized = grants.map((entry) => String(entry || '').trim());
     const lower = normalized.map((entry) => entry.toLowerCase());
     return normalized.includes('*') || normalized.includes('ALL') || lower.includes('all');
   }, [authUser?.permissions]);
+  const createCountryCode = resolveCountryCode(createForm.country);
+  const editCountryCode = resolveCountryCode(editForm.country);
 
   useEffect(() => {
     void fetchAdminRoles();
@@ -584,13 +588,23 @@ export default function AdminUsers() {
                 />
               ) : null}
               {isAdministratorMode ? (
-                <input
-                  type="text"
-                  value={createForm.country}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, country: e.target.value }))}
-                  placeholder="Country (optional)"
+                <select
+                  value={createCountryCode}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({
+                      ...prev,
+                      country: resolveCountryName(e.target.value),
+                    }))
+                  }
                   className="w-full px-3 py-2 border rounded-lg"
-                />
+                >
+                  <option value="">Select country (optional)</option>
+                  {countryOptions.map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.name}
+                    </option>
+                  ))}
+                </select>
               ) : null}
               </div>
               <div className="sticky bottom-0 flex gap-3 border-t bg-white pt-3">
@@ -660,13 +674,23 @@ export default function AdminUsers() {
                 />
               ) : null}
               {isAdministratorMode ? (
-                <input
-                  type="text"
-                  value={editForm.country}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, country: e.target.value }))}
-                  placeholder="Country (optional)"
+                <select
+                  value={editCountryCode}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      country: resolveCountryName(e.target.value),
+                    }))
+                  }
                   className="w-full px-3 py-2 border rounded-lg"
-                />
+                >
+                  <option value="">Select country (optional)</option>
+                  {countryOptions.map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.name}
+                    </option>
+                  ))}
+                </select>
               ) : null}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <select
