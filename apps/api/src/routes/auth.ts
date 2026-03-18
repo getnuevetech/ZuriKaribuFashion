@@ -1138,9 +1138,14 @@ router.post('/login', async (req, res, next) => {
       /can't reach database server/i.test(message) ||
       /prismaclientinitializationerror/i.test(String(error?.name || ''));
     if (knownPrismaConnectionIssue) {
+      console.error('[auth/login] database unavailable', {
+        errorName: String(error?.name || ''),
+        message: String(error?.message || '').slice(0, 600),
+      });
       return res.status(503).json({
         success: false,
         message: 'Authentication service is temporarily unavailable. Please contact support.',
+        code: 'AUTH_DB_UNAVAILABLE',
       });
     }
     next(error);

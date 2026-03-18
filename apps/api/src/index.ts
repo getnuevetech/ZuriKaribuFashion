@@ -46,6 +46,7 @@ import referralRoutes from './routes/referrals';
 import adminAutomationRoutes from './routes/admin-automation';
 import adminReportsRoutes from './routes/admin-reports';
 import failedProductApprovalsRoutes from './routes/failed-product-approvals';
+import { prisma } from './db';
 import { activityAuditMiddleware } from './middleware/activity-audit';
 import { runStartupRepairs } from './bootstrap';
 
@@ -169,6 +170,30 @@ app.get('/api/health', (_req, res) => {
     timestamp: new Date().toISOString(),
     deployment: getDeploymentMetadata(),
   });
+});
+
+app.get('/api/health/db', async (_req, res) => {
+  try {
+    await prisma.$queryRawUnsafe('SELECT 1');
+    return res.json({
+      status: 'ok',
+      db: 'reachable',
+      timestamp: new Date().toISOString(),
+      deployment: getDeploymentMetadata(),
+    });
+  } catch (error: any) {
+    console.error('[health/db] database unavailable', {
+      errorName: String(error?.name || ''),
+      message: String(error?.message || '').slice(0, 600),
+    });
+    return res.status(503).json({
+      status: 'error',
+      db: 'unreachable',
+      message: 'Database is unavailable for API runtime.',
+      timestamp: new Date().toISOString(),
+      deployment: getDeploymentMetadata(),
+    });
+  }
 });
 
 app.get('/health/routes', (_req, res) => {
