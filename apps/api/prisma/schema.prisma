@@ -2,7 +2,10 @@
 // Multi-role eCommerce with order splitting and virtual try-on
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Railway/containers can run on musl + OpenSSL 3; include explicit engine target
+  // to avoid loading the legacy musl engine that expects libssl.so.1.1.
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
