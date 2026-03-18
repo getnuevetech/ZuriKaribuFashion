@@ -618,109 +618,107 @@ export default function AdminCategoryPages() {
               )}
             </div>
 
-            {activePage === 'READY_TO_WEAR' ? (
-              <div className="space-y-3 rounded-lg border border-gray-200 p-4">
-                <h3 className="text-sm font-semibold text-gray-800">
-                  Rotating Ready-To-Wear section (after filters)
-                </h3>
-                <p className="text-xs text-gray-600">
-                  Set products-per-row (columns) and rows. Products shown on refresh = columns × rows.
-                </p>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <label className="text-sm space-y-1">
-                    <span className="text-gray-700">Products per row (columns)</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={6}
-                      value={settings.rotatingColumns}
-                      onChange={(event) =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          rotatingColumns: Number.parseInt(event.target.value || '2', 10) || 2,
-                        }))
-                      }
-                      className="w-full rounded-md border px-3 py-2"
-                    />
-                  </label>
-                  <label className="text-sm space-y-1">
-                    <span className="text-gray-700">Rows</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={6}
-                      value={settings.rotatingRows}
-                      onChange={(event) =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          rotatingRows: Number.parseInt(event.target.value || '1', 10) || 1,
-                        }))
-                      }
-                      className="w-full rounded-md border px-3 py-2"
-                    />
-                  </label>
-                  <label className="text-sm space-y-1 md:col-span-2">
-                    <span className="text-gray-700">Rotating product title text size (px)</span>
-                    <input
-                      type="number"
-                      min={16}
-                      max={64}
-                      value={settings.rotatingTitleSize}
-                      onChange={(event) =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          rotatingTitleSize: Number.parseInt(event.target.value || '32', 10) || 32,
-                        }))
-                      }
-                      className="w-full rounded-md border px-3 py-2"
-                    />
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500">
-                  Current target display count: {Math.max(1, Number(settings.rotatingColumns || 1)) * Math.max(1, Number(settings.rotatingRows || 1))}
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={selectedRotatingProductId}
-                    onChange={(event) => setSelectedRotatingProductId(event.target.value)}
-                    className="min-w-[280px] flex-1 rounded-md border px-3 py-2 text-sm"
-                  >
-                    <option value="">Select product to add</option>
-                    {productOptions.map((option) => (
-                      <option key={`rotating-option-${option.id}`} value={option.id}>
-                        {option.name} · {option.ownerName} · ${Number(option.priceUsd || 0).toFixed(2)}
-                      </option>
-                    ))}
-                  </select>
-                  <Button type="button" size="sm" variant="outline" onClick={addRotatingProduct}>
-                    Add product
-                  </Button>
-                </div>
-                {settings.rotatingProductIds.length > 0 ? (
-                  <div className="space-y-2">
-                    {settings.rotatingProductIds.map((productId) => {
-                      const option = optionById.get(productId);
-                      return (
-                        <div key={`rotating-${productId}`} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
-                          <span className="truncate">
-                            {option ? `${option.name} · ${option.ownerName}` : productId}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeRotatingProduct(productId)}
-                            className="ml-3 shrink-0 text-xs font-medium text-red-600 hover:text-red-700"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-500">No rotating products selected yet.</p>
-                )}
+            <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-800">
+                Rotating {selectedPageMeta.label} section (after filters)
+              </h3>
+              <p className="text-xs text-gray-600">
+                Set products-per-row (columns) and rows. Products shown on refresh = columns × rows.
+              </p>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="text-sm space-y-1">
+                  <span className="text-gray-700">Products per row (columns)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={6}
+                    value={settings.rotatingColumns}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        rotatingColumns: Number.parseInt(event.target.value || '2', 10) || 2,
+                      }))
+                    }
+                    className="w-full rounded-md border px-3 py-2"
+                  />
+                </label>
+                <label className="text-sm space-y-1">
+                  <span className="text-gray-700">Rows</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={6}
+                    value={settings.rotatingRows}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        rotatingRows: Number.parseInt(event.target.value || '1', 10) || 1,
+                      }))
+                    }
+                    className="w-full rounded-md border px-3 py-2"
+                  />
+                </label>
+                <label className="text-sm space-y-1 md:col-span-2">
+                  <span className="text-gray-700">Rotating product title text size (px)</span>
+                  <input
+                    type="number"
+                    min={16}
+                    max={64}
+                    value={settings.rotatingTitleSize}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        rotatingTitleSize: Number.parseInt(event.target.value || '32', 10) || 32,
+                      }))
+                    }
+                    className="w-full rounded-md border px-3 py-2"
+                  />
+                </label>
               </div>
-            ) : null}
+              <p className="text-xs text-gray-500">
+                Current target display count: {Math.max(1, Number(settings.rotatingColumns || 1)) * Math.max(1, Number(settings.rotatingRows || 1))}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={selectedRotatingProductId}
+                  onChange={(event) => setSelectedRotatingProductId(event.target.value)}
+                  className="min-w-[280px] flex-1 rounded-md border px-3 py-2 text-sm"
+                >
+                  <option value="">Select product to add</option>
+                  {productOptions.map((option) => (
+                    <option key={`rotating-option-${option.id}`} value={option.id}>
+                      {option.name} · {option.ownerName} · ${Number(option.priceUsd || 0).toFixed(2)}
+                    </option>
+                  ))}
+                </select>
+                <Button type="button" size="sm" variant="outline" onClick={addRotatingProduct}>
+                  Add product
+                </Button>
+              </div>
+              {settings.rotatingProductIds.length > 0 ? (
+                <div className="space-y-2">
+                  {settings.rotatingProductIds.map((productId) => {
+                    const option = optionById.get(productId);
+                    return (
+                      <div key={`rotating-${productId}`} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
+                        <span className="truncate">
+                          {option ? `${option.name} · ${option.ownerName}` : productId}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeRotatingProduct(productId)}
+                          className="ml-3 shrink-0 text-xs font-medium text-red-600 hover:text-red-700"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">No rotating products selected yet.</p>
+              )}
+            </div>
 
             {settings.bannerImage ? (
               <div className="rounded-lg border overflow-hidden">

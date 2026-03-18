@@ -589,24 +589,31 @@ export default function ReadyToWear() {
                           className="absolute left-3 top-3 h-6 w-9 rounded-sm object-cover shadow"
                         />
                       ) : null}
-                      <div className="absolute inset-0 flex items-center p-4 md:p-5">
-                        <div className="max-w-[92%] bg-black/55 px-4 py-3 text-left text-white md:max-w-[80%]">
-                          <h2
-                            className="font-semibold leading-tight"
-                            style={{
-                              fontSize: `${Math.max(16, Math.min(64, Number(settings.rotatingTitleSize || DEFAULT_SETTINGS.rotatingTitleSize)))}px`,
-                            }}
-                          >
-                            {product.name}
-                          </h2>
-                          {product.description ? (
-                            <p className="mt-2 line-clamp-2 text-sm text-white/90">{product.description}</p>
-                          ) : null}
-                          <p className="mt-2 text-xs text-white/90">{product.ownerName}</p>
-                          <p className="mt-1 text-base font-semibold">{formatFromUsd(Number(product.priceUsd || 0))}</p>
-                          <span className="mt-3 inline-flex bg-white px-3 py-1.5 text-xs font-semibold text-black">VIEW PRODUCT</span>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 p-4 md:p-5">
+                      <div className="max-w-[95%] text-left text-white">
+                        <h2
+                          className="font-semibold leading-tight"
+                          style={{
+                            fontSize: `${Math.max(16, Math.min(64, Number(settings.rotatingTitleSize || DEFAULT_SETTINGS.rotatingTitleSize)))}px`,
+                          }}
+                        >
+                          {product.name}
+                        </h2>
+                        {product.description ? (
+                          <p className="mt-1 line-clamp-2 text-xs text-white/90 md:text-sm">{product.description}</p>
+                        ) : null}
+                        <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
+                          <div>
+                            <p className="text-xs text-white/90">{product.ownerName}</p>
+                            <p className="mt-1 font-extrabold leading-none" style={{ fontSize: '1.3rem' }}>
+                              {formatFromUsd(Number(product.priceUsd || 0))}
+                            </p>
+                          </div>
+                          <span className="inline-flex bg-white px-3 py-1.5 text-xs font-semibold text-black">VIEW PRODUCT</span>
                         </div>
                       </div>
+                    </div>
                     </div>
                   </Link>
                 );

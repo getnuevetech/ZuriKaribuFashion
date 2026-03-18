@@ -1669,7 +1669,6 @@ async function readPublicCategoryPageSettingsWithFallback<T>(
       const activeFeaturedIds = resolveActiveFeaturedIdsFromSettings(settings);
       const needsFeaturedHydration = featuredProducts.length === 0 && activeFeaturedIds.length > 0;
       const needsRotatingHydration =
-        pageType === 'READY_TO_WEAR' &&
         rotatingProducts.length === 0 &&
         Array.isArray(settings?.rotatingProductIds) &&
         settings.rotatingProductIds.length > 0;
@@ -1720,13 +1719,10 @@ async function readPublicCategoryPageSettingsWithFallback<T>(
       .map((id: any) => optionMap.get(String(id || '').trim()))
       .filter(Boolean)
       .map((row: any) => optionToPreview(pageType, row));
-    rotatingProducts =
-      pageType === 'READY_TO_WEAR'
-        ? (settings.rotatingProductIds || [])
-            .map((id: any) => optionMap.get(String(id || '').trim()))
-            .filter(Boolean)
-            .map((row: any) => optionToPreview(pageType, row))
-        : [];
+    rotatingProducts = (settings.rotatingProductIds || [])
+      .map((id: any) => optionMap.get(String(id || '').trim()))
+      .filter(Boolean)
+      .map((row: any) => optionToPreview(pageType, row));
   } catch {
     featuredProducts = [];
     rotatingProducts = [];

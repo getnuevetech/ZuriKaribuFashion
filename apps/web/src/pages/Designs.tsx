@@ -58,11 +58,15 @@ type CategoryPageSettings = {
   showPagination: boolean;
   featuredProductIds: string[];
   rotatingProductIds: string[];
+  rotatingColumns: number;
+  rotatingRows: number;
+  rotatingTitleSize: number;
 };
 
 type FeaturedProduct = {
   id: string;
   name: string;
+  description?: string;
   image: string;
   priceUsd: number;
   country: string;
@@ -80,6 +84,9 @@ const DEFAULT_SETTINGS: CategoryPageSettings = {
   showPagination: true,
   featuredProductIds: [],
   rotatingProductIds: [],
+  rotatingColumns: 2,
+  rotatingRows: 1,
+  rotatingTitleSize: 32,
 };
 
 const COMMON_SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
@@ -114,6 +121,33 @@ const mdGridByColumns: Record<number, string> = {
   6: 'md:grid-cols-3',
 };
 
+const dynamicMdGridByColumns: Record<number, string> = {
+  1: 'md:grid-cols-1',
+  2: 'md:grid-cols-2',
+  3: 'md:grid-cols-3',
+  4: 'md:grid-cols-4',
+  5: 'md:grid-cols-5',
+  6: 'md:grid-cols-6',
+};
+
+const dynamicLgGridByColumns: Record<number, string> = {
+  1: 'lg:grid-cols-1',
+  2: 'lg:grid-cols-2',
+  3: 'lg:grid-cols-3',
+  4: 'lg:grid-cols-4',
+  5: 'lg:grid-cols-5',
+  6: 'lg:grid-cols-6',
+};
+
+function pickRandomProducts(rows: FeaturedProduct[], count: number) {
+  const copy = [...rows];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[randomIndex]] = [copy[randomIndex], copy[index]];
+  }
+  return copy.slice(0, Math.max(0, count));
+}
+
 function buildFiltersFromParams(searchParams: URLSearchParams) {
   return {
     search: searchParams.get('search') || '',
@@ -135,6 +169,7 @@ export default function Designs() {
   const [allCountries, setAllCountries] = useState<string[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([]);
+  const [rotatingProducts, setRotatingProducts] = useState<FeaturedProduct[]>([]);
   const [settings, setSettings] = useState<CategoryPageSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -168,6 +203,10 @@ export default function Designs() {
     if (count === 2) return 'grid grid-cols-1 md:grid-cols-2 gap-6';
     return 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6';
   }, [featuredProducts.length]);
+  const rotatingGridClass = useMemo(() => {
+    const columns = Math.max(1, Math.min(6, Math.round(Number(settings.rotatingColumns || DEFAULT_SETTINGS.rotatingColumns))));
+    return `grid grid-cols-1 ${dynamicMdGridByColumns[columns]} ${dynamicLgGridByColumns[columns]} gap-4`;
+  }, [settings.rotatingColumns]);
 
   const selectedCategoryLabel = useMemo(() => {
     if (!appliedFilters.categoryId) return 'All';
@@ -190,8 +229,17 @@ export default function Designs() {
           showPagination: Boolean(response.data.settings.showPagination),
           featuredProductIds: Array.isArray(response.data.settings.featuredProductIds) ? response.data.settings.featuredProductIds : [],
           rotatingProductIds: Array.isArray(response.data.settings.rotatingProductIds) ? response.data.settings.rotatingProductIds : [],
+          rotatingColumns: Number(response.data.settings.rotatingColumns || DEFAULT_SETTINGS.rotatingColumns),
+          rotatingRows: Number(response.data.settings.rotatingRows || DEFAULT_SETTINGS.rotatingRows),
+          rotatingTitleSize: Number(response.data.settings.rotatingTitleSize || DEFAULT_SETTINGS.rotatingTitleSize),
         });
-        setFeaturedProducts(Array.isArray(response.data.featuredProducts) ? response.data.featuredProducts : []);
+        const nextFeatured = Array.isArray(response.data.featuredProducts) ? response.data.featuredProducts : [];
+        const nextRotatingPool = Array.isArray(response.data.rotatingProducts) ? response.data.rotatingProducts : [];
+        setFeaturedProducts(nextFeatured);
+        const rotatingCount =
+          Math.max(1, Math.min(6, Math.round(Number(response.data.settings.rotatingColumns || DEFAULT_SETTINGS.rotatingColumns)))) *
+          Math.max(1, Math.min(6, Math.round(Number(response.data.settings.rotatingRows || DEFAULT_SETTINGS.rotatingRows))));
+        setRotatingProducts(pickRandomProducts(nextRotatingPool, rotatingCount));
       } catch (settingsError) {
         console.error('Failed to load custom-to-wear page settings:', settingsError);
       }
@@ -438,6 +486,66 @@ export default function Designs() {
             </button>
           ) : null}
         </div>
+
+        {rotatingProducts.length > 0 ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Custom-To-Wear Picks For You</h2>
+              <span className="text-xs text-gray-500">
+                {settings.rotatingColumns} column{settings.rotatingColumns > 1 ? 's' : ''} × {settings.rotatingRows} row
+                {settings.rotatingRows > 1 ? 's' : ''} (randomized on refresh)
+              </span>
+            </div>
+            <div className={rotatingGridClass}>
+              {rotatingProducts.map((product) => {
+                const flagCode = resolveCountryCode(product.country || '');
+                return (
+                  <Link key={`rotating-${product.id}`} to={product.href} className="group overflow-hidden rounded-xl border border-gray-200 bg-white">
+                    <div className="relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
+                      <img
+                        src={product.image || '/placeholder.jpg'}
+                        alt={product.name}
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      {flagCode ? (
+                        <img
+                          src={`https://flagcdn.com/w80/${flagCode.toLowerCase()}.png`}
+                          alt={`${product.country || 'Country'} flag`}
+                          className="absolute left-3 top-3 h-6 w-9 rounded-sm object-cover shadow"
+                        />
+                      ) : null}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+                      <div className="absolute inset-x-0 bottom-0 p-4 md:p-5">
+                        <div className="max-w-[95%] text-left text-white">
+                          <h2
+                            className="font-semibold leading-tight"
+                            style={{
+                              fontSize: `${Math.max(16, Math.min(64, Number(settings.rotatingTitleSize || DEFAULT_SETTINGS.rotatingTitleSize)))}px`,
+                            }}
+                          >
+                            {product.name}
+                          </h2>
+                          {product.description ? (
+                            <p className="mt-1 line-clamp-2 text-xs text-white/90 md:text-sm">{product.description}</p>
+                          ) : null}
+                          <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
+                            <div>
+                              <p className="text-xs text-white/90">{product.ownerName}</p>
+                              <p className="mt-1 font-extrabold leading-none" style={{ fontSize: '1.3rem' }}>
+                                {formatFromUsd(Number(product.priceUsd || 0))}
+                              </p>
+                            </div>
+                            <span className="inline-flex bg-white px-3 py-1.5 text-xs font-semibold text-black">VIEW PRODUCT</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
 
         {featuredProducts.length > 0 ? (
           <div className={featuredGridClass}>

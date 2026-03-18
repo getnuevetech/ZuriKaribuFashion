@@ -97,10 +97,7 @@ router.get('/admin/:pageType', authenticate, authorizePermissions(Permissions.HO
     if (!pageType) return;
     const snapshot = await readCategoryPageSettings(pageType);
     const featuredProducts = await readCategoryFeaturedProducts(pageType, resolveActiveFeaturedIds(snapshot.settings));
-    const rotatingProducts =
-      pageType === 'READY_TO_WEAR'
-        ? await readCategoryFeaturedProducts(pageType, snapshot.settings.rotatingProductIds)
-        : [];
+    const rotatingProducts = await readCategoryFeaturedProducts(pageType, snapshot.settings.rotatingProductIds);
     res.json({
       success: true,
       data: {
@@ -122,10 +119,7 @@ router.put('/admin/:pageType', authenticate, authorizePermissions(Permissions.HO
     const payload = updateCategoryPageSettingsSchema.parse(req.body || {});
     const settings = await writeCategoryPageSettings(pageType, payload, false);
     const featuredProducts = await readCategoryFeaturedProducts(pageType, resolveActiveFeaturedIds(settings));
-    const rotatingProducts =
-      pageType === 'READY_TO_WEAR'
-        ? await readCategoryFeaturedProducts(pageType, settings.rotatingProductIds)
-        : [];
+    const rotatingProducts = await readCategoryFeaturedProducts(pageType, settings.rotatingProductIds);
     res.json({
       success: true,
       data: {
@@ -150,10 +144,7 @@ router.patch('/admin/:pageType', authenticate, authorizePermissions(Permissions.
     const payload = updateCategoryPageSettingsSchema.parse(req.body || {});
     const settings = await writeCategoryPageSettings(pageType, payload, true);
     const featuredProducts = await readCategoryFeaturedProducts(pageType, resolveActiveFeaturedIds(settings));
-    const rotatingProducts =
-      pageType === 'READY_TO_WEAR'
-        ? await readCategoryFeaturedProducts(pageType, settings.rotatingProductIds)
-        : [];
+    const rotatingProducts = await readCategoryFeaturedProducts(pageType, settings.rotatingProductIds);
     res.json({
       success: true,
       data: {
@@ -177,10 +168,7 @@ router.get('/:pageType', async (req, res, next) => {
     if (!pageType) return;
     const snapshot = await readCategoryPageSettings(pageType);
     const featuredProducts = await readCategoryFeaturedProducts(pageType, resolveActiveFeaturedIds(snapshot.settings));
-    const rotatingProducts =
-      pageType === 'READY_TO_WEAR'
-        ? await readCategoryFeaturedProducts(pageType, snapshot.settings.rotatingProductIds)
-        : [];
+    const rotatingProducts = await readCategoryFeaturedProducts(pageType, snapshot.settings.rotatingProductIds);
     res.json({
       success: true,
       data: {
