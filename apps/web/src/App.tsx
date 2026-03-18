@@ -345,7 +345,7 @@ function App() {
                 <Route
                   path="/admin/ticket-management"
                   element={
-                    <AdminPermissionGuard required={['support:tickets:manage']}>
+                    <AdminPermissionGuard required={['orders:manage']}>
                       <AdminTicketManagement />
                     </AdminPermissionGuard>
                   }
@@ -353,7 +353,7 @@ function App() {
                 <Route
                   path="/admin/tickets"
                   element={
-                    <AdminPermissionGuard required={['support:tickets:manage']}>
+                    <AdminPermissionGuard required={['orders:manage']}>
                       <AdminTicketManagement />
                     </AdminPermissionGuard>
                   }

@@ -785,7 +785,7 @@ router.get('/public/config', async (_req, res) => {
 router.get(
   '/admin/settings',
   authenticate,
-  authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE),
+  authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE, Permissions.ORDERS_MANAGE),
   async (_req, res) => {
     try {
       const settings = await readSettings();
@@ -805,7 +805,7 @@ router.get(
 router.patch(
   '/admin/settings',
   authenticate,
-  authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE),
+  authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
       const parsed = supportSettingsPatchSchema.safeParse(req.body || {});
@@ -823,7 +823,7 @@ router.patch(
 router.get(
   '/admin/departments',
   authenticate,
-  authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE),
+  authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE, Permissions.ORDERS_MANAGE),
   async (_req, res) => {
     try {
       await ensureSchema();
@@ -842,7 +842,7 @@ router.get(
 router.post(
   '/admin/departments',
   authenticate,
-  authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE),
+  authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
       const parsed = departmentSchema.safeParse(req.body || {});
@@ -873,7 +873,7 @@ router.post(
 router.patch(
   '/admin/departments/:id',
   authenticate,
-  authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE),
+  authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
       const parsed = departmentSchema.partial().safeParse(req.body || {});
@@ -913,7 +913,7 @@ router.patch(
 router.get(
   '/admin/ticket-routing/groups',
   authenticate,
-  authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE),
+  authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE, Permissions.ORDERS_MANAGE),
   async (_req, res) => {
     try {
       await ensureSchema();
@@ -928,7 +928,7 @@ router.get(
 router.post(
   '/admin/ticket-routing/groups',
   authenticate,
-  authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE),
+  authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
       const parsed = groupSchema.safeParse(req.body || {});
@@ -957,7 +957,7 @@ router.post(
 router.patch(
   '/admin/ticket-routing/groups/:id',
   authenticate,
-  authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE),
+  authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
       const parsed = groupSchema.partial().safeParse(req.body || {});
@@ -994,7 +994,7 @@ router.patch(
 router.get(
   '/admin/ticket-routing/rules',
   authenticate,
-  authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE),
+  authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE, Permissions.ORDERS_MANAGE),
   async (_req, res) => {
     try {
       await ensureSchema();
@@ -1011,7 +1011,7 @@ router.get(
 router.post(
   '/admin/ticket-routing/rules',
   authenticate,
-  authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE),
+  authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
       const parsed = routingRuleSchema.safeParse(req.body || {});
@@ -1043,7 +1043,7 @@ router.post(
 router.patch(
   '/admin/ticket-routing/rules/:id',
   authenticate,
-  authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE),
+  authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
       const parsed = routingRuleSchema.partial().safeParse(req.body || {});
@@ -1086,7 +1086,7 @@ router.patch(
 router.get(
   '/admin/tickets',
   authenticate,
-  authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE),
+  authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
       await ensureSchema();
@@ -1173,7 +1173,7 @@ router.get(
 router.post(
   '/admin/tickets',
   authenticate,
-  authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE),
+  authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE, Permissions.ORDERS_MANAGE),
   async (req: any, res) => {
     try {
       const parsed = ticketCreateSchema.safeParse(req.body || {});
@@ -1205,7 +1205,7 @@ router.post(
 router.get(
   '/admin/tickets/:ticketRef/messages',
   authenticate,
-  authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE),
+  authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
       const ticketRef = String(req.params.ticketRef || '').trim();
@@ -1238,7 +1238,7 @@ router.get(
 router.post(
   '/admin/tickets/:ticketRef/messages',
   authenticate,
-  authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE),
+  authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE, Permissions.ORDERS_MANAGE),
   async (req: any, res) => {
     try {
       const parsed = ticketReplySchema.safeParse(req.body || {});
@@ -1300,7 +1300,7 @@ router.post(
 router.patch(
   '/admin/tickets/:ticketRef/assign',
   authenticate,
-  authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE),
+  authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
       const parsed = ticketAssignSchema.safeParse(req.body || {});
@@ -1651,7 +1651,7 @@ router.post('/chat/:sessionId/messages', optionalAuth, async (req: any, res) => 
 router.get(
   '/admin/chats',
   authenticate,
-  authorizePermissions(Permissions.CUSTOMER_SERVICE_CHAT_MANAGE),
+  authorizePermissions(Permissions.CUSTOMER_SERVICE_CHAT_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
       await ensureSchema();
@@ -1705,7 +1705,7 @@ router.get(
 router.patch(
   '/admin/chats/:sessionId/actions',
   authenticate,
-  authorizePermissions(Permissions.CUSTOMER_SERVICE_CHAT_MANAGE),
+  authorizePermissions(Permissions.CUSTOMER_SERVICE_CHAT_MANAGE, Permissions.ORDERS_MANAGE),
   async (req: any, res) => {
     try {
       await ensureSchema();
