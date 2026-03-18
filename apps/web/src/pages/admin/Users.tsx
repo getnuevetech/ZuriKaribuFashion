@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Search, Filter, XCircle, UserCheck, UserX, Mail, Plus, Edit } from 'lucide-react';
+import { Search, Filter, XCircle, UserCheck, UserX, Mail, Plus, Edit, PhoneCall } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -155,6 +155,22 @@ export default function AdminUsers() {
     setSelectedUser(user);
     setActionType(action);
     setShowActionModal(true);
+  };
+
+  const startVoipCall = async (userId: string) => {
+    if (!userId) return;
+    try {
+      const response = await api.customerService.startVoipCall({
+        contextType: 'DIRECT',
+        contextId: `admin-user-${userId}`,
+        toUserId: userId,
+      });
+      if (response?.data?.callLink) {
+        window.open(response.data.callLink, '_blank', 'noopener,noreferrer');
+      }
+    } catch (voipError) {
+      console.error('Failed to start VoIP call:', voipError);
+    }
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -383,6 +399,13 @@ export default function AdminUsers() {
                         title="Edit profile"
                       >
                         <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => void startVoipCall(user.id)}
+                        className="p-2 text-amber-700 hover:bg-amber-50 rounded-lg"
+                        title="Start VoIP call"
+                      >
+                        <PhoneCall className="w-4 h-4" />
                       </button>
                       {user.status !== 'ACTIVE' && (
                         <button

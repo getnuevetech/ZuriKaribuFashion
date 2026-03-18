@@ -36,6 +36,17 @@ type BackupJob = {
   completedAt?: string | null;
 };
 
+type BackupRestoreJob = {
+  id: string;
+  artifactId: string;
+  artifactType: string;
+  status: string;
+  summary?: string;
+  errorMessage?: string;
+  createdAt?: string | null;
+  completedAt?: string | null;
+};
+
 const DEFAULT_SETTINGS: BackupSettings = {
   storage: {
     uploadToS3: false,
@@ -71,9 +82,12 @@ export default function AdminBackups() {
   const [running, setRunning] = useState(false);
   const [settings, setSettings] = useState<BackupSettings>(DEFAULT_SETTINGS);
   const [jobs, setJobs] = useState<BackupJob[]>([]);
+  const [restoreJobs, setRestoreJobs] = useState<BackupRestoreJob[]>([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [downloadingId, setDownloadingId] = useState('');
+  const [restoring, setRestoring] = useState(false);
+  const [restoreArtifactId, setRestoreArtifactId] = useState('');
 
   const completedJobs = useMemo(
     () => jobs.filter((job) => String(job.status || '').toUpperCase() === 'COMPLETED'),
@@ -84,9 +98,10 @@ export default function AdminBackups() {
     setLoading(true);
     setError('');
     try {
-      const [settingsResponse, jobsResponse] = await Promise.all([
+      const [settingsResponse, jobsResponse, restoreJobsResponse] = await Promise.all([
         api.admin.getBackupSettings(),
         api.admin.listBackups({ limit: 80 }),
+        api.admin.listBackupRestoreJobs({ limit: 80 }),
       ]);
       if (settingsResponse.success && settingsResponse.data) {
         setSettings({
@@ -111,8 +126,19 @@ export default function AdminBackups() {
       }
       if (jobsResponse.success && Array.isArray(jobsResponse.data)) {
         setJobs(jobsResponse.data);
+        const firstCompleted = jobsResponse.data.find(
+          (job: BackupJob) => String(job.status || '').toUpperCase() === 'COMPLETED'
+        );
+        if (firstCompleted && !restoreArtifactId) {
+          setRestoreArtifactId(String(firstCompleted.id || ''));
+        }
       } else {
         setJobs([]);
+      }
+      if (restoreJobsResponse.success && Array.isArray(restoreJobsResponse.data)) {
+        setRestoreJobs(restoreJobsResponse.data);
+      } else {
+        setRestoreJobs([]);
       }
     } catch (loadError: any) {
       setError(loadError?.response?.data?.message || 'Failed to load backup center.');
@@ -177,6 +203,24 @@ export default function AdminBackups() {
       setError(runError?.response?.data?.message || 'Failed to execute daily profile backup.');
     } finally {
       setRunning(false);
+    }
+  };
+
+  const runRestore = async () => {
+    if (!restoreArtifactId) return;
+    setRestoring(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await api.admin.runBackupRestore({ artifactId: restoreArtifactId, mode: 'MERGE' });
+      if (response.success) {
+        setMessage(response.message || 'Restore job executed.');
+      }
+      await load();
+    } catch (restoreError: any) {
+      setError(restoreError?.response?.data?.message || 'Restore job failed.');
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -423,6 +467,88 @@ export default function AdminBackups() {
           >
             Full Backup Bundle
           </Button>
+        </div>
+      </section>
+
+      <section className="rounded-xl border bg-white p-4 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">Restore Center</h2>
+            <p className="text-xs text-gray-500">
+              Restore from completed artifacts. Full database/system restores are intentionally marked as manual-required for safety.
+            </p>
+          </div>
+          <Button variant="outline" onClick={() => void load()}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+          <select
+            value={restoreArtifactId}
+            onChange={(event) => setRestoreArtifactId(event.target.value)}
+            className="rounded border px-3 py-2 text-sm"
+          >
+            <option value="">Select completed backup artifact</option>
+            {completedJobs.map((job) => (
+              <option key={job.id} value={job.id}>
+                {job.type} • {job.fileName || job.id} • {job.createdAt ? new Date(job.createdAt).toLocaleString() : '—'}
+              </option>
+            ))}
+          </select>
+          <Button onClick={() => void runRestore()} disabled={!restoreArtifactId || restoring}>
+            {restoring ? 'Restoring...' : 'Run Restore'}
+          </Button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Artifact</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Type</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Status</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Summary</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {restoreJobs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-3 py-6 text-center text-gray-500">
+                    No restore jobs yet.
+                  </td>
+                </tr>
+              ) : (
+                restoreJobs.map((job) => (
+                  <tr key={job.id} className="border-t">
+                    <td className="px-3 py-2 text-xs text-gray-700">{job.artifactId}</td>
+                    <td className="px-3 py-2">{job.artifactType}</td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`inline-flex rounded px-2 py-0.5 text-xs ${
+                          String(job.status || '').toUpperCase() === 'COMPLETED'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : String(job.status || '').toUpperCase() === 'FAILED'
+                              ? 'bg-red-100 text-red-700'
+                              : String(job.status || '').toUpperCase() === 'MANUAL_REQUIRED'
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        {job.status}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-700">
+                      {job.summary || job.errorMessage || '—'}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-700">
+                      {job.createdAt ? new Date(job.createdAt).toLocaleString() : '—'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 

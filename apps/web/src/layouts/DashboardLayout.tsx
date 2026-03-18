@@ -29,6 +29,7 @@ import {
   Search,
   Mail,
   MessageSquare,
+  PhoneCall,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import DashboardErrorBoundary from '../components/DashboardErrorBoundary';
@@ -87,6 +88,9 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'API Diagnostics', href: '/admin/api-diagnostics', icon: Settings },
     { label: 'Order Management', href: '/admin/orders', icon: ShoppingBag },
     { label: 'Ticket Management', href: '/admin/ticket-management', icon: MessageSquare },
+    { label: 'Customer Service Chat', href: '/admin/customer-service/chat', icon: MessageSquare },
+    { label: 'Customer Service Settings', href: '/admin/customer-service/settings', icon: Settings },
+    { label: 'VoIP Configuration', href: '/admin/voip', icon: PhoneCall },
     { label: 'Banners', href: '/admin/banners', icon: ImageIcon },
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
     { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: Eye },
@@ -210,7 +214,11 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/backups': ['backups:manage'],
       '/admin/partners': ['users:manage'],
       '/admin/orders': ['orders:manage'],
-      '/admin/ticket-management': ['orders:manage'],
+      '/admin/ticket-management': ['support:tickets:manage'],
+      '/admin/tickets': ['support:tickets:manage'],
+      '/admin/customer-service/chat': ['customer_service:chat:manage'],
+      '/admin/customer-service/settings': ['customer_service:settings:manage'],
+      '/admin/voip': ['voip:manage'],
       '/admin/banners': ['banners:manage'],
       '/admin/homepage': ['homepage:manage'],
       '/admin/homepage-visibility': ['homepage:manage'],
@@ -230,6 +238,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Processing Workflow', href: '/admin/orders?tab=processing-workflow', icon: ChevronRight },
   ];
   const ticketManagementSubmenu = [
+    { label: 'Ticket List', href: '/admin/tickets', icon: ChevronRight },
     { label: 'Ticket Queue', href: '/admin/orders?tab=ticket-queue', icon: ChevronRight },
     { label: 'Ticket Workflow', href: '/admin/orders?tab=ticketing-workflow', icon: ChevronRight },
   ];
@@ -668,8 +677,9 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
 
               if (userType === 'admin' && item.href === '/admin/ticket-management') {
                 const ticketMenuActive =
-                  location.pathname === '/admin/orders' &&
-                  (currentTab === 'ticket-queue' || currentTab === 'ticketing-workflow');
+                  location.pathname === '/admin/tickets' ||
+                  (location.pathname === '/admin/orders' &&
+                    (currentTab === 'ticket-queue' || currentTab === 'ticketing-workflow'));
                 return (
                   <div key={item.href} className="space-y-1">
                     <button

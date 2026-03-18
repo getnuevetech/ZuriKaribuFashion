@@ -8,6 +8,7 @@ import { useCurrencyStore } from '../store/currencyStore';
 import { api } from '../services/api';
 import Footer from '../components/Footer';
 import { getHomeRouteForUser, normalizeRole } from '../auth/rbac';
+import CustomerServiceChatWidget from '../components/chat/CustomerServiceChatWidget';
 
 const USE_DYNAMIC_HOMEPAGE = import.meta.env.VITE_HOMEPAGE_MODE === 'dynamic';
 const TOP_STRIP_DEFAULTS = {
@@ -118,7 +119,7 @@ export default function MainLayout() {
   const rightNavLinks = [
     { label: 'Shop', href: '/#shop' },
     { label: 'About Us', href: '/#about' },
-    { label: 'Contact Us', href: '/#contact' },
+    { label: 'Contact Us', href: '/contact' },
   ];
   const hamburgerLinks = [
     { label: 'Home', href: '/' },
@@ -127,7 +128,7 @@ export default function MainLayout() {
     { label: 'Fabric To Buy', href: '/fabrics' },
     { label: 'Custom To Wear', href: '/designs' },
     { label: 'About Us', href: '/#about' },
-    { label: 'Contact Us', href: '/#contact' },
+    { label: 'Contact Us', href: '/contact' },
   ];
   const isHeroHeader = location.pathname === '/' && !isScrolled;
   const menuTextClass = isHeroHeader ? 'text-white/90 hover:text-white' : 'text-black hover:text-black/70';
@@ -312,6 +313,7 @@ export default function MainLayout() {
           Checkout ({cartItemCount})
         </Link>
       ) : null}
+      <CustomerServiceChatWidget />
       <Footer />
     </div>
   );

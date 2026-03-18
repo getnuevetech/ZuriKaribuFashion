@@ -27,6 +27,7 @@ import ResetPassword from './pages/ResetPassword';
 import ChangePasswordRequired from './pages/ChangePasswordRequired';
 import ReferralCodeRedirect from './pages/ReferralCodeRedirect';
 import StoryPage from './pages/Story';
+import ContactPage from './pages/Contact';
 import SellerStorefront from './pages/storefront/SellerStorefront';
 import DesignerStorefront from './pages/storefront/DesignerStorefront';
 
@@ -76,6 +77,10 @@ import AdminReferralMaterials from './pages/admin/ReferralMaterials';
 import AdminReferralList from './pages/admin/ReferralList';
 import AdminReports from './pages/admin/Reports';
 import AdminProfilePage from './pages/admin/Profile';
+import AdminTicketManagement from './pages/admin/TicketManagement';
+import AdminCustomerServiceChat from './pages/admin/CustomerServiceChat';
+import AdminCustomerServiceSettings from './pages/admin/CustomerServiceSettings';
+import AdminVoipConfiguration from './pages/admin/VoipConfiguration';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -152,6 +157,7 @@ function App() {
               <Route path="/try-on/:id" element={<TryOn />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/stories/:slug" element={<StoryPage />} />
+              <Route path="/contact" element={<ContactPage />} />
               <Route path="/store/seller/:profileId/:brandSlug" element={<SellerStorefront />} />
               <Route path="/store/designer/:profileId/:brandSlug" element={<DesignerStorefront />} />
             </Route>
@@ -339,8 +345,40 @@ function App() {
                 <Route
                   path="/admin/ticket-management"
                   element={
-                    <AdminPermissionGuard required={['orders:manage']}>
-                      <Navigate to="/admin/orders?tab=ticket-queue" replace />
+                    <AdminPermissionGuard required={['support:tickets:manage']}>
+                      <AdminTicketManagement />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/tickets"
+                  element={
+                    <AdminPermissionGuard required={['support:tickets:manage']}>
+                      <AdminTicketManagement />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/customer-service/chat"
+                  element={
+                    <AdminPermissionGuard required={['customer_service:chat:manage']}>
+                      <AdminCustomerServiceChat />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/customer-service/settings"
+                  element={
+                    <AdminPermissionGuard required={['customer_service:settings:manage']}>
+                      <AdminCustomerServiceSettings />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/voip"
+                  element={
+                    <AdminPermissionGuard required={['voip:manage']}>
+                      <AdminVoipConfiguration />
                     </AdminPermissionGuard>
                   }
                 />

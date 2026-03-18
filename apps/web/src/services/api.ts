@@ -7376,6 +7376,12 @@ const adminApi = {
   listBackups: (params?: { limit?: number }) =>
     apiService.get<{ success: boolean; data: any[]; message?: string }>('/admin/backups/jobs', { params }),
 
+  listBackupRestoreJobs: (params?: { limit?: number }) =>
+    apiService.get<{ success: boolean; data: any[]; message?: string }>('/admin/backups/restore/jobs', { params }),
+
+  runBackupRestore: (data: { artifactId: string; mode?: 'MERGE'; reason?: string }) =>
+    apiService.post<{ success: boolean; data: { job: any }; message?: string }>('/admin/backups/restore/run', data),
+
   downloadBackupArtifact: async (backupId: string) => {
     const sanitizedId = encodeURIComponent(String(backupId || '').trim());
     const response = await httpClient.get(`/admin/backups/jobs/${sanitizedId}/download`, {
@@ -9658,6 +9664,128 @@ const referralsApi = {
     })),
 };
 
+const customerServiceApi = {
+  getPublicConfig: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        settings: {
+          translationEnabled: boolean;
+          defaultLanguage: string;
+          chatPopupDelayMinutes: number;
+          shoppingBotDelayMinutes: number;
+          botEnabled: boolean;
+          shoppingBotEnabled: boolean;
+          serviceBotEnabled: boolean;
+          shoppingBotAvatarFemale: string;
+          shoppingBotAvatarMale: string;
+        };
+        supportedLanguages: Array<{ code: string; label: string }>;
+        departments: Array<{ id: string; name: string; code: string; description?: string }>;
+      };
+    }>('/customer-service/public/config'),
+
+  getSettings: () =>
+    apiService.get<{ success: boolean; data: any }>('/customer-service/admin/settings'),
+  updateSettings: (payload: Record<string, unknown>) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>('/customer-service/admin/settings', payload),
+
+  listDepartments: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/customer-service/admin/departments'),
+  createDepartment: (payload: Record<string, unknown>) =>
+    apiService.post<{ success: boolean; data: any; message?: string }>('/customer-service/admin/departments', payload),
+  updateDepartment: (id: string, payload: Record<string, unknown>) =>
+    apiService.patch<{ success: boolean; message?: string }>(`/customer-service/admin/departments/${id}`, payload),
+
+  listRoutingGroups: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/customer-service/admin/ticket-routing/groups'),
+  createRoutingGroup: (payload: Record<string, unknown>) =>
+    apiService.post<{ success: boolean; data: any; message?: string }>(
+      '/customer-service/admin/ticket-routing/groups',
+      payload
+    ),
+  updateRoutingGroup: (id: string, payload: Record<string, unknown>) =>
+    apiService.patch<{ success: boolean; message?: string }>(
+      `/customer-service/admin/ticket-routing/groups/${id}`,
+      payload
+    ),
+
+  listRoutingRules: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/customer-service/admin/ticket-routing/rules'),
+  createRoutingRule: (payload: Record<string, unknown>) =>
+    apiService.post<{ success: boolean; data: any; message?: string }>(
+      '/customer-service/admin/ticket-routing/rules',
+      payload
+    ),
+  updateRoutingRule: (id: string, payload: Record<string, unknown>) =>
+    apiService.patch<{ success: boolean; message?: string }>(
+      `/customer-service/admin/ticket-routing/rules/${id}`,
+      payload
+    ),
+
+  listTickets: (params?: Record<string, unknown>) =>
+    apiService.get<{ success: boolean; data: any[] }>('/customer-service/admin/tickets', { params }),
+  createTicket: (payload: Record<string, unknown>) =>
+    apiService.post<{ success: boolean; data: any; message?: string }>('/customer-service/admin/tickets', payload),
+  getTicketMessages: (ticketRef: string) =>
+    apiService.get<{ success: boolean; data: any[] }>(
+      `/customer-service/admin/tickets/${encodeURIComponent(ticketRef)}/messages`
+    ),
+  replyTicket: (ticketRef: string, payload: Record<string, unknown>) =>
+    apiService.post<{ success: boolean; message?: string }>(
+      `/customer-service/admin/tickets/${encodeURIComponent(ticketRef)}/messages`,
+      payload
+    ),
+  assignTicket: (ticketRef: string, payload: Record<string, unknown>) =>
+    apiService.patch<{ success: boolean; message?: string }>(
+      `/customer-service/admin/tickets/${encodeURIComponent(ticketRef)}/assign`,
+      payload
+    ),
+
+  startChat: (payload: Record<string, unknown>) =>
+    apiService.post<{ success: boolean; data: { sessionId: string; token?: string; preferredLanguage: string } }>(
+      '/customer-service/chat/start',
+      payload
+    ),
+  getChatThread: (sessionId: string, params?: Record<string, unknown>, token?: string) =>
+    apiService.get<{ success: boolean; data: any }>(`/customer-service/chat/${sessionId}`, {
+      params,
+      headers: token ? { 'x-chat-token': token } : undefined,
+    }),
+  sendChatMessage: (sessionId: string, payload: Record<string, unknown>, token?: string) =>
+    apiService.post<{ success: boolean; data: any }>(`/customer-service/chat/${sessionId}/messages`, payload, {
+      headers: token ? { 'x-chat-token': token } : undefined,
+    }),
+
+  listAdminChats: (params?: Record<string, unknown>) =>
+    apiService.get<{ success: boolean; data: any[] }>('/customer-service/admin/chats', { params }),
+  applyAdminChatAction: (sessionId: string, payload: Record<string, unknown>) =>
+    apiService.patch<{ success: boolean; message?: string }>(
+      `/customer-service/admin/chats/${sessionId}/actions`,
+      payload
+    ),
+
+  botRespond: (payload: Record<string, unknown>) =>
+    apiService.post<{ success: boolean; data: any }>('/customer-service/bot/respond', payload),
+
+  getVoipSettings: () =>
+    apiService.get<{ success: boolean; data: { enabled: boolean; provider: string; callBaseUrl: string } }>(
+      '/customer-service/admin/voip/settings'
+    ),
+  updateVoipSettings: (payload: Record<string, unknown>) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>(
+      '/customer-service/admin/voip/settings',
+      payload
+    ),
+  startVoipCall: (payload: Record<string, unknown>) =>
+    apiService.post<{ success: boolean; data: { id: string; callLink: string; provider: string } }>(
+      '/customer-service/voip/calls/start',
+      payload
+    ),
+  endVoipCall: (id: string) =>
+    apiService.post<{ success: boolean; message?: string }>(`/customer-service/voip/calls/${id}/end`),
+};
+
 // Export combined API
 export const api = {
   auth: authApi,
@@ -9682,6 +9810,7 @@ export const api = {
   messages: messagesApi,
   enterprise: enterpriseApi,
   referrals: referralsApi,
+  customerService: customerServiceApi,
 };
 
 // Named exports for direct import
@@ -9708,6 +9837,7 @@ export {
   messagesApi,
   enterpriseApi,
   referralsApi,
+  customerServiceApi,
   apiService,
   httpClient,
 };

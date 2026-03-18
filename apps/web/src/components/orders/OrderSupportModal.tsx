@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, MessageSquare, Paperclip, Upload, X } from 'lucide-react';
+import { AlertCircle, MessageSquare, Paperclip, PhoneCall, Upload, X } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
@@ -254,6 +254,23 @@ export default function OrderSupportModal({
     }
   };
 
+  const handleStartVoipCall = async () => {
+    if (!orderId) return;
+    try {
+      const response = await api.customerService.startVoipCall({
+        contextType: 'TICKET',
+        contextId: orderId,
+      });
+      if (response?.data?.callLink) {
+        window.open(response.data.callLink, '_blank', 'noopener,noreferrer');
+      } else {
+        setMessageNotice('VoIP call started.');
+      }
+    } catch (callError: any) {
+      setMessageNotice(callError?.response?.data?.message || callError?.message || 'Unable to start VoIP call.');
+    }
+  };
+
   if (!isOpen || !orderId) return null;
 
   const orderNumber = String(orderDetail?.orderNumber || thread?.orderNumber || 'Order');
@@ -500,6 +517,10 @@ export default function OrderSupportModal({
                 <Badge variant="outline">Due: {new Date(thread.ticket.dueAt).toLocaleString()}</Badge>
               ) : null}
               {thread?.ticket?.escalatedAt ? <Badge variant="red">Escalated</Badge> : null}
+              <Button size="sm" variant="outline" onClick={() => void handleStartVoipCall()}>
+                <PhoneCall className="mr-1 h-3.5 w-3.5" />
+                Call
+              </Button>
               {thread?.permissions?.canManageTicket ? (
                 <select
                   className="rounded border px-2 py-1 text-xs"

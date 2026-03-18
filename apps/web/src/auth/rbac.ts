@@ -12,6 +12,10 @@ export const ROLE_HOME_ROUTE: Record<UserRole, string> = {
 const ADMIN_PERMISSION_ROUTE_PRIORITY: Array<{ route: string; required: string[] }> = [
   { route: '/admin', required: [] },
   { route: '/admin/users', required: ['users:read'] },
+  { route: '/admin/tickets', required: ['support:tickets:manage'] },
+  { route: '/admin/customer-service/chat', required: ['customer_service:chat:manage'] },
+  { route: '/admin/customer-service/settings', required: ['customer_service:settings:manage'] },
+  { route: '/admin/voip', required: ['voip:manage'] },
   { route: '/admin/orders', required: ['orders:manage'] },
   { route: '/admin/products', required: ['products:manage'] },
   { route: '/admin/products/configuration', required: ['products:manage'] },
