@@ -21,10 +21,16 @@ import {
 } from '../utils/pricing-rules';
 import { readCheckoutPricingSettings } from '../utils/checkout-pricing-settings';
 import { recordReferralCommissionsForOrder } from '../utils/referral-program';
+import {
+  getTicketingSupportedLanguages,
+  normalizeTicketingLanguage,
+  translateTicketingText,
+} from '../utils/ticketing-translation';
 
 const router = Router();
 
 const ORDER_TICKETING_SETTINGS_KEY = 'order_ticketing_settings_v1';
+const ORDER_TICKETING_TRANSLATION_SETTINGS_KEY = 'order_ticketing_translation_settings_v1';
 const ORDER_TICKET_STATUSES = ['OPEN', 'PENDING', 'RESOLVED', 'CLOSED'] as const;
 type OrderTicketStatus = (typeof ORDER_TICKET_STATUSES)[number];
 const ORDER_TICKETING_ROLES = [
@@ -59,6 +65,10 @@ type OrderTicketingSettings = {
   escalationNotifyRoles: OrderTicketingRole[];
   recipientMatrix: Record<OrderTicketingRole, OrderTicketingRole[]>;
 };
+type OrderTicketingTranslationSettings = {
+  enabled: boolean;
+  defaultLanguage: string;
+};
 const DEFAULT_ORDER_TICKETING_SETTINGS: OrderTicketingSettings = {
   enabled: true,
   defaultVisibleToCustomer: false,
@@ -91,6 +101,10 @@ const DEFAULT_ORDER_TICKETING_SETTINGS: OrderTicketingSettings = {
       UserRole.FASHION_DESIGNER,
     ],
   },
+};
+const DEFAULT_ORDER_TICKETING_TRANSLATION_SETTINGS: OrderTicketingTranslationSettings = {
+  enabled: true,
+  defaultLanguage: 'en',
 };
 
 const parseJsonObject = (value: unknown): Record<string, unknown> => {
@@ -379,6 +393,16 @@ const normalizeOrderTicketingSettings = (value: unknown): OrderTicketingSettings
   }
   return normalized;
 };
+const normalizeOrderTicketingTranslationSettings = (value: unknown): OrderTicketingTranslationSettings => {
+  const source = parseJsonObject(value);
+  return {
+    enabled: source.enabled !== false,
+    defaultLanguage: normalizeTicketingLanguage(
+      source.defaultLanguage,
+      DEFAULT_ORDER_TICKETING_TRANSLATION_SETTINGS.defaultLanguage
+    ),
+  };
+};
 async function ensureOrderTicketingSchema() {
   await prisma.$executeRawUnsafe(
     `CREATE TABLE IF NOT EXISTS "HomepageSectionSetting" (
@@ -458,10 +482,47 @@ async function ensureOrderTicketingSchema() {
     `ALTER TABLE "OrderTicketMessage" ADD COLUMN IF NOT EXISTS "attachments" JSONB NOT NULL DEFAULT '[]'::jsonb`
   );
   await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicketMessage" ADD COLUMN IF NOT EXISTS "sourceLanguage" TEXT NOT NULL DEFAULT 'en'`
+  );
+  await prisma.$executeRawUnsafe(
     `CREATE INDEX IF NOT EXISTS "OrderTicketMessage_ticketId_idx" ON "OrderTicketMessage"("ticketId","createdAt")`
   );
   await prisma.$executeRawUnsafe(
     `CREATE INDEX IF NOT EXISTS "OrderTicketMessage_orderId_idx" ON "OrderTicketMessage"("orderId","createdAt")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "UserTicketLanguagePreference" (
+      "userId" TEXT NOT NULL,
+      "preferredLanguage" TEXT NOT NULL DEFAULT 'en',
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "UserTicketLanguagePreference_pkey" PRIMARY KEY ("userId")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "UserTicketLanguagePreference" ADD COLUMN IF NOT EXISTS "preferredLanguage" TEXT NOT NULL DEFAULT 'en'`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "OrderTicketMessageTranslation" (
+      "id" TEXT NOT NULL,
+      "messageId" TEXT NOT NULL,
+      "sourceLanguage" TEXT NOT NULL DEFAULT 'auto',
+      "targetLanguage" TEXT NOT NULL,
+      "translatedBody" TEXT NOT NULL,
+      "provider" TEXT,
+      "status" TEXT NOT NULL DEFAULT 'SUCCESS',
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "OrderTicketMessageTranslation_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "OrderTicketMessageTranslation_messageId_targetLanguage_key"
+     ON "OrderTicketMessageTranslation"("messageId","targetLanguage")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "OrderTicketMessageTranslation_targetLanguage_updatedAt_idx"
+     ON "OrderTicketMessageTranslation"("targetLanguage","updatedAt")`
   );
 }
 async function readOrderTicketingSettings(): Promise<OrderTicketingSettings> {
@@ -496,6 +557,68 @@ async function writeOrderTicketingSettings(payload: Partial<OrderTicketingSettin
     );
   }
   return normalized;
+}
+async function readOrderTicketingTranslationSettings(): Promise<OrderTicketingTranslationSettings> {
+  await ensureOrderTicketingSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<{ value: unknown }>>(
+    `SELECT "value" FROM "HomepageSectionSetting" WHERE "key" = $1 LIMIT 1`,
+    ORDER_TICKETING_TRANSLATION_SETTINGS_KEY
+  );
+  return rows[0]
+    ? normalizeOrderTicketingTranslationSettings(rows[0].value)
+    : DEFAULT_ORDER_TICKETING_TRANSLATION_SETTINGS;
+}
+async function writeOrderTicketingTranslationSettings(
+  payload: Partial<OrderTicketingTranslationSettings>,
+  merge = true
+): Promise<OrderTicketingTranslationSettings> {
+  await ensureOrderTicketingSchema();
+  const current = await readOrderTicketingTranslationSettings();
+  const normalized = normalizeOrderTicketingTranslationSettings(merge ? { ...current, ...(payload || {}) } : payload || {});
+  const existingRows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `SELECT "id" FROM "HomepageSectionSetting" WHERE "key" = $1 LIMIT 1`,
+    ORDER_TICKETING_TRANSLATION_SETTINGS_KEY
+  );
+  if (existingRows[0]?.id) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting" SET "value" = $1::jsonb, "updatedAt" = NOW() WHERE "id" = $2`,
+      JSON.stringify(normalized),
+      String(existingRows[0].id)
+    );
+  } else {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "HomepageSectionSetting" ("id","key","value","createdAt","updatedAt")
+       VALUES ($1,$2,$3::jsonb,NOW(),NOW())`,
+      randomUUID(),
+      ORDER_TICKETING_TRANSLATION_SETTINGS_KEY,
+      JSON.stringify(normalized)
+    );
+  }
+  return normalized;
+}
+async function readUserTicketingLanguagePreference(userId: string, fallbackLanguage = 'en') {
+  await ensureOrderTicketingSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<{ preferredLanguage: string | null }>>(
+    `SELECT "preferredLanguage"
+     FROM "UserTicketLanguagePreference"
+     WHERE "userId" = $1
+     LIMIT 1`,
+    String(userId || '')
+  );
+  return normalizeTicketingLanguage(rows[0]?.preferredLanguage || fallbackLanguage, fallbackLanguage);
+}
+async function writeUserTicketingLanguagePreference(userId: string, language: string) {
+  await ensureOrderTicketingSchema();
+  const normalizedLanguage = normalizeTicketingLanguage(language);
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "UserTicketLanguagePreference" ("userId","preferredLanguage","createdAt","updatedAt")
+     VALUES ($1,$2,NOW(),NOW())
+     ON CONFLICT ("userId")
+     DO UPDATE SET "preferredLanguage" = EXCLUDED."preferredLanguage", "updatedAt" = NOW()`,
+    String(userId || ''),
+    normalizedLanguage
+  );
+  return normalizedLanguage;
 }
 
 const resolveUsersForTicketRole = (
@@ -1479,6 +1602,12 @@ const orderTicketingSettingsSchema = z
     recipientMatrix: z.record(z.array(z.string())).optional(),
   })
   .strict();
+const orderTicketingTranslationSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    defaultLanguage: z.string().trim().min(2).max(24).optional(),
+  })
+  .strict();
 
 const orderTicketMessageSchema = z
   .object({
@@ -1487,6 +1616,12 @@ const orderTicketMessageSchema = z
     attachments: z.array(z.string().trim().max(4096)).max(12).optional(),
     visibleToCustomer: z.boolean().optional(),
     subject: z.string().trim().max(240).optional(),
+    sourceLanguage: z.string().trim().min(2).max(24).optional(),
+  })
+  .strict();
+const ticketingLanguagePreferenceSchema = z
+  .object({
+    language: z.string().trim().min(2).max(24),
   })
   .strict();
 
@@ -1661,6 +1796,8 @@ async function readOrderTicketThread(params: {
   ticketSubject?: string;
   orderContext: OrderAccessContext;
   settings: OrderTicketingSettings;
+  translationSettings: OrderTicketingTranslationSettings;
+  viewerLanguage: string;
 }) {
   await ensureOrderTicketingSchema();
   let ticket = await getLatestOrderTicket(params.orderId);
@@ -1677,6 +1814,10 @@ async function readOrderTicketThread(params: {
     return {
       ticket: null,
       messages: [] as any[],
+      viewerLanguage: normalizeTicketingLanguage(
+        params.viewerLanguage,
+        params.translationSettings.defaultLanguage
+      ),
     };
   }
   ticket = await runTicketEscalationIfDue({
@@ -1688,6 +1829,10 @@ async function readOrderTicketThread(params: {
     return {
       ticket: null,
       messages: [] as any[],
+      viewerLanguage: normalizeTicketingLanguage(
+        params.viewerLanguage,
+        params.translationSettings.defaultLanguage
+      ),
     };
   }
 
@@ -1701,12 +1846,13 @@ async function readOrderTicketThread(params: {
       body: string;
       recipientRoles: unknown;
       attachments: unknown;
+      sourceLanguage: string | null;
       visibleToCustomer: boolean;
       isInternal: boolean;
       createdAt: Date;
     }>
   >(
-    `SELECT "id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","attachments","visibleToCustomer","isInternal","createdAt"
+    `SELECT "id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","attachments","sourceLanguage","visibleToCustomer","isInternal","createdAt"
      FROM "OrderTicketMessage"
      WHERE "ticketId" = $1
      ORDER BY "createdAt" ASC`,
@@ -1732,7 +1878,7 @@ async function readOrderTicketThread(params: {
     params.orderContext.customerUser
       ? fullName(params.orderContext.customerUser.firstName, params.orderContext.customerUser.lastName) || 'Customer'
       : 'Customer';
-  const messages = rows
+  const mappedMessages = rows
     .map((entry) => {
       const senderRole = asRoleToken(entry.senderRole) || UserRole.ADMINISTRATOR;
       const recipientRoles = dedupeRoleTokens(entry.recipientRoles);
@@ -1749,6 +1895,10 @@ async function readOrderTicketThread(params: {
         senderRole,
         senderDisplayName: displayName,
         body: String(entry.body || ''),
+        sourceLanguage: normalizeTicketingLanguage(
+          entry.sourceLanguage || params.translationSettings.defaultLanguage,
+          params.translationSettings.defaultLanguage
+        ),
         recipientRoles,
         attachments: normalizeAttachmentUrls(parseJsonArray(entry.attachments)),
         visibleToCustomer: Boolean(entry.visibleToCustomer),
@@ -1767,9 +1917,128 @@ async function readOrderTicketThread(params: {
         params.viewerId
       )
     );
+  const viewerLanguage = normalizeTicketingLanguage(
+    params.viewerLanguage,
+    params.translationSettings.defaultLanguage
+  );
+  const translationCandidates = mappedMessages.filter(
+    (entry) =>
+      params.translationSettings.enabled &&
+      Boolean(String(entry.body || '').trim()) &&
+      viewerLanguage !== normalizeTicketingLanguage(entry.sourceLanguage, params.translationSettings.defaultLanguage)
+  );
+  const translationIds = translationCandidates.map((entry) => String(entry.id));
+  const cachedTranslations = translationIds.length
+    ? await prisma.$queryRawUnsafe<
+        Array<{
+          messageId: string;
+          translatedBody: string;
+          sourceLanguage: string | null;
+          targetLanguage: string;
+          status: string;
+        }>
+      >(
+        `SELECT "messageId","translatedBody","sourceLanguage","targetLanguage","status"
+         FROM "OrderTicketMessageTranslation"
+         WHERE "messageId" = ANY($1::text[])
+           AND "targetLanguage" = $2`,
+        translationIds,
+        viewerLanguage
+      )
+    : [];
+  const translationByMessageId = new Map(
+    cachedTranslations.map((row) => [
+      String(row.messageId || ''),
+      {
+        translatedBody: String(row.translatedBody || ''),
+        status: String(row.status || 'SUCCESS').toUpperCase(),
+        sourceLanguage: normalizeTicketingLanguage(
+          row.sourceLanguage || params.translationSettings.defaultLanguage,
+          params.translationSettings.defaultLanguage
+        ),
+      },
+    ])
+  );
+  for (const message of translationCandidates) {
+    if (translationByMessageId.has(String(message.id))) continue;
+    const messageSourceLanguage = normalizeTicketingLanguage(
+      message.sourceLanguage,
+      params.translationSettings.defaultLanguage
+    );
+    let translatedBody = String(message.body || '');
+    let provider = 'identity';
+    let status = 'SUCCESS';
+    let detectedLanguage = messageSourceLanguage;
+    try {
+      const translated = await translateTicketingText({
+        text: String(message.body || ''),
+        sourceLanguage: messageSourceLanguage || 'auto',
+        targetLanguage: viewerLanguage,
+      });
+      translatedBody = String(translated.translatedText || message.body || '');
+      provider = String(translated.provider || 'google-translate-web');
+      detectedLanguage = normalizeTicketingLanguage(
+        translated.detectedLanguage || messageSourceLanguage,
+        params.translationSettings.defaultLanguage
+      );
+    } catch {
+      status = 'FAILED';
+      provider = 'fallback';
+      translatedBody = String(message.body || '');
+    }
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "OrderTicketMessageTranslation"
+        ("id","messageId","sourceLanguage","targetLanguage","translatedBody","provider","status","createdAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())
+       ON CONFLICT ("messageId","targetLanguage")
+       DO UPDATE SET
+         "sourceLanguage" = EXCLUDED."sourceLanguage",
+         "translatedBody" = EXCLUDED."translatedBody",
+         "provider" = EXCLUDED."provider",
+         "status" = EXCLUDED."status",
+         "updatedAt" = NOW()`,
+      randomUUID(),
+      String(message.id),
+      detectedLanguage,
+      viewerLanguage,
+      translatedBody,
+      provider,
+      status
+    );
+    translationByMessageId.set(String(message.id), {
+      translatedBody,
+      status,
+      sourceLanguage: detectedLanguage,
+    });
+  }
+  const messages = mappedMessages.map((entry) => {
+    const sourceLanguage = normalizeTicketingLanguage(
+      entry.sourceLanguage,
+      params.translationSettings.defaultLanguage
+    );
+    const translation = translationByMessageId.get(String(entry.id));
+    const translatedBody =
+      params.translationSettings.enabled &&
+      translation &&
+      viewerLanguage !== sourceLanguage &&
+      String(translation.translatedBody || '').trim()
+        ? String(translation.translatedBody)
+        : String(entry.body || '');
+    const translated = translatedBody.trim() !== String(entry.body || '').trim();
+    return {
+      ...entry,
+      body: translatedBody,
+      originalBody: String(entry.body || ''),
+      sourceLanguage,
+      translated,
+      translatedToLanguage: viewerLanguage,
+      translationStatus: translation?.status || (translated ? 'SUCCESS' : 'SKIPPED'),
+    };
+  });
   return {
     ticket,
     messages,
+    viewerLanguage,
   };
 }
 
@@ -1819,6 +2088,100 @@ router.patch(
     }
   }
 );
+
+router.get(
+  '/admin/ticketing/translation-settings',
+  authorizePermissions(Permissions.ORDERS_TICKETING_TRANSLATION_MANAGE),
+  async (_req, res, next) => {
+    try {
+      const settings = await readOrderTicketingTranslationSettings();
+      res.json({
+        success: true,
+        data: {
+          ...settings,
+          supportedLanguages: getTicketingSupportedLanguages(),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.patch(
+  '/admin/ticketing/translation-settings',
+  authorizePermissions(Permissions.ORDERS_TICKETING_TRANSLATION_MANAGE),
+  async (req, res, next) => {
+    try {
+      const payload = orderTicketingTranslationSettingsSchema.parse(req.body || {});
+      const settings = await writeOrderTicketingTranslationSettings(payload, true);
+      res.json({
+        success: true,
+        data: {
+          ...settings,
+          supportedLanguages: getTicketingSupportedLanguages(),
+        },
+        message: 'Order ticketing translation settings saved.',
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      next(error);
+    }
+  }
+);
+
+router.get('/ticketing/language-preference', async (req, res, next) => {
+  try {
+    const user = req.user!;
+    const userRole = asRoleToken(user.role);
+    if (!userRole) {
+      return res.status(403).json({ success: false, message: 'Unsupported role for ticketing language settings.' });
+    }
+    const translationSettings = await readOrderTicketingTranslationSettings();
+    const language = await readUserTicketingLanguagePreference(user.id, translationSettings.defaultLanguage);
+    res.json({
+      success: true,
+      data: {
+        language,
+        translationEnabled: translationSettings.enabled,
+        defaultLanguage: translationSettings.defaultLanguage,
+        supportedLanguages: getTicketingSupportedLanguages(),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put('/ticketing/language-preference', async (req, res, next) => {
+  try {
+    const user = req.user!;
+    const userRole = asRoleToken(user.role);
+    if (!userRole) {
+      return res.status(403).json({ success: false, message: 'Unsupported role for ticketing language settings.' });
+    }
+    const payload = ticketingLanguagePreferenceSchema.parse(req.body || {});
+    const translationSettings = await readOrderTicketingTranslationSettings();
+    const language = await writeUserTicketingLanguagePreference(user.id, payload.language);
+    res.json({
+      success: true,
+      data: {
+        language,
+        translationEnabled: translationSettings.enabled,
+        defaultLanguage: translationSettings.defaultLanguage,
+        supportedLanguages: getTicketingSupportedLanguages(),
+      },
+      message: 'Ticket language preference saved.',
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    next(error);
+  }
+});
 
 router.get(
   '/admin/tickets',
@@ -2082,6 +2445,8 @@ router.get(
         return res.status(403).json({ success: false, message: 'Unsupported role for ticketing.' });
       }
       const settings = await readOrderTicketingSettings();
+      const translationSettings = await readOrderTicketingTranslationSettings();
+      const viewerLanguage = await readUserTicketingLanguagePreference(user.id, translationSettings.defaultLanguage);
       const context = await resolveOrderAccessContext(String(req.params.id || ''), { id: user.id, role: user.role });
       const thread = await readOrderTicketThread({
         orderId: context.orderId,
@@ -2089,6 +2454,8 @@ router.get(
         viewerRole: userRole,
         orderContext: context,
         settings,
+        translationSettings,
+        viewerLanguage,
       });
       const allowedRecipientRoles = resolveAllowedRecipientRoles(userRole, settings, context.participantUsersByRole);
       const canPost =
@@ -2123,6 +2490,12 @@ router.get(
             escalationRole: settings.escalationRole,
             escalationNotifyRoles: settings.escalationNotifyRoles,
           },
+          language: {
+            viewerPreferredLanguage: thread.viewerLanguage,
+            translationEnabled: translationSettings.enabled,
+            defaultLanguage: translationSettings.defaultLanguage,
+            supportedLanguages: getTicketingSupportedLanguages(),
+          },
         },
       });
     } catch (error: any) {
@@ -2144,6 +2517,8 @@ router.post(
       if (!userRole) return res.status(403).json({ success: false, message: 'Unsupported role for ticketing.' });
       const payload = orderTicketMessageSchema.parse(req.body || {});
       const settings = await readOrderTicketingSettings();
+      const translationSettings = await readOrderTicketingTranslationSettings();
+      const viewerLanguage = await readUserTicketingLanguagePreference(user.id, translationSettings.defaultLanguage);
       if (!settings.enabled) {
         return res.status(403).json({ success: false, message: 'Order ticketing is currently disabled by admin.' });
       }
@@ -2178,6 +2553,11 @@ router.post(
       if (visibleToCustomer && !recipientRoles.includes(UserRole.CUSTOMER) && (context.participantUsersByRole[UserRole.CUSTOMER] || []).length > 0) {
         recipientRoles.push(UserRole.CUSTOMER);
       }
+      const sourceLanguage = normalizeTicketingLanguage(
+        payload.sourceLanguage || viewerLanguage,
+        translationSettings.defaultLanguage
+      );
+      await writeUserTicketingLanguagePreference(user.id, sourceLanguage).catch(() => undefined);
 
       const threadBefore = await readOrderTicketThread({
         orderId: context.orderId,
@@ -2187,6 +2567,8 @@ router.post(
         createIfMissing: true,
         ticketSubject: payload.subject,
         settings,
+        translationSettings,
+        viewerLanguage,
       });
       const ticket = threadBefore.ticket;
       if (!ticket) {
@@ -2194,8 +2576,8 @@ router.post(
       }
       await prisma.$executeRawUnsafe(
         `INSERT INTO "OrderTicketMessage"
-          ("id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","visibleToCustomer","isInternal","attachments","createdAt")
-         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10::jsonb,NOW())`,
+          ("id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","visibleToCustomer","isInternal","attachments","sourceLanguage","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10::jsonb,$11,NOW())`,
         randomUUID(),
         ticket.id,
         context.orderId,
@@ -2205,7 +2587,8 @@ router.post(
         JSON.stringify(recipientRoles),
         visibleToCustomer,
         !visibleToCustomer,
-        JSON.stringify(normalizeAttachmentUrls(payload.attachments || []))
+        JSON.stringify(normalizeAttachmentUrls(payload.attachments || [])),
+        sourceLanguage
       );
       await prisma.$executeRawUnsafe(
         `UPDATE "OrderTicket"
@@ -2247,6 +2630,8 @@ router.post(
         viewerRole: userRole,
         orderContext: context,
         settings,
+        translationSettings,
+        viewerLanguage,
       });
       res.status(201).json({
         success: true,

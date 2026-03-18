@@ -15,6 +15,7 @@ import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import OrderSupportModal from '../../components/orders/OrderSupportModal';
+import { useAuthStore } from '../../store/authStore';
 
 interface Order {
   id: string;
@@ -115,7 +116,9 @@ export default function AdminOrders() {
   const [savingWorkflow, setSavingWorkflow] = useState(false);
   const [workflowMessage, setWorkflowMessage] = useState('');
   const [ticketingSettings, setTicketingSettings] = useState<any | null>(null);
+  const [translationSettings, setTranslationSettings] = useState<any | null>(null);
   const [savingTicketing, setSavingTicketing] = useState(false);
+  const [savingTranslationSettings, setSavingTranslationSettings] = useState(false);
   const [supportOrderId, setSupportOrderId] = useState<string | null>(null);
   const [supportInitialTab, setSupportInitialTab] = useState<'details' | 'ticket'>('ticket');
   const [tickets, setTickets] = useState<AdminTicketRow[]>([]);
@@ -127,6 +130,12 @@ export default function AdminOrders() {
   const [ticketPage, setTicketPage] = useState(1);
   const [ticketPages, setTicketPages] = useState(1);
   const [adminRoleOptions, setAdminRoleOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const { user } = useAuthStore();
+  const userPermissions = Array.isArray(user?.permissions) ? user.permissions : [];
+  const canManageTicketingTranslations =
+    userPermissions.length === 0 ||
+    userPermissions.includes('*') ||
+    userPermissions.includes('orders:ticketing:translation:manage');
   const activeManagementTab = resolveOrderManagementTab(searchParams.get('tab'));
   const showOrderList = activeManagementTab === 'all' || activeManagementTab === 'list';
   const showTicketQueue = activeManagementTab === 'all' || activeManagementTab === 'ticket-queue';
@@ -152,8 +161,10 @@ export default function AdminOrders() {
     fetchOrders();
     fetchWorkflowSettings();
     fetchTicketingSettings();
+    void fetchTranslationSettings();
     void fetchAdminRoles();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canManageTicketingTranslations]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -197,6 +208,21 @@ export default function AdminOrders() {
       if (response.success) setTicketingSettings(response.data || null);
     } catch (error) {
       console.error('Failed to load ticketing settings:', error);
+    }
+  };
+  const fetchTranslationSettings = async () => {
+    if (!canManageTicketingTranslations) {
+      setTranslationSettings(null);
+      return;
+    }
+    try {
+      const response = await api.admin.getOrderTicketingTranslationSettings();
+      if (response.success) {
+        setTranslationSettings(response.data || null);
+      }
+    } catch (error) {
+      console.error('Failed to load ticketing translation settings:', error);
+      setTranslationSettings(null);
     }
   };
 
@@ -281,6 +307,25 @@ export default function AdminOrders() {
       setWorkflowMessage(error?.response?.data?.message || 'Failed to save order ticketing settings.');
     } finally {
       setSavingTicketing(false);
+    }
+  };
+  const handleSaveTranslationSettings = async () => {
+    if (!translationSettings || !canManageTicketingTranslations) return;
+    try {
+      setSavingTranslationSettings(true);
+      setWorkflowMessage('');
+      const response = await api.admin.updateOrderTicketingTranslationSettings({
+        enabled: translationSettings.enabled !== false,
+        defaultLanguage: String(translationSettings.defaultLanguage || 'en').trim().toLowerCase() || 'en',
+      });
+      if (response.success) {
+        setTranslationSettings(response.data || translationSettings);
+        setWorkflowMessage('Ticket translation settings saved.');
+      }
+    } catch (error: any) {
+      setWorkflowMessage(error?.response?.data?.message || 'Failed to save ticket translation settings.');
+    } finally {
+      setSavingTranslationSettings(false);
     }
   };
 
@@ -834,6 +879,52 @@ export default function AdminOrders() {
                 ))}
               </select>
             </label>
+          </div>
+        </div>
+      ) : null}
+
+      {showTicketingWorkflow && canManageTicketingTranslations && translationSettings ? (
+        <div className="bg-white rounded-xl border p-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-gray-900">Ticket Translation Controls</h2>
+            <Button onClick={handleSaveTranslationSettings} disabled={savingTranslationSettings}>
+              {savingTranslationSettings ? 'Saving...' : 'Save Translation Settings'}
+            </Button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={translationSettings.enabled !== false}
+                onChange={(event) =>
+                  setTranslationSettings((prev: any) => ({ ...(prev || {}), enabled: event.target.checked }))
+                }
+              />
+              Enable multilingual message translation
+            </label>
+            <label className="text-sm text-gray-700">
+              Default ticket language
+              <select
+                value={String(translationSettings.defaultLanguage || 'en').toLowerCase()}
+                onChange={(event) =>
+                  setTranslationSettings((prev: any) => ({
+                    ...(prev || {}),
+                    defaultLanguage: String(event.target.value || 'en').toLowerCase(),
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              >
+                {(Array.isArray(translationSettings.supportedLanguages) ? translationSettings.supportedLanguages : []).map((row: any) => (
+                  <option key={`translation-language-${String(row?.code || '')}`} value={String(row?.code || '').toLowerCase()}>
+                    {String(row?.label || row?.code || '').trim() || 'Language'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+              Customers, QA, and Admin agents can select their own preferred language in the ticket console. Messages are
+              translated to the viewer preference automatically.
+            </div>
           </div>
         </div>
       ) : null}

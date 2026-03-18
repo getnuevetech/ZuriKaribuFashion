@@ -4783,6 +4783,11 @@ const ordersApi = {
           senderRole: 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR';
           senderDisplayName: string;
           body: string;
+          originalBody?: string;
+          sourceLanguage?: string;
+          translated?: boolean;
+          translatedToLanguage?: string;
+          translationStatus?: string;
           recipientRoles: Array<'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR'>;
           attachments?: string[];
           visibleToCustomer: boolean;
@@ -4810,6 +4815,12 @@ const ordersApi = {
           escalationRole?: 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR';
           escalationNotifyRoles?: Array<'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR'>;
         };
+        language?: {
+          viewerPreferredLanguage: string;
+          translationEnabled: boolean;
+          defaultLanguage: string;
+          supportedLanguages: Array<{ code: string; label: string }>;
+        };
       };
     }>(`/orders/${orderId}/ticketing`),
 
@@ -4821,9 +4832,33 @@ const ordersApi = {
       attachments?: string[];
       visibleToCustomer?: boolean;
       subject?: string;
+      sourceLanguage?: string;
     }
   ) =>
     apiService.post<{ success: boolean; data: any; message?: string }>(`/orders/${orderId}/ticketing/messages`, data),
+
+  getTicketingLanguagePreference: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        language: string;
+        translationEnabled: boolean;
+        defaultLanguage: string;
+        supportedLanguages: Array<{ code: string; label: string }>;
+      };
+    }>('/orders/ticketing/language-preference'),
+
+  updateTicketingLanguagePreference: (data: { language: string }) =>
+    apiService.put<{
+      success: boolean;
+      data: {
+        language: string;
+        translationEnabled: boolean;
+        defaultLanguage: string;
+        supportedLanguages: Array<{ code: string; label: string }>;
+      };
+      message?: string;
+    }>('/orders/ticketing/language-preference', data),
 
   updateOrderTicketStatus: (orderId: string, status: 'OPEN' | 'PENDING' | 'RESOLVED' | 'CLOSED') =>
     apiService.patch<{ success: boolean; data: any; message?: string }>(`/orders/${orderId}/ticketing/status`, { status }),
@@ -7403,6 +7438,25 @@ const adminApi = {
     recipientMatrix?: Record<string, string[]>;
   }) =>
     apiService.patch<{ success: boolean; data: any; message?: string }>('/orders/admin/ticketing/settings', data),
+
+  getOrderTicketingTranslationSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        enabled: boolean;
+        defaultLanguage: string;
+        supportedLanguages: Array<{ code: string; label: string }>;
+      };
+    }>('/orders/admin/ticketing/translation-settings'),
+
+  updateOrderTicketingTranslationSettings: (data: {
+    enabled?: boolean;
+    defaultLanguage?: string;
+  }) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>(
+      '/orders/admin/ticketing/translation-settings',
+      data
+    ),
 
   getCategoryPageSettings: (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR') =>
     readAdminCategoryPageSettingsWithFallback<{

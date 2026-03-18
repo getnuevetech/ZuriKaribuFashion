@@ -5,6 +5,7 @@ import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 
 type TicketRole = 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR';
+type TicketLanguageOption = { code: string; label: string };
 
 const ROLE_LABELS: Record<TicketRole, string> = {
   CUSTOMER: 'Customer',
@@ -13,6 +14,16 @@ const ROLE_LABELS: Record<TicketRole, string> = {
   QA_TEAM: 'QA',
   ADMINISTRATOR: 'Admin',
 };
+const DEFAULT_TICKET_LANGUAGE_OPTIONS: TicketLanguageOption[] = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Spanish' },
+  { code: 'fr', label: 'French' },
+  { code: 'pt', label: 'Portuguese' },
+  { code: 'de', label: 'German' },
+  { code: 'ar', label: 'Arabic' },
+  { code: 'sw', label: 'Swahili' },
+  { code: 'zh-cn', label: 'Chinese (Simplified)' },
+];
 
 const statusLabel = (value: unknown) =>
   String(value || '')
@@ -50,6 +61,9 @@ export default function OrderSupportModal({
   const [messageNotice, setMessageNotice] = useState('');
   const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [preferredLanguage, setPreferredLanguage] = useState('en');
+  const [supportedLanguages, setSupportedLanguages] = useState<TicketLanguageOption[]>(DEFAULT_TICKET_LANGUAGE_OPTIONS);
+  const [languageSaving, setLanguageSaving] = useState(false);
 
   const loadData = async () => {
     if (!orderId || !isOpen) return;
@@ -59,12 +73,22 @@ export default function OrderSupportModal({
       const [orderRes, threadRes] = await Promise.all([api.orders.getOrder(orderId), api.orders.getOrderTicketThread(orderId)]);
       if (orderRes.success) setOrderDetail(orderRes.data || null);
       if (threadRes.success) {
-        setThread(threadRes.data || null);
-        const allowed = Array.isArray(threadRes.data?.permissions?.allowedRecipientRoles)
-          ? (threadRes.data.permissions.allowedRecipientRoles as TicketRole[])
+        const threadData = threadRes.data || null;
+        setThread(threadData);
+        const allowed = Array.isArray(threadData?.permissions?.allowedRecipientRoles)
+          ? (threadData.permissions.allowedRecipientRoles as TicketRole[])
           : [];
+        const languageRows = Array.isArray(threadData?.language?.supportedLanguages)
+          ? (threadData.language.supportedLanguages as TicketLanguageOption[])
+          : DEFAULT_TICKET_LANGUAGE_OPTIONS;
+        setSupportedLanguages(languageRows.length > 0 ? languageRows : DEFAULT_TICKET_LANGUAGE_OPTIONS);
+        setPreferredLanguage(
+          String(threadData?.language?.viewerPreferredLanguage || threadData?.language?.defaultLanguage || 'en')
+            .trim()
+            .toLowerCase() || 'en'
+        );
         setSelectedRecipients(allowed.slice(0, Math.min(2, allowed.length)));
-        setVisibleToCustomer(Boolean(threadRes.data?.settings?.defaultVisibleToCustomer));
+        setVisibleToCustomer(Boolean(threadData?.settings?.defaultVisibleToCustomer));
       }
     } catch (loadError: any) {
       setError(loadError?.response?.data?.message || loadError?.message || 'Failed to load order details.');
@@ -86,13 +110,57 @@ export default function OrderSupportModal({
   const reloadThread = async () => {
     if (!orderId) return;
     const response = await api.orders.getOrderTicketThread(orderId);
-    if (response.success) setThread(response.data || null);
+    if (response.success) {
+      const threadData = response.data || null;
+      setThread(threadData);
+      const languageRows = Array.isArray(threadData?.language?.supportedLanguages)
+        ? (threadData.language.supportedLanguages as TicketLanguageOption[])
+        : DEFAULT_TICKET_LANGUAGE_OPTIONS;
+      setSupportedLanguages(languageRows.length > 0 ? languageRows : DEFAULT_TICKET_LANGUAGE_OPTIONS);
+      const language = String(threadData?.language?.viewerPreferredLanguage || preferredLanguage || 'en')
+        .trim()
+        .toLowerCase();
+      if (language) {
+        setPreferredLanguage(language);
+      }
+    }
   };
 
   const allowedRecipientRoles = useMemo(
     () => (Array.isArray(thread?.permissions?.allowedRecipientRoles) ? (thread.permissions.allowedRecipientRoles as TicketRole[]) : []),
     [thread]
   );
+  const languageLabelByCode = useMemo(
+    () =>
+      new Map(
+        (supportedLanguages || []).map((row) => [String(row.code || '').trim().toLowerCase(), String(row.label || '').trim()])
+      ),
+    [supportedLanguages]
+  );
+  const resolveLanguageLabel = (code: unknown) =>
+    languageLabelByCode.get(String(code || '').trim().toLowerCase()) ||
+    String(code || '')
+      .trim()
+      .toUpperCase() ||
+    'Unknown';
+
+  const handlePreferredLanguageChange = async (nextLanguage: string) => {
+    const normalized = String(nextLanguage || '').trim().toLowerCase();
+    if (!normalized) return;
+    setPreferredLanguage(normalized);
+    try {
+      setLanguageSaving(true);
+      const response = await api.orders.updateTicketingLanguagePreference({ language: normalized });
+      if (response.success) {
+        setMessageNotice('Ticket language updated.');
+      }
+      await reloadThread();
+    } catch (languageError: any) {
+      setMessageNotice(languageError?.response?.data?.message || languageError?.message || 'Failed to update ticket language.');
+    } finally {
+      setLanguageSaving(false);
+    }
+  };
 
   const toggleRecipient = (role: TicketRole) => {
     setSelectedRecipients((previous) => {
@@ -135,9 +203,11 @@ export default function OrderSupportModal({
         recipientRoles?: TicketRole[];
         attachments?: string[];
         visibleToCustomer?: boolean;
+        sourceLanguage?: string;
       } = {
         body: String(messageBody || '').trim(),
       };
+      payload.sourceLanguage = String(preferredLanguage || 'en').trim().toLowerCase() || 'en';
       if (selectedRecipients.length > 0) payload.recipientRoles = selectedRecipients;
       if (attachmentUrls.length > 0) payload.attachments = attachmentUrls;
       if (thread?.permissions?.canControlCustomerVisibility) {
@@ -437,6 +507,27 @@ export default function OrderSupportModal({
               ) : null}
             </div>
 
+            <div className="rounded-lg border bg-gray-50 p-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="text-xs font-medium text-gray-700">Preferred ticket language</label>
+                <select
+                  value={preferredLanguage}
+                  onChange={(event) => void handlePreferredLanguageChange(event.target.value)}
+                  disabled={languageSaving}
+                  className="rounded border px-2 py-1 text-xs"
+                >
+                  {(supportedLanguages.length > 0 ? supportedLanguages : DEFAULT_TICKET_LANGUAGE_OPTIONS).map((row) => (
+                    <option key={`ticket-language-${row.code}`} value={String(row.code || '').toLowerCase()}>
+                      {row.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-gray-500">
+                  {languageSaving ? 'Saving...' : 'Messages are shown in your selected language when translation is available.'}
+                </span>
+              </div>
+            </div>
+
             <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border bg-gray-50 p-3">
               {(thread?.messages || []).length === 0 ? (
                 <p className="text-sm text-gray-500">No ticket messages yet.</p>
@@ -453,6 +544,20 @@ export default function OrderSupportModal({
                       </Badge>
                     </div>
                     <p className="mt-2 text-sm text-gray-800 whitespace-pre-wrap">{message.body}</p>
+                    {message?.translated ? (
+                      <p className="mt-1 text-[11px] text-gray-500">
+                        Translated from {resolveLanguageLabel(message.sourceLanguage)} to{' '}
+                        {resolveLanguageLabel(message.translatedToLanguage || preferredLanguage)}.
+                      </p>
+                    ) : null}
+                    {message?.translated && String(message?.originalBody || '').trim() ? (
+                      <details className="mt-2 rounded border border-gray-200 bg-gray-50 p-2">
+                        <summary className="cursor-pointer text-[11px] font-medium text-gray-700">
+                          View original message ({resolveLanguageLabel(message.sourceLanguage)})
+                        </summary>
+                        <p className="mt-1 whitespace-pre-wrap text-xs text-gray-700">{String(message.originalBody || '')}</p>
+                      </details>
+                    ) : null}
                     {Array.isArray(message.attachments) && message.attachments.length > 0 ? (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {message.attachments.map((url: string) => (

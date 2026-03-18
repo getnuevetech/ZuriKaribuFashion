@@ -16,6 +16,7 @@ export const Permissions = {
   SESSION_AUDIT_READ: 'session_audit:read',
   PRODUCTS_MANAGE: 'products:manage',
   ORDERS_MANAGE: 'orders:manage',
+  ORDERS_TICKETING_TRANSLATION_MANAGE: 'orders:ticketing:translation:manage',
   PRICING_MANAGE: 'pricing:manage',
   CURRENCY_MANAGE: 'currency:manage',
   TRAFFIC_READ: 'traffic:read',
@@ -106,6 +107,12 @@ export const PERMISSION_CATALOG: PermissionCatalogEntry[] = [
     label: 'Manage orders',
     group: 'OPERATIONS',
     description: 'View and update order lifecycle across the platform.',
+  },
+  {
+    key: Permissions.ORDERS_TICKETING_TRANSLATION_MANAGE,
+    label: 'Manage order ticket translations',
+    group: 'OPERATIONS',
+    description: 'Configure multilingual translation behavior for order ticket communications.',
   },
   {
     key: Permissions.PRICING_MANAGE,
