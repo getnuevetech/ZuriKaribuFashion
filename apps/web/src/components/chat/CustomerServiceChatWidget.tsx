@@ -3,6 +3,7 @@ import { MessageCircle, X, Send, Bot, ShoppingBag, Paperclip } from 'lucide-reac
 import { useLocation } from 'react-router-dom';
 import { api } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
+import Button from '../ui/Button';
 
 const STORAGE_KEY = 'af_customer_service_chat_session_v1';
 const SHOPPING_STORAGE_KEY = 'af_customer_service_shopping_chat_v1';
