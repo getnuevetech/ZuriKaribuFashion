@@ -28,6 +28,8 @@ import ChangePasswordRequired from './pages/ChangePasswordRequired';
 import ReferralCodeRedirect from './pages/ReferralCodeRedirect';
 import StoryPage from './pages/Story';
 import ContactPage from './pages/Contact';
+import HelpCenterPage from './pages/HelpCenter';
+import VendorSupportCenterPage from './pages/VendorSupportCenter';
 import SellerStorefront from './pages/storefront/SellerStorefront';
 import DesignerStorefront from './pages/storefront/DesignerStorefront';
 
@@ -82,6 +84,7 @@ import AdminCustomerServiceChat from './pages/admin/CustomerServiceChat';
 import AdminCustomerServiceSettings from './pages/admin/CustomerServiceSettings';
 import AdminVoipConfiguration from './pages/admin/VoipConfiguration';
 import AdminAuthenticatorSettings from './pages/admin/AuthenticatorSettings';
+import AdminHelpCenterContent from './pages/admin/HelpCenterContent';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -159,6 +162,8 @@ function App() {
               <Route path="/cart" element={<Cart />} />
               <Route path="/stories/:slug" element={<StoryPage />} />
               <Route path="/contact" element={<ContactPage />} />
+              <Route path="/help-center" element={<HelpCenterPage />} />
+              <Route path="/seller-designer-support" element={<VendorSupportCenterPage />} />
               <Route path="/store/seller/:profileId/:brandSlug" element={<SellerStorefront />} />
               <Route path="/store/designer/:profileId/:brandSlug" element={<DesignerStorefront />} />
             </Route>
@@ -386,7 +391,7 @@ function App() {
                 <Route
                   path="/admin/voip"
                   element={
-                    <AdminPermissionGuard required={['voip:manage|orders:manage']}>
+                    <AdminPermissionGuard required={['voip:manage|whatsapp:manage|orders:manage']}>
                       <AdminVoipConfiguration />
                     </AdminPermissionGuard>
                   }
@@ -571,6 +576,14 @@ function App() {
                     </AdminPermissionGuard>
                   }
                 />
+                <Route
+                  path="/admin/help-center-content"
+                  element={
+                    <AdminPermissionGuard required={['help_center:manage|homepage:manage']}>
+                      <AdminHelpCenterContent />
+                    </AdminPermissionGuard>
+                  }
+                />
               </Route>
             </Route>
 
@@ -592,6 +605,7 @@ function App() {
                 <Route path="enterprise/role-management" element={<SellerEnterpriseRoleManagementPage />} />
                 <Route path="messages" element={<SellerMessagesPage />} />
                 <Route path="failed-product-approvals" element={<SellerFailedProductApprovalPage />} />
+                <Route path="support-center" element={<VendorSupportCenterPage />} />
                 <Route path="*" element={<Navigate to="/seller" replace />} />
               </Route>
             </Route>
@@ -615,6 +629,7 @@ function App() {
                 <Route path="enterprise/role-management" element={<DesignerEnterpriseRoleManagementPage />} />
                 <Route path="messages" element={<DesignerMessagesPage />} />
                 <Route path="failed-product-approvals" element={<DesignerFailedProductApprovalPage />} />
+                <Route path="support-center" element={<VendorSupportCenterPage />} />
                 <Route path="*" element={<Navigate to="/designer" replace />} />
               </Route>
             </Route>
@@ -646,6 +661,7 @@ function App() {
                 <Route index element={<ResellerDashboard />} />
                 <Route path="profile" element={<ResellerProfilePage />} />
                 <Route path="materials" element={<ResellerMaterialsPage />} />
+                <Route path="support-center" element={<VendorSupportCenterPage />} />
                 <Route path="*" element={<Navigate to="/reseller" replace />} />
               </Route>
             </Route>

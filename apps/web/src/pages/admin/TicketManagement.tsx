@@ -31,7 +31,7 @@ type TicketMessage = {
   attachments?: string[];
 };
 
-const SOURCE_OPTIONS = ['ORDER', 'EMAIL', 'PHONE', 'WEB', 'OTHER', 'CHAT', 'BOT'];
+const SOURCE_OPTIONS = ['ORDER', 'EMAIL', 'PHONE', 'WEB', 'WHATSAPP', 'OTHER', 'CHAT', 'BOT'];
 
 export default function AdminTicketManagement() {
   const [loading, setLoading] = useState(true);

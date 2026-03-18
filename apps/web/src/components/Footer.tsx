@@ -27,10 +27,10 @@ const FOOTER_DEFAULT_MENUS: Record<'shop' | 'company' | 'support', FooterNavLink
     { label: 'Careers', href: '/#contact' },
   ],
   support: [
-    { label: 'Contact Us', href: '/#contact' },
-    { label: 'FAQs', href: '/#contact' },
-    { label: 'Shipping Info', href: '/#contact' },
-    { label: 'Returns', href: '/#contact' },
+    { label: 'Contact Us', href: '/contact' },
+    { label: 'Customer FAQs', href: '/help-center' },
+    { label: 'Seller/Designer Support', href: '/seller-designer-support' },
+    { label: 'Returns & Support', href: '/help-center' },
   ],
 };
 

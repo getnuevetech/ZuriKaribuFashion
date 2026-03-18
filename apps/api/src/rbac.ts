@@ -24,6 +24,8 @@ export const Permissions = {
   BOTS_MANAGE: 'bots:manage',
   VOIP_MANAGE: 'voip:manage',
   AUTHENTICATOR_MANAGE: 'authenticator:manage',
+  WHATSAPP_MANAGE: 'whatsapp:manage',
+  HELP_CENTER_MANAGE: 'help_center:manage',
   BACKUPS_RESTORE: 'backups:restore',
   PRICING_MANAGE: 'pricing:manage',
   CURRENCY_MANAGE: 'currency:manage',
@@ -163,6 +165,18 @@ export const PERMISSION_CATALOG: PermissionCatalogEntry[] = [
     label: 'Manage authenticator security',
     group: 'SYSTEM',
     description: 'Configure OTP and authenticator policy, methods, and enforcement scope.',
+  },
+  {
+    key: Permissions.WHATSAPP_MANAGE,
+    label: 'Manage WhatsApp channel',
+    group: 'SYSTEM',
+    description: 'Configure WhatsApp chat/call routing, channel behavior, and admin communication settings.',
+  },
+  {
+    key: Permissions.HELP_CENTER_MANAGE,
+    label: 'Manage help center content',
+    group: 'MARKETING',
+    description: 'Manage customer and vendor FAQ, knowledge articles, and support contact pages.',
   },
   {
     key: Permissions.BACKUPS_RESTORE,

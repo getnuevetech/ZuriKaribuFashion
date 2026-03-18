@@ -98,6 +98,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Homepage Sections', href: '/admin/homepage-sections', icon: LayoutGrid },
     { label: 'Category Pages', href: '/admin/category-pages', icon: LayoutGrid },
     { label: 'Blogs', href: '/admin/blogs', icon: FileText },
+    { label: 'Help Center Content', href: '/admin/help-center-content', icon: FileText },
     { label: 'Activity Logs', href: '/admin/activity-logs', icon: ClipboardCheck },
   ],
   seller: [
@@ -107,6 +108,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: '3D TryON', href: '/seller?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/seller?tab=orders', icon: ShoppingBag },
     { label: 'Messages', href: '/seller/messages', icon: Mail },
+    { label: 'Support Center', href: '/seller/support-center', icon: MessageSquare },
     { label: 'Payment', href: '/seller/payments', icon: CreditCard },
     { label: 'Enterprise', href: '/seller/enterprise', icon: Users },
     { label: 'Profile', href: '/seller/profile', icon: User },
@@ -119,6 +121,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: '3D TryON', href: '/designer?tab=tryon', icon: Sparkles },
     { label: 'Orders', href: '/designer?tab=orders', icon: ShoppingBag },
     { label: 'Messages', href: '/designer/messages', icon: Mail },
+    { label: 'Support Center', href: '/designer/support-center', icon: MessageSquare },
     { label: 'Payment', href: '/designer/payments', icon: CreditCard },
     { label: 'Enterprise', href: '/designer/enterprise', icon: Users },
     { label: 'Profile', href: '/designer/profile', icon: User },
@@ -129,6 +132,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Commissions', href: '/reseller?tab=commissions', icon: DollarSign },
     { label: 'Profile', href: '/reseller/profile', icon: User },
     { label: 'Materials', href: '/reseller/materials', icon: ImageIcon },
+    { label: 'Support Center', href: '/reseller/support-center', icon: MessageSquare },
   ],
   qa: [
     { label: 'Dashboard', href: '/qa', icon: LayoutDashboard },
@@ -229,13 +233,14 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/tickets': ['orders:manage'],
       '/admin/customer-service/chat': ['customer_service:chat:manage'],
       '/admin/customer-service/settings': ['customer_service:settings:manage'],
-      '/admin/voip': ['voip:manage|orders:manage'],
+      '/admin/voip': ['voip:manage|whatsapp:manage|orders:manage'],
       '/admin/banners': ['banners:manage'],
       '/admin/homepage': ['homepage:manage'],
       '/admin/homepage-visibility': ['homepage:manage'],
       '/admin/homepage-sections': ['homepage:manage'],
       '/admin/category-pages': ['homepage:manage'],
       '/admin/blogs': ['homepage:manage'],
+      '/admin/help-center-content': ['help_center:manage|homepage:manage'],
     };
     const required = permissionByHref[href] || [];
     if (required.length === 0) return true;

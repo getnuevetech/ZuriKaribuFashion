@@ -9963,6 +9963,70 @@ const customerServiceApi = {
     apiService.post<{ success: boolean; message?: string }>(`/customer-service/voip/calls/${id}/end`),
   listVoipCalls: (params?: Record<string, unknown>) =>
     apiService.get<{ success: boolean; data: any[] }>('/customer-service/admin/voip/calls', { params }),
+
+  getWhatsAppSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        enabled: boolean;
+        businessNumber: string;
+        chatBaseUrl: string;
+        callBaseUrl: string;
+        routes: any[];
+      };
+    }>('/customer-service/admin/whatsapp/settings'),
+  updateWhatsAppSettings: (payload: Record<string, unknown>) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>(
+      '/customer-service/admin/whatsapp/settings',
+      payload
+    ),
+  listWhatsAppEvents: (params?: Record<string, unknown>) =>
+    apiService.get<{ success: boolean; data: any[] }>('/customer-service/admin/whatsapp/events', { params }),
+  startWhatsAppSession: (payload: Record<string, unknown>) =>
+    apiService.post<{ success: boolean; data: { id: string; eventLink: string; mode: 'CHAT' | 'CALL' } }>(
+      '/customer-service/whatsapp/start',
+      payload
+    ),
+  endWhatsAppSession: (id: string) =>
+    apiService.post<{ success: boolean; message?: string }>(`/customer-service/whatsapp/events/${id}/end`),
+};
+
+const helpCenterApi = {
+  getPublic: (audience: 'CUSTOMER' | 'VENDOR' | 'SELLER_DESIGNER' = 'CUSTOMER') =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        audience: 'CUSTOMER' | 'VENDOR';
+        heroTitle: string;
+        heroSubtitle: string;
+        supportHint: string;
+        faqs: Array<{ id: string; question: string; answer: string; isActive: boolean; sortOrder: number }>;
+        articles: Array<{
+          id: string;
+          title: string;
+          summary: string;
+          body: string;
+          tags: string[];
+          isActive: boolean;
+          sortOrder: number;
+        }>;
+        contacts: Array<{
+          id: string;
+          label: string;
+          value: string;
+          type: 'EMAIL' | 'PHONE' | 'WHATSAPP' | 'LINK' | 'OTHER';
+          isActive: boolean;
+          sortOrder: number;
+        }>;
+      };
+    }>(`/help-center/public/${audience.toLowerCase()}`),
+  getAdminContent: () =>
+    apiService.get<{ success: boolean; data: any }>('/help-center/admin/content'),
+  updateAdminContent: (payload: Record<string, unknown>) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>(
+      '/help-center/admin/content',
+      payload
+    ),
 };
 
 // Export combined API
@@ -9990,6 +10054,7 @@ export const api = {
   enterprise: enterpriseApi,
   referrals: referralsApi,
   customerService: customerServiceApi,
+  helpCenter: helpCenterApi,
 };
 
 // Named exports for direct import
@@ -10017,6 +10082,7 @@ export {
   enterpriseApi,
   referralsApi,
   customerServiceApi,
+  helpCenterApi,
   apiService,
   httpClient,
 };

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { PhoneCall, RefreshCw, Save } from 'lucide-react';
+import { MessageCircle, PhoneCall, RefreshCw, Save } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { api } from '../../services/api';
 
@@ -33,6 +33,31 @@ type VoipCallLog = {
   endedAt?: string | null;
 };
 
+type WhatsAppRoute = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  mode: 'CHAT' | 'CALL' | 'ANY';
+  contextType: 'TICKET' | 'CHAT' | 'DIRECT' | 'ANY';
+  fromRoles: string[];
+  targetType: 'ADMIN_USER' | 'ADMIN_GROUP' | 'ADMIN_ROLE' | 'CUSTOMER_SERVICE';
+  targetId: string;
+};
+
+type WhatsAppEventLog = {
+  id: string;
+  routeId?: string | null;
+  mode: 'CHAT' | 'CALL';
+  contextType: string;
+  contextId?: string | null;
+  fromPhone?: string | null;
+  toPhone?: string | null;
+  status: string;
+  eventLink: string;
+  startedAt?: string | null;
+  endedAt?: string | null;
+};
+
 const buildEmptyRoute = (): VoipRoute => ({
   id: `route-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
   name: '',
@@ -51,35 +76,57 @@ const buildEmptyTransferTarget = (): VoipTransferTarget => ({
   targetId: '',
 });
 
+const buildEmptyWhatsAppRoute = (): WhatsAppRoute => ({
+  id: `wa-route-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  name: '',
+  enabled: true,
+  mode: 'ANY',
+  contextType: 'ANY',
+  fromRoles: [],
+  targetType: 'CUSTOMER_SERVICE',
+  targetId: '',
+});
+
 export default function AdminVoipConfiguration() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [activeTab, setActiveTab] = useState<'configuration' | 'logs' | 'transfer'>('configuration');
+  const [activeTab, setActiveTab] = useState<'configuration' | 'logs' | 'transfer' | 'whatsapp'>('configuration');
   const [settings, setSettings] = useState({
     enabled: false,
     provider: 'INTERNAL',
     callBaseUrl: '',
     routes: [] as VoipRoute[],
     transferTargets: [] as VoipTransferTarget[],
+    whatsappEnabled: false,
+    whatsappBusinessNumber: '',
+    whatsappChatBaseUrl: 'https://wa.me',
+    whatsappCallBaseUrl: 'https://wa.me',
+    whatsappRoutes: [] as WhatsAppRoute[],
   });
   const [callLogs, setCallLogs] = useState<VoipCallLog[]>([]);
+  const [whatsAppLogs, setWhatsAppLogs] = useState<WhatsAppEventLog[]>([]);
   const [testContextId, setTestContextId] = useState('');
   const [testToUserId, setTestToUserId] = useState('');
+  const [testWhatsAppMessage, setTestWhatsAppMessage] = useState('Hello from ZuriKaribu support.');
+  const [testWhatsAppMode, setTestWhatsAppMode] = useState<'CHAT' | 'CALL'>('CHAT');
 
   const load = async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await api.customerService.getVoipSettings();
-      if (response.success && response.data) {
+      const [voipResponse, whatsappResponse] = await Promise.all([
+        api.customerService.getVoipSettings(),
+        api.customerService.getWhatsAppSettings().catch(() => null),
+      ]);
+      if (voipResponse.success && voipResponse.data) {
         setSettings({
-          enabled: Boolean(response.data.enabled),
-          provider: String(response.data.provider || 'INTERNAL'),
-          callBaseUrl: String(response.data.callBaseUrl || ''),
-          routes: Array.isArray(response.data.routes)
-            ? response.data.routes.map((row: any) => ({
+          enabled: Boolean(voipResponse.data.enabled),
+          provider: String(voipResponse.data.provider || 'INTERNAL'),
+          callBaseUrl: String(voipResponse.data.callBaseUrl || ''),
+          routes: Array.isArray(voipResponse.data.routes)
+            ? voipResponse.data.routes.map((row: any) => ({
                 id: String(row?.id || ''),
                 name: String(row?.name || ''),
                 enabled: row?.enabled !== false,
@@ -97,14 +144,40 @@ export default function AdminVoipConfiguration() {
                 targetId: String(row?.targetId || ''),
               }))
             : [],
-          transferTargets: Array.isArray(response.data.transferTargets)
-            ? response.data.transferTargets.map((row: any) => ({
+          transferTargets: Array.isArray(voipResponse.data.transferTargets)
+            ? voipResponse.data.transferTargets.map((row: any) => ({
                 id: String(row?.id || ''),
                 name: String(row?.name || ''),
                 enabled: row?.enabled !== false,
                 targetType: ['ADMIN_USER', 'ADMIN_GROUP', 'ADMIN_ROLE'].includes(String(row?.targetType || '').toUpperCase())
                   ? (String(row?.targetType || '').toUpperCase() as any)
                   : 'ADMIN_USER',
+                targetId: String(row?.targetId || ''),
+              }))
+            : [],
+          whatsappEnabled: Boolean(whatsappResponse?.data?.enabled),
+          whatsappBusinessNumber: String(whatsappResponse?.data?.businessNumber || ''),
+          whatsappChatBaseUrl: String(whatsappResponse?.data?.chatBaseUrl || 'https://wa.me'),
+          whatsappCallBaseUrl: String(whatsappResponse?.data?.callBaseUrl || 'https://wa.me'),
+          whatsappRoutes: Array.isArray(whatsappResponse?.data?.routes)
+            ? whatsappResponse!.data.routes.map((row: any) => ({
+                id: String(row?.id || ''),
+                name: String(row?.name || ''),
+                enabled: row?.enabled !== false,
+                mode: ['CHAT', 'CALL', 'ANY'].includes(String(row?.mode || '').toUpperCase())
+                  ? (String(row?.mode || '').toUpperCase() as any)
+                  : 'ANY',
+                contextType: ['TICKET', 'CHAT', 'DIRECT', 'ANY'].includes(String(row?.contextType || '').toUpperCase())
+                  ? (String(row?.contextType || '').toUpperCase() as any)
+                  : 'ANY',
+                fromRoles: Array.isArray(row?.fromRoles)
+                  ? row.fromRoles.map((entry: any) => String(entry || '').toUpperCase()).filter(Boolean)
+                  : [],
+                targetType: ['ADMIN_USER', 'ADMIN_GROUP', 'ADMIN_ROLE', 'CUSTOMER_SERVICE'].includes(
+                  String(row?.targetType || '').toUpperCase()
+                )
+                  ? (String(row?.targetType || '').toUpperCase() as any)
+                  : 'CUSTOMER_SERVICE',
                 targetId: String(row?.targetId || ''),
               }))
             : [],
@@ -128,6 +201,17 @@ export default function AdminVoipConfiguration() {
     }
   };
 
+  const loadWhatsAppLogs = async () => {
+    try {
+      const response = await api.customerService.listWhatsAppEvents({ limit: 200 });
+      if (response.success) {
+        setWhatsAppLogs(Array.isArray(response.data) ? response.data : []);
+      }
+    } catch (logError: any) {
+      setError(logError?.response?.data?.message || 'Failed to load WhatsApp logs.');
+    }
+  };
+
   useEffect(() => {
     void load();
   }, []);
@@ -137,31 +221,55 @@ export default function AdminVoipConfiguration() {
     void loadCallLogs();
   }, [activeTab]);
 
+  useEffect(() => {
+    if (activeTab !== 'whatsapp') return;
+    void loadWhatsAppLogs();
+  }, [activeTab]);
+
   const save = async () => {
     setSaving(true);
     setError('');
     setMessage('');
     try {
-      const response = await api.customerService.updateVoipSettings({
-        enabled: settings.enabled,
-        provider: settings.provider.trim(),
-        callBaseUrl: settings.callBaseUrl.trim(),
-        routes: settings.routes.map((row) => ({
-          ...row,
-          id: String(row.id || '').trim(),
-          name: String(row.name || '').trim(),
-          targetId: String(row.targetId || '').trim(),
-          fromRoles: (Array.isArray(row.fromRoles) ? row.fromRoles : []).map((entry) => String(entry || '').trim().toUpperCase()).filter(Boolean),
-        })),
-        transferTargets: settings.transferTargets.map((row) => ({
-          ...row,
-          id: String(row.id || '').trim(),
-          name: String(row.name || '').trim(),
-          targetId: String(row.targetId || '').trim(),
-        })),
-      });
-      if (response.success) {
-        setMessage(response.message || 'VoIP settings saved.');
+      const [voipResponse, whatsappResponse] = await Promise.all([
+        api.customerService.updateVoipSettings({
+          enabled: settings.enabled,
+          provider: settings.provider.trim(),
+          callBaseUrl: settings.callBaseUrl.trim(),
+          routes: settings.routes.map((row) => ({
+            ...row,
+            id: String(row.id || '').trim(),
+            name: String(row.name || '').trim(),
+            targetId: String(row.targetId || '').trim(),
+            fromRoles: (Array.isArray(row.fromRoles) ? row.fromRoles : [])
+              .map((entry) => String(entry || '').trim().toUpperCase())
+              .filter(Boolean),
+          })),
+          transferTargets: settings.transferTargets.map((row) => ({
+            ...row,
+            id: String(row.id || '').trim(),
+            name: String(row.name || '').trim(),
+            targetId: String(row.targetId || '').trim(),
+          })),
+        }),
+        api.customerService.updateWhatsAppSettings({
+          enabled: settings.whatsappEnabled,
+          businessNumber: settings.whatsappBusinessNumber.trim(),
+          chatBaseUrl: settings.whatsappChatBaseUrl.trim(),
+          callBaseUrl: settings.whatsappCallBaseUrl.trim(),
+          routes: settings.whatsappRoutes.map((row) => ({
+            ...row,
+            id: String(row.id || '').trim(),
+            name: String(row.name || '').trim(),
+            targetId: String(row.targetId || '').trim(),
+            fromRoles: (Array.isArray(row.fromRoles) ? row.fromRoles : [])
+              .map((entry) => String(entry || '').trim().toUpperCase())
+              .filter(Boolean),
+          })),
+        }),
+      ]);
+      if (voipResponse.success || whatsappResponse.success) {
+        setMessage(whatsappResponse.message || voipResponse.message || 'Communication channel settings saved.');
       }
       await load();
     } catch (saveError: any) {
@@ -193,6 +301,30 @@ export default function AdminVoipConfiguration() {
     }
   };
 
+  const startWhatsAppTest = async () => {
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await api.customerService.startWhatsAppSession({
+        mode: testWhatsAppMode,
+        contextType: 'DIRECT',
+        contextId: testContextId.trim() || undefined,
+        toUserId: testToUserId.trim() || undefined,
+        message: testWhatsAppMessage.trim() || undefined,
+      });
+      if (response.success && response.data?.eventLink) {
+        setMessage(`WhatsApp ${testWhatsAppMode.toLowerCase()} started. Opening ${response.data.eventLink}`);
+        window.open(response.data.eventLink, '_blank', 'noopener,noreferrer');
+      }
+      if (activeTab === 'whatsapp') await loadWhatsAppLogs();
+    } catch (whatsAppError: any) {
+      setError(whatsAppError?.response?.data?.message || 'Failed to start WhatsApp session.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-72 items-center justify-center">
@@ -206,7 +338,9 @@ export default function AdminVoipConfiguration() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">VoIP Management</h1>
-          <p className="text-sm text-gray-600">Manage PBX-style call configuration, routing, call logs, and transfer targets.</p>
+          <p className="text-sm text-gray-600">
+            Manage PBX-style call configuration, WhatsApp routing, logs, and transfer targets.
+          </p>
         </div>
         <Button variant="outline" onClick={() => void load()}>
           <RefreshCw className="mr-2 h-4 w-4" />
@@ -235,6 +369,13 @@ export default function AdminVoipConfiguration() {
           className={`rounded-lg px-3 py-2 text-sm ${activeTab === 'transfer' ? 'bg-amber-100 text-amber-900' : 'bg-gray-100 text-gray-700'}`}
         >
           Call Transfer Management Configuration
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('whatsapp')}
+          className={`rounded-lg px-3 py-2 text-sm ${activeTab === 'whatsapp' ? 'bg-amber-100 text-amber-900' : 'bg-gray-100 text-gray-700'}`}
+        >
+          WhatsApp Channel Management
         </button>
       </div>
 
@@ -584,6 +725,315 @@ export default function AdminVoipConfiguration() {
             </table>
           </div>
         </section>
+      ) : null}
+
+      {activeTab === 'whatsapp' ? (
+        <div className="space-y-4">
+          <section className="rounded-xl border bg-white p-4 space-y-4">
+            <h2 className="text-sm font-semibold text-gray-900">WhatsApp Provider Setup</h2>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={settings.whatsappEnabled}
+                onChange={(event) => setSettings((prev) => ({ ...prev, whatsappEnabled: event.target.checked }))}
+              />
+              Enable WhatsApp channel
+            </label>
+            <div className="grid gap-3 md:grid-cols-3">
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">Business number</span>
+                <input
+                  value={settings.whatsappBusinessNumber}
+                  onChange={(event) => setSettings((prev) => ({ ...prev, whatsappBusinessNumber: event.target.value }))}
+                  className="w-full rounded border px-3 py-2"
+                  placeholder="+2340000000000"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">Chat base URL</span>
+                <input
+                  value={settings.whatsappChatBaseUrl}
+                  onChange={(event) => setSettings((prev) => ({ ...prev, whatsappChatBaseUrl: event.target.value }))}
+                  className="w-full rounded border px-3 py-2"
+                  placeholder="https://wa.me"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">Call base URL</span>
+                <input
+                  value={settings.whatsappCallBaseUrl}
+                  onChange={(event) => setSettings((prev) => ({ ...prev, whatsappCallBaseUrl: event.target.value }))}
+                  className="w-full rounded border px-3 py-2"
+                  placeholder="https://wa.me"
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="rounded-xl border bg-white p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-900">WhatsApp Route Management</h2>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setSettings((prev) => ({ ...prev, whatsappRoutes: [...prev.whatsappRoutes, buildEmptyWhatsAppRoute()] }))
+                }
+              >
+                Add WhatsApp Route
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {settings.whatsappRoutes.map((route, index) => (
+                <div key={route.id || `wa-route-${index}`} className="rounded border p-3 space-y-2">
+                  <div className="grid gap-2 md:grid-cols-6">
+                    <input
+                      value={route.id}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          whatsappRoutes: prev.whatsappRoutes.map((row, idx) =>
+                            idx === index ? { ...row, id: event.target.value } : row
+                          ),
+                        }))
+                      }
+                      placeholder="Route ID"
+                      className="rounded border px-2 py-1 text-sm"
+                    />
+                    <input
+                      value={route.name}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          whatsappRoutes: prev.whatsappRoutes.map((row, idx) =>
+                            idx === index ? { ...row, name: event.target.value } : row
+                          ),
+                        }))
+                      }
+                      placeholder="Route name"
+                      className="rounded border px-2 py-1 text-sm md:col-span-2"
+                    />
+                    <select
+                      value={route.mode}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          whatsappRoutes: prev.whatsappRoutes.map((row, idx) =>
+                            idx === index ? { ...row, mode: event.target.value as any } : row
+                          ),
+                        }))
+                      }
+                      className="rounded border px-2 py-1 text-sm"
+                    >
+                      <option value="ANY">ANY</option>
+                      <option value="CHAT">CHAT</option>
+                      <option value="CALL">CALL</option>
+                    </select>
+                    <select
+                      value={route.contextType}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          whatsappRoutes: prev.whatsappRoutes.map((row, idx) =>
+                            idx === index ? { ...row, contextType: event.target.value as any } : row
+                          ),
+                        }))
+                      }
+                      className="rounded border px-2 py-1 text-sm"
+                    >
+                      <option value="ANY">ANY</option>
+                      <option value="TICKET">TICKET</option>
+                      <option value="CHAT">CHAT</option>
+                      <option value="DIRECT">DIRECT</option>
+                    </select>
+                    <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={route.enabled}
+                        onChange={(event) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            whatsappRoutes: prev.whatsappRoutes.map((row, idx) =>
+                              idx === index ? { ...row, enabled: event.target.checked } : row
+                            ),
+                          }))
+                        }
+                      />
+                      Enabled
+                    </label>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-4">
+                    <input
+                      value={route.fromRoles.join(',')}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          whatsappRoutes: prev.whatsappRoutes.map((row, idx) =>
+                            idx === index
+                              ? {
+                                  ...row,
+                                  fromRoles: event.target.value
+                                    .split(',')
+                                    .map((entry) => entry.trim().toUpperCase())
+                                    .filter(Boolean),
+                                }
+                              : row
+                          ),
+                        }))
+                      }
+                      placeholder="From roles (comma-separated)"
+                      className="rounded border px-2 py-1 text-sm md:col-span-2"
+                    />
+                    <select
+                      value={route.targetType}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          whatsappRoutes: prev.whatsappRoutes.map((row, idx) =>
+                            idx === index ? { ...row, targetType: event.target.value as any } : row
+                          ),
+                        }))
+                      }
+                      className="rounded border px-2 py-1 text-sm"
+                    >
+                      <option value="CUSTOMER_SERVICE">CUSTOMER_SERVICE</option>
+                      <option value="ADMIN_USER">ADMIN_USER</option>
+                      <option value="ADMIN_GROUP">ADMIN_GROUP</option>
+                      <option value="ADMIN_ROLE">ADMIN_ROLE</option>
+                    </select>
+                    <input
+                      value={route.targetId}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          whatsappRoutes: prev.whatsappRoutes.map((row, idx) =>
+                            idx === index ? { ...row, targetId: event.target.value } : row
+                          ),
+                        }))
+                      }
+                      placeholder="Target ID"
+                      className="rounded border px-2 py-1 text-sm"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
+                    onClick={() =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        whatsappRoutes: prev.whatsappRoutes.filter((_row, idx) => idx !== index),
+                      }))
+                    }
+                  >
+                    Remove Route
+                  </button>
+                </div>
+              ))}
+              {settings.whatsappRoutes.length === 0 ? (
+                <p className="text-sm text-gray-500">No WhatsApp routes configured yet.</p>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="rounded-xl border bg-white p-4 space-y-4">
+            <h2 className="text-sm font-semibold text-gray-900">Test WhatsApp Session</h2>
+            <div className="grid gap-3 md:grid-cols-2">
+              <input
+                value={testContextId}
+                onChange={(event) => setTestContextId(event.target.value)}
+                placeholder="Context id (optional)"
+                className="rounded border px-3 py-2 text-sm"
+              />
+              <input
+                value={testToUserId}
+                onChange={(event) => setTestToUserId(event.target.value)}
+                placeholder="Target user id (optional)"
+                className="rounded border px-3 py-2 text-sm"
+              />
+              <select
+                value={testWhatsAppMode}
+                onChange={(event) => setTestWhatsAppMode(event.target.value as 'CHAT' | 'CALL')}
+                className="rounded border px-3 py-2 text-sm"
+              >
+                <option value="CHAT">CHAT</option>
+                <option value="CALL">CALL</option>
+              </select>
+              <input
+                value={testWhatsAppMessage}
+                onChange={(event) => setTestWhatsAppMessage(event.target.value)}
+                placeholder="Message text"
+                className="rounded border px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => void save()} disabled={saving}>
+                <Save className="mr-2 h-4 w-4" />
+                Save WhatsApp Configuration
+              </Button>
+              <Button onClick={() => void startWhatsAppTest()} disabled={saving} variant="outline">
+                <MessageCircle className="mr-2 h-4 w-4" />
+                Start WhatsApp {testWhatsAppMode === 'CALL' ? 'Call' : 'Chat'}
+              </Button>
+            </div>
+          </section>
+
+          <section className="rounded-xl border bg-white p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-900">WhatsApp Session Logs</h2>
+              <Button variant="outline" onClick={() => void loadWhatsAppLogs()}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Refresh Logs
+              </Button>
+            </div>
+            <div className="overflow-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500">
+                    <th className="py-2 pr-3">Session ID</th>
+                    <th className="py-2 pr-3">Mode</th>
+                    <th className="py-2 pr-3">Route</th>
+                    <th className="py-2 pr-3">Context</th>
+                    <th className="py-2 pr-3">From</th>
+                    <th className="py-2 pr-3">To</th>
+                    <th className="py-2 pr-3">Status</th>
+                    <th className="py-2 pr-3">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {whatsAppLogs.map((row) => (
+                    <tr key={row.id} className="border-t">
+                      <td className="py-2 pr-3 font-mono text-xs">{row.id}</td>
+                      <td className="py-2 pr-3">{row.mode}</td>
+                      <td className="py-2 pr-3">{row.routeId || '-'}</td>
+                      <td className="py-2 pr-3">
+                        {row.contextType}
+                        {row.contextId ? ` (${row.contextId})` : ''}
+                      </td>
+                      <td className="py-2 pr-3">{row.fromPhone || '-'}</td>
+                      <td className="py-2 pr-3">{row.toPhone || '-'}</td>
+                      <td className="py-2 pr-3">{row.status}</td>
+                      <td className="py-2 pr-3">
+                        {row.eventLink ? (
+                          <a className="text-amber-700 hover:underline" href={row.eventLink} target="_blank" rel="noreferrer">
+                            Open
+                          </a>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {whatsAppLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-gray-500">
+                        No WhatsApp sessions yet.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       ) : null}
     </div>
   );

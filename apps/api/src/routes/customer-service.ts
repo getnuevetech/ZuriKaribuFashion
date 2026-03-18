@@ -13,7 +13,7 @@ import {
 
 const router = Router();
 
-const TICKET_SOURCES = ['ORDER', 'EMAIL', 'PHONE', 'WEB', 'OTHER', 'CHAT', 'BOT'] as const;
+const TICKET_SOURCES = ['ORDER', 'EMAIL', 'PHONE', 'WEB', 'WHATSAPP', 'OTHER', 'CHAT', 'BOT'] as const;
 const TICKET_STATUSES = ['OPEN', 'PENDING', 'RESOLVED', 'CLOSED'] as const;
 const ROUTE_TARGET_TYPES = ['ADMIN_USER', 'ADMIN_GROUP', 'ADMIN_ROLE'] as const;
 const CHAT_ROLES = ['CUSTOMER', 'AGENT', 'SUPERVISOR', 'ADMIN', 'BOT'] as const;
@@ -54,6 +54,20 @@ type SupportSettings = {
   }>;
   emailIngestEnabled: boolean;
   emailIngestToken: string;
+  whatsappEnabled: boolean;
+  whatsappBusinessNumber: string;
+  whatsappChatBaseUrl: string;
+  whatsappCallBaseUrl: string;
+  whatsappRoutes: Array<{
+    id: string;
+    name: string;
+    enabled: boolean;
+    mode: 'CHAT' | 'CALL' | 'ANY';
+    contextType: 'TICKET' | 'CHAT' | 'DIRECT' | 'ANY';
+    fromRoles: string[];
+    targetType: 'ADMIN_USER' | 'ADMIN_GROUP' | 'ADMIN_ROLE' | 'CUSTOMER_SERVICE';
+    targetId: string;
+  }>;
   ticketIdPrefix: string;
   ticketIdSuffix: string;
   ticketIdPadding: number;
@@ -77,6 +91,11 @@ const DEFAULT_SUPPORT_SETTINGS: SupportSettings = {
   voipTransferTargets: [],
   emailIngestEnabled: false,
   emailIngestToken: '',
+  whatsappEnabled: false,
+  whatsappBusinessNumber: '',
+  whatsappChatBaseUrl: 'https://wa.me',
+  whatsappCallBaseUrl: 'https://wa.me',
+  whatsappRoutes: [],
   ticketIdPrefix: 'TKT-',
   ticketIdSuffix: '',
   ticketIdPadding: 6,
@@ -125,6 +144,25 @@ const supportSettingsPatchSchema = z
       .optional(),
     emailIngestEnabled: z.boolean().optional(),
     emailIngestToken: z.string().trim().max(240).optional(),
+    whatsappEnabled: z.boolean().optional(),
+    whatsappBusinessNumber: z.string().trim().max(80).optional(),
+    whatsappChatBaseUrl: z.string().trim().max(2000).optional(),
+    whatsappCallBaseUrl: z.string().trim().max(2000).optional(),
+    whatsappRoutes: z
+      .array(
+        z.object({
+          id: z.string().trim().min(1).max(80),
+          name: z.string().trim().min(1).max(140),
+          enabled: z.boolean().optional(),
+          mode: z.enum(['CHAT', 'CALL', 'ANY']).optional(),
+          contextType: z.enum(['TICKET', 'CHAT', 'DIRECT', 'ANY']).optional(),
+          fromRoles: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
+          targetType: z.enum(['ADMIN_USER', 'ADMIN_GROUP', 'ADMIN_ROLE', 'CUSTOMER_SERVICE']).optional(),
+          targetId: z.string().trim().max(120).optional(),
+        })
+      )
+      .max(200)
+      .optional(),
     ticketIdPrefix: z.string().trim().max(40).optional(),
     ticketIdSuffix: z.string().trim().max(40).optional(),
     ticketIdPadding: z.number().int().min(1).max(12).optional(),
@@ -275,6 +313,28 @@ const voipTransferTargetItemSchema = z.object({
   targetId: z.string().trim().max(120).optional(),
 });
 
+const whatsappRouteItemSchema = z.object({
+  id: z.string().trim().min(1).max(80),
+  name: z.string().trim().min(1).max(140),
+  enabled: z.boolean().optional(),
+  mode: z.enum(['CHAT', 'CALL', 'ANY']).optional(),
+  contextType: z.enum(['TICKET', 'CHAT', 'DIRECT', 'ANY']).optional(),
+  fromRoles: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
+  targetType: z.enum(['ADMIN_USER', 'ADMIN_GROUP', 'ADMIN_ROLE', 'CUSTOMER_SERVICE']).optional(),
+  targetId: z.string().trim().max(120).optional(),
+});
+
+const whatsappStartSchema = z
+  .object({
+    mode: z.enum(['CHAT', 'CALL']).default('CHAT'),
+    contextType: z.enum(['TICKET', 'CHAT', 'DIRECT']),
+    contextId: z.string().trim().max(64).optional(),
+    toUserId: z.string().trim().max(64).optional(),
+    routeId: z.string().trim().max(80).optional(),
+    message: z.string().trim().max(2000).optional(),
+  })
+  .strict();
+
 function parseObject(value: unknown): Record<string, unknown> {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
   if (typeof value === 'string') {
@@ -346,6 +406,27 @@ function normalizeSettings(value: unknown): SupportSettings {
       targetId: String(entry.targetId || '').trim().slice(0, 120),
     }))
     .filter((entry) => entry.id && entry.name);
+  const normalizedWhatsappRoutes = (Array.isArray(source.whatsappRoutes) ? source.whatsappRoutes : [])
+    .map((entry) => parseObject(entry))
+    .map((entry) => ({
+      id: String(entry.id || randomUUID()).trim().slice(0, 80),
+      name: String(entry.name || 'WhatsApp Route').trim().slice(0, 140) || 'WhatsApp Route',
+      enabled: entry.enabled !== false,
+      mode: (['CHAT', 'CALL', 'ANY'].includes(String(entry.mode || '').toUpperCase())
+        ? String(entry.mode || '').toUpperCase()
+        : 'ANY') as 'CHAT' | 'CALL' | 'ANY',
+      contextType: (['TICKET', 'CHAT', 'DIRECT', 'ANY'].includes(String(entry.contextType || '').toUpperCase())
+        ? String(entry.contextType || '').toUpperCase()
+        : 'ANY') as 'TICKET' | 'CHAT' | 'DIRECT' | 'ANY',
+      fromRoles: dedupeStrings(parseArray(entry.fromRoles)).slice(0, 20),
+      targetType: (['ADMIN_USER', 'ADMIN_GROUP', 'ADMIN_ROLE', 'CUSTOMER_SERVICE'].includes(
+        String(entry.targetType || '').toUpperCase()
+      )
+        ? String(entry.targetType || '').toUpperCase()
+        : 'CUSTOMER_SERVICE') as 'ADMIN_USER' | 'ADMIN_GROUP' | 'ADMIN_ROLE' | 'CUSTOMER_SERVICE',
+      targetId: String(entry.targetId || '').trim().slice(0, 120),
+    }))
+    .filter((entry) => entry.id && entry.name);
   const ticketIdPadding = Math.max(1, Math.min(12, Number(source.ticketIdPadding || DEFAULT_SUPPORT_SETTINGS.ticketIdPadding)));
   const ticketIdNextNumber = Math.max(1, Math.floor(Number(source.ticketIdNextNumber || DEFAULT_SUPPORT_SETTINGS.ticketIdNextNumber)));
   return {
@@ -365,6 +446,15 @@ function normalizeSettings(value: unknown): SupportSettings {
     voipTransferTargets: normalizedTransferTargets,
     emailIngestEnabled: source.emailIngestEnabled === true,
     emailIngestToken: String(source.emailIngestToken || '').trim(),
+    whatsappEnabled: source.whatsappEnabled === true,
+    whatsappBusinessNumber: String(source.whatsappBusinessNumber || '').trim().slice(0, 80),
+    whatsappChatBaseUrl:
+      String(source.whatsappChatBaseUrl || DEFAULT_SUPPORT_SETTINGS.whatsappChatBaseUrl).trim() ||
+      DEFAULT_SUPPORT_SETTINGS.whatsappChatBaseUrl,
+    whatsappCallBaseUrl:
+      String(source.whatsappCallBaseUrl || DEFAULT_SUPPORT_SETTINGS.whatsappCallBaseUrl).trim() ||
+      DEFAULT_SUPPORT_SETTINGS.whatsappCallBaseUrl,
+    whatsappRoutes: normalizedWhatsappRoutes,
     ticketIdPrefix: String(source.ticketIdPrefix || DEFAULT_SUPPORT_SETTINGS.ticketIdPrefix).trim().slice(0, 40),
     ticketIdSuffix: String(source.ticketIdSuffix || DEFAULT_SUPPORT_SETTINGS.ticketIdSuffix).trim().slice(0, 40),
     ticketIdPadding,
@@ -406,6 +496,34 @@ async function ensureSchema() {
       await prisma.$executeRawUnsafe(`ALTER TABLE "SupportVoipCall" ADD COLUMN IF NOT EXISTS "toCallerId" TEXT`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SupportVoipCall_context_idx" ON "SupportVoipCall"("contextType","contextId","createdAt")`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SupportVoipCall_startedAt_idx" ON "SupportVoipCall"("startedAt")`);
+      await prisma.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS "SupportWhatsAppEvent" (
+          "id" TEXT PRIMARY KEY,
+          "routeId" TEXT,
+          "mode" TEXT NOT NULL DEFAULT 'CHAT',
+          "contextType" TEXT NOT NULL,
+          "contextId" TEXT,
+          "fromUserId" TEXT,
+          "toUserId" TEXT,
+          "fromRole" TEXT,
+          "toRole" TEXT,
+          "fromPhone" TEXT,
+          "toPhone" TEXT,
+          "status" TEXT NOT NULL DEFAULT 'INITIATED',
+          "eventLink" TEXT,
+          "metadata" JSONB NOT NULL DEFAULT '{}'::jsonb,
+          "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "endedAt" TIMESTAMP(3),
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )`
+      );
+      await prisma.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS "SupportWhatsAppEvent_context_idx" ON "SupportWhatsAppEvent"("contextType","contextId","createdAt")`
+      );
+      await prisma.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS "SupportWhatsAppEvent_startedAt_idx" ON "SupportWhatsAppEvent"("startedAt")`
+      );
       await prisma.$executeRawUnsafe(
         `CREATE TABLE IF NOT EXISTS "SupportNumberSequence" (
           "key" TEXT PRIMARY KEY,
@@ -455,6 +573,7 @@ async function ensureSchema() {
             Permissions.SUPPORT_ROUTING_MANAGE,
             Permissions.BOTS_MANAGE,
             Permissions.VOIP_MANAGE,
+            Permissions.WHATSAPP_MANAGE,
             Permissions.ORDERS_TICKETING_TRANSLATION_MANAGE,
           ])
         );
@@ -664,6 +783,20 @@ function routeMatches(
   return allowedRoles.includes(fromRole);
 }
 
+function whatsappRouteMatches(
+  route: SupportSettings['whatsappRoutes'][number],
+  mode: 'CHAT' | 'CALL',
+  contextType: 'TICKET' | 'CHAT' | 'DIRECT',
+  fromRole: string
+) {
+  if (!route.enabled) return false;
+  if (route.mode !== 'ANY' && route.mode !== mode) return false;
+  if (route.contextType !== 'ANY' && route.contextType !== contextType) return false;
+  if (!Array.isArray(route.fromRoles) || route.fromRoles.length === 0) return true;
+  const allowedRoles = route.fromRoles.map((token) => normalizeRoleToken(token)).filter(Boolean);
+  return allowedRoles.includes(fromRole);
+}
+
 function pickVoipRoute(
   settings: SupportSettings,
   params: { requestedRouteId?: string; contextType: 'TICKET' | 'CHAT' | 'DIRECT'; fromRole: string }
@@ -677,12 +810,44 @@ function pickVoipRoute(
   return routes.find((route) => routeMatches(route, params.contextType, params.fromRole)) || null;
 }
 
+function pickWhatsAppRoute(
+  settings: SupportSettings,
+  params: {
+    requestedRouteId?: string;
+    mode: 'CHAT' | 'CALL';
+    contextType: 'TICKET' | 'CHAT' | 'DIRECT';
+    fromRole: string;
+  }
+) {
+  const routes = Array.isArray(settings.whatsappRoutes) ? settings.whatsappRoutes : [];
+  const requestedRouteId = String(params.requestedRouteId || '').trim();
+  if (requestedRouteId) {
+    const selected = routes.find((route) => String(route.id || '').trim() === requestedRouteId);
+    if (selected && whatsappRouteMatches(selected, params.mode, params.contextType, params.fromRole)) return selected;
+  }
+  return routes.find((route) => whatsappRouteMatches(route, params.mode, params.contextType, params.fromRole)) || null;
+}
+
 async function resolveVoipTargetFromRoute(
   route: SupportSettings['voipRoutes'][number] | null
 ): Promise<string | null> {
   if (!route || !route.enabled) return null;
   if (route.targetType === 'CUSTOMER_SERVICE') {
     const routing = await resolveInitialRouting('PHONE');
+    return routing?.assignment?.assignedAdminUserId || null;
+  }
+  const targetType = String(route.targetType || '').trim().toUpperCase() as RouteTargetType;
+  if (!ROUTE_TARGET_TYPES.includes(targetType)) return null;
+  const assignment = await resolveAssignment(targetType, String(route.targetId || ''));
+  return assignment.assignedAdminUserId || null;
+}
+
+async function resolveWhatsAppTargetFromRoute(
+  route: SupportSettings['whatsappRoutes'][number] | null
+): Promise<string | null> {
+  if (!route || !route.enabled) return null;
+  if (route.targetType === 'CUSTOMER_SERVICE') {
+    const routing = await resolveInitialRouting('WHATSAPP');
     return routing?.assignment?.assignedAdminUserId || null;
   }
   const targetType = String(route.targetType || '').trim().toUpperCase() as RouteTargetType;
@@ -772,6 +937,36 @@ async function readUserCallerId(userId: string | null): Promise<string | null> {
   );
   const callerId = rows[0]?.callerId ? String(rows[0].callerId).trim() : '';
   return callerId || null;
+}
+
+async function readUserContactSnapshot(userId: string | null): Promise<{ role: string; phone: string | null; callerId: string | null }> {
+  if (!userId) return { role: '', phone: null, callerId: null };
+  const rows = await prisma.$queryRawUnsafe<Array<{ role: string | null; phone: string | null; callerId: string | null }>>(
+    `SELECT "role"::text AS "role","phone","callerId"
+     FROM "User"
+     WHERE "id" = $1
+     LIMIT 1`,
+    userId
+  );
+  const row = rows[0];
+  return {
+    role: String(row?.role || '').trim().toUpperCase(),
+    phone: row?.phone ? String(row.phone).trim() : null,
+    callerId: row?.callerId ? String(row.callerId).trim() : null,
+  };
+}
+
+function normalizeWhatsappNumber(value: unknown): string {
+  return String(value || '').replace(/[^\d]/g, '').trim();
+}
+
+function buildWhatsAppLink(baseUrl: string, phone: string, text?: string) {
+  const normalizedBase = String(baseUrl || 'https://wa.me').trim().replace(/\/+$/, '');
+  const normalizedPhone = normalizeWhatsappNumber(phone);
+  if (!normalizedPhone) return '';
+  const queryText = String(text || '').trim();
+  const query = queryText ? `?text=${encodeURIComponent(queryText)}` : '';
+  return `${normalizedBase}/${normalizedPhone}${query}`;
 }
 
 async function runEscalationSweep() {
@@ -1112,6 +1307,10 @@ router.get('/public/config', async (_req, res) => {
           serviceBotEnabled: settings.serviceBotEnabled,
           shoppingBotAvatarFemale: settings.shoppingBotAvatarFemale,
           shoppingBotAvatarMale: settings.shoppingBotAvatarMale,
+          whatsappEnabled: settings.whatsappEnabled,
+          whatsappBusinessNumber: settings.whatsappBusinessNumber,
+          whatsappChatBaseUrl: settings.whatsappChatBaseUrl,
+          whatsappCallBaseUrl: settings.whatsappCallBaseUrl,
         },
         supportedLanguages: getTicketingSupportedLanguages(),
         departments: departments.map((row) => ({
@@ -2163,7 +2362,7 @@ router.post('/bot/respond', optionalAuth, async (req, res) => {
 router.get(
   '/admin/voip/settings',
   authenticate,
-  authorizePermissions(Permissions.VOIP_MANAGE, Permissions.ORDERS_MANAGE),
+  authorizePermissions(Permissions.VOIP_MANAGE, Permissions.WHATSAPP_MANAGE, Permissions.ORDERS_MANAGE),
   async (_req, res) => {
     try {
       const settings = await readSettings();
@@ -2186,7 +2385,7 @@ router.get(
 router.patch(
   '/admin/voip/settings',
   authenticate,
-  authorizePermissions(Permissions.VOIP_MANAGE, Permissions.ORDERS_MANAGE),
+  authorizePermissions(Permissions.VOIP_MANAGE, Permissions.WHATSAPP_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
       const payload = z
@@ -2242,9 +2441,295 @@ router.patch(
 );
 
 router.get(
+  '/admin/whatsapp/settings',
+  authenticate,
+  authorizePermissions(Permissions.WHATSAPP_MANAGE, Permissions.VOIP_MANAGE, Permissions.ORDERS_MANAGE),
+  async (_req, res) => {
+    try {
+      const settings = await readSettings();
+      return res.json({
+        success: true,
+        data: {
+          enabled: settings.whatsappEnabled,
+          businessNumber: settings.whatsappBusinessNumber,
+          chatBaseUrl: settings.whatsappChatBaseUrl,
+          callBaseUrl: settings.whatsappCallBaseUrl,
+          routes: settings.whatsappRoutes,
+        },
+      });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to load WhatsApp settings.' });
+    }
+  }
+);
+
+router.patch(
+  '/admin/whatsapp/settings',
+  authenticate,
+  authorizePermissions(Permissions.WHATSAPP_MANAGE, Permissions.VOIP_MANAGE, Permissions.ORDERS_MANAGE),
+  async (req, res) => {
+    try {
+      const payload = z
+        .object({
+          enabled: z.boolean().optional(),
+          businessNumber: z.string().trim().max(80).optional(),
+          chatBaseUrl: z.string().trim().max(2000).optional(),
+          callBaseUrl: z.string().trim().max(2000).optional(),
+          routes: z.array(whatsappRouteItemSchema).max(200).optional(),
+        })
+        .safeParse(req.body || {});
+      if (!payload.success) return res.status(400).json({ success: false, message: payload.error.errors[0]?.message || 'Invalid payload.' });
+      const updated = await writeSettings({
+        whatsappEnabled: payload.data.enabled,
+        whatsappBusinessNumber: payload.data.businessNumber,
+        whatsappChatBaseUrl: payload.data.chatBaseUrl,
+        whatsappCallBaseUrl: payload.data.callBaseUrl,
+        whatsappRoutes: payload.data.routes
+          ? payload.data.routes.map((route) => ({
+              id: String(route.id || '').trim(),
+              name: String(route.name || '').trim(),
+              enabled: route.enabled !== false,
+              mode: route.mode || 'ANY',
+              contextType: route.contextType || 'ANY',
+              fromRoles: dedupeStrings(Array.isArray(route.fromRoles) ? route.fromRoles : []).map((token) =>
+                String(token || '').trim().toUpperCase()
+              ),
+              targetType: route.targetType || 'CUSTOMER_SERVICE',
+              targetId: String(route.targetId || '').trim(),
+            }))
+          : undefined,
+      });
+      return res.json({
+        success: true,
+        data: {
+          enabled: updated.whatsappEnabled,
+          businessNumber: updated.whatsappBusinessNumber,
+          chatBaseUrl: updated.whatsappChatBaseUrl,
+          callBaseUrl: updated.whatsappCallBaseUrl,
+          routes: updated.whatsappRoutes,
+        },
+        message: 'WhatsApp settings updated.',
+      });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to update WhatsApp settings.' });
+    }
+  }
+);
+
+router.get(
+  '/admin/whatsapp/events',
+  authenticate,
+  authorizePermissions(Permissions.WHATSAPP_MANAGE, Permissions.VOIP_MANAGE, Permissions.ORDERS_MANAGE),
+  async (req, res) => {
+    try {
+      await ensureSchema();
+      const modeFilter = String(req.query?.mode || '').trim().toUpperCase();
+      const statusFilter = String(req.query?.status || '').trim().toUpperCase();
+      const search = String(req.query?.search || '').trim().toLowerCase();
+      const rows = await prisma.$queryRawUnsafe<Array<any>>(
+        `SELECT e.*,
+                fu."email" AS "fromEmail",
+                tu."email" AS "toEmail"
+         FROM "SupportWhatsAppEvent" e
+         LEFT JOIN "User" fu ON fu."id" = e."fromUserId"
+         LEFT JOIN "User" tu ON tu."id" = e."toUserId"
+         ORDER BY e."startedAt" DESC NULLS LAST, e."createdAt" DESC
+         LIMIT 1000`
+      );
+      const mapped = rows
+        .map((row) => ({
+          id: String(row.id || ''),
+          routeId: row.routeId ? String(row.routeId) : null,
+          mode: String(row.mode || 'CHAT'),
+          contextType: String(row.contextType || 'DIRECT'),
+          contextId: row.contextId ? String(row.contextId) : null,
+          fromUserId: row.fromUserId ? String(row.fromUserId) : null,
+          toUserId: row.toUserId ? String(row.toUserId) : null,
+          fromRole: String(row.fromRole || ''),
+          toRole: String(row.toRole || ''),
+          fromPhone: row.fromPhone ? String(row.fromPhone) : null,
+          toPhone: row.toPhone ? String(row.toPhone) : null,
+          fromEmail: String(row.fromEmail || ''),
+          toEmail: String(row.toEmail || ''),
+          status: String(row.status || 'INITIATED'),
+          eventLink: String(row.eventLink || ''),
+          startedAt: row.startedAt ? new Date(row.startedAt).toISOString() : null,
+          endedAt: row.endedAt ? new Date(row.endedAt).toISOString() : null,
+          createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
+          updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
+        }))
+        .filter((row) => (modeFilter ? row.mode.toUpperCase() === modeFilter : true))
+        .filter((row) => (statusFilter ? row.status.toUpperCase() === statusFilter : true))
+        .filter((row) => {
+          if (!search) return true;
+          return (
+            String(row.fromEmail || '').toLowerCase().includes(search) ||
+            String(row.toEmail || '').toLowerCase().includes(search) ||
+            String(row.fromPhone || '').toLowerCase().includes(search) ||
+            String(row.toPhone || '').toLowerCase().includes(search) ||
+            String(row.contextId || '').toLowerCase().includes(search)
+          );
+        });
+      return res.json({ success: true, data: mapped });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to list WhatsApp events.' });
+    }
+  }
+);
+
+router.post('/whatsapp/start', authenticate, async (req: any, res) => {
+  try {
+    await ensureSchema();
+    const parsed = whatsappStartSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ success: false, message: parsed.error.errors[0]?.message || 'Invalid payload.' });
+    const settings = await readSettings();
+    if (!settings.whatsappEnabled) {
+      return res.status(403).json({ success: false, message: 'WhatsApp channel is disabled by admin settings.' });
+    }
+    const data = parsed.data;
+    const callerUserId = req.user?.id ? String(req.user.id) : '';
+    const callerRole = normalizeRoleToken(req.user?.role);
+    if (!callerUserId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+
+    const selectedRoute = pickWhatsAppRoute(settings, {
+      requestedRouteId: data.routeId,
+      mode: data.mode,
+      contextType: data.contextType,
+      fromRole: callerRole,
+    });
+
+    let toUserId = String(data.toUserId || '').trim() || null;
+    if (!toUserId && data.contextType === 'TICKET') {
+      toUserId = await resolveVoipTicketTargetUserId(String(data.contextId || ''), callerUserId);
+    }
+    if (!toUserId && data.contextType === 'CHAT') {
+      toUserId = await resolveVoipChatTargetUserId(String(data.contextId || ''), callerUserId);
+    }
+    if (!toUserId) {
+      toUserId = await resolveWhatsAppTargetFromRoute(selectedRoute);
+    }
+    if ((isCustomerRole(callerRole) || isSellerOrDesignerRole(callerRole)) && !toUserId) {
+      const fallbackRouting = await resolveInitialRouting('WHATSAPP');
+      toUserId = fallbackRouting?.assignment?.assignedAdminUserId || null;
+    }
+    if (toUserId && String(toUserId) === callerUserId) {
+      toUserId = null;
+    }
+    if (!toUserId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unable to resolve WhatsApp recipient for this context.',
+      });
+    }
+
+    const [callerInfo, recipientInfo] = await Promise.all([
+      readUserContactSnapshot(callerUserId),
+      readUserContactSnapshot(toUserId),
+    ]);
+    if (isSellerOrDesignerRole(callerRole) && recipientInfo.role !== 'ADMINISTRATOR') {
+      return res.status(403).json({
+        success: false,
+        message: 'Seller/designer WhatsApp outreach can only be routed to administrator users.',
+      });
+    }
+    if (isCustomerRole(callerRole) && recipientInfo.role !== 'ADMINISTRATOR') {
+      return res.status(403).json({
+        success: false,
+        message: 'Customer WhatsApp outreach can only be routed to customer service/admin.',
+      });
+    }
+
+    const toPhone =
+      recipientInfo.callerId ||
+      recipientInfo.phone ||
+      normalizeWhatsappNumber(settings.whatsappBusinessNumber) ||
+      null;
+    if (!toPhone) {
+      return res.status(400).json({ success: false, message: 'Target recipient does not have a WhatsApp-capable number configured.' });
+    }
+    const eventId = randomUUID();
+    const routeId = selectedRoute?.id ? String(selectedRoute.id) : null;
+    const defaultText =
+      data.mode === 'CALL'
+        ? `Call request from ${callerRole || 'USER'} on ZuriKaribu`
+        : `New WhatsApp support chat request from ${callerRole || 'USER'} on ZuriKaribu`;
+    const eventLink = buildWhatsAppLink(
+      data.mode === 'CALL' ? settings.whatsappCallBaseUrl : settings.whatsappChatBaseUrl,
+      toPhone,
+      data.message || defaultText
+    );
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "SupportWhatsAppEvent"
+        ("id","routeId","mode","contextType","contextId","fromUserId","toUserId","fromRole","toRole","fromPhone","toPhone","status","eventLink","metadata","startedAt","createdAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'INITIATED',$12,$13::jsonb,NOW(),NOW(),NOW())`,
+      eventId,
+      routeId,
+      data.mode,
+      data.contextType,
+      data.contextId || null,
+      callerUserId,
+      toUserId,
+      callerRole,
+      recipientInfo.role || null,
+      callerInfo.callerId || callerInfo.phone || null,
+      toPhone,
+      eventLink,
+      JSON.stringify({
+        routeName: selectedRoute?.name || null,
+        callerRole,
+      })
+    );
+    let linkedTicket: { id: string; ticketNumber: string } | null = null;
+    if (data.mode === 'CHAT' && !String(data.contextId || '').trim() && String(data.message || '').trim()) {
+      const requesterIsCaller = isSellerOrDesignerRole(callerRole) || isCustomerRole(callerRole);
+      const ticket = await createSupportTicket({
+        source: 'WHATSAPP',
+        title: `WhatsApp ${callerRole || 'USER'} conversation`,
+        subject: 'WhatsApp support conversation',
+        body: String(data.message || '').trim(),
+        requesterUserId: requesterIsCaller ? callerUserId : toUserId,
+        requesterName: requesterIsCaller ? undefined : 'Administrator',
+        requesterPhone: callerInfo.callerId || callerInfo.phone || undefined,
+        createdByUserId: callerUserId,
+      });
+      linkedTicket = { id: ticket.ticketId, ticketNumber: ticket.ticketNumber };
+    }
+    return res.status(201).json({
+      success: true,
+      data: {
+        id: eventId,
+        routeId,
+        mode: data.mode,
+        toUserId,
+        toPhone,
+        eventLink,
+        ticket: linkedTicket,
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error?.message || 'Failed to start WhatsApp session.' });
+  }
+});
+
+router.post('/whatsapp/events/:id/end', authenticate, async (req, res) => {
+  try {
+    await ensureSchema();
+    await prisma.$executeRawUnsafe(
+      `UPDATE "SupportWhatsAppEvent"
+       SET "status" = 'ENDED', "endedAt" = NOW(), "updatedAt" = NOW()
+       WHERE "id" = $1`,
+      String(req.params.id || '')
+    );
+    return res.json({ success: true, message: 'WhatsApp session ended.' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error?.message || 'Failed to end WhatsApp session.' });
+  }
+});
+
+router.get(
   '/admin/voip/calls',
   authenticate,
-  authorizePermissions(Permissions.VOIP_MANAGE, Permissions.ORDERS_MANAGE),
+  authorizePermissions(Permissions.VOIP_MANAGE, Permissions.WHATSAPP_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
       await ensureSchema();
