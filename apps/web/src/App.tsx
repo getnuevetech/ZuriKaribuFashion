@@ -337,6 +337,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/admin/ticket-management"
+                  element={
+                    <AdminPermissionGuard required={['orders:manage']}>
+                      <Navigate to="/admin/orders?tab=ticket-queue" replace />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
                   path="/admin/pricing"
                   element={
                     <AdminPermissionGuard required={['pricing:manage']}>

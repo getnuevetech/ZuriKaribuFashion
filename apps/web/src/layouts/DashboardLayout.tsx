@@ -28,6 +28,7 @@ import {
   Database,
   Search,
   Mail,
+  MessageSquare,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import DashboardErrorBoundary from '../components/DashboardErrorBoundary';
