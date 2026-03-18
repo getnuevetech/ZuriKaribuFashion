@@ -279,7 +279,11 @@ const verifyLegacyPbkdf2 = (plainPassword: string, storedPassword: string) => {
   return false;
 };
 
-async function verifyPasswordCompat(plainPassword: string, storedPassword: string) {
+async function verifyPasswordCompat(plainPassword: string, storedPasswordInput: unknown) {
+  const storedPassword = typeof storedPasswordInput === 'string' ? storedPasswordInput : '';
+  if (!storedPassword) {
+    return { isValid: false, shouldUpgradeHash: false };
+  }
   const normalized = normalizeStoredPassword(storedPassword);
   const candidates = Array.from(new Set([storedPassword, normalized])).filter(Boolean);
 
@@ -1006,11 +1010,17 @@ router.post('/login', async (req, res, next) => {
     const isVendor =
       user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER;
 
-    const rejectionPolicy = await applyVendorRejectionPolicy({
-      id: user.id,
-      role: user.role,
-      status: user.status as UserStatus,
-    });
+    const rejectionPolicy = await (async () => {
+      try {
+        return await applyVendorRejectionPolicy({
+          id: user.id,
+          role: user.role,
+          status: user.status as UserStatus,
+        });
+      } catch {
+        return { user, blockedMessage: null as string | null };
+      }
+    })();
     if (rejectionPolicy.blockedMessage) {
       return res.status(403).json({
         success: false,
@@ -1055,29 +1065,37 @@ router.post('/login', async (req, res, next) => {
     const sessionIssuedAt = Date.now();
 
     // Update last login
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLogin: new Date(sessionIssuedAt) },
-    });
+    try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { lastLogin: new Date(sessionIssuedAt) },
+      });
+    } catch {
+      // Do not fail login for lastLogin bookkeeping schema drift.
+    }
 
     if (user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER) {
       const forwardedFor = req.headers['x-forwarded-for'];
       const rawIp = Array.isArray(forwardedFor) ? String(forwardedFor[0] || '') : String(forwardedFor || req.ip || '');
       const ipAddress = rawIp.split(',')[0].trim() || null;
-      await prisma.activityLog.create({
-        data: {
-          userId: user.id,
-          action: previousLastLoginAt ? 'VENDOR_SESSION_REPLACED' : 'VENDOR_SESSION_STARTED',
-          details: {
-            role: user.role,
-            sessionIssuedAt,
-            previousSessionAt: previousLastLoginAt ? previousLastLoginAt.toISOString() : null,
-            deviceType: String(req.headers['sec-ch-ua-platform'] || req.headers['user-agent'] || '').slice(0, 120),
+      try {
+        await prisma.activityLog.create({
+          data: {
+            userId: user.id,
+            action: previousLastLoginAt ? 'VENDOR_SESSION_REPLACED' : 'VENDOR_SESSION_STARTED',
+            details: {
+              role: user.role,
+              sessionIssuedAt,
+              previousSessionAt: previousLastLoginAt ? previousLastLoginAt.toISOString() : null,
+              deviceType: String(req.headers['sec-ch-ua-platform'] || req.headers['user-agent'] || '').slice(0, 120),
+            },
+            ipAddress,
+            userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
           },
-          ipAddress,
-          userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
-        },
-      });
+        });
+      } catch {
+        // Do not fail login when audit log write is unavailable.
+      }
     }
 
     // Generate token
@@ -1113,7 +1131,18 @@ router.post('/login', async (req, res, next) => {
         },
       },
     });
-  } catch (error) {
+  } catch (error: any) {
+    const message = String(error?.message || '');
+    const knownPrismaConnectionIssue =
+      /database_url/i.test(message) ||
+      /can't reach database server/i.test(message) ||
+      /prismaclientinitializationerror/i.test(String(error?.name || ''));
+    if (knownPrismaConnectionIssue) {
+      return res.status(503).json({
+        success: false,
+        message: 'Authentication service is temporarily unavailable. Please contact support.',
+      });
+    }
     next(error);
   }
 });

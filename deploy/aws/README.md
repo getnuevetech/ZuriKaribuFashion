@@ -107,3 +107,51 @@ aws cloudfront create-invalidation --distribution-id <DIST_ID> --paths "/*"
 - Keep old DNS TTL low during cutover.
 - Rollback by switching DNS back if critical path fails.
 
+---
+
+## 7) GitHub Actions auto-deploy (main → staging + production)
+
+Workflow file:
+
+- `.github/workflows/aws-deploy-main.yml`
+
+It deploys on every merge/push to `main` in this order:
+
+1. Verify build (API + Web)
+2. Deploy **staging API** (ECR + ECS, run `prisma migrate deploy`)
+3. Deploy **staging Web** (S3 + CloudFront invalidate)
+4. Deploy **production API** (ECR + ECS, run `prisma migrate deploy`)
+5. Deploy **production Web** (S3 + CloudFront invalidate)
+
+### Required GitHub Encrypted Secrets
+
+- `AWS_ROLE_TO_ASSUME_STAGING`
+- `AWS_ROLE_TO_ASSUME_PRODUCTION`
+
+### Required GitHub Repository Variables
+
+- `AWS_REGION`
+- `AWS_ECR_REPOSITORY_API` (example: `african-fashion-api`)
+
+**Staging variables**
+- `AWS_STAGING_ECS_CLUSTER`
+- `AWS_STAGING_ECS_SERVICE_API`
+- `AWS_STAGING_ECS_TASK_DEFINITION`
+- `AWS_STAGING_API_CONTAINER_NAME`
+- `AWS_STAGING_PRIVATE_SUBNET_IDS` (comma-separated)
+- `AWS_STAGING_TASK_SECURITY_GROUPS` (comma-separated)
+- `AWS_STAGING_WEB_BUCKET`
+- `AWS_STAGING_CLOUDFRONT_DISTRIBUTION_ID`
+- `AWS_STAGING_WEB_API_URL` (example: `https://staging-api.example.com/api`)
+
+**Production variables**
+- `AWS_PRODUCTION_ECS_CLUSTER`
+- `AWS_PRODUCTION_ECS_SERVICE_API`
+- `AWS_PRODUCTION_ECS_TASK_DEFINITION`
+- `AWS_PRODUCTION_API_CONTAINER_NAME`
+- `AWS_PRODUCTION_PRIVATE_SUBNET_IDS` (comma-separated)
+- `AWS_PRODUCTION_TASK_SECURITY_GROUPS` (comma-separated)
+- `AWS_PRODUCTION_WEB_BUCKET`
+- `AWS_PRODUCTION_CLOUDFRONT_DISTRIBUTION_ID`
+- `AWS_PRODUCTION_WEB_API_URL` (example: `https://api.example.com/api`)
+

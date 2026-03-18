@@ -37,6 +37,7 @@ AWS migration assets are available in:
 - `deploy/aws/README.md`
 - `apps/api/Dockerfile`
 - `apps/web/Dockerfile`
+- `.github/workflows/aws-deploy-main.yml` (auto deploy on merge to `main`)
 
 ## 🤖 Cloud Agent Environment Setup
 
