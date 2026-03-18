@@ -1430,15 +1430,37 @@ const saveHowItWorksStyleSettings = async (next: Partial<HowItWorksStyleSettings
 };
 
 const readAuthPageSettings = async () => {
-  const rows = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT "id", "value", "updatedAt"
-     FROM "HomepageSectionSetting"
-     WHERE "key" = $1
-     LIMIT 1`,
-    AUTH_PAGE_SETTINGS_KEY
-  );
-  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-  if (!row) {
+  try {
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT "id", "value", "updatedAt"
+       FROM "HomepageSectionSetting"
+       WHERE "key" = $1
+       LIMIT 1`,
+      AUTH_PAGE_SETTINGS_KEY
+    );
+    const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+    if (!row) {
+      return {
+        rowId: null as string | null,
+        settings: { ...AUTH_PAGE_SETTINGS_DEFAULTS },
+        source: 'DEFAULT' as const,
+        updatedAt: null as Date | null,
+      };
+    }
+    let parsed = { ...AUTH_PAGE_SETTINGS_DEFAULTS };
+    try {
+      parsed = normalizeAuthPageSettings(JSON.parse(String(row.value || '{}')));
+    } catch {
+      parsed = { ...AUTH_PAGE_SETTINGS_DEFAULTS };
+    }
+    return {
+      rowId: String(row.id),
+      settings: parsed,
+      source: 'DATABASE' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  } catch {
+    // Keep auth screens available even if homepage settings table is unavailable.
     return {
       rowId: null as string | null,
       settings: { ...AUTH_PAGE_SETTINGS_DEFAULTS },
@@ -1446,18 +1468,6 @@ const readAuthPageSettings = async () => {
       updatedAt: null as Date | null,
     };
   }
-  let parsed = { ...AUTH_PAGE_SETTINGS_DEFAULTS };
-  try {
-    parsed = normalizeAuthPageSettings(JSON.parse(String(row.value || '{}')));
-  } catch {
-    parsed = { ...AUTH_PAGE_SETTINGS_DEFAULTS };
-  }
-  return {
-    rowId: String(row.id),
-    settings: parsed,
-    source: 'DATABASE' as const,
-    updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
-  };
 };
 
 const saveAuthPageSettings = async (next: Partial<AuthPageSettings>) => {
@@ -1843,7 +1853,7 @@ router.get('/auth-page-settings', async (_req, res) => {
     res.json({ success: true, data: settings });
   } catch (error) {
     console.error('Error fetching auth page settings:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch auth page settings.' });
+    res.json({ success: true, data: { ...AUTH_PAGE_SETTINGS_DEFAULTS } });
   }
 });
 
