@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen, ChevronDown, HelpCircle, Mail, MessageCircle, Phone } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { useAuthStore } from '../store/authStore';
 import { api } from '../services/api';
@@ -21,6 +22,7 @@ export default function VendorSupportCenterPage() {
   const [startingWhatsApp, setStartingWhatsApp] = useState(false);
   const [whatsAppMessage, setWhatsAppMessage] = useState('');
   const user = useAuthStore((state) => state.user);
+  const location = useLocation();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['help-center', 'vendor'],
@@ -77,9 +79,14 @@ export default function VendorSupportCenterPage() {
 
   const roleToken = String(user?.role || '').toUpperCase();
   const canInitiateVendorWhatsApp = roleToken === 'FABRIC_SELLER' || roleToken === 'FASHION_DESIGNER' || roleToken === 'RESELLER_INFLUENCER';
+  const isPublicSupportPage = location.pathname === '/seller-designer-support';
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 py-10 sm:px-6">
+    <div
+      className={`mx-auto max-w-6xl space-y-8 px-4 sm:px-6 ${
+        isPublicSupportPage ? 'pb-10 pt-28' : 'py-10'
+      }`}
+    >
       <section className="rounded-2xl bg-gray-900 px-6 py-10 text-white sm:px-8">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Seller / Designer</p>
         <h1 className="mt-2 text-3xl font-semibold sm:text-4xl">{data.heroTitle}</h1>

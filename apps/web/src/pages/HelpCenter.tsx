@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen, ChevronDown, HelpCircle, Mail, MessageCircle, Phone } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 
 function contactIcon(type: string) {
@@ -23,6 +24,7 @@ function resolveContactHref(type: string, value: string) {
 
 export default function HelpCenterPage() {
   const [openFaqId, setOpenFaqId] = useState<string>('');
+  const location = useLocation();
   const { data, isLoading, isError } = useQuery({
     queryKey: ['help-center', 'customer'],
     queryFn: async () => {
@@ -55,8 +57,14 @@ export default function HelpCenterPage() {
     );
   }
 
+  const isPublicHelpCenterPage = location.pathname === '/help-center';
+
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 py-10 sm:px-6">
+    <div
+      className={`mx-auto max-w-6xl space-y-8 px-4 sm:px-6 ${
+        isPublicHelpCenterPage ? 'pb-10 pt-28' : 'py-10'
+      }`}
+    >
       <section className="rounded-2xl bg-gray-900 px-6 py-10 text-white sm:px-8">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Support</p>
         <h1 className="mt-2 text-3xl font-semibold sm:text-4xl">{data.heroTitle}</h1>
