@@ -46,6 +46,7 @@ import referralRoutes from './routes/referrals';
 import adminAutomationRoutes from './routes/admin-automation';
 import adminReportsRoutes from './routes/admin-reports';
 import failedProductApprovalsRoutes from './routes/failed-product-approvals';
+import customerServiceRoutes from './routes/customer-service';
 import { prisma } from './db';
 import { activityAuditMiddleware } from './middleware/activity-audit';
 import { runStartupRepairs } from './bootstrap';
@@ -268,6 +269,7 @@ app.use('/api/admin/referrals', referralRoutes);
 app.use('/api/admin/automation', adminAutomationRoutes);
 app.use('/api/admin/reports', adminReportsRoutes);
 app.use('/api/failed-product-approvals', failedProductApprovalsRoutes);
+app.use('/api/customer-service', customerServiceRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

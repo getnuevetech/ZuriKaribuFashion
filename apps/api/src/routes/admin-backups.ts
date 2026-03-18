@@ -98,6 +98,14 @@ const runBackupSchema = z
   })
   .strict();
 
+const runRestoreSchema = z
+  .object({
+    artifactId: z.string().trim().min(1).max(120),
+    mode: z.enum(['MERGE']).optional(),
+    reason: z.string().trim().max(240).optional(),
+  })
+  .strict();
+
 const parseObject = (value: unknown): Record<string, unknown> => {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
   if (typeof value === 'string') {
@@ -110,6 +118,19 @@ const parseObject = (value: unknown): Record<string, unknown> => {
     }
   }
   return {};
+};
+
+const parseArray = (value: unknown): unknown[] => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
 };
 
 const isPathInside = (candidatePath: string, parentPath: string) => {
@@ -256,6 +277,29 @@ async function ensureBackupSchema() {
   );
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BackupArtifact_type_idx" ON "BackupArtifact"("type","createdAt")`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BackupArtifact_status_idx" ON "BackupArtifact"("status","createdAt")`);
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "BackupRestoreJob" (
+      "id" TEXT NOT NULL,
+      "artifactId" TEXT NOT NULL,
+      "artifactType" TEXT NOT NULL,
+      "status" TEXT NOT NULL DEFAULT 'PENDING',
+      "summary" TEXT,
+      "errorMessage" TEXT,
+      "createdById" TEXT,
+      "metadata" JSONB NOT NULL DEFAULT '{}'::jsonb,
+      "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "completedAt" TIMESTAMP(3),
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "BackupRestoreJob_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "BackupRestoreJob_artifact_idx" ON "BackupRestoreJob"("artifactId","createdAt")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "BackupRestoreJob_status_idx" ON "BackupRestoreJob"("status","createdAt")`
+  );
 }
 
 async function readBackupSettings(): Promise<BackupSettings> {
@@ -818,6 +862,196 @@ async function listBackupArtifacts(limit = 30) {
   }));
 }
 
+async function listRestoreJobs(limit = 40) {
+  await ensureBackupSchema();
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id","artifactId","artifactType","status","summary","errorMessage","createdById","metadata","startedAt","completedAt","createdAt","updatedAt"
+     FROM "BackupRestoreJob"
+     ORDER BY "createdAt" DESC
+     LIMIT ${Math.max(1, Math.min(200, Number(limit || 40)))}`
+  );
+  return rows.map((row) => ({
+    id: String(row.id || ''),
+    artifactId: String(row.artifactId || ''),
+    artifactType: String(row.artifactType || ''),
+    status: String(row.status || ''),
+    summary: String(row.summary || ''),
+    errorMessage: String(row.errorMessage || ''),
+    createdById: String(row.createdById || ''),
+    metadata: parseObject(row.metadata),
+    startedAt: row.startedAt ? new Date(row.startedAt).toISOString() : null,
+    completedAt: row.completedAt ? new Date(row.completedAt).toISOString() : null,
+    createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
+    updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
+  }));
+}
+
+async function createRestoreJob(artifactId: string, artifactType: string, createdById: string | null, reason?: string) {
+  const id = randomUUID();
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "BackupRestoreJob"
+      ("id","artifactId","artifactType","status","summary","createdById","metadata","startedAt","createdAt","updatedAt")
+     VALUES ($1,$2,$3,'RUNNING',$4,$5,$6::jsonb,NOW(),NOW(),NOW())`,
+    id,
+    artifactId,
+    artifactType,
+    reason ? String(reason).slice(0, 240) : null,
+    createdById,
+    stringifyJsonSafely({ reason: reason || null })
+  );
+  return id;
+}
+
+async function markRestoreJobDone(
+  id: string,
+  input: { status: 'COMPLETED' | 'FAILED' | 'MANUAL_REQUIRED'; summary?: string; errorMessage?: string; metadata?: unknown }
+) {
+  await prisma.$executeRawUnsafe(
+    `UPDATE "BackupRestoreJob"
+     SET "status" = $2,
+         "summary" = $3,
+         "errorMessage" = $4,
+         "metadata" = $5::jsonb,
+         "completedAt" = NOW(),
+         "updatedAt" = NOW()
+     WHERE "id" = $1`,
+    id,
+    input.status,
+    input.summary ? String(input.summary).slice(0, 400) : null,
+    input.errorMessage ? String(input.errorMessage).slice(0, 1000) : null,
+    stringifyJsonSafely(input.metadata || {})
+  );
+}
+
+async function readArtifactById(artifactId: string) {
+  await ensureBackupSchema();
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id","type","status","localPath","fileName","s3Uri","metadata"
+     FROM "BackupArtifact"
+     WHERE "id" = $1
+     LIMIT 1`,
+    artifactId
+  );
+  return rows[0] || null;
+}
+
+async function restoreUsersFromSnapshot(rawRows: unknown[], expectedRole: UserRole) {
+  const users = Array.isArray(rawRows) ? rawRows : [];
+  let updated = 0;
+  let skipped = 0;
+  for (const candidate of users) {
+    const row = parseObject(candidate);
+    const role = String(row.role || '').trim().toUpperCase();
+    if (role && role !== expectedRole) {
+      skipped += 1;
+      continue;
+    }
+    const id = String(row.id || '').trim();
+    const email = String(row.email || '').trim().toLowerCase();
+    if (!id && !email) {
+      skipped += 1;
+      continue;
+    }
+    const existing = await prisma.user.findFirst({
+      where: {
+        OR: [
+          ...(id ? [{ id }] : []),
+          ...(email ? [{ email }] : []),
+        ],
+      },
+      select: { id: true },
+    });
+    if (!existing?.id) {
+      skipped += 1;
+      continue;
+    }
+    const firstName = String(row.firstName || '').trim();
+    const lastName = String(row.lastName || '').trim();
+    const phone = row.phone === null || row.phone === undefined ? null : String(row.phone || '').trim();
+    const status = String(row.status || '').trim().toUpperCase();
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
+        phone: phone || null,
+        ...(status ? { status: status as any } : {}),
+      },
+    });
+    updated += 1;
+  }
+  return { updated, skipped };
+}
+
+async function runRestoreJob(params: {
+  artifactId: string;
+  createdById: string | null;
+  reason?: string;
+}) {
+  const artifact = await readArtifactById(params.artifactId);
+  if (!artifact) throw new Error('Backup artifact not found.');
+  const restoreJobId = await createRestoreJob(params.artifactId, String(artifact.type || ''), params.createdById, params.reason);
+  try {
+    if (String(artifact.status || '').toUpperCase() !== 'COMPLETED') {
+      throw new Error('Backup artifact is not completed yet.');
+    }
+    const type = String(artifact.type || '').trim().toUpperCase();
+    const localPath = String(artifact.localPath || '').trim();
+    if (!localPath) {
+      await markRestoreJobDone(restoreJobId, {
+        status: 'MANUAL_REQUIRED',
+        summary: 'Artifact has no local file path. Download from S3 and restore manually.',
+      });
+      return { id: restoreJobId };
+    }
+    const resolvedPath = path.resolve(localPath);
+    if (!fs.existsSync(resolvedPath)) {
+      await markRestoreJobDone(restoreJobId, {
+        status: 'MANUAL_REQUIRED',
+        summary: 'Local backup file is missing. Retrieve from S3 and run manual restore.',
+      });
+      return { id: restoreJobId };
+    }
+    if (type === 'DATABASE_FULL' || type === 'SYSTEM_FULL') {
+      await markRestoreJobDone(restoreJobId, {
+        status: 'MANUAL_REQUIRED',
+        summary: `${type} restore requires controlled maintenance procedure and is intentionally manual.`,
+      });
+      return { id: restoreJobId };
+    }
+    const rawText = await fsp.readFile(resolvedPath, 'utf8');
+    const parsed = parseObject(rawText);
+    let summary = 'No supported records were restored.';
+    let metadata: Record<string, unknown> = {};
+    if (type === 'CUSTOMER_FULL') {
+      const result = await restoreUsersFromSnapshot(parseArray(parsed.users), UserRole.CUSTOMER);
+      summary = `Customer restore completed. Updated ${result.updated} user record(s), skipped ${result.skipped}.`;
+      metadata = { ...result, type };
+    } else if (type === 'SELLER_FULL') {
+      const result = await restoreUsersFromSnapshot(parseArray(parsed.users), UserRole.FABRIC_SELLER);
+      summary = `Seller restore completed. Updated ${result.updated} user record(s), skipped ${result.skipped}.`;
+      metadata = { ...result, type };
+    } else if (type === 'DESIGNER_FULL') {
+      const result = await restoreUsersFromSnapshot(parseArray(parsed.users), UserRole.FASHION_DESIGNER);
+      summary = `Designer restore completed. Updated ${result.updated} user record(s), skipped ${result.skipped}.`;
+      metadata = { ...result, type };
+    }
+    await markRestoreJobDone(restoreJobId, {
+      status: 'COMPLETED',
+      summary,
+      metadata,
+    });
+    return { id: restoreJobId };
+  } catch (error: any) {
+    await markRestoreJobDone(restoreJobId, {
+      status: 'FAILED',
+      summary: 'Restore failed.',
+      errorMessage: String(error?.message || 'Restore failed'),
+    });
+    throw error;
+  }
+}
+
 async function runDailyProfile(createdById: string | null, reason = 'Daily backup profile execution') {
   const settings = await readBackupSettings();
   const types: BackupType[] = [];
@@ -855,9 +1089,9 @@ router.post('/run-daily-cron', async (req, res, next) => {
 });
 
 router.use(authenticate);
-router.use(authorizePermissions(Permissions.BACKUPS_MANAGE));
+router.use(authorizePermissions(Permissions.BACKUPS_MANAGE, Permissions.BACKUPS_RESTORE));
 
-router.get('/settings', async (_req, res, next) => {
+router.get('/settings', authorizePermissions(Permissions.BACKUPS_MANAGE), async (_req, res, next) => {
   try {
     const settings = await readBackupSettings();
     const storage = resolveEffectiveStorageConfig(settings);
@@ -886,7 +1120,7 @@ router.get('/settings', async (_req, res, next) => {
   }
 });
 
-router.patch('/settings', async (req, res, next) => {
+router.patch('/settings', authorizePermissions(Permissions.BACKUPS_MANAGE), async (req, res, next) => {
   try {
     const settings = await writeBackupSettings(req.body || {}, true);
     res.json({ success: true, data: settings, message: 'Backup settings saved.' });
@@ -898,7 +1132,7 @@ router.patch('/settings', async (req, res, next) => {
   }
 });
 
-router.post('/run', async (req, res, next) => {
+router.post('/run', authorizePermissions(Permissions.BACKUPS_MANAGE), async (req, res, next) => {
   try {
     const payload = runBackupSchema.parse(req.body || {});
     const settings = await readBackupSettings();
@@ -923,7 +1157,7 @@ router.post('/run', async (req, res, next) => {
   }
 });
 
-router.post('/run-daily-now', async (req, res, next) => {
+router.post('/run-daily-now', authorizePermissions(Permissions.BACKUPS_MANAGE), async (req, res, next) => {
   try {
     const jobs = await runDailyProfile(req.user?.id || null, 'Manual daily-profile backup run');
     res.json({
@@ -936,7 +1170,7 @@ router.post('/run-daily-now', async (req, res, next) => {
   }
 });
 
-router.get('/jobs', async (req, res, next) => {
+router.get('/jobs', authorizePermissions(Permissions.BACKUPS_MANAGE), async (req, res, next) => {
   try {
     const limit = Number.parseInt(String(req.query.limit || '40'), 10);
     const rows = await listBackupArtifacts(limit);
@@ -946,7 +1180,7 @@ router.get('/jobs', async (req, res, next) => {
   }
 });
 
-router.get('/jobs/:id/download', async (req, res, next) => {
+router.get('/jobs/:id/download', authorizePermissions(Permissions.BACKUPS_MANAGE), async (req, res, next) => {
   try {
     const backupDirectory = await resolveBackupDirectory();
     const id = String(req.params.id || '').trim();
@@ -976,6 +1210,38 @@ router.get('/jobs/:id/download', async (req, res, next) => {
     }
     return res.download(filePath, String(row.fileName || path.basename(filePath)));
   } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/restore/jobs', authorizePermissions(Permissions.BACKUPS_RESTORE), async (req, res, next) => {
+  try {
+    const limit = Number.parseInt(String(req.query.limit || '40'), 10);
+    const rows = await listRestoreJobs(limit);
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/restore/run', authorizePermissions(Permissions.BACKUPS_RESTORE), async (req, res, next) => {
+  try {
+    const payload = runRestoreSchema.parse(req.body || {});
+    const result = await runRestoreJob({
+      artifactId: payload.artifactId,
+      createdById: req.user?.id || null,
+      reason: payload.reason || 'Manual restore run',
+    });
+    const rows = await listRestoreJobs(1);
+    res.json({
+      success: true,
+      data: { job: rows.find((row) => row.id === result.id) || { id: result.id } },
+      message: 'Restore job executed.',
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed.', issues: error.issues });
+    }
     next(error);
   }
 });
