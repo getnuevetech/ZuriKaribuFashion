@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/authStore';
 
 const STORAGE_KEY = 'af_customer_service_chat_session_v1';
 const SHOPPING_STORAGE_KEY = 'af_customer_service_shopping_chat_v1';
+const OPEN_CHAT_EVENT = 'af-open-support-chat';
 
 type SupportedLanguage = { code: string; label: string };
 type Department = { id: string; name: string; code: string; description?: string };
@@ -121,6 +122,36 @@ export default function CustomerServiceChatWidget() {
     } catch {
       // ignore storage parse errors
     }
+  }, [isDashboardPath]);
+
+  useEffect(() => {
+    if (isDashboardPath) return;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail || {};
+      const nextMode = String((detail as any)?.mode || 'support').trim().toLowerCase();
+      setOpen(true);
+      setMode(nextMode === 'shopping' ? 'shopping' : 'support');
+      const nextDepartmentId = String((detail as any)?.departmentId || '').trim();
+      const nextIssueType = String((detail as any)?.issueType || '').trim();
+      const nextLanguage = String((detail as any)?.preferredLanguage || '').trim().toLowerCase();
+      const nextSessionId = String((detail as any)?.sessionId || '').trim();
+      const nextToken = String((detail as any)?.token || '').trim();
+      const nextName = String((detail as any)?.name || '').trim();
+      const nextEmail = String((detail as any)?.email || '').trim();
+      const nextPhone = String((detail as any)?.phone || '').trim();
+      if (nextDepartmentId) setDepartmentId(nextDepartmentId);
+      if (nextIssueType) setIssueType(nextIssueType);
+      if (nextLanguage) setPreferredLanguage(nextLanguage);
+      if (nextName) setGuestName(nextName);
+      if (nextEmail) setGuestEmail(nextEmail);
+      if (nextPhone) setGuestPhone(nextPhone);
+      if (nextSessionId) {
+        setSessionId(nextSessionId);
+        setSessionToken(nextToken);
+      }
+    };
+    window.addEventListener(OPEN_CHAT_EVENT, handler as EventListener);
+    return () => window.removeEventListener(OPEN_CHAT_EVENT, handler as EventListener);
   }, [isDashboardPath]);
 
   useEffect(() => {

@@ -983,6 +983,123 @@ async function restoreUsersFromSnapshot(rawRows: unknown[], expectedRole: UserRo
   return { updated, skipped };
 }
 
+async function restoreCustomerProfilesFromSnapshot(rawRows: unknown[]) {
+  const rows = Array.isArray(rawRows) ? rawRows : [];
+  let updated = 0;
+  let skipped = 0;
+  for (const candidate of rows) {
+    const row = parseObject(candidate);
+    const userId = String(row.userId || '').trim();
+    if (!userId) {
+      skipped += 1;
+      continue;
+    }
+    const existing = await prisma.customerProfile.findFirst({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!existing?.id) {
+      skipped += 1;
+      continue;
+    }
+    const totalOrders = Number(row.totalOrders || 0);
+    const totalSpent = Number(row.totalSpent || 0);
+    await prisma.customerProfile.update({
+      where: { id: existing.id },
+      data: {
+        ...(Number.isFinite(totalOrders) ? { totalOrders: Math.max(0, Math.trunc(totalOrders)) } : {}),
+        ...(Number.isFinite(totalSpent) ? { totalSpent: Math.max(0, totalSpent) as any } : {}),
+      },
+    });
+    updated += 1;
+  }
+  return { updated, skipped };
+}
+
+async function restoreSellerProfilesFromSnapshot(rawRows: unknown[]) {
+  const rows = Array.isArray(rawRows) ? rawRows : [];
+  let updated = 0;
+  let skipped = 0;
+  for (const candidate of rows) {
+    const row = parseObject(candidate);
+    const userId = String(row.userId || '').trim();
+    if (!userId) {
+      skipped += 1;
+      continue;
+    }
+    const existing = await prisma.fabricSellerProfile.findFirst({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!existing?.id) {
+      skipped += 1;
+      continue;
+    }
+    await prisma.fabricSellerProfile.update({
+      where: { id: existing.id },
+      data: {
+        ...(row.businessName !== undefined ? { businessName: String(row.businessName || '') } : {}),
+        ...(row.businessEmail !== undefined ? { businessEmail: String(row.businessEmail || '') } : {}),
+        ...(row.businessPhone !== undefined ? { businessPhone: String(row.businessPhone || '') } : {}),
+        ...(row.country !== undefined ? { country: String(row.country || '') } : {}),
+        ...(row.city !== undefined ? { city: String(row.city || '') } : {}),
+        ...(row.address !== undefined ? { address: String(row.address || '') } : {}),
+        ...(row.postalCode !== undefined ? { postalCode: row.postalCode ? String(row.postalCode) : null } : {}),
+        ...(row.isVerified !== undefined ? { isVerified: row.isVerified === true } : {}),
+        ...(row.verificationDoc !== undefined ? { verificationDoc: row.verificationDoc ? String(row.verificationDoc) : null } : {}),
+        ...(row.totalFabrics !== undefined ? { totalFabrics: Math.max(0, Number(row.totalFabrics || 0)) } : {}),
+        ...(row.totalSales !== undefined ? { totalSales: Math.max(0, Number(row.totalSales || 0)) as any } : {}),
+        ...(row.rating !== undefined ? { rating: Math.max(0, Number(row.rating || 0)) } : {}),
+      },
+    });
+    updated += 1;
+  }
+  return { updated, skipped };
+}
+
+async function restoreDesignerProfilesFromSnapshot(rawRows: unknown[]) {
+  const rows = Array.isArray(rawRows) ? rawRows : [];
+  let updated = 0;
+  let skipped = 0;
+  for (const candidate of rows) {
+    const row = parseObject(candidate);
+    const userId = String(row.userId || '').trim();
+    if (!userId) {
+      skipped += 1;
+      continue;
+    }
+    const existing = await prisma.designerProfile.findFirst({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!existing?.id) {
+      skipped += 1;
+      continue;
+    }
+    await prisma.designerProfile.update({
+      where: { id: existing.id },
+      data: {
+        ...(row.businessName !== undefined ? { businessName: String(row.businessName || '') } : {}),
+        ...(row.businessEmail !== undefined ? { businessEmail: String(row.businessEmail || '') } : {}),
+        ...(row.businessPhone !== undefined ? { businessPhone: String(row.businessPhone || '') } : {}),
+        ...(row.bio !== undefined ? { bio: row.bio ? String(row.bio) : null } : {}),
+        ...(row.country !== undefined ? { country: String(row.country || '') } : {}),
+        ...(row.city !== undefined ? { city: String(row.city || '') } : {}),
+        ...(row.address !== undefined ? { address: String(row.address || '') } : {}),
+        ...(row.postalCode !== undefined ? { postalCode: row.postalCode ? String(row.postalCode) : null } : {}),
+        ...(row.isVerified !== undefined ? { isVerified: row.isVerified === true } : {}),
+        ...(row.portfolioUrl !== undefined ? { portfolioUrl: row.portfolioUrl ? String(row.portfolioUrl) : null } : {}),
+        ...(row.verificationDoc !== undefined ? { verificationDoc: row.verificationDoc ? String(row.verificationDoc) : null } : {}),
+        ...(row.totalDesigns !== undefined ? { totalDesigns: Math.max(0, Number(row.totalDesigns || 0)) } : {}),
+        ...(row.totalSales !== undefined ? { totalSales: Math.max(0, Number(row.totalSales || 0)) as any } : {}),
+        ...(row.rating !== undefined ? { rating: Math.max(0, Number(row.rating || 0)) } : {}),
+      },
+    });
+    updated += 1;
+  }
+  return { updated, skipped };
+}
+
 async function runRestoreJob(params: {
   artifactId: string;
   createdById: string | null;
@@ -1024,17 +1141,20 @@ async function runRestoreJob(params: {
     let summary = 'No supported records were restored.';
     let metadata: Record<string, unknown> = {};
     if (type === 'CUSTOMER_FULL') {
-      const result = await restoreUsersFromSnapshot(parseArray(parsed.users), UserRole.CUSTOMER);
-      summary = `Customer restore completed. Updated ${result.updated} user record(s), skipped ${result.skipped}.`;
-      metadata = { ...result, type };
+      const userResult = await restoreUsersFromSnapshot(parseArray(parsed.users), UserRole.CUSTOMER);
+      const profileResult = await restoreCustomerProfilesFromSnapshot(parseArray(parsed.customerProfiles));
+      summary = `Customer restore completed. Updated ${userResult.updated} user(s), ${profileResult.updated} profile(s); skipped ${userResult.skipped + profileResult.skipped}.`;
+      metadata = { type, users: userResult, profiles: profileResult };
     } else if (type === 'SELLER_FULL') {
-      const result = await restoreUsersFromSnapshot(parseArray(parsed.users), UserRole.FABRIC_SELLER);
-      summary = `Seller restore completed. Updated ${result.updated} user record(s), skipped ${result.skipped}.`;
-      metadata = { ...result, type };
+      const userResult = await restoreUsersFromSnapshot(parseArray(parsed.users), UserRole.FABRIC_SELLER);
+      const profileResult = await restoreSellerProfilesFromSnapshot(parseArray(parsed.sellerProfiles));
+      summary = `Seller restore completed. Updated ${userResult.updated} user(s), ${profileResult.updated} profile(s); skipped ${userResult.skipped + profileResult.skipped}.`;
+      metadata = { type, users: userResult, profiles: profileResult };
     } else if (type === 'DESIGNER_FULL') {
-      const result = await restoreUsersFromSnapshot(parseArray(parsed.users), UserRole.FASHION_DESIGNER);
-      summary = `Designer restore completed. Updated ${result.updated} user record(s), skipped ${result.skipped}.`;
-      metadata = { ...result, type };
+      const userResult = await restoreUsersFromSnapshot(parseArray(parsed.users), UserRole.FASHION_DESIGNER);
+      const profileResult = await restoreDesignerProfilesFromSnapshot(parseArray(parsed.designerProfiles));
+      summary = `Designer restore completed. Updated ${userResult.updated} user(s), ${profileResult.updated} profile(s); skipped ${userResult.skipped + profileResult.skipped}.`;
+      metadata = { type, users: userResult, profiles: profileResult };
     }
     await markRestoreJobDone(restoreJobId, {
       status: 'COMPLETED',

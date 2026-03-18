@@ -525,18 +525,48 @@ async function canAccessChat(sessionId: string, req: any) {
   return false;
 }
 
-async function buildChatThread(sessionId: string, viewerLanguage?: string) {
+function isPrivilegedChatViewer(user: any) {
+  return user?.role === UserRole.ADMINISTRATOR || user?.role === UserRole.QA_TEAM;
+}
+
+async function buildChatThread(params: {
+  sessionId: string;
+  viewerLanguage?: string;
+  includeInternal: boolean;
+  includeInvisibleAgentMessages: boolean;
+}) {
   const settings = await readSettings();
   const messages = await prisma.$queryRawUnsafe<Array<any>>(
-    `SELECT "id","senderRole","senderDisplayName","body","attachments","isInternal","sourceLanguage","createdAt"
-     FROM "SupportChatMessage"
-     WHERE "sessionId" = $1
-     ORDER BY "createdAt" ASC`,
-    sessionId
+    `SELECT m."id",
+            m."senderParticipantId",
+            m."senderRole",
+            m."senderDisplayName",
+            m."body",
+            m."attachments",
+            m."isInternal",
+            m."sourceLanguage",
+            m."createdAt",
+            COALESCE(p."isVisibleToCustomer", true) AS "senderVisibleToCustomer"
+     FROM "SupportChatMessage" m
+     LEFT JOIN "SupportChatParticipant" p ON p."id" = m."senderParticipantId"
+     WHERE m."sessionId" = $1
+     ORDER BY m."createdAt" ASC`,
+    params.sessionId
   );
-  const normalizedViewerLanguage = normalizeTicketingLanguage(viewerLanguage, settings.defaultLanguage);
+  const normalizedViewerLanguage = normalizeTicketingLanguage(params.viewerLanguage, settings.defaultLanguage);
   const mapped = [];
   for (const row of messages) {
+    const senderRole = String(row.senderRole || '').trim().toUpperCase();
+    const senderVisibleToCustomer = row.senderVisibleToCustomer !== false;
+    if (!params.includeInternal && row.isInternal === true) continue;
+    if (
+      !params.includeInvisibleAgentMessages &&
+      senderRole !== 'CUSTOMER' &&
+      senderRole !== 'BOT' &&
+      senderVisibleToCustomer === false
+    ) {
+      continue;
+    }
     const sourceLanguage = normalizeTicketingLanguage(row.sourceLanguage, settings.defaultLanguage);
     let body = String(row.body || '');
     let translated = false;
@@ -563,9 +593,10 @@ async function buildChatThread(sessionId: string, viewerLanguage?: string) {
       sourceLanguage,
       translated,
       translatedToLanguage: normalizedViewerLanguage,
-      senderRole: String(row.senderRole || ''),
+      senderRole: senderRole || String(row.senderRole || ''),
       senderDisplayName: String(row.senderDisplayName || ''),
       isInternal: row.isInternal === true,
+      senderVisibleToCustomer,
       attachments: normalizeAttachments(parseArray(row.attachments)),
       createdAt: new Date(row.createdAt || Date.now()).toISOString(),
     });
@@ -1440,15 +1471,43 @@ router.get('/chat/:sessionId', optionalAuth, async (req: any, res) => {
     const rows = await prisma.$queryRawUnsafe<Array<any>>(`SELECT * FROM "SupportChatSession" WHERE "id" = $1 LIMIT 1`, sessionId);
     const session = rows[0];
     if (!session) return res.status(404).json({ success: false, message: 'Chat session not found.' });
-    const viewerLanguage = normalizeTicketingLanguage(req.query?.language || req.query?.preferredLanguage, session.preferredLanguage || 'en');
-    const messages = await buildChatThread(sessionId, viewerLanguage);
-    const participants = await prisma.$queryRawUnsafe<Array<any>>(
+    const settings = await readSettings();
+    const viewerLanguage = normalizeTicketingLanguage(
+      req.query?.language || req.query?.preferredLanguage,
+      session.preferredLanguage || settings.defaultLanguage
+    );
+    const privilegedViewer = isPrivilegedChatViewer(req.user);
+    const messages = await buildChatThread({
+      sessionId,
+      viewerLanguage,
+      includeInternal: privilegedViewer,
+      includeInvisibleAgentMessages: privilegedViewer,
+    });
+    const participantRows = await prisma.$queryRawUnsafe<Array<any>>(
       `SELECT "id","userId","displayName","role","preferredLanguage","isVisibleToCustomer","isPrimary","joinedAt","leftAt"
        FROM "SupportChatParticipant"
        WHERE "sessionId" = $1
        ORDER BY "joinedAt" ASC`,
       sessionId
     );
+    const participants = participantRows
+      .filter((row) => {
+        if (privilegedViewer) return true;
+        const role = String(row.role || '').trim().toUpperCase();
+        if (role === 'CUSTOMER') return true;
+        return row.isVisibleToCustomer === true;
+      })
+      .map((row) => ({
+        id: String(row.id || ''),
+        userId: privilegedViewer ? (row.userId ? String(row.userId) : null) : null,
+        displayName: String(row.displayName || ''),
+        role: String(row.role || ''),
+        preferredLanguage: normalizeTicketingLanguage(row.preferredLanguage, settings.defaultLanguage),
+        isVisibleToCustomer: row.isVisibleToCustomer !== false,
+        isPrimary: row.isPrimary === true,
+        joinedAt: row.joinedAt ? new Date(row.joinedAt).toISOString() : null,
+        leftAt: row.leftAt ? new Date(row.leftAt).toISOString() : null,
+      }));
     return res.json({
       success: true,
       data: {
@@ -1467,8 +1526,8 @@ router.get('/chat/:sessionId', optionalAuth, async (req: any, res) => {
         },
         language: {
           viewerPreferredLanguage: viewerLanguage,
-          translationEnabled: (await readSettings()).translationEnabled,
-          defaultLanguage: (await readSettings()).defaultLanguage,
+          translationEnabled: settings.translationEnabled,
+          defaultLanguage: settings.defaultLanguage,
           supportedLanguages: getTicketingSupportedLanguages(),
         },
         participants,
@@ -1523,6 +1582,8 @@ router.post('/chat/:sessionId/messages', optionalAuth, async (req: any, res) => 
       data.sourceLanguage === 'auto'
         ? await detectTicketingLanguage({ text: data.body, fallbackLanguage: settings.defaultLanguage })
         : normalizeTicketingLanguage(data.sourceLanguage, settings.defaultLanguage);
+    const internalMessageRequested = data.isInternal === true;
+    const effectiveIsInternal = senderRole === 'CUSTOMER' ? false : internalMessageRequested;
     await prisma.$executeRawUnsafe(
       `INSERT INTO "SupportChatMessage"
         ("id","sessionId","senderParticipantId","senderRole","senderDisplayName","body","attachments","isInternal","sourceLanguage","createdAt")
@@ -1534,7 +1595,7 @@ router.post('/chat/:sessionId/messages', optionalAuth, async (req: any, res) => 
       senderUser ? `${senderUser.firstName || ''} ${senderUser.lastName || ''}`.trim() || senderUser.email || 'Support Agent' : session.guestName || 'Customer',
       data.body,
       JSON.stringify(normalizeAttachments(data.attachments || [])),
-      data.isInternal === true,
+      effectiveIsInternal,
       sourceLanguage
     );
     await prisma.$executeRawUnsafe(`UPDATE "SupportChatSession" SET "lastMessageAt" = NOW(), "updatedAt" = NOW() WHERE "id" = $1`, sessionId);
@@ -1550,7 +1611,7 @@ router.post('/chat/:sessionId/messages', optionalAuth, async (req: any, res) => 
         bot.reply,
         settings.defaultLanguage
       );
-      if (bot.escalate && !session.assignedAdminUserId) {
+      if (bot.escalate && !session.assignedAdminUserId && !session.assignedAdminRoleId && !session.assignedGroupId) {
         const ticketId = await createSupportTicket({
           source: 'CHAT',
           title: `Chat escalation ${new Date().toISOString().slice(0, 16)}`,
@@ -1574,7 +1635,13 @@ router.post('/chat/:sessionId/messages', optionalAuth, async (req: any, res) => 
       }
     }
     const viewerLanguage = normalizeTicketingLanguage(data.preferredLanguage, session.preferredLanguage || settings.defaultLanguage);
-    const messages = await buildChatThread(sessionId, viewerLanguage);
+    const privilegedViewer = senderRole !== 'CUSTOMER';
+    const messages = await buildChatThread({
+      sessionId,
+      viewerLanguage,
+      includeInternal: privilegedViewer,
+      includeInvisibleAgentMessages: privilegedViewer,
+    });
     return res.json({ success: true, data: { messages } });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error?.message || 'Failed to post chat message.' });

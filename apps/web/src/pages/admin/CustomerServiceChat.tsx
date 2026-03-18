@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Send, UserPlus, ArrowRightLeft, Eye, EyeOff, PhoneCall } from 'lucide-react';
+import { RefreshCw, Send, UserPlus, ArrowRightLeft, Eye, EyeOff, PhoneCall, Paperclip } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { api } from '../../services/api';
 
@@ -26,6 +26,13 @@ export default function AdminCustomerServiceChat() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [reply, setReply] = useState('');
+  const [replyAttachments, setReplyAttachments] = useState<string[]>([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [viewerLanguage, setViewerLanguage] = useState('en');
+  const [messageSourceLanguage, setMessageSourceLanguage] = useState('auto');
+  const [supportedLanguages, setSupportedLanguages] = useState<Array<{ code: string; label: string }>>([
+    { code: 'en', label: 'English' },
+  ]);
   const [targetUserId, setTargetUserId] = useState('');
   const [participantIdForVisibility, setParticipantIdForVisibility] = useState('');
   const [messageBanner, setMessageBanner] = useState('');
@@ -59,8 +66,17 @@ export default function AdminCustomerServiceChat() {
   const loadThread = async (sessionId: string) => {
     if (!sessionId) return;
     try {
-      const response = await api.customerService.getChatThread(sessionId, {});
-      setThread(response?.data || null);
+      const response = await api.customerService.getChatThread(sessionId, {
+        preferredLanguage: viewerLanguage || undefined,
+      });
+      const data = response?.data || null;
+      setThread(data);
+      const languages = Array.isArray(data?.language?.supportedLanguages) ? data.language.supportedLanguages : [];
+      if (languages.length > 0) {
+        setSupportedLanguages(languages.map((row: any) => ({ code: String(row.code || 'en'), label: String(row.label || row.code || 'Language') })));
+      }
+      const preferred = String(data?.language?.viewerPreferredLanguage || '').trim().toLowerCase();
+      if (preferred) setViewerLanguage(preferred);
     } catch (threadError: any) {
       setThread(null);
       setError(threadError?.response?.data?.message || 'Failed to load chat thread.');
@@ -77,7 +93,7 @@ export default function AdminCustomerServiceChat() {
     } else {
       setThread(null);
     }
-  }, [selectedSessionId]);
+  }, [selectedSessionId, viewerLanguage]);
 
   const refreshAll = async () => {
     await loadSessions();
@@ -94,8 +110,12 @@ export default function AdminCustomerServiceChat() {
     try {
       await api.customerService.sendChatMessage(selectedSessionId, {
         body: reply.trim(),
+        sourceLanguage: messageSourceLanguage || 'auto',
+        preferredLanguage: viewerLanguage || 'en',
+        attachments: replyAttachments,
       });
       setReply('');
+      setReplyAttachments([]);
       setMessageBanner('Reply sent.');
       await loadThread(selectedSessionId);
       await loadSessions();
@@ -103,6 +123,25 @@ export default function AdminCustomerServiceChat() {
       setError(sendError?.response?.data?.message || 'Failed to send chat reply.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const uploadAttachment = async (file: File | null) => {
+    if (!file) return;
+    setUploadingAttachment(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await api.upload.file(formData);
+      const url = String(response?.data?.url || '').trim();
+      if (url) {
+        setReplyAttachments((prev) => Array.from(new Set([...prev, url])).slice(0, 12));
+      }
+    } catch (uploadError: any) {
+      setError(uploadError?.response?.data?.message || 'Failed to upload attachment.');
+    } finally {
+      setUploadingAttachment(false);
     }
   };
 
@@ -310,6 +349,31 @@ export default function AdminCustomerServiceChat() {
 
               <div className="rounded border p-3 space-y-3">
                 <h3 className="text-sm font-semibold text-gray-900">Messages</h3>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <select
+                      value={viewerLanguage}
+                      onChange={(event) => setViewerLanguage(event.target.value)}
+                      className="rounded border px-2 py-2 text-sm"
+                    >
+                      {supportedLanguages.map((row) => (
+                        <option key={row.code} value={row.code}>
+                          View language: {row.label}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={messageSourceLanguage}
+                      onChange={(event) => setMessageSourceLanguage(event.target.value)}
+                      className="rounded border px-2 py-2 text-sm"
+                    >
+                      <option value="auto">Message language: Auto detect</option>
+                      {supportedLanguages.map((row) => (
+                        <option key={`msg-${row.code}`} value={row.code}>
+                          Message language: {row.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 <div className="max-h-[360px] space-y-2 overflow-auto rounded border bg-gray-50 p-2">
                   {Array.isArray(thread?.messages) && thread.messages.length > 0 ? (
                     thread.messages.map((row: any) => (
@@ -341,11 +405,38 @@ export default function AdminCustomerServiceChat() {
                     rows={3}
                     className="flex-1 rounded border px-3 py-2 text-sm"
                   />
+                  <label className="inline-flex cursor-pointer items-center justify-center rounded border px-2 py-2 text-gray-600 hover:bg-gray-50">
+                    <Paperclip className="h-4 w-4" />
+                    <input
+                      type="file"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void uploadAttachment(file);
+                        event.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
                   <Button onClick={() => void sendReply()} disabled={saving || !reply.trim()}>
                     <Send className="mr-2 h-4 w-4" />
                     Send
                   </Button>
                 </div>
+                {uploadingAttachment ? <p className="text-xs text-gray-500">Uploading attachment...</p> : null}
+                {replyAttachments.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {replyAttachments.map((url) => (
+                      <button
+                        key={url}
+                        type="button"
+                        onClick={() => setReplyAttachments((prev) => prev.filter((entry) => entry !== url))}
+                        className="rounded bg-gray-100 px-2 py-1 text-[11px] text-gray-700"
+                      >
+                        Attached file ×
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : (

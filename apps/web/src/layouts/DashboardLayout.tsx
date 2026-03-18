@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import DashboardErrorBoundary from '../components/DashboardErrorBoundary';
+import { api } from '../services/api';
 
 import { 
   User, 
@@ -168,6 +169,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isReferralMenuOpen, setIsReferralMenuOpen] = useState(true);
   const [isEnterpriseMenuOpen, setIsEnterpriseMenuOpen] = useState(true);
   const [enterpriseRoleManagementAllowed, setEnterpriseRoleManagementAllowed] = useState(false);
+  const [supportCalling, setSupportCalling] = useState(false);
   const { user, token, logout } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -523,6 +525,25 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  const handleStartSupportCall = async () => {
+    if (userType === 'admin') return;
+    try {
+      setSupportCalling(true);
+      const response = await api.customerService.startVoipCall({
+        contextType: 'DIRECT',
+        contextId: `${userType}-dashboard-support`,
+      });
+      const callLink = String(response?.data?.callLink || '').trim();
+      if (callLink) {
+        window.open(callLink, '_blank', 'noopener,noreferrer');
+      }
+    } catch {
+      // no-op: avoid interrupting dashboard flow if VoIP is not enabled
+    } finally {
+      setSupportCalling(false);
+    }
   };
 
   const readHrefMeta = (href: string) => {
@@ -1071,6 +1092,16 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                     <p className="text-xs text-white/50">{roleLabel}</p>
                   </div>
                 </div>
+                {userType !== 'admin' ? (
+                  <button
+                    onClick={() => void handleStartSupportCall()}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                    disabled={supportCalling}
+                  >
+                    <PhoneCall className="w-4 h-4" />
+                    {supportCalling ? 'Calling support...' : 'Call Support'}
+                  </button>
+                ) : null}
                 <button
                   onClick={handleLogout}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
