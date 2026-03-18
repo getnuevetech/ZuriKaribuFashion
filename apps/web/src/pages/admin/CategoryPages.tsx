@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import Button from '../../components/ui/Button';
-import { api } from '../../services/api';
+import { api, resolveAssetUrl } from '../../services/api';
 
 type CategoryPageType = 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
 
@@ -136,7 +136,7 @@ export default function AdminCategoryPages() {
         setSettings({
           bannerTitle: String(nextSettings.bannerTitle || ''),
           bannerSubtitle: String(nextSettings.bannerSubtitle || ''),
-          bannerImage: String(nextSettings.bannerImage || ''),
+          bannerImage: resolveAssetUrl(String(nextSettings.bannerImage || '')),
           bannerHeight: Number(nextSettings.bannerHeight || 320),
           pageSize: Number(nextSettings.pageSize || 24),
           columns: Number(nextSettings.columns || 4),
@@ -211,7 +211,7 @@ export default function AdminCategoryPages() {
         setSettings({
           bannerTitle: String(response.data.settings.bannerTitle || ''),
           bannerSubtitle: String(response.data.settings.bannerSubtitle || ''),
-          bannerImage: String(response.data.settings.bannerImage || ''),
+          bannerImage: resolveAssetUrl(String(response.data.settings.bannerImage || '')),
           bannerHeight: Number(response.data.settings.bannerHeight || 320),
           pageSize: Number(response.data.settings.pageSize || 24),
           columns: Number(response.data.settings.columns || 4),
@@ -315,7 +315,7 @@ export default function AdminCategoryPages() {
       formData.append('image', file);
       const response = await api.upload.image(formData);
       if (response.success && response.data?.url) {
-        setSettings((prev) => ({ ...prev, bannerImage: String(response.data.url) }));
+        setSettings((prev) => ({ ...prev, bannerImage: resolveAssetUrl(String(response.data.url)) }));
       } else {
         setMessage('Failed to upload banner image.');
       }
@@ -723,7 +723,7 @@ export default function AdminCategoryPages() {
             {settings.bannerImage ? (
               <div className="rounded-lg border overflow-hidden">
                 <img
-                  src={settings.bannerImage}
+                  src={resolveAssetUrl(settings.bannerImage)}
                   alt={`${selectedPageMeta.label} banner preview`}
                   className="w-full object-cover"
                   style={{ height: `${Math.max(220, Math.min(560, Number(settings.bannerHeight || 320)))}px` }}

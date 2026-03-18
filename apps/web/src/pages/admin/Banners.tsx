@@ -14,7 +14,7 @@ import {
   CheckCircle,
   RefreshCw
 } from 'lucide-react';
-import { api } from '../../services/api';
+import { api, resolveAssetUrl } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 
@@ -365,7 +365,7 @@ export default function AdminBanners() {
             <div className="relative h-48 bg-gray-100">
               {banner.images.length > 0 ? (
                 <img
-                  src={banner.images[0]}
+                  src={resolveAssetUrl(banner.images[0])}
                   alt={banner.name}
                   className="w-full h-full object-cover"
                 />
@@ -619,7 +619,7 @@ export default function AdminBanners() {
                     {formData.images.map((image, index) => (
                       <div key={index} className="relative aspect-video">
                         <img
-                          src={image}
+                          src={resolveAssetUrl(image)}
                           alt={`Banner ${index + 1}`}
                           className="w-full h-full object-cover"
                         />

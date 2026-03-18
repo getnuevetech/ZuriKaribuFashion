@@ -81,6 +81,7 @@ import AdminTicketManagement from './pages/admin/TicketManagement';
 import AdminCustomerServiceChat from './pages/admin/CustomerServiceChat';
 import AdminCustomerServiceSettings from './pages/admin/CustomerServiceSettings';
 import AdminVoipConfiguration from './pages/admin/VoipConfiguration';
+import AdminAuthenticatorSettings from './pages/admin/AuthenticatorSettings';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -234,6 +235,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['admin:roles:manage', 'users:read']}>
                       <AdminRoleManagement />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/authenticator-security"
+                  element={
+                    <AdminPermissionGuard required={['authenticator:manage|users:manage']}>
+                      <AdminAuthenticatorSettings />
                     </AdminPermissionGuard>
                   }
                 />

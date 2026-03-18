@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Button from '../../components/ui/Button';
-import { api } from '../../services/api';
+import { api, resolveAssetUrl } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import { getCountryOptions, resolveCountryCode, resolveCountryName } from '../../data/locationOptions';
 import { normalizePhoneWithCountryPrefix } from '../../utils/phone';
@@ -47,7 +47,7 @@ export default function AdminProfilePage() {
           email: String(row.email || ''),
           phone: String(row.phone || ''),
           country: String(row.country || ''),
-          avatar: String(row.avatar || ''),
+          avatar: resolveAssetUrl(String(row.avatar || '')),
         });
       }
     } catch (loadError: any) {
@@ -82,13 +82,13 @@ export default function AdminProfilePage() {
           email: String(payload.email || prev.email),
           phone: String(payload.phone || ''),
           country: String(payload.country || ''),
-          avatar: String(payload.avatar || ''),
+          avatar: resolveAssetUrl(String(payload.avatar || '')),
         }));
         updateUser({
           firstName: String(payload.firstName || form.firstName),
           lastName: String(payload.lastName || form.lastName),
           phone: String(payload.phone || ''),
-          avatar: String(payload.avatar || ''),
+          avatar: resolveAssetUrl(String(payload.avatar || '')),
         });
         setMessage(response.message || 'Profile updated successfully.');
       }
@@ -109,7 +109,7 @@ export default function AdminProfilePage() {
       formData.append('image', file);
       const response = await api.upload.image(formData);
       if (response?.success && response?.data?.url) {
-        setForm((prev) => ({ ...prev, avatar: String(response.data.url || '').trim() }));
+        setForm((prev) => ({ ...prev, avatar: resolveAssetUrl(String(response.data.url || '').trim()) }));
       }
     } catch (uploadError: any) {
       setError(uploadError?.response?.data?.message || 'Failed to upload avatar.');

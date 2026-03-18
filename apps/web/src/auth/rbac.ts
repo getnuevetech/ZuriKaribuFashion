@@ -28,6 +28,7 @@ const ADMIN_PERMISSION_ROUTE_PRIORITY: Array<{ route: string; required: string[]
   { route: '/admin/homepage-visibility', required: ['homepage:manage'] },
   { route: '/admin/banners', required: ['banners:manage'] },
   { route: '/admin/roles', required: ['admin:roles:manage', 'users:read'] },
+  { route: '/admin/authenticator-security', required: ['authenticator:manage'] },
 ];
 
 const hasAllPermissions = (grants: string[], required: string[]) =>

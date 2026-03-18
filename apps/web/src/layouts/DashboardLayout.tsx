@@ -194,6 +194,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/administrator-accounts': [],
       '/admin/administrators': ['users:read'],
       '/admin/roles': ['admin:roles:manage', 'users:read'],
+      '/admin/authenticator-security': ['authenticator:manage|users:manage'],
       '/admin/vendor-profiles': ['vendor_profiles:read'],
       '/admin/resellers': ['users:manage'],
       '/admin/referrals/list': ['users:read'],
@@ -255,6 +256,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const adminAccountsSubmenu = [
     { label: 'Administrator', href: '/admin/administrators', icon: ChevronRight },
     { label: 'Role Management', href: '/admin/roles', icon: ChevronRight },
+    { label: 'Authenticator Security', href: '/admin/authenticator-security', icon: ChevronRight },
     { label: 'Backup Center', href: '/admin/backups', icon: Database },
   ];
   const canRenderAdminAccountsSubItem = (href: string) => {
@@ -836,6 +838,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                 const adminAccountsMenuActive =
                   location.pathname === '/admin/administrators' ||
                   location.pathname === '/admin/roles' ||
+                  location.pathname === '/admin/authenticator-security' ||
                   location.pathname === '/admin/backups';
                 const visibleAdminAccountSubmenu = adminAccountsSubmenu.filter((subItem) =>
                   canRenderAdminAccountsSubItem(subItem.href)

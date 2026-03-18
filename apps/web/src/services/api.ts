@@ -41,6 +41,7 @@ const resolveApiAssetUrl = (value: unknown): string => {
     return uploadPath;
   }
 };
+export const resolveAssetUrl = (value: unknown): string => resolveApiAssetUrl(value);
 
 // Create axios instance
 const httpClient = axios.create({
@@ -4131,11 +4132,27 @@ async function deleteWithRouteFallback<T>(paths: string[]) {
 
 // Auth API
 const authApi = {
-  login: (email: string, password: string) =>
-    apiService.post<{ success: boolean; data: { user: any; token: string | null } }>('/auth/login', { email, password }),
+  login: (email: string, password: string, mfaMethod?: 'EMAIL_OTP' | 'TOTP_AUTHENTICATOR') =>
+    apiService.post<{
+      success: boolean;
+      data: {
+        user?: any;
+        token?: string | null;
+        requiresSecondFactor?: boolean;
+        challenge?: any;
+      };
+    }>('/auth/login', { email, password, ...(mfaMethod ? { mfaMethod } : {}) }),
 
-  loginWithGoogle: (idToken: string) =>
-    postWithRouteFallback<{ success: boolean; data: { user: any; token: string | null } }>(googleLoginPaths, { idToken }),
+  loginWithGoogle: (idToken: string, mfaMethod?: 'EMAIL_OTP' | 'TOTP_AUTHENTICATOR') =>
+    postWithRouteFallback<{
+      success: boolean;
+      data: {
+        user?: any;
+        token?: string | null;
+        requiresSecondFactor?: boolean;
+        challenge?: any;
+      };
+    }>(googleLoginPaths, { idToken, ...(mfaMethod ? { mfaMethod } : {}) }),
 
   getGoogleLinkStatus: () =>
     getWithRouteFallback<{ success: boolean; data: { linked: boolean; email: string | null; linkedAt: string | null } }>(
@@ -4165,6 +4182,43 @@ const authApi = {
 
   resetPassword: (token: string, newPassword: string) =>
     apiService.post<{ success: boolean; message: string }>('/auth/reset-password', { token, newPassword }),
+
+  selectMfaChallengeMethod: (challengeId: string, method: 'EMAIL_OTP' | 'TOTP_AUTHENTICATOR') =>
+    apiService.post<{
+      success: boolean;
+      data: {
+        challenge: any;
+      };
+      message?: string;
+    }>('/auth/mfa/challenge/select', { challengeId, method }),
+
+  verifyMfaChallenge: (challengeId: string, code: string) =>
+    apiService.post<{
+      success: boolean;
+      data: {
+        user?: any;
+        token?: string | null;
+      };
+      message?: string;
+    }>('/auth/mfa/verify', { challengeId, code }),
+
+  getMfaPreferences: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        preferredMethod: 'EMAIL_OTP' | 'TOTP_AUTHENTICATOR' | null;
+        availableMethods: Array<'EMAIL_OTP' | 'TOTP_AUTHENTICATOR'>;
+        totpConfigured: boolean;
+        required: boolean;
+      };
+    }>('/auth/mfa/preferences'),
+
+  updateMfaPreferences: (preferredMethod: 'EMAIL_OTP' | 'TOTP_AUTHENTICATOR' | null) =>
+    apiService.patch<{
+      success: boolean;
+      message?: string;
+      data: { preferredMethod: 'EMAIL_OTP' | 'TOTP_AUTHENTICATOR' | null };
+    }>('/auth/mfa/preferences', { preferredMethod }),
 
   logout: () =>
     apiService.post('/auth/logout'),
@@ -6934,6 +6988,51 @@ const adminApi = {
       }>;
     }>('/admin/roles'),
 
+  getAuthenticatorSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        settings: {
+          enabled: boolean;
+          allowEmailOtp: boolean;
+          allowTotpAuthenticator: boolean;
+          otpLength: number;
+          otpExpiryMinutes: number;
+          challengeMaxAttempts: number;
+          totpIssuer: string;
+          totpPeriodSeconds: number;
+          totpDigits: number;
+          requiredUserRoles: string[];
+          requiredAdminRoleIds: string[];
+        };
+        userRoles: string[];
+        adminRoles: Array<{ id: string; name: string; isActive: boolean }>;
+      };
+    }>('/admin/authenticator/settings'),
+
+  updateAuthenticatorSettings: (payload: Partial<{
+    enabled: boolean;
+    allowEmailOtp: boolean;
+    allowTotpAuthenticator: boolean;
+    otpLength: number;
+    otpExpiryMinutes: number;
+    challengeMaxAttempts: number;
+    totpIssuer: string;
+    totpPeriodSeconds: number;
+    totpDigits: number;
+    requiredUserRoles: string[];
+    requiredAdminRoleIds: string[];
+  }>) =>
+    apiService.patch<{
+      success: boolean;
+      message?: string;
+      data: {
+        settings: any;
+        userRoles: string[];
+        adminRoles: Array<{ id: string; name: string; isActive: boolean }>;
+      };
+    }>('/admin/authenticator/settings', payload),
+
   createAdminRole: (data: {
     name: string;
     description?: string;
@@ -7603,8 +7702,15 @@ const adminApi = {
     }>(pageType, params),
 
   // Banner Management
+  normalizeBannerRow: (row: any) => ({
+    ...(row || {}),
+    images: Array.isArray(row?.images) ? row.images.map((image: any) => resolveApiAssetUrl(image)) : [],
+  }),
   getBanners: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/banners/admin/all'),
+    apiService.get<{ success: boolean; data: any[] }>('/banners/admin/all').then((response) => ({
+      ...response,
+      data: Array.isArray(response?.data) ? response.data.map((row) => adminApi.normalizeBannerRow(row)) : [],
+    })),
 
   getPromoBadgeSettings: () =>
     readAdminPromoBadgeWithFallback<{ success: boolean; data: { valueText: string; labelText: string } }>(),
@@ -7613,16 +7719,25 @@ const adminApi = {
     writeAdminPromoBadgeWithFallback<{ success: boolean; data: { valueText: string; labelText: string } }>(data),
 
   createBanner: (data: any) =>
-    apiService.post<{ success: boolean; data: any }>('/banners', data),
+    apiService.post<{ success: boolean; data: any }>('/banners', data).then((response) => ({
+      ...response,
+      data: response?.data ? adminApi.normalizeBannerRow(response.data) : response?.data,
+    })),
 
   updateBanner: (id: string, data: any) =>
-    apiService.put<{ success: boolean; data: any }>(`/banners/${id}`, data),
+    apiService.put<{ success: boolean; data: any }>(`/banners/${id}`, data).then((response) => ({
+      ...response,
+      data: response?.data ? adminApi.normalizeBannerRow(response.data) : response?.data,
+    })),
 
   deleteBanner: (id: string) =>
     apiService.delete<{ success: boolean }>(`/banners/${id}`),
 
   toggleBanner: (id: string) =>
-    apiService.patch<{ success: boolean; data: any }>(`/banners/${id}/toggle`),
+    apiService.patch<{ success: boolean; data: any }>(`/banners/${id}/toggle`).then((response) => ({
+      ...response,
+      data: response?.data ? adminApi.normalizeBannerRow(response.data) : response?.data,
+    })),
 };
 
 // Fabric Seller API
@@ -8211,45 +8326,100 @@ const uploadApi = {
     }),
 };
 
+const normalizeHomepageSlide = (entry: any) => ({
+  ...(entry || {}),
+  image: resolveApiAssetUrl(entry?.image || ''),
+});
+const normalizeHomepageFeaturedEntry = (entry: any) => ({
+  ...(entry || {}),
+  image: resolveApiAssetUrl(entry?.image || ''),
+  images: Array.isArray(entry?.images) ? entry.images.map((item: any) => resolveApiAssetUrl(item)) : entry?.images,
+});
+
 // Homepage API
 const homepageApi = {
   // Public endpoints
   getHeroSlides: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/homepage/hero-slides'),
+    apiService.get<{ success: boolean; data: any[] }>('/homepage/hero-slides').then((response) => ({
+      ...response,
+      data: Array.isArray(response?.data) ? response.data.map((entry) => normalizeHomepageSlide(entry)) : [],
+    })),
 
   getFeaturedBySection: (section: string) =>
-    apiService.get<{ success: boolean; data: any[] }>(`/homepage/featured/${section}`),
+    apiService.get<{ success: boolean; data: any[] }>(`/homepage/featured/${section}`).then((response) => ({
+      ...response,
+      data: Array.isArray(response?.data) ? response.data.map((entry) => normalizeHomepageFeaturedEntry(entry)) : [],
+    })),
 
   getAllFeatured: () =>
-    apiService.get<{ success: boolean; data: any }>('/homepage/featured'),
+    apiService.get<{ success: boolean; data: any }>('/homepage/featured').then((response) => ({
+      ...response,
+      data: response?.data
+        ? {
+            ...(response.data || {}),
+            featuredProducts: Array.isArray(response.data?.featuredProducts)
+              ? response.data.featuredProducts.map((entry: any) => normalizeHomepageFeaturedEntry(entry))
+              : response.data?.featuredProducts,
+          }
+        : response?.data,
+    })),
 
   // Admin endpoints
   getAdminHeroSlides: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/homepage/admin/hero-slides'),
+    apiService.get<{ success: boolean; data: any[] }>('/homepage/admin/hero-slides').then((response) => ({
+      ...response,
+      data: Array.isArray(response?.data) ? response.data.map((entry) => normalizeHomepageSlide(entry)) : [],
+    })),
 
   createHeroSlide: (data: any) =>
-    apiService.post<{ success: boolean; data: any }>('/homepage/admin/hero-slides', data),
+    apiService.post<{ success: boolean; data: any }>('/homepage/admin/hero-slides', data).then((response) => ({
+      ...response,
+      data: response?.data ? normalizeHomepageSlide(response.data) : response?.data,
+    })),
 
   updateHeroSlide: (id: string, data: any) =>
-    apiService.put<{ success: boolean; data: any }>(`/homepage/admin/hero-slides/${id}`, data),
+    apiService.put<{ success: boolean; data: any }>(`/homepage/admin/hero-slides/${id}`, data).then((response) => ({
+      ...response,
+      data: response?.data ? normalizeHomepageSlide(response.data) : response?.data,
+    })),
 
   deleteHeroSlide: (id: string) =>
     apiService.delete<{ success: boolean }>(`/homepage/admin/hero-slides/${id}`),
 
   getAdminFeatured: () =>
-    apiService.get<{ success: boolean; data: any[] }>('/homepage/admin/featured'),
+    apiService.get<{ success: boolean; data: any[] }>('/homepage/admin/featured').then((response) => ({
+      ...response,
+      data: Array.isArray(response?.data) ? response.data.map((entry) => normalizeHomepageFeaturedEntry(entry)) : [],
+    })),
 
   addFeaturedProduct: (data: any) =>
-    apiService.post<{ success: boolean; data: any }>('/homepage/admin/featured', data),
+    apiService.post<{ success: boolean; data: any }>('/homepage/admin/featured', data).then((response) => ({
+      ...response,
+      data: response?.data ? normalizeHomepageFeaturedEntry(response.data) : response?.data,
+    })),
 
   updateFeaturedProduct: (id: string, data: any) =>
-    apiService.put<{ success: boolean; data: any }>(`/homepage/admin/featured/${id}`, data),
+    apiService.put<{ success: boolean; data: any }>(`/homepage/admin/featured/${id}`, data).then((response) => ({
+      ...response,
+      data: response?.data ? normalizeHomepageFeaturedEntry(response.data) : response?.data,
+    })),
 
   removeFeaturedProduct: (id: string) =>
     apiService.delete<{ success: boolean }>(`/homepage/admin/featured/${id}`),
 
   getProductsForFeaturing: (type?: string) =>
-    apiService.get<{ success: boolean; data: any[] }>('/homepage/admin/products-for-featured', { params: type ? { type } : undefined }),
+    apiService
+      .get<{ success: boolean; data: any[] }>('/homepage/admin/products-for-featured', { params: type ? { type } : undefined })
+      .then((response) => ({
+        ...response,
+        data: Array.isArray(response?.data)
+          ? response.data.map((entry) => ({
+              ...entry,
+              image: resolveApiAssetUrl(entry?.image || entry?.images?.[0] || ''),
+              images: Array.isArray(entry?.images) ? entry.images.map((image: any) => resolveApiAssetUrl(image)) : entry?.images,
+            }))
+          : [],
+      })),
 };
 
 type AuthPageSettingsPayload = {

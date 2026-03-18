@@ -23,6 +23,7 @@ export const Permissions = {
   CUSTOMER_SERVICE_SETTINGS_MANAGE: 'customer_service:settings:manage',
   BOTS_MANAGE: 'bots:manage',
   VOIP_MANAGE: 'voip:manage',
+  AUTHENTICATOR_MANAGE: 'authenticator:manage',
   BACKUPS_RESTORE: 'backups:restore',
   PRICING_MANAGE: 'pricing:manage',
   CURRENCY_MANAGE: 'currency:manage',
@@ -156,6 +157,12 @@ export const PERMISSION_CATALOG: PermissionCatalogEntry[] = [
     label: 'Manage VoIP configuration',
     group: 'SYSTEM',
     description: 'Configure in-app VoIP settings and call routing for support communications.',
+  },
+  {
+    key: Permissions.AUTHENTICATOR_MANAGE,
+    label: 'Manage authenticator security',
+    group: 'SYSTEM',
+    description: 'Configure OTP and authenticator policy, methods, and enforcement scope.',
   },
   {
     key: Permissions.BACKUPS_RESTORE,

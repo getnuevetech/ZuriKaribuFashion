@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Eye, EyeOff, Upload, X, Globe, Sparkles, ShoppingBag, User, BookOpen, MessageSquare, Layout, Loader2, BarChart3 } from 'lucide-react';
-import { api } from '../../services/api';
+import { api, resolveAssetUrl } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 
@@ -777,7 +777,7 @@ export default function HomepageSections() {
       formData.append('image', file);
       const response = await api.upload.image(formData);
       if (response.success && response.data?.url) {
-        setAuthPageSettings((prev) => ({ ...prev, [field]: response.data.url }));
+        setAuthPageSettings((prev) => ({ ...prev, [field]: resolveAssetUrl(response.data.url) }));
       }
     } catch (error) {
       console.error('Error uploading auth page image:', error);
@@ -1117,7 +1117,7 @@ export default function HomepageSections() {
               <div className="h-40 overflow-hidden border border-gray-200 bg-gray-50">
                 {authPageSettings[entry.field] ? (
                   <img
-                    src={authPageSettings[entry.field]}
+                    src={resolveAssetUrl(authPageSettings[entry.field])}
                     alt={entry.label}
                     className="h-full w-full object-cover"
                   />
@@ -1555,7 +1555,7 @@ function CountriesTable({ data, onEdit, onToggle, onDelete }: any) {
             <td className="px-6 py-4 whitespace-nowrap">
               <div className="flex items-center">
                 {item.image && (
-                  <img src={item.image} alt={item.name} className="h-10 w-10 object-cover mr-3" />
+                  <img src={resolveAssetUrl(item.image)} alt={item.name} className="h-10 w-10 object-cover mr-3" />
                 )}
                 <span className="text-sm font-medium text-gray-900">{item.name}</span>
               </div>
@@ -1653,7 +1653,7 @@ function CategoriesTable({ data, onEdit, onToggle, onDelete }: any) {
             <td className="px-6 py-4 whitespace-nowrap">
               <div className="flex items-center">
                 {item.image && (
-                  <img src={item.image} alt={item.title} className="h-10 w-10 object-cover mr-3" />
+                  <img src={resolveAssetUrl(item.image)} alt={item.title} className="h-10 w-10 object-cover mr-3" />
                 )}
                 <span className="text-sm font-medium text-gray-900">{item.title}</span>
               </div>
@@ -1719,7 +1719,7 @@ function DesignerSpotlightTable({ data, designers, onEdit, onToggle, onDelete }:
             <td className="px-6 py-4 whitespace-nowrap">
               <div className="flex items-center">
                 {item.image && (
-                  <img src={item.image} alt={linkedName} className="h-10 w-10 object-cover mr-3" />
+                  <img src={resolveAssetUrl(item.image)} alt={linkedName} className="h-10 w-10 object-cover mr-3" />
                 )}
                 <span className="text-sm font-medium text-gray-900">Spotlight Card</span>
               </div>
@@ -1778,7 +1778,7 @@ function HeritageTable({ data, onEdit, onToggle, onDelete }: any) {
             <td className="px-6 py-4 whitespace-nowrap">
               <div className="flex items-center">
                 {item.image && (
-                  <img src={item.image} alt={item.title} className="h-10 w-10 object-cover mr-3" />
+                  <img src={resolveAssetUrl(item.image)} alt={item.title} className="h-10 w-10 object-cover mr-3" />
                 )}
                 <span className="text-sm font-medium text-gray-900">{item.title}</span>
               </div>
@@ -1831,7 +1831,7 @@ function TestimonialsTable({ data, onEdit, onToggle, onDelete }: any) {
             <td className="px-6 py-4 whitespace-nowrap">
               <div className="flex items-center">
                 {item.avatar && (
-                  <img src={item.avatar} alt={item.name} className="h-10 w-10 object-cover mr-3" />
+                  <img src={resolveAssetUrl(item.avatar)} alt={item.name} className="h-10 w-10 object-cover mr-3" />
                 )}
                 <span className="text-sm font-medium text-gray-900">{item.name}</span>
               </div>
@@ -2191,16 +2191,17 @@ function SectionModal({
       const response = await api.upload.image(formData);
       if (response.success) {
         setFormData((prev: any) => {
+          const resolvedUrl = resolveAssetUrl(response.data.url);
           if (type === 'categories' && field === 'image') {
             const current = parseCategoryImageList(prev?.categoryImagesText || prev?.image || '');
-            const nextImages = Array.from(new Set([response.data.url, ...current])).slice(0, 5);
+            const nextImages = Array.from(new Set([resolvedUrl, ...current])).slice(0, 5);
             return {
               ...prev,
-              image: nextImages[0] || response.data.url,
+              image: nextImages[0] || resolvedUrl,
               categoryImagesText: nextImages.join('\n'),
             };
           }
-          return { ...prev, [field]: response.data.url };
+          return { ...prev, [field]: resolvedUrl };
         });
       }
     } catch (error) {
@@ -3456,7 +3457,7 @@ function SectionModal({
                 <label className="block text-sm font-medium text-gray-700 mb-1">Image</label>
                 <div className="flex items-center gap-4">
                   {(type === 'testimonials' ? formData.avatar : formData.image) && (
-                    <img src={type === 'testimonials' ? formData.avatar : formData.image} alt="Preview" className="h-20 w-20 object-cover" />
+                    <img src={resolveAssetUrl(type === 'testimonials' ? formData.avatar : formData.image)} alt="Preview" className="h-20 w-20 object-cover" />
                   )}
                   <label className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
                     <Upload className="w-4 h-4" />

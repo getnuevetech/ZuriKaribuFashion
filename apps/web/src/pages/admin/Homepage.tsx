@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Eye, EyeOff, Image as ImageIcon, Upload, X, ChevronLeft, ChevronRight, AlertCircle, CheckCircle, RefreshCw, Star, Package } from 'lucide-react';
-import { api } from '../../services/api';
+import { api, resolveAssetUrl } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 
@@ -144,7 +144,7 @@ export default function AdminHomepage() {
     setHeroFormData({
       title: slide.title,
       subtitle: slide.subtitle,
-      image: slide.image,
+      image: resolveAssetUrl(slide.image),
       ctaText: slide.ctaText || '',
       ctaLink: slide.ctaLink || '',
       displayOrder: slide.displayOrder,
@@ -215,7 +215,7 @@ export default function AdminHomepage() {
       formData.append('image', file);
       const response = await api.upload.image(formData);
       if (response.success && response.data?.url) {
-        setHeroFormData((prev) => ({ ...prev, image: response.data.url }));
+        setHeroFormData((prev) => ({ ...prev, image: resolveAssetUrl(response.data.url) }));
       } else {
         window.alert('Image upload failed.');
       }
@@ -414,7 +414,7 @@ export default function AdminHomepage() {
                   <div className="aspect-video bg-gray-100 relative">
                     {slide.image ? (
                       <img
-                        src={slide.image}
+                        src={resolveAssetUrl(slide.image)}
                         alt={slide.title}
                         className="w-full h-full object-cover"
                       />

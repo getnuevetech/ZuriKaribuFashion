@@ -14,6 +14,27 @@ import {
   clearTemporaryPasswordRequirement,
   readPasswordPolicyForUser,
 } from '../utils/password-policy';
+import {
+  AUTHENTICATOR_METHODS,
+  type AuthenticatorMethod,
+  buildOtpAuthUri,
+  createLoginChallenge,
+  decryptTotpSecret,
+  deleteLoginChallenge,
+  encryptTotpSecret,
+  ensureAuthenticatorSchema,
+  generateNumericOtp,
+  generateTotpSecretBase32,
+  hashChallengeCode,
+  isAuthenticatorRequiredForUser,
+  readAuthenticatorSettings,
+  readLoginChallenge,
+  readUserMfaProfile,
+  saveUserTotpSecret,
+  updateLoginChallenge,
+  updateUserMfaPreferredMethod,
+  verifyTotpCode,
+} from '../utils/authenticator';
 
 const router = Router();
 
@@ -51,6 +72,19 @@ const forgotPasswordSchema = z.object({
 const resetPasswordSchema = z.object({
   token: z.string().min(10, 'Reset token is required'),
   newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+});
+const mfaMethodSchema = z.enum(AUTHENTICATOR_METHODS);
+const mfaChallengeSchema = z.object({
+  challengeId: z.string().uuid('Valid challenge identifier is required.'),
+});
+const mfaVerifySchema = mfaChallengeSchema.extend({
+  code: z.string().trim().min(4).max(12),
+});
+const mfaSelectMethodSchema = mfaChallengeSchema.extend({
+  method: mfaMethodSchema,
+});
+const mfaPreferenceSchema = z.object({
+  preferredMethod: mfaMethodSchema.nullable(),
 });
 
 const AFRICAN_COUNTRY_CODE_TO_NAME = new Map<string, string>([
@@ -562,6 +596,235 @@ const appPublicBaseUrl = () =>
     .replace(/\/+$/, '');
 const hashResetToken = (token: string) => crypto.createHash('sha256').update(String(token)).digest('hex');
 
+const normalizeMfaMethod = (value: unknown): AuthenticatorMethod | null => {
+  const token = String(value || '').trim().toUpperCase();
+  if (token === 'EMAIL_OTP') return 'EMAIL_OTP';
+  if (token === 'TOTP_AUTHENTICATOR') return 'TOTP_AUTHENTICATOR';
+  return null;
+};
+
+const getAvailableMfaMethods = (settings: Awaited<ReturnType<typeof readAuthenticatorSettings>>) => {
+  const methods: AuthenticatorMethod[] = [];
+  if (settings.allowEmailOtp) methods.push('EMAIL_OTP');
+  if (settings.allowTotpAuthenticator) methods.push('TOTP_AUTHENTICATOR');
+  return methods;
+};
+
+const maskEmail = (value: string) => {
+  const email = String(value || '').trim();
+  const [localPart, domain = ''] = email.split('@');
+  if (!localPart || !domain) return email;
+  const safeLocal =
+    localPart.length <= 2 ? `${localPart.charAt(0)}*` : `${localPart.slice(0, 2)}${'*'.repeat(Math.max(1, localPart.length - 2))}`;
+  return `${safeLocal}@${domain}`;
+};
+
+async function issueLoginSuccessResponse(input: {
+  req: any;
+  res: any;
+  user: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: UserRole;
+    status: UserStatus;
+    lastLogin: Date | null;
+    avatar?: string | null;
+  };
+  authProvider?: 'password' | 'google' | 'mfa';
+  avatarOverride?: string | null;
+}) {
+  let user = { ...input.user };
+  const previousLastLoginAt = user.lastLogin;
+  const sessionIssuedAt = Date.now();
+  const nextAvatar = input.avatarOverride !== undefined ? String(input.avatarOverride || '').trim() || null : undefined;
+  try {
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastLogin: new Date(sessionIssuedAt),
+        ...(nextAvatar !== undefined ? { avatar: nextAvatar } : {}),
+      },
+    });
+    user = {
+      ...user,
+      avatar: updated.avatar,
+      lastLogin: updated.lastLogin,
+    };
+  } catch {
+    // Do not block login when bookkeeping fields cannot be updated.
+  }
+
+  if (user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER) {
+    const forwardedFor = input.req.headers['x-forwarded-for'];
+    const rawIp = Array.isArray(forwardedFor) ? String(forwardedFor[0] || '') : String(forwardedFor || input.req.ip || '');
+    const ipAddress = rawIp.split(',')[0].trim() || null;
+    try {
+      await prisma.activityLog.create({
+        data: {
+          userId: user.id,
+          action: previousLastLoginAt ? 'VENDOR_SESSION_REPLACED' : 'VENDOR_SESSION_STARTED',
+          details: {
+            role: user.role,
+            sessionIssuedAt,
+            previousSessionAt: previousLastLoginAt ? previousLastLoginAt.toISOString() : null,
+            deviceType: String(input.req.headers['sec-ch-ua-platform'] || input.req.headers['user-agent'] || '').slice(0, 120),
+            authProvider: input.authProvider || 'password',
+          },
+          ipAddress,
+          userAgent: String(input.req.headers['user-agent'] || '').slice(0, 500),
+        },
+      });
+    } catch {
+      // Best effort.
+    }
+  }
+
+  const token = generateToken({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    sessionIssuedAt,
+  });
+  const effectivePermissions = await resolveEffectivePermissions(user.id, user.role);
+  const passwordPolicy = await readPasswordPolicyForUser(user.id);
+  const requiresPasswordChange = passwordPolicy.requiresPasswordChange;
+
+  return input.res.json({
+    success: true,
+    message: 'Login successful!',
+    data: {
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        status: user.status,
+        permissions: effectivePermissions,
+        requirePasswordChange: requiresPasswordChange,
+      },
+      token,
+      access: {
+        homeRoute: requiresPasswordChange ? '/change-password-required' : ROLE_HOME_ROUTE[user.role],
+        permissions: effectivePermissions,
+      },
+    },
+  });
+}
+
+async function initiateMfaLoginChallenge(input: {
+  user: {
+    id: string;
+    email: string;
+    firstName: string;
+    role: UserRole;
+  };
+  requestedMethod?: unknown;
+}) {
+  await ensureAuthenticatorSchema();
+  const settings = await readAuthenticatorSettings();
+  const requirement = await isAuthenticatorRequiredForUser({
+    userId: input.user.id,
+    role: input.user.role,
+    settings,
+  });
+  if (!requirement.required) return null;
+  const methods = getAvailableMfaMethods(settings);
+  if (methods.length === 0) return null;
+  const mfaProfile = await readUserMfaProfile(input.user.id);
+  const requestedMethod = normalizeMfaMethod(input.requestedMethod);
+  const selectedMethod =
+    (requestedMethod && methods.includes(requestedMethod) && requestedMethod) ||
+    (mfaProfile.preferredMethod && methods.includes(mfaProfile.preferredMethod) ? mfaProfile.preferredMethod : methods[0]);
+  const expiresAt = new Date(Date.now() + settings.otpExpiryMinutes * 60 * 1000);
+  const maxAttempts = settings.challengeMaxAttempts;
+
+  if (selectedMethod === 'EMAIL_OTP') {
+    const code = generateNumericOtp(settings.otpLength);
+    const challenge = await createLoginChallenge({
+      userId: input.user.id,
+      method: selectedMethod,
+      expiresAt,
+      maxAttempts,
+      codeHash: '',
+    });
+    if (!challenge) {
+      throw new Error('Unable to initialize OTP challenge.');
+    }
+    const codeHash = hashChallengeCode(challenge.id, code);
+    await updateLoginChallenge(challenge.id, { codeHash });
+    void sendEmail({
+      to: input.user.email,
+      subject: 'Your sign-in verification code',
+      text: `Hello ${input.user.firstName || 'there'},\n\nYour one-time login code is: ${code}\n\nThe code expires in ${settings.otpExpiryMinutes} minute(s).`,
+      html: `<p>Hello ${input.user.firstName || 'there'},</p><p>Your one-time login code is:</p><p style="font-size: 24px; font-weight: 700; letter-spacing: 2px;">${code}</p><p>The code expires in <strong>${settings.otpExpiryMinutes} minute(s)</strong>.</p>`,
+    }).catch(() => undefined);
+    return {
+      challengeId: challenge.id,
+      method: selectedMethod,
+      methods,
+      expiresAt: expiresAt.toISOString(),
+      requiresTotpSetup: false,
+      deliveryHint: `Verification code sent to ${maskEmail(input.user.email)}`,
+    };
+  }
+
+  const decryptedExistingSecret = mfaProfile.totpSecret ? decryptTotpSecret(mfaProfile.totpSecret) : '';
+  if (mfaProfile.totpEnabled && decryptedExistingSecret) {
+    const challenge = await createLoginChallenge({
+      userId: input.user.id,
+      method: selectedMethod,
+      expiresAt,
+      maxAttempts,
+      codeHash: null,
+      pendingTotpSecret: null,
+    });
+    if (!challenge) throw new Error('Unable to initialize authenticator challenge.');
+    return {
+      challengeId: challenge.id,
+      method: selectedMethod,
+      methods,
+      expiresAt: expiresAt.toISOString(),
+      requiresTotpSetup: false,
+    };
+  }
+
+  const secretBase32 = generateTotpSecretBase32();
+  const pendingEncrypted = encryptTotpSecret(secretBase32);
+  const challenge = await createLoginChallenge({
+    userId: input.user.id,
+    method: selectedMethod,
+    expiresAt,
+    maxAttempts,
+    codeHash: null,
+    pendingTotpSecret: pendingEncrypted,
+  });
+  if (!challenge) throw new Error('Unable to initialize authenticator setup challenge.');
+  const otpauthUrl = buildOtpAuthUri({
+    secretBase32,
+    accountLabel: input.user.email,
+    issuer: settings.totpIssuer,
+    periodSeconds: settings.totpPeriodSeconds,
+    digits: settings.totpDigits,
+  });
+  return {
+    challengeId: challenge.id,
+    method: selectedMethod,
+    methods,
+    expiresAt: expiresAt.toISOString(),
+    requiresTotpSetup: true,
+    setup: {
+      secret: secretBase32,
+      otpauthUrl,
+      issuer: settings.totpIssuer,
+      digits: settings.totpDigits,
+      periodSeconds: settings.totpPeriodSeconds,
+    },
+  };
+}
+
 const parseNameFromGoogle = (payload: Record<string, unknown>) => {
   const givenName = String(payload.given_name || '').trim();
   const familyName = String(payload.family_name || '').trim();
@@ -1061,75 +1324,40 @@ router.post('/login', async (req, res, next) => {
       });
     }
 
-    const previousLastLoginAt = user.lastLogin;
-    const sessionIssuedAt = Date.now();
-
-    // Update last login
-    try {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { lastLogin: new Date(sessionIssuedAt) },
-      });
-    } catch {
-      // Do not fail login for lastLogin bookkeeping schema drift.
-    }
-
-    if (user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER) {
-      const forwardedFor = req.headers['x-forwarded-for'];
-      const rawIp = Array.isArray(forwardedFor) ? String(forwardedFor[0] || '') : String(forwardedFor || req.ip || '');
-      const ipAddress = rawIp.split(',')[0].trim() || null;
-      try {
-        await prisma.activityLog.create({
-          data: {
-            userId: user.id,
-            action: previousLastLoginAt ? 'VENDOR_SESSION_REPLACED' : 'VENDOR_SESSION_STARTED',
-            details: {
-              role: user.role,
-              sessionIssuedAt,
-              previousSessionAt: previousLastLoginAt ? previousLastLoginAt.toISOString() : null,
-              deviceType: String(req.headers['sec-ch-ua-platform'] || req.headers['user-agent'] || '').slice(0, 120),
-            },
-            ipAddress,
-            userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
-          },
-        });
-      } catch {
-        // Do not fail login when audit log write is unavailable.
-      }
-    }
-
-    // Generate token
-    const token = generateToken({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      sessionIssuedAt,
-    });
-
-    const effectivePermissions = await resolveEffectivePermissions(user.id, user.role);
-    const passwordPolicy = await readPasswordPolicyForUser(user.id);
-    const requiresPasswordChange = passwordPolicy.requiresPasswordChange;
-
-    res.json({
-      success: true,
-      message: 'Login successful!',
-      data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          status: user.status,
-          permissions: effectivePermissions,
-          requirePasswordChange: requiresPasswordChange,
-        },
-        token,
-        access: {
-          homeRoute: requiresPasswordChange ? '/change-password-required' : ROLE_HOME_ROUTE[user.role],
-          permissions: effectivePermissions,
-        },
+    const mfaChallenge = await initiateMfaLoginChallenge({
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        role: user.role,
       },
+      requestedMethod: (req.body || {}).mfaMethod,
+    });
+    if (mfaChallenge) {
+      return res.status(202).json({
+        success: true,
+        message: 'Second-factor verification required.',
+        data: {
+          requiresSecondFactor: true,
+          challenge: mfaChallenge,
+        },
+      });
+    }
+
+    return issueLoginSuccessResponse({
+      req,
+      res,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        status: user.status,
+        lastLogin: user.lastLogin,
+        avatar: user.avatar,
+      },
+      authProvider: 'password',
     });
   } catch (error: any) {
     const message = String(error?.message || '');
@@ -1384,67 +1612,41 @@ const handleGoogleLogin = async (req: any, res: any, next: any) => {
       });
     }
 
-    const previousLastLoginAt = user.lastLogin;
-    const sessionIssuedAt = Date.now();
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        lastLogin: new Date(sessionIssuedAt),
-        avatar: user.avatar || String(payload.picture || '').trim() || null,
+    const mfaChallenge = await initiateMfaLoginChallenge({
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        role: user.role,
       },
+      requestedMethod: (req.body || {}).mfaMethod,
     });
-
-    if (user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER) {
-      const forwardedFor = req.headers['x-forwarded-for'];
-      const rawIp = Array.isArray(forwardedFor) ? String(forwardedFor[0] || '') : String(forwardedFor || req.ip || '');
-      const ipAddress = rawIp.split(',')[0].trim() || null;
-      await prisma.activityLog.create({
+    if (mfaChallenge) {
+      return res.status(202).json({
+        success: true,
+        message: 'Second-factor verification required.',
         data: {
-          userId: user.id,
-          action: previousLastLoginAt ? 'VENDOR_SESSION_REPLACED' : 'VENDOR_SESSION_STARTED',
-          details: {
-            role: user.role,
-            sessionIssuedAt,
-            previousSessionAt: previousLastLoginAt ? previousLastLoginAt.toISOString() : null,
-            deviceType: String(req.headers['sec-ch-ua-platform'] || req.headers['user-agent'] || '').slice(0, 120),
-            authProvider: 'google',
-          },
-          ipAddress,
-          userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
+          requiresSecondFactor: true,
+          challenge: mfaChallenge,
         },
       });
     }
 
-    const token = generateToken({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      sessionIssuedAt,
-    });
-    const effectivePermissions = await resolveEffectivePermissions(user.id, user.role);
-    const passwordPolicy = await readPasswordPolicyForUser(user.id);
-    const requiresPasswordChange = passwordPolicy.requiresPasswordChange;
-
-    return res.json({
-      success: true,
-      message: 'Login successful!',
-      data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          status: user.status,
-          permissions: effectivePermissions,
-          requirePasswordChange: requiresPasswordChange,
-        },
-        token,
-        access: {
-          homeRoute: requiresPasswordChange ? '/change-password-required' : ROLE_HOME_ROUTE[user.role],
-          permissions: effectivePermissions,
-        },
+    return issueLoginSuccessResponse({
+      req,
+      res,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        status: user.status,
+        lastLogin: user.lastLogin,
+        avatar: user.avatar,
       },
+      authProvider: 'google',
+      avatarOverride: user.avatar || String(payload.picture || '').trim() || null,
     });
   } catch (error) {
     return next(error);
@@ -1557,6 +1759,300 @@ const handleGoogleUnlink = async (req: any, res: any, next: any) => {
 
 router.delete('/google/link', authenticate, handleGoogleUnlink);
 router.delete('/google-link', authenticate, handleGoogleUnlink);
+
+router.post('/mfa/challenge/select', async (req, res, next) => {
+  try {
+    await ensureAuthenticatorSchema();
+    const payload = mfaSelectMethodSchema.parse(req.body || {});
+    const challenge = await readLoginChallenge(payload.challengeId);
+    if (!challenge) {
+      return res.status(404).json({ success: false, message: 'Authentication challenge was not found.' });
+    }
+    if (challenge.expiresAt.getTime() <= Date.now()) {
+      await deleteLoginChallenge(challenge.id);
+      return res.status(400).json({ success: false, message: 'Authentication challenge expired. Please sign in again.' });
+    }
+    const settings = await readAuthenticatorSettings();
+    const methods = getAvailableMfaMethods(settings);
+    if (!methods.includes(payload.method)) {
+      return res.status(400).json({ success: false, message: 'Selected authentication method is disabled by administrator.' });
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: challenge.userId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        role: true,
+      },
+    });
+    if (!user) {
+      await deleteLoginChallenge(challenge.id);
+      return res.status(404).json({ success: false, message: 'User account no longer exists.' });
+    }
+    const profile = await readUserMfaProfile(user.id);
+    const expiresAt = new Date(Date.now() + settings.otpExpiryMinutes * 60 * 1000);
+    if (payload.method === 'EMAIL_OTP') {
+      const code = generateNumericOtp(settings.otpLength);
+      const codeHash = hashChallengeCode(challenge.id, code);
+      const updated = await updateLoginChallenge(challenge.id, {
+        method: payload.method,
+        codeHash,
+        pendingTotpSecret: null,
+        expiresAt,
+        attemptCount: 0,
+      });
+      if (!updated) {
+        return res.status(400).json({ success: false, message: 'Unable to refresh authentication challenge.' });
+      }
+      void sendEmail({
+        to: user.email,
+        subject: 'Your sign-in verification code',
+        text: `Hello ${user.firstName || 'there'},\n\nYour one-time login code is: ${code}\n\nThe code expires in ${settings.otpExpiryMinutes} minute(s).`,
+        html: `<p>Hello ${user.firstName || 'there'},</p><p>Your one-time login code is:</p><p style="font-size:24px;font-weight:700;letter-spacing:2px;">${code}</p><p>The code expires in <strong>${settings.otpExpiryMinutes} minute(s)</strong>.</p>`,
+      }).catch(() => undefined);
+      return res.json({
+        success: true,
+        message: 'Verification code sent.',
+        data: {
+          challenge: {
+            challengeId: updated.id,
+            method: payload.method,
+            methods,
+            expiresAt: updated.expiresAt.toISOString(),
+            requiresTotpSetup: false,
+            deliveryHint: `Verification code sent to ${maskEmail(user.email)}`,
+          },
+        },
+      });
+    }
+
+    const decryptedExistingSecret = profile.totpSecret ? decryptTotpSecret(profile.totpSecret) : '';
+    if (profile.totpEnabled && decryptedExistingSecret) {
+      const updated = await updateLoginChallenge(challenge.id, {
+        method: payload.method,
+        codeHash: null,
+        pendingTotpSecret: null,
+        expiresAt,
+        attemptCount: 0,
+      });
+      if (!updated) {
+        return res.status(400).json({ success: false, message: 'Unable to refresh authentication challenge.' });
+      }
+      return res.json({
+        success: true,
+        data: {
+          challenge: {
+            challengeId: updated.id,
+            method: payload.method,
+            methods,
+            expiresAt: updated.expiresAt.toISOString(),
+            requiresTotpSetup: false,
+          },
+        },
+      });
+    }
+
+    const secretBase32 = generateTotpSecretBase32();
+    const pendingEncrypted = encryptTotpSecret(secretBase32);
+    const updated = await updateLoginChallenge(challenge.id, {
+      method: payload.method,
+      codeHash: null,
+      pendingTotpSecret: pendingEncrypted,
+      expiresAt,
+      attemptCount: 0,
+    });
+    if (!updated) {
+      return res.status(400).json({ success: false, message: 'Unable to refresh authentication challenge.' });
+    }
+    const otpauthUrl = buildOtpAuthUri({
+      secretBase32,
+      accountLabel: user.email,
+      issuer: settings.totpIssuer,
+      periodSeconds: settings.totpPeriodSeconds,
+      digits: settings.totpDigits,
+    });
+    return res.json({
+      success: true,
+      data: {
+        challenge: {
+          challengeId: updated.id,
+          method: payload.method,
+          methods,
+          expiresAt: updated.expiresAt.toISOString(),
+          requiresTotpSetup: true,
+          setup: {
+            secret: secretBase32,
+            otpauthUrl,
+            issuer: settings.totpIssuer,
+            digits: settings.totpDigits,
+            periodSeconds: settings.totpPeriodSeconds,
+          },
+        },
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/mfa/verify', async (req, res, next) => {
+  try {
+    await ensureAuthenticatorSchema();
+    const payload = mfaVerifySchema.parse(req.body || {});
+    const challenge = await readLoginChallenge(payload.challengeId);
+    if (!challenge) {
+      return res.status(404).json({ success: false, message: 'Authentication challenge was not found.' });
+    }
+    if (challenge.expiresAt.getTime() <= Date.now()) {
+      await deleteLoginChallenge(challenge.id);
+      return res.status(400).json({ success: false, message: 'Authentication challenge expired. Please sign in again.' });
+    }
+    if (challenge.attemptCount >= challenge.maxAttempts) {
+      await deleteLoginChallenge(challenge.id);
+      return res.status(429).json({ success: false, message: 'Too many failed verification attempts. Please sign in again.' });
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: challenge.userId },
+    });
+    if (!user) {
+      await deleteLoginChallenge(challenge.id);
+      return res.status(404).json({ success: false, message: 'User account no longer exists.' });
+    }
+
+    const isVendor = user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER;
+    const rejectionPolicy = await applyVendorRejectionPolicy({
+      id: user.id,
+      role: user.role,
+      status: user.status as UserStatus,
+    });
+    if (rejectionPolicy.blockedMessage) {
+      await deleteLoginChallenge(challenge.id);
+      return res.status(403).json({ success: false, message: rejectionPolicy.blockedMessage });
+    }
+    const effectiveStatus = rejectionPolicy.user.status;
+    if (effectiveStatus === UserStatus.PENDING && !isVendor) {
+      await deleteLoginChallenge(challenge.id);
+      return res.status(403).json({ success: false, message: 'Your account is pending approval. Please wait for admin verification.' });
+    }
+    if (effectiveStatus === UserStatus.SUSPENDED) {
+      await deleteLoginChallenge(challenge.id);
+      return res.status(403).json({ success: false, message: 'Your account has been suspended. Please contact support.' });
+    }
+    if (effectiveStatus === UserStatus.REJECTED) {
+      await deleteLoginChallenge(challenge.id);
+      return res.status(403).json({
+        success: false,
+        message: 'Your registration was not approved. Please contact support for more information.',
+      });
+    }
+
+    const settings = await readAuthenticatorSettings();
+    let verified = false;
+    if (challenge.method === 'EMAIL_OTP') {
+      const expectedHash = String(challenge.codeHash || '').trim();
+      const candidateHash = hashChallengeCode(challenge.id, payload.code);
+      verified = Boolean(expectedHash) && candidateHash === expectedHash;
+    } else {
+      const profile = await readUserMfaProfile(user.id);
+      const secretBase32 = challenge.pendingTotpSecret
+        ? decryptTotpSecret(challenge.pendingTotpSecret)
+        : profile.totpSecret
+          ? decryptTotpSecret(profile.totpSecret)
+          : '';
+      verified = verifyTotpCode({
+        secretBase32,
+        code: payload.code,
+        periodSeconds: settings.totpPeriodSeconds,
+        digits: settings.totpDigits,
+      });
+      if (verified && challenge.pendingTotpSecret) {
+        await saveUserTotpSecret(user.id, challenge.pendingTotpSecret);
+      }
+    }
+
+    if (!verified) {
+      const attemptCount = challenge.attemptCount + 1;
+      if (attemptCount >= challenge.maxAttempts) {
+        await deleteLoginChallenge(challenge.id);
+      } else {
+        await updateLoginChallenge(challenge.id, { attemptCount });
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid verification code. Please try again.',
+      });
+    }
+
+    await updateUserMfaPreferredMethod(user.id, challenge.method);
+    await deleteLoginChallenge(challenge.id);
+    return issueLoginSuccessResponse({
+      req,
+      res,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        status: effectiveStatus,
+        lastLogin: user.lastLogin,
+        avatar: user.avatar,
+      },
+      authProvider: 'mfa',
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/mfa/preferences', authenticate, async (req, res, next) => {
+  try {
+    await ensureAuthenticatorSchema();
+    const [settings, profile, requirement] = await Promise.all([
+      readAuthenticatorSettings(),
+      readUserMfaProfile(req.user!.id),
+      isAuthenticatorRequiredForUser({ userId: req.user!.id, role: req.user!.role }),
+    ]);
+    const methods = getAvailableMfaMethods(settings);
+    return res.json({
+      success: true,
+      data: {
+        preferredMethod: profile.preferredMethod,
+        availableMethods: methods,
+        totpConfigured: profile.totpEnabled && Boolean(profile.totpSecret && decryptTotpSecret(profile.totpSecret)),
+        required: requirement.required,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/mfa/preferences', authenticate, async (req, res, next) => {
+  try {
+    await ensureAuthenticatorSchema();
+    const payload = mfaPreferenceSchema.parse(req.body || {});
+    const settings = await readAuthenticatorSettings();
+    const methods = getAvailableMfaMethods(settings);
+    if (payload.preferredMethod && !methods.includes(payload.preferredMethod)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Selected preferred method is currently disabled by administrator.',
+      });
+    }
+    await updateUserMfaPreferredMethod(req.user!.id, payload.preferredMethod || null);
+    return res.json({
+      success: true,
+      message: 'Authenticator preference updated.',
+      data: {
+        preferredMethod: payload.preferredMethod || null,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 // Get current user
 router.get('/me', authenticate, async (req, res, next) => {

@@ -57,9 +57,30 @@ const resolveFileExtension = (file: Express.Multer.File) =>
 
 const resolveS3ObjectKey = (filename: string) => `${uploadPrefix}/${filename}`;
 
-const resolveUploadedUrl = (filename: string) => {
+const resolveRequestOrigin = (req: any) => {
+  const envBase =
+    String(process.env.APP_BASE_URL || process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || '')
+      .trim()
+      .replace(/\/+$/g, '');
+  if (envBase) return envBase;
+  const forwardedProto = String(req?.headers?.['x-forwarded-proto'] || '').split(',')[0].trim();
+  const forwardedHost = String(req?.headers?.['x-forwarded-host'] || '').split(',')[0].trim();
+  const host = forwardedHost || String(req?.headers?.host || '').trim();
+  const protocol = forwardedProto || req?.protocol || 'https';
+  if (!host) return '';
+  return `${protocol}://${host}`;
+};
+
+const resolveUploadedUrl = (req: any, filename: string) => {
   if (!useS3Uploads) {
-    return `/uploads/${filename}`;
+    const relativePath = `/uploads/${filename}`;
+    const origin = resolveRequestOrigin(req);
+    if (!origin) return relativePath;
+    try {
+      return new URL(relativePath, origin).toString();
+    } catch {
+      return relativePath;
+    }
   }
   const key = resolveS3ObjectKey(filename);
   if (uploadBaseUrl) {
@@ -68,7 +89,7 @@ const resolveUploadedUrl = (filename: string) => {
   return `https://${uploadBucket}.s3.${uploadRegion}.amazonaws.com/${key}`;
 };
 
-const persistUploadedFile = async (file: Express.Multer.File) => {
+const persistUploadedFile = async (req: any, file: Express.Multer.File) => {
   const extension = resolveFileExtension(file);
   const filename = useS3Uploads ? `${uuidv4()}${extension}` : String(file.filename || `${uuidv4()}${extension}`);
   if (useS3Uploads) {
@@ -93,7 +114,7 @@ const persistUploadedFile = async (file: Express.Multer.File) => {
     );
   }
   return {
-    url: resolveUploadedUrl(filename),
+    url: resolveUploadedUrl(req, filename),
     filename,
     size: file.size,
   };
@@ -130,8 +151,8 @@ const mixedUpload = createUpload(
   'Only approved image or document files are allowed.'
 );
 
-const sendSingleUploadResponse = async (res: any, file: Express.Multer.File, successMessage: string) => {
-  const persisted = await persistUploadedFile(file);
+const sendSingleUploadResponse = async (req: any, res: any, file: Express.Multer.File, successMessage: string) => {
+  const persisted = await persistUploadedFile(req, file);
   res.json({
     success: true,
     message: successMessage,
@@ -139,8 +160,8 @@ const sendSingleUploadResponse = async (res: any, file: Express.Multer.File, suc
   });
 };
 
-const sendMultiUploadResponse = async (res: any, files: Express.Multer.File[], label: string) => {
-  const persisted = await Promise.all(files.map((file) => persistUploadedFile(file)));
+const sendMultiUploadResponse = async (req: any, res: any, files: Express.Multer.File[], label: string) => {
+  const persisted = await Promise.all(files.map((file) => persistUploadedFile(req, file)));
   res.json({
     success: true,
     message: `${files.length} ${label}(s) uploaded successfully.`,
@@ -153,7 +174,7 @@ router.post('/image', authenticate, authorizePermissions(Permissions.UPLOADS_CRE
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No image file provided.' });
     }
-    await sendSingleUploadResponse(res, req.file, 'Image uploaded successfully.');
+    await sendSingleUploadResponse(req, res, req.file, 'Image uploaded successfully.');
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Failed to upload image.' });
   }
@@ -165,7 +186,7 @@ router.post('/images', authenticate, authorizePermissions(Permissions.UPLOADS_CR
     if (files.length === 0) {
       return res.status(400).json({ success: false, message: 'No image files provided.' });
     }
-    await sendMultiUploadResponse(res, files, 'image');
+    await sendMultiUploadResponse(req, res, files, 'image');
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Failed to upload images.' });
   }
@@ -176,7 +197,7 @@ router.post('/document', authenticate, authorizePermissions(Permissions.UPLOADS_
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No document file provided.' });
     }
-    await sendSingleUploadResponse(res, req.file, 'Document uploaded successfully.');
+    await sendSingleUploadResponse(req, res, req.file, 'Document uploaded successfully.');
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Failed to upload document.' });
   }
@@ -188,7 +209,7 @@ router.post('/documents', authenticate, authorizePermissions(Permissions.UPLOADS
     if (files.length === 0) {
       return res.status(400).json({ success: false, message: 'No document files provided.' });
     }
-    await sendMultiUploadResponse(res, files, 'document');
+    await sendMultiUploadResponse(req, res, files, 'document');
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Failed to upload documents.' });
   }
@@ -199,7 +220,7 @@ router.post('/file', authenticate, authorizePermissions(Permissions.UPLOADS_CREA
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file provided.' });
     }
-    await sendSingleUploadResponse(res, req.file, 'File uploaded successfully.');
+    await sendSingleUploadResponse(req, res, req.file, 'File uploaded successfully.');
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Failed to upload file.' });
   }
@@ -211,7 +232,7 @@ router.post('/files', authenticate, authorizePermissions(Permissions.UPLOADS_CRE
     if (files.length === 0) {
       return res.status(400).json({ success: false, message: 'No files provided.' });
     }
-    await sendMultiUploadResponse(res, files, 'file');
+    await sendMultiUploadResponse(req, res, files, 'file');
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Failed to upload files.' });
   }

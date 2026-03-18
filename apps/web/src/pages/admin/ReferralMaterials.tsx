@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Button from '../../components/ui/Button';
-import { api } from '../../services/api';
+import { api, resolveAssetUrl } from '../../services/api';
 
 const emptyForm = {
   title: '',
@@ -25,7 +25,10 @@ export default function AdminReferralMaterialsPage() {
     try {
       setLoading(true);
       const response = await api.admin.getReferralMaterials();
-      if (response.success) setRows(Array.isArray(response.data) ? response.data : []);
+      if (response.success) {
+        const rows = Array.isArray(response.data) ? response.data : [];
+        setRows(rows.map((row) => ({ ...row, imageUrl: resolveAssetUrl(row?.imageUrl || '') })));
+      }
     } catch (error: any) {
       setMessage(error?.response?.data?.message || 'Failed to load referral materials.');
     } finally {
@@ -46,7 +49,7 @@ export default function AdminReferralMaterialsPage() {
       payload.append('image', file);
       const response = await api.upload.image(payload);
       if (response?.success && response?.data?.url) {
-        setForm((prev: any) => ({ ...prev, imageUrl: String(response.data.url || '').trim() }));
+        setForm((prev: any) => ({ ...prev, imageUrl: resolveAssetUrl(String(response.data.url || '').trim()) }));
       } else {
         setMessage('Image upload failed. Please try again.');
       }
@@ -73,7 +76,8 @@ export default function AdminReferralMaterialsPage() {
         isActive: Boolean(form.isActive),
       });
       if (response.success) {
-        setRows(Array.isArray(response.data) ? response.data : []);
+        const rows = Array.isArray(response.data) ? response.data : [];
+        setRows(rows.map((row) => ({ ...row, imageUrl: resolveAssetUrl(row?.imageUrl || '') })));
         setForm(emptyForm);
         setMessage(response.message || 'Material created.');
       }
@@ -89,7 +93,8 @@ export default function AdminReferralMaterialsPage() {
       setSaving(true);
       const response = await api.admin.updateReferralMaterial(String(row.id), { isActive: !(row.isActive !== false) });
       if (response.success) {
-        setRows(Array.isArray(response.data) ? response.data : []);
+        const rows = Array.isArray(response.data) ? response.data : [];
+        setRows(rows.map((entry) => ({ ...entry, imageUrl: resolveAssetUrl(entry?.imageUrl || '') })));
       }
     } catch (error: any) {
       setMessage(error?.response?.data?.message || 'Failed to update material.');
@@ -104,7 +109,8 @@ export default function AdminReferralMaterialsPage() {
       setSaving(true);
       const response = await api.admin.deleteReferralMaterial(id);
       if (response.success) {
-        setRows(Array.isArray(response.data) ? response.data : []);
+        const rows = Array.isArray(response.data) ? response.data : [];
+        setRows(rows.map((entry) => ({ ...entry, imageUrl: resolveAssetUrl(entry?.imageUrl || '') })));
       }
     } catch (error: any) {
       setMessage(error?.response?.data?.message || 'Failed to delete material.');

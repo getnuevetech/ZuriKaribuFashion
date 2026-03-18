@@ -47,6 +47,7 @@ import adminAutomationRoutes from './routes/admin-automation';
 import adminReportsRoutes from './routes/admin-reports';
 import failedProductApprovalsRoutes from './routes/failed-product-approvals';
 import customerServiceRoutes from './routes/customer-service';
+import adminAuthenticatorRoutes from './routes/admin-authenticator';
 import { prisma } from './db';
 import { activityAuditMiddleware } from './middleware/activity-audit';
 import { runStartupRepairs } from './bootstrap';
@@ -232,6 +233,7 @@ app.use('/api/admin/designer-fabric-country-access', adminDesignerFabricCountryA
 app.use('/api/admin/designer-fabric-access', adminDesignerFabricCountryAccessRoutes);
 app.use('/api/admin/designer/fabric-country-access', adminDesignerFabricCountryAccessRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/authenticator', adminAuthenticatorRoutes);
 app.use('/api/fabric-seller', fabricSellerRoutes);
 app.use('/api/seller', fabricSellerRoutes);
 app.use('/api/designer', designerRoutes);
