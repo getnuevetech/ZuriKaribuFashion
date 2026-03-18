@@ -3,6 +3,7 @@ import { AlertCircle, MessageSquare, Paperclip, Upload, X } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
+import { useAuthStore } from '../../store/authStore';
 
 type TicketRole = 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR';
 type TicketLanguageOption = { code: string; label: string };
@@ -49,6 +50,8 @@ export default function OrderSupportModal({
   initialTab = 'details',
   onClose,
 }: OrderSupportModalProps) {
+  const { user } = useAuthStore();
+  const isCustomerUser = String(user?.role || '').toUpperCase() === 'CUSTOMER';
   const [activeTab, setActiveTab] = useState<ModalTab>(initialTab);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -89,7 +92,7 @@ export default function OrderSupportModal({
             .trim()
             .toLowerCase() || 'en'
         );
-        setSelectedRecipients(allowed.slice(0, Math.min(2, allowed.length)));
+        setSelectedRecipients(isCustomerUser ? [] : allowed.slice(0, Math.min(2, allowed.length)));
         setVisibleToCustomer(Boolean(threadData?.settings?.defaultVisibleToCustomer));
       }
     } catch (loadError: any) {
@@ -108,7 +111,7 @@ export default function OrderSupportModal({
     setMessageSourceLanguage(AUTO_LANGUAGE_CODE);
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, orderId, initialTab]);
+  }, [isOpen, orderId, initialTab, isCustomerUser]);
 
   const reloadThread = async () => {
     if (!orderId) return;
@@ -214,7 +217,7 @@ export default function OrderSupportModal({
       if (selectedSourceLanguage && selectedSourceLanguage !== AUTO_LANGUAGE_CODE) {
         payload.sourceLanguage = selectedSourceLanguage;
       }
-      if (selectedRecipients.length > 0) payload.recipientRoles = selectedRecipients;
+      if (!isCustomerUser && selectedRecipients.length > 0) payload.recipientRoles = selectedRecipients;
       if (attachmentUrls.length > 0) payload.attachments = attachmentUrls;
       if (thread?.permissions?.canControlCustomerVisibility) {
         payload.visibleToCustomer = Boolean(visibleToCustomer);
@@ -588,7 +591,7 @@ export default function OrderSupportModal({
 
             {thread?.permissions?.canPost ? (
               <div className="rounded-lg border p-3 space-y-3">
-                {allowedRecipientRoles.length > 0 ? (
+                {!isCustomerUser && allowedRecipientRoles.length > 0 ? (
                   <div>
                     <p className="text-xs font-medium text-gray-700 mb-1">Recipients</p>
                     <div className="flex flex-wrap gap-2">

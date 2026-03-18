@@ -2530,13 +2530,18 @@ router.post(
       }
       const requestedRecipientRoles = dedupeRoleTokens(payload.recipientRoles || []);
       const recipientRoles =
-        requestedRecipientRoles.length > 0
-          ? requestedRecipientRoles.filter((role) => allowedRecipientRoles.includes(role))
-          : defaultRecipientRolesForSender(userRole, allowedRecipientRoles);
+        userRole === UserRole.CUSTOMER
+          ? defaultRecipientRolesForSender(userRole, allowedRecipientRoles)
+          : requestedRecipientRoles.length > 0
+            ? requestedRecipientRoles.filter((role) => allowedRecipientRoles.includes(role))
+            : defaultRecipientRolesForSender(userRole, allowedRecipientRoles);
       if (recipientRoles.length === 0) {
         return res.status(400).json({
           success: false,
-          message: `No valid recipients selected. Allowed recipients: ${allowedRecipientRoles.map((role) => ORDER_TICKETING_ROLE_LABELS[role]).join(', ')}`,
+          message:
+            userRole === UserRole.CUSTOMER
+              ? 'No ticket recipients are configured in admin routing flow for your role.'
+              : `No valid recipients selected. Allowed recipients: ${allowedRecipientRoles.map((role) => ORDER_TICKETING_ROLE_LABELS[role]).join(', ')}`,
         });
       }
 

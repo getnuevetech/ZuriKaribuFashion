@@ -85,6 +85,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Partner API', href: '/admin/partners', icon: Settings },
     { label: 'API Diagnostics', href: '/admin/api-diagnostics', icon: Settings },
     { label: 'Order Management', href: '/admin/orders', icon: ShoppingBag },
+    { label: 'Ticket Management', href: '/admin/ticket-management', icon: MessageSquare },
     { label: 'Banners', href: '/admin/banners', icon: ImageIcon },
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
     { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: Eye },
@@ -154,6 +155,7 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isOrderMenuOpen, setIsOrderMenuOpen] = useState(true);
+  const [isTicketManagementMenuOpen, setIsTicketManagementMenuOpen] = useState(true);
   const [isPaymentMenuOpen, setIsPaymentMenuOpen] = useState(true);
   const [isAdminAccountsMenuOpen, setIsAdminAccountsMenuOpen] = useState(true);
   const [isProductManagementMenuOpen, setIsProductManagementMenuOpen] = useState(true);
@@ -207,6 +209,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/backups': ['backups:manage'],
       '/admin/partners': ['users:manage'],
       '/admin/orders': ['orders:manage'],
+      '/admin/ticket-management': ['orders:manage'],
       '/admin/banners': ['banners:manage'],
       '/admin/homepage': ['homepage:manage'],
       '/admin/homepage-visibility': ['homepage:manage'],
@@ -223,9 +226,11 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
   const orderManagementSubmenu = [
     { label: 'Order List', href: '/admin/orders?tab=list', icon: ChevronRight },
+    { label: 'Processing Workflow', href: '/admin/orders?tab=processing-workflow', icon: ChevronRight },
+  ];
+  const ticketManagementSubmenu = [
     { label: 'Ticket Queue', href: '/admin/orders?tab=ticket-queue', icon: ChevronRight },
     { label: 'Ticket Workflow', href: '/admin/orders?tab=ticketing-workflow', icon: ChevronRight },
-    { label: 'Processing Workflow', href: '/admin/orders?tab=processing-workflow', icon: ChevronRight },
   ];
   const adminAccountsSubmenu = [
     { label: 'Administrator', href: '/admin/administrators', icon: ChevronRight },
@@ -361,8 +366,15 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
         entries,
         orderManagementSubmenu
           .filter((item) => canAccessAdminNav(item.href.split('?')[0]))
-          .map((item) => ({ label: item.label, href: item.href, keywords: ['order', 'ticket', 'workflow', 'queue'] })),
+          .map((item) => ({ label: item.label, href: item.href, keywords: ['order', 'processing', 'workflow', 'delivery'] })),
         { prefix: 'Order Management' }
+      );
+      addSearchEntries(
+        entries,
+        ticketManagementSubmenu
+          .filter((item) => canAccessAdminNav(item.href.split('?')[0]))
+          .map((item) => ({ label: item.label, href: item.href, keywords: ['ticket', 'queue', 'workflow', 'routing'] })),
+        { prefix: 'Ticket Management' }
       );
       addSearchEntries(
         entries,
@@ -599,7 +611,10 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
               }
 
               if (userType === 'admin' && item.href === '/admin/orders') {
-                const orderMenuActive = location.pathname === '/admin/orders';
+                const orderMenuActive =
+                  location.pathname === '/admin/orders' &&
+                  currentTab !== 'ticket-queue' &&
+                  currentTab !== 'ticketing-workflow';
                 return (
                   <div key={item.href} className="space-y-1">
                     <button
@@ -624,6 +639,64 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                     {isOrderMenuOpen && isSidebarOpen ? (
                       <div className="ml-7 space-y-1">
                         {orderManagementSubmenu.map((subItem) => {
+                          const subMeta = readHrefMeta(subItem.href);
+                          const subActive =
+                            location.pathname === subMeta.pathname &&
+                            (subMeta.tab ? currentTab === subMeta.tab : !currentTab);
+                          const SubIcon = subItem.icon;
+                          return (
+                            <Link
+                              key={subItem.href}
+                              to={subItem.href}
+                              className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
+                                subActive
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <SubIcon className="h-4 w-4" />
+                              <span>{subItem.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+
+              if (userType === 'admin' && item.href === '/admin/ticket-management') {
+                const ticketMenuActive =
+                  location.pathname === '/admin/orders' &&
+                  (currentTab === 'ticket-queue' || currentTab === 'ticketing-workflow');
+                return (
+                  <div key={item.href} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsTicketManagementMenuOpen((prev) => !prev)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
+                        ticketMenuActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {isSidebarOpen ? (
+                        <>
+                          <span className="text-sm font-medium">Ticket Management</span>
+                          <span className="ml-auto">
+                            {isTicketManagementMenuOpen ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </span>
+                        </>
+                      ) : null}
+                    </button>
+                    {isTicketManagementMenuOpen && isSidebarOpen ? (
+                      <div className="ml-7 space-y-1">
+                        {ticketManagementSubmenu.map((subItem) => {
                           const subMeta = readHrefMeta(subItem.href);
                           const subActive =
                             location.pathname === subMeta.pathname &&
