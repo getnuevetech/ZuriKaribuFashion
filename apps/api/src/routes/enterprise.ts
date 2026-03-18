@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma, UserRole, UserStatus } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
-import { Permissions } from '../rbac';
+import { Permissions, sanitizePermissionGrants } from '../rbac';
 import {
   ENTERPRISE_PERMISSION_CATALOG,
   ENTERPRISE_STANDARD_ROLE_TEMPLATES,
@@ -25,6 +25,39 @@ const parsePagination = (pageInput: unknown, limitInput: unknown, fallbackLimit 
   const limit = Math.max(1, Math.min(200, Number(limitInput || fallbackLimit) || fallbackLimit));
   return { page, limit, skip: (page - 1) * limit };
 };
+
+const isSuperAdminRequest = (req: any) => {
+  const grants = sanitizePermissionGrants(Array.isArray(req?.user?.permissions) ? req.user.permissions : []);
+  const grantSet = new Set(grants.map((entry) => String(entry || '').trim()));
+  const lowerGrantSet = new Set(grants.map((entry) => String(entry || '').trim().toLowerCase()));
+  return grantSet.has('*') || grantSet.has('ALL') || lowerGrantSet.has('all');
+};
+
+let callerIdSchemaEnsured = false;
+async function ensureCallerIdSchemaAndBackfill() {
+  if (!callerIdSchemaEnsured) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "callerId" TEXT`);
+    await prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "User_callerId_key" ON "User"("callerId") WHERE "callerId" IS NOT NULL`
+    );
+    callerIdSchemaEnsured = true;
+  }
+  await prisma.$executeRawUnsafe(
+    `UPDATE "User"
+     SET "callerId" = (
+       CASE
+         WHEN "role"::text = 'ADMINISTRATOR' THEN 'ADM'
+         WHEN "role"::text = 'FASHION_DESIGNER' THEN 'DSN'
+         WHEN "role"::text = 'FABRIC_SELLER' THEN 'SLR'
+         WHEN "role"::text = 'RESELLER_INFLUENCER' THEN 'RSL'
+         WHEN "role"::text = 'QA_TEAM' THEN 'QAT'
+         ELSE 'CUS'
+       END
+       || '-' || UPPER(SUBSTRING(REPLACE("id", '-', '') FROM 1 FOR 10))
+     )
+     WHERE "callerId" IS NULL OR BTRIM("callerId") = ''`
+  );
+}
 
 const normalizeVendorRole = (value: unknown): 'FABRIC_SELLER' | 'FASHION_DESIGNER' | null => {
   const normalized = String(value || '')
@@ -1065,6 +1098,10 @@ router.put('/config', authorizePermissions(Permissions.VENDOR_PROFILES_REVIEW), 
 
 router.get('/accounts', authorizePermissions(Permissions.VENDOR_PROFILES_READ), async (req, res, next) => {
   try {
+    const superAdminViewer = isSuperAdminRequest(req);
+    if (superAdminViewer) {
+      await ensureCallerIdSchemaAndBackfill();
+    }
     await ensureEnterpriseSchema();
     const query = z
       .object({
@@ -1100,6 +1137,7 @@ router.get('/accounts', authorizePermissions(Permissions.VENDOR_PROFILES_READ), 
           u."email",
           u."firstName",
           u."lastName",
+          u."callerId",
           u."role",
           u."status" AS "userStatus",
           ea."id" AS "enterpriseAccountId",
@@ -1133,10 +1171,14 @@ router.get('/accounts', authorizePermissions(Permissions.VENDOR_PROFILES_READ), 
       ...values
     );
     const total = Number(countRows?.[0]?.count || 0);
+    const mappedRows = (Array.isArray(rows) ? rows : []).map((row) => ({
+      ...row,
+      callerId: superAdminViewer ? (row?.callerId ? String(row.callerId).trim() : null) : null,
+    }));
     return res.json({
       success: true,
       data: {
-        accounts: rows,
+        accounts: mappedRows,
         pagination: {
           page: pagination.page,
           limit: pagination.limit,
@@ -1325,6 +1367,10 @@ router.get(
 
 router.get('/upgrade-requests', authorizePermissions(Permissions.VENDOR_PROFILES_READ), async (req, res, next) => {
   try {
+    const superAdminViewer = isSuperAdminRequest(req);
+    if (superAdminViewer) {
+      await ensureCallerIdSchemaAndBackfill();
+    }
     await ensureEnterpriseSchema();
     const query = z
       .object({
@@ -1354,7 +1400,8 @@ router.get('/upgrade-requests', authorizePermissions(Permissions.VENDOR_PROFILES
             r.*,
             COALESCE(u."email",'') AS "ownerEmail",
             COALESCE(u."firstName",'') AS "ownerFirstName",
-            COALESCE(u."lastName",'') AS "ownerLastName"
+            COALESCE(u."lastName",'') AS "ownerLastName",
+            u."callerId" AS "ownerCallerId"
          FROM "EnterpriseUpgradeRequest" r
          LEFT JOIN "User" u ON u."id" = r."ownerUserId"
          ${whereSql}
@@ -1374,10 +1421,14 @@ router.get('/upgrade-requests', authorizePermissions(Permissions.VENDOR_PROFILES
       countRows = [{ count: 0 }];
     }
     const total = Number(countRows?.[0]?.count || 0);
+    const mappedRows = (Array.isArray(rows) ? rows : []).map((row) => ({
+      ...row,
+      ownerCallerId: superAdminViewer ? (row?.ownerCallerId ? String(row.ownerCallerId).trim() : null) : null,
+    }));
     return res.json({
       success: true,
       data: {
-        requests: rows,
+        requests: mappedRows,
         pagination: {
           page: pagination.page,
           limit: pagination.limit,

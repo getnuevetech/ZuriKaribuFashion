@@ -4,6 +4,7 @@ import Badge from '../../components/ui/Badge';
 import { api } from '../../services/api';
 import { getCityOptionsByCountryCode, getCountryOptions, resolveCountryCode, resolveCountryName } from '../../data/locationOptions';
 import { normalizePhoneWithCountryPrefix } from '../../utils/phone';
+import { useAuthStore } from '../../store/authStore';
 
 type VendorRole = 'FABRIC_SELLER' | 'FASHION_DESIGNER';
 type VendorProfileStatus = 'INCOMPLETE' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
@@ -304,6 +305,13 @@ const extractDownloadLinks = (value: unknown): string[] => {
 };
 
 export default function AdminVendorProfiles() {
+  const authUser = useAuthStore((state) => state.user);
+  const isSuperAdmin = useMemo(() => {
+    const grants = Array.isArray(authUser?.permissions) ? authUser.permissions : [];
+    const normalized = grants.map((entry) => String(entry || '').trim());
+    const lower = normalized.map((entry) => entry.toLowerCase());
+    return normalized.includes('*') || normalized.includes('ALL') || lower.includes('all');
+  }, [authUser?.permissions]);
   const [tab, setTab] = useState<'fields' | 'reviews' | 'dashboard' | 'sellerAccounts' | 'designerAccounts' | 'enterprise'>('fields');
   const [role, setRole] = useState<VendorRole>('FABRIC_SELLER');
   const [loading, setLoading] = useState(true);
@@ -1248,6 +1256,9 @@ export default function AdminVendorProfiles() {
                         {`${account.firstName || ''} ${account.lastName || ''}`.trim() || account.email}
                       </p>
                       <p className="text-xs text-gray-500">{account.email}</p>
+                      {isSuperAdmin && account.callerId ? (
+                        <p className="text-[11px] text-emerald-700">Caller ID: {String(account.callerId)}</p>
+                      ) : null}
                       <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700">
                         {String(account.vendorUuid || account.id || '').trim() || '-'}
                       </code>
@@ -1433,6 +1444,121 @@ export default function AdminVendorProfiles() {
           </div>
 
           <div className="rounded-xl border bg-white p-4 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Enterprise Upgrade Requests</h3>
+            <div className="overflow-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500">
+                    <th className="py-2 pr-3">Vendor</th>
+                    <th className="py-2 pr-3">Requested</th>
+                    <th className="py-2 pr-3">Status</th>
+                    <th className="py-2 pr-3">Payment</th>
+                    <th className="py-2">Review</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {enterpriseRequests.map((request) => {
+                    const draft = enterpriseReviewDrafts[String(request.id)] || {
+                      approvedLevelName: String(request.approvedLevelName || request.requestedLevelKey || ''),
+                      approvedSeatLimit: Number(request.approvedSeatLimit || request.requestedSeatLimit || 5),
+                      approvedYearlyFeeUsd: Number(request.approvedYearlyFeeUsd || 99),
+                      reviewNote: '',
+                    };
+                    return (
+                      <tr key={request.id} className="border-t">
+                        <td className="py-2 pr-3">
+                          <p className="font-medium text-gray-900">
+                            {`${request.ownerFirstName || ''} ${request.ownerLastName || ''}`.trim() || request.ownerEmail}
+                          </p>
+                          <p className="text-xs text-gray-500">{request.ownerEmail}</p>
+                          {isSuperAdmin && request.ownerCallerId ? (
+                            <p className="text-[11px] text-emerald-700">Caller ID: {String(request.ownerCallerId)}</p>
+                          ) : null}
+                        </td>
+                        <td className="py-2 pr-3">
+                          <p>Level: {request.requestedLevelKey || '-'}</p>
+                          <p>Seats: {request.requestedSeatLimit || '-'}</p>
+                          <p>Years: {request.requestedYears || 1}</p>
+                        </td>
+                        <td className="py-2 pr-3">{request.status}</td>
+                        <td className="py-2 pr-3">{request.paymentStatus}</td>
+                        <td className="py-2">
+                          <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+                            <input
+                              value={draft.approvedLevelName}
+                              onChange={(e) =>
+                                setEnterpriseReviewDrafts((prev) => ({
+                                  ...prev,
+                                  [request.id]: { ...draft, approvedLevelName: e.target.value },
+                                }))
+                              }
+                              placeholder="Approved level"
+                              className="rounded border px-2 py-1 text-xs"
+                            />
+                            <input
+                              type="number"
+                              min={1}
+                              value={draft.approvedSeatLimit}
+                              onChange={(e) =>
+                                setEnterpriseReviewDrafts((prev) => ({
+                                  ...prev,
+                                  [request.id]: { ...draft, approvedSeatLimit: Math.max(1, Number(e.target.value || 1)) },
+                                }))
+                              }
+                              placeholder="Seats"
+                              className="rounded border px-2 py-1 text-xs"
+                            />
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={draft.approvedYearlyFeeUsd}
+                              onChange={(e) =>
+                                setEnterpriseReviewDrafts((prev) => ({
+                                  ...prev,
+                                  [request.id]: { ...draft, approvedYearlyFeeUsd: Math.max(0, Number(e.target.value || 0)) },
+                                }))
+                              }
+                              placeholder="Yearly USD"
+                              className="rounded border px-2 py-1 text-xs"
+                            />
+                            <input
+                              value={draft.reviewNote}
+                              onChange={(e) =>
+                                setEnterpriseReviewDrafts((prev) => ({
+                                  ...prev,
+                                  [request.id]: { ...draft, reviewNote: e.target.value },
+                                }))
+                              }
+                              placeholder="Review note"
+                              className="rounded border px-2 py-1 text-xs"
+                            />
+                          </div>
+                          <div className="mt-2 flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => reviewEnterpriseRequest(String(request.id), 'REJECTED')} disabled={savingEnterprise}>
+                              Reject
+                            </Button>
+                            <Button size="sm" onClick={() => reviewEnterpriseRequest(String(request.id), 'APPROVED')} disabled={savingEnterprise}>
+                              Approve
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {enterpriseRequests.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-gray-500">
+                        No enterprise upgrade requests found.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-4">
             <h3 className="text-lg font-semibold text-gray-900">Enterprise Vendor Accounts</h3>
             <div className="overflow-auto">
               <table className="min-w-full text-sm">
@@ -1458,6 +1584,9 @@ export default function AdminVendorProfiles() {
                               {`${account.firstName || ''} ${account.lastName || ''}`.trim() || account.email}
                             </p>
                             <p className="text-xs text-gray-500">{account.email}</p>
+                            {isSuperAdmin && account.callerId ? (
+                              <p className="text-[11px] text-emerald-700">Caller ID: {String(account.callerId)}</p>
+                            ) : null}
                           </td>
                           <td className="py-2 pr-3">
                             {String(account.role || '').toUpperCase() === 'FABRIC_SELLER' ? 'Fabric Seller' : 'Fashion Designer'}
@@ -1547,118 +1676,6 @@ export default function AdminVendorProfiles() {
                     <tr>
                       <td colSpan={6} className="py-8 text-center text-gray-500">
                         No enterprise-eligible vendor accounts found.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="rounded-xl border bg-white p-4 space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900">Enterprise Upgrade Requests</h3>
-            <div className="overflow-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-500">
-                    <th className="py-2 pr-3">Vendor</th>
-                    <th className="py-2 pr-3">Requested</th>
-                    <th className="py-2 pr-3">Status</th>
-                    <th className="py-2 pr-3">Payment</th>
-                    <th className="py-2">Review</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {enterpriseRequests.map((request) => {
-                    const draft = enterpriseReviewDrafts[String(request.id)] || {
-                      approvedLevelName: String(request.approvedLevelName || request.requestedLevelKey || ''),
-                      approvedSeatLimit: Number(request.approvedSeatLimit || request.requestedSeatLimit || 5),
-                      approvedYearlyFeeUsd: Number(request.approvedYearlyFeeUsd || 99),
-                      reviewNote: '',
-                    };
-                    return (
-                      <tr key={request.id} className="border-t">
-                        <td className="py-2 pr-3">
-                          <p className="font-medium text-gray-900">
-                            {`${request.ownerFirstName || ''} ${request.ownerLastName || ''}`.trim() || request.ownerEmail}
-                          </p>
-                          <p className="text-xs text-gray-500">{request.ownerEmail}</p>
-                        </td>
-                        <td className="py-2 pr-3">
-                          <p>Level: {request.requestedLevelKey || '-'}</p>
-                          <p>Seats: {request.requestedSeatLimit || '-'}</p>
-                          <p>Years: {request.requestedYears || 1}</p>
-                        </td>
-                        <td className="py-2 pr-3">{request.status}</td>
-                        <td className="py-2 pr-3">{request.paymentStatus}</td>
-                        <td className="py-2">
-                          <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
-                            <input
-                              value={draft.approvedLevelName}
-                              onChange={(e) =>
-                                setEnterpriseReviewDrafts((prev) => ({
-                                  ...prev,
-                                  [request.id]: { ...draft, approvedLevelName: e.target.value },
-                                }))
-                              }
-                              placeholder="Approved level"
-                              className="rounded border px-2 py-1 text-xs"
-                            />
-                            <input
-                              type="number"
-                              min={1}
-                              value={draft.approvedSeatLimit}
-                              onChange={(e) =>
-                                setEnterpriseReviewDrafts((prev) => ({
-                                  ...prev,
-                                  [request.id]: { ...draft, approvedSeatLimit: Math.max(1, Number(e.target.value || 1)) },
-                                }))
-                              }
-                              placeholder="Seats"
-                              className="rounded border px-2 py-1 text-xs"
-                            />
-                            <input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              value={draft.approvedYearlyFeeUsd}
-                              onChange={(e) =>
-                                setEnterpriseReviewDrafts((prev) => ({
-                                  ...prev,
-                                  [request.id]: { ...draft, approvedYearlyFeeUsd: Math.max(0, Number(e.target.value || 0)) },
-                                }))
-                              }
-                              placeholder="Yearly USD"
-                              className="rounded border px-2 py-1 text-xs"
-                            />
-                            <input
-                              value={draft.reviewNote}
-                              onChange={(e) =>
-                                setEnterpriseReviewDrafts((prev) => ({
-                                  ...prev,
-                                  [request.id]: { ...draft, reviewNote: e.target.value },
-                                }))
-                              }
-                              placeholder="Review note"
-                              className="rounded border px-2 py-1 text-xs"
-                            />
-                          </div>
-                          <div className="mt-2 flex gap-2">
-                            <Button size="sm" variant="outline" onClick={() => reviewEnterpriseRequest(String(request.id), 'REJECTED')} disabled={savingEnterprise}>
-                              Reject
-                            </Button>
-                            <Button size="sm" onClick={() => reviewEnterpriseRequest(String(request.id), 'APPROVED')} disabled={savingEnterprise}>
-                              Approve
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {enterpriseRequests.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-8 text-center text-gray-500">
-                        No enterprise upgrade requests found.
                       </td>
                     </tr>
                   ) : null}

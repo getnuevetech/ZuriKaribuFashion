@@ -109,6 +109,44 @@ async function ensureUserCallerIdSchema() {
   userCallerIdSchemaEnsured = true;
 }
 
+let userCallerIdBackfillEnsured = false;
+const resolveCallerIdPrefix = (role: unknown) => {
+  const token = String(role || '').trim().toUpperCase();
+  if (token === 'ADMINISTRATOR') return 'ADM';
+  if (token === 'FASHION_DESIGNER') return 'DSN';
+  if (token === 'FABRIC_SELLER') return 'SLR';
+  if (token === 'RESELLER_INFLUENCER') return 'RSL';
+  if (token === 'QA_TEAM') return 'QAT';
+  return 'CUS';
+};
+
+const buildGeneratedCallerId = (role: unknown, userId: string) =>
+  `${resolveCallerIdPrefix(role)}-${String(userId || '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toUpperCase()
+    .slice(0, 10)}`;
+
+async function ensureCallerIdsBackfilled() {
+  await ensureUserCallerIdSchema();
+  if (userCallerIdBackfillEnsured) return;
+  await prisma.$executeRawUnsafe(
+    `UPDATE "User"
+     SET "callerId" = (
+       CASE
+         WHEN "role"::text = 'ADMINISTRATOR' THEN 'ADM'
+         WHEN "role"::text = 'FASHION_DESIGNER' THEN 'DSN'
+         WHEN "role"::text = 'FABRIC_SELLER' THEN 'SLR'
+         WHEN "role"::text = 'RESELLER_INFLUENCER' THEN 'RSL'
+         WHEN "role"::text = 'QA_TEAM' THEN 'QAT'
+         ELSE 'CUS'
+       END
+       || '-' || UPPER(SUBSTRING(REPLACE("id", '-', '') FROM 1 FOR 10))
+     )
+     WHERE "callerId" IS NULL OR BTRIM("callerId") = ''`
+  );
+  userCallerIdBackfillEnsured = true;
+}
+
 const getVendorDisplayName = (input: {
   id: string;
   roleLabel: 'Designer' | 'Fabric Seller';
@@ -1995,7 +2033,7 @@ router.get('/users', async (req, res, next) => {
       ])
     );
     if (superAdminViewer) {
-      await ensureUserCallerIdSchema();
+      await ensureCallerIdsBackfilled();
     }
     const callerIdRows =
       superAdminViewer && userIds.length > 0
@@ -2136,11 +2174,10 @@ router.post('/users', async (req, res, next) => {
         displayName: `${created.firstName} ${created.lastName}`.trim(),
       });
     }
-    if (normalizedCallerId) {
-      await ensureUserCallerIdSchema();
-      await prisma.$executeRawUnsafe(`UPDATE "User" SET "callerId" = $2 WHERE "id" = $1`, created.id, normalizedCallerId);
-      (created as any).callerId = normalizedCallerId;
-    }
+    const callerIdToPersist = normalizedCallerId || buildGeneratedCallerId(data.role, created.id);
+    await ensureUserCallerIdSchema();
+    await prisma.$executeRawUnsafe(`UPDATE "User" SET "callerId" = $2 WHERE "id" = $1`, created.id, callerIdToPersist);
+    (created as any).callerId = callerIdToPersist;
     await markTemporaryPasswordRequired(created.id);
 
     res.status(201).json({
@@ -3502,6 +3539,10 @@ router.get('/3d-tryon/insights', handleGetTryOnInsights);
 
 router.get('/vendor-profiles', async (req, res, next) => {
   try {
+    const superAdminViewer = isSuperAdminRequest(req);
+    if (superAdminViewer) {
+      await ensureCallerIdsBackfilled();
+    }
     const schema = z.object({
       role: vendorRoleSchema.optional(),
       status: vendorProfileStatusSchema.optional(),
@@ -3536,6 +3577,25 @@ router.get('/vendor-profiles', async (req, res, next) => {
           }),
       getVendorSubmissionRows(),
     ]);
+    const callerIdByUserId = new Map<string, string | null>();
+    if (superAdminViewer) {
+      const userIds = Array.from(
+        new Set(
+          [...(Array.isArray(sellers) ? sellers : []), ...(Array.isArray(designers) ? designers : [])]
+            .map((profile: any) => String(profile?.userId || '').trim())
+            .filter(Boolean)
+        )
+      );
+      if (userIds.length > 0) {
+        const callerIdRows = await prisma.$queryRawUnsafe<Array<{ id: string; callerId: string | null }>>(
+          `SELECT "id","callerId" FROM "User" WHERE "id" = ANY($1::text[])`,
+          userIds
+        );
+        callerIdRows.forEach((row) => {
+          callerIdByUserId.set(String(row.id), String(row.callerId || '').trim() || null);
+        });
+      }
+    }
 
     const rows = [
       ...sellers.map((profile) => {
@@ -3562,7 +3622,10 @@ router.get('/vendor-profiles', async (req, res, next) => {
           permanentRejectionAt: submission?.permanentRejectionAt || null,
           permanentDisableAt: submission?.permanentDisableAt || null,
           profileData: submission?.profileData || {},
-          user: profile.user,
+          user: {
+            ...profile.user,
+            callerId: superAdminViewer ? callerIdByUserId.get(String(profile.userId || '')) || null : null,
+          },
           updatedAt: submission?.updatedAt || profile.updatedAt,
         };
       }),
@@ -3590,7 +3653,10 @@ router.get('/vendor-profiles', async (req, res, next) => {
           permanentRejectionAt: submission?.permanentRejectionAt || null,
           permanentDisableAt: submission?.permanentDisableAt || null,
           profileData: submission?.profileData || {},
-          user: profile.user,
+          user: {
+            ...profile.user,
+            callerId: superAdminViewer ? callerIdByUserId.get(String(profile.userId || '')) || null : null,
+          },
           updatedAt: submission?.updatedAt || profile.updatedAt,
         };
       }),
@@ -3626,6 +3692,10 @@ router.get('/vendor-profiles', async (req, res, next) => {
 
 router.get('/vendor-profiles/:role/:userId', async (req, res, next) => {
   try {
+    const superAdminViewer = isSuperAdminRequest(req);
+    if (superAdminViewer) {
+      await ensureCallerIdsBackfilled();
+    }
     const role = vendorRoleSchema.parse(String(req.params.role || ''));
     const userId = String(req.params.userId || '');
     const submissionColumns = await readTableColumns('VendorProfileSubmission');
@@ -3667,11 +3737,22 @@ router.get('/vendor-profiles/:role/:userId', async (req, res, next) => {
       if (!profile) {
         return res.status(404).json({ success: false, message: 'Vendor profile not found.' });
       }
+      const callerIdRows =
+        superAdminViewer
+          ? await prisma.$queryRawUnsafe<Array<{ callerId: string | null }>>(
+              `SELECT "callerId" FROM "User" WHERE "id" = $1 LIMIT 1`,
+              userId
+            )
+          : [];
+      const callerId = superAdminViewer ? String(callerIdRows[0]?.callerId || '').trim() || null : null;
       return res.json({
         success: true,
         data: {
           role,
-          user: profile.user,
+          user: {
+            ...profile.user,
+            callerId,
+          },
           profile: {
             ...profile,
             profileStatus: submission ? normalizeVendorProfileStatus(submission.profileStatus) : 'INCOMPLETE',
@@ -3698,11 +3779,22 @@ router.get('/vendor-profiles/:role/:userId', async (req, res, next) => {
     if (!profile) {
       return res.status(404).json({ success: false, message: 'Vendor profile not found.' });
     }
+    const callerIdRows =
+      superAdminViewer
+        ? await prisma.$queryRawUnsafe<Array<{ callerId: string | null }>>(
+            `SELECT "callerId" FROM "User" WHERE "id" = $1 LIMIT 1`,
+            userId
+          )
+        : [];
+    const callerId = superAdminViewer ? String(callerIdRows[0]?.callerId || '').trim() || null : null;
     return res.json({
       success: true,
       data: {
         role,
-        user: profile.user,
+        user: {
+          ...profile.user,
+          callerId,
+        },
         profile: {
           ...profile,
           profileStatus: submission ? normalizeVendorProfileStatus(submission.profileStatus) : 'INCOMPLETE',

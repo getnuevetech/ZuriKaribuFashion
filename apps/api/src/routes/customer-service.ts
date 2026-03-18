@@ -36,6 +36,41 @@ type SupportSettings = {
   voipEnabled: boolean;
   voipProvider: string;
   voipCallBaseUrl: string;
+  pbxEnabled: boolean;
+  pbxDeploymentMode: 'LOCAL_HOSTED' | 'EXTERNAL_PROVIDER';
+  pbxHost: string;
+  pbxPort: number;
+  pbxTransport: 'UDP' | 'TCP' | 'TLS' | 'WS' | 'WSS';
+  pbxWebSocketUrl: string;
+  pbxRealm: string;
+  pbxContext: string;
+  pbxExtensionPrefix: string;
+  pbxExtensionDigits: number;
+  pbxExtensionNext: number;
+  pbxRecordingEnabled: boolean;
+  pbxCodecPreferences: string[];
+  pbxEmergencyNumbers: string[];
+  pbxTrunks: Array<{
+    id: string;
+    name: string;
+    enabled: boolean;
+    host: string;
+    port: number;
+    transport: 'UDP' | 'TCP' | 'TLS' | 'WS' | 'WSS';
+    username: string;
+    authType: 'IP' | 'CREDENTIALS';
+    inboundPrefix: string;
+    outboundPrefix: string;
+  }>;
+  pbxQueues: Array<{
+    id: string;
+    name: string;
+    extension: string;
+    strategy: 'RING_ALL' | 'ROUND_ROBIN' | 'LEAST_RECENT' | 'FEWEST_CALLS';
+    maxWaitSeconds: number;
+    members: string[];
+    enabled: boolean;
+  }>;
   voipRoutes: Array<{
     id: string;
     name: string;
@@ -87,6 +122,22 @@ const DEFAULT_SUPPORT_SETTINGS: SupportSettings = {
   voipEnabled: false,
   voipProvider: 'INTERNAL',
   voipCallBaseUrl: '',
+  pbxEnabled: false,
+  pbxDeploymentMode: 'LOCAL_HOSTED',
+  pbxHost: '127.0.0.1',
+  pbxPort: 5060,
+  pbxTransport: 'UDP',
+  pbxWebSocketUrl: '',
+  pbxRealm: 'zurikaribu.local',
+  pbxContext: 'default',
+  pbxExtensionPrefix: '9',
+  pbxExtensionDigits: 4,
+  pbxExtensionNext: 1001,
+  pbxRecordingEnabled: false,
+  pbxCodecPreferences: ['OPUS', 'PCMU', 'PCMA'],
+  pbxEmergencyNumbers: ['911', '112'],
+  pbxTrunks: [],
+  pbxQueues: [],
   voipRoutes: [],
   voipTransferTargets: [],
   emailIngestEnabled: false,
@@ -116,6 +167,51 @@ const supportSettingsPatchSchema = z
     voipEnabled: z.boolean().optional(),
     voipProvider: z.string().trim().max(120).optional(),
     voipCallBaseUrl: z.string().trim().max(2000).optional(),
+    pbxEnabled: z.boolean().optional(),
+    pbxDeploymentMode: z.enum(['LOCAL_HOSTED', 'EXTERNAL_PROVIDER']).optional(),
+    pbxHost: z.string().trim().max(255).optional(),
+    pbxPort: z.number().int().min(1).max(65535).optional(),
+    pbxTransport: z.enum(['UDP', 'TCP', 'TLS', 'WS', 'WSS']).optional(),
+    pbxWebSocketUrl: z.string().trim().max(2000).optional(),
+    pbxRealm: z.string().trim().max(120).optional(),
+    pbxContext: z.string().trim().max(120).optional(),
+    pbxExtensionPrefix: z.string().trim().max(12).optional(),
+    pbxExtensionDigits: z.number().int().min(2).max(8).optional(),
+    pbxExtensionNext: z.number().int().min(1).max(99999999).optional(),
+    pbxRecordingEnabled: z.boolean().optional(),
+    pbxCodecPreferences: z.array(z.string().trim().min(1).max(32)).max(20).optional(),
+    pbxEmergencyNumbers: z.array(z.string().trim().min(2).max(32)).max(20).optional(),
+    pbxTrunks: z
+      .array(
+        z.object({
+          id: z.string().trim().min(1).max(80),
+          name: z.string().trim().min(1).max(140),
+          enabled: z.boolean().optional(),
+          host: z.string().trim().max(255).optional(),
+          port: z.number().int().min(1).max(65535).optional(),
+          transport: z.enum(['UDP', 'TCP', 'TLS', 'WS', 'WSS']).optional(),
+          username: z.string().trim().max(120).optional(),
+          authType: z.enum(['IP', 'CREDENTIALS']).optional(),
+          inboundPrefix: z.string().trim().max(32).optional(),
+          outboundPrefix: z.string().trim().max(32).optional(),
+        })
+      )
+      .max(200)
+      .optional(),
+    pbxQueues: z
+      .array(
+        z.object({
+          id: z.string().trim().min(1).max(80),
+          name: z.string().trim().min(1).max(140),
+          extension: z.string().trim().max(32).optional(),
+          strategy: z.enum(['RING_ALL', 'ROUND_ROBIN', 'LEAST_RECENT', 'FEWEST_CALLS']).optional(),
+          maxWaitSeconds: z.number().int().min(5).max(7200).optional(),
+          members: z.array(z.string().trim().min(1).max(64)).max(200).optional(),
+          enabled: z.boolean().optional(),
+        })
+      )
+      .max(200)
+      .optional(),
     voipRoutes: z
       .array(
         z.object({
@@ -313,6 +409,29 @@ const voipTransferTargetItemSchema = z.object({
   targetId: z.string().trim().max(120).optional(),
 });
 
+const pbxTrunkItemSchema = z.object({
+  id: z.string().trim().min(1).max(80),
+  name: z.string().trim().min(1).max(140),
+  enabled: z.boolean().optional(),
+  host: z.string().trim().max(255).optional(),
+  port: z.number().int().min(1).max(65535).optional(),
+  transport: z.enum(['UDP', 'TCP', 'TLS', 'WS', 'WSS']).optional(),
+  username: z.string().trim().max(120).optional(),
+  authType: z.enum(['IP', 'CREDENTIALS']).optional(),
+  inboundPrefix: z.string().trim().max(32).optional(),
+  outboundPrefix: z.string().trim().max(32).optional(),
+});
+
+const pbxQueueItemSchema = z.object({
+  id: z.string().trim().min(1).max(80),
+  name: z.string().trim().min(1).max(140),
+  extension: z.string().trim().max(32).optional(),
+  strategy: z.enum(['RING_ALL', 'ROUND_ROBIN', 'LEAST_RECENT', 'FEWEST_CALLS']).optional(),
+  maxWaitSeconds: z.number().int().min(5).max(7200).optional(),
+  members: z.array(z.string().trim().min(1).max(64)).max(200).optional(),
+  enabled: z.boolean().optional(),
+});
+
 const whatsappRouteItemSchema = z.object({
   id: z.string().trim().min(1).max(80),
   name: z.string().trim().min(1).max(140),
@@ -406,6 +525,39 @@ function normalizeSettings(value: unknown): SupportSettings {
       targetId: String(entry.targetId || '').trim().slice(0, 120),
     }))
     .filter((entry) => entry.id && entry.name);
+  const normalizedPbxTrunks = (Array.isArray(source.pbxTrunks) ? source.pbxTrunks : [])
+    .map((entry) => parseObject(entry))
+    .map((entry) => ({
+      id: String(entry.id || randomUUID()).trim().slice(0, 80),
+      name: String(entry.name || 'PBX Trunk').trim().slice(0, 140) || 'PBX Trunk',
+      enabled: entry.enabled !== false,
+      host: String(entry.host || '').trim().slice(0, 255),
+      port: Math.max(1, Math.min(65535, Number(entry.port || 5060))),
+      transport: (['UDP', 'TCP', 'TLS', 'WS', 'WSS'].includes(String(entry.transport || '').toUpperCase())
+        ? String(entry.transport || '').toUpperCase()
+        : 'UDP') as 'UDP' | 'TCP' | 'TLS' | 'WS' | 'WSS',
+      username: String(entry.username || '').trim().slice(0, 120),
+      authType: (['IP', 'CREDENTIALS'].includes(String(entry.authType || '').toUpperCase())
+        ? String(entry.authType || '').toUpperCase()
+        : 'CREDENTIALS') as 'IP' | 'CREDENTIALS',
+      inboundPrefix: String(entry.inboundPrefix || '').trim().slice(0, 32),
+      outboundPrefix: String(entry.outboundPrefix || '').trim().slice(0, 32),
+    }))
+    .filter((entry) => entry.id && entry.name);
+  const normalizedPbxQueues = (Array.isArray(source.pbxQueues) ? source.pbxQueues : [])
+    .map((entry) => parseObject(entry))
+    .map((entry) => ({
+      id: String(entry.id || randomUUID()).trim().slice(0, 80),
+      name: String(entry.name || 'PBX Queue').trim().slice(0, 140) || 'PBX Queue',
+      extension: String(entry.extension || '').trim().slice(0, 32),
+      strategy: (['RING_ALL', 'ROUND_ROBIN', 'LEAST_RECENT', 'FEWEST_CALLS'].includes(String(entry.strategy || '').toUpperCase())
+        ? String(entry.strategy || '').toUpperCase()
+        : 'RING_ALL') as 'RING_ALL' | 'ROUND_ROBIN' | 'LEAST_RECENT' | 'FEWEST_CALLS',
+      maxWaitSeconds: Math.max(5, Math.min(7200, Number(entry.maxWaitSeconds || 60))),
+      members: dedupeStrings(parseArray(entry.members)).slice(0, 200),
+      enabled: entry.enabled !== false,
+    }))
+    .filter((entry) => entry.id && entry.name);
   const normalizedWhatsappRoutes = (Array.isArray(source.whatsappRoutes) ? source.whatsappRoutes : [])
     .map((entry) => parseObject(entry))
     .map((entry) => ({
@@ -442,6 +594,36 @@ function normalizeSettings(value: unknown): SupportSettings {
     voipEnabled: source.voipEnabled === true,
     voipProvider: String(source.voipProvider || DEFAULT_SUPPORT_SETTINGS.voipProvider).trim() || 'INTERNAL',
     voipCallBaseUrl: String(source.voipCallBaseUrl || '').trim(),
+    pbxEnabled: source.pbxEnabled === true,
+    pbxDeploymentMode:
+      String(source.pbxDeploymentMode || DEFAULT_SUPPORT_SETTINGS.pbxDeploymentMode).trim().toUpperCase() ===
+      'EXTERNAL_PROVIDER'
+        ? 'EXTERNAL_PROVIDER'
+        : 'LOCAL_HOSTED',
+    pbxHost: String(source.pbxHost || DEFAULT_SUPPORT_SETTINGS.pbxHost).trim().slice(0, 255) || DEFAULT_SUPPORT_SETTINGS.pbxHost,
+    pbxPort: Math.max(1, Math.min(65535, Number(source.pbxPort || DEFAULT_SUPPORT_SETTINGS.pbxPort))),
+    pbxTransport: (['UDP', 'TCP', 'TLS', 'WS', 'WSS'].includes(String(source.pbxTransport || '').toUpperCase())
+      ? String(source.pbxTransport || '').toUpperCase()
+      : DEFAULT_SUPPORT_SETTINGS.pbxTransport) as 'UDP' | 'TCP' | 'TLS' | 'WS' | 'WSS',
+    pbxWebSocketUrl: String(source.pbxWebSocketUrl || '').trim().slice(0, 2000),
+    pbxRealm:
+      String(source.pbxRealm || DEFAULT_SUPPORT_SETTINGS.pbxRealm).trim().slice(0, 120) ||
+      DEFAULT_SUPPORT_SETTINGS.pbxRealm,
+    pbxContext:
+      String(source.pbxContext || DEFAULT_SUPPORT_SETTINGS.pbxContext).trim().slice(0, 120) ||
+      DEFAULT_SUPPORT_SETTINGS.pbxContext,
+    pbxExtensionPrefix:
+      String(source.pbxExtensionPrefix || DEFAULT_SUPPORT_SETTINGS.pbxExtensionPrefix).trim().slice(0, 12) ||
+      DEFAULT_SUPPORT_SETTINGS.pbxExtensionPrefix,
+    pbxExtensionDigits: Math.max(2, Math.min(8, Number(source.pbxExtensionDigits || DEFAULT_SUPPORT_SETTINGS.pbxExtensionDigits))),
+    pbxExtensionNext: Math.max(1, Math.floor(Number(source.pbxExtensionNext || DEFAULT_SUPPORT_SETTINGS.pbxExtensionNext))),
+    pbxRecordingEnabled: source.pbxRecordingEnabled === true,
+    pbxCodecPreferences: dedupeStrings(parseArray(source.pbxCodecPreferences || DEFAULT_SUPPORT_SETTINGS.pbxCodecPreferences)).slice(0, 20),
+    pbxEmergencyNumbers: dedupeStrings(parseArray(source.pbxEmergencyNumbers || DEFAULT_SUPPORT_SETTINGS.pbxEmergencyNumbers))
+      .map((entry) => entry.slice(0, 32))
+      .slice(0, 20),
+    pbxTrunks: normalizedPbxTrunks,
+    pbxQueues: normalizedPbxQueues,
     voipRoutes: normalizedVoipRoutes,
     voipTransferTargets: normalizedTransferTargets,
     emailIngestEnabled: source.emailIngestEnabled === true,
@@ -534,6 +716,21 @@ async function ensureSchema() {
       );
       await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "callerId" TEXT`);
       await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "User_callerId_key" ON "User"("callerId") WHERE "callerId" IS NOT NULL`);
+      await prisma.$executeRawUnsafe(
+        `UPDATE "User"
+         SET "callerId" = (
+           CASE
+             WHEN "role"::text = 'ADMINISTRATOR' THEN 'ADM'
+             WHEN "role"::text = 'FASHION_DESIGNER' THEN 'DSN'
+             WHEN "role"::text = 'FABRIC_SELLER' THEN 'SLR'
+             WHEN "role"::text = 'RESELLER_INFLUENCER' THEN 'RSL'
+             WHEN "role"::text = 'QA_TEAM' THEN 'QAT'
+             ELSE 'CUS'
+           END
+           || '-' || UPPER(SUBSTRING(REPLACE("id", '-', '') FROM 1 FOR 10))
+         )
+         WHERE "callerId" IS NULL OR BTRIM("callerId") = ''`
+      );
       try {
         await prisma.$executeRawUnsafe(`ALTER TABLE "OrderTicketMessage" ADD COLUMN IF NOT EXISTS "senderDisplayName" TEXT`);
       } catch {
@@ -2372,6 +2569,24 @@ router.get(
           enabled: settings.voipEnabled,
           provider: settings.voipProvider,
           callBaseUrl: settings.voipCallBaseUrl,
+          pbx: {
+            enabled: settings.pbxEnabled,
+            deploymentMode: settings.pbxDeploymentMode,
+            host: settings.pbxHost,
+            port: settings.pbxPort,
+            transport: settings.pbxTransport,
+            webSocketUrl: settings.pbxWebSocketUrl,
+            realm: settings.pbxRealm,
+            context: settings.pbxContext,
+            extensionPrefix: settings.pbxExtensionPrefix,
+            extensionDigits: settings.pbxExtensionDigits,
+            extensionNext: settings.pbxExtensionNext,
+            recordingEnabled: settings.pbxRecordingEnabled,
+            codecPreferences: settings.pbxCodecPreferences,
+            emergencyNumbers: settings.pbxEmergencyNumbers,
+            trunks: settings.pbxTrunks,
+            queues: settings.pbxQueues,
+          },
           routes: settings.voipRoutes,
           transferTargets: settings.voipTransferTargets,
         },
@@ -2393,6 +2608,26 @@ router.patch(
           enabled: z.boolean().optional(),
           provider: z.string().trim().max(120).optional(),
           callBaseUrl: z.string().trim().max(2000).optional(),
+          pbx: z
+            .object({
+              enabled: z.boolean().optional(),
+              deploymentMode: z.enum(['LOCAL_HOSTED', 'EXTERNAL_PROVIDER']).optional(),
+              host: z.string().trim().max(255).optional(),
+              port: z.number().int().min(1).max(65535).optional(),
+              transport: z.enum(['UDP', 'TCP', 'TLS', 'WS', 'WSS']).optional(),
+              webSocketUrl: z.string().trim().max(2000).optional(),
+              realm: z.string().trim().max(120).optional(),
+              context: z.string().trim().max(120).optional(),
+              extensionPrefix: z.string().trim().max(12).optional(),
+              extensionDigits: z.number().int().min(2).max(8).optional(),
+              extensionNext: z.number().int().min(1).max(99999999).optional(),
+              recordingEnabled: z.boolean().optional(),
+              codecPreferences: z.array(z.string().trim().min(1).max(32)).max(20).optional(),
+              emergencyNumbers: z.array(z.string().trim().min(2).max(32)).max(20).optional(),
+              trunks: z.array(pbxTrunkItemSchema).max(200).optional(),
+              queues: z.array(pbxQueueItemSchema).max(200).optional(),
+            })
+            .optional(),
           routes: z.array(voipRouteItemSchema).max(200).optional(),
           transferTargets: z.array(voipTransferTargetItemSchema).max(200).optional(),
         })
@@ -2402,6 +2637,47 @@ router.patch(
         voipEnabled: payload.data.enabled,
         voipProvider: payload.data.provider,
         voipCallBaseUrl: payload.data.callBaseUrl,
+        pbxEnabled: payload.data.pbx?.enabled,
+        pbxDeploymentMode: payload.data.pbx?.deploymentMode,
+        pbxHost: payload.data.pbx?.host,
+        pbxPort: payload.data.pbx?.port,
+        pbxTransport: payload.data.pbx?.transport,
+        pbxWebSocketUrl: payload.data.pbx?.webSocketUrl,
+        pbxRealm: payload.data.pbx?.realm,
+        pbxContext: payload.data.pbx?.context,
+        pbxExtensionPrefix: payload.data.pbx?.extensionPrefix,
+        pbxExtensionDigits: payload.data.pbx?.extensionDigits,
+        pbxExtensionNext: payload.data.pbx?.extensionNext,
+        pbxRecordingEnabled: payload.data.pbx?.recordingEnabled,
+        pbxCodecPreferences: payload.data.pbx?.codecPreferences,
+        pbxEmergencyNumbers: payload.data.pbx?.emergencyNumbers,
+        pbxTrunks: payload.data.pbx?.trunks
+          ? payload.data.pbx.trunks.map((trunk) => ({
+              id: String(trunk.id || '').trim(),
+              name: String(trunk.name || '').trim(),
+              enabled: trunk.enabled !== false,
+              host: String(trunk.host || '').trim(),
+              port: Math.max(1, Math.min(65535, Number(trunk.port || 5060))),
+              transport: trunk.transport || 'UDP',
+              username: String(trunk.username || '').trim(),
+              authType: trunk.authType || 'CREDENTIALS',
+              inboundPrefix: String(trunk.inboundPrefix || '').trim(),
+              outboundPrefix: String(trunk.outboundPrefix || '').trim(),
+            }))
+          : undefined,
+        pbxQueues: payload.data.pbx?.queues
+          ? payload.data.pbx.queues.map((queue) => ({
+              id: String(queue.id || '').trim(),
+              name: String(queue.name || '').trim(),
+              extension: String(queue.extension || '').trim(),
+              strategy: queue.strategy || 'RING_ALL',
+              maxWaitSeconds: Math.max(5, Math.min(7200, Number(queue.maxWaitSeconds || 60))),
+              members: dedupeStrings(Array.isArray(queue.members) ? queue.members : []).map((member) =>
+                String(member || '').trim()
+              ),
+              enabled: queue.enabled !== false,
+            }))
+          : undefined,
         voipRoutes: payload.data.routes
           ? payload.data.routes.map((route) => ({
               id: String(route.id || '').trim(),
@@ -2429,6 +2705,24 @@ router.patch(
           enabled: updated.voipEnabled,
           provider: updated.voipProvider,
           callBaseUrl: updated.voipCallBaseUrl,
+          pbx: {
+            enabled: updated.pbxEnabled,
+            deploymentMode: updated.pbxDeploymentMode,
+            host: updated.pbxHost,
+            port: updated.pbxPort,
+            transport: updated.pbxTransport,
+            webSocketUrl: updated.pbxWebSocketUrl,
+            realm: updated.pbxRealm,
+            context: updated.pbxContext,
+            extensionPrefix: updated.pbxExtensionPrefix,
+            extensionDigits: updated.pbxExtensionDigits,
+            extensionNext: updated.pbxExtensionNext,
+            recordingEnabled: updated.pbxRecordingEnabled,
+            codecPreferences: updated.pbxCodecPreferences,
+            emergencyNumbers: updated.pbxEmergencyNumbers,
+            trunks: updated.pbxTrunks,
+            queues: updated.pbxQueues,
+          },
           routes: updated.voipRoutes,
           transferTargets: updated.voipTransferTargets,
         },
@@ -2842,7 +3136,13 @@ router.post('/voip/calls/start', authenticate, async (req: any, res) => {
     const routeId = selectedRoute?.id ? String(selectedRoute.id) : null;
     const callLink = settings.voipCallBaseUrl
       ? `${settings.voipCallBaseUrl.replace(/\/+$/, '')}/${callId}`
-      : `voip://${callId}`;
+      : settings.pbxEnabled && settings.pbxHost && toCallerId
+        ? `sip:${encodeURIComponent(String(toCallerId))}@${settings.pbxHost}:${settings.pbxPort};transport=${String(
+            settings.pbxTransport || 'UDP'
+          ).toLowerCase()}`
+        : settings.pbxEnabled && settings.pbxWebSocketUrl
+          ? `${settings.pbxWebSocketUrl.replace(/\/+$/, '')}/dial/${callId}`
+          : `voip://${callId}`;
     await prisma.$executeRawUnsafe(
       `INSERT INTO "SupportVoipCall"
         ("id","routeId","contextType","contextId","fromUserId","toUserId","fromCallerId","toCallerId","status","provider","callLink","metadata","startedAt","createdAt","updatedAt")

@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma, UserRole, UserStatus } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
-import { Permissions } from '../rbac';
+import { Permissions, sanitizePermissionGrants } from '../rbac';
 import {
   createReferralMaterial,
   deleteReferralMaterial,
@@ -28,6 +28,39 @@ router.use(async (_req, _res, next) => {
     next(error);
   }
 });
+
+const isSuperAdminRequest = (req: any) => {
+  const grants = sanitizePermissionGrants(Array.isArray(req?.user?.permissions) ? req.user.permissions : []);
+  const grantSet = new Set(grants.map((entry) => String(entry || '').trim()));
+  const lowerGrantSet = new Set(grants.map((entry) => String(entry || '').trim().toLowerCase()));
+  return grantSet.has('*') || grantSet.has('ALL') || lowerGrantSet.has('all');
+};
+
+let callerIdSchemaEnsured = false;
+async function ensureCallerIdSchemaAndBackfill() {
+  if (!callerIdSchemaEnsured) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "callerId" TEXT`);
+    await prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "User_callerId_key" ON "User"("callerId") WHERE "callerId" IS NOT NULL`
+    );
+    callerIdSchemaEnsured = true;
+  }
+  await prisma.$executeRawUnsafe(
+    `UPDATE "User"
+     SET "callerId" = (
+       CASE
+         WHEN "role"::text = 'ADMINISTRATOR' THEN 'ADM'
+         WHEN "role"::text = 'FASHION_DESIGNER' THEN 'DSN'
+         WHEN "role"::text = 'FABRIC_SELLER' THEN 'SLR'
+         WHEN "role"::text = 'RESELLER_INFLUENCER' THEN 'RSL'
+         WHEN "role"::text = 'QA_TEAM' THEN 'QAT'
+         ELSE 'CUS'
+       END
+       || '-' || UPPER(SUBSTRING(REPLACE("id", '-', '') FROM 1 FOR 10))
+     )
+     WHERE "callerId" IS NULL OR BTRIM("callerId") = ''`
+  );
+}
 
 const resellerCreateSchema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase().trim()),
@@ -178,6 +211,10 @@ router.patch(
 
 router.get('/resellers', authorizePermissions(Permissions.USERS_READ), async (req, res, next) => {
   try {
+    const superAdminViewer = isSuperAdminRequest(req);
+    if (superAdminViewer) {
+      await ensureCallerIdSchemaAndBackfill();
+    }
     const querySchema = z.object({
       search: z.string().optional(),
       page: z.coerce.number().int().min(1).optional(),
@@ -185,9 +222,28 @@ router.get('/resellers', authorizePermissions(Permissions.USERS_READ), async (re
     });
     const query = querySchema.parse(req.query || {});
     const result = await listResellerInfluencersWithMetrics(query);
+    const rows = Array.isArray(result.rows) ? result.rows : [];
+    const userIds = rows.map((row) => String(row?.userId || '').trim()).filter(Boolean);
+    const callerIdRows =
+      superAdminViewer && userIds.length > 0
+        ? await prisma.$queryRawUnsafe<Array<{ id: string; callerId: string | null }>>(
+            `SELECT "id","callerId" FROM "User" WHERE "id" = ANY($1::text[])`,
+            userIds
+          )
+        : [];
+    const callerIdByUserId = new Map(
+      callerIdRows.map((row) => [String(row.id), String(row.callerId || '').trim() || null])
+    );
+    const mappedRows = rows.map((row) => ({
+      ...row,
+      user: {
+        ...(row?.user || {}),
+        callerId: superAdminViewer ? callerIdByUserId.get(String(row?.userId || '')) || null : null,
+      },
+    }));
     res.json({
       success: true,
-      data: result.rows,
+      data: mappedRows,
       pagination: result.pagination,
     });
   } catch (error) {

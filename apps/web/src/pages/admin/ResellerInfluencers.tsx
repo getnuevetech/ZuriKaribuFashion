@@ -3,8 +3,16 @@ import { Copy, Plus, RefreshCw } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { api } from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
 
 export default function AdminResellerInfluencersPage() {
+  const authUser = useAuthStore((state) => state.user);
+  const isSuperAdmin = useMemo(() => {
+    const grants = Array.isArray(authUser?.permissions) ? authUser.permissions : [];
+    const normalized = grants.map((entry) => String(entry || '').trim());
+    const lower = normalized.map((entry) => entry.toLowerCase());
+    return normalized.includes('*') || normalized.includes('ALL') || lower.includes('all');
+  }, [authUser?.permissions]);
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingCreate, setSavingCreate] = useState(false);
@@ -472,6 +480,9 @@ export default function AdminResellerInfluencersPage() {
                       {`${row?.user?.firstName || ''} ${row?.user?.lastName || ''}`.trim() || row?.displayName || 'Reseller'}
                     </p>
                     <p className="text-xs text-gray-500">{row?.user?.email || '-'}</p>
+                    {isSuperAdmin && row?.user?.callerId ? (
+                      <p className="text-[11px] text-emerald-700">Caller ID: {String(row.user.callerId)}</p>
+                    ) : null}
                   </td>
                   <td className="px-3 py-2">
                     <p className="font-medium text-gray-900">{row?.referralCode || '-'}</p>

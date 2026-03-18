@@ -58,6 +58,29 @@ type WhatsAppEventLog = {
   endedAt?: string | null;
 };
 
+type PbxTrunk = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  host: string;
+  port: number;
+  transport: 'UDP' | 'TCP' | 'TLS' | 'WS' | 'WSS';
+  username: string;
+  authType: 'IP' | 'CREDENTIALS';
+  inboundPrefix: string;
+  outboundPrefix: string;
+};
+
+type PbxQueue = {
+  id: string;
+  name: string;
+  extension: string;
+  strategy: 'RING_ALL' | 'ROUND_ROBIN' | 'LEAST_RECENT' | 'FEWEST_CALLS';
+  maxWaitSeconds: number;
+  members: string[];
+  enabled: boolean;
+};
+
 const buildEmptyRoute = (): VoipRoute => ({
   id: `route-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
   name: '',
@@ -87,6 +110,29 @@ const buildEmptyWhatsAppRoute = (): WhatsAppRoute => ({
   targetId: '',
 });
 
+const buildEmptyPbxTrunk = (): PbxTrunk => ({
+  id: `trunk-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  name: '',
+  enabled: true,
+  host: '',
+  port: 5060,
+  transport: 'UDP',
+  username: '',
+  authType: 'CREDENTIALS',
+  inboundPrefix: '',
+  outboundPrefix: '',
+});
+
+const buildEmptyPbxQueue = (): PbxQueue => ({
+  id: `queue-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  name: '',
+  extension: '',
+  strategy: 'RING_ALL',
+  maxWaitSeconds: 60,
+  members: [],
+  enabled: true,
+});
+
 export default function AdminVoipConfiguration() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -97,6 +143,22 @@ export default function AdminVoipConfiguration() {
     enabled: false,
     provider: 'INTERNAL',
     callBaseUrl: '',
+    pbxEnabled: false,
+    pbxDeploymentMode: 'LOCAL_HOSTED' as 'LOCAL_HOSTED' | 'EXTERNAL_PROVIDER',
+    pbxHost: '127.0.0.1',
+    pbxPort: 5060,
+    pbxTransport: 'UDP' as 'UDP' | 'TCP' | 'TLS' | 'WS' | 'WSS',
+    pbxWebSocketUrl: '',
+    pbxRealm: 'zurikaribu.local',
+    pbxContext: 'default',
+    pbxExtensionPrefix: '9',
+    pbxExtensionDigits: 4,
+    pbxExtensionNext: 1001,
+    pbxRecordingEnabled: false,
+    pbxCodecPreferences: ['OPUS', 'PCMU', 'PCMA'] as string[],
+    pbxEmergencyNumbers: ['911', '112'] as string[],
+    pbxTrunks: [] as PbxTrunk[],
+    pbxQueues: [] as PbxQueue[],
     routes: [] as VoipRoute[],
     transferTargets: [] as VoipTransferTarget[],
     whatsappEnabled: false,
@@ -125,6 +187,62 @@ export default function AdminVoipConfiguration() {
           enabled: Boolean(voipResponse.data.enabled),
           provider: String(voipResponse.data.provider || 'INTERNAL'),
           callBaseUrl: String(voipResponse.data.callBaseUrl || ''),
+          pbxEnabled: Boolean(voipResponse.data.pbx?.enabled),
+          pbxDeploymentMode:
+            String(voipResponse.data.pbx?.deploymentMode || 'LOCAL_HOSTED').toUpperCase() === 'EXTERNAL_PROVIDER'
+              ? 'EXTERNAL_PROVIDER'
+              : 'LOCAL_HOSTED',
+          pbxHost: String(voipResponse.data.pbx?.host || '127.0.0.1'),
+          pbxPort: Math.max(1, Number(voipResponse.data.pbx?.port || 5060)),
+          pbxTransport: ['UDP', 'TCP', 'TLS', 'WS', 'WSS'].includes(String(voipResponse.data.pbx?.transport || '').toUpperCase())
+            ? (String(voipResponse.data.pbx?.transport || '').toUpperCase() as any)
+            : 'UDP',
+          pbxWebSocketUrl: String(voipResponse.data.pbx?.webSocketUrl || ''),
+          pbxRealm: String(voipResponse.data.pbx?.realm || 'zurikaribu.local'),
+          pbxContext: String(voipResponse.data.pbx?.context || 'default'),
+          pbxExtensionPrefix: String(voipResponse.data.pbx?.extensionPrefix || '9'),
+          pbxExtensionDigits: Math.max(2, Number(voipResponse.data.pbx?.extensionDigits || 4)),
+          pbxExtensionNext: Math.max(1, Number(voipResponse.data.pbx?.extensionNext || 1001)),
+          pbxRecordingEnabled: Boolean(voipResponse.data.pbx?.recordingEnabled),
+          pbxCodecPreferences: Array.isArray(voipResponse.data.pbx?.codecPreferences)
+            ? voipResponse.data.pbx!.codecPreferences.map((entry: any) => String(entry || '').trim()).filter(Boolean)
+            : ['OPUS', 'PCMU', 'PCMA'],
+          pbxEmergencyNumbers: Array.isArray(voipResponse.data.pbx?.emergencyNumbers)
+            ? voipResponse.data.pbx!.emergencyNumbers.map((entry: any) => String(entry || '').trim()).filter(Boolean)
+            : ['911', '112'],
+          pbxTrunks: Array.isArray(voipResponse.data.pbx?.trunks)
+            ? voipResponse.data.pbx!.trunks.map((row: any) => ({
+                id: String(row?.id || ''),
+                name: String(row?.name || ''),
+                enabled: row?.enabled !== false,
+                host: String(row?.host || ''),
+                port: Math.max(1, Number(row?.port || 5060)),
+                transport: ['UDP', 'TCP', 'TLS', 'WS', 'WSS'].includes(String(row?.transport || '').toUpperCase())
+                  ? (String(row?.transport || '').toUpperCase() as any)
+                  : 'UDP',
+                username: String(row?.username || ''),
+                authType: String(row?.authType || '').toUpperCase() === 'IP' ? 'IP' : 'CREDENTIALS',
+                inboundPrefix: String(row?.inboundPrefix || ''),
+                outboundPrefix: String(row?.outboundPrefix || ''),
+              }))
+            : [],
+          pbxQueues: Array.isArray(voipResponse.data.pbx?.queues)
+            ? voipResponse.data.pbx!.queues.map((row: any) => ({
+                id: String(row?.id || ''),
+                name: String(row?.name || ''),
+                extension: String(row?.extension || ''),
+                strategy: ['RING_ALL', 'ROUND_ROBIN', 'LEAST_RECENT', 'FEWEST_CALLS'].includes(
+                  String(row?.strategy || '').toUpperCase()
+                )
+                  ? (String(row?.strategy || '').toUpperCase() as any)
+                  : 'RING_ALL',
+                maxWaitSeconds: Math.max(5, Number(row?.maxWaitSeconds || 60)),
+                members: Array.isArray(row?.members)
+                  ? row.members.map((entry: any) => String(entry || '').trim()).filter(Boolean)
+                  : [],
+                enabled: row?.enabled !== false,
+              }))
+            : [],
           routes: Array.isArray(voipResponse.data.routes)
             ? voipResponse.data.routes.map((row: any) => ({
                 id: String(row?.id || ''),
@@ -236,6 +354,46 @@ export default function AdminVoipConfiguration() {
           enabled: settings.enabled,
           provider: settings.provider.trim(),
           callBaseUrl: settings.callBaseUrl.trim(),
+          pbx: {
+            enabled: settings.pbxEnabled,
+            deploymentMode: settings.pbxDeploymentMode,
+            host: settings.pbxHost.trim(),
+            port: Number(settings.pbxPort || 5060),
+            transport: settings.pbxTransport,
+            webSocketUrl: settings.pbxWebSocketUrl.trim(),
+            realm: settings.pbxRealm.trim(),
+            context: settings.pbxContext.trim(),
+            extensionPrefix: settings.pbxExtensionPrefix.trim(),
+            extensionDigits: Number(settings.pbxExtensionDigits || 4),
+            extensionNext: Number(settings.pbxExtensionNext || 1001),
+            recordingEnabled: settings.pbxRecordingEnabled,
+            codecPreferences: (Array.isArray(settings.pbxCodecPreferences) ? settings.pbxCodecPreferences : [])
+              .map((entry) => String(entry || '').trim().toUpperCase())
+              .filter(Boolean),
+            emergencyNumbers: (Array.isArray(settings.pbxEmergencyNumbers) ? settings.pbxEmergencyNumbers : [])
+              .map((entry) => String(entry || '').trim())
+              .filter(Boolean),
+            trunks: settings.pbxTrunks.map((row) => ({
+              ...row,
+              id: String(row.id || '').trim(),
+              name: String(row.name || '').trim(),
+              host: String(row.host || '').trim(),
+              username: String(row.username || '').trim(),
+              inboundPrefix: String(row.inboundPrefix || '').trim(),
+              outboundPrefix: String(row.outboundPrefix || '').trim(),
+              port: Number(row.port || 5060),
+            })),
+            queues: settings.pbxQueues.map((row) => ({
+              ...row,
+              id: String(row.id || '').trim(),
+              name: String(row.name || '').trim(),
+              extension: String(row.extension || '').trim(),
+              maxWaitSeconds: Number(row.maxWaitSeconds || 60),
+              members: (Array.isArray(row.members) ? row.members : [])
+                .map((entry) => String(entry || '').trim())
+                .filter(Boolean),
+            })),
+          },
           routes: settings.routes.map((row) => ({
             ...row,
             id: String(row.id || '').trim(),
@@ -413,6 +571,452 @@ export default function AdminVoipConfiguration() {
                   placeholder="https://your-voip-app/call"
                 />
               </label>
+            </div>
+          </section>
+
+          <section className="rounded-xl border bg-white p-4 space-y-4">
+            <h2 className="text-sm font-semibold text-gray-900">PBX Core Configuration (Local PBS Hosting)</h2>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={settings.pbxEnabled}
+                onChange={(event) => setSettings((prev) => ({ ...prev, pbxEnabled: event.target.checked }))}
+              />
+              Enable built-in PBX mode
+            </label>
+            <div className="grid gap-3 md:grid-cols-3">
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">Deployment Mode</span>
+                <select
+                  value={settings.pbxDeploymentMode}
+                  onChange={(event) =>
+                    setSettings((prev) => ({ ...prev, pbxDeploymentMode: event.target.value as 'LOCAL_HOSTED' | 'EXTERNAL_PROVIDER' }))
+                  }
+                  className="w-full rounded border px-3 py-2"
+                >
+                  <option value="LOCAL_HOSTED">LOCAL_HOSTED</option>
+                  <option value="EXTERNAL_PROVIDER">EXTERNAL_PROVIDER</option>
+                </select>
+              </label>
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">PBX Host</span>
+                <input
+                  value={settings.pbxHost}
+                  onChange={(event) => setSettings((prev) => ({ ...prev, pbxHost: event.target.value }))}
+                  className="w-full rounded border px-3 py-2"
+                  placeholder="127.0.0.1"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">PBX Port</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={settings.pbxPort}
+                  onChange={(event) => setSettings((prev) => ({ ...prev, pbxPort: Number(event.target.value || 5060) }))}
+                  className="w-full rounded border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">Transport</span>
+                <select
+                  value={settings.pbxTransport}
+                  onChange={(event) => setSettings((prev) => ({ ...prev, pbxTransport: event.target.value as any }))}
+                  className="w-full rounded border px-3 py-2"
+                >
+                  <option value="UDP">UDP</option>
+                  <option value="TCP">TCP</option>
+                  <option value="TLS">TLS</option>
+                  <option value="WS">WS</option>
+                  <option value="WSS">WSS</option>
+                </select>
+              </label>
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">WebSocket URL (softphone)</span>
+                <input
+                  value={settings.pbxWebSocketUrl}
+                  onChange={(event) => setSettings((prev) => ({ ...prev, pbxWebSocketUrl: event.target.value }))}
+                  className="w-full rounded border px-3 py-2"
+                  placeholder="ws://127.0.0.1:8088/ws"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">Realm / Domain</span>
+                <input
+                  value={settings.pbxRealm}
+                  onChange={(event) => setSettings((prev) => ({ ...prev, pbxRealm: event.target.value }))}
+                  className="w-full rounded border px-3 py-2"
+                  placeholder="zurikaribu.local"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">Dialplan Context</span>
+                <input
+                  value={settings.pbxContext}
+                  onChange={(event) => setSettings((prev) => ({ ...prev, pbxContext: event.target.value }))}
+                  className="w-full rounded border px-3 py-2"
+                  placeholder="default"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">Extension Prefix</span>
+                <input
+                  value={settings.pbxExtensionPrefix}
+                  onChange={(event) => setSettings((prev) => ({ ...prev, pbxExtensionPrefix: event.target.value }))}
+                  className="w-full rounded border px-3 py-2"
+                  placeholder="9"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">Extension Digits</span>
+                <input
+                  type="number"
+                  min={2}
+                  max={8}
+                  value={settings.pbxExtensionDigits}
+                  onChange={(event) => setSettings((prev) => ({ ...prev, pbxExtensionDigits: Number(event.target.value || 4) }))}
+                  className="w-full rounded border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">Next Extension Number</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={settings.pbxExtensionNext}
+                  onChange={(event) => setSettings((prev) => ({ ...prev, pbxExtensionNext: Number(event.target.value || 1001) }))}
+                  className="w-full rounded border px-3 py-2"
+                />
+              </label>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">Codec Preferences (comma separated)</span>
+                <input
+                  value={settings.pbxCodecPreferences.join(',')}
+                  onChange={(event) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      pbxCodecPreferences: event.target.value
+                        .split(',')
+                        .map((entry) => entry.trim().toUpperCase())
+                        .filter(Boolean),
+                    }))
+                  }
+                  className="w-full rounded border px-3 py-2"
+                  placeholder="OPUS,PCMU,PCMA"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                <span className="mb-1 block">Emergency Numbers (comma separated)</span>
+                <input
+                  value={settings.pbxEmergencyNumbers.join(',')}
+                  onChange={(event) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      pbxEmergencyNumbers: event.target.value
+                        .split(',')
+                        .map((entry) => entry.trim())
+                        .filter(Boolean),
+                    }))
+                  }
+                  className="w-full rounded border px-3 py-2"
+                  placeholder="911,112"
+                />
+              </label>
+            </div>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={settings.pbxRecordingEnabled}
+                onChange={(event) => setSettings((prev) => ({ ...prev, pbxRecordingEnabled: event.target.checked }))}
+              />
+              Enable call recording
+            </label>
+          </section>
+
+          <section className="rounded-xl border bg-white p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-900">PBX Trunks</h2>
+              <Button variant="outline" onClick={() => setSettings((prev) => ({ ...prev, pbxTrunks: [...prev.pbxTrunks, buildEmptyPbxTrunk()] }))}>
+                Add Trunk
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {settings.pbxTrunks.map((trunk, index) => (
+                <div key={trunk.id || `pbx-trunk-${index}`} className="rounded border p-3 space-y-2">
+                  <div className="grid gap-2 md:grid-cols-6">
+                    <input
+                      value={trunk.id}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxTrunks: prev.pbxTrunks.map((row, idx) => (idx === index ? { ...row, id: event.target.value } : row)),
+                        }))
+                      }
+                      placeholder="Trunk ID"
+                      className="rounded border px-2 py-1 text-sm"
+                    />
+                    <input
+                      value={trunk.name}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxTrunks: prev.pbxTrunks.map((row, idx) => (idx === index ? { ...row, name: event.target.value } : row)),
+                        }))
+                      }
+                      placeholder="Trunk name"
+                      className="rounded border px-2 py-1 text-sm md:col-span-2"
+                    />
+                    <input
+                      value={trunk.host}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxTrunks: prev.pbxTrunks.map((row, idx) => (idx === index ? { ...row, host: event.target.value } : row)),
+                        }))
+                      }
+                      placeholder="Host"
+                      className="rounded border px-2 py-1 text-sm"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={trunk.port}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxTrunks: prev.pbxTrunks.map((row, idx) => (idx === index ? { ...row, port: Number(event.target.value || 5060) } : row)),
+                        }))
+                      }
+                      placeholder="Port"
+                      className="rounded border px-2 py-1 text-sm"
+                    />
+                    <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={trunk.enabled}
+                        onChange={(event) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            pbxTrunks: prev.pbxTrunks.map((row, idx) => (idx === index ? { ...row, enabled: event.target.checked } : row)),
+                          }))
+                        }
+                      />
+                      Enabled
+                    </label>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-5">
+                    <select
+                      value={trunk.transport}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxTrunks: prev.pbxTrunks.map((row, idx) => (idx === index ? { ...row, transport: event.target.value as any } : row)),
+                        }))
+                      }
+                      className="rounded border px-2 py-1 text-sm"
+                    >
+                      <option value="UDP">UDP</option>
+                      <option value="TCP">TCP</option>
+                      <option value="TLS">TLS</option>
+                      <option value="WS">WS</option>
+                      <option value="WSS">WSS</option>
+                    </select>
+                    <input
+                      value={trunk.username}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxTrunks: prev.pbxTrunks.map((row, idx) => (idx === index ? { ...row, username: event.target.value } : row)),
+                        }))
+                      }
+                      placeholder="Username"
+                      className="rounded border px-2 py-1 text-sm"
+                    />
+                    <select
+                      value={trunk.authType}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxTrunks: prev.pbxTrunks.map((row, idx) => (idx === index ? { ...row, authType: event.target.value as any } : row)),
+                        }))
+                      }
+                      className="rounded border px-2 py-1 text-sm"
+                    >
+                      <option value="CREDENTIALS">CREDENTIALS</option>
+                      <option value="IP">IP</option>
+                    </select>
+                    <input
+                      value={trunk.inboundPrefix}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxTrunks: prev.pbxTrunks.map((row, idx) => (idx === index ? { ...row, inboundPrefix: event.target.value } : row)),
+                        }))
+                      }
+                      placeholder="Inbound Prefix"
+                      className="rounded border px-2 py-1 text-sm"
+                    />
+                    <input
+                      value={trunk.outboundPrefix}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxTrunks: prev.pbxTrunks.map((row, idx) => (idx === index ? { ...row, outboundPrefix: event.target.value } : row)),
+                        }))
+                      }
+                      placeholder="Outbound Prefix"
+                      className="rounded border px-2 py-1 text-sm"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
+                    onClick={() =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        pbxTrunks: prev.pbxTrunks.filter((_row, idx) => idx !== index),
+                      }))
+                    }
+                  >
+                    Remove Trunk
+                  </button>
+                </div>
+              ))}
+              {settings.pbxTrunks.length === 0 ? <p className="text-sm text-gray-500">No trunks configured yet.</p> : null}
+            </div>
+          </section>
+
+          <section className="rounded-xl border bg-white p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-900">PBX Queues & Extensions</h2>
+              <Button variant="outline" onClick={() => setSettings((prev) => ({ ...prev, pbxQueues: [...prev.pbxQueues, buildEmptyPbxQueue()] }))}>
+                Add Queue
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {settings.pbxQueues.map((queue, index) => (
+                <div key={queue.id || `pbx-queue-${index}`} className="rounded border p-3 space-y-2">
+                  <div className="grid gap-2 md:grid-cols-6">
+                    <input
+                      value={queue.id}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxQueues: prev.pbxQueues.map((row, idx) => (idx === index ? { ...row, id: event.target.value } : row)),
+                        }))
+                      }
+                      placeholder="Queue ID"
+                      className="rounded border px-2 py-1 text-sm"
+                    />
+                    <input
+                      value={queue.name}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxQueues: prev.pbxQueues.map((row, idx) => (idx === index ? { ...row, name: event.target.value } : row)),
+                        }))
+                      }
+                      placeholder="Queue name"
+                      className="rounded border px-2 py-1 text-sm md:col-span-2"
+                    />
+                    <input
+                      value={queue.extension}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxQueues: prev.pbxQueues.map((row, idx) => (idx === index ? { ...row, extension: event.target.value } : row)),
+                        }))
+                      }
+                      placeholder="Extension"
+                      className="rounded border px-2 py-1 text-sm"
+                    />
+                    <select
+                      value={queue.strategy}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxQueues: prev.pbxQueues.map((row, idx) => (idx === index ? { ...row, strategy: event.target.value as any } : row)),
+                        }))
+                      }
+                      className="rounded border px-2 py-1 text-sm"
+                    >
+                      <option value="RING_ALL">RING_ALL</option>
+                      <option value="ROUND_ROBIN">ROUND_ROBIN</option>
+                      <option value="LEAST_RECENT">LEAST_RECENT</option>
+                      <option value="FEWEST_CALLS">FEWEST_CALLS</option>
+                    </select>
+                    <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={queue.enabled}
+                        onChange={(event) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            pbxQueues: prev.pbxQueues.map((row, idx) => (idx === index ? { ...row, enabled: event.target.checked } : row)),
+                          }))
+                        }
+                      />
+                      Enabled
+                    </label>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-[180px_1fr]">
+                    <input
+                      type="number"
+                      min={5}
+                      max={7200}
+                      value={queue.maxWaitSeconds}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxQueues: prev.pbxQueues.map((row, idx) =>
+                            idx === index ? { ...row, maxWaitSeconds: Number(event.target.value || 60) } : row
+                          ),
+                        }))
+                      }
+                      placeholder="Max wait (seconds)"
+                      className="rounded border px-2 py-1 text-sm"
+                    />
+                    <input
+                      value={queue.members.join(',')}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          pbxQueues: prev.pbxQueues.map((row, idx) =>
+                            idx === index
+                              ? {
+                                  ...row,
+                                  members: event.target.value
+                                    .split(',')
+                                    .map((entry) => entry.trim())
+                                    .filter(Boolean),
+                                }
+                              : row
+                          ),
+                        }))
+                      }
+                      placeholder="Members by caller ID/extension (comma-separated)"
+                      className="rounded border px-2 py-1 text-sm"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
+                    onClick={() =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        pbxQueues: prev.pbxQueues.filter((_row, idx) => idx !== index),
+                      }))
+                    }
+                  >
+                    Remove Queue
+                  </button>
+                </div>
+              ))}
+              {settings.pbxQueues.length === 0 ? <p className="text-sm text-gray-500">No queues configured yet.</p> : null}
             </div>
           </section>
 

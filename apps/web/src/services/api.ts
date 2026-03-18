@@ -9943,6 +9943,24 @@ const customerServiceApi = {
         enabled: boolean;
         provider: string;
         callBaseUrl: string;
+        pbx?: {
+          enabled: boolean;
+          deploymentMode: 'LOCAL_HOSTED' | 'EXTERNAL_PROVIDER';
+          host: string;
+          port: number;
+          transport: 'UDP' | 'TCP' | 'TLS' | 'WS' | 'WSS';
+          webSocketUrl: string;
+          realm: string;
+          context: string;
+          extensionPrefix: string;
+          extensionDigits: number;
+          extensionNext: number;
+          recordingEnabled: boolean;
+          codecPreferences: string[];
+          emergencyNumbers: string[];
+          trunks: any[];
+          queues: any[];
+        };
         routes?: any[];
         transferTargets?: any[];
       };
