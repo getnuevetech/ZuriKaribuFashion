@@ -15,7 +15,31 @@ function parseCookie(name: string) {
   if (typeof document === 'undefined') return '';
   const needle = `${name}=`;
   const cookie = document.cookie.split(';').map((row) => row.trim()).find((row) => row.startsWith(needle));
-  return cookie ? decodeURIComponent(cookie.slice(needle.length)) : '';
+  if (!cookie) return '';
+  try {
+    return decodeURIComponent(cookie.slice(needle.length));
+  } catch {
+    // Malformed cookie values should never crash chat rendering.
+    return cookie.slice(needle.length);
+  }
+}
+
+function safeReadLocalStorage(key: string) {
+  if (typeof window === 'undefined') return '';
+  try {
+    return window.localStorage.getItem(key) || '';
+  } catch {
+    return '';
+  }
+}
+
+function safeWriteLocalStorage(key: string, value: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // ignore storage quota/privacy errors
+  }
 }
 
 export default function CustomerServiceChatWidget() {
@@ -106,7 +130,7 @@ export default function CustomerServiceChatWidget() {
     if (isDashboardPath) return;
     void loadConfig();
     try {
-      const sessionSnapshot = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}');
+      const sessionSnapshot = JSON.parse(safeReadLocalStorage(STORAGE_KEY) || '{}');
       const restoredSessionId = String(sessionSnapshot?.sessionId || '');
       const restoredToken = String(sessionSnapshot?.token || '');
       const restoredLanguage = String(sessionSnapshot?.preferredLanguage || '');
@@ -115,7 +139,7 @@ export default function CustomerServiceChatWidget() {
         setSessionToken(restoredToken);
         if (restoredLanguage) setPreferredLanguage(restoredLanguage);
       }
-      const shoppingSnapshot = JSON.parse(window.localStorage.getItem(SHOPPING_STORAGE_KEY) || '{}');
+      const shoppingSnapshot = JSON.parse(safeReadLocalStorage(SHOPPING_STORAGE_KEY) || '{}');
       if (Array.isArray(shoppingSnapshot?.messages)) {
         setShoppingMessages(shoppingSnapshot.messages);
       }
@@ -127,27 +151,31 @@ export default function CustomerServiceChatWidget() {
   useEffect(() => {
     if (isDashboardPath) return;
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent)?.detail || {};
-      const nextMode = String((detail as any)?.mode || 'support').trim().toLowerCase();
-      setOpen(true);
-      setMode(nextMode === 'shopping' ? 'shopping' : 'support');
-      const nextDepartmentId = String((detail as any)?.departmentId || '').trim();
-      const nextIssueType = String((detail as any)?.issueType || '').trim();
-      const nextLanguage = String((detail as any)?.preferredLanguage || '').trim().toLowerCase();
-      const nextSessionId = String((detail as any)?.sessionId || '').trim();
-      const nextToken = String((detail as any)?.token || '').trim();
-      const nextName = String((detail as any)?.name || '').trim();
-      const nextEmail = String((detail as any)?.email || '').trim();
-      const nextPhone = String((detail as any)?.phone || '').trim();
-      if (nextDepartmentId) setDepartmentId(nextDepartmentId);
-      if (nextIssueType) setIssueType(nextIssueType);
-      if (nextLanguage) setPreferredLanguage(nextLanguage);
-      if (nextName) setGuestName(nextName);
-      if (nextEmail) setGuestEmail(nextEmail);
-      if (nextPhone) setGuestPhone(nextPhone);
-      if (nextSessionId) {
-        setSessionId(nextSessionId);
-        setSessionToken(nextToken);
+      try {
+        const detail = (event as CustomEvent)?.detail || {};
+        const nextMode = String((detail as any)?.mode || 'support').trim().toLowerCase();
+        setOpen(true);
+        setMode(nextMode === 'shopping' ? 'shopping' : 'support');
+        const nextDepartmentId = String((detail as any)?.departmentId || '').trim();
+        const nextIssueType = String((detail as any)?.issueType || '').trim();
+        const nextLanguage = String((detail as any)?.preferredLanguage || '').trim().toLowerCase();
+        const nextSessionId = String((detail as any)?.sessionId || '').trim();
+        const nextToken = String((detail as any)?.token || '').trim();
+        const nextName = String((detail as any)?.name || '').trim();
+        const nextEmail = String((detail as any)?.email || '').trim();
+        const nextPhone = String((detail as any)?.phone || '').trim();
+        if (nextDepartmentId) setDepartmentId(nextDepartmentId);
+        if (nextIssueType) setIssueType(nextIssueType);
+        if (nextLanguage) setPreferredLanguage(nextLanguage);
+        if (nextName) setGuestName(nextName);
+        if (nextEmail) setGuestEmail(nextEmail);
+        if (nextPhone) setGuestPhone(nextPhone);
+        if (nextSessionId) {
+          setSessionId(nextSessionId);
+          setSessionToken(nextToken);
+        }
+      } catch {
+        // ignore malformed custom event payloads
       }
     };
     window.addEventListener(OPEN_CHAT_EVENT, handler as EventListener);
@@ -190,7 +218,7 @@ export default function CustomerServiceChatWidget() {
 
   useEffect(() => {
     if (sessionId) {
-      window.localStorage.setItem(
+      safeWriteLocalStorage(
         STORAGE_KEY,
         JSON.stringify({
           sessionId,
@@ -202,7 +230,7 @@ export default function CustomerServiceChatWidget() {
   }, [sessionId, sessionToken, preferredLanguage]);
 
   useEffect(() => {
-    window.localStorage.setItem(
+    safeWriteLocalStorage(
       SHOPPING_STORAGE_KEY,
       JSON.stringify({
         messages: shoppingMessages.slice(-40),

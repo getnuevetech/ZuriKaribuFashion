@@ -9,6 +9,7 @@ import { api } from '../services/api';
 import Footer from '../components/Footer';
 import { getHomeRouteForUser, normalizeRole } from '../auth/rbac';
 import CustomerServiceChatWidget from '../components/chat/CustomerServiceChatWidget';
+import CustomerServiceChatWidgetBoundary from '../components/chat/CustomerServiceChatWidgetBoundary';
 
 const USE_DYNAMIC_HOMEPAGE = import.meta.env.VITE_HOMEPAGE_MODE === 'dynamic';
 const TOP_STRIP_DEFAULTS = {
@@ -313,7 +314,9 @@ export default function MainLayout() {
           Checkout ({cartItemCount})
         </Link>
       ) : null}
-      <CustomerServiceChatWidget />
+      <CustomerServiceChatWidgetBoundary>
+        <CustomerServiceChatWidget />
+      </CustomerServiceChatWidgetBoundary>
       <Footer />
     </div>
   );
