@@ -70,6 +70,14 @@ const normalizePolicyLink = (raw: unknown, fallback: FooterPolicyLink): FooterPo
   };
 };
 
+const ensureFooterLink = (links: FooterNavLink[], requiredLink: FooterNavLink): FooterNavLink[] => {
+  const exists = links.some(
+    (entry) => entry.href.trim().toLowerCase() === requiredLink.href.trim().toLowerCase(),
+  );
+  if (exists) return links;
+  return [...links, requiredLink];
+};
+
 export default function Footer() {
   const { data: footerContent } = useQuery({
     queryKey: ['homepageFooterContent'],
@@ -128,11 +136,15 @@ export default function Footer() {
     const rawMenus = (row.menus && typeof row.menus === 'object' ? row.menus : {}) as Record<string, unknown>;
     const rawPolicies =
       (row.policies && typeof row.policies === 'object' ? row.policies : {}) as Record<string, unknown>;
+    const supportLinks = ensureFooterLink(
+      normalizeFooterNavLinks(rawMenus.support, FOOTER_DEFAULT_MENUS.support),
+      { label: 'Seller/Designer Support', href: '/seller-designer-support' },
+    );
     return {
       menus: {
         shop: normalizeFooterNavLinks(rawMenus.shop, FOOTER_DEFAULT_MENUS.shop),
         company: normalizeFooterNavLinks(rawMenus.company, FOOTER_DEFAULT_MENUS.company),
-        support: normalizeFooterNavLinks(rawMenus.support, FOOTER_DEFAULT_MENUS.support),
+        support: ensureFooterLink(supportLinks, { label: 'Customer FAQs', href: '/help-center' }),
       },
       policies: {
         privacy: normalizePolicyLink(rawPolicies.privacy, FOOTER_DEFAULT_POLICIES.privacy),
