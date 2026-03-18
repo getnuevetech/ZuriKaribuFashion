@@ -36,6 +36,7 @@ import {
 import { readCheckoutPricingSettings, saveCheckoutPricingSettings } from '../utils/checkout-pricing-settings';
 import { ensureResellerProfileForUser } from '../utils/referral-program';
 import { markTemporaryPasswordRequired } from '../utils/password-policy';
+import { readProductAutomationOutcomesForProducts } from '../utils/automation-approval';
 
 const router = Router();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
@@ -89,6 +90,23 @@ function parsePagination(pageValue: unknown, limitValue: unknown, defaultLimit =
   const limit = Math.min(100, Math.max(1, Number.parseInt(String(limitValue ?? defaultLimit), 10) || defaultLimit));
   const skip = (page - 1) * limit;
   return { page, limit, skip };
+}
+
+const isSuperAdminRequest = (req: any) => {
+  const grants = sanitizePermissionGrants(Array.isArray(req?.user?.permissions) ? req.user.permissions : []);
+  const grantSet = new Set(grants.map((entry) => String(entry || '').trim()));
+  const lowerGrantSet = new Set(grants.map((entry) => String(entry || '').trim().toLowerCase()));
+  return grantSet.has('*') || grantSet.has('ALL') || lowerGrantSet.has('all');
+};
+
+let userCallerIdSchemaEnsured = false;
+async function ensureUserCallerIdSchema() {
+  if (userCallerIdSchemaEnsured) return;
+  await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "callerId" TEXT`);
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "User_callerId_key" ON "User"("callerId") WHERE "callerId" IS NOT NULL`
+  );
+  userCallerIdSchemaEnsured = true;
 }
 
 const getVendorDisplayName = (input: {
@@ -1184,6 +1202,7 @@ const adminUserCreateSchema = z.object({
   status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
   phone: z.string().optional(),
   country: z.string().optional(),
+  callerId: z.string().trim().max(64).optional(),
 });
 
 const adminUserUpdateSchema = z.object({
@@ -1194,6 +1213,7 @@ const adminUserUpdateSchema = z.object({
   status: z.nativeEnum(UserStatus).optional(),
   phone: z.string().nullable().optional(),
   country: z.string().nullable().optional(),
+  callerId: z.string().trim().max(64).nullable().optional(),
 });
 
 const vendorCreateMinimalSchema = z.object({
@@ -1913,6 +1933,7 @@ router.get('/dashboard', async (req, res, next) => {
 // Get all users with filters
 router.get('/users', async (req, res, next) => {
   try {
+    const superAdminViewer = isSuperAdminRequest(req);
     const { role, status, search, page, limit } = req.query;
 
     const where: any = {};
@@ -1973,9 +1994,23 @@ router.get('/users', async (req, res, next) => {
         },
       ])
     );
+    if (superAdminViewer) {
+      await ensureUserCallerIdSchema();
+    }
+    const callerIdRows =
+      superAdminViewer && userIds.length > 0
+        ? await prisma.$queryRawUnsafe<Array<{ id: string; callerId: string | null }>>(
+            `SELECT "id","callerId" FROM "User" WHERE "id" = ANY($1::text[])`,
+            userIds
+          )
+        : [];
+    const callerIdByUserId = new Map(
+      callerIdRows.map((row) => [String(row.id), String(row.callerId || '').trim() || null])
+    );
     const usersWithAdminMeta = users.map((user) => ({
       ...user,
       country: user.role === UserRole.ADMINISTRATOR ? adminMetaByUserId.get(user.id)?.country || '' : '',
+      callerId: superAdminViewer ? callerIdByUserId.get(user.id) || null : null,
       adminProfile: user.adminProfile
         ? {
             ...user.adminProfile,
@@ -2005,6 +2040,11 @@ router.get('/users', async (req, res, next) => {
 router.post('/users', async (req, res, next) => {
   try {
     const data = adminUserCreateSchema.parse(req.body);
+    const superAdminActor = isSuperAdminRequest(req);
+    const normalizedCallerId = String(data.callerId || '').trim() || null;
+    if (normalizedCallerId && !superAdminActor) {
+      return res.status(403).json({ success: false, message: 'Only Super Admin can set caller ID.' });
+    }
     const password = await bcrypt.hash(data.password, 10);
     const normalizedCountry = String(data.country || '').trim();
 
@@ -2096,6 +2136,11 @@ router.post('/users', async (req, res, next) => {
         displayName: `${created.firstName} ${created.lastName}`.trim(),
       });
     }
+    if (normalizedCallerId) {
+      await ensureUserCallerIdSchema();
+      await prisma.$executeRawUnsafe(`UPDATE "User" SET "callerId" = $2 WHERE "id" = $1`, created.id, normalizedCallerId);
+      (created as any).callerId = normalizedCallerId;
+    }
     await markTemporaryPasswordRequired(created.id);
 
     res.status(201).json({
@@ -2117,7 +2162,12 @@ router.post('/users', async (req, res, next) => {
 router.patch('/users/:id', async (req, res, next) => {
   try {
     const data = adminUserUpdateSchema.parse(req.body);
+    const superAdminActor = isSuperAdminRequest(req);
+    if (data.callerId !== undefined && !superAdminActor) {
+      return res.status(403).json({ success: false, message: 'Only Super Admin can update caller ID.' });
+    }
     const normalizedCountry = data.country === undefined ? undefined : String(data.country || '').trim();
+    const normalizedCallerId = data.callerId === undefined ? undefined : String(data.callerId || '').trim() || null;
     const updated = await prisma.user.update({
       where: { id: req.params.id },
       data: {
@@ -2173,6 +2223,11 @@ router.patch('/users/:id', async (req, res, next) => {
         },
         update: {},
       });
+    }
+    if (normalizedCallerId !== undefined) {
+      await ensureUserCallerIdSchema();
+      await prisma.$executeRawUnsafe(`UPDATE "User" SET "callerId" = $2 WHERE "id" = $1`, updated.id, normalizedCallerId);
+      (updated as any).callerId = normalizedCallerId;
     }
 
     if (updated.role === UserRole.FASHION_DESIGNER) {
@@ -4934,6 +4989,20 @@ router.get('/products', async (req, res, next) => {
           })
         : Promise.resolve([]),
     ]);
+    const [fabricAutomationOutcomes, designAutomationOutcomes, readyAutomationOutcomes] = await Promise.all([
+      readProductAutomationOutcomesForProducts({
+        productType: ProductType.FABRIC as any,
+        productIds: fabrics.map((item) => item.id),
+      }),
+      readProductAutomationOutcomesForProducts({
+        productType: ProductType.DESIGN as any,
+        productIds: designs.map((item) => item.id),
+      }),
+      readProductAutomationOutcomesForProducts({
+        productType: ProductType.READY_TO_WEAR as any,
+        productIds: readyToWear.map((item) => item.id),
+      }),
+    ]);
 
     const rows = [
       ...fabrics.map((item) => ({
@@ -4953,6 +5022,10 @@ router.get('/products', async (req, res, next) => {
         images: (Array.isArray(item.images) ? item.images : []).map((entry) => entry?.url).filter(Boolean),
         image: item.images?.[0]?.url || null,
         createdAt: item.createdAt,
+        aiAutomationApprovedTag:
+          String(fabricAutomationOutcomes[item.id]?.action || '')
+            .trim()
+            .toUpperCase() === 'AUTO_APPROVED',
       })),
       ...designs.map((item) => ({
         id: item.id,
@@ -4971,6 +5044,10 @@ router.get('/products', async (req, res, next) => {
         images: (Array.isArray(item.images) ? item.images : []).map((entry) => entry?.url).filter(Boolean),
         image: item.images?.[0]?.url || null,
         createdAt: item.createdAt,
+        aiAutomationApprovedTag:
+          String(designAutomationOutcomes[item.id]?.action || '')
+            .trim()
+            .toUpperCase() === 'AUTO_APPROVED',
       })),
       ...readyToWear.map((item) => ({
         id: item.id,
@@ -5003,6 +5080,10 @@ router.get('/products', async (req, res, next) => {
             })
           : [],
         createdAt: item.createdAt,
+        aiAutomationApprovedTag:
+          String(readyAutomationOutcomes[item.id]?.action || '')
+            .trim()
+            .toUpperCase() === 'AUTO_APPROVED',
       })),
     ].sort((a, b) => Number(new Date(b.createdAt)) - Number(new Date(a.createdAt)));
 

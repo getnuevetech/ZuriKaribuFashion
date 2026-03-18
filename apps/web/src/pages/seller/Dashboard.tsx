@@ -84,6 +84,7 @@ interface Fabric {
   approvedEditableFields?: string[];
   approvedEditAccessEndsAt?: string | null;
   automationOutcome?: ProductAutomationOutcome | null;
+  aiAutomationApprovedTag?: boolean;
 }
 
 interface FabricOrder {
@@ -816,6 +817,7 @@ export default function SellerDashboard() {
           approvedEditableFields: Array.isArray(item.approvedEditableFields) ? item.approvedEditableFields : [],
           approvedEditAccessEndsAt: item.approvedEditAccessEndsAt ? String(item.approvedEditAccessEndsAt) : null,
           automationOutcome: normalizeAutomationOutcome(item.automationOutcome),
+          aiAutomationApprovedTag: item.aiAutomationApprovedTag === true,
         }));
         setFabrics(mappedFabrics);
       }
@@ -2439,6 +2441,9 @@ export default function SellerDashboard() {
                             <div>
                               <p className="font-medium text-gray-900">{item.name}</p>
                               <p className="text-sm text-gray-500">{item.materialType?.name || 'Material'}</p>
+                              {item.aiAutomationApprovedTag ? (
+                                <p className="text-xs font-semibold text-emerald-700">AI Approved</p>
+                              ) : null}
                               {item.automationOutcome?.needsCorrection ? (
                                 <p
                                   className={`text-xs font-semibold ${

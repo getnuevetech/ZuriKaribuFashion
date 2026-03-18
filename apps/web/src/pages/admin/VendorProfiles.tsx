@@ -1233,7 +1233,6 @@ export default function AdminVendorProfiles() {
               <thead>
                 <tr className="text-left text-gray-500">
                   <th className="py-2 pr-3">Account</th>
-                  <th className="py-2 pr-3">Vendor UUID</th>
                   <th className="py-2 pr-3">Type</th>
                   <th className="py-2 pr-3">Country</th>
                   <th className="py-2 pr-3">Status</th>
@@ -1249,8 +1248,6 @@ export default function AdminVendorProfiles() {
                         {`${account.firstName || ''} ${account.lastName || ''}`.trim() || account.email}
                       </p>
                       <p className="text-xs text-gray-500">{account.email}</p>
-                    </td>
-                    <td className="py-2 pr-3">
                       <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700">
                         {String(account.vendorUuid || account.id || '').trim() || '-'}
                       </code>
@@ -1286,7 +1283,7 @@ export default function AdminVendorProfiles() {
                 ))}
                 {vendorAccounts.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-gray-500">
+                    <td colSpan={6} className="py-8 text-center text-gray-500">
                       No {activeAccountRoleLabel.toLowerCase()} accounts found.
                     </td>
                   </tr>

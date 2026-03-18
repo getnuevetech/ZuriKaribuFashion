@@ -362,6 +362,37 @@ export default function AdminAutomationApprovalsPage() {
             {saving ? 'Saving...' : 'Save Controls'}
           </Button>
         </div>
+        <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <p className="text-xs font-semibold text-gray-800">AI Approval Tag Visibility</p>
+          <p className="mt-1 text-xs text-gray-600">
+            Admins always see the “AI Approved” tag. Use these toggles to allow other groups to see it.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-4">
+            {[
+              { key: 'seller', label: 'Sellers' },
+              { key: 'designer', label: 'Designers' },
+              { key: 'customer', label: 'Customers' },
+              { key: 'reseller', label: 'Resellers' },
+            ].map((entry) => (
+              <label key={entry.key} className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={Boolean(settings?.aiApprovalTagVisibility?.[entry.key])}
+                  onChange={(event) =>
+                    setSettings((prev: any) => ({
+                      ...(prev || {}),
+                      aiApprovalTagVisibility: {
+                        ...(prev?.aiApprovalTagVisibility || {}),
+                        [entry.key]: event.target.checked,
+                      },
+                    }))
+                  }
+                />
+                Show to {entry.label}
+              </label>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="rounded-xl border bg-white p-4 shadow-sm">

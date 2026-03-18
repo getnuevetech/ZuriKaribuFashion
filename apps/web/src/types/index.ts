@@ -15,6 +15,7 @@ export interface User {
   firstName?: string;
   lastName?: string;
   phone?: string;
+  callerId?: string | null;
   avatar?: string;
   role: UserRole;
   status: UserStatus;

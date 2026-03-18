@@ -4,6 +4,7 @@ import { Search, Filter, XCircle, UserCheck, UserX, Mail, Plus, Edit, PhoneCall 
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import { useAuthStore } from '../../store/authStore';
 
 interface User {
   id: string;
@@ -18,6 +19,7 @@ interface User {
   createdAt: string;
   orderCount?: number;
   adminRoleId?: string | null;
+  callerId?: string | null;
 }
 
 interface AdminRoleOption {
@@ -53,6 +55,7 @@ export default function AdminUsers() {
     password: '',
     status: 'ACTIVE',
     phone: '',
+    callerId: '',
     country: '',
     adminRoleId: '',
   });
@@ -62,10 +65,18 @@ export default function AdminUsers() {
     lastName: '',
     email: '',
     phone: '',
+    callerId: '',
     country: '',
     status: 'ACTIVE',
     adminRoleId: '',
   });
+  const authUser = useAuthStore((state) => state.user);
+  const isSuperAdmin = useMemo(() => {
+    const grants = Array.isArray(authUser?.permissions) ? authUser.permissions : [];
+    const normalized = grants.map((entry) => String(entry || '').trim());
+    const lower = normalized.map((entry) => entry.toLowerCase());
+    return normalized.includes('*') || normalized.includes('ALL') || lower.includes('all');
+  }, [authUser?.permissions]);
 
   useEffect(() => {
     void fetchAdminRoles();
@@ -114,6 +125,7 @@ export default function AdminUsers() {
           role: user.role,
           status: user.status,
           country: String(user.country || user?.adminProfile?.country || '').trim(),
+          callerId: user.callerId ? String(user.callerId) : null,
           createdAt: user.createdAt,
           orderCount: 0,
           adminRoleId: user?.adminProfile?.adminRoleId ? String(user.adminProfile.adminRoleId) : null,
@@ -187,6 +199,7 @@ export default function AdminUsers() {
         status: createForm.status,
         phone: createForm.phone.trim() || undefined,
         country: isAdministratorMode ? createForm.country.trim() : undefined,
+        callerId: isSuperAdmin ? createForm.callerId.trim() || undefined : undefined,
       });
       if (
         createdResponse?.success &&
@@ -205,6 +218,7 @@ export default function AdminUsers() {
         password: '',
         status: 'ACTIVE',
         phone: '',
+        callerId: '',
         country: '',
         adminRoleId: '',
       });
@@ -225,6 +239,7 @@ export default function AdminUsers() {
       lastName: user.lastName || '',
       email: user.email,
       phone: user.phone || '',
+      callerId: user.callerId || '',
       country: user.country || '',
       status: user.status,
       adminRoleId: user.adminRoleId || '',
@@ -243,6 +258,7 @@ export default function AdminUsers() {
         email: editForm.email.trim(),
         phone: editForm.phone.trim() || null,
         country: isAdministratorMode ? editForm.country.trim() : undefined,
+        callerId: isSuperAdmin ? editForm.callerId.trim() || null : undefined,
         status: editForm.status,
       });
       if (isAdministratorMode) {
@@ -365,6 +381,10 @@ export default function AdminUsers() {
                       <div>
                         <p className="font-medium text-gray-900">{user.fullName}</p>
                         <p className="text-sm text-gray-500">{user.email}</p>
+                        {isSuperAdmin && user.callerId ? (
+                          <p className="text-[11px] text-emerald-700">Caller ID: {user.callerId}</p>
+                        ) : null}
+                        <p className="font-mono text-[11px] text-gray-400">UUID: {user.id}</p>
                       </div>
                     </div>
                   </td>
@@ -554,6 +574,15 @@ export default function AdminUsers() {
                 placeholder="Phone (optional)"
                 className="w-full px-3 py-2 border rounded-lg"
               />
+              {isSuperAdmin ? (
+                <input
+                  type="text"
+                  value={createForm.callerId}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, callerId: e.target.value }))}
+                  placeholder="Caller ID / VoIP extension (optional)"
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              ) : null}
               {isAdministratorMode ? (
                 <input
                   type="text"
@@ -621,6 +650,15 @@ export default function AdminUsers() {
                 placeholder="Phone (optional)"
                 className="w-full px-3 py-2 border rounded-lg"
               />
+              {isSuperAdmin ? (
+                <input
+                  type="text"
+                  value={editForm.callerId}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, callerId: e.target.value }))}
+                  placeholder="Caller ID / VoIP extension (optional)"
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              ) : null}
               {isAdministratorMode ? (
                 <input
                   type="text"
