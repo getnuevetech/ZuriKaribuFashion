@@ -22,6 +22,7 @@ import {
 import { readCheckoutPricingSettings } from '../utils/checkout-pricing-settings';
 import { recordReferralCommissionsForOrder } from '../utils/referral-program';
 import {
+  detectTicketingLanguage,
   getTicketingSupportedLanguages,
   normalizeTicketingLanguage,
   translateTicketingText,
@@ -2553,11 +2554,24 @@ router.post(
       if (visibleToCustomer && !recipientRoles.includes(UserRole.CUSTOMER) && (context.participantUsersByRole[UserRole.CUSTOMER] || []).length > 0) {
         recipientRoles.push(UserRole.CUSTOMER);
       }
-      const sourceLanguage = normalizeTicketingLanguage(
-        payload.sourceLanguage || viewerLanguage,
-        translationSettings.defaultLanguage
+      const requestedSourceLanguage = normalizeTicketingLanguage(payload.sourceLanguage || 'auto', 'auto');
+      let sourceLanguage = requestedSourceLanguage;
+      if (sourceLanguage === 'auto') {
+        sourceLanguage = await detectTicketingLanguage({
+          text: payload.body.trim(),
+          fallbackLanguage: viewerLanguage || translationSettings.defaultLanguage,
+        });
+      }
+      sourceLanguage = normalizeTicketingLanguage(
+        sourceLanguage,
+        viewerLanguage || translationSettings.defaultLanguage
       );
-      await writeUserTicketingLanguagePreference(user.id, sourceLanguage).catch(() => undefined);
+      const hasExplicitSourceLanguage =
+        Boolean(String(payload.sourceLanguage || '').trim()) &&
+        normalizeTicketingLanguage(payload.sourceLanguage, 'auto') !== 'auto';
+      if (hasExplicitSourceLanguage) {
+        await writeUserTicketingLanguagePreference(user.id, sourceLanguage).catch(() => undefined);
+      }
 
       const threadBefore = await readOrderTicketThread({
         orderId: context.orderId,

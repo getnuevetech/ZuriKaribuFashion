@@ -24,6 +24,7 @@ const DEFAULT_TICKET_LANGUAGE_OPTIONS: TicketLanguageOption[] = [
   { code: 'sw', label: 'Swahili' },
   { code: 'zh-cn', label: 'Chinese (Simplified)' },
 ];
+const AUTO_LANGUAGE_CODE = 'auto';
 
 const statusLabel = (value: unknown) =>
   String(value || '')
@@ -62,6 +63,7 @@ export default function OrderSupportModal({
   const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [preferredLanguage, setPreferredLanguage] = useState('en');
+  const [messageSourceLanguage, setMessageSourceLanguage] = useState(AUTO_LANGUAGE_CODE);
   const [supportedLanguages, setSupportedLanguages] = useState<TicketLanguageOption[]>(DEFAULT_TICKET_LANGUAGE_OPTIONS);
   const [languageSaving, setLanguageSaving] = useState(false);
 
@@ -103,6 +105,7 @@ export default function OrderSupportModal({
     setMessageBody('');
     setMessageNotice('');
     setAttachmentUrls([]);
+    setMessageSourceLanguage(AUTO_LANGUAGE_CODE);
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, orderId, initialTab]);
@@ -207,7 +210,10 @@ export default function OrderSupportModal({
       } = {
         body: String(messageBody || '').trim(),
       };
-      payload.sourceLanguage = String(preferredLanguage || 'en').trim().toLowerCase() || 'en';
+      const selectedSourceLanguage = String(messageSourceLanguage || AUTO_LANGUAGE_CODE).trim().toLowerCase() || AUTO_LANGUAGE_CODE;
+      if (selectedSourceLanguage && selectedSourceLanguage !== AUTO_LANGUAGE_CODE) {
+        payload.sourceLanguage = selectedSourceLanguage;
+      }
       if (selectedRecipients.length > 0) payload.recipientRoles = selectedRecipients;
       if (attachmentUrls.length > 0) payload.attachments = attachmentUrls;
       if (thread?.permissions?.canControlCustomerVisibility) {
@@ -217,6 +223,7 @@ export default function OrderSupportModal({
       if (response.success) {
         setMessageBody('');
         setAttachmentUrls([]);
+        setMessageSourceLanguage(AUTO_LANGUAGE_CODE);
         setMessageNotice('Message sent.');
         await reloadThread();
       }
@@ -609,6 +616,24 @@ export default function OrderSupportModal({
                     Open this message to customer
                   </label>
                 ) : null}
+
+                <label className="block text-xs text-gray-700">
+                  Message input language (optional)
+                  <select
+                    value={messageSourceLanguage}
+                    onChange={(event) =>
+                      setMessageSourceLanguage(String(event.target.value || AUTO_LANGUAGE_CODE).trim().toLowerCase() || AUTO_LANGUAGE_CODE)
+                    }
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  >
+                    <option value={AUTO_LANGUAGE_CODE}>Auto detect from typed message</option>
+                    {(supportedLanguages.length > 0 ? supportedLanguages : DEFAULT_TICKET_LANGUAGE_OPTIONS).map((row) => (
+                      <option key={`source-language-${row.code}`} value={String(row.code || '').toLowerCase()}>
+                        {row.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
                 <textarea
                   value={messageBody}

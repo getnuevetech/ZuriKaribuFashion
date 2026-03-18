@@ -187,3 +187,27 @@ export const translateTicketingText = async (
     clearTimeout(timer);
   }
 };
+
+export const detectTicketingLanguage = async (params: {
+  text: string;
+  fallbackLanguage?: string;
+  timeoutMs?: number;
+}) => {
+  const originalText = String(params.text || '');
+  if (!originalText.trim()) {
+    return normalizeTicketingLanguage(params.fallbackLanguage || 'en', 'en');
+  }
+  const fallbackLanguage = normalizeTicketingLanguage(params.fallbackLanguage || 'en', 'en');
+  try {
+    const translated = await translateTicketingText({
+      text: originalText,
+      sourceLanguage: 'auto',
+      targetLanguage: fallbackLanguage,
+      timeoutMs: params.timeoutMs,
+    });
+    const detectedLanguage = normalizeTicketingLanguage(translated.detectedLanguage, fallbackLanguage);
+    return detectedLanguage === 'auto' ? fallbackLanguage : detectedLanguage;
+  } catch {
+    return fallbackLanguage;
+  }
+};
