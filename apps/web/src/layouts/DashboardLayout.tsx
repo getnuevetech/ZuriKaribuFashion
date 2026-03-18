@@ -91,7 +91,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Ticket Management', href: '/admin/ticket-management', icon: MessageSquare },
     { label: 'Customer Service Chat', href: '/admin/customer-service/chat', icon: MessageSquare },
     { label: 'Customer Service Settings', href: '/admin/customer-service/settings', icon: Settings },
-    { label: 'VoIP Configuration', href: '/admin/voip', icon: PhoneCall },
+    { label: 'VoIP Management', href: '/admin/voip', icon: PhoneCall },
     { label: 'Banners', href: '/admin/banners', icon: ImageIcon },
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
     { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: Eye },
@@ -1092,7 +1092,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                     <p className="text-xs text-white/50">{roleLabel}</p>
                   </div>
                 </div>
-                {userType !== 'admin' ? (
+                {userType === 'customer' ? (
                   <button
                     onClick={() => void handleStartSupportCall()}
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-colors"

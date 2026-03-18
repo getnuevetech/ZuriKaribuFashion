@@ -423,7 +423,7 @@ async function resolveDesignerListingPrice(params: {
   requestedCurrencyCode?: string;
 }) {
   const { matrix, rules } = await getCurrencyState();
-  const { defaultCurrency, allowedCurrencies } = getAllowedCurrenciesForVendor({
+  const { defaultCurrency } = getAllowedCurrenciesForVendor({
     role: UserRole.FASHION_DESIGNER,
     userId: params.userId,
     country: params.country,
@@ -432,8 +432,14 @@ async function resolveDesignerListingPrice(params: {
     includeUsdFallback: false,
   });
   const requested = normalizeCurrencyCode(params.requestedCurrencyCode);
-  const selectedCurrency =
-    requested && allowedCurrencies.includes(requested) ? requested : defaultCurrency;
+  if (requested && requested !== defaultCurrency) {
+    const error = new Error(
+      `Designers can only list products in their local currency (${defaultCurrency}).`
+    ) as Error & { status?: number };
+    error.status = 400;
+    throw error;
+  }
+  const selectedCurrency = defaultCurrency;
   const localPrice = Number(params.localPriceInput || 0);
   const usdPrice = convertLocalToUsd(localPrice, selectedCurrency, matrix);
   return {
@@ -442,7 +448,7 @@ async function resolveDesignerListingPrice(params: {
     usdPrice,
     usdPerUnit: getUsdPerUnit(selectedCurrency, matrix) || 1,
     defaultCurrency,
-    allowedCurrencies,
+    allowedCurrencies: [defaultCurrency],
   };
 }
 
@@ -875,14 +881,27 @@ router.get('/fabric-options', async (req, res, next) => {
       select: { country: true },
     });
     const allSellerCountries = dedupeCountryList(sellerCountryRows.map((row) => row.country));
-    const countryScope = requestedCountry ? [requestedCountry] : allowedCountries;
-    const resolvedCountryScope = dedupeCountryList([
-      ...countryScope,
+    const catalogCountryScope = dedupeCountryList([
+      ...allowedCountries,
       ...allSellerCountries.filter((sellerCountry) =>
-        countryScope.some((entry) => isEquivalentCountry(entry, sellerCountry))
+        allowedCountries.some((entry) => isEquivalentCountry(entry, sellerCountry))
       ),
     ]);
-    const scopedCountryFilters = resolvedCountryScope.map((entry) => ({
+    const selectedCountryScope = requestedCountry
+      ? dedupeCountryList([
+          requestedCountry,
+          ...allSellerCountries.filter((sellerCountry) => isEquivalentCountry(requestedCountry, sellerCountry)),
+        ])
+      : catalogCountryScope;
+    const catalogCountryFilters = catalogCountryScope.map((entry) => ({
+      seller: {
+        country: {
+          equals: entry,
+          mode: 'insensitive' as const,
+        },
+      },
+    }));
+    const selectedCountryFilters = selectedCountryScope.map((entry) => ({
       seller: {
         country: {
           equals: entry,
@@ -894,10 +913,11 @@ router.get('/fabric-options', async (req, res, next) => {
     const baseWhere: any = {
       status: ProductStatus.APPROVED,
       isAvailable: true,
-      ...(scopedCountryFilters.length > 0 ? { OR: scopedCountryFilters } : {}),
+      ...(catalogCountryFilters.length > 0 ? { OR: catalogCountryFilters } : {}),
     };
     const filteredWhere: any = {
       ...baseWhere,
+      ...(selectedCountryFilters.length > 0 ? { OR: selectedCountryFilters } : {}),
       ...(materialTypeIdRaw ? { materialTypeId: materialTypeIdRaw } : {}),
       ...(search
         ? {
@@ -951,10 +971,7 @@ router.get('/fabric-options', async (req, res, next) => {
       }),
     ]);
 
-    const countryOptions = dedupeCountryList([
-      ...resolvedCountryScope,
-      ...optionRows.map((row) => row.seller?.country),
-    ]);
+    const countryOptions = dedupeCountryList([...catalogCountryScope, ...optionRows.map((row) => row.seller?.country)]);
     const materialMap = new Map<string, { id: string; name: string }>();
     for (const row of optionRows) {
       const id = String(row.materialType?.id || '').trim();
@@ -1216,6 +1233,7 @@ router.get('/designs', async (req, res, next) => {
         productType: ProductType.DESIGN as any,
         productIds: designs.map((item) => item.id),
         userFacing: true,
+        viewerRole: req.user?.role || null,
       }),
     ]);
     const metadataByDesignId = new Map<string, any>(metadataRows);
@@ -1236,6 +1254,7 @@ router.get('/designs', async (req, res, next) => {
                 activeGrant,
               })
             : getFieldKeysForProductType('DESIGN');
+        const automationOutcome = automationOutcomesByDesignId[item.id] || null;
         return {
           ...item,
           isFeatured: featuredSections.length > 0,
@@ -1247,7 +1266,11 @@ router.get('/designs', async (req, res, next) => {
           predominantColor: designColorMap[item.id] || null,
           approvedEditableFields,
           approvedEditAccessEndsAt: activeGrant?.grantEndsAt || null,
-          automationOutcome: automationOutcomesByDesignId[item.id] || null,
+          automationOutcome,
+          aiAutomationApprovedTag:
+            String(automationOutcome?.action || '')
+              .trim()
+              .toUpperCase() === 'AUTO_APPROVED',
         };
       }),
     });
@@ -1852,6 +1875,12 @@ router.patch('/designs/:id', async (req, res, next) => {
         .optional(),
     });
     const data = schema.parse(req.body);
+    if (data.priceCurrencyCode !== undefined && data.basePrice === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'priceCurrencyCode can only be updated together with basePrice.',
+      });
+    }
     await assertDesignerCanManageCatalog(req.user!.id, 'edit products');
 
     const profile = await resolveDesignerProfile(req.user!.id);
@@ -1893,9 +1922,7 @@ router.patch('/designs/:id', async (req, res, next) => {
       const attemptedFields = Object.entries(data)
         .filter(([key, value]) => key !== 'priceCurrencyCode' && value !== undefined)
         .map(([key]) => key);
-      if (data.priceCurrencyCode !== undefined && data.basePrice === undefined) {
-        attemptedFields.push('priceCurrencyCode');
-      }
+      if (data.priceCurrencyCode !== undefined && data.basePrice === undefined) attemptedFields.push('priceCurrencyCode');
       const disallowed = attemptedFields.filter((field) => !allowedFields.has(field));
       if (disallowed.length > 0) {
         return res.status(403).json({
@@ -2192,6 +2219,7 @@ router.get('/ready-to-wear', async (req, res, next) => {
         productType: ProductType.READY_TO_WEAR as any,
         productIds: products.map((item) => item.id),
         userFacing: true,
+        viewerRole: req.user?.role || null,
       }),
     ]);
     const metadataByProductId = new Map<string, any>(metadataRows);
@@ -2212,6 +2240,7 @@ router.get('/ready-to-wear', async (req, res, next) => {
                 activeGrant,
               })
             : getFieldKeysForProductType('READY_TO_WEAR');
+        const automationOutcome = automationOutcomesByProductId[item.id] || null;
         return {
           ...item,
           sizeVariations: Array.isArray(item.sizeVariations)
@@ -2242,7 +2271,11 @@ router.get('/ready-to-wear', async (req, res, next) => {
           predominantColor: readyColorMap[item.id] || null,
           approvedEditableFields,
           approvedEditAccessEndsAt: activeGrant?.grantEndsAt || null,
-          automationOutcome: automationOutcomesByProductId[item.id] || null,
+          automationOutcome,
+          aiAutomationApprovedTag:
+            String(automationOutcome?.action || '')
+              .trim()
+              .toUpperCase() === 'AUTO_APPROVED',
         };
       }),
     });
@@ -2568,6 +2601,12 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         .optional(),
     });
     const data = schema.parse(req.body);
+    if (data.priceCurrencyCode !== undefined && data.basePrice === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'priceCurrencyCode can only be updated together with basePrice.',
+      });
+    }
     await assertDesignerCanManageCatalog(req.user!.id, 'edit products');
     const readyVariantRules = await readReadyToWearVariantRules();
     const allowedSizes = readyVariantRules.sizes;
@@ -2641,9 +2680,7 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
       const attemptedFields = Object.entries(data)
         .filter(([key, value]) => key !== 'priceCurrencyCode' && value !== undefined)
         .map(([key]) => key);
-      if (data.priceCurrencyCode !== undefined && data.basePrice === undefined) {
-        attemptedFields.push('priceCurrencyCode');
-      }
+      if (data.priceCurrencyCode !== undefined && data.basePrice === undefined) attemptedFields.push('priceCurrencyCode');
       const disallowed = attemptedFields.filter((field) => !allowedFields.has(field));
       if (disallowed.length > 0) {
         return res.status(403).json({
@@ -2693,10 +2730,7 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         payload.sizeVariations = {
           create: normalizedSizes.map((row) => ({
             size: row.variantKey,
-            price:
-              effectiveCurrencyCode === 'USD'
-                ? Number(row.price || 0)
-                : Number((Number(row.price || 0) * effectiveUsdPerUnit).toFixed(2)),
+            price: Number((Number(row.price || 0) * effectiveUsdPerUnit).toFixed(2)),
             stock: Math.max(minVariantStock, Math.floor(Number(row.stock || 0))),
           })),
         };

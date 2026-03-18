@@ -13,7 +13,7 @@ import {
 
 const router = Router();
 
-const TICKET_SOURCES = ['ORDER', 'EMAIL', 'PHONE', 'OTHER', 'CHAT', 'BOT'] as const;
+const TICKET_SOURCES = ['ORDER', 'EMAIL', 'PHONE', 'WEB', 'OTHER', 'CHAT', 'BOT'] as const;
 const TICKET_STATUSES = ['OPEN', 'PENDING', 'RESOLVED', 'CLOSED'] as const;
 const ROUTE_TARGET_TYPES = ['ADMIN_USER', 'ADMIN_GROUP', 'ADMIN_ROLE'] as const;
 const CHAT_ROLES = ['CUSTOMER', 'AGENT', 'SUPERVISOR', 'ADMIN', 'BOT'] as const;
@@ -36,8 +36,28 @@ type SupportSettings = {
   voipEnabled: boolean;
   voipProvider: string;
   voipCallBaseUrl: string;
+  voipRoutes: Array<{
+    id: string;
+    name: string;
+    enabled: boolean;
+    contextType: 'TICKET' | 'CHAT' | 'DIRECT' | 'ANY';
+    fromRoles: string[];
+    targetType: 'ADMIN_USER' | 'ADMIN_GROUP' | 'ADMIN_ROLE' | 'CUSTOMER_SERVICE';
+    targetId: string;
+  }>;
+  voipTransferTargets: Array<{
+    id: string;
+    name: string;
+    enabled: boolean;
+    targetType: 'ADMIN_USER' | 'ADMIN_GROUP' | 'ADMIN_ROLE';
+    targetId: string;
+  }>;
   emailIngestEnabled: boolean;
   emailIngestToken: string;
+  ticketIdPrefix: string;
+  ticketIdSuffix: string;
+  ticketIdPadding: number;
+  ticketIdNextNumber: number;
 };
 
 const DEFAULT_SUPPORT_SETTINGS: SupportSettings = {
@@ -53,8 +73,14 @@ const DEFAULT_SUPPORT_SETTINGS: SupportSettings = {
   voipEnabled: false,
   voipProvider: 'INTERNAL',
   voipCallBaseUrl: '',
+  voipRoutes: [],
+  voipTransferTargets: [],
   emailIngestEnabled: false,
   emailIngestToken: '',
+  ticketIdPrefix: 'TKT-',
+  ticketIdSuffix: '',
+  ticketIdPadding: 6,
+  ticketIdNextNumber: 1,
 };
 
 const supportSettingsPatchSchema = z
@@ -71,8 +97,38 @@ const supportSettingsPatchSchema = z
     voipEnabled: z.boolean().optional(),
     voipProvider: z.string().trim().max(120).optional(),
     voipCallBaseUrl: z.string().trim().max(2000).optional(),
+    voipRoutes: z
+      .array(
+        z.object({
+          id: z.string().trim().min(1).max(80),
+          name: z.string().trim().min(1).max(140),
+          enabled: z.boolean().optional(),
+          contextType: z.enum(['TICKET', 'CHAT', 'DIRECT', 'ANY']).optional(),
+          fromRoles: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
+          targetType: z.enum(['ADMIN_USER', 'ADMIN_GROUP', 'ADMIN_ROLE', 'CUSTOMER_SERVICE']).optional(),
+          targetId: z.string().trim().max(120).optional(),
+        })
+      )
+      .max(100)
+      .optional(),
+    voipTransferTargets: z
+      .array(
+        z.object({
+          id: z.string().trim().min(1).max(80),
+          name: z.string().trim().min(1).max(140),
+          enabled: z.boolean().optional(),
+          targetType: z.enum(['ADMIN_USER', 'ADMIN_GROUP', 'ADMIN_ROLE']).optional(),
+          targetId: z.string().trim().max(120).optional(),
+        })
+      )
+      .max(100)
+      .optional(),
     emailIngestEnabled: z.boolean().optional(),
     emailIngestToken: z.string().trim().max(240).optional(),
+    ticketIdPrefix: z.string().trim().max(40).optional(),
+    ticketIdSuffix: z.string().trim().max(40).optional(),
+    ticketIdPadding: z.number().int().min(1).max(12).optional(),
+    ticketIdNextNumber: z.number().int().min(1).max(999999999).optional(),
   })
   .strict();
 
@@ -197,8 +253,27 @@ const voipStartSchema = z
     contextType: z.enum(['TICKET', 'CHAT', 'DIRECT']),
     contextId: z.string().trim().max(64).optional(),
     toUserId: z.string().trim().max(64).optional(),
+    routeId: z.string().trim().max(80).optional(),
   })
   .strict();
+
+const voipRouteItemSchema = z.object({
+  id: z.string().trim().min(1).max(80),
+  name: z.string().trim().min(1).max(140),
+  enabled: z.boolean().optional(),
+  contextType: z.enum(['TICKET', 'CHAT', 'DIRECT', 'ANY']).optional(),
+  fromRoles: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
+  targetType: z.enum(['ADMIN_USER', 'ADMIN_GROUP', 'ADMIN_ROLE', 'CUSTOMER_SERVICE']).optional(),
+  targetId: z.string().trim().max(120).optional(),
+});
+
+const voipTransferTargetItemSchema = z.object({
+  id: z.string().trim().min(1).max(80),
+  name: z.string().trim().min(1).max(140),
+  enabled: z.boolean().optional(),
+  targetType: z.enum(['ADMIN_USER', 'ADMIN_GROUP', 'ADMIN_ROLE']).optional(),
+  targetId: z.string().trim().max(120).optional(),
+});
 
 function parseObject(value: unknown): Record<string, unknown> {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
@@ -241,6 +316,38 @@ function asTicketSource(value: unknown, fallback: TicketSource = 'OTHER'): Ticke
 
 function normalizeSettings(value: unknown): SupportSettings {
   const source = parseObject(value);
+  const normalizedVoipRoutes = (Array.isArray(source.voipRoutes) ? source.voipRoutes : [])
+    .map((entry) => parseObject(entry))
+    .map((entry) => ({
+      id: String(entry.id || randomUUID()).trim().slice(0, 80),
+      name: String(entry.name || 'Route').trim().slice(0, 140) || 'Route',
+      enabled: entry.enabled !== false,
+      contextType: (['TICKET', 'CHAT', 'DIRECT', 'ANY'].includes(String(entry.contextType || '').toUpperCase())
+        ? String(entry.contextType || '').toUpperCase()
+        : 'ANY') as 'TICKET' | 'CHAT' | 'DIRECT' | 'ANY',
+      fromRoles: dedupeStrings(parseArray(entry.fromRoles)).slice(0, 20),
+      targetType: (['ADMIN_USER', 'ADMIN_GROUP', 'ADMIN_ROLE', 'CUSTOMER_SERVICE'].includes(
+        String(entry.targetType || '').toUpperCase()
+      )
+        ? String(entry.targetType || '').toUpperCase()
+        : 'CUSTOMER_SERVICE') as 'ADMIN_USER' | 'ADMIN_GROUP' | 'ADMIN_ROLE' | 'CUSTOMER_SERVICE',
+      targetId: String(entry.targetId || '').trim().slice(0, 120),
+    }))
+    .filter((entry) => entry.id && entry.name);
+  const normalizedTransferTargets = (Array.isArray(source.voipTransferTargets) ? source.voipTransferTargets : [])
+    .map((entry) => parseObject(entry))
+    .map((entry) => ({
+      id: String(entry.id || randomUUID()).trim().slice(0, 80),
+      name: String(entry.name || 'Transfer Target').trim().slice(0, 140) || 'Transfer Target',
+      enabled: entry.enabled !== false,
+      targetType: (['ADMIN_USER', 'ADMIN_GROUP', 'ADMIN_ROLE'].includes(String(entry.targetType || '').toUpperCase())
+        ? String(entry.targetType || '').toUpperCase()
+        : 'ADMIN_GROUP') as 'ADMIN_USER' | 'ADMIN_GROUP' | 'ADMIN_ROLE',
+      targetId: String(entry.targetId || '').trim().slice(0, 120),
+    }))
+    .filter((entry) => entry.id && entry.name);
+  const ticketIdPadding = Math.max(1, Math.min(12, Number(source.ticketIdPadding || DEFAULT_SUPPORT_SETTINGS.ticketIdPadding)));
+  const ticketIdNextNumber = Math.max(1, Math.floor(Number(source.ticketIdNextNumber || DEFAULT_SUPPORT_SETTINGS.ticketIdNextNumber)));
   return {
     translationEnabled: source.translationEnabled !== false,
     defaultLanguage: normalizeTicketingLanguage(source.defaultLanguage, DEFAULT_SUPPORT_SETTINGS.defaultLanguage),
@@ -254,8 +361,14 @@ function normalizeSettings(value: unknown): SupportSettings {
     voipEnabled: source.voipEnabled === true,
     voipProvider: String(source.voipProvider || DEFAULT_SUPPORT_SETTINGS.voipProvider).trim() || 'INTERNAL',
     voipCallBaseUrl: String(source.voipCallBaseUrl || '').trim(),
+    voipRoutes: normalizedVoipRoutes,
+    voipTransferTargets: normalizedTransferTargets,
     emailIngestEnabled: source.emailIngestEnabled === true,
     emailIngestToken: String(source.emailIngestToken || '').trim(),
+    ticketIdPrefix: String(source.ticketIdPrefix || DEFAULT_SUPPORT_SETTINGS.ticketIdPrefix).trim().slice(0, 40),
+    ticketIdSuffix: String(source.ticketIdSuffix || DEFAULT_SUPPORT_SETTINGS.ticketIdSuffix).trim().slice(0, 40),
+    ticketIdPadding,
+    ticketIdNextNumber,
   };
 }
 
@@ -274,6 +387,8 @@ async function ensureSchema() {
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SupportTicketRoutingRule" ("id" TEXT PRIMARY KEY, "name" TEXT NOT NULL, "source" TEXT NOT NULL DEFAULT 'ALL', "sequence" INTEGER NOT NULL DEFAULT 1, "targetType" TEXT NOT NULL, "targetId" TEXT NOT NULL, "slaHours" INTEGER NOT NULL DEFAULT 24, "escalationTargetType" TEXT, "escalationTargetId" TEXT, "isActive" BOOLEAN NOT NULL DEFAULT true, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SupportTicketRoutingRule_source_idx" ON "SupportTicketRoutingRule"("source","sequence","isActive")`);
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SupportTicket" ("id" TEXT PRIMARY KEY, "source" TEXT NOT NULL DEFAULT 'OTHER', "title" TEXT NOT NULL, "subject" TEXT, "status" TEXT NOT NULL DEFAULT 'OPEN', "priority" TEXT NOT NULL DEFAULT 'NORMAL', "relatedOrderId" TEXT, "requesterUserId" TEXT, "requesterName" TEXT, "requesterEmail" TEXT, "requesterPhone" TEXT, "assignedAdminUserId" TEXT, "assignedAdminRoleId" TEXT, "assignedGroupId" TEXT, "slaDueAt" TIMESTAMP(3), "escalatedAt" TIMESTAMP(3), "escalationLevel" INTEGER NOT NULL DEFAULT 0, "routeSnapshot" JSONB NOT NULL DEFAULT '{}'::jsonb, "createdByUserId" TEXT, "lastMessageAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "SupportTicket" ADD COLUMN IF NOT EXISTS "ticketNumber" TEXT`);
+      await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "SupportTicket_ticketNumber_key" ON "SupportTicket"("ticketNumber") WHERE "ticketNumber" IS NOT NULL`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SupportTicket_lookup_idx" ON "SupportTicket"("source","status","updatedAt")`);
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SupportTicketMessage" ("id" TEXT PRIMARY KEY, "ticketId" TEXT NOT NULL, "senderUserId" TEXT, "senderRole" TEXT NOT NULL, "senderDisplayName" TEXT, "body" TEXT NOT NULL, "attachments" JSONB NOT NULL DEFAULT '[]'::jsonb, "sourceLanguage" TEXT NOT NULL DEFAULT 'en', "visibleToCustomer" BOOLEAN NOT NULL DEFAULT true, "isInternal" BOOLEAN NOT NULL DEFAULT false, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SupportTicketMessage_ticket_idx" ON "SupportTicketMessage"("ticketId","createdAt")`);
@@ -284,7 +399,21 @@ async function ensureSchema() {
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SupportChatMessage" ("id" TEXT PRIMARY KEY, "sessionId" TEXT NOT NULL, "senderParticipantId" TEXT, "senderRole" TEXT NOT NULL, "senderDisplayName" TEXT, "body" TEXT NOT NULL, "attachments" JSONB NOT NULL DEFAULT '[]'::jsonb, "isInternal" BOOLEAN NOT NULL DEFAULT false, "sourceLanguage" TEXT NOT NULL DEFAULT 'en', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SupportChatMessage_session_idx" ON "SupportChatMessage"("sessionId","createdAt")`);
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SupportVoipCall" ("id" TEXT PRIMARY KEY, "contextType" TEXT NOT NULL, "contextId" TEXT, "fromUserId" TEXT, "toUserId" TEXT, "status" TEXT NOT NULL DEFAULT 'INITIATED', "provider" TEXT, "callLink" TEXT, "metadata" JSONB NOT NULL DEFAULT '{}'::jsonb, "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "endedAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "SupportVoipCall" ADD COLUMN IF NOT EXISTS "routeId" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "SupportVoipCall" ADD COLUMN IF NOT EXISTS "fromCallerId" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "SupportVoipCall" ADD COLUMN IF NOT EXISTS "toCallerId" TEXT`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SupportVoipCall_context_idx" ON "SupportVoipCall"("contextType","contextId","createdAt")`);
+      await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SupportVoipCall_startedAt_idx" ON "SupportVoipCall"("startedAt")`);
+      await prisma.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS "SupportNumberSequence" (
+          "key" TEXT PRIMARY KEY,
+          "currentNumber" BIGINT NOT NULL DEFAULT 0,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )`
+      );
+      await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "callerId" TEXT`);
+      await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "User_callerId_key" ON "User"("callerId") WHERE "callerId" IS NOT NULL`);
 
       const defaults = [
         ['Customer Service', 'CUSTOMER_SERVICE', 'General customer service requests.'],
@@ -332,12 +461,76 @@ async function ensureSchema() {
   schemaPromise = null;
 }
 
+const SUPPORT_TICKET_SEQUENCE_KEY = 'SUPPORT_TICKET';
+
+async function readSupportTicketNextNumber(): Promise<number> {
+  await ensureSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<{ currentNumber: number }>>(
+    `SELECT "currentNumber"::bigint AS "currentNumber"
+     FROM "SupportNumberSequence"
+     WHERE "key" = $1
+     LIMIT 1`,
+    SUPPORT_TICKET_SEQUENCE_KEY
+  );
+  const currentNumber = Number(rows[0]?.currentNumber || 0);
+  const safeCurrent = Number.isFinite(currentNumber) ? Math.max(0, Math.floor(currentNumber)) : 0;
+  return safeCurrent + 1;
+}
+
+async function setSupportTicketNextNumber(nextNumber: number) {
+  await ensureSchema();
+  const safeNext = Math.max(1, Math.floor(Number(nextNumber || 1)));
+  const currentNumber = safeNext - 1;
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "SupportNumberSequence" ("key","currentNumber","createdAt","updatedAt")
+     VALUES ($1,$2,NOW(),NOW())
+     ON CONFLICT ("key")
+     DO UPDATE SET "currentNumber" = EXCLUDED."currentNumber", "updatedAt" = NOW()`,
+    SUPPORT_TICKET_SEQUENCE_KEY,
+    currentNumber
+  );
+}
+
+async function allocateSupportTicketNumber(settings: SupportSettings): Promise<string> {
+  await ensureSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<{ currentNumber: number }>>(
+    `INSERT INTO "SupportNumberSequence" ("key","currentNumber","createdAt","updatedAt")
+     VALUES ($1,1,NOW(),NOW())
+     ON CONFLICT ("key")
+     DO UPDATE SET "currentNumber" = "SupportNumberSequence"."currentNumber" + 1, "updatedAt" = NOW()
+     RETURNING "currentNumber"::bigint AS "currentNumber"`,
+    SUPPORT_TICKET_SEQUENCE_KEY
+  );
+  const sequenceNumber = Math.max(1, Math.floor(Number(rows[0]?.currentNumber || 1)));
+  const prefix = String(settings.ticketIdPrefix || '').trim();
+  const suffix = String(settings.ticketIdSuffix || '').trim();
+  const padded = String(sequenceNumber).padStart(Math.max(1, Number(settings.ticketIdPadding || 6)), '0');
+  return `${prefix}${padded}${suffix}`.slice(0, 120);
+}
+
+async function resolveIncomingSourceLanguage(params: {
+  providedLanguage?: string;
+  text: string;
+  fallbackLanguage: string;
+  preferredLanguage?: string;
+}) {
+  const fallback = normalizeTicketingLanguage(params.preferredLanguage, params.fallbackLanguage);
+  const requested = normalizeTicketingLanguage(params.providedLanguage || 'auto', 'auto');
+  if (requested !== 'auto') return normalizeTicketingLanguage(requested, fallback);
+  const detected = await detectTicketingLanguage({
+    text: String(params.text || ''),
+    fallbackLanguage: fallback,
+  });
+  return normalizeTicketingLanguage(detected, fallback);
+}
+
 async function readSettings(): Promise<SupportSettings> {
   await ensureSchema();
   const rows = await prisma.$queryRawUnsafe<Array<{ value: unknown }>>(`SELECT "value" FROM "SupportCenterSetting" WHERE "key" = $1 LIMIT 1`, SUPPORT_SETTINGS_KEY);
   const normalized = rows[0] ? normalizeSettings(rows[0].value) : { ...DEFAULT_SUPPORT_SETTINGS };
   const envToken = String(process.env.SUPPORT_EMAIL_INGEST_TOKEN || '').trim();
   if (!normalized.emailIngestToken && envToken) normalized.emailIngestToken = envToken;
+  normalized.ticketIdNextNumber = await readSupportTicketNextNumber();
   return normalized;
 }
 
@@ -352,6 +545,10 @@ async function writeSettings(patch: Partial<SupportSettings>) {
     SUPPORT_SETTINGS_KEY,
     JSON.stringify(next)
   );
+  if (patch.ticketIdNextNumber !== undefined) {
+    await setSupportTicketNextNumber(Number(patch.ticketIdNextNumber || 1));
+    next.ticketIdNextNumber = await readSupportTicketNextNumber();
+  }
   return next;
 }
 
@@ -433,6 +630,141 @@ async function resolveInitialRouting(source: TicketSource) {
     escalationTargetId: rule.escalationTargetId ? String(rule.escalationTargetId) : null,
   };
   return { assignment, snapshot };
+}
+
+function normalizeRoleToken(role: unknown) {
+  return String(role || '').trim().toUpperCase();
+}
+
+function isSellerOrDesignerRole(role: unknown) {
+  const token = normalizeRoleToken(role);
+  return token === 'FABRIC_SELLER' || token === 'FASHION_DESIGNER' || token === 'RESELLER_INFLUENCER';
+}
+
+function isCustomerRole(role: unknown) {
+  return normalizeRoleToken(role) === 'CUSTOMER';
+}
+
+function routeMatches(
+  route: SupportSettings['voipRoutes'][number],
+  contextType: 'TICKET' | 'CHAT' | 'DIRECT',
+  fromRole: string
+) {
+  if (!route.enabled) return false;
+  if (route.contextType !== 'ANY' && route.contextType !== contextType) return false;
+  if (!Array.isArray(route.fromRoles) || route.fromRoles.length === 0) return true;
+  const allowedRoles = route.fromRoles.map((token) => normalizeRoleToken(token)).filter(Boolean);
+  return allowedRoles.includes(fromRole);
+}
+
+function pickVoipRoute(
+  settings: SupportSettings,
+  params: { requestedRouteId?: string; contextType: 'TICKET' | 'CHAT' | 'DIRECT'; fromRole: string }
+) {
+  const routes = Array.isArray(settings.voipRoutes) ? settings.voipRoutes : [];
+  const requestedRouteId = String(params.requestedRouteId || '').trim();
+  if (requestedRouteId) {
+    const selected = routes.find((route) => String(route.id || '').trim() === requestedRouteId);
+    if (selected && routeMatches(selected, params.contextType, params.fromRole)) return selected;
+  }
+  return routes.find((route) => routeMatches(route, params.contextType, params.fromRole)) || null;
+}
+
+async function resolveVoipTargetFromRoute(
+  route: SupportSettings['voipRoutes'][number] | null
+): Promise<string | null> {
+  if (!route || !route.enabled) return null;
+  if (route.targetType === 'CUSTOMER_SERVICE') {
+    const routing = await resolveInitialRouting('PHONE');
+    return routing?.assignment?.assignedAdminUserId || null;
+  }
+  const targetType = String(route.targetType || '').trim().toUpperCase() as RouteTargetType;
+  if (!ROUTE_TARGET_TYPES.includes(targetType)) return null;
+  const assignment = await resolveAssignment(targetType, String(route.targetId || ''));
+  return assignment.assignedAdminUserId || null;
+}
+
+async function resolveVoipTicketTargetUserId(contextId: string, callerUserId: string): Promise<string | null> {
+  const rawRef = String(contextId || '').trim();
+  if (!rawRef) return null;
+  const supportTicketId = /^SUPPORT:/i.test(rawRef) ? rawRef.slice('SUPPORT:'.length) : rawRef;
+  const supportRows = await prisma.$queryRawUnsafe<Array<{ requesterUserId: string | null; createdByUserId: string | null }>>(
+    `SELECT "requesterUserId","createdByUserId"
+     FROM "SupportTicket"
+     WHERE "id" = $1 OR "ticketNumber" = $2
+     LIMIT 1`,
+    supportTicketId,
+    rawRef
+  );
+  const support = supportRows[0];
+  if (support) {
+    const targetUserId = [support.requesterUserId, support.createdByUserId]
+      .map((value) => (value ? String(value) : ''))
+      .find((value) => value && value !== callerUserId);
+    if (targetUserId) return targetUserId;
+  }
+
+  const orderTicketId = /^ORDER:/i.test(rawRef) ? rawRef.slice('ORDER:'.length) : rawRef;
+  const orderTicketRows = await prisma.$queryRawUnsafe<Array<{ customerId: string | null }>>(
+    `SELECT o."customerId"
+     FROM "OrderTicket" ot
+     LEFT JOIN "Order" o ON o."id" = ot."orderId"
+     WHERE ot."id" = $1
+     LIMIT 1`,
+    orderTicketId
+  );
+  if (orderTicketRows[0]?.customerId && String(orderTicketRows[0].customerId) !== callerUserId) {
+    return String(orderTicketRows[0].customerId);
+  }
+
+  const orderRows = await prisma.$queryRawUnsafe<Array<{ customerId: string | null }>>(
+    `SELECT "customerId" FROM "Order" WHERE "id" = $1 LIMIT 1`,
+    rawRef
+  );
+  if (orderRows[0]?.customerId && String(orderRows[0].customerId) !== callerUserId) {
+    return String(orderRows[0].customerId);
+  }
+
+  return null;
+}
+
+async function resolveVoipChatTargetUserId(contextId: string, callerUserId: string): Promise<string | null> {
+  const sessionId = String(contextId || '').trim();
+  if (!sessionId) return null;
+  const sessionRows = await prisma.$queryRawUnsafe<Array<{ customerUserId: string | null; assignedAdminUserId: string | null }>>(
+    `SELECT "customerUserId","assignedAdminUserId"
+     FROM "SupportChatSession"
+     WHERE "id" = $1
+     LIMIT 1`,
+    sessionId
+  );
+  const session = sessionRows[0];
+  if (!session) return null;
+  if (session.customerUserId && String(session.customerUserId) !== callerUserId) return String(session.customerUserId);
+  if (session.assignedAdminUserId && String(session.assignedAdminUserId) !== callerUserId) return String(session.assignedAdminUserId);
+  const participants = await prisma.$queryRawUnsafe<Array<{ userId: string | null }>>(
+    `SELECT "userId"
+     FROM "SupportChatParticipant"
+     WHERE "sessionId" = $1
+       AND "userId" IS NOT NULL
+     ORDER BY "joinedAt" ASC
+     LIMIT 20`,
+    sessionId
+  );
+  const participantTarget = participants
+    .map((row) => (row.userId ? String(row.userId) : ''))
+    .find((userId) => userId && userId !== callerUserId);
+  return participantTarget || null;
+}
+
+async function readUserCallerId(userId: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const rows = await prisma.$queryRawUnsafe<Array<{ callerId: string | null }>>(
+    `SELECT "callerId" FROM "User" WHERE "id" = $1 LIMIT 1`,
+    userId
+  );
+  const callerId = rows[0]?.callerId ? String(rows[0].callerId).trim() : '';
+  return callerId || null;
 }
 
 async function runEscalationSweep() {
@@ -621,7 +953,12 @@ async function createSupportTicket(input: {
   targetId?: string;
 }) {
   const settings = await readSettings();
-  const sourceLanguage = normalizeTicketingLanguage(input.sourceLanguage || settings.defaultLanguage, settings.defaultLanguage);
+  const sourceLanguage = await resolveIncomingSourceLanguage({
+    providedLanguage: input.sourceLanguage,
+    text: input.body,
+    fallbackLanguage: settings.defaultLanguage,
+  });
+  const ticketNumber = await allocateSupportTicketNumber(settings);
   let assignment = { assignedAdminUserId: null as string | null, assignedAdminRoleId: null as string | null, assignedGroupId: null as string | null };
   let snapshot: Record<string, unknown> = {};
   let slaHours = 24;
@@ -639,9 +976,10 @@ async function createSupportTicket(input: {
   const ticketId = randomUUID();
   await prisma.$executeRawUnsafe(
     `INSERT INTO "SupportTicket"
-      ("id","source","title","subject","status","relatedOrderId","requesterUserId","requesterName","requesterEmail","requesterPhone","assignedAdminUserId","assignedAdminRoleId","assignedGroupId","slaDueAt","routeSnapshot","createdByUserId","lastMessageAt","createdAt","updatedAt")
-     VALUES ($1,$2,$3,$4,'OPEN',$5,$6,$7,$8,$9,$10,$11,$12,(NOW() + ($13 || ' hours')::interval),$14::jsonb,$15,NOW(),NOW(),NOW())`,
+      ("id","ticketNumber","source","title","subject","status","relatedOrderId","requesterUserId","requesterName","requesterEmail","requesterPhone","assignedAdminUserId","assignedAdminRoleId","assignedGroupId","slaDueAt","routeSnapshot","createdByUserId","lastMessageAt","createdAt","updatedAt")
+     VALUES ($1,$2,$3,$4,$5,'OPEN',$6,$7,$8,$9,$10,$11,$12,$13,(NOW() + ($14 || ' hours')::interval),$15::jsonb,$16,NOW(),NOW(),NOW())`,
     ticketId,
+    ticketNumber,
     input.source,
     String(input.title || '').slice(0, 240),
     String(input.subject || input.title || '').slice(0, 240),
@@ -670,7 +1008,7 @@ async function createSupportTicket(input: {
     JSON.stringify(normalizeAttachments(input.attachments || [])),
     sourceLanguage
   );
-  return ticketId;
+  return { ticketId, ticketNumber };
 }
 
 async function sendBotSupportResponse(message: string) {
@@ -812,7 +1150,7 @@ router.patch(
       if (!parsed.success) {
         return res.status(400).json({ success: false, message: parsed.error.errors[0]?.message || 'Invalid payload.' });
       }
-      const updated = await writeSettings(parsed.data);
+      const updated = await writeSettings(parsed.data as Partial<SupportSettings>);
       return res.json({ success: true, data: updated, message: 'Customer service settings updated.' });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error?.message || 'Failed to update settings.' });
@@ -1103,7 +1441,7 @@ router.get(
       );
       const orderTickets = await prisma.$queryRawUnsafe<Array<any>>(
         `SELECT ot."id", ot."orderId", ot."subject", ot."status", ot."assignedToUserId", ot."assignedToRole", ot."dueAt", ot."escalatedAt", ot."createdAt", ot."updatedAt",
-                o."orderNumber",
+                o."orderNumber", o."customerId",
                 (SELECT COUNT(*)::int FROM "OrderTicketMessage" om WHERE om."ticketId" = ot."id") AS "messageCount"
          FROM "OrderTicket" ot
          LEFT JOIN "Order" o ON o."id" = ot."orderId"
@@ -1113,10 +1451,12 @@ router.get(
       const mappedSupport = supportTickets.map((row) => ({
         id: `SUPPORT:${row.id}`,
         ticketId: String(row.id || ''),
+        ticketNumber: String(row.ticketNumber || '').trim(),
         source: asTicketSource(row.source, 'OTHER'),
         title: String(row.title || row.subject || 'Support Ticket'),
         subject: String(row.subject || row.title || ''),
         status: String(row.status || 'OPEN'),
+        requesterUserId: row.requesterUserId ? String(row.requesterUserId) : null,
         requesterName: String(row.requesterName || ''),
         requesterEmail: String(row.requesterEmail || ''),
         requesterPhone: String(row.requesterPhone || ''),
@@ -1133,10 +1473,12 @@ router.get(
       const mappedOrder = orderTickets.map((row) => ({
         id: `ORDER:${row.id}`,
         ticketId: String(row.id || ''),
+        ticketNumber: '',
         source: 'ORDER',
         title: String(row.orderNumber || row.subject || `Order ${row.orderId || ''}`),
         subject: String(row.subject || row.orderNumber || ''),
         status: String(row.status || 'OPEN'),
+        requesterUserId: row.customerId ? String(row.customerId) : null,
         requesterName: '',
         requesterEmail: '',
         requesterPhone: '',
@@ -1179,7 +1521,7 @@ router.post(
       const parsed = ticketCreateSchema.safeParse(req.body || {});
       if (!parsed.success) return res.status(400).json({ success: false, message: parsed.error.errors[0]?.message || 'Invalid payload.' });
       const data = parsed.data;
-      const ticketId = await createSupportTicket({
+      const created = await createSupportTicket({
         source: data.source || 'OTHER',
         title: data.title,
         subject: data.subject,
@@ -1195,7 +1537,9 @@ router.post(
         targetType: data.targetType,
         targetId: data.targetId,
       });
-      return res.status(201).json({ success: true, data: { id: `SUPPORT:${ticketId}` }, message: 'Ticket created.' });
+      return res
+        .status(201)
+        .json({ success: true, data: { id: `SUPPORT:${created.ticketId}`, ticketNumber: created.ticketNumber }, message: 'Ticket created.' });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error?.message || 'Failed to create ticket.' });
     }
@@ -1246,10 +1590,11 @@ router.post(
       const ticketRef = String(req.params.ticketRef || '').trim();
       const data = parsed.data;
       const settings = await readSettings();
-      const sourceLanguage =
-        data.sourceLanguage === 'auto'
-          ? await detectTicketingLanguage({ text: data.body, fallbackLanguage: settings.defaultLanguage })
-          : normalizeTicketingLanguage(data.sourceLanguage, settings.defaultLanguage);
+      const sourceLanguage = await resolveIncomingSourceLanguage({
+        providedLanguage: data.sourceLanguage,
+        text: data.body,
+        fallbackLanguage: settings.defaultLanguage,
+      });
       if (ticketRef.startsWith('ORDER:')) {
         const ticketId = ticketRef.slice('ORDER:'.length);
         await prisma.$executeRawUnsafe(
@@ -1374,7 +1719,7 @@ router.post('/email/ingest', async (req, res) => {
       .safeParse(req.body || {});
     if (!payload.success) return res.status(400).json({ success: false, message: payload.error.errors[0]?.message || 'Invalid payload.' });
     const data = payload.data;
-    const ticketId = await createSupportTicket({
+    const created = await createSupportTicket({
       source: 'EMAIL',
       title: data.subject,
       subject: data.subject,
@@ -1384,7 +1729,9 @@ router.post('/email/ingest', async (req, res) => {
       requesterPhone: data.phone,
       sourceLanguage: data.sourceLanguage,
     });
-    return res.status(201).json({ success: true, data: { id: `SUPPORT:${ticketId}` }, message: 'Email converted to ticket.' });
+    return res
+      .status(201)
+      .json({ success: true, data: { id: `SUPPORT:${created.ticketId}`, ticketNumber: created.ticketNumber }, message: 'Email converted to ticket.' });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error?.message || 'Failed to ingest email.' });
   }
@@ -1578,10 +1925,12 @@ router.post('/chat/:sessionId/messages', optionalAuth, async (req: any, res) => 
         senderRole === 'CUSTOMER'
       );
     }
-    const sourceLanguage =
-      data.sourceLanguage === 'auto'
-        ? await detectTicketingLanguage({ text: data.body, fallbackLanguage: settings.defaultLanguage })
-        : normalizeTicketingLanguage(data.sourceLanguage, settings.defaultLanguage);
+    const sourceLanguage = await resolveIncomingSourceLanguage({
+      providedLanguage: data.sourceLanguage,
+      text: data.body,
+      fallbackLanguage: settings.defaultLanguage,
+      preferredLanguage: normalizeTicketingLanguage(data.preferredLanguage, session.preferredLanguage || settings.defaultLanguage),
+    });
     const internalMessageRequested = data.isInternal === true;
     const effectiveIsInternal = senderRole === 'CUSTOMER' ? false : internalMessageRequested;
     await prisma.$executeRawUnsafe(
@@ -1612,7 +1961,7 @@ router.post('/chat/:sessionId/messages', optionalAuth, async (req: any, res) => 
         settings.defaultLanguage
       );
       if (bot.escalate && !session.assignedAdminUserId && !session.assignedAdminRoleId && !session.assignedGroupId) {
-        const ticketId = await createSupportTicket({
+        const created = await createSupportTicket({
           source: 'CHAT',
           title: `Chat escalation ${new Date().toISOString().slice(0, 16)}`,
           subject: 'Escalated from customer service chat',
@@ -1629,7 +1978,7 @@ router.post('/chat/:sessionId/messages', optionalAuth, async (req: any, res) => 
            VALUES ($1,$2,NULL,'BOT','ZuriKaribu Assistant',$3,'[]'::jsonb,false,$4,NOW())`,
           randomUUID(),
           sessionId,
-          `A support ticket has been created for escalation: SUPPORT:${ticketId}. Our team will follow up shortly.`,
+          `A support ticket has been created for escalation: SUPPORT:${created.ticketId} (${created.ticketNumber}). Our team will follow up shortly.`,
           settings.defaultLanguage
         );
       }
@@ -1806,7 +2155,7 @@ router.post('/bot/respond', optionalAuth, async (req, res) => {
 router.get(
   '/admin/voip/settings',
   authenticate,
-  authorizePermissions(Permissions.VOIP_MANAGE),
+  authorizePermissions(Permissions.VOIP_MANAGE, Permissions.ORDERS_MANAGE),
   async (_req, res) => {
     try {
       const settings = await readSettings();
@@ -1816,6 +2165,8 @@ router.get(
           enabled: settings.voipEnabled,
           provider: settings.voipProvider,
           callBaseUrl: settings.voipCallBaseUrl,
+          routes: settings.voipRoutes,
+          transferTargets: settings.voipTransferTargets,
         },
       });
     } catch (error: any) {
@@ -1827,7 +2178,7 @@ router.get(
 router.patch(
   '/admin/voip/settings',
   authenticate,
-  authorizePermissions(Permissions.VOIP_MANAGE),
+  authorizePermissions(Permissions.VOIP_MANAGE, Permissions.ORDERS_MANAGE),
   async (req, res) => {
     try {
       const payload = z
@@ -1835,6 +2186,8 @@ router.patch(
           enabled: z.boolean().optional(),
           provider: z.string().trim().max(120).optional(),
           callBaseUrl: z.string().trim().max(2000).optional(),
+          routes: z.array(voipRouteItemSchema).max(200).optional(),
+          transferTargets: z.array(voipTransferTargetItemSchema).max(200).optional(),
         })
         .safeParse(req.body || {});
       if (!payload.success) return res.status(400).json({ success: false, message: payload.error.errors[0]?.message || 'Invalid payload.' });
@@ -1842,6 +2195,26 @@ router.patch(
         voipEnabled: payload.data.enabled,
         voipProvider: payload.data.provider,
         voipCallBaseUrl: payload.data.callBaseUrl,
+        voipRoutes: payload.data.routes
+          ? payload.data.routes.map((route) => ({
+              id: String(route.id || '').trim(),
+              name: String(route.name || '').trim(),
+              enabled: route.enabled !== false,
+              contextType: route.contextType || 'ANY',
+              fromRoles: dedupeStrings(Array.isArray(route.fromRoles) ? route.fromRoles : []).map((token) => String(token || '').trim().toUpperCase()),
+              targetType: route.targetType || 'CUSTOMER_SERVICE',
+              targetId: String(route.targetId || '').trim(),
+            }))
+          : undefined,
+        voipTransferTargets: payload.data.transferTargets
+          ? payload.data.transferTargets.map((target) => ({
+              id: String(target.id || '').trim(),
+              name: String(target.name || '').trim(),
+              enabled: target.enabled !== false,
+              targetType: target.targetType || 'ADMIN_USER',
+              targetId: String(target.targetId || '').trim(),
+            }))
+          : undefined,
       });
       return res.json({
         success: true,
@@ -1849,6 +2222,8 @@ router.patch(
           enabled: updated.voipEnabled,
           provider: updated.voipProvider,
           callBaseUrl: updated.voipCallBaseUrl,
+          routes: updated.voipRoutes,
+          transferTargets: updated.voipTransferTargets,
         },
         message: 'VoIP settings updated.',
       });
@@ -1858,30 +2233,146 @@ router.patch(
   }
 );
 
+router.get(
+  '/admin/voip/calls',
+  authenticate,
+  authorizePermissions(Permissions.VOIP_MANAGE, Permissions.ORDERS_MANAGE),
+  async (req, res) => {
+    try {
+      await ensureSchema();
+      const statusFilter = String(req.query?.status || '').trim().toUpperCase();
+      const contextTypeFilter = String(req.query?.contextType || '').trim().toUpperCase();
+      const search = String(req.query?.search || '').trim().toLowerCase();
+      const rows = await prisma.$queryRawUnsafe<Array<any>>(
+        `SELECT c.*,
+                fu."email" AS "fromEmail",
+                tu."email" AS "toEmail"
+         FROM "SupportVoipCall" c
+         LEFT JOIN "User" fu ON fu."id" = c."fromUserId"
+         LEFT JOIN "User" tu ON tu."id" = c."toUserId"
+         ORDER BY c."startedAt" DESC NULLS LAST, c."createdAt" DESC
+         LIMIT 1000`
+      );
+      const mapped = rows
+        .map((row) => ({
+          id: String(row.id || ''),
+          routeId: row.routeId ? String(row.routeId) : null,
+          contextType: String(row.contextType || 'DIRECT'),
+          contextId: row.contextId ? String(row.contextId) : null,
+          fromUserId: row.fromUserId ? String(row.fromUserId) : null,
+          toUserId: row.toUserId ? String(row.toUserId) : null,
+          fromCallerId: row.fromCallerId ? String(row.fromCallerId) : null,
+          toCallerId: row.toCallerId ? String(row.toCallerId) : null,
+          fromEmail: String(row.fromEmail || ''),
+          toEmail: String(row.toEmail || ''),
+          provider: String(row.provider || ''),
+          status: String(row.status || 'INITIATED'),
+          callLink: String(row.callLink || ''),
+          startedAt: row.startedAt ? new Date(row.startedAt).toISOString() : null,
+          endedAt: row.endedAt ? new Date(row.endedAt).toISOString() : null,
+          createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
+          updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
+        }))
+        .filter((row) => (statusFilter ? row.status.toUpperCase() === statusFilter : true))
+        .filter((row) => (contextTypeFilter ? row.contextType.toUpperCase() === contextTypeFilter : true))
+        .filter((row) => {
+          if (!search) return true;
+          return (
+            String(row.fromEmail || '').toLowerCase().includes(search) ||
+            String(row.toEmail || '').toLowerCase().includes(search) ||
+            String(row.fromCallerId || '').toLowerCase().includes(search) ||
+            String(row.toCallerId || '').toLowerCase().includes(search) ||
+            String(row.contextId || '').toLowerCase().includes(search)
+          );
+        });
+      return res.json({ success: true, data: mapped });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to list call logs.' });
+    }
+  }
+);
+
 router.post('/voip/calls/start', authenticate, async (req: any, res) => {
   try {
+    await ensureSchema();
     const parsed = voipStartSchema.safeParse(req.body || {});
     if (!parsed.success) return res.status(400).json({ success: false, message: parsed.error.errors[0]?.message || 'Invalid payload.' });
     const settings = await readSettings();
     if (!settings.voipEnabled) return res.status(403).json({ success: false, message: 'VoIP is disabled by admin settings.' });
     const data = parsed.data;
+    const callerUserId = req.user?.id ? String(req.user.id) : '';
+    const callerRole = normalizeRoleToken(req.user?.role);
+    if (!callerUserId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+    if (isSellerOrDesignerRole(callerRole)) {
+      return res.status(403).json({ success: false, message: 'Outbound calls are disabled for seller/designer accounts.' });
+    }
+
+    const selectedRoute = pickVoipRoute(settings, {
+      requestedRouteId: data.routeId,
+      contextType: data.contextType,
+      fromRole: callerRole,
+    });
+
+    let toUserId = String(data.toUserId || '').trim() || null;
+    const customerOnlyRoute = isCustomerRole(callerRole);
+    if (customerOnlyRoute) {
+      toUserId = null;
+    }
+    if (!customerOnlyRoute && !toUserId && data.contextType === 'TICKET') {
+      toUserId = await resolveVoipTicketTargetUserId(String(data.contextId || ''), callerUserId);
+    }
+    if (!customerOnlyRoute && !toUserId && data.contextType === 'CHAT') {
+      toUserId = await resolveVoipChatTargetUserId(String(data.contextId || ''), callerUserId);
+    }
+    if (!toUserId) {
+      toUserId = await resolveVoipTargetFromRoute(selectedRoute);
+    }
+    if (isCustomerRole(callerRole) && !toUserId) {
+      const fallbackRouting = await resolveInitialRouting('PHONE');
+      toUserId = fallbackRouting?.assignment?.assignedAdminUserId || null;
+    }
+    if (toUserId && String(toUserId) === callerUserId) {
+      toUserId = null;
+    }
+    if (!toUserId) {
+      return res.status(400).json({
+        success: false,
+        message: isCustomerRole(callerRole)
+          ? 'No customer service agent is currently routable for calls.'
+          : 'Unable to resolve the call recipient for this context.',
+      });
+    }
+
     const callId = randomUUID();
+    const fromCallerId = await readUserCallerId(callerUserId);
+    const toCallerId = await readUserCallerId(toUserId);
+    const routeId = selectedRoute?.id ? String(selectedRoute.id) : null;
     const callLink = settings.voipCallBaseUrl
       ? `${settings.voipCallBaseUrl.replace(/\/+$/, '')}/${callId}`
       : `voip://${callId}`;
     await prisma.$executeRawUnsafe(
       `INSERT INTO "SupportVoipCall"
-        ("id","contextType","contextId","fromUserId","toUserId","status","provider","callLink","metadata","startedAt","createdAt","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,'INITIATED',$6,$7,'{}'::jsonb,NOW(),NOW(),NOW())`,
+        ("id","routeId","contextType","contextId","fromUserId","toUserId","fromCallerId","toCallerId","status","provider","callLink","metadata","startedAt","createdAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'INITIATED',$9,$10,$11::jsonb,NOW(),NOW(),NOW())`,
       callId,
+      routeId,
       data.contextType,
       data.contextId || null,
-      req.user?.id || null,
-      data.toUserId || null,
+      callerUserId,
+      toUserId,
+      fromCallerId,
+      toCallerId,
       settings.voipProvider,
-      callLink
+      callLink,
+      JSON.stringify({
+        routeName: selectedRoute?.name || null,
+        callerRole,
+      })
     );
-    return res.status(201).json({ success: true, data: { id: callId, callLink, provider: settings.voipProvider } });
+    return res.status(201).json({
+      success: true,
+      data: { id: callId, routeId, callLink, provider: settings.voipProvider, toUserId, fromCallerId, toCallerId },
+    });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error?.message || 'Failed to start call.' });
   }

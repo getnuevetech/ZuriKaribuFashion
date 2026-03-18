@@ -6033,6 +6033,7 @@ const adminApi = {
     status?: string;
     phone?: string;
     country?: string;
+    callerId?: string;
   }) => apiService.post<{ success: boolean; data: any; message?: string }>('/admin/users', data),
 
   updateUser: (
@@ -6045,6 +6046,7 @@ const adminApi = {
       status?: string;
       phone?: string | null;
       country?: string | null;
+      callerId?: string | null;
     }
   ) => apiService.patch<{ success: boolean; data: any; message?: string }>(`/admin/users/${id}`, data),
 
@@ -9769,7 +9771,16 @@ const customerServiceApi = {
     apiService.post<{ success: boolean; data: any }>('/customer-service/bot/respond', payload),
 
   getVoipSettings: () =>
-    apiService.get<{ success: boolean; data: { enabled: boolean; provider: string; callBaseUrl: string } }>(
+    apiService.get<{
+      success: boolean;
+      data: {
+        enabled: boolean;
+        provider: string;
+        callBaseUrl: string;
+        routes?: any[];
+        transferTargets?: any[];
+      };
+    }>(
       '/customer-service/admin/voip/settings'
     ),
   updateVoipSettings: (payload: Record<string, unknown>) =>
@@ -9784,6 +9795,8 @@ const customerServiceApi = {
     ),
   endVoipCall: (id: string) =>
     apiService.post<{ success: boolean; message?: string }>(`/customer-service/voip/calls/${id}/end`),
+  listVoipCalls: (params?: Record<string, unknown>) =>
+    apiService.get<{ success: boolean; data: any[] }>('/customer-service/admin/voip/calls', { params }),
 };
 
 // Export combined API

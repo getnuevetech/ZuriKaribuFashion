@@ -61,6 +61,14 @@ export type AutomationApprovalSettings = {
   autoRunOnProductSubmit: boolean;
   autoApproveOnPass: boolean;
   failOnNeedsAi: boolean;
+  aiApprovalTagVisibility: {
+    admin: boolean;
+    seller: boolean;
+    designer: boolean;
+    customer: boolean;
+    qa: boolean;
+    reseller: boolean;
+  };
   aiProviders: AutomationAiProvider[];
   functionBindings: AutomationFunctionBinding[];
   criteria: ProductAutomationCriteria;
@@ -452,6 +460,14 @@ const DEFAULT_SETTINGS: AutomationApprovalSettings = {
   autoRunOnProductSubmit: false,
   autoApproveOnPass: false,
   failOnNeedsAi: true,
+  aiApprovalTagVisibility: {
+    admin: true,
+    seller: false,
+    designer: false,
+    customer: false,
+    qa: true,
+    reseller: false,
+  },
   aiProviders: [],
   functionBindings: [
     {
@@ -543,6 +559,33 @@ const normalizeCriteria = (value: unknown, fallback: AutomationCriterion[]) => {
   return rows.length > 0 ? rows : fallbackRows;
 };
 
+const normalizeAiApprovalTagVisibility = (value: unknown): AutomationApprovalSettings['aiApprovalTagVisibility'] => {
+  const source = parseObject(value);
+  return {
+    admin: source.admin !== false,
+    seller: source.seller === true,
+    designer: source.designer === true,
+    customer: source.customer === true,
+    qa: source.qa !== false,
+    reseller: source.reseller === true,
+  };
+};
+
+export const isAiApprovalTagVisibleForRole = (
+  settings: AutomationApprovalSettings | null | undefined,
+  role: string | null | undefined
+) => {
+  const visibility = settings?.aiApprovalTagVisibility || DEFAULT_SETTINGS.aiApprovalTagVisibility;
+  const token = String(role || '').trim().toUpperCase();
+  if (token === 'ADMINISTRATOR') return visibility.admin !== false;
+  if (token === 'QA_TEAM') return visibility.qa !== false;
+  if (token === 'FABRIC_SELLER') return visibility.seller === true;
+  if (token === 'FASHION_DESIGNER') return visibility.designer === true;
+  if (token === 'CUSTOMER') return visibility.customer === true;
+  if (token === 'RESELLER_INFLUENCER') return visibility.reseller === true;
+  return false;
+};
+
 export const normalizeAutomationApprovalSettings = (value: unknown): AutomationApprovalSettings => {
   const source = parseObject(value);
   const criteria = parseObject(source.criteria);
@@ -551,6 +594,7 @@ export const normalizeAutomationApprovalSettings = (value: unknown): AutomationA
     autoRunOnProductSubmit: source.autoRunOnProductSubmit === true,
     autoApproveOnPass: source.autoApproveOnPass === true,
     failOnNeedsAi: source.failOnNeedsAi !== false,
+    aiApprovalTagVisibility: normalizeAiApprovalTagVisibility(source.aiApprovalTagVisibility),
     aiProviders: (Array.isArray(source.aiProviders) ? source.aiProviders : [])
       .map((entry) => normalizeProvider(entry))
       .filter((entry): entry is AutomationAiProvider => Boolean(entry)),
@@ -875,10 +919,14 @@ export const readProductAutomationOutcomesForProducts = async (input: {
   productType: ProductType;
   productIds: string[];
   userFacing?: boolean;
+  viewerRole?: string | null;
 }) => {
   await ensureProductAutomationOutcomeSchema();
   const ids = Array.from(new Set((input.productIds || []).map((entry) => String(entry || '').trim()).filter(Boolean)));
   if (ids.length === 0) return {} as Record<string, ProductAutomationOutcome>;
+  const tagVisibleToViewer = input.userFacing
+    ? isAiApprovalTagVisibleForRole((await readAutomationApprovalSettings()).settings, input.viewerRole)
+    : true;
   const rows = await prisma.$queryRawUnsafe<Array<any>>(
     `SELECT "productType","productId","evaluationStatus","action","failureSeverity","needsCorrection","summaryMessage","report","changeReport","technicalFailure","technicalFailureReason","autoRetryCount","retryExhausted","updatedAt"
      FROM "ProductAutomationOutcome"
@@ -889,7 +937,16 @@ export const readProductAutomationOutcomesForProducts = async (input: {
   );
   return (Array.isArray(rows) ? rows : []).reduce<Record<string, ProductAutomationOutcome>>((acc, row) => {
     const mappedRaw = mapProductAutomationOutcomeRow(row);
-    const mapped = input.userFacing ? toUserFacingAutomationOutcome(mappedRaw) : mappedRaw;
+    let mapped = input.userFacing ? toUserFacingAutomationOutcome(mappedRaw) : mappedRaw;
+    if (
+      input.userFacing &&
+      !tagVisibleToViewer &&
+      String(mapped.action || '')
+        .trim()
+        .toUpperCase() === 'AUTO_APPROVED'
+    ) {
+      mapped = { ...mapped, action: 'NONE' };
+    }
     if (mapped.productId) acc[mapped.productId] = mapped;
     return acc;
   }, {});
@@ -2251,6 +2308,41 @@ export const evaluateProductAutomationChecks = async (input: {
     productType: input.productType,
     productId: input.productId,
   });
+  const maybeSkipApprovedUnchanged = (params: {
+    status: unknown;
+    updatedAt: Date | string | null | undefined;
+    productLabel: string;
+  }): ProductAutomationEvaluation | null => {
+    const productStatus = String(params.status || '').trim().toUpperCase();
+    const previousAction = String(previousOutcome?.action || '').trim().toUpperCase();
+    const previousUpdatedAtMs = previousOutcome?.updatedAt ? Number(new Date(previousOutcome.updatedAt).getTime()) : 0;
+    const productUpdatedAtMs = params.updatedAt ? Number(new Date(params.updatedAt).getTime()) : 0;
+    const unchangedSinceApproval =
+      previousUpdatedAtMs > 0 &&
+      productUpdatedAtMs > 0 &&
+      productUpdatedAtMs <= previousUpdatedAtMs;
+    if (productStatus !== 'APPROVED' || previousAction !== 'AUTO_APPROVED' || !unchangedSinceApproval) {
+      return null;
+    }
+    return {
+      canAutoApprove: true,
+      status: 'PASS',
+      report: [
+        {
+          key: 'approved_unchanged_skip',
+          label: 'Skip redundant automation rerun',
+          status: 'PASS',
+          message: `${params.productLabel} is already AI-approved and unchanged since the last automation run. Rerun skipped.`,
+        },
+      ],
+      changeReport: [],
+      technicalFailure: false,
+      technicalFailureReason: '',
+      autoRetryCount: autoRetryAttempt,
+      retriedAfterTechnicalFailure: autoRetryAttempt > 0,
+      retryExhausted: false,
+    };
+  };
 
   const addResult = (row: AutomationCheckReportRow) => {
     const criterion = criteria.find((entry) => entry.key === row.key);
@@ -3137,6 +3229,12 @@ Rules:
         changeReport: [] as AutomationAppliedChange[],
       };
     }
+    const skipEvaluation = maybeSkipApprovedUnchanged({
+      status: product.status,
+      updatedAt: product.updatedAt,
+      productLabel: 'Fabric product',
+    });
+    if (skipEvaluation) return skipEvaluation;
     const peerAvgRows = await prisma.$queryRawUnsafe<Array<{ avgPrice: number }>>(
       `SELECT AVG("finalPrice")::numeric AS "avgPrice"
        FROM "Fabric"
@@ -3316,6 +3414,12 @@ Rules:
         changeReport: [] as AutomationAppliedChange[],
       };
     }
+    const skipEvaluation = maybeSkipApprovedUnchanged({
+      status: product.status,
+      updatedAt: product.updatedAt,
+      productLabel: 'Ready-to-wear product',
+    });
+    if (skipEvaluation) return skipEvaluation;
     const peerAvgRows = await prisma.$queryRawUnsafe<Array<{ avgPrice: number }>>(
       `SELECT AVG("basePrice")::numeric AS "avgPrice"
        FROM "ReadyToWear"
@@ -3481,6 +3585,12 @@ Rules:
         changeReport: [] as AutomationAppliedChange[],
       };
     }
+    const skipEvaluation = maybeSkipApprovedUnchanged({
+      status: product.status,
+      updatedAt: product.updatedAt,
+      productLabel: 'Design product',
+    });
+    if (skipEvaluation) return skipEvaluation;
     const peerAvgRows = await prisma.$queryRawUnsafe<Array<{ avgPrice: number }>>(
       `SELECT AVG("basePrice")::numeric AS "avgPrice"
        FROM "Design"

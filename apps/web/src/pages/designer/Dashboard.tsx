@@ -96,6 +96,7 @@ interface Design {
   approvedEditableFields?: string[];
   approvedEditAccessEndsAt?: string | null;
   automationOutcome?: ProductAutomationOutcome | null;
+  aiAutomationApprovedTag?: boolean;
 }
 
 interface ReadyProduct {
@@ -117,6 +118,7 @@ interface ReadyProduct {
   approvedEditableFields?: string[];
   approvedEditAccessEndsAt?: string | null;
   automationOutcome?: ProductAutomationOutcome | null;
+  aiAutomationApprovedTag?: boolean;
 }
 
 interface DesignOrder {
@@ -1127,6 +1129,7 @@ export default function DesignerDashboard() {
           approvedEditableFields: Array.isArray(design.approvedEditableFields) ? design.approvedEditableFields : [],
           approvedEditAccessEndsAt: design.approvedEditAccessEndsAt ? String(design.approvedEditAccessEndsAt) : null,
           automationOutcome: normalizeAutomationOutcome(design.automationOutcome),
+          aiAutomationApprovedTag: design.aiAutomationApprovedTag === true,
         }));
         setDesigns(mappedDesigns);
       }
@@ -1162,6 +1165,7 @@ export default function DesignerDashboard() {
           approvedEditableFields: Array.isArray(item.approvedEditableFields) ? item.approvedEditableFields : [],
           approvedEditAccessEndsAt: item.approvedEditAccessEndsAt ? String(item.approvedEditAccessEndsAt) : null,
           automationOutcome: normalizeAutomationOutcome(item.automationOutcome),
+          aiAutomationApprovedTag: item.aiAutomationApprovedTag === true,
         }));
         setReadyProducts(mappedReady);
       }
@@ -1903,11 +1907,8 @@ export default function DesignerDashboard() {
       }));
       setFabricCountryOptions(countries);
       setFabricMaterialOptions(materials.filter((entry) => entry.id && entry.name));
-      if (!designFabricCountryFilter && countries.length > 0) {
-        setDesignFabricCountryFilter(countries[0]);
-      }
       if (designFabricCountryFilter && countries.length > 0 && !countries.includes(designFabricCountryFilter)) {
-        setDesignFabricCountryFilter(countries[0]);
+        setDesignFabricCountryFilter('');
       }
       if (
         designFabricMaterialFilter &&
@@ -1970,9 +1971,6 @@ export default function DesignerDashboard() {
       setFabricAccessAllowedCountries(mergedAllowedCountries);
       setFabricAccessAvailableCountries(mergedAvailableCountries);
       setFabricAccessRequests(requests);
-      if (!designFabricCountryFilter && mergedAllowedCountries.length > 0) {
-        setDesignFabricCountryFilter(mergedAllowedCountries[0]);
-      }
     } catch (error) {
       console.error('Failed to load fabric country access summary:', error);
     } finally {
@@ -2909,6 +2907,9 @@ export default function DesignerDashboard() {
                       <div>
                         <p className="font-medium text-gray-900">{item.name}</p>
                         <p className="text-sm text-gray-500">{productType === 'READY_TO_WEAR' ? 'Ready To Wear' : 'Custom To Wear'}</p>
+                        {item.aiAutomationApprovedTag ? (
+                          <p className="text-xs font-semibold text-emerald-700">AI Approved</p>
+                        ) : null}
                         {item.automationOutcome?.needsCorrection ? (
                           <p className={`text-xs font-semibold ${severity === 'MAJOR' ? 'text-red-700' : 'text-amber-700'}`}>
                             Automation correction required ({severity === 'MAJOR' ? 'Major' : 'Mid'})

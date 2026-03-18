@@ -219,7 +219,7 @@ async function resolveSellerListingPrice(params: {
   requestedCurrencyCode?: string;
 }) {
   const { matrix, rules } = await getCurrencyState();
-  const { defaultCurrency, allowedCurrencies } = getAllowedCurrenciesForVendor({
+  const { defaultCurrency } = getAllowedCurrenciesForVendor({
     role: UserRole.FABRIC_SELLER,
     userId: params.userId,
     country: params.country,
@@ -228,8 +228,14 @@ async function resolveSellerListingPrice(params: {
     includeUsdFallback: false,
   });
   const requested = normalizeCurrencyCode(params.requestedCurrencyCode);
-  const selectedCurrency =
-    requested && allowedCurrencies.includes(requested) ? requested : defaultCurrency;
+  if (requested && requested !== defaultCurrency) {
+    const error = new Error(
+      `Sellers can only list products in their local currency (${defaultCurrency}).`
+    ) as Error & { status?: number };
+    error.status = 400;
+    throw error;
+  }
+  const selectedCurrency = defaultCurrency;
   const localPrice = Number(params.localPriceInput || 0);
   const usdPrice = convertLocalToUsd(localPrice, selectedCurrency, matrix);
   return {
@@ -238,7 +244,7 @@ async function resolveSellerListingPrice(params: {
     usdPrice,
     usdPerUnit: getUsdPerUnit(selectedCurrency, matrix) || 1,
     defaultCurrency,
-    allowedCurrencies,
+    allowedCurrencies: [defaultCurrency],
   };
 }
 
@@ -618,6 +624,7 @@ router.get('/fabrics', async (req, res, next) => {
         productType: ProductType.FABRIC as any,
         productIds: fabrics.map((item) => item.id),
         userFacing: true,
+        viewerRole: req.user?.role || null,
       }),
     ]);
     const metadataByFabricId = new Map<string, any>(metadataRows);
@@ -639,6 +646,7 @@ router.get('/fabrics', async (req, res, next) => {
                 activeGrant,
               })
             : getFieldKeysForProductType('FABRIC');
+        const automationOutcome = automationOutcomesByFabricId[item.id] || null;
         return {
           ...item,
           isFeatured: featuredSections.length > 0,
@@ -650,7 +658,11 @@ router.get('/fabrics', async (req, res, next) => {
           predominantColor: colorMap[item.id] || null,
           approvedEditableFields,
           approvedEditAccessEndsAt: activeGrant?.grantEndsAt || null,
-          automationOutcome: automationOutcomesByFabricId[item.id] || null,
+          automationOutcome,
+          aiAutomationApprovedTag:
+            String(automationOutcome?.action || '')
+              .trim()
+              .toUpperCase() === 'AUTO_APPROVED',
         };
       }),
     });
@@ -1160,6 +1172,12 @@ router.patch('/fabrics/:id', async (req, res, next) => {
         .optional(),
     });
     const data = schema.parse(req.body);
+    if (data.priceCurrencyCode !== undefined && data.sellerPrice === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'priceCurrencyCode can only be updated together with sellerPrice.',
+      });
+    }
     await assertSellerCanManageCatalog(req.user!.id, 'edit products');
 
     const profile = await resolveSellerProfile(req.user!.id);
