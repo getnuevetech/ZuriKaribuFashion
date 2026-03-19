@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { api, resolveAssetUrl } from '../../services/api';
+import {
+  CATEGORY_PAGE_DESIGN_PRESET_OPTIONS,
+  CategoryPageDesignPreset,
+} from '../../design/categoryPagePreset';
 
 type CategoryPageType = 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
 
@@ -9,6 +13,7 @@ type CategoryPageSettingsForm = {
   bannerTitle: string;
   bannerSubtitle: string;
   bannerImage: string;
+  designPreset: CategoryPageDesignPreset;
   bannerHeight: number;
   pageSize: number;
   columns: number;
@@ -44,6 +49,7 @@ const emptySettings: CategoryPageSettingsForm = {
   bannerTitle: '',
   bannerSubtitle: '',
   bannerImage: '',
+  designPreset: 'STANDARD',
   bannerHeight: 320,
   pageSize: 24,
   columns: 4,
@@ -137,6 +143,12 @@ export default function AdminCategoryPages() {
           bannerTitle: String(nextSettings.bannerTitle || ''),
           bannerSubtitle: String(nextSettings.bannerSubtitle || ''),
           bannerImage: resolveAssetUrl(String(nextSettings.bannerImage || '')),
+          designPreset:
+            String(nextSettings.designPreset || '').trim().toUpperCase() === 'EDITORIAL'
+              ? 'EDITORIAL'
+              : String(nextSettings.designPreset || '').trim().toUpperCase() === 'MINIMAL'
+                ? 'MINIMAL'
+                : 'STANDARD',
           bannerHeight: Number(nextSettings.bannerHeight || 320),
           pageSize: Number(nextSettings.pageSize || 24),
           columns: Number(nextSettings.columns || 4),
@@ -187,6 +199,7 @@ export default function AdminCategoryPages() {
         bannerTitle: settings.bannerTitle.trim(),
         bannerSubtitle: settings.bannerSubtitle.trim(),
         bannerImage: settings.bannerImage.trim(),
+        designPreset: settings.designPreset,
         bannerHeight: Math.max(220, Math.min(560, Math.round(Number(settings.bannerHeight || 320)))),
         pageSize: Math.max(8, Math.min(120, Math.round(Number(settings.pageSize || 24)))),
         columns: Math.max(2, Math.min(6, Math.round(Number(settings.columns || 4)))),
@@ -212,6 +225,12 @@ export default function AdminCategoryPages() {
           bannerTitle: String(response.data.settings.bannerTitle || ''),
           bannerSubtitle: String(response.data.settings.bannerSubtitle || ''),
           bannerImage: resolveAssetUrl(String(response.data.settings.bannerImage || '')),
+          designPreset:
+            String(response.data.settings.designPreset || '').trim().toUpperCase() === 'EDITORIAL'
+              ? 'EDITORIAL'
+              : String(response.data.settings.designPreset || '').trim().toUpperCase() === 'MINIMAL'
+                ? 'MINIMAL'
+                : 'STANDARD',
           bannerHeight: Number(response.data.settings.bannerHeight || 320),
           pageSize: Number(response.data.settings.pageSize || 24),
           columns: Number(response.data.settings.columns || 4),
@@ -452,6 +471,36 @@ export default function AdminCategoryPages() {
                   }
                   className="w-full rounded-md border px-3 py-2"
                 />
+              </label>
+              <label className="text-sm space-y-1">
+                <span className="text-gray-700">Design preset</span>
+                <select
+                  value={settings.designPreset}
+                  onChange={(event) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      designPreset:
+                        String(event.target.value || '').toUpperCase() === 'EDITORIAL'
+                          ? 'EDITORIAL'
+                          : String(event.target.value || '').toUpperCase() === 'MINIMAL'
+                            ? 'MINIMAL'
+                            : 'STANDARD',
+                    }))
+                  }
+                  className="w-full rounded-md border px-3 py-2"
+                >
+                  {CATEGORY_PAGE_DESIGN_PRESET_OPTIONS.map((preset) => (
+                    <option key={preset.value} value={preset.value}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="block text-xs text-gray-500">
+                  {
+                    CATEGORY_PAGE_DESIGN_PRESET_OPTIONS.find((preset) => preset.value === settings.designPreset)
+                      ?.description
+                  }
+                </span>
               </label>
               <label className="text-sm space-y-1 flex items-center gap-2 pt-6">
                 <input

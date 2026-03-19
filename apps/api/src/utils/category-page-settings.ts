@@ -4,6 +4,8 @@ import { prisma, ProductStatus } from '../db';
 
 export const CATEGORY_PAGE_TYPES = ['READY_TO_WEAR', 'FABRIC_TO_BUY', 'CUSTOM_TO_WEAR'] as const;
 export type CategoryPageType = (typeof CATEGORY_PAGE_TYPES)[number];
+export const CATEGORY_PAGE_DESIGN_PRESETS = ['STANDARD', 'EDITORIAL', 'MINIMAL'] as const;
+export type CategoryPageDesignPreset = (typeof CATEGORY_PAGE_DESIGN_PRESETS)[number];
 
 export type CategoryPageProductPreview = {
   id: string;
@@ -37,6 +39,7 @@ const categoryPageSettingsSchema = z.object({
   bannerTitle: z.string().trim().max(120),
   bannerSubtitle: z.string().trim().max(320),
   bannerImage: z.string().trim().max(2048),
+  designPreset: z.enum(CATEGORY_PAGE_DESIGN_PRESETS),
   bannerHeight: z.number().int().min(220).max(560),
   pageSize: z.number().int().min(8).max(120),
   columns: z.number().int().min(2).max(6),
@@ -63,6 +66,7 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     bannerTitle: 'Ready To Wear',
     bannerSubtitle: 'Shop ready styles from designers across Africa.',
     bannerImage: '/images/hero-readytowear.jpg',
+    designPreset: 'STANDARD',
     bannerHeight: 320,
     pageSize: 24,
     columns: 4,
@@ -87,6 +91,7 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     bannerTitle: 'Fabrics To Buy',
     bannerSubtitle: 'Choose quality fabrics by material and country.',
     bannerImage: '/images/hero-fabrics.jpg',
+    designPreset: 'STANDARD',
     bannerHeight: 320,
     pageSize: 24,
     columns: 4,
@@ -111,6 +116,7 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     bannerTitle: 'Custom To Wear',
     bannerSubtitle: 'Discover custom designs made for your measurements.',
     bannerImage: '/images/hero-designs.jpg',
+    designPreset: 'STANDARD',
     bannerHeight: 320,
     pageSize: 24,
     columns: 4,
@@ -212,6 +218,9 @@ const normalizeCategoryPageSettings = (pageType: CategoryPageType, raw: unknown)
     bannerTitle: String(row.bannerTitle ?? fallback.bannerTitle).trim().slice(0, 120),
     bannerSubtitle: String(row.bannerSubtitle ?? fallback.bannerSubtitle).trim().slice(0, 320),
     bannerImage: String(row.bannerImage ?? fallback.bannerImage).trim().slice(0, 2048),
+    designPreset: CATEGORY_PAGE_DESIGN_PRESETS.includes(String(row.designPreset || '').trim().toUpperCase() as CategoryPageDesignPreset)
+      ? (String(row.designPreset || '').trim().toUpperCase() as CategoryPageDesignPreset)
+      : fallback.designPreset,
     bannerHeight: Number.isFinite(Number(row.bannerHeight))
       ? Math.max(220, Math.min(560, Math.round(Number(row.bannerHeight))))
       : fallback.bannerHeight,

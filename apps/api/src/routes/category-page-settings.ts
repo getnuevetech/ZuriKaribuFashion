@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import {
+  CATEGORY_PAGE_DESIGN_PRESETS,
   CATEGORY_PAGE_TYPES,
   listCategoryPageProductOptions,
   readCategoryFeaturedProducts,
@@ -18,6 +19,7 @@ const updateCategoryPageSettingsSchema = z
     bannerTitle: z.string().trim().max(120).optional(),
     bannerSubtitle: z.string().trim().max(320).optional(),
     bannerImage: z.string().trim().max(2048).optional(),
+    designPreset: z.enum(CATEGORY_PAGE_DESIGN_PRESETS).optional(),
     bannerHeight: z.number().int().min(220).max(560).optional(),
     pageSize: z.number().int().min(8).max(120).optional(),
     columns: z.number().int().min(2).max(6).optional(),

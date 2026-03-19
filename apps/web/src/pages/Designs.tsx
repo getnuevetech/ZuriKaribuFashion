@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Loader2, Search } from 'lucide-react';
 import { api } from '../services/api';
 import { useCurrencyStore } from '../store/currencyStore';
 import { resolveCountryCode } from '../data/locationOptions';
+import { CategoryPageDesignPreset, resolveRotatingTitlePresentation } from '../design/categoryPagePreset';
 
 interface Design {
   id: string;
@@ -52,6 +53,7 @@ type CategoryPageSettings = {
   bannerTitle: string;
   bannerSubtitle: string;
   bannerImage: string;
+  designPreset: CategoryPageDesignPreset;
   bannerHeight: number;
   pageSize: number;
   columns: number;
@@ -78,6 +80,7 @@ const DEFAULT_SETTINGS: CategoryPageSettings = {
   bannerTitle: 'Custom To Wear',
   bannerSubtitle: 'Discover custom designs from top fashion designers.',
   bannerImage: '/images/hero-designs.jpg',
+  designPreset: 'STANDARD',
   bannerHeight: 320,
   pageSize: 24,
   columns: 4,
@@ -223,6 +226,12 @@ export default function Designs() {
           bannerTitle: String(response.data.settings.bannerTitle || DEFAULT_SETTINGS.bannerTitle),
           bannerSubtitle: String(response.data.settings.bannerSubtitle || DEFAULT_SETTINGS.bannerSubtitle),
           bannerImage: String(response.data.settings.bannerImage || DEFAULT_SETTINGS.bannerImage),
+          designPreset:
+            String(response.data.settings.designPreset || '').trim().toUpperCase() === 'EDITORIAL'
+              ? 'EDITORIAL'
+              : String(response.data.settings.designPreset || '').trim().toUpperCase() === 'MINIMAL'
+                ? 'MINIMAL'
+                : 'STANDARD',
           bannerHeight: Number(response.data.settings.bannerHeight || DEFAULT_SETTINGS.bannerHeight),
           pageSize: Number(response.data.settings.pageSize || DEFAULT_SETTINGS.pageSize),
           columns: Number(response.data.settings.columns || DEFAULT_SETTINGS.columns),
@@ -498,6 +507,10 @@ export default function Designs() {
             </div>
             <div className={rotatingGridClass}>
               {rotatingProducts.map((product) => {
+                const rotatingTitlePresentation = resolveRotatingTitlePresentation(
+                  settings.designPreset,
+                  Number(settings.rotatingTitleSize || DEFAULT_SETTINGS.rotatingTitleSize)
+                );
                 const flagCode = resolveCountryCode(product.country || '');
                 return (
                   <Link key={`rotating-${product.id}`} to={product.href} className="group overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -518,10 +531,8 @@ export default function Designs() {
                       <div className="absolute inset-x-0 bottom-0 p-4 md:p-5">
                         <div className="max-w-[95%] text-left text-white">
                           <h2
-                            className="font-semibold leading-tight"
-                            style={{
-                              fontSize: `${Math.max(16, Math.min(64, Number(settings.rotatingTitleSize || DEFAULT_SETTINGS.rotatingTitleSize)))}px`,
-                            }}
+                            className={rotatingTitlePresentation.titleClassName}
+                            style={{ fontSize: `${rotatingTitlePresentation.fontSize}px` }}
                           >
                             {product.name}
                           </h2>
@@ -531,11 +542,11 @@ export default function Designs() {
                           <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
                             <div>
                               <p className="text-xs text-white/90">{product.ownerName}</p>
-                              <p className="mt-1 font-extrabold leading-none" style={{ fontSize: '1.3rem' }}>
+                              <p className={rotatingTitlePresentation.priceClassName}>
                                 {formatFromUsd(Number(product.priceUsd || 0))}
                               </p>
                             </div>
-                            <span className="inline-flex bg-white px-3 py-1.5 text-xs font-semibold text-black">VIEW PRODUCT</span>
+                            <span className={rotatingTitlePresentation.ctaClassName}>VIEW PRODUCT</span>
                           </div>
                         </div>
                       </div>

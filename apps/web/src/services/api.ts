@@ -1321,6 +1321,7 @@ const defaultCategoryPageSettings = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY'
   bannerTitle: pageType === 'FABRIC_TO_BUY' ? 'Fabrics To Buy' : pageType === 'CUSTOM_TO_WEAR' ? 'Custom To Wear' : 'Ready To Wear',
   bannerSubtitle: '',
   bannerImage: '',
+  designPreset: 'STANDARD' as 'STANDARD' | 'EDITORIAL' | 'MINIMAL',
   bannerHeight: 320,
   pageSize: 24,
   columns: 4,
@@ -1342,8 +1343,14 @@ const normalizeCategoryPageSettingsPayload = (pageType: 'READY_TO_WEAR' | 'FABRI
     ...defaultCategoryPageSettings(pageType),
     ...(input && typeof input === 'object' ? input : {}),
   } as any;
+  const presetToken = String(merged.designPreset || '').trim().toUpperCase();
+  const designPreset =
+    presetToken === 'EDITORIAL' || presetToken === 'MINIMAL' || presetToken === 'STANDARD'
+      ? presetToken
+      : 'STANDARD';
   return {
     ...merged,
+    designPreset,
     bannerImage: resolveApiAssetUrl(merged.bannerImage),
   };
 };
@@ -4570,6 +4577,7 @@ const productsApi = {
           bannerTitle: string;
           bannerSubtitle: string;
           bannerImage: string;
+          designPreset: 'STANDARD' | 'EDITORIAL' | 'MINIMAL';
           bannerHeight: number;
           pageSize: number;
           columns: number;
@@ -7572,6 +7580,7 @@ const adminApi = {
           bannerTitle: string;
           bannerSubtitle: string;
           bannerImage: string;
+          designPreset: 'STANDARD' | 'EDITORIAL' | 'MINIMAL';
           bannerHeight: number;
           pageSize: number;
           columns: number;
@@ -7618,6 +7627,7 @@ const adminApi = {
       bannerTitle: string;
       bannerSubtitle: string;
       bannerImage: string;
+      designPreset: 'STANDARD' | 'EDITORIAL' | 'MINIMAL';
       bannerHeight: number;
       pageSize: number;
       columns: number;
@@ -7643,6 +7653,7 @@ const adminApi = {
           bannerTitle: string;
           bannerSubtitle: string;
           bannerImage: string;
+          designPreset: 'STANDARD' | 'EDITORIAL' | 'MINIMAL';
           bannerHeight: number;
           pageSize: number;
           columns: number;
