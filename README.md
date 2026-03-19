@@ -111,6 +111,7 @@ After database seeding:
 - [Deployment Guide](DEPLOY.md) - Detailed deployment instructions
 - [AWS Migration Guide](deploy/aws/README.md) - AWS migration runbook
 - [API Documentation](apps/api/README.md) - Backend API docs
+- [Modularization Blueprint (Draft)](docs/architecture/modularization-blueprint.md) - Domain split and service extraction plan
 
 ## 📝 License
 
