@@ -47,6 +47,12 @@ export type AutomationCriterion = {
   allowAiEdits?: boolean;
   aiFunctionKey?: string;
   aiProviderId?: string;
+  targetField?: string;
+  verifierFunctionKey?: string;
+  verifierProviderId?: string;
+  fixerFunctionKey?: string;
+  fixerProviderId?: string;
+  passResultToFixer?: boolean;
 };
 
 export type ProductAutomationCriteria = {
@@ -61,6 +67,12 @@ export type AutomationApprovalSettings = {
   autoRunOnProductSubmit: boolean;
   autoApproveOnPass: boolean;
   failOnNeedsAi: boolean;
+  automationSystems: {
+    legacyEngineEnabled: boolean;
+    fieldPipelineEngineEnabled: boolean;
+    activeEngine: 'LEGACY' | 'FIELD_PIPELINE';
+    fallbackToLegacy: boolean;
+  };
   aiApprovalTagVisibility: {
     admin: boolean;
     seller: boolean;
@@ -460,6 +472,12 @@ const DEFAULT_SETTINGS: AutomationApprovalSettings = {
   autoRunOnProductSubmit: false,
   autoApproveOnPass: false,
   failOnNeedsAi: true,
+  automationSystems: {
+    legacyEngineEnabled: true,
+    fieldPipelineEngineEnabled: false,
+    activeEngine: 'LEGACY',
+    fallbackToLegacy: true,
+  },
   aiApprovalTagVisibility: {
     admin: true,
     seller: false,
@@ -509,6 +527,31 @@ const STRICT_AUTO_EDIT_DEFAULT_KEYS = new Set([
   'predominant_color_match',
 ]);
 
+const defaultCriterionTargetField = (criterionKey: string, productType?: ProductType | 'ACCOUNT_APPROVAL') => {
+  const key = String(criterionKey || '').trim().toLowerCase();
+  if (key === 'name_grammar') return 'name';
+  if (key === 'description_grammar') return 'description';
+  if (key === 'price_outlier' || key === 'currency_sanity') {
+    return productType === ProductType.FABRIC ? 'finalPrice' : 'basePrice';
+  }
+  if (key === 'minimum_yards') return 'minYards';
+  if (key === 'stock_vs_minimum') return 'stockYards';
+  if (key === 'predominant_color_match') return 'predominantColor';
+  if (key === 'image_quality') return 'images[0]';
+  if (key === 'account_notes_grammar') return 'account.notes';
+  return '';
+};
+
+const normalizeCriterionTargetField = (
+  value: unknown,
+  criterionKey: string,
+  productType?: ProductType | 'ACCOUNT_APPROVAL'
+) => {
+  const normalized = String(value || '').trim();
+  if (normalized) return normalized;
+  return defaultCriterionTargetField(criterionKey, productType);
+};
+
 const defaultAiFunctionForCriterionKey = (criterionKey: string) => {
   const key = String(criterionKey || '').trim().toLowerCase();
   if (key === 'name_grammar' || key === 'description_grammar') return 'text_grammar_enhancement';
@@ -524,15 +567,46 @@ const normalizeCriterionFunctionKey = (value: unknown, criterionKey: string) => 
   return defaultAiFunctionForCriterionKey(criterionKey);
 };
 
-const normalizeCriteria = (value: unknown, fallback: AutomationCriterion[]) => {
+const defaultFixerFunctionForCriterionKey = (criterionKey: string, targetField: string) => {
+  const normalizedField = String(targetField || '').trim().toLowerCase();
+  if (normalizedField === 'images[0]' || String(criterionKey || '').trim().toLowerCase() === 'image_quality') {
+    return 'image_regeneration';
+  }
+  return 'text_grammar_enhancement';
+};
+
+const normalizeCriterionFixerFunctionKey = (value: unknown, criterionKey: string, targetField: string) => {
+  const normalized = normalizeAutomationFunctionKey(value);
+  if (normalized && SYSTEM_AUTOMATION_FUNCTION_KEYS.has(normalized)) return normalized;
+  return defaultFixerFunctionForCriterionKey(criterionKey, targetField);
+};
+
+const normalizeCriteria = (
+  value: unknown,
+  fallback: AutomationCriterion[],
+  productType: ProductType | 'ACCOUNT_APPROVAL'
+) => {
   const fallbackRows = fallback.map((entry) => ({
     ...entry,
     allowAiEdits:
       typeof entry.allowAiEdits === 'boolean'
         ? entry.allowAiEdits
         : entry.requiresAi === true && STRICT_AUTO_EDIT_DEFAULT_KEYS.has(String(entry.key || '').trim()),
+    targetField: normalizeCriterionTargetField(entry.targetField, String(entry.key || '').trim(), productType),
     aiFunctionKey: normalizeCriterionFunctionKey(entry.aiFunctionKey, String(entry.key || '').trim()),
+    verifierFunctionKey: normalizeCriterionFunctionKey(
+      entry.verifierFunctionKey || entry.aiFunctionKey,
+      String(entry.key || '').trim()
+    ),
+    fixerFunctionKey: normalizeCriterionFixerFunctionKey(
+      entry.fixerFunctionKey,
+      String(entry.key || '').trim(),
+      normalizeCriterionTargetField(entry.targetField, String(entry.key || '').trim(), productType)
+    ),
     aiProviderId: String(entry.aiProviderId || '').trim(),
+    verifierProviderId: String(entry.verifierProviderId || entry.aiProviderId || '').trim(),
+    fixerProviderId: String(entry.fixerProviderId || '').trim(),
+    passResultToFixer: entry.passResultToFixer !== false,
   }));
   if (!Array.isArray(value)) return fallbackRows;
   const rows = value
@@ -540,6 +614,7 @@ const normalizeCriteria = (value: unknown, fallback: AutomationCriterion[]) => {
     .map((row) => {
       const key = String(row.key || '').trim();
       const requiresAi = row.requiresAi === true;
+      const targetField = normalizeCriterionTargetField(row.targetField, key, productType);
       const allowAiEditsRaw = row.allowAiEdits;
       const allowAiEdits =
         typeof allowAiEditsRaw === 'boolean'
@@ -551,8 +626,14 @@ const normalizeCriteria = (value: unknown, fallback: AutomationCriterion[]) => {
         enabled: row.enabled !== false,
         requiresAi,
         allowAiEdits,
+        targetField,
         aiFunctionKey: normalizeCriterionFunctionKey(row.aiFunctionKey, key),
+        verifierFunctionKey: normalizeCriterionFunctionKey(row.verifierFunctionKey || row.aiFunctionKey, key),
+        fixerFunctionKey: normalizeCriterionFixerFunctionKey(row.fixerFunctionKey, key, targetField),
         aiProviderId: String(row.aiProviderId || '').trim(),
+        verifierProviderId: String(row.verifierProviderId || row.aiProviderId || '').trim(),
+        fixerProviderId: String(row.fixerProviderId || '').trim(),
+        passResultToFixer: row.passResultToFixer !== false,
       };
     })
     .filter((row) => row.key.length > 0);
@@ -568,6 +649,21 @@ const normalizeAiApprovalTagVisibility = (value: unknown): AutomationApprovalSet
     customer: source.customer === true,
     qa: source.qa !== false,
     reseller: source.reseller === true,
+  };
+};
+
+const normalizeAutomationSystems = (
+  value: unknown
+): AutomationApprovalSettings['automationSystems'] => {
+  const source = parseObject(value);
+  const activeEngine = String(source.activeEngine || '').trim().toUpperCase() === 'FIELD_PIPELINE'
+    ? 'FIELD_PIPELINE'
+    : 'LEGACY';
+  return {
+    legacyEngineEnabled: source.legacyEngineEnabled !== false,
+    fieldPipelineEngineEnabled: source.fieldPipelineEngineEnabled === true,
+    activeEngine,
+    fallbackToLegacy: source.fallbackToLegacy !== false,
   };
 };
 
@@ -594,6 +690,7 @@ export const normalizeAutomationApprovalSettings = (value: unknown): AutomationA
     autoRunOnProductSubmit: source.autoRunOnProductSubmit === true,
     autoApproveOnPass: source.autoApproveOnPass === true,
     failOnNeedsAi: source.failOnNeedsAi !== false,
+    automationSystems: normalizeAutomationSystems(source.automationSystems),
     aiApprovalTagVisibility: normalizeAiApprovalTagVisibility(source.aiApprovalTagVisibility),
     aiProviders: (Array.isArray(source.aiProviders) ? source.aiProviders : [])
       .map((entry) => normalizeProvider(entry))
@@ -602,10 +699,10 @@ export const normalizeAutomationApprovalSettings = (value: unknown): AutomationA
       .map((entry) => normalizeBinding(entry))
       .filter((entry): entry is AutomationFunctionBinding => Boolean(entry)),
     criteria: {
-      FABRIC: normalizeCriteria(criteria.FABRIC, DEFAULT_CRITERIA.FABRIC),
-      READY_TO_WEAR: normalizeCriteria(criteria.READY_TO_WEAR, DEFAULT_CRITERIA.READY_TO_WEAR),
-      DESIGN: normalizeCriteria(criteria.DESIGN, DEFAULT_CRITERIA.DESIGN),
-      ACCOUNT_APPROVAL: normalizeCriteria(criteria.ACCOUNT_APPROVAL, DEFAULT_CRITERIA.ACCOUNT_APPROVAL),
+      FABRIC: normalizeCriteria(criteria.FABRIC, DEFAULT_CRITERIA.FABRIC, ProductType.FABRIC),
+      READY_TO_WEAR: normalizeCriteria(criteria.READY_TO_WEAR, DEFAULT_CRITERIA.READY_TO_WEAR, ProductType.READY_TO_WEAR),
+      DESIGN: normalizeCriteria(criteria.DESIGN, DEFAULT_CRITERIA.DESIGN, ProductType.DESIGN),
+      ACCOUNT_APPROVAL: normalizeCriteria(criteria.ACCOUNT_APPROVAL, DEFAULT_CRITERIA.ACCOUNT_APPROVAL, 'ACCOUNT_APPROVAL'),
     },
   };
 };
@@ -2266,6 +2363,26 @@ export const testAutomationProviderBinding = async (input: {
 
 const safeRatio = (a: number, b: number) => (b > 0 ? a / b : 0);
 
+const resolveRuntimeAutomationSystem = (settings: AutomationApprovalSettings) => {
+  const systems = settings.automationSystems || DEFAULT_SETTINGS.automationSystems;
+  const legacyEngineEnabled = systems.legacyEngineEnabled !== false;
+  const fieldPipelineEngineEnabled = systems.fieldPipelineEngineEnabled === true;
+  const preferredEngine = systems.activeEngine === 'FIELD_PIPELINE' ? 'FIELD_PIPELINE' : 'LEGACY';
+  let activeEngine: 'LEGACY' | 'FIELD_PIPELINE' = preferredEngine;
+  if (preferredEngine === 'FIELD_PIPELINE' && !fieldPipelineEngineEnabled) {
+    activeEngine = legacyEngineEnabled ? 'LEGACY' : 'FIELD_PIPELINE';
+  }
+  if (preferredEngine === 'LEGACY' && !legacyEngineEnabled) {
+    activeEngine = fieldPipelineEngineEnabled ? 'FIELD_PIPELINE' : 'LEGACY';
+  }
+  return {
+    legacyEngineEnabled,
+    fieldPipelineEngineEnabled,
+    fallbackToLegacy: systems.fallbackToLegacy !== false,
+    activeEngine,
+  };
+};
+
 export type ProductAutomationEvaluation = {
   canAutoApprove: boolean;
   status: 'PASS' | 'REVIEW_REQUIRED' | 'AUTOMATION_DISABLED' | 'PRODUCT_NOT_FOUND';
@@ -2287,6 +2404,7 @@ export const evaluateProductAutomationChecks = async (input: {
   const autoRetryAttempt = Math.max(0, Math.min(1, Number(input.__autoRetryAttempt || 0) || 0));
   const settings = input.settingsOverride || (await readAutomationApprovalSettings()).settings;
   const criteria = settings.criteria[input.productType];
+  const runtimeAutomationSystem = resolveRuntimeAutomationSystem(settings);
   const report: AutomationCheckReportRow[] = [];
   let aiContextSummary = '';
   if (!settings.enabled) {
@@ -2299,6 +2417,21 @@ export const evaluateProductAutomationChecks = async (input: {
           label: 'Automation is disabled',
           status: 'SKIPPED' as const,
           message: 'Enable automation in settings to run product approval checks.',
+        },
+      ],
+      changeReport: [] as AutomationAppliedChange[],
+    };
+  }
+  if (!runtimeAutomationSystem.legacyEngineEnabled && !runtimeAutomationSystem.fieldPipelineEngineEnabled) {
+    return {
+      canAutoApprove: false,
+      status: 'AUTOMATION_DISABLED' as const,
+      report: [
+        {
+          key: 'automation_engine_disabled',
+          label: 'Automation system engine disabled',
+          status: 'SKIPPED' as const,
+          message: 'Enable at least one automation engine (Legacy or Field Pipeline) in Automation System Switchboard.',
         },
       ],
       changeReport: [] as AutomationAppliedChange[],
@@ -2370,7 +2503,41 @@ export const evaluateProductAutomationChecks = async (input: {
   type CriterionFieldEditRule =
     | { field: EditableFieldKey; kind: 'text'; minLength: number; maxLength: number }
     | { field: EditableFieldKey; kind: 'number'; minNumber: number; maxNumber: number };
-  const resolveCriterionEditRule = (criterionKey: string): CriterionFieldEditRule | null => {
+  const normalizeEditableFieldKey = (value: string): EditableFieldKey | null => {
+    const normalized = String(value || '').trim();
+    if (
+      normalized === 'name' ||
+      normalized === 'description' ||
+      normalized === 'finalPrice' ||
+      normalized === 'basePrice' ||
+      normalized === 'minYards' ||
+      normalized === 'stockYards' ||
+      normalized === 'predominantColor'
+    ) {
+      return normalized as EditableFieldKey;
+    }
+    return null;
+  };
+  const resolveFieldRuleFromEditableField = (field: EditableFieldKey): CriterionFieldEditRule | null => {
+    if (field === 'name') return { field, kind: 'text', minLength: 3, maxLength: 160 };
+    if (field === 'description') return { field, kind: 'text', minLength: 24, maxLength: 4000 };
+    if (field === 'predominantColor') return { field, kind: 'text', minLength: 3, maxLength: 40 };
+    if (field === 'finalPrice' || field === 'basePrice') return { field, kind: 'number', minNumber: 1, maxNumber: 1000000 };
+    if (field === 'minYards') return { field, kind: 'number', minNumber: 1, maxNumber: 100000 };
+    if (field === 'stockYards') return { field, kind: 'number', minNumber: 1, maxNumber: 1000000 };
+    return null;
+  };
+  const resolveCriterionEditRule = (criterionKey: string, targetFieldOverride?: string): CriterionFieldEditRule | null => {
+    const normalizedTargetField = normalizeEditableFieldKey(String(targetFieldOverride || '').trim());
+    if (normalizedTargetField) {
+      if (normalizedTargetField === 'finalPrice' && input.productType !== ProductType.FABRIC) {
+        return resolveFieldRuleFromEditableField('basePrice');
+      }
+      if ((normalizedTargetField === 'minYards' || normalizedTargetField === 'stockYards') && input.productType !== ProductType.FABRIC) {
+        return null;
+      }
+      return resolveFieldRuleFromEditableField(normalizedTargetField);
+    }
     switch (criterionKey) {
       case 'name_grammar':
         return { field: 'name', kind: 'text', minLength: 3, maxLength: 160 };
@@ -2433,8 +2600,10 @@ export const evaluateProductAutomationChecks = async (input: {
     row: AutomationCheckReportRow;
     functionKey?: string;
     providerOverrideId?: string;
+    targetField?: string;
+    verificationContext?: string;
   }) => {
-    const rule = resolveCriterionEditRule(params.row.key);
+    const rule = resolveCriterionEditRule(params.row.key, params.targetField);
     if (!rule) {
       return null as {
         applied: boolean;
@@ -2458,6 +2627,9 @@ Criterion: ${params.row.label}
 Current value:
 """${before}"""
 
+Verifier context:
+${String(params.verificationContext || '').trim() || 'No verifier context provided.'}
+
 Return STRICT JSON only:
 {"updatedValue":"<corrected value>","reason":"<short reason>"}
 Rules:
@@ -2472,6 +2644,7 @@ Criterion: ${params.row.label}
 Field: ${rule.field}
 Current numeric value: ${before}
 Validation message: ${params.row.message}
+Verifier context: ${String(params.verificationContext || '').trim() || 'No verifier context provided.'}
 
 Return STRICT JSON only:
 {"updatedValue":123.45,"reason":"<short reason>"}
@@ -2662,7 +2835,14 @@ No explanations, no labels, no JSON, no markdown.`,
     };
   };
 
-  const requestAiImageEdit = async (params: { row: AutomationCheckReportRow; providerOverrideId?: string }) => {
+  const requestAiImageEdit = async (params: {
+    row: AutomationCheckReportRow;
+    fixerFunctionKey?: string;
+    fixerProviderOverrideId?: string;
+    verificationFunctionKey?: string;
+    verificationProviderOverrideId?: string;
+    verificationContext?: string;
+  }) => {
     const existingImages = readStagedImageUrls();
     if (existingImages.length === 0) {
       return {
@@ -2675,7 +2855,7 @@ No explanations, no labels, no JSON, no markdown.`,
     const sourceUrl = existingImages[0] || '';
     const execution = await executeAutomationAiFunction({
       settings,
-      functionKey: 'image_regeneration',
+      functionKey: params.fixerFunctionKey || 'image_regeneration',
       prompt: `Enhance the uploaded product image for criterion "${params.row.label}".
 
 Product context:
@@ -2693,7 +2873,7 @@ STRICT requirements:
 Return STRICT JSON only:
 {"imageUrl":"https://...","changeType":"ENHANCEMENT_OR_EXACT_REGEN","reason":"short reason"}`,
       systemPrompt: 'You are an e-commerce image regeneration assistant.',
-      providerOverrideId: params.providerOverrideId,
+      providerOverrideId: params.fixerProviderOverrideId,
     });
     if (execution.status !== 'OK') {
       const normalizedReason = normalizeProviderExecutionReason(execution.reason);
@@ -2733,7 +2913,7 @@ Return STRICT JSON only:
     };
     const verification = await executeAutomationAiFunction({
       settings,
-      functionKey: 'image_verification',
+      functionKey: params.verificationFunctionKey || 'image_verification',
       prompt: `Verify if candidate image is an enhancement or exact regeneration of the source product image.
 
 Source image URL:
@@ -2744,6 +2924,9 @@ ${urlCandidate}
 
 Product context:
 ${aiContextSummary || 'No extra product context provided.'}
+
+Verifier context:
+${String(params.verificationContext || '').trim() || 'No verifier context provided.'}
 
 Return STRICT JSON only:
 {
@@ -2758,7 +2941,7 @@ Rules:
 - Mark false if candidate appears to be a different product/model/scene.
 - Mark false if major visual identity changed.`,
       systemPrompt: 'You are a strict e-commerce image consistency verifier. Return strict JSON only.',
-      providerOverrideId: params.providerOverrideId,
+      providerOverrideId: params.verificationProviderOverrideId,
     });
     if (verification.status !== 'OK') {
       return {
@@ -2917,15 +3100,42 @@ Rules:
         enhanced.push(row);
         continue;
       }
-      const criterionFunctionKey = normalizeCriterionFunctionKey(
-        criterion.aiFunctionKey,
+      const useFieldPipelineEngine =
+        runtimeAutomationSystem.activeEngine === 'FIELD_PIPELINE' && runtimeAutomationSystem.fieldPipelineEngineEnabled;
+      const criterionTargetField = normalizeCriterionTargetField(
+        criterion.targetField,
+        row.key,
+        input.productType
+      );
+      const criterionVerifierFunctionKey = normalizeCriterionFunctionKey(
+        useFieldPipelineEngine
+          ? criterion.verifierFunctionKey || criterion.aiFunctionKey
+          : criterion.aiFunctionKey || criterion.verifierFunctionKey,
         row.key
       );
-      const criterionProviderOverrideId = String(criterion.aiProviderId || '').trim() || undefined;
+      const criterionVerifierProviderOverrideId =
+        String(
+          (useFieldPipelineEngine
+            ? criterion.verifierProviderId || criterion.aiProviderId
+            : criterion.aiProviderId || criterion.verifierProviderId) || ''
+        ).trim() || undefined;
+      const criterionFixerFunctionKey = normalizeCriterionFixerFunctionKey(
+        useFieldPipelineEngine ? criterion.fixerFunctionKey : criterionVerifierFunctionKey,
+        row.key,
+        criterionTargetField
+      );
+      const criterionFixerProviderOverrideId =
+        String(
+          (useFieldPipelineEngine
+            ? criterion.fixerProviderId || criterion.verifierProviderId || criterion.aiProviderId
+            : criterionVerifierProviderOverrideId) || ''
+        ).trim() || undefined;
       const canApplyAiEdits = criterion.allowAiEdits === true && criterion.requiresAi === true;
-      const mappedTextRule = resolveCriterionEditRule(row.key);
+      const mappedTextRule = resolveCriterionEditRule(row.key, criterionTargetField);
       const mappedField =
-        row.key === 'predominant_color_match' ? 'predominantColor' : mappedTextRule?.field || imageFieldForCriterion(row.key);
+        row.key === 'predominant_color_match'
+          ? 'predominantColor'
+          : mappedTextRule?.field || criterionTargetField || imageFieldForCriterion(row.key);
       if (canApplyAiEdits && mappedField) {
         const previousApplied =
           previousAppliedEditByCriterionField.byCriterionField.get(`${row.key}::${mappedField}`) ||
@@ -2974,10 +3184,10 @@ Rules:
 - Keep guidance specific and actionable.`;
       const execution = await executeAutomationAiFunction({
         settings,
-        functionKey: criterionFunctionKey,
+        functionKey: criterionVerifierFunctionKey,
         prompt,
         systemPrompt: 'You are an e-commerce quality automation evaluator. Return strict JSON only.',
-        providerOverrideId: criterionProviderOverrideId,
+        providerOverrideId: criterionVerifierProviderOverrideId,
       });
       let nextRow: AutomationCheckReportRow;
       if (execution.status === 'NO_PROVIDER') {
@@ -2990,11 +3200,11 @@ Rules:
         if (row.key === 'image_quality') {
           const regenerate = await executeAutomationAiFunction({
             settings,
-            functionKey: 'image_regeneration',
+            functionKey: criterionFixerFunctionKey || 'image_regeneration',
             prompt: `Enhance product image quality while preserving exact original product identity, composition, and styling. Do not replace with a different product. Context: ${aiContextSummary}`,
             systemPrompt:
               'You are an image regeneration assistant for e-commerce catalog quality improvement.',
-            providerOverrideId: criterionProviderOverrideId,
+            providerOverrideId: criterionFixerProviderOverrideId || criterionVerifierProviderOverrideId,
           });
           if (regenerate.status === 'OK') {
             nextRow = {
@@ -3077,7 +3287,7 @@ Rules:
         }
       }
       if (!canApplyAiEdits && nextRow.status === 'FAIL') {
-        const mappedRule = resolveCriterionEditRule(row.key);
+        const mappedRule = resolveCriterionEditRule(row.key, criterionTargetField);
         const isImageMapped = imageEditKeys.has(row.key);
         if (mappedRule || isImageMapped) {
           nextRow = {
@@ -3087,7 +3297,7 @@ Rules:
         }
       }
       if (canApplyAiEdits) {
-        const textRule = resolveCriterionEditRule(row.key);
+        const textRule = resolveCriterionEditRule(row.key, criterionTargetField);
         const shouldAttemptTextEdit =
           Boolean(textRule) &&
           Boolean(persistStagedProductEdits) &&
@@ -3095,8 +3305,11 @@ Rules:
         if (shouldAttemptTextEdit) {
           const editResult = await requestAiFieldEdit({
             row: nextRow,
-            functionKey: criterionFunctionKey,
-            providerOverrideId: criterionProviderOverrideId,
+            functionKey: criterionFixerFunctionKey,
+            providerOverrideId: criterionFixerProviderOverrideId || criterionVerifierProviderOverrideId,
+            targetField: criterionTargetField,
+            verificationContext:
+              useFieldPipelineEngine && criterion.passResultToFixer !== false ? String(nextRow.message || '') : '',
           });
           if (editResult && textRule) {
             if (editResult.applied) {
@@ -3152,7 +3365,12 @@ Rules:
         if (shouldAttemptImageEdit) {
           const imageResult = await requestAiImageEdit({
             row: nextRow,
-            providerOverrideId: criterionProviderOverrideId,
+            fixerFunctionKey: criterionFixerFunctionKey,
+            fixerProviderOverrideId: criterionFixerProviderOverrideId || criterionVerifierProviderOverrideId,
+            verificationFunctionKey: criterionVerifierFunctionKey,
+            verificationProviderOverrideId: criterionVerifierProviderOverrideId,
+            verificationContext:
+              useFieldPipelineEngine && criterion.passResultToFixer !== false ? String(nextRow.message || '') : '',
           });
           if (imageResult.applied) {
             hasPendingImageUpdate = true;
@@ -3788,6 +4006,7 @@ export const evaluateAccountAutomationChecks = async (input: {
 }) => {
   const settings = input.settingsOverride || (await readAutomationApprovalSettings()).settings;
   const criteria = settings.criteria.ACCOUNT_APPROVAL || [];
+  const runtimeAutomationSystem = resolveRuntimeAutomationSystem(settings);
   if (!settings.enabled) {
     return {
       canAutoApprove: false,
@@ -3798,6 +4017,20 @@ export const evaluateAccountAutomationChecks = async (input: {
           label: 'Automation is disabled',
           status: 'SKIPPED' as const,
           message: 'Enable automation in settings to run account approval checks.',
+        },
+      ] as AutomationCheckReportRow[],
+    };
+  }
+  if (!runtimeAutomationSystem.legacyEngineEnabled && !runtimeAutomationSystem.fieldPipelineEngineEnabled) {
+    return {
+      canAutoApprove: false,
+      status: 'AUTOMATION_DISABLED' as const,
+      report: [
+        {
+          key: 'automation_engine_disabled',
+          label: 'Automation system engine disabled',
+          status: 'SKIPPED' as const,
+          message: 'Enable at least one automation engine (Legacy or Field Pipeline) in Automation System Switchboard.',
         },
       ] as AutomationCheckReportRow[],
     };
@@ -3864,11 +4097,38 @@ export const evaluateAccountAutomationChecks = async (input: {
   });
   const aiCriterion = criteria.find((entry) => entry.key === 'account_notes_grammar' && entry.enabled && entry.requiresAi);
   if (aiCriterion) {
+    const useFieldPipelineEngine =
+      runtimeAutomationSystem.activeEngine === 'FIELD_PIPELINE' && runtimeAutomationSystem.fieldPipelineEngineEnabled;
+    const verifierFunctionKey = normalizeCriterionFunctionKey(
+      useFieldPipelineEngine
+        ? aiCriterion.verifierFunctionKey || aiCriterion.aiFunctionKey || 'text_grammar_enhancement'
+        : aiCriterion.aiFunctionKey || aiCriterion.verifierFunctionKey || 'text_grammar_enhancement',
+      aiCriterion.key
+    );
+    const verifierProviderOverrideId =
+      String(
+        (useFieldPipelineEngine
+          ? aiCriterion.verifierProviderId || aiCriterion.aiProviderId
+          : aiCriterion.aiProviderId || aiCriterion.verifierProviderId) || ''
+      ).trim() || undefined;
+    const targetField = normalizeCriterionTargetField(aiCriterion.targetField, aiCriterion.key, 'ACCOUNT_APPROVAL');
+    const fixerFunctionKey = normalizeCriterionFixerFunctionKey(
+      useFieldPipelineEngine ? aiCriterion.fixerFunctionKey : verifierFunctionKey,
+      aiCriterion.key,
+      targetField
+    );
+    const fixerProviderOverrideId =
+      String(
+        (useFieldPipelineEngine
+          ? aiCriterion.fixerProviderId || aiCriterion.verifierProviderId || aiCriterion.aiProviderId
+          : verifierProviderOverrideId) || ''
+      ).trim() || undefined;
     const execution = await executeAutomationAiFunction({
       settings,
-      functionKey: 'text_grammar_enhancement',
+      functionKey: verifierFunctionKey,
       prompt: `Validate and improve this account summary grammar:\nRole: ${normalizedRole}\nName: ${user.firstName} ${user.lastName}\nEmail: ${user.email}\nPhone: ${user.phone || 'N/A'}`,
       systemPrompt: 'You are reviewing account-approval summary grammar for an e-commerce admin.',
+      providerOverrideId: verifierProviderOverrideId,
     });
     if (execution.status === 'OK') {
       addResult({
@@ -3885,12 +4145,37 @@ export const evaluateAccountAutomationChecks = async (input: {
         message: execution.reason,
       });
     } else {
-      addResult({
-        key: 'account_notes_grammar',
-        label: 'AI grammar check for account notes/description',
-        status: 'FAIL',
-        message: execution.reason,
-      });
+      if (useFieldPipelineEngine && aiCriterion.allowAiEdits === true) {
+        const fixer = await executeAutomationAiFunction({
+          settings,
+          functionKey: fixerFunctionKey,
+          prompt: `Fix account summary grammar using verifier output.\nVerifier output: ${execution.reason}\nRole: ${normalizedRole}\nName: ${user.firstName} ${user.lastName}\nEmail: ${user.email}\nPhone: ${user.phone || 'N/A'}\nReturn concise corrected summary text only.`,
+          systemPrompt: 'You fix account summary grammar for admin verification.',
+          providerOverrideId: fixerProviderOverrideId,
+        });
+        if (fixer.status === 'OK') {
+          addResult({
+            key: 'account_notes_grammar',
+            label: 'AI grammar check for account notes/description',
+            status: 'PASS',
+            message: `Verifier flagged issue. Fixer applied correction: ${String(fixer.output || '').trim()}`,
+          });
+        } else {
+          addResult({
+            key: 'account_notes_grammar',
+            label: 'AI grammar check for account notes/description',
+            status: 'FAIL',
+            message: `${execution.reason} | Fixer execution failed: ${fixer.reason}`,
+          });
+        }
+      } else {
+        addResult({
+          key: 'account_notes_grammar',
+          label: 'AI grammar check for account notes/description',
+          status: 'FAIL',
+          message: execution.reason,
+        });
+      }
     }
   }
   const seenKeys = new Set(report.map((entry) => entry.key));

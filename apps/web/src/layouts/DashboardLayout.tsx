@@ -234,6 +234,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/product-change-requests': ['products:manage'],
       '/admin/automation/approvals': ['products:manage'],
       '/admin/automation/ai-integrations': ['products:manage'],
+      '/admin/automation/system': ['products:manage'],
       '/admin/pricing': ['pricing:manage'],
       '/admin/promo-codes': ['pricing:manage'],
       '/admin/payments': ['payments:manage'],
@@ -308,6 +309,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Product Change Request', href: '/admin/product-change-requests', icon: ChevronRight },
   ];
   const automationSubmenu = [
+    { label: 'Automation System Switchboard', href: '/admin/automation/system', icon: ChevronRight },
     { label: 'Automated Product Approval', href: '/admin/automation/approvals', icon: ChevronRight },
     { label: 'Account Approval Automation', href: '/admin/automation/approvals?tab=account', icon: ChevronRight },
     { label: 'AI API Integrations', href: '/admin/automation/ai-integrations', icon: ChevronRight },

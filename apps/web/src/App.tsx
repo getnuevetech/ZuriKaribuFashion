@@ -76,6 +76,7 @@ import AdminFailedAiApproval from './pages/admin/FailedAiApproval';
 import AdminResellerInfluencers from './pages/admin/ResellerInfluencers';
 import AdminAutomationApprovals from './pages/admin/AutomationApprovals';
 import AdminAutomationAiConfig from './pages/admin/AutomationAiConfig';
+import AdminAutomationSystem from './pages/admin/AutomationSystem';
 import AdminReferralMaterials from './pages/admin/ReferralMaterials';
 import AdminReferralList from './pages/admin/ReferralList';
 import AdminReports from './pages/admin/Reports';
@@ -516,6 +517,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['products:manage']}>
                       <AdminAutomationAiConfig />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/automation/system"
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminAutomationSystem />
                     </AdminPermissionGuard>
                   }
                 />
