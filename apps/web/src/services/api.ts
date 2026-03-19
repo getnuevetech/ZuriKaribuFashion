@@ -10047,6 +10047,39 @@ const helpCenterApi = {
     ),
 };
 
+const moduleRuntimeApi = {
+  getDecisions: (params?: { keys?: string[] }) =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        keys: string[];
+        map: Record<
+          string,
+          {
+            moduleKey: string;
+            enabled: boolean;
+            mode: 'active' | 'degraded' | 'maintenance';
+            provider: string;
+            rolloutScope: { type: 'GLOBAL' | 'ROLE' | 'PERCENT'; value: string };
+            allowed: boolean;
+            reason: null | 'MODULE_DISABLED' | 'MODULE_MAINTENANCE' | 'MODULE_SCOPE_BLOCKED';
+          }
+        >;
+      };
+    }>('/module-runtime/decisions', {
+      params: {
+        ...(Array.isArray(params?.keys) && params?.keys.length > 0 ? { keys: params.keys.join(',') } : {}),
+      },
+    }),
+  listAdminModules: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/module-runtime/admin/modules'),
+  updateAdminModule: (moduleKey: string, payload: Record<string, unknown>) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>(
+      `/module-runtime/admin/modules/${encodeURIComponent(moduleKey)}`,
+      payload
+    ),
+};
+
 // Export combined API
 export const api = {
   auth: authApi,
@@ -10073,6 +10106,7 @@ export const api = {
   referrals: referralsApi,
   customerService: customerServiceApi,
   helpCenter: helpCenterApi,
+  moduleRuntime: moduleRuntimeApi,
 };
 
 // Named exports for direct import
@@ -10101,6 +10135,7 @@ export {
   referralsApi,
   customerServiceApi,
   helpCenterApi,
+  moduleRuntimeApi,
   apiService,
   httpClient,
 };

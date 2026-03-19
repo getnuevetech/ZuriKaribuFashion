@@ -99,6 +99,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Category Pages', href: '/admin/category-pages', icon: LayoutGrid },
     { label: 'Blogs', href: '/admin/blogs', icon: FileText },
     { label: 'Help Center Content', href: '/admin/help-center-content', icon: FileText },
+    { label: 'Module Switchboard', href: '/admin/modules', icon: Settings },
     { label: 'Activity Logs', href: '/admin/activity-logs', icon: ClipboardCheck },
   ],
   seller: [
@@ -151,6 +152,18 @@ const navItems: Record<DashboardType, NavItem[]> = {
   ],
 };
 
+const navModuleByHref: Record<string, 'ticketing' | 'chat' | 'communications' | 'help_center'> = {
+  '/admin/ticket-management': 'ticketing',
+  '/admin/customer-service/settings': 'ticketing',
+  '/admin/customer-service/chat': 'chat',
+  '/admin/voip': 'communications',
+  '/admin/help-center-content': 'help_center',
+  '/seller/support-center': 'help_center',
+  '/designer/support-center': 'help_center',
+  '/reseller/support-center': 'help_center',
+  '/help-center': 'help_center',
+};
+
 const roleLabels: Record<DashboardType, string> = {
   admin: 'Administrator',
   seller: 'Fabric Seller',
@@ -176,6 +189,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isEnterpriseMenuOpen, setIsEnterpriseMenuOpen] = useState(true);
   const [enterpriseRoleManagementAllowed, setEnterpriseRoleManagementAllowed] = useState(false);
   const [supportCalling, setSupportCalling] = useState(false);
+  const [moduleAccessMap, setModuleAccessMap] = useState<Record<string, { allowed: boolean }> | null>(null);
   const { user, token, logout } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -243,12 +257,19 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/category-pages': ['homepage:manage'],
       '/admin/blogs': ['homepage:manage'],
       '/admin/help-center-content': ['help_center:manage|homepage:manage'],
+      '/admin/modules': ['modules:manage|users:manage|admin:roles:manage'],
     };
     const required = permissionByHref[href] || [];
     if (required.length === 0) return true;
     return required.every((requirement) => hasPermissionRequirement(requirement));
   };
-  const visibleItems = items.filter((item) => canAccessAdminNav(item.href));
+  const canAccessModuleNav = (href: string) => {
+    const moduleKey = navModuleByHref[href];
+    if (!moduleKey) return true;
+    if (!moduleAccessMap) return true;
+    return moduleAccessMap[moduleKey]?.allowed !== false;
+  };
+  const visibleItems = items.filter((item) => canAccessAdminNav(item.href) && canAccessModuleNav(item.href));
   const roleLabel = roleLabels[userType] || 'User';
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
   const orderManagementSubmenu = [
@@ -357,6 +378,32 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     };
   }, [userType, user?.id, token]);
 
+  useEffect(() => {
+    if (!token) {
+      setModuleAccessMap(null);
+      return;
+    }
+    let cancelled = false;
+    const loadModuleAccess = async () => {
+      try {
+        const response = await api.moduleRuntime.getDecisions({
+          keys: ['ticketing', 'chat', 'communications', 'help_center'],
+        });
+        if (!cancelled) {
+          setModuleAccessMap(response?.data?.map || {});
+        }
+      } catch {
+        if (!cancelled) {
+          setModuleAccessMap(null);
+        }
+      }
+    };
+    void loadModuleAccess();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
   const normalizeSearchToken = (value: string) => String(value || '').trim().toLowerCase();
   const addSearchEntries = (
     target: DashboardSearchEntry[],
@@ -401,7 +448,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       addSearchEntries(
         entries,
         ticketManagementSubmenu
-          .filter((item) => canAccessAdminNav(item.href.split('?')[0]))
+          .filter((item) => canAccessAdminNav(item.href.split('?')[0]) && canAccessModuleNav('/admin/ticket-management'))
           .map((item) => ({ label: item.label, href: item.href, keywords: ['ticket', 'queue', 'workflow', 'routing'] })),
         { prefix: 'Ticket Management' }
       );

@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma, UserRole } from '../db';
 import { authenticate, authorizePermissions, optionalAuth } from '../middleware/auth';
+import { requireModuleAccess } from '../middleware/module-runtime';
 import { Permissions } from '../rbac';
 import {
   detectTicketingLanguage,
@@ -12,6 +13,9 @@ import {
 } from '../utils/ticketing-translation';
 
 const router = Router();
+const requireTicketingModule = requireModuleAccess('ticketing');
+const requireChatModule = requireModuleAccess('chat');
+const requireCommunicationsModule = requireModuleAccess('communications');
 
 const TICKET_SOURCES = ['ORDER', 'EMAIL', 'PHONE', 'WEB', 'WHATSAPP', 'OTHER', 'CHAT', 'BOT'] as const;
 const TICKET_STATUSES = ['OPEN', 'PENDING', 'RESOLVED', 'CLOSED'] as const;
@@ -1527,6 +1531,7 @@ router.get(
   '/admin/settings',
   authenticate,
   authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (_req, res) => {
     try {
       const settings = await readSettings();
@@ -1547,6 +1552,7 @@ router.patch(
   '/admin/settings',
   authenticate,
   authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (req, res) => {
     try {
       const parsed = supportSettingsPatchSchema.safeParse(req.body || {});
@@ -1565,6 +1571,7 @@ router.get(
   '/admin/departments',
   authenticate,
   authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (_req, res) => {
     try {
       await ensureSchema();
@@ -1584,6 +1591,7 @@ router.post(
   '/admin/departments',
   authenticate,
   authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (req, res) => {
     try {
       const parsed = departmentSchema.safeParse(req.body || {});
@@ -1615,6 +1623,7 @@ router.patch(
   '/admin/departments/:id',
   authenticate,
   authorizePermissions(Permissions.CUSTOMER_SERVICE_SETTINGS_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (req, res) => {
     try {
       const parsed = departmentSchema.partial().safeParse(req.body || {});
@@ -1655,6 +1664,7 @@ router.get(
   '/admin/ticket-routing/groups',
   authenticate,
   authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (_req, res) => {
     try {
       await ensureSchema();
@@ -1670,6 +1680,7 @@ router.post(
   '/admin/ticket-routing/groups',
   authenticate,
   authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (req, res) => {
     try {
       const parsed = groupSchema.safeParse(req.body || {});
@@ -1699,6 +1710,7 @@ router.patch(
   '/admin/ticket-routing/groups/:id',
   authenticate,
   authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (req, res) => {
     try {
       const parsed = groupSchema.partial().safeParse(req.body || {});
@@ -1736,6 +1748,7 @@ router.get(
   '/admin/ticket-routing/rules',
   authenticate,
   authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (_req, res) => {
     try {
       await ensureSchema();
@@ -1753,6 +1766,7 @@ router.post(
   '/admin/ticket-routing/rules',
   authenticate,
   authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (req, res) => {
     try {
       const parsed = routingRuleSchema.safeParse(req.body || {});
@@ -1785,6 +1799,7 @@ router.patch(
   '/admin/ticket-routing/rules/:id',
   authenticate,
   authorizePermissions(Permissions.SUPPORT_ROUTING_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (req, res) => {
     try {
       const parsed = routingRuleSchema.partial().safeParse(req.body || {});
@@ -1828,6 +1843,7 @@ router.get(
   '/admin/tickets',
   authenticate,
   authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (req, res) => {
     try {
       await ensureSchema();
@@ -1919,6 +1935,7 @@ router.post(
   '/admin/tickets',
   authenticate,
   authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (req: any, res) => {
     try {
       const parsed = ticketCreateSchema.safeParse(req.body || {});
@@ -1953,6 +1970,7 @@ router.get(
   '/admin/tickets/:ticketRef/messages',
   authenticate,
   authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (req, res) => {
     try {
       await ensureSchema();
@@ -1987,6 +2005,7 @@ router.post(
   '/admin/tickets/:ticketRef/messages',
   authenticate,
   authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (req: any, res) => {
     try {
       const parsed = ticketReplySchema.safeParse(req.body || {});
@@ -2050,6 +2069,7 @@ router.patch(
   '/admin/tickets/:ticketRef/assign',
   authenticate,
   authorizePermissions(Permissions.SUPPORT_TICKETS_MANAGE, Permissions.ORDERS_MANAGE),
+  requireTicketingModule,
   async (req, res) => {
     try {
       const parsed = ticketAssignSchema.safeParse(req.body || {});
@@ -2105,7 +2125,7 @@ router.patch(
   }
 );
 
-router.post('/email/ingest', async (req, res) => {
+router.post('/email/ingest', requireTicketingModule, async (req, res) => {
   try {
     const settings = await readSettings();
     if (!settings.emailIngestEnabled) return res.status(403).json({ success: false, message: 'Email ingestion is disabled.' });
@@ -2141,7 +2161,7 @@ router.post('/email/ingest', async (req, res) => {
   }
 });
 
-router.post('/chat/start', optionalAuth, async (req: any, res) => {
+router.post('/chat/start', optionalAuth, requireChatModule, async (req: any, res) => {
   try {
     await ensureSchema();
     const parsed = chatStartSchema.safeParse(req.body || {});
@@ -2212,7 +2232,7 @@ router.post('/chat/start', optionalAuth, async (req: any, res) => {
   }
 });
 
-router.get('/chat/:sessionId', optionalAuth, async (req: any, res) => {
+router.get('/chat/:sessionId', optionalAuth, requireChatModule, async (req: any, res) => {
   try {
     await ensureSchema();
     const sessionId = String(req.params.sessionId || '').trim();
@@ -2290,7 +2310,7 @@ router.get('/chat/:sessionId', optionalAuth, async (req: any, res) => {
   }
 });
 
-router.post('/chat/:sessionId/messages', optionalAuth, async (req: any, res) => {
+router.post('/chat/:sessionId/messages', optionalAuth, requireChatModule, async (req: any, res) => {
   try {
     await ensureSchema();
     const sessionId = String(req.params.sessionId || '').trim();
@@ -2405,6 +2425,7 @@ router.get(
   '/admin/chats',
   authenticate,
   authorizePermissions(Permissions.CUSTOMER_SERVICE_CHAT_MANAGE, Permissions.ORDERS_MANAGE),
+  requireChatModule,
   async (req, res) => {
     try {
       await ensureSchema();
@@ -2459,6 +2480,7 @@ router.patch(
   '/admin/chats/:sessionId/actions',
   authenticate,
   authorizePermissions(Permissions.CUSTOMER_SERVICE_CHAT_MANAGE, Permissions.ORDERS_MANAGE),
+  requireChatModule,
   async (req: any, res) => {
     try {
       await ensureSchema();
@@ -2560,6 +2582,7 @@ router.get(
   '/admin/voip/settings',
   authenticate,
   authorizePermissions(Permissions.VOIP_MANAGE, Permissions.WHATSAPP_MANAGE, Permissions.ORDERS_MANAGE),
+  requireCommunicationsModule,
   async (_req, res) => {
     try {
       const settings = await readSettings();
@@ -2601,6 +2624,7 @@ router.patch(
   '/admin/voip/settings',
   authenticate,
   authorizePermissions(Permissions.VOIP_MANAGE, Permissions.WHATSAPP_MANAGE, Permissions.ORDERS_MANAGE),
+  requireCommunicationsModule,
   async (req, res) => {
     try {
       const payload = z
@@ -2738,6 +2762,7 @@ router.get(
   '/admin/whatsapp/settings',
   authenticate,
   authorizePermissions(Permissions.WHATSAPP_MANAGE, Permissions.VOIP_MANAGE, Permissions.ORDERS_MANAGE),
+  requireCommunicationsModule,
   async (_req, res) => {
     try {
       const settings = await readSettings();
@@ -2761,6 +2786,7 @@ router.patch(
   '/admin/whatsapp/settings',
   authenticate,
   authorizePermissions(Permissions.WHATSAPP_MANAGE, Permissions.VOIP_MANAGE, Permissions.ORDERS_MANAGE),
+  requireCommunicationsModule,
   async (req, res) => {
     try {
       const payload = z
@@ -2814,6 +2840,7 @@ router.get(
   '/admin/whatsapp/events',
   authenticate,
   authorizePermissions(Permissions.WHATSAPP_MANAGE, Permissions.VOIP_MANAGE, Permissions.ORDERS_MANAGE),
+  requireCommunicationsModule,
   async (req, res) => {
     try {
       await ensureSchema();
@@ -2871,7 +2898,7 @@ router.get(
   }
 );
 
-router.post('/whatsapp/start', authenticate, async (req: any, res) => {
+router.post('/whatsapp/start', authenticate, requireCommunicationsModule, async (req: any, res) => {
   try {
     await ensureSchema();
     const parsed = whatsappStartSchema.safeParse(req.body || {});
@@ -3005,7 +3032,7 @@ router.post('/whatsapp/start', authenticate, async (req: any, res) => {
   }
 });
 
-router.post('/whatsapp/events/:id/end', authenticate, async (req, res) => {
+router.post('/whatsapp/events/:id/end', authenticate, requireCommunicationsModule, async (req, res) => {
   try {
     await ensureSchema();
     await prisma.$executeRawUnsafe(
@@ -3024,6 +3051,7 @@ router.get(
   '/admin/voip/calls',
   authenticate,
   authorizePermissions(Permissions.VOIP_MANAGE, Permissions.WHATSAPP_MANAGE, Permissions.ORDERS_MANAGE),
+  requireCommunicationsModule,
   async (req, res) => {
     try {
       await ensureSchema();
@@ -3079,7 +3107,7 @@ router.get(
   }
 );
 
-router.post('/voip/calls/start', authenticate, async (req: any, res) => {
+router.post('/voip/calls/start', authenticate, requireCommunicationsModule, async (req: any, res) => {
   try {
     await ensureSchema();
     const parsed = voipStartSchema.safeParse(req.body || {});
@@ -3171,7 +3199,7 @@ router.post('/voip/calls/start', authenticate, async (req: any, res) => {
   }
 });
 
-router.post('/voip/calls/:id/end', authenticate, async (req, res) => {
+router.post('/voip/calls/:id/end', authenticate, requireCommunicationsModule, async (req, res) => {
   try {
     await ensureSchema();
     await prisma.$executeRawUnsafe(

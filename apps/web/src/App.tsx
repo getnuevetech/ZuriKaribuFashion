@@ -85,6 +85,7 @@ import AdminCustomerServiceSettings from './pages/admin/CustomerServiceSettings'
 import AdminVoipConfiguration from './pages/admin/VoipConfiguration';
 import AdminAuthenticatorSettings from './pages/admin/AuthenticatorSettings';
 import AdminHelpCenterContent from './pages/admin/HelpCenterContent';
+import AdminModuleRuntimeSettings from './pages/admin/ModuleRuntimeSettings';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -581,6 +582,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['help_center:manage|homepage:manage']}>
                       <AdminHelpCenterContent />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/modules"
+                  element={
+                    <AdminPermissionGuard required={['modules:manage|users:manage|admin:roles:manage']}>
+                      <AdminModuleRuntimeSettings />
                     </AdminPermissionGuard>
                   }
                 />

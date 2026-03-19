@@ -3,9 +3,11 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
+import { requireModuleAccess } from '../middleware/module-runtime';
 import { Permissions } from '../rbac';
 
 const router = Router();
+const requireHelpCenterModule = requireModuleAccess('help_center');
 
 const HELP_CENTER_SETTINGS_KEY = 'HELP_CENTER_CONTENT_V1';
 
@@ -399,7 +401,7 @@ function asPublicContent(input: HelpAudienceContent) {
   };
 }
 
-router.get('/public/:audience', async (req, res) => {
+router.get('/public/:audience', requireHelpCenterModule, async (req, res) => {
   try {
     const audience = String(req.params.audience || '').trim().toLowerCase();
     const content = await readContent();
@@ -422,6 +424,7 @@ router.get(
   '/admin/content',
   authenticate,
   authorizePermissions(Permissions.HELP_CENTER_MANAGE, Permissions.HOMEPAGE_MANAGE),
+  requireHelpCenterModule,
   async (_req, res) => {
     try {
       const content = await readContent();
@@ -436,6 +439,7 @@ router.patch(
   '/admin/content',
   authenticate,
   authorizePermissions(Permissions.HELP_CENTER_MANAGE, Permissions.HOMEPAGE_MANAGE),
+  requireHelpCenterModule,
   async (req, res) => {
     try {
       const parsed = adminPatchSchema.safeParse(req.body || {});

@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma, UserRole, OrderType, OrderStatus, PaymentStatus, ProductStatus } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
+import { requireModuleAccess } from '../middleware/module-runtime';
 import { Permissions } from '../rbac';
 import nodemailer from 'nodemailer';
 import {
@@ -29,6 +30,7 @@ import {
 } from '../utils/ticketing-translation';
 
 const router = Router();
+const requireOrderTicketingModule = requireModuleAccess('ticketing');
 
 const ORDER_TICKETING_SETTINGS_KEY = 'order_ticketing_settings_v1';
 const ORDER_TICKETING_TRANSLATION_SETTINGS_KEY = 'order_ticketing_translation_settings_v1';
@@ -2048,6 +2050,7 @@ async function readOrderTicketThread(params: {
 
 router.get(
   '/admin/ticketing/settings',
+  requireOrderTicketingModule,
   authorizePermissions(Permissions.ORDERS_MANAGE),
   async (_req, res, next) => {
     try {
@@ -2061,6 +2064,7 @@ router.get(
 
 router.put(
   '/admin/ticketing/settings',
+  requireOrderTicketingModule,
   authorizePermissions(Permissions.ORDERS_MANAGE),
   async (req, res, next) => {
     try {
@@ -2078,6 +2082,7 @@ router.put(
 
 router.patch(
   '/admin/ticketing/settings',
+  requireOrderTicketingModule,
   authorizePermissions(Permissions.ORDERS_MANAGE),
   async (req, res, next) => {
     try {
@@ -2095,6 +2100,7 @@ router.patch(
 
 router.get(
   '/admin/ticketing/translation-settings',
+  requireOrderTicketingModule,
   authorizePermissions(Permissions.ORDERS_TICKETING_TRANSLATION_MANAGE),
   async (_req, res, next) => {
     try {
@@ -2114,6 +2120,7 @@ router.get(
 
 router.patch(
   '/admin/ticketing/translation-settings',
+  requireOrderTicketingModule,
   authorizePermissions(Permissions.ORDERS_TICKETING_TRANSLATION_MANAGE),
   async (req, res, next) => {
     try {
@@ -2136,7 +2143,7 @@ router.patch(
   }
 );
 
-router.get('/ticketing/language-preference', async (req, res, next) => {
+router.get('/ticketing/language-preference', requireOrderTicketingModule, async (req, res, next) => {
   try {
     const user = req.user!;
     const userRole = asRoleToken(user.role);
@@ -2159,7 +2166,7 @@ router.get('/ticketing/language-preference', async (req, res, next) => {
   }
 });
 
-router.put('/ticketing/language-preference', async (req, res, next) => {
+router.put('/ticketing/language-preference', requireOrderTicketingModule, async (req, res, next) => {
   try {
     const user = req.user!;
     const userRole = asRoleToken(user.role);
@@ -2189,6 +2196,7 @@ router.put('/ticketing/language-preference', async (req, res, next) => {
 
 router.get(
   '/admin/tickets',
+  requireOrderTicketingModule,
   authorizePermissions(Permissions.ORDERS_MANAGE),
   async (req, res, next) => {
     try {
@@ -2358,6 +2366,7 @@ router.get(
 
 router.patch(
   '/admin/tickets/:ticketId/assign',
+  requireOrderTicketingModule,
   authorizePermissions(Permissions.ORDERS_MANAGE),
   async (req, res, next) => {
     try {
@@ -2440,6 +2449,7 @@ router.patch(
 
 router.get(
   '/:id/ticketing',
+  requireOrderTicketingModule,
   authorizePermissions(Permissions.ORDERS_READ_SELF, Permissions.ORDERS_READ_ASSIGNED, Permissions.ORDERS_READ_ALL),
   async (req, res, next) => {
     try {
@@ -2513,6 +2523,7 @@ router.get(
 
 router.post(
   '/:id/ticketing/messages',
+  requireOrderTicketingModule,
   authorizePermissions(Permissions.ORDERS_READ_SELF, Permissions.ORDERS_READ_ASSIGNED, Permissions.ORDERS_READ_ALL),
   async (req, res, next) => {
     try {
@@ -2679,6 +2690,7 @@ router.post(
 
 router.patch(
   '/:id/ticketing/status',
+  requireOrderTicketingModule,
   authorizePermissions(Permissions.ORDERS_READ_ASSIGNED, Permissions.ORDERS_READ_ALL, Permissions.ORDERS_UPDATE_ASSIGNED, Permissions.ORDERS_UPDATE_ALL),
   async (req, res, next) => {
     try {

@@ -24,6 +24,7 @@ export const Permissions = {
   BOTS_MANAGE: 'bots:manage',
   VOIP_MANAGE: 'voip:manage',
   AUTHENTICATOR_MANAGE: 'authenticator:manage',
+  MODULES_MANAGE: 'modules:manage',
   WHATSAPP_MANAGE: 'whatsapp:manage',
   HELP_CENTER_MANAGE: 'help_center:manage',
   BACKUPS_RESTORE: 'backups:restore',
@@ -165,6 +166,12 @@ export const PERMISSION_CATALOG: PermissionCatalogEntry[] = [
     label: 'Manage authenticator security',
     group: 'SYSTEM',
     description: 'Configure OTP and authenticator policy, methods, and enforcement scope.',
+  },
+  {
+    key: Permissions.MODULES_MANAGE,
+    label: 'Manage module runtime',
+    group: 'SYSTEM',
+    description: 'Enable or disable runtime modules, provider selection, and rollout scope.',
   },
   {
     key: Permissions.WHATSAPP_MANAGE,
