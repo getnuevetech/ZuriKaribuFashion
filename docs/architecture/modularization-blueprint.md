@@ -1,7 +1,7 @@
 # Modularization Blueprint (Draft)
 
 **Product:** African Fashion Platform  
-**Draft status:** v0.2 (execution-ready planning draft)  
+**Draft status:** v0.3 (execution-ready planning draft)  
 **Purpose:** Move from feature-rich monolith to modular platform with safe extraction path and provider swap capability.
 
 ---
@@ -13,6 +13,10 @@
   1. **Module-by-module API contracts** (internal ports + current endpoint map),
   2. **Initial DB/table ownership map**,
   3. **Sprint plan with acceptance criteria**.
+- **v0.3:** Adds:
+  1. **Folder/package refactor map** (`apps/api/src/modules/*`, shared packages),
+  2. **Sprint-1 execution checklist** (migration-safe, no hard break),
+  3. **Delivery workstream matrix** (who does what, in what order).
 
 ---
 
@@ -614,7 +618,7 @@ Initial SLO targets:
 
 ---
 
-## 11) Risks and mitigation updates (v0.2)
+## 11) Risks and mitigation updates (v0.3)
 
 - **Risk:** Split-brain behavior during provider swap.  
   **Mitigation:** shadow mode + parity checker + staged rollout scopes.
@@ -632,18 +636,243 @@ Initial SLO targets:
 
 ## 12) Immediate next actions
 
-1. Approve this v0.2 baseline.
+1. Approve this v0.3 baseline.
 2. Create implementation epics aligned to Sprints 1-6.
 3. Start Sprint 1 with module registry + runtime gate middleware.
 4. Start contract-test harness in parallel (before extraction work).
 
 ---
 
-## 13) Decision summary (v0.2)
+## 13) Decision summary (v0.3)
 
 1. Keep one user-facing platform, modularize internally now.
 2. Add module switchboard and provider ports immediately.
 3. Make communications the first extraction candidate.
 4. Enforce table ownership and outbox patterns before service split.
 5. Gate extraction by measurable SLO and rollback readiness.
+
+---
+
+## 14) Folder/package refactor map (v0.3)
+
+This is the target layout for a **modular monolith** without changing user-facing APIs.
+
+## 14.1 API app structure (`apps/api/src`)
+
+```text
+apps/api/src/
+  modules/
+    platform-core/
+      routes/
+        auth.routes.ts
+        admin-authenticator.routes.ts
+        admin-users.routes.ts
+      services/
+        identity.service.ts
+        mfa.service.ts
+        rbac.service.ts
+      repositories/
+        user.repository.ts
+        security.repository.ts
+      contracts/
+        identity.port.ts
+      events/
+        auth.events.ts
+
+    commerce/
+      routes/
+        orders.routes.ts
+        products.routes.ts
+        payments.routes.ts
+        shipping.routes.ts
+      services/
+        order.service.ts
+        pricing.service.ts
+      repositories/
+        order.repository.ts
+        product.repository.ts
+      contracts/
+        order-ticketing.port.ts
+      events/
+        order.events.ts
+
+    ticketing/
+      routes/
+        support-ticket.routes.ts
+        support-routing.routes.ts
+        order-ticketing-admin.routes.ts
+      services/
+        ticket.service.ts
+        routing.service.ts
+        sla.service.ts
+      repositories/
+        support-ticket.repository.ts
+        support-routing.repository.ts
+      contracts/
+        ticketing.port.ts
+      events/
+        ticket.events.ts
+
+    chat/
+      routes/
+        support-chat.routes.ts
+      services/
+        chat.service.ts
+      repositories/
+        chat.repository.ts
+      contracts/
+        chat.port.ts
+      events/
+        chat.events.ts
+
+    communications/
+      routes/
+        voip.routes.ts
+        whatsapp.routes.ts
+      services/
+        communications.service.ts
+      adapters/
+        internal/
+          internal-pbx.adapter.ts
+          internal-whatsapp.adapter.ts
+        external/
+          twilio.adapter.ts
+      repositories/
+        voip.repository.ts
+        whatsapp.repository.ts
+      contracts/
+        communications.port.ts
+      events/
+        communications.events.ts
+
+    help-center/
+      routes/
+        help-center.routes.ts
+      services/
+        help-center.service.ts
+      repositories/
+        help-center.repository.ts
+      contracts/
+        help-center.port.ts
+
+    automation-ai/
+      routes/
+        automation.routes.ts
+      services/
+        approval-automation.service.ts
+        failed-approval.service.ts
+      workers/
+        approval-retry.worker.ts
+      events/
+        automation.events.ts
+
+    ops/
+      routes/
+        backups.routes.ts
+        health.routes.ts
+      services/
+        backup.service.ts
+      repositories/
+        backup.repository.ts
+
+  shared/
+    db/
+    config/
+    errors/
+    middleware/
+    observability/
+```
+
+## 14.2 Shared workspace packages (`packages/*`)
+
+```text
+packages/
+  contracts/        # shared DTOs and event envelopes (versioned)
+  module-runtime/   # module switchboard, provider resolver, health checks
+  observability/    # logger, metrics, tracing wrappers
+  database/         # Prisma schema + migrations + generated client
+```
+
+## 14.3 Frontend alignment (`apps/web/src`)
+
+```text
+apps/web/src/
+  modules/
+    support/
+      pages/
+      components/
+      api/
+    communications/
+      pages/
+      components/
+      api/
+    help-center/
+      pages/
+      api/
+    admin-config/
+      modules-switchboard/
+```
+
+UI gating rule: navigation items render only when module decision is `allowed=true`.
+
+---
+
+## 15) Sprint-1 migration checklist (v0.3, no hard breaks)
+
+Goal: implement switchboard + module runtime without endpoint changes.
+
+## 15.1 Pre-flight
+- [ ] Freeze route signatures for:
+  - `/api/customer-service/*`
+  - `/api/orders/*ticketing*`
+  - `/api/help-center/*`
+  - `/api/admin/authenticator/*`
+- [ ] Capture baseline metrics (latency/error) for ticket/chat/voip/whatsapp.
+- [ ] Define rollback flag: `MODULE_RUNTIME_ENABLED=false`.
+
+## 15.2 Data and config
+- [ ] Create `ModuleRegistry` storage (or `SupportCenterSetting` namespaced key as interim).
+- [ ] Seed defaults:
+  - ticketing/chat/communications/help_center => `enabled=true`, `provider=internal`, `mode=active`.
+- [ ] Add validation for `provider`, `mode`, rollout scope format.
+
+## 15.3 Runtime wiring
+- [ ] Add `resolveModuleDecision(moduleKey, actor)` service.
+- [ ] Add middleware helper:
+  - `requireModule('ticketing')`, `requireModule('communications')`, etc.
+- [ ] Wrap existing route handlers with module checks (no business logic changes yet).
+
+## 15.4 Admin APIs and UI control
+- [ ] Add admin endpoints:
+  - `GET /api/admin/modules`
+  - `PATCH /api/admin/modules/:moduleKey`
+- [ ] Add admin dashboard page: Module Switchboard (status/provider/mode/scope).
+- [ ] Ensure every config change writes to activity/audit log.
+
+## 15.5 Safety and observability
+- [ ] Add module health endpoint:
+  - `/api/health/modules`
+- [ ] Add structured log fields: `module_key`, `module_mode`, `provider`.
+- [ ] Add alert when module is switched to `degraded` or `maintenance`.
+
+## 15.6 Exit criteria
+- [ ] No existing public/admin endpoint contract changes.
+- [ ] Module toggle hides corresponding sidebar/menu entries.
+- [ ] Disabled module returns deterministic error payload:
+  - `{ success:false, code:'MODULE_DISABLED', moduleKey:'...' }`
+- [ ] Rollback tested by turning `MODULE_RUNTIME_ENABLED=false` and redeploy.
+
+---
+
+## 16) Delivery workstream matrix (v0.3)
+
+| Workstream | Primary Module | Dependencies | Deliverable |
+|---|---|---|---|
+| A: Runtime switchboard | platform_core | none | module registry, resolver, middleware |
+| B: Admin control plane | platform_core + web admin | A | module management UI and APIs |
+| C: Ticket/chat boundary hardening | ticketing + chat | A | route wrapping + ownership guards |
+| D: Comms provider abstraction | communications | A | communications port and internal adapter |
+| E: Observability and rollback | ops + platform_core | A | module health, alerts, rollback runbook |
+
+Recommended sequence: **A -> B -> C + D (parallel) -> E**.
 
