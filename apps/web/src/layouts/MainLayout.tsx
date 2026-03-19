@@ -135,7 +135,12 @@ export default function MainLayout() {
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    document.documentElement.dataset.zkTheme = concreteTheme.toLowerCase();
+    document.body.dataset.zkScope = 'public';
+    document.body.dataset.zkTheme = concreteTheme.toLowerCase();
+    return () => {
+      delete document.body.dataset.zkScope;
+      delete document.body.dataset.zkTheme;
+    };
   }, [concreteTheme]);
 
   const handleLogout = () => {

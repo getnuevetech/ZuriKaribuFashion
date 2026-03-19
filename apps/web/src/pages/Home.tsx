@@ -594,10 +594,39 @@ export default function Home() {
   const customStripRef = useRef<HTMLDivElement>(null);
   const rtwStripRef = useRef<HTMLDivElement>(null);
   const fabricsStripRef = useRef<HTMLDivElement>(null);
+  const experienceSettings = useHomepageExperienceStore((state) => state.settings);
   const resolvedExperienceMode = useHomepageExperienceStore((state) => state.resolvedMode);
   const capabilityProfile = useHomepageExperienceStore((state) => state.capability);
   const isLiteExperienceMode = resolvedExperienceMode === 'LITE_COMMERCE';
   const useMotion = !isLiteExperienceMode && !capabilityProfile?.prefersReducedMotion;
+  const heroVariant = experienceSettings.heroVariant || 'SPLIT_EDITORIAL';
+  const categoryEntryVariant = experienceSettings.categoryEntryVariant || 'THREE_COLUMN_CORE';
+  const spotlightVariant = experienceSettings.spotlightVariant || 'CAROUSEL';
+  const tokenSet = experienceSettings.tokenSet || 'GLOBAL_PREMIUM_DARK';
+  const tokenPalette = useMemo(
+    () =>
+      ({
+        GLOBAL_PREMIUM_DARK: {
+          heroPanel: '#0b0b0c',
+          heroText: '#ffffff',
+          heroMuted: '#b8b5ad',
+          accent: '#ff4d2e',
+        },
+        GLOBAL_PREMIUM_LIGHT: {
+          heroPanel: '#ffffff',
+          heroText: '#111827',
+          heroMuted: '#4b5563',
+          accent: '#111827',
+        },
+        AFRO_EDITORIAL: {
+          heroPanel: '#1f140f',
+          heroText: '#f9f3ea',
+          heroMuted: '#d9c7af',
+          accent: '#d7662a',
+        },
+      } as const)[tokenSet],
+    [tokenSet]
+  );
 
   const { data: heroSlidesData } = useQuery({
     queryKey: ['heroSlides'],
@@ -1017,11 +1046,74 @@ export default function Home() {
   };
 
   const isExternalHref = (href: string) => /^(https?:\/\/|mailto:|tel:)/i.test(String(href || ''));
+  const renderSpotlightCard = (designer: any, className = '', imageClassName = 'aspect-[3/4]') => {
+    const href = resolveSpotlightHref(designer);
+    const content = (
+      <>
+        <div className={`${imageClassName} overflow-hidden`}>
+          <img
+            src={designer.image}
+            alt={designer.name}
+            className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105 grayscale group-hover:grayscale-0"
+            loading="lazy"
+          />
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-80 group-hover:opacity-90 transition-opacity" />
+        <div className="absolute bottom-0 left-0 right-0 p-6">
+          <div className="flex items-center gap-2 mb-2">
+            {designer.flagCode ? (
+              <img
+                src={`https://flagcdn.com/w40/${String(designer.flagCode || '').toLowerCase()}.png`}
+                alt={`${designer.country} flag`}
+                className="h-5 w-7 rounded-sm object-cover shadow-md"
+                loading="lazy"
+              />
+            ) : (
+              <span className="text-2xl">{designer.flag}</span>
+            )}
+            <span className="text-white/70 text-sm">{designer.country}</span>
+          </div>
+          <h3 className="font-['Oswald'] text-2xl font-bold text-white mb-2">{designer.name}</h3>
+          <p className="text-white/80 text-sm italic">&ldquo;{designer.quote}&rdquo;</p>
+        </div>
+      </>
+    );
+    if (isExternalHref(href)) {
+      return (
+        <a key={designer.id} href={href} target="_blank" rel="noopener noreferrer" className={`group relative overflow-hidden rounded-xl block ${className}`}>
+          {content}
+        </a>
+      );
+    }
+    return (
+      <Link key={designer.id} to={href} className={`group relative overflow-hidden rounded-xl block ${className}`}>
+        {content}
+      </Link>
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-white" data-experience-mode={resolvedExperienceMode}>
+    <div
+      className="min-h-screen bg-white"
+      data-experience-mode={resolvedExperienceMode}
+      data-hero-variant={heroVariant}
+      data-category-variant={categoryEntryVariant}
+      data-spotlight-variant={spotlightVariant}
+      data-token-set={tokenSet}
+    >
       {sectionVisibility.hero ? (
-      <section className={`relative w-full overflow-hidden ${isLiteExperienceMode ? 'h-[72vh]' : 'h-screen'}`}>
+      <section
+        className={`relative w-full overflow-hidden ${
+          heroVariant === 'SPLIT_EDITORIAL'
+            ? isLiteExperienceMode
+              ? 'h-[76vh]'
+              : 'h-[90vh]'
+            : isLiteExperienceMode
+              ? 'h-[72vh]'
+              : 'h-screen'
+        }`}
+        data-analytics-section="home-hero"
+      >
         {heroSlides.map((slide, index) => (
           <div
             key={slide.id}
@@ -1029,14 +1121,35 @@ export default function Home() {
               index === currentSlide ? 'opacity-100' : 'opacity-0'
             }`}
           >
-            <img src={slide.image} alt={slide.title} className="w-full h-full object-cover" />
-            <div className={`absolute inset-0 ${isLiteExperienceMode ? 'bg-gradient-to-r from-black/55 via-black/35 to-black/30' : 'bg-gradient-to-r from-black/60 via-black/30 to-transparent'}`} />
+            <img
+              src={slide.image}
+              alt={slide.title}
+              className={`h-full object-cover ${
+                heroVariant === 'SPLIT_EDITORIAL' ? 'w-full lg:w-[58%]' : 'w-full'
+              }`}
+            />
+            {heroVariant === 'SPLIT_EDITORIAL' ? (
+              <>
+                <div className="absolute inset-y-0 right-0 hidden w-[42%] lg:block" style={{ backgroundColor: tokenPalette.heroPanel }} />
+                <div className="absolute inset-0 bg-black/45 lg:hidden" />
+              </>
+            ) : (
+              <div
+                className={`absolute inset-0 ${
+                  isLiteExperienceMode
+                    ? 'bg-gradient-to-r from-black/55 via-black/35 to-black/30'
+                    : heroVariant === 'VIDEO_STORY'
+                      ? 'bg-gradient-to-r from-black/70 via-black/45 to-black/30'
+                      : 'bg-gradient-to-r from-black/60 via-black/30 to-transparent'
+                }`}
+              />
+            )}
           </div>
         ))}
 
         <div className="relative h-full flex items-center">
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-            <div className="max-w-2xl">
+            <div className={heroVariant === 'SPLIT_EDITORIAL' ? 'max-w-xl lg:ml-auto lg:pr-8' : 'max-w-2xl'}>
               {heroSlides.map((slide, index) => (
                 <div
                   key={slide.id}
@@ -1046,10 +1159,25 @@ export default function Home() {
                 >
                   {index === currentSlide && (
                     <>
-                      <h1 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-6 leading-tight">
+                      <p
+                        className="mb-3 text-[11px] font-semibold tracking-[0.25em] uppercase"
+                        style={{ color: tokenPalette.heroMuted }}
+                      >
+                        {heroVariant === 'VIDEO_STORY' ? 'Cinematic Story' : 'Global African Fashion'}
+                      </p>
+                      <h1
+                        className={`font-['Oswald'] font-bold mb-6 leading-tight ${
+                          heroVariant === 'SPLIT_EDITORIAL'
+                            ? 'text-4xl sm:text-5xl lg:text-6xl'
+                            : 'text-4xl sm:text-5xl lg:text-6xl xl:text-7xl'
+                        }`}
+                        style={{ color: tokenPalette.heroText }}
+                      >
                         {slide.title}
                       </h1>
-                      <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-lg">{slide.subtitle}</p>
+                      <p className="text-lg sm:text-xl mb-8 max-w-lg" style={{ color: tokenPalette.heroMuted }}>
+                        {slide.subtitle}
+                      </p>
                       <div className="mb-5 flex flex-wrap items-center gap-2">
                         <Link to="/ready-to-wear" className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}>
                           Shop RTW
@@ -1065,6 +1193,23 @@ export default function Home() {
                         {(slide.ctaText || 'SHOP NOW').toUpperCase()}
                         <ArrowRight className="w-4 h-4" />
                       </Link>
+                      {heroVariant === 'CLEAN_COMMERCE' ? (
+                        <div className="mt-5 flex w-full max-w-xl items-center gap-2 rounded-md bg-white/95 p-2 text-black">
+                          <Search className="h-4 w-4 text-gray-500" />
+                          <input
+                            type="text"
+                            className="h-8 flex-1 bg-transparent text-sm outline-none"
+                            placeholder="Search products..."
+                            aria-label="Search products"
+                          />
+                          <Link
+                            to="/shop"
+                            className="inline-flex items-center rounded border border-black px-3 py-1 text-xs font-semibold"
+                          >
+                            Go
+                          </Link>
+                        </div>
+                      ) : null}
                     </>
                   )}
                 </div>
@@ -1116,8 +1261,22 @@ export default function Home() {
                 key={index}
                 onClick={() => setCurrentSlide(index)}
                 className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                  index === currentSlide ? 'bg-white w-8' : 'bg-white/50 hover:bg-white/70'
+                  index === currentSlide
+                    ? heroVariant === 'SPLIT_EDITORIAL'
+                      ? 'w-8'
+                      : 'bg-white w-8'
+                    : heroVariant === 'SPLIT_EDITORIAL'
+                      ? ''
+                      : 'bg-white/50 hover:bg-white/70'
                 }`}
+                style={
+                  heroVariant === 'SPLIT_EDITORIAL'
+                    ? {
+                        backgroundColor:
+                          index === currentSlide ? tokenPalette.accent : `${tokenPalette.heroMuted}66`,
+                      }
+                    : undefined
+                }
               />
             ))}
           </div>
@@ -1175,27 +1334,70 @@ export default function Home() {
               Choose what fits your moment, ready pieces, custom fits, or raw fabrics.
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
-            {categories.map((category) => (
-              <Link key={category.id} to={category.link} className="group relative overflow-hidden rounded-xl cursor-pointer card-hover">
-                <div className="aspect-[3/4] overflow-hidden">
-                  <img
-                    src={categoryImageById[category.id] || category.image}
-                    alt={category.title}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                  />
-                </div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                  <h3 className="font-['Oswald'] text-2xl font-bold mb-2">{category.title}</h3>
-                  <p className="text-white/80 text-sm mb-4">{category.description}</p>
-                  <span className="inline-flex items-center justify-center border border-white text-white rounded-none px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200 group-hover:bg-white group-hover:text-black">
-                    {category.ctaText || 'SHOP NOW'}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
+          {categoryEntryVariant === 'MEGA_GRID' ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:gap-6" data-analytics-section="category-entry-mega-grid">
+              {categories[0] ? (
+                <Link key={categories[0].id} to={categories[0].link} className="group relative overflow-hidden rounded-xl cursor-pointer card-hover md:row-span-2">
+                  <div className="aspect-[3/4] h-full overflow-hidden">
+                    <img
+                      src={categoryImageById[categories[0].id] || categories[0].image}
+                      alt={categories[0].title}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+                    <h3 className="font-['Oswald'] text-3xl font-bold mb-2">{categories[0].title}</h3>
+                    <p className="text-white/80 text-sm mb-4">{categories[0].description}</p>
+                    <span className="inline-flex items-center justify-center border border-white text-white rounded-none px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200 group-hover:bg-white group-hover:text-black">
+                      {categories[0].ctaText || 'SHOP NOW'}
+                    </span>
+                  </div>
+                </Link>
+              ) : null}
+              {categories.slice(1).map((category) => (
+                <Link key={category.id} to={category.link} className="group relative overflow-hidden rounded-xl cursor-pointer card-hover">
+                  <div className="aspect-[16/10] overflow-hidden">
+                    <img
+                      src={categoryImageById[category.id] || category.image}
+                      alt={category.title}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+                    <h3 className="font-['Oswald'] text-2xl font-bold mb-2">{category.title}</h3>
+                    <p className="text-white/80 text-sm mb-4">{category.description}</p>
+                    <span className="inline-flex items-center justify-center border border-white text-white rounded-none px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200 group-hover:bg-white group-hover:text-black">
+                      {category.ctaText || 'SHOP NOW'}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6" data-analytics-section="category-entry-three-column">
+              {categories.map((category) => (
+                <Link key={category.id} to={category.link} className="group relative overflow-hidden rounded-xl cursor-pointer card-hover">
+                  <div className="aspect-[3/4] overflow-hidden">
+                    <img
+                      src={categoryImageById[category.id] || category.image}
+                      alt={category.title}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    />
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+                    <h3 className="font-['Oswald'] text-2xl font-bold mb-2">{category.title}</h3>
+                    <p className="text-white/80 text-sm mb-4">{category.description}</p>
+                    <span className="inline-flex items-center justify-center border border-white text-white rounded-none px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200 group-hover:bg-white group-hover:text-black">
+                      {category.ctaText || 'SHOP NOW'}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </section>
       ) : null}
@@ -1391,48 +1593,38 @@ export default function Home() {
             <p className="text-gray-600 max-w-xl mx-auto">Showcasing rotating talent from different countries.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {designers.map((designer) => {
-              const href = resolveSpotlightHref(designer);
-              const content = (
-                <>
-                  <div className="aspect-[3/4] overflow-hidden">
-                    <img src={designer.image} alt={designer.name} className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105 grayscale group-hover:grayscale-0" />
-                  </div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-80 group-hover:opacity-90 transition-opacity" />
-                  <div className="absolute bottom-0 left-0 right-0 p-6">
-                    <div className="flex items-center gap-2 mb-2">
-                      {designer.flagCode ? (
-                        <img
-                          src={`https://flagcdn.com/w40/${String(designer.flagCode || '').toLowerCase()}.png`}
-                          alt={`${designer.country} flag`}
-                          className="h-5 w-7 rounded-sm object-cover shadow-md"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <span className="text-2xl">{designer.flag}</span>
-                      )}
-                      <span className="text-white/70 text-sm">{designer.country}</span>
-                    </div>
-                    <h3 className="font-['Oswald'] text-2xl font-bold text-white mb-2">{designer.name}</h3>
-                    <p className="text-white/80 text-sm italic">&ldquo;{designer.quote}&rdquo;</p>
-                  </div>
-                </>
-              );
-              if (isExternalHref(href)) {
-                return (
-                  <a key={designer.id} href={href} target="_blank" rel="noopener noreferrer" className="group relative overflow-hidden rounded-xl block">
-                    {content}
-                  </a>
-                );
-              }
-              return (
-                <Link key={designer.id} to={href} className="group relative overflow-hidden rounded-xl block">
-                  {content}
-                </Link>
-              );
-            })}
-          </div>
+          {spotlightVariant === 'SINGLE_FEATURE' ? (
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-3" data-analytics-section="designer-spotlight-single">
+              {designers[0] ? renderSpotlightCard(designers[0], 'md:col-span-2', 'aspect-[16/10] md:aspect-[4/3]') : null}
+              <div className="grid grid-cols-1 gap-5">
+                {designers.slice(1, 3).map((designer) =>
+                  renderSpotlightCard(designer, '', 'aspect-[16/10]')
+                )}
+              </div>
+            </div>
+          ) : spotlightVariant === 'MOSAIC' ? (
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-3" data-analytics-section="designer-spotlight-mosaic">
+              {designers.map((designer, index) =>
+                renderSpotlightCard(
+                  designer,
+                  index === 0 ? 'md:col-span-2 md:row-span-2' : '',
+                  index === 0 ? 'aspect-[16/10] md:aspect-[4/3]' : 'aspect-[16/10]'
+                )
+              )}
+            </div>
+          ) : (
+            <div
+              className="flex gap-6 overflow-x-auto pb-2 scrollbar-hide"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              data-analytics-section="designer-spotlight-carousel"
+            >
+              {designers.map((designer) => (
+                <div key={designer.id} className="min-w-[300px] flex-1 md:min-w-[360px]">
+                  {renderSpotlightCard(designer)}
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="text-center mt-10">
             <Link

@@ -1358,6 +1358,68 @@ export default function HomepageSections() {
             Configure adaptive Lite/Standard/Editorial behavior, theme options, and approved section variants.
           </p>
         </div>
+        <div className="mb-4 grid gap-4 md:grid-cols-2">
+          <div className="rounded-md border border-gray-200 p-3">
+            <p className="text-sm font-semibold text-gray-800">Enabled Experience Modes</p>
+            <div className="mt-2 space-y-2">
+              {[
+                { value: 'LITE_COMMERCE', label: 'Lite Commerce' },
+                { value: 'STANDARD_PREMIUM', label: 'Standard Premium' },
+                { value: 'EDITORIAL_IMMERSIVE', label: 'Editorial Immersive' },
+              ].map((entry) => (
+                <label key={entry.value} className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={homepageExperienceSettings.enabledModes.includes(entry.value as any)}
+                    onChange={(e) =>
+                      setHomepageExperienceSettings((prev) => {
+                        const nextModes = e.target.checked
+                          ? Array.from(new Set([...prev.enabledModes, entry.value as any]))
+                          : prev.enabledModes.filter((mode) => mode !== entry.value);
+                        return {
+                          ...prev,
+                          enabledModes: nextModes.length > 0 ? nextModes : prev.enabledModes,
+                        };
+                      })
+                    }
+                    className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  {entry.label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-md border border-gray-200 p-3">
+            <p className="text-sm font-semibold text-gray-800">Enabled Theme Modes</p>
+            <div className="mt-2 space-y-2">
+              {[
+                { value: 'SYSTEM', label: 'System' },
+                { value: 'LIGHT', label: 'Light' },
+                { value: 'DARK', label: 'Dark' },
+              ].map((entry) => (
+                <label key={entry.value} className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={homepageExperienceSettings.themeModes.includes(entry.value as any)}
+                    onChange={(e) =>
+                      setHomepageExperienceSettings((prev) => {
+                        const nextModes = e.target.checked
+                          ? Array.from(new Set([...prev.themeModes, entry.value as any]))
+                          : prev.themeModes.filter((mode) => mode !== entry.value);
+                        return {
+                          ...prev,
+                          themeModes: nextModes.length > 0 ? nextModes : prev.themeModes,
+                        };
+                      })
+                    }
+                    className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  {entry.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700">Default Experience Mode</label>
