@@ -27,6 +27,7 @@ const ADMIN_PERMISSION_ROUTE_PRIORITY: Array<{ route: string; required: string[]
   { route: '/admin/homepage', required: ['homepage:manage'] },
   { route: '/admin/help-center-content', required: ['help_center:manage'] },
   { route: '/admin/modules', required: ['users:manage'] },
+  { route: '/admin/dynamic-fields', required: ['dynamic_fields:manage'] },
   { route: '/admin/homepage-visibility', required: ['homepage:manage'] },
   { route: '/admin/banners', required: ['banners:manage'] },
   { route: '/admin/roles', required: ['admin:roles:manage', 'users:read'] },

@@ -14,16 +14,14 @@ type ProviderForm = {
 
 type MessageTone = 'info' | 'success' | 'error';
 
-const SYSTEM_FUNCTION_OPTIONS = [
+const DEFAULT_FUNCTION_OPTIONS = [
   { key: 'text_grammar_enhancement', label: 'Text/Grammatical Correction' },
   { key: 'image_verification', label: 'Image Verification' },
   { key: 'image_regeneration', label: 'Image Regeneration' },
   { key: 'document_ocr_analysis', label: 'Document OCR/Analysis' },
 ] as const;
 
-const SYSTEM_FUNCTION_KEY_SET = new Set(SYSTEM_FUNCTION_OPTIONS.map((entry) => entry.key));
-
-const FUNCTION_LABEL_BY_KEY = SYSTEM_FUNCTION_OPTIONS.reduce<Record<string, string>>((acc, entry) => {
+const FUNCTION_LABEL_BY_KEY = DEFAULT_FUNCTION_OPTIONS.reduce<Record<string, string>>((acc, entry) => {
   acc[entry.key] = entry.label;
   return acc;
 }, {});
@@ -59,8 +57,14 @@ export default function AdminAutomationAiConfigPage() {
   });
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [newBinding, setNewBinding] = useState({
-    functionKey: SYSTEM_FUNCTION_OPTIONS[0].key,
+    functionKey: DEFAULT_FUNCTION_OPTIONS[0].key,
     providerId: '',
+    isActive: true,
+  });
+  const [newFunction, setNewFunction] = useState({
+    key: '',
+    label: '',
+    description: '',
     isActive: true,
   });
   const [providerFunctionSelections, setProviderFunctionSelections] = useState<Record<string, string[]>>({});
@@ -97,6 +101,37 @@ export default function AdminAutomationAiConfigPage() {
     () => (Array.isArray(settings?.functionBindings) ? settings.functionBindings : []),
     [settings]
   );
+  const functionCatalogOptions = useMemo(() => {
+    const catalogRows = Array.isArray(settings?.functionCatalog) ? settings.functionCatalog : [];
+    const map = new Map<string, { key: string; label: string; description?: string; isSystem?: boolean; isActive?: boolean }>();
+    for (const row of DEFAULT_FUNCTION_OPTIONS) {
+      map.set(row.key, {
+        key: row.key,
+        label: row.label,
+        description: '',
+        isSystem: true,
+        isActive: true,
+      });
+    }
+    for (const row of catalogRows) {
+      const key = String(row?.key || '')
+        .trim()
+        .toLowerCase();
+      if (!key) continue;
+      map.set(key, {
+        key,
+        label: String(row?.label || FUNCTION_LABEL_BY_KEY[key] || key).trim() || key,
+        description: String(row?.description || '').trim(),
+        isSystem: row?.isSystem === true,
+        isActive: row?.isActive !== false,
+      });
+    }
+    return Array.from(map.values()).sort((a, b) => String(a.label).localeCompare(String(b.label)));
+  }, [settings]);
+  const functionKeySet = useMemo(
+    () => new Set(functionCatalogOptions.map((entry) => String(entry.key || '').trim().toLowerCase()).filter(Boolean)),
+    [functionCatalogOptions]
+  );
   const providerTagOptions = useMemo(() => {
     const options = new Map<string, string>();
     const add = (value: string, label: string) => {
@@ -132,12 +167,12 @@ export default function AdminAutomationAiConfigPage() {
       const linkedFunctionKeys = bindings
         .filter((binding: any) => String(binding?.providerId || '').trim() === id)
         .map((binding: any) => String(binding?.functionKey || '').trim().toLowerCase())
-        .filter((key: string) => SYSTEM_FUNCTION_KEY_SET.has(key as any));
+        .filter((key: string) => functionKeySet.has(key));
       acc[id] = Array.from(new Set(linkedFunctionKeys));
       return acc;
     }, {});
     setProviderFunctionSelections(nextSelections);
-  }, [providers, bindings]);
+  }, [providers, bindings, functionKeySet]);
 
   const persist = async (next: any) => {
     try {
@@ -199,7 +234,7 @@ export default function AdminAutomationAiConfigPage() {
 
   const toggleProviderFunctionSelection = (providerId: string, functionKey: string, checked: boolean) => {
     const normalized = String(functionKey || '').trim().toLowerCase();
-    if (!SYSTEM_FUNCTION_KEY_SET.has(normalized as any)) return;
+    if (!functionKeySet.has(normalized)) return;
     setProviderFunctionSelections((prev) => {
       const current = Array.isArray(prev[providerId]) ? prev[providerId] : [];
       const next = checked
@@ -232,7 +267,7 @@ export default function AdminAutomationAiConfigPage() {
       new Set(
         (providerFunctionSelections[providerId] || [])
           .map((entry) => String(entry || '').trim().toLowerCase())
-          .filter((entry) => SYSTEM_FUNCTION_KEY_SET.has(entry as any))
+          .filter((entry) => functionKeySet.has(entry))
       )
     );
     const providerExistingBindings = bindings.filter(
@@ -329,9 +364,9 @@ export default function AdminAutomationAiConfigPage() {
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9_]/g, '_');
-    if (!functionKey || !SYSTEM_FUNCTION_KEY_SET.has(functionKey as any)) {
+    if (!functionKey || !functionKeySet.has(functionKey)) {
       setMessageTone('error');
-      setMessage('Please select a valid system function key.');
+      setMessage('Please select a valid function key.');
       return;
     }
     if (
@@ -352,7 +387,7 @@ export default function AdminAutomationAiConfigPage() {
         {
           id: crypto.randomUUID(),
           functionKey,
-          functionLabel: FUNCTION_LABEL_BY_KEY[functionKey] || functionKey,
+          functionLabel: functionCatalogOptions.find((entry) => entry.key === functionKey)?.label || FUNCTION_LABEL_BY_KEY[functionKey] || functionKey,
           providerId: String(newBinding.providerId || '').trim(),
           isActive: Boolean(newBinding.isActive),
         },
@@ -360,10 +395,69 @@ export default function AdminAutomationAiConfigPage() {
     };
     setSettings(next);
     setNewBinding({
-      functionKey: SYSTEM_FUNCTION_OPTIONS[0].key,
+      functionKey: functionCatalogOptions[0]?.key || DEFAULT_FUNCTION_OPTIONS[0].key,
       providerId: '',
       isActive: true,
     });
+  };
+
+  const addFunctionCatalogEntry = async () => {
+    const key = String(newFunction.key || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    const label = String(newFunction.label || '').trim();
+    if (!key || key.length < 2 || !label) {
+      setMessageTone('error');
+      setMessage('Function key and label are required.');
+      return;
+    }
+    if (functionCatalogOptions.some((entry) => String(entry.key || '').trim().toLowerCase() === key)) {
+      setMessageTone('error');
+      setMessage('Function key already exists.');
+      return;
+    }
+    const existingCatalog = Array.isArray(settings?.functionCatalog) ? settings.functionCatalog : [];
+    const nextSettings = {
+      ...(settings || {}),
+      functionCatalog: [
+        ...existingCatalog,
+        {
+          id: crypto.randomUUID(),
+          key,
+          label,
+          description: String(newFunction.description || '').trim(),
+          isSystem: false,
+          isActive: newFunction.isActive !== false,
+        },
+      ],
+    };
+    await persist(nextSettings);
+    setNewFunction({
+      key: '',
+      label: '',
+      description: '',
+      isActive: true,
+    });
+    setNewBinding((prev) => ({ ...prev, functionKey: key }));
+  };
+
+  const toggleFunctionCatalogEntry = async (entry: any, isActive: boolean) => {
+    const key = String(entry?.key || '').trim().toLowerCase();
+    const existingCatalog = Array.isArray(settings?.functionCatalog) ? settings.functionCatalog : [];
+    const nextCatalog = existingCatalog.map((row: any) =>
+      String(row?.key || '').trim().toLowerCase() === key ? { ...row, isActive } : row
+    );
+    const nextSettings = {
+      ...(settings || {}),
+      functionCatalog: nextCatalog,
+      functionBindings: bindings.map((row: any) =>
+        String(row?.functionKey || '').trim().toLowerCase() === key ? { ...row, isActive } : row
+      ),
+    };
+    await persist(nextSettings);
   };
 
   if (loading) {
@@ -406,6 +500,95 @@ export default function AdminAutomationAiConfigPage() {
               <p className="mt-1">Recommended: {(row.recommendedFunctions || []).join(', ') || '-'}</p>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-white p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-gray-900">AI Function Catalog</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Add custom AI functions beyond the default system functions, then bind each function to any provider.
+        </p>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="function_key (example: fraud_screening)"
+            value={newFunction.key}
+            onChange={(event) => setNewFunction((prev) => ({ ...prev, key: event.target.value }))}
+          />
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="Function label"
+            value={newFunction.label}
+            onChange={(event) => setNewFunction((prev) => ({ ...prev, label: event.target.value }))}
+          />
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="Function description (optional)"
+            value={newFunction.description}
+            onChange={(event) => setNewFunction((prev) => ({ ...prev, description: event.target.value }))}
+          />
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+            <input
+              type="checkbox"
+              checked={newFunction.isActive}
+              onChange={(event) => setNewFunction((prev) => ({ ...prev, isActive: event.target.checked }))}
+            />
+            Active
+          </label>
+          <Button variant="outline" onClick={() => void addFunctionCatalogEntry()} disabled={saving}>
+            {saving ? 'Saving...' : 'Add Function'}
+          </Button>
+        </div>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[800px] text-sm">
+            <thead className="bg-gray-50 text-left text-gray-500">
+              <tr>
+                <th className="px-3 py-2">Function Key</th>
+                <th className="px-3 py-2">Label</th>
+                <th className="px-3 py-2">Description</th>
+                <th className="px-3 py-2">Type</th>
+                <th className="px-3 py-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {functionCatalogOptions.map((entry) => (
+                <tr key={entry.key} className="border-t">
+                  <td className="px-3 py-2 font-mono text-xs text-gray-700">{entry.key}</td>
+                  <td className="px-3 py-2 text-gray-900">{entry.label}</td>
+                  <td className="px-3 py-2 text-gray-700">{entry.description || '-'}</td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs ${
+                        entry.isSystem ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                      }`}
+                    >
+                      {entry.isSystem ? 'System' : 'Custom'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={entry.isActive !== false}
+                        onChange={(event) => void toggleFunctionCatalogEntry(entry, event.target.checked)}
+                        disabled={entry.isSystem === true}
+                      />
+                      {entry.isActive !== false ? 'Active' : 'Inactive'}
+                    </label>
+                  </td>
+                </tr>
+              ))}
+              {functionCatalogOptions.length < 1 ? (
+                <tr>
+                  <td className="px-3 py-4 text-center text-gray-500" colSpan={5}>
+                    No function catalog entries.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -472,10 +655,11 @@ export default function AdminAutomationAiConfigPage() {
             value={testFunctionKey}
             onChange={(event) => setTestFunctionKey(event.target.value)}
           >
-            <option value="text_grammar_enhancement">Text/Grammatical Correction</option>
-            <option value="image_verification">Image Verification</option>
-            <option value="image_regeneration">Image Regeneration</option>
-            <option value="document_ocr_analysis">Document OCR/Analysis</option>
+            {functionCatalogOptions.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <input
             className="rounded border px-3 py-2 text-sm"
@@ -552,7 +736,7 @@ export default function AdminAutomationAiConfigPage() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="grid gap-1">
-                        {SYSTEM_FUNCTION_OPTIONS.map((option) => {
+                        {functionCatalogOptions.map((option) => {
                           const selected = (providerFunctionSelections[providerId] || []).includes(option.key);
                           return (
                             <label key={`${providerId}-${option.key}`} className="inline-flex items-center gap-2 text-xs text-gray-700">
@@ -687,7 +871,7 @@ export default function AdminAutomationAiConfigPage() {
             value={newBinding.functionKey}
             onChange={(event) => setNewBinding((prev) => ({ ...prev, functionKey: event.target.value }))}
           >
-            {SYSTEM_FUNCTION_OPTIONS.map((option) => (
+            {functionCatalogOptions.map((option) => (
               <option key={option.key} value={option.key}>
                 {option.label}
               </option>

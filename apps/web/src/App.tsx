@@ -77,6 +77,7 @@ import AdminResellerInfluencers from './pages/admin/ResellerInfluencers';
 import AdminAutomationApprovals from './pages/admin/AutomationApprovals';
 import AdminAutomationAiConfig from './pages/admin/AutomationAiConfig';
 import AdminAutomationSystem from './pages/admin/AutomationSystem';
+import AdminDynamicFields from './pages/admin/DynamicFields';
 import AdminReferralMaterials from './pages/admin/ReferralMaterials';
 import AdminReferralList from './pages/admin/ReferralList';
 import AdminReports from './pages/admin/Reports';
@@ -525,6 +526,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['products:manage']}>
                       <AdminAutomationSystem />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/dynamic-fields"
+                  element={
+                    <AdminPermissionGuard required={['dynamic_fields:manage|products:manage|users:manage']}>
+                      <AdminDynamicFields />
                     </AdminPermissionGuard>
                   }
                 />

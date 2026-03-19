@@ -7,12 +7,14 @@ import {
   ensureAutomationSettingsSchema,
   evaluateAccountAutomationChecks,
   evaluateProductAutomationChecks,
+  listCoreAutomationFieldCatalog,
   notifyVendorAboutProductAutomationFailure,
   readAutomationApprovalSettings,
   saveProductAutomationOutcome,
   saveAutomationApprovalSettings,
   testAutomationProviderBinding,
 } from '../utils/automation-approval';
+import { listDynamicFieldDefinitions } from '../utils/dynamic-fields';
 
 const router = Router();
 router.use(authenticate);
@@ -41,6 +43,63 @@ const accountEvaluationRequestSchema = z.object({
   role: z.nativeEnum(UserRole).optional(),
 });
 
+const mergeAutomationFieldCatalog = async () => {
+  const coreCatalog = listCoreAutomationFieldCatalog();
+  const dynamicFields = await listDynamicFieldDefinitions({ isActive: true });
+  const scopes: Record<'FABRIC' | 'READY_TO_WEAR' | 'DESIGN' | 'ACCOUNT_APPROVAL', any[]> = {
+    FABRIC: [...coreCatalog.FABRIC],
+    READY_TO_WEAR: [...coreCatalog.READY_TO_WEAR],
+    DESIGN: [...coreCatalog.DESIGN],
+    ACCOUNT_APPROVAL: [...coreCatalog.ACCOUNT_APPROVAL],
+  };
+  const scopeSet = new Set(Object.keys(scopes));
+  for (const row of dynamicFields) {
+    const module = String(row.module || '').toUpperCase();
+    const scope = String(row.scope || '').toUpperCase();
+    const mappedScope =
+      scopeSet.has(scope)
+        ? (scope as 'FABRIC' | 'READY_TO_WEAR' | 'DESIGN' | 'ACCOUNT_APPROVAL')
+        : module === 'PRODUCT' && (scope === 'ALL_PRODUCTS' || scope === 'ALL' || !scope)
+          ? null
+          : null;
+    const entry = {
+      key: String(row.key || '').trim(),
+      label: String(row.label || row.key || '').trim(),
+      dataType: String(row.dataType || 'TEXT').trim().toUpperCase(),
+      source: 'DYNAMIC' as const,
+    };
+    if (!entry.key) continue;
+    if (module === 'PRODUCT' && !mappedScope) {
+      scopes.FABRIC.push(entry);
+      scopes.READY_TO_WEAR.push(entry);
+      scopes.DESIGN.push(entry);
+      continue;
+    }
+    if (mappedScope) {
+      scopes[mappedScope].push(entry);
+      continue;
+    }
+    if (module === 'ACCOUNT') {
+      scopes.ACCOUNT_APPROVAL.push(entry);
+    }
+  }
+  const dedupe = (rows: any[]) => {
+    const map = new Map<string, any>();
+    for (const row of rows) {
+      const key = String(row?.key || '').trim();
+      if (!key) continue;
+      map.set(key, row);
+    }
+    return Array.from(map.values()).sort((a, b) => String(a.label || a.key).localeCompare(String(b.label || b.key)));
+  };
+  return {
+    FABRIC: dedupe(scopes.FABRIC),
+    READY_TO_WEAR: dedupe(scopes.READY_TO_WEAR),
+    DESIGN: dedupe(scopes.DESIGN),
+    ACCOUNT_APPROVAL: dedupe(scopes.ACCOUNT_APPROVAL),
+  };
+};
+
 router.get('/settings', async (_req, res, next) => {
   try {
     const payload = await readAutomationApprovalSettings();
@@ -62,6 +121,35 @@ router.patch('/settings', async (req, res, next) => {
       success: true,
       message: 'Automation settings saved.',
       data: saved,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/field-catalog', async (_req, res, next) => {
+  try {
+    const data = await mergeAutomationFieldCatalog();
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/field-catalog/sync', async (_req, res, next) => {
+  try {
+    const settingsPayload = await readAutomationApprovalSettings();
+    const settings = settingsPayload.settings;
+    const synced = await saveAutomationApprovalSettings(settings);
+    const data = await mergeAutomationFieldCatalog();
+    res.json({
+      success: true,
+      message: 'Automation field catalog synced.',
+      settings: synced,
+      data,
     });
   } catch (error) {
     next(error);

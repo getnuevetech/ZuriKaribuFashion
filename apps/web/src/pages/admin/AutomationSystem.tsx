@@ -4,48 +4,6 @@ import { api } from '../../services/api';
 
 type CriteriaScope = 'FABRIC' | 'READY_TO_WEAR' | 'DESIGN' | 'ACCOUNT_APPROVAL';
 
-const FUNCTION_OPTIONS = [
-  { key: 'text_grammar_enhancement', label: 'Text/Grammatical Correction' },
-  { key: 'image_verification', label: 'Image Verification' },
-  { key: 'image_regeneration', label: 'Image Regeneration' },
-  { key: 'document_ocr_analysis', label: 'Document OCR/Analysis' },
-] as const;
-
-const FIELD_OPTIONS_BY_SCOPE: Record<CriteriaScope, Array<{ value: string; label: string }>> = {
-  FABRIC: [
-    { value: '', label: 'Auto (by criterion)' },
-    { value: 'name', label: 'Product Name' },
-    { value: 'description', label: 'Product Description' },
-    { value: 'finalPrice', label: 'Final Price' },
-    { value: 'minYards', label: 'Minimum Yards' },
-    { value: 'stockYards', label: 'Stock Yards' },
-    { value: 'predominantColor', label: 'Predominant Color' },
-    { value: 'images[0]', label: 'Primary Product Image' },
-  ],
-  READY_TO_WEAR: [
-    { value: '', label: 'Auto (by criterion)' },
-    { value: 'name', label: 'Product Name' },
-    { value: 'description', label: 'Product Description' },
-    { value: 'basePrice', label: 'Base Price' },
-    { value: 'predominantColor', label: 'Predominant Color' },
-    { value: 'images[0]', label: 'Primary Product Image' },
-  ],
-  DESIGN: [
-    { value: '', label: 'Auto (by criterion)' },
-    { value: 'name', label: 'Design Name' },
-    { value: 'description', label: 'Design Description' },
-    { value: 'basePrice', label: 'Base Price' },
-    { value: 'predominantColor', label: 'Predominant Color' },
-    { value: 'images[0]', label: 'Primary Product Image' },
-  ],
-  ACCOUNT_APPROVAL: [
-    { value: '', label: 'Auto (by criterion)' },
-    { value: 'account.notes', label: 'Account Notes / Summary' },
-    { value: 'account.identity', label: 'Identity Fields' },
-    { value: 'account.contact', label: 'Contact Fields' },
-  ],
-};
-
 const toProviderOptions = (settings: any) =>
   (Array.isArray(settings?.aiProviders) ? settings.aiProviders : [])
     .filter((entry: any) => String(entry?.id || '').trim().length > 0)
@@ -61,14 +19,28 @@ export default function AdminAutomationSystemPage() {
   const [messageTone, setMessageTone] = useState<'success' | 'error' | 'info'>('info');
   const [activeScope, setActiveScope] = useState<CriteriaScope>('FABRIC');
   const [settings, setSettings] = useState<any>(null);
+  const [fieldCatalog, setFieldCatalog] = useState<
+    Record<CriteriaScope, Array<{ key: string; label: string; dataType?: string; source?: 'CORE' | 'DYNAMIC' }>>
+  >({
+    FABRIC: [],
+    READY_TO_WEAR: [],
+    DESIGN: [],
+    ACCOUNT_APPROVAL: [],
+  });
 
   const load = async () => {
     try {
       setLoading(true);
       setMessage('');
-      const response = await api.admin.getAutomationSettings();
+      const [response, catalogResponse] = await Promise.all([
+        api.admin.getAutomationSettings(),
+        api.admin.getAutomationFieldCatalog(),
+      ]);
       if (response.success) {
         setSettings(response.data || null);
+      }
+      if (catalogResponse.success) {
+        setFieldCatalog(catalogResponse.data || {});
       }
     } catch (error: any) {
       setMessageTone('error');
@@ -83,10 +55,38 @@ export default function AdminAutomationSystemPage() {
   }, []);
 
   const providerOptions = useMemo(() => toProviderOptions(settings), [settings]);
+  const functionOptions = useMemo(() => {
+    const rows = Array.isArray(settings?.functionCatalog) ? settings.functionCatalog : [];
+    const dedupe = new Map<string, { key: string; label: string }>();
+    for (const row of rows) {
+      const key = String(row?.key || '').trim().toLowerCase();
+      if (!key) continue;
+      dedupe.set(key, { key, label: String(row?.label || key).trim() || key });
+    }
+    if (dedupe.size < 1) {
+      dedupe.set('text_grammar_enhancement', { key: 'text_grammar_enhancement', label: 'Text/Grammatical Correction' });
+      dedupe.set('image_verification', { key: 'image_verification', label: 'Image Verification' });
+      dedupe.set('image_regeneration', { key: 'image_regeneration', label: 'Image Regeneration' });
+      dedupe.set('document_ocr_analysis', { key: 'document_ocr_analysis', label: 'Document OCR/Analysis' });
+    }
+    return Array.from(dedupe.values());
+  }, [settings]);
   const criteriaRows = useMemo(() => {
     const rows = settings?.criteria?.[activeScope];
     return Array.isArray(rows) ? rows : [];
   }, [settings, activeScope]);
+  const fieldOptionsForScope = useMemo(() => {
+    const rows = Array.isArray(fieldCatalog?.[activeScope]) ? fieldCatalog[activeScope] : [];
+    return [
+      { value: '', label: 'Auto (by criterion)' },
+      ...rows.map((entry) => ({
+        value: String(entry.key || ''),
+        label: `${String(entry.label || entry.key || '')}${entry.source === 'DYNAMIC' ? ' • dynamic' : ''}${
+          entry.dataType ? ` (${String(entry.dataType)})` : ''
+        }`,
+      })),
+    ];
+  }, [activeScope, fieldCatalog]);
 
   const persist = async () => {
     try {
@@ -131,6 +131,27 @@ export default function AdminAutomationSystemPage() {
         ),
       },
     }));
+  };
+  const syncFieldCatalog = async () => {
+    try {
+      setSaving(true);
+      setMessage('');
+      setMessageTone('info');
+      const response = await api.admin.syncAutomationFieldCatalog();
+      if (response.success) {
+        if (response.settings) {
+          setSettings(response.settings);
+        }
+        setFieldCatalog(response.data || fieldCatalog);
+        setMessageTone('success');
+        setMessage(response.message || 'Field catalog synced successfully.');
+      }
+    } catch (error: any) {
+      setMessageTone('error');
+      setMessage(error?.response?.data?.message || error?.message || 'Failed to sync field catalog.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -267,6 +288,9 @@ export default function AdminAutomationSystemPage() {
               {scope === 'FABRIC' ? 'FTB' : scope === 'READY_TO_WEAR' ? 'RTW' : scope === 'DESIGN' ? 'CTW' : 'Account'}
             </button>
           ))}
+          <Button variant="outline" onClick={() => void syncFieldCatalog()} disabled={saving}>
+            {saving ? 'Syncing...' : 'Sync fields'}
+          </Button>
         </div>
 
         <div className="mt-3 overflow-x-auto">
@@ -321,7 +345,7 @@ export default function AdminAutomationSystemPage() {
                         value={String(row?.targetField || '')}
                         onChange={(event) => updateCriterion(key, { targetField: event.target.value })}
                       >
-                        {FIELD_OPTIONS_BY_SCOPE[activeScope].map((option) => (
+                        {fieldOptionsForScope.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
                           </option>
@@ -336,7 +360,7 @@ export default function AdminAutomationSystemPage() {
                           updateCriterion(key, { verifierFunctionKey: event.target.value, aiFunctionKey: event.target.value })
                         }
                       >
-                        {FUNCTION_OPTIONS.map((option) => (
+                        {functionOptions.map((option) => (
                           <option key={option.key} value={option.key}>
                             {option.label}
                           </option>
@@ -366,7 +390,7 @@ export default function AdminAutomationSystemPage() {
                         onChange={(event) => updateCriterion(key, { fixerFunctionKey: event.target.value })}
                       >
                         <option value="">Auto-fixer by field type</option>
-                        {FUNCTION_OPTIONS.map((option) => (
+                        {functionOptions.map((option) => (
                           <option key={option.key} value={option.key}>
                             {option.label}
                           </option>

@@ -7419,6 +7419,71 @@ const adminApi = {
   testAutomationProvider: (data: { providerId: string; functionKey?: string; prompt?: string }) =>
     apiService.post<{ success: boolean; data: any; message?: string }>('/admin/automation/providers/test', data),
 
+  getAutomationFieldCatalog: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        FABRIC: Array<{ key: string; label: string; dataType: string; source: 'CORE' | 'DYNAMIC' }>;
+        READY_TO_WEAR: Array<{ key: string; label: string; dataType: string; source: 'CORE' | 'DYNAMIC' }>;
+        DESIGN: Array<{ key: string; label: string; dataType: string; source: 'CORE' | 'DYNAMIC' }>;
+        ACCOUNT_APPROVAL: Array<{ key: string; label: string; dataType: string; source: 'CORE' | 'DYNAMIC' }>;
+      };
+    }>('/admin/automation/field-catalog'),
+
+  syncAutomationFieldCatalog: () =>
+    apiService.post<{
+      success: boolean;
+      message?: string;
+      settings?: any;
+      data: {
+        FABRIC: Array<{ key: string; label: string; dataType: string; source: 'CORE' | 'DYNAMIC' }>;
+        READY_TO_WEAR: Array<{ key: string; label: string; dataType: string; source: 'CORE' | 'DYNAMIC' }>;
+        DESIGN: Array<{ key: string; label: string; dataType: string; source: 'CORE' | 'DYNAMIC' }>;
+        ACCOUNT_APPROVAL: Array<{ key: string; label: string; dataType: string; source: 'CORE' | 'DYNAMIC' }>;
+      };
+    }>('/admin/automation/field-catalog/sync'),
+
+  listDynamicFields: (params?: { module?: string; scope?: string; isActive?: boolean }) =>
+    apiService.get<{ success: boolean; data: any[] }>('/admin/dynamic-fields', { params }),
+
+  createDynamicField: (data: {
+    key: string;
+    label: string;
+    module: string;
+    scope: string;
+    dataType?: string;
+    placeholder?: string;
+    helpText?: string;
+    defaultValue?: string;
+    options?: string[];
+    validation?: Record<string, any>;
+    functionKeys?: string[];
+    isRequired?: boolean;
+    isActive?: boolean;
+  }) => apiService.post<{ success: boolean; data: any; message?: string }>('/admin/dynamic-fields', data),
+
+  updateDynamicField: (
+    id: string,
+    data: {
+      key?: string;
+      label?: string;
+      module?: string;
+      scope?: string;
+      dataType?: string;
+      placeholder?: string;
+      helpText?: string;
+      defaultValue?: string;
+      options?: string[];
+      validation?: Record<string, any>;
+      functionKeys?: string[];
+      isRequired?: boolean;
+      isActive?: boolean;
+    }
+  ) => apiService.patch<{ success: boolean; data: any; message?: string }>(`/admin/dynamic-fields/${id}`, data),
+
+  deleteDynamicField: (id: string) =>
+    apiService.delete<{ success: boolean; message?: string }>(`/admin/dynamic-fields/${id}`),
+
   autoCloseOverdueOrders: () =>
     apiService.post<{ success: boolean; data: { closedCount: number }; message?: string }>(
       '/admin/order-workflow/auto-close-overdue'

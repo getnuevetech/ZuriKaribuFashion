@@ -50,6 +50,7 @@ import customerServiceRoutes from './routes/customer-service';
 import helpCenterRoutes from './routes/help-center';
 import adminAuthenticatorRoutes from './routes/admin-authenticator';
 import moduleRuntimeRoutes from './routes/module-runtime';
+import adminDynamicFieldsRoutes from './routes/admin-dynamic-fields';
 import { prisma } from './db';
 import { activityAuditMiddleware } from './middleware/activity-audit';
 import { runStartupRepairs } from './bootstrap';
@@ -276,6 +277,7 @@ app.use('/api/failed-product-approvals', failedProductApprovalsRoutes);
 app.use('/api/customer-service', customerServiceRoutes);
 app.use('/api/help-center', helpCenterRoutes);
 app.use('/api/module-runtime', moduleRuntimeRoutes);
+app.use('/api/admin/dynamic-fields', adminDynamicFieldsRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

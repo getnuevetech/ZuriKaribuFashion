@@ -32,12 +32,56 @@ export type AutomationFunctionBinding = {
   isActive: boolean;
 };
 
+export type AutomationFunctionCatalogEntry = {
+  id: string;
+  key: string;
+  label: string;
+  description: string;
+  isSystem: boolean;
+  isActive: boolean;
+};
+
 const SYSTEM_AUTOMATION_FUNCTION_KEYS = new Set([
   'text_grammar_enhancement',
   'image_verification',
   'image_regeneration',
   'document_ocr_analysis',
 ]);
+
+const DEFAULT_FUNCTION_CATALOG: AutomationFunctionCatalogEntry[] = [
+  {
+    id: randomUUID(),
+    key: 'text_grammar_enhancement',
+    label: 'Text/Grammatical Correction & Enhancement',
+    description: 'Use AI to validate and improve text quality.',
+    isSystem: true,
+    isActive: true,
+  },
+  {
+    id: randomUUID(),
+    key: 'image_verification',
+    label: 'Image Verification',
+    description: 'Validate image quality/consistency with product intent.',
+    isSystem: true,
+    isActive: true,
+  },
+  {
+    id: randomUUID(),
+    key: 'image_regeneration',
+    label: 'Image Regeneration',
+    description: 'Generate/enhance product image while preserving identity.',
+    isSystem: true,
+    isActive: true,
+  },
+  {
+    id: randomUUID(),
+    key: 'document_ocr_analysis',
+    label: 'Document OCR / Analysis',
+    description: 'Extract and analyze document text/metadata.',
+    isSystem: true,
+    isActive: true,
+  },
+];
 
 export type AutomationCriterion = {
   key: string;
@@ -82,6 +126,7 @@ export type AutomationApprovalSettings = {
     reseller: boolean;
   };
   aiProviders: AutomationAiProvider[];
+  functionCatalog: AutomationFunctionCatalogEntry[];
   functionBindings: AutomationFunctionBinding[];
   criteria: ProductAutomationCriteria;
 };
@@ -408,12 +453,26 @@ const normalizeProvider = (value: unknown): AutomationAiProvider | null => {
 const normalizeBinding = (value: unknown): AutomationFunctionBinding | null => {
   const row = parseObject(value);
   const functionKey = normalizeAutomationFunctionKey(row.functionKey);
-  if (!functionKey || !SYSTEM_AUTOMATION_FUNCTION_KEYS.has(functionKey)) return null;
+  if (!functionKey || functionKey.length < 2) return null;
   return {
     id: String(row.id || randomUUID()),
     functionKey,
     functionLabel: String(row.functionLabel || functionKey).trim(),
     providerId: String(row.providerId || '').trim(),
+    isActive: row.isActive !== false,
+  };
+};
+
+const normalizeFunctionCatalogEntry = (value: unknown): AutomationFunctionCatalogEntry | null => {
+  const row = parseObject(value);
+  const key = normalizeAutomationFunctionKey(row.key);
+  if (!key || key.length < 2) return null;
+  return {
+    id: String(row.id || randomUUID()),
+    key,
+    label: String(row.label || key).trim() || key,
+    description: String(row.description || '').trim(),
+    isSystem: row.isSystem === true || SYSTEM_AUTOMATION_FUNCTION_KEYS.has(key),
     isActive: row.isActive !== false,
   };
 };
@@ -487,6 +546,7 @@ const DEFAULT_SETTINGS: AutomationApprovalSettings = {
     reseller: false,
   },
   aiProviders: [],
+  functionCatalog: DEFAULT_FUNCTION_CATALOG,
   functionBindings: [
     {
       id: randomUUID(),
@@ -563,7 +623,7 @@ const defaultAiFunctionForCriterionKey = (criterionKey: string) => {
 
 const normalizeCriterionFunctionKey = (value: unknown, criterionKey: string) => {
   const normalized = normalizeAutomationFunctionKey(value);
-  if (normalized && SYSTEM_AUTOMATION_FUNCTION_KEYS.has(normalized)) return normalized;
+  if (normalized && normalized.length > 1) return normalized;
   return defaultAiFunctionForCriterionKey(criterionKey);
 };
 
@@ -577,7 +637,7 @@ const defaultFixerFunctionForCriterionKey = (criterionKey: string, targetField: 
 
 const normalizeCriterionFixerFunctionKey = (value: unknown, criterionKey: string, targetField: string) => {
   const normalized = normalizeAutomationFunctionKey(value);
-  if (normalized && SYSTEM_AUTOMATION_FUNCTION_KEYS.has(normalized)) return normalized;
+  if (normalized && normalized.length > 1) return normalized;
   return defaultFixerFunctionForCriterionKey(criterionKey, targetField);
 };
 
@@ -685,6 +745,39 @@ export const isAiApprovalTagVisibleForRole = (
 export const normalizeAutomationApprovalSettings = (value: unknown): AutomationApprovalSettings => {
   const source = parseObject(value);
   const criteria = parseObject(source.criteria);
+  const catalogRows = (Array.isArray(source.functionCatalog) ? source.functionCatalog : [])
+    .map((entry) => normalizeFunctionCatalogEntry(entry))
+    .filter((entry): entry is AutomationFunctionCatalogEntry => Boolean(entry));
+  const catalogByKey = new Map<string, AutomationFunctionCatalogEntry>();
+  for (const entry of [...DEFAULT_FUNCTION_CATALOG, ...catalogRows]) {
+    const key = normalizeAutomationFunctionKey(entry.key);
+    if (!key) continue;
+    const existing = catalogByKey.get(key);
+    catalogByKey.set(key, {
+      ...(existing || entry),
+      ...entry,
+      key,
+      label: String(entry.label || existing?.label || key).trim() || key,
+      isSystem:
+        entry.isSystem === true || existing?.isSystem === true || SYSTEM_AUTOMATION_FUNCTION_KEYS.has(key),
+      isActive: entry.isActive !== false,
+    });
+  }
+  const functionCatalog = Array.from(catalogByKey.values());
+  const validFunctionKeySet = new Set(functionCatalog.map((entry) => entry.key));
+  const normalizedBindings = (Array.isArray(source.functionBindings) ? source.functionBindings : [])
+    .map((entry) => normalizeBinding(entry))
+    .filter((entry): entry is AutomationFunctionBinding => Boolean(entry))
+    .map((entry) => ({
+      ...entry,
+      functionKey:
+        validFunctionKeySet.has(entry.functionKey) || entry.functionKey.length > 1
+          ? entry.functionKey
+          : 'text_grammar_enhancement',
+      functionLabel:
+        functionCatalog.find((row) => row.key === entry.functionKey)?.label ||
+        String(entry.functionLabel || entry.functionKey),
+    }));
   return {
     enabled: source.enabled === true,
     autoRunOnProductSubmit: source.autoRunOnProductSubmit === true,
@@ -695,9 +788,8 @@ export const normalizeAutomationApprovalSettings = (value: unknown): AutomationA
     aiProviders: (Array.isArray(source.aiProviders) ? source.aiProviders : [])
       .map((entry) => normalizeProvider(entry))
       .filter((entry): entry is AutomationAiProvider => Boolean(entry)),
-    functionBindings: (Array.isArray(source.functionBindings) ? source.functionBindings : [])
-      .map((entry) => normalizeBinding(entry))
-      .filter((entry): entry is AutomationFunctionBinding => Boolean(entry)),
+    functionCatalog,
+    functionBindings: normalizedBindings,
     criteria: {
       FABRIC: normalizeCriteria(criteria.FABRIC, DEFAULT_CRITERIA.FABRIC, ProductType.FABRIC),
       READY_TO_WEAR: normalizeCriteria(criteria.READY_TO_WEAR, DEFAULT_CRITERIA.READY_TO_WEAR, ProductType.READY_TO_WEAR),
@@ -2394,6 +2486,87 @@ export type ProductAutomationEvaluation = {
   retriedAfterTechnicalFailure?: boolean;
   retryExhausted?: boolean;
 };
+
+export type AutomationFieldCatalogOption = {
+  key: string;
+  label: string;
+  dataType: string;
+  source: 'CORE' | 'DYNAMIC';
+};
+
+const CORE_FIELD_CATALOG_BY_SCOPE: Record<
+  'FABRIC' | 'READY_TO_WEAR' | 'DESIGN' | 'ACCOUNT_APPROVAL',
+  AutomationFieldCatalogOption[]
+> = {
+  FABRIC: [
+    { key: 'name', label: 'Fabric Name', dataType: 'TEXT', source: 'CORE' },
+    { key: 'description', label: 'Fabric Description', dataType: 'LONG_TEXT', source: 'CORE' },
+    { key: 'basePrice', label: 'Base Price', dataType: 'DECIMAL', source: 'CORE' },
+    { key: 'finalPrice', label: 'Final Price', dataType: 'DECIMAL', source: 'CORE' },
+    { key: 'minYards', label: 'Minimum Yards', dataType: 'NUMBER', source: 'CORE' },
+    { key: 'stockYards', label: 'Stock Yards', dataType: 'NUMBER', source: 'CORE' },
+    { key: 'currency', label: 'Currency', dataType: 'TEXT', source: 'CORE' },
+    { key: 'material', label: 'Material', dataType: 'TEXT', source: 'CORE' },
+    { key: 'width', label: 'Fabric Width', dataType: 'TEXT', source: 'CORE' },
+    { key: 'country', label: 'Country', dataType: 'TEXT', source: 'CORE' },
+    { key: 'careInstructions', label: 'Care Instructions', dataType: 'LONG_TEXT', source: 'CORE' },
+    { key: 'predominantColor', label: 'Predominant Color', dataType: 'TEXT', source: 'CORE' },
+    { key: 'images[0]', label: 'Primary Image', dataType: 'URL', source: 'CORE' },
+    { key: 'images[*]', label: 'All Images', dataType: 'MULTI_ENUM', source: 'CORE' },
+  ],
+  READY_TO_WEAR: [
+    { key: 'name', label: 'Product Name', dataType: 'TEXT', source: 'CORE' },
+    { key: 'description', label: 'Product Description', dataType: 'LONG_TEXT', source: 'CORE' },
+    { key: 'basePrice', label: 'Base Price', dataType: 'DECIMAL', source: 'CORE' },
+    { key: 'currency', label: 'Currency', dataType: 'TEXT', source: 'CORE' },
+    { key: 'categoryId', label: 'Category ID', dataType: 'TEXT', source: 'CORE' },
+    { key: 'categoryName', label: 'Category Name', dataType: 'TEXT', source: 'CORE' },
+    { key: 'material', label: 'Material', dataType: 'TEXT', source: 'CORE' },
+    { key: 'careInstructions', label: 'Care Instructions', dataType: 'LONG_TEXT', source: 'CORE' },
+    { key: 'gender', label: 'Gender', dataType: 'TEXT', source: 'CORE' },
+    { key: 'predominantColor', label: 'Predominant Color', dataType: 'TEXT', source: 'CORE' },
+    { key: 'images[0]', label: 'Primary Image', dataType: 'URL', source: 'CORE' },
+    { key: 'images[*]', label: 'All Images', dataType: 'MULTI_ENUM', source: 'CORE' },
+    { key: 'variants[*].size', label: 'Variant Size', dataType: 'TEXT', source: 'CORE' },
+    { key: 'variants[*].color', label: 'Variant Color', dataType: 'TEXT', source: 'CORE' },
+    { key: 'variants[*].price', label: 'Variant Price', dataType: 'DECIMAL', source: 'CORE' },
+    { key: 'variants[*].stock', label: 'Variant Stock', dataType: 'NUMBER', source: 'CORE' },
+  ],
+  DESIGN: [
+    { key: 'name', label: 'Design Name', dataType: 'TEXT', source: 'CORE' },
+    { key: 'description', label: 'Design Description', dataType: 'LONG_TEXT', source: 'CORE' },
+    { key: 'basePrice', label: 'Base Price', dataType: 'DECIMAL', source: 'CORE' },
+    { key: 'currency', label: 'Currency', dataType: 'TEXT', source: 'CORE' },
+    { key: 'categoryId', label: 'Category ID', dataType: 'TEXT', source: 'CORE' },
+    { key: 'categoryName', label: 'Category Name', dataType: 'TEXT', source: 'CORE' },
+    { key: 'predominantColor', label: 'Predominant Color', dataType: 'TEXT', source: 'CORE' },
+    { key: 'images[0]', label: 'Primary Image', dataType: 'URL', source: 'CORE' },
+    { key: 'images[*]', label: 'All Images', dataType: 'MULTI_ENUM', source: 'CORE' },
+    { key: 'suitableFabrics[*]', label: 'Suitable Fabrics', dataType: 'MULTI_ENUM', source: 'CORE' },
+    { key: 'requiredMeasurements[*]', label: 'Required Measurements', dataType: 'MULTI_ENUM', source: 'CORE' },
+    { key: 'deliveryWindowDays', label: 'Delivery Window (days)', dataType: 'NUMBER', source: 'CORE' },
+    { key: 'designNotes', label: 'Design Notes', dataType: 'LONG_TEXT', source: 'CORE' },
+  ],
+  ACCOUNT_APPROVAL: [
+    { key: 'account.identity.firstName', label: 'First Name', dataType: 'TEXT', source: 'CORE' },
+    { key: 'account.identity.lastName', label: 'Last Name', dataType: 'TEXT', source: 'CORE' },
+    { key: 'account.identity.email', label: 'Email', dataType: 'EMAIL', source: 'CORE' },
+    { key: 'account.contact.phone', label: 'Phone', dataType: 'PHONE', source: 'CORE' },
+    { key: 'account.contact.country', label: 'Country', dataType: 'TEXT', source: 'CORE' },
+    { key: 'account.contact.city', label: 'City', dataType: 'TEXT', source: 'CORE' },
+    { key: 'account.profile.businessName', label: 'Business Name', dataType: 'TEXT', source: 'CORE' },
+    { key: 'account.profile.bio', label: 'Profile Bio', dataType: 'LONG_TEXT', source: 'CORE' },
+    { key: 'account.profile.status', label: 'Profile Status', dataType: 'TEXT', source: 'CORE' },
+    { key: 'account.notes', label: 'Account Notes', dataType: 'LONG_TEXT', source: 'CORE' },
+  ],
+};
+
+export const listCoreAutomationFieldCatalog = () => ({
+  FABRIC: CORE_FIELD_CATALOG_BY_SCOPE.FABRIC.map((entry) => ({ ...entry })),
+  READY_TO_WEAR: CORE_FIELD_CATALOG_BY_SCOPE.READY_TO_WEAR.map((entry) => ({ ...entry })),
+  DESIGN: CORE_FIELD_CATALOG_BY_SCOPE.DESIGN.map((entry) => ({ ...entry })),
+  ACCOUNT_APPROVAL: CORE_FIELD_CATALOG_BY_SCOPE.ACCOUNT_APPROVAL.map((entry) => ({ ...entry })),
+});
 
 export const evaluateProductAutomationChecks = async (input: {
   productType: ProductType;

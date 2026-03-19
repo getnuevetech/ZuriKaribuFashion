@@ -25,6 +25,7 @@ export const Permissions = {
   VOIP_MANAGE: 'voip:manage',
   AUTHENTICATOR_MANAGE: 'authenticator:manage',
   MODULES_MANAGE: 'modules:manage',
+  DYNAMIC_FIELDS_MANAGE: 'dynamic_fields:manage',
   WHATSAPP_MANAGE: 'whatsapp:manage',
   HELP_CENTER_MANAGE: 'help_center:manage',
   BACKUPS_RESTORE: 'backups:restore',
@@ -172,6 +173,12 @@ export const PERMISSION_CATALOG: PermissionCatalogEntry[] = [
     label: 'Manage module runtime',
     group: 'SYSTEM',
     description: 'Enable or disable runtime modules, provider selection, and rollout scope.',
+  },
+  {
+    key: Permissions.DYNAMIC_FIELDS_MANAGE,
+    label: 'Manage dynamic fields',
+    group: 'SYSTEM',
+    description: 'Create and manage dynamic/custom fields and field behavior across system modules.',
   },
   {
     key: Permissions.WHATSAPP_MANAGE,
