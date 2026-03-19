@@ -14,9 +14,16 @@ const HOMEPAGE_STATS_STRIP_SETTINGS_KEY = 'HOMEPAGE_STATS_STRIP';
 const HOMEPAGE_COUNTRY_IMAGE_GENERATION_SETTINGS_KEY = 'HOMEPAGE_COUNTRY_IMAGE_GENERATION';
 const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
 const HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY = 'HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION';
+const HOMEPAGE_EXPERIENCE_SETTINGS_KEY = 'HOMEPAGE_EXPERIENCE_SETTINGS';
 const AUTH_PAGE_SETTINGS_KEY = 'AUTH_PAGE_SETTINGS';
 const SPOTLIGHT_LINK_MODES = ['DEFAULT_STORE', 'CUSTOM_URL', 'BLOG'] as const;
 type SpotlightLinkMode = (typeof SPOTLIGHT_LINK_MODES)[number];
+const HOMEPAGE_EXPERIENCE_MODES = ['LITE_COMMERCE', 'STANDARD_PREMIUM', 'EDITORIAL_IMMERSIVE'] as const;
+const HOMEPAGE_THEME_MODES = ['SYSTEM', 'LIGHT', 'DARK'] as const;
+const HOMEPAGE_TOKEN_SETS = ['GLOBAL_PREMIUM_DARK', 'GLOBAL_PREMIUM_LIGHT', 'AFRO_EDITORIAL'] as const;
+const HOMEPAGE_HERO_VARIANTS = ['SPLIT_EDITORIAL', 'CLEAN_COMMERCE', 'VIDEO_STORY'] as const;
+const HOMEPAGE_CATEGORY_ENTRY_VARIANTS = ['THREE_COLUMN_CORE', 'MEGA_GRID'] as const;
+const HOMEPAGE_SPOTLIGHT_VARIANTS = ['CAROUSEL', 'SINGLE_FEATURE', 'MOSAIC'] as const;
 const HOMEPAGE_SECTION_VISIBILITY_META = [
   { key: 'topStrip', label: 'Top Announcement Strip', description: 'Scrolling announcement bar above the hero banner.' },
   { key: 'hero', label: 'Hero Banner', description: 'Top hero carousel section.' },
@@ -807,6 +814,20 @@ const authPageSettingsUpdateSchema = z.object({
   showGoogleOnLogin: z.boolean().optional(),
   showGoogleOnRegister: z.boolean().optional(),
 });
+const homepageExperienceSettingsUpdateSchema = z.object({
+  enabledModes: z.array(z.enum(HOMEPAGE_EXPERIENCE_MODES)).min(1).max(3).optional(),
+  defaultMode: z.enum(HOMEPAGE_EXPERIENCE_MODES).optional(),
+  allowUserModeOverride: z.boolean().optional(),
+  adaptiveByDevice: z.boolean().optional(),
+  adaptiveByConnection: z.boolean().optional(),
+  respectReducedMotion: z.boolean().optional(),
+  themeModes: z.array(z.enum(HOMEPAGE_THEME_MODES)).min(1).max(3).optional(),
+  defaultThemeMode: z.enum(HOMEPAGE_THEME_MODES).optional(),
+  tokenSet: z.enum(HOMEPAGE_TOKEN_SETS).optional(),
+  heroVariant: z.enum(HOMEPAGE_HERO_VARIANTS).optional(),
+  categoryEntryVariant: z.enum(HOMEPAGE_CATEGORY_ENTRY_VARIANTS).optional(),
+  spotlightVariant: z.enum(HOMEPAGE_SPOTLIGHT_VARIANTS).optional(),
+});
 
 type TopStripSettings = {
   messages: string[];
@@ -865,6 +886,26 @@ type AuthPageSettings = {
   googleClientIds: string;
   showGoogleOnLogin: boolean;
   showGoogleOnRegister: boolean;
+};
+type HomepageExperienceMode = (typeof HOMEPAGE_EXPERIENCE_MODES)[number];
+type HomepageThemeMode = (typeof HOMEPAGE_THEME_MODES)[number];
+type HomepageTokenSet = (typeof HOMEPAGE_TOKEN_SETS)[number];
+type HomepageHeroVariant = (typeof HOMEPAGE_HERO_VARIANTS)[number];
+type HomepageCategoryEntryVariant = (typeof HOMEPAGE_CATEGORY_ENTRY_VARIANTS)[number];
+type HomepageSpotlightVariant = (typeof HOMEPAGE_SPOTLIGHT_VARIANTS)[number];
+type HomepageExperienceSettings = {
+  enabledModes: HomepageExperienceMode[];
+  defaultMode: HomepageExperienceMode;
+  allowUserModeOverride: boolean;
+  adaptiveByDevice: boolean;
+  adaptiveByConnection: boolean;
+  respectReducedMotion: boolean;
+  themeModes: HomepageThemeMode[];
+  defaultThemeMode: HomepageThemeMode;
+  tokenSet: HomepageTokenSet;
+  heroVariant: HomepageHeroVariant;
+  categoryEntryVariant: HomepageCategoryEntryVariant;
+  spotlightVariant: HomepageSpotlightVariant;
 };
 
 const TOP_STRIP_DEFAULTS: TopStripSettings = {
@@ -925,6 +966,20 @@ const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettings = {
   googleClientIds: '',
   showGoogleOnLogin: true,
   showGoogleOnRegister: true,
+};
+const HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS: HomepageExperienceSettings = {
+  enabledModes: [...HOMEPAGE_EXPERIENCE_MODES],
+  defaultMode: 'STANDARD_PREMIUM',
+  allowUserModeOverride: true,
+  adaptiveByDevice: true,
+  adaptiveByConnection: true,
+  respectReducedMotion: true,
+  themeModes: [...HOMEPAGE_THEME_MODES],
+  defaultThemeMode: 'SYSTEM',
+  tokenSet: 'GLOBAL_PREMIUM_DARK',
+  heroVariant: 'SPLIT_EDITORIAL',
+  categoryEntryVariant: 'THREE_COLUMN_CORE',
+  spotlightVariant: 'CAROUSEL',
 };
 
 const normalizeHexColor = (value: unknown, fallback: string) => {
@@ -1046,6 +1101,89 @@ const normalizeAuthPageSettings = (raw: unknown): AuthPageSettings => {
     showGoogleOnLogin: getBoolean(row.showGoogleOnLogin) ?? AUTH_PAGE_SETTINGS_DEFAULTS.showGoogleOnLogin,
     showGoogleOnRegister:
       getBoolean(row.showGoogleOnRegister) ?? AUTH_PAGE_SETTINGS_DEFAULTS.showGoogleOnRegister,
+  };
+};
+
+const normalizeEnumList = <T extends string>(
+  values: unknown,
+  allowed: readonly T[],
+  fallback: readonly T[]
+): T[] => {
+  const allowedSet = new Set(allowed);
+  const source = Array.isArray(values) ? values : fallback;
+  const normalized: T[] = [];
+  for (const entry of source) {
+    const value = String(entry || '').trim().toUpperCase();
+    if (!allowedSet.has(value as T)) continue;
+    if (!normalized.includes(value as T)) normalized.push(value as T);
+  }
+  return normalized.length > 0 ? normalized : [...fallback];
+};
+
+const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSettings => {
+  if (!raw || typeof raw !== 'object') return { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const enabledModes = normalizeEnumList(
+    row.enabledModes,
+    HOMEPAGE_EXPERIENCE_MODES,
+    HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.enabledModes
+  );
+  const defaultModeCandidate = String(row.defaultMode || '').trim().toUpperCase() as HomepageExperienceMode;
+  const defaultMode = enabledModes.includes(defaultModeCandidate)
+    ? defaultModeCandidate
+    : enabledModes.includes(HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.defaultMode)
+      ? HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.defaultMode
+      : enabledModes[0];
+
+  const themeModes = normalizeEnumList(
+    row.themeModes,
+    HOMEPAGE_THEME_MODES,
+    HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.themeModes
+  );
+  const defaultThemeCandidate = String(row.defaultThemeMode || '').trim().toUpperCase() as HomepageThemeMode;
+  const defaultThemeMode = themeModes.includes(defaultThemeCandidate)
+    ? defaultThemeCandidate
+    : themeModes.includes(HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.defaultThemeMode)
+      ? HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.defaultThemeMode
+      : themeModes[0];
+
+  const tokenSetCandidate = String(row.tokenSet || '').trim().toUpperCase() as HomepageTokenSet;
+  const tokenSet = HOMEPAGE_TOKEN_SETS.includes(tokenSetCandidate)
+    ? tokenSetCandidate
+    : HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.tokenSet;
+
+  const heroVariantCandidate = String(row.heroVariant || '').trim().toUpperCase() as HomepageHeroVariant;
+  const heroVariant = HOMEPAGE_HERO_VARIANTS.includes(heroVariantCandidate)
+    ? heroVariantCandidate
+    : HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.heroVariant;
+
+  const categoryVariantCandidate = String(row.categoryEntryVariant || '')
+    .trim()
+    .toUpperCase() as HomepageCategoryEntryVariant;
+  const categoryEntryVariant = HOMEPAGE_CATEGORY_ENTRY_VARIANTS.includes(categoryVariantCandidate)
+    ? categoryVariantCandidate
+    : HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.categoryEntryVariant;
+
+  const spotlightVariantCandidate = String(row.spotlightVariant || '').trim().toUpperCase() as HomepageSpotlightVariant;
+  const spotlightVariant = HOMEPAGE_SPOTLIGHT_VARIANTS.includes(spotlightVariantCandidate)
+    ? spotlightVariantCandidate
+    : HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.spotlightVariant;
+
+  return {
+    enabledModes,
+    defaultMode,
+    allowUserModeOverride: getBoolean(row.allowUserModeOverride) ?? HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.allowUserModeOverride,
+    adaptiveByDevice: getBoolean(row.adaptiveByDevice) ?? HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.adaptiveByDevice,
+    adaptiveByConnection:
+      getBoolean(row.adaptiveByConnection) ?? HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.adaptiveByConnection,
+    respectReducedMotion:
+      getBoolean(row.respectReducedMotion) ?? HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.respectReducedMotion,
+    themeModes,
+    defaultThemeMode,
+    tokenSet,
+    heroVariant,
+    categoryEntryVariant,
+    spotlightVariant,
   };
 };
 
@@ -1497,6 +1635,64 @@ const saveAuthPageSettings = async (next: Partial<AuthPageSettings>) => {
   return merged;
 };
 
+const readHomepageExperienceSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_EXPERIENCE_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS },
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  let parsed = { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS };
+  try {
+    parsed = normalizeHomepageExperienceSettings(JSON.parse(String(row.value || '{}')));
+  } catch {
+    parsed = { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS };
+  }
+  return {
+    rowId: String(row.id),
+    settings: parsed,
+    source: 'DATABASE' as const,
+    updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+  };
+};
+
+const saveHomepageExperienceSettings = async (next: Partial<HomepageExperienceSettings>) => {
+  const existing = await readHomepageExperienceSettings();
+  const merged = normalizeHomepageExperienceSettings({
+    ...existing.settings,
+    ...next,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_EXPERIENCE_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+
 const readCountryImageGenerationSettings = async () => {
   const rows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT "id", "value", "updatedAt"
@@ -1854,6 +2050,15 @@ router.get('/auth-page-settings', async (_req, res) => {
   } catch (error) {
     console.error('Error fetching auth page settings:', error);
     res.json({ success: true, data: { ...AUTH_PAGE_SETTINGS_DEFAULTS } });
+  }
+});
+router.get('/experience-settings', async (_req, res) => {
+  try {
+    const { settings } = await readHomepageExperienceSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching homepage experience settings:', error);
+    res.json({ success: true, data: { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS } });
   }
 });
 
@@ -2360,6 +2565,66 @@ router.patch(
       }
       console.error('Error updating auth page settings:', error);
       res.status(500).json({ success: false, message: 'Failed to update auth page settings.' });
+    }
+  }
+);
+
+router.get(
+  '/admin/experience-settings',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (_req, res) => {
+    try {
+      const { settings, source, updatedAt } = await readHomepageExperienceSettings();
+      res.json({
+        success: true,
+        data: {
+          ...settings,
+          source,
+          updatedAt,
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching homepage experience settings:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch homepage experience settings.' });
+    }
+  }
+);
+
+router.put(
+  '/admin/experience-settings',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (req, res) => {
+    try {
+      const payload = homepageExperienceSettingsUpdateSchema.parse(req.body);
+      const settings = await saveHomepageExperienceSettings(payload);
+      res.json({ success: true, data: settings });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      console.error('Error updating homepage experience settings:', error);
+      res.status(500).json({ success: false, message: 'Failed to update homepage experience settings.' });
+    }
+  }
+);
+
+router.patch(
+  '/admin/experience-settings',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (req, res) => {
+    try {
+      const payload = homepageExperienceSettingsUpdateSchema.parse(req.body);
+      const settings = await saveHomepageExperienceSettings(payload);
+      res.json({ success: true, data: settings });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      console.error('Error updating homepage experience settings:', error);
+      res.status(500).json({ success: false, message: 'Failed to update homepage experience settings.' });
     }
   }
 );

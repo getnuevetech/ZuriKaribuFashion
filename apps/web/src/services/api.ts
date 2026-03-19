@@ -8646,6 +8646,24 @@ const homepageSectionsApi = {
       success: boolean;
       data: AuthPageSettingsPayload;
     }>('public'),
+  getExperienceSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        enabledModes: Array<'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE'>;
+        defaultMode: 'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE';
+        allowUserModeOverride: boolean;
+        adaptiveByDevice: boolean;
+        adaptiveByConnection: boolean;
+        respectReducedMotion: boolean;
+        themeModes: Array<'SYSTEM' | 'LIGHT' | 'DARK'>;
+        defaultThemeMode: 'SYSTEM' | 'LIGHT' | 'DARK';
+        tokenSet: 'GLOBAL_PREMIUM_DARK' | 'GLOBAL_PREMIUM_LIGHT' | 'AFRO_EDITORIAL';
+        heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
+        categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
+        spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+      };
+    }>('/homepage-sections/experience-settings'),
 
   getCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/countries'),
@@ -8751,6 +8769,57 @@ const homepageSectionsApi = {
       success: boolean;
       data: AuthPageSettingsPayload & { source?: 'DATABASE' | 'DEFAULT'; updatedAt?: string | null };
     }>('admin'),
+  getAdminExperienceSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        enabledModes: Array<'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE'>;
+        defaultMode: 'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE';
+        allowUserModeOverride: boolean;
+        adaptiveByDevice: boolean;
+        adaptiveByConnection: boolean;
+        respectReducedMotion: boolean;
+        themeModes: Array<'SYSTEM' | 'LIGHT' | 'DARK'>;
+        defaultThemeMode: 'SYSTEM' | 'LIGHT' | 'DARK';
+        tokenSet: 'GLOBAL_PREMIUM_DARK' | 'GLOBAL_PREMIUM_LIGHT' | 'AFRO_EDITORIAL';
+        heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
+        categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
+        spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+        source?: 'DATABASE' | 'DEFAULT';
+        updatedAt?: string | null;
+      };
+    }>('/homepage-sections/admin/experience-settings'),
+  updateAdminExperienceSettings: (data: {
+    enabledModes?: Array<'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE'>;
+    defaultMode?: 'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE';
+    allowUserModeOverride?: boolean;
+    adaptiveByDevice?: boolean;
+    adaptiveByConnection?: boolean;
+    respectReducedMotion?: boolean;
+    themeModes?: Array<'SYSTEM' | 'LIGHT' | 'DARK'>;
+    defaultThemeMode?: 'SYSTEM' | 'LIGHT' | 'DARK';
+    tokenSet?: 'GLOBAL_PREMIUM_DARK' | 'GLOBAL_PREMIUM_LIGHT' | 'AFRO_EDITORIAL';
+    heroVariant?: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
+    categoryEntryVariant?: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
+    spotlightVariant?: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+  }) =>
+    apiService.put<{
+      success: boolean;
+      data: {
+        enabledModes: Array<'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE'>;
+        defaultMode: 'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE';
+        allowUserModeOverride: boolean;
+        adaptiveByDevice: boolean;
+        adaptiveByConnection: boolean;
+        respectReducedMotion: boolean;
+        themeModes: Array<'SYSTEM' | 'LIGHT' | 'DARK'>;
+        defaultThemeMode: 'SYSTEM' | 'LIGHT' | 'DARK';
+        tokenSet: 'GLOBAL_PREMIUM_DARK' | 'GLOBAL_PREMIUM_LIGHT' | 'AFRO_EDITORIAL';
+        heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
+        categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
+        spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+      };
+    }>('/homepage-sections/admin/experience-settings', data),
   updateAdminAuthPageSettings: (data: Partial<AuthPageSettingsPayload>) =>
     writeAuthPageSettingsWithFallback<{
       success: boolean;

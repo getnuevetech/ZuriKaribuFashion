@@ -5,11 +5,13 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
 import { useCurrencyStore } from '../store/currencyStore';
+import { useHomepageExperienceStore } from '../store/homepageExperienceStore';
 import { api } from '../services/api';
 import Footer from '../components/Footer';
 import { getHomeRouteForUser, normalizeRole } from '../auth/rbac';
 import CustomerServiceChatWidget from '../components/chat/CustomerServiceChatWidget';
 import CustomerServiceChatWidgetBoundary from '../components/chat/CustomerServiceChatWidgetBoundary';
+import type { HomepageExperienceMode, HomepageThemeMode } from '../design/homepageExperience';
 
 const USE_DYNAMIC_HOMEPAGE = import.meta.env.VITE_HOMEPAGE_MODE === 'dynamic';
 const TOP_STRIP_DEFAULTS = {
@@ -62,6 +64,23 @@ export default function MainLayout() {
       return response.success ? response.data : null;
     },
   });
+  const { data: homepageExperienceSettings } = useQuery({
+    queryKey: ['homepageExperienceSettings'],
+    queryFn: async () => {
+      const response = await api.homepageSections.getExperienceSettings();
+      return response.success ? response.data : null;
+    },
+  });
+  const experienceSettings = useHomepageExperienceStore((state) => state.settings);
+  const resolvedExperienceMode = useHomepageExperienceStore((state) => state.resolvedMode);
+  const userOverrideMode = useHomepageExperienceStore((state) => state.userOverrideMode);
+  const resolvedThemeMode = useHomepageExperienceStore((state) => state.resolvedThemeMode);
+  const userOverrideThemeMode = useHomepageExperienceStore((state) => state.userOverrideThemeMode);
+  const concreteTheme = useHomepageExperienceStore((state) => state.concreteTheme);
+  const hydrateExperienceSettings = useHomepageExperienceStore((state) => state.hydrateSettings);
+  const evaluateExperienceCapabilities = useHomepageExperienceStore((state) => state.evaluateCapabilities);
+  const setUserOverrideMode = useHomepageExperienceStore((state) => state.setUserOverrideMode);
+  const setUserOverrideThemeMode = useHomepageExperienceStore((state) => state.setUserOverrideThemeMode);
   const brandName = footerContent?.companyName?.trim() || 'ZURIKARIBU';
   const userRole = normalizeRole(user?.role);
   const dashboardRoute = getHomeRouteForUser(user);
@@ -106,9 +125,44 @@ export default function MainLayout() {
     }
   }, [currencyConfig, hydrateFromConfig]);
 
+  useEffect(() => {
+    hydrateExperienceSettings(homepageExperienceSettings || undefined);
+  }, [homepageExperienceSettings, hydrateExperienceSettings]);
+
+  useEffect(() => {
+    evaluateExperienceCapabilities();
+  }, [evaluateExperienceCapabilities]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.dataset.zkTheme = concreteTheme.toLowerCase();
+  }, [concreteTheme]);
+
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+  const enabledModes = Array.isArray(experienceSettings.enabledModes)
+    ? experienceSettings.enabledModes
+    : ['LITE_COMMERCE', 'STANDARD_PREMIUM', 'EDITORIAL_IMMERSIVE'];
+  const enabledThemeModes = Array.isArray(experienceSettings.themeModes)
+    ? experienceSettings.themeModes
+    : ['SYSTEM', 'LIGHT', 'DARK'];
+  const currentModePickerValue = userOverrideMode || 'AUTO';
+  const currentThemePickerValue = userOverrideThemeMode || 'AUTO';
+  const handleExperienceModeChange = (value: string) => {
+    if (value === 'AUTO') {
+      setUserOverrideMode(null);
+      return;
+    }
+    setUserOverrideMode(value as HomepageExperienceMode);
+  };
+  const handleThemeModeChange = (value: string) => {
+    if (value === 'AUTO') {
+      setUserOverrideThemeMode(null);
+      return;
+    }
+    setUserOverrideThemeMode(value as HomepageThemeMode);
   };
 
   const leftNavLinks = [
@@ -118,13 +172,13 @@ export default function MainLayout() {
     { label: 'Custom To Wear', href: '/designs' },
   ];
   const rightNavLinks = [
-    { label: 'Shop', href: '/#shop' },
+    { label: 'Shop', href: '/shop' },
     { label: 'About Us', href: '/#about' },
     { label: 'Contact Us', href: '/contact' },
   ];
   const hamburgerLinks = [
     { label: 'Home', href: '/' },
-    { label: 'Shop', href: '/#shop' },
+    { label: 'Shop', href: '/shop' },
     { label: 'Ready To Wear', href: '/ready-to-wear' },
     { label: 'Fabric To Buy', href: '/fabrics' },
     { label: 'Custom To Wear', href: '/designs' },
@@ -246,6 +300,38 @@ export default function MainLayout() {
                   {(supportedCurrencies || ['USD']).map((code) => (
                     <option key={code} value={code}>
                       {code}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="hidden xl:flex items-center gap-2">
+                <select
+                  className={`h-8 min-w-[132px] rounded border border-current/20 bg-transparent px-2 text-[11px] ${iconTextClass}`}
+                  value={currentModePickerValue}
+                  onChange={(event) => handleExperienceModeChange(event.target.value)}
+                  aria-label="Homepage experience mode"
+                >
+                  <option value="AUTO">Mode: Auto ({resolvedExperienceMode.replace('_', ' ')})</option>
+                  {enabledModes.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {mode === 'LITE_COMMERCE'
+                        ? 'Lite Commerce'
+                        : mode === 'STANDARD_PREMIUM'
+                          ? 'Standard Premium'
+                          : 'Editorial Immersive'}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className={`h-8 min-w-[124px] rounded border border-current/20 bg-transparent px-2 text-[11px] ${iconTextClass}`}
+                  value={currentThemePickerValue}
+                  onChange={(event) => handleThemeModeChange(event.target.value)}
+                  aria-label="Theme mode"
+                >
+                  <option value="AUTO">Theme: Auto ({resolvedThemeMode})</option>
+                  {enabledThemeModes.map((theme) => (
+                    <option key={theme} value={theme}>
+                      {theme}
                     </option>
                   ))}
                 </select>

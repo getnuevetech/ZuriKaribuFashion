@@ -16,6 +16,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { useCurrencyStore } from '../store/currencyStore';
+import { useHomepageExperienceStore } from '../store/homepageExperienceStore';
 
 type HeroSlide = {
   id: string;
@@ -223,7 +224,7 @@ const resolveCountryFlag = (country?: string | null, explicitFlag?: string | nul
 const kimiHeroSlides: HeroSlide[] = [
   {
     id: '1',
-    image: 'https://picsum.photos/seed/kimi-hero-1/1920/1080',
+    image: '/kimi/hero_model.jpg',
     badge: 'NEW COLLECTION',
     title: 'The Elegance of Africa',
     subtitle: 'Discover authentic fashion crafted by African designers',
@@ -232,7 +233,7 @@ const kimiHeroSlides: HeroSlide[] = [
   },
   {
     id: '2',
-    image: 'https://picsum.photos/seed/kimi-hero-2/1920/1080',
+    image: '/kimi/rw_full.jpg',
     badge: 'FRESH DROPS',
     title: 'Timeless Heritage',
     subtitle: 'Wear the story of African craftsmanship',
@@ -241,7 +242,7 @@ const kimiHeroSlides: HeroSlide[] = [
   },
   {
     id: '3',
-    image: 'https://picsum.photos/seed/kimi-hero-3/1920/1080',
+    image: '/kimi/custom_full.jpg',
     badge: 'TRENDING NOW',
     title: 'Modern African Luxury',
     subtitle: 'Contemporary designs rooted in tradition',
@@ -261,21 +262,21 @@ const kimiCategories = [
     id: '1',
     title: 'Ready To Wear',
     description: 'Made by African, Worn by the World',
-    image: 'https://picsum.photos/seed/kimi-category-ready/900/1200',
+    image: '/kimi/rw_full.jpg',
     link: '/ready-to-wear',
   },
   {
     id: '2',
     title: 'Fabrics To Buy',
     description: 'African fabrics across all edges of Africa',
-    image: 'https://picsum.photos/seed/kimi-category-fabrics/900/1200',
+    image: '/kimi/fabrics_full.jpg',
     link: '/fabrics',
   },
   {
     id: '3',
     title: 'Custom To Wear',
     description: 'Every stitch sewn by an African Designer',
-    image: 'https://picsum.photos/seed/kimi-category-custom/900/1200',
+    image: '/kimi/custom_full.jpg',
     link: '/designs',
   },
 ];
@@ -318,22 +319,22 @@ const iconByNormalizedName: Record<string, any> = {
 };
 
 const kimiFeaturedDesigns: FeaturedProduct[] = [
-  { id: '1', name: 'Exclusive Gorgeous', price: 1428.57, image: 'https://picsum.photos/seed/kimi-custom-1/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
-  { id: '2', name: 'My Skkentele', price: 714.29, image: 'https://picsum.photos/seed/kimi-custom-2/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
-  { id: '3', name: 'Ankara Gbasibe', price: 857.14, image: 'https://picsum.photos/seed/kimi-custom-3/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
+  { id: '1', name: 'Exclusive Gorgeous', price: 1428.57, image: '/kimi/product1.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
+  { id: '2', name: 'My Skkentele', price: 714.29, image: '/kimi/product2.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
+  { id: '3', name: 'Ankara Gbasibe', price: 857.14, image: '/kimi/product3.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
 ];
 
 const kimiReadyToWear: FeaturedProduct[] = [
-  { id: 'r1', name: 'Bridal Traditional', price: 2285.71, image: 'https://picsum.photos/seed/kimi-ready-1/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
-  { id: 'r2', name: 'Afigan', price: 1642.86, image: 'https://picsum.photos/seed/kimi-ready-2/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
-  { id: 'r3', name: 'Kakaki Africa', price: 1507.14, image: 'https://picsum.photos/seed/kimi-ready-3/800/1000', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
+  { id: 'r1', name: 'Bridal Traditional', price: 2285.71, image: '/kimi/product4.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
+  { id: 'r2', name: 'Afigan', price: 1642.86, image: '/kimi/product5.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
+  { id: 'r3', name: 'Kakaki Africa', price: 1507.14, image: '/kimi/product6.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
 ];
 
 const kimiFabrics: FeaturedProduct[] = [
-  { id: 'f1', name: 'Ankara Mummy', price: 2142.86, image: 'https://picsum.photos/seed/kimi-fabric-1/800/1000', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
-  { id: 'f2', name: 'Dancing Queen Adire', price: 785.71, image: 'https://picsum.photos/seed/kimi-fabric-2/800/1000', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
-  { id: 'f3', name: 'Ankara Party', price: 928.57, image: 'https://picsum.photos/seed/kimi-fabric-3/800/1000', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
-  { id: 'f4', name: 'Awon Da', price: 1428.57, image: 'https://picsum.photos/seed/kimi-fabric-4/800/1000', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
+  { id: 'f1', name: 'Ankara Mummy', price: 2142.86, image: '/kimi/fabrics_full.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
+  { id: 'f2', name: 'Dancing Queen Adire', price: 785.71, image: '/kimi/featured_rw_left.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
+  { id: 'f3', name: 'Ankara Party', price: 928.57, image: '/kimi/featured_rw_right.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
+  { id: 'f4', name: 'Awon Da', price: 1428.57, image: '/kimi/featured_custom_left.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
 ];
 
 const kimiDesigners = [
@@ -343,7 +344,7 @@ const kimiDesigners = [
     country: 'Ghana',
     flag: '🇬🇭',
     quote: 'When we sew, it is from the heart. Every stitch tells a story.',
-    image: 'https://picsum.photos/seed/kimi-designer-1/800/1000',
+    image: '/kimi/designer_spotlight.jpg',
   },
   {
     id: '2',
@@ -351,7 +352,7 @@ const kimiDesigners = [
     country: 'Nigeria',
     flag: '🇳🇬',
     quote: 'Bringing the vibrant spirit of Africa to the world through fashion.',
-    image: 'https://picsum.photos/seed/kimi-designer-2/800/1000',
+    image: '/kimi/featured_custom_right.jpg',
   },
   {
     id: '3',
@@ -359,7 +360,7 @@ const kimiDesigners = [
     country: 'Ghana',
     flag: '🇬🇭',
     quote: 'Kente to the world. Preserving tradition while embracing modernity.',
-    image: 'https://picsum.photos/seed/kimi-designer-3/800/1000',
+    image: '/kimi/featured_rw_left.jpg',
   },
 ];
 
@@ -368,21 +369,21 @@ const kimiTestimonials = [
     id: '1',
     name: 'Amara Johnson',
     location: 'New York, USA',
-    avatar: 'https://picsum.photos/seed/kimi-testimonial-1/120/120',
+    avatar: '/kimi/product1.jpg',
     quote: 'The quality exceeded my expectations. My dress fits perfectly and the fabric is gorgeous.',
   },
   {
     id: '2',
     name: 'Kwame Asante',
     location: 'London, UK',
-    avatar: 'https://picsum.photos/seed/kimi-testimonial-2/120/120',
+    avatar: '/kimi/product2.jpg',
     quote: 'Amazing experience from start to finish. The custom tailoring service is a game changer!',
   },
   {
     id: '3',
     name: 'Fatima Mohammed',
     location: 'Dubai, UAE',
-    avatar: 'https://picsum.photos/seed/kimi-testimonial-3/120/120',
+    avatar: '/kimi/product3.jpg',
     quote: 'Supporting African designers while getting beautiful clothes—this platform is a gem.',
   },
 ];
@@ -593,6 +594,10 @@ export default function Home() {
   const customStripRef = useRef<HTMLDivElement>(null);
   const rtwStripRef = useRef<HTMLDivElement>(null);
   const fabricsStripRef = useRef<HTMLDivElement>(null);
+  const resolvedExperienceMode = useHomepageExperienceStore((state) => state.resolvedMode);
+  const capabilityProfile = useHomepageExperienceStore((state) => state.capability);
+  const isLiteExperienceMode = resolvedExperienceMode === 'LITE_COMMERCE';
+  const useMotion = !isLiteExperienceMode && !capabilityProfile?.prefersReducedMotion;
 
   const { data: heroSlidesData } = useQuery({
     queryKey: ['heroSlides'],
@@ -901,7 +906,7 @@ export default function Home() {
   }, [categories]);
 
   useEffect(() => {
-    if (categories.length === 0) return;
+    if (!useMotion || categories.length === 0) return;
     const interval = window.setInterval(() => {
       setCategoryImageById((prev) => {
         const next = { ...prev };
@@ -916,7 +921,7 @@ export default function Home() {
       });
     }, 6000);
     return () => window.clearInterval(interval);
-  }, [categories]);
+  }, [categories, useMotion]);
 
   const testimonials = useMemo(
     () =>
@@ -938,7 +943,7 @@ export default function Home() {
         heritageData?.description,
         "Every pattern carries meaning. From Kente's bold geometry to Ankara's vibrant motifs, African textiles tell stories of identity, celebration, and legacy passed through generations.",
       ),
-      image: asText(heritageData?.image, 'https://picsum.photos/seed/kimi-heritage/1920/1080'),
+      image: asText(heritageData?.image, '/kimi/heritage_story.jpg'),
       ctaText: asText(heritageData?.ctaText, 'READ OUR STORY'),
       ctaLink: asText(heritageData?.ctaLink, '/about'),
     }),
@@ -956,18 +961,26 @@ export default function Home() {
   );
 
   useEffect(() => {
+    if (!useMotion) {
+      setCurrentSlide(0);
+      return;
+    }
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
     }, 6000);
     return () => clearInterval(timer);
-  }, [heroSlides.length]);
+  }, [heroSlides.length, useMotion]);
 
   useEffect(() => {
+    if (!useMotion) {
+      setActiveTestimonial(0);
+      return;
+    }
     const timer = setInterval(() => {
       setActiveTestimonial((prev) => (prev + 1) % testimonials.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, [testimonials.length]);
+  }, [testimonials.length, useMotion]);
 
   const scrollStrip = (stripRef: { current: HTMLDivElement | null }, direction: 'left' | 'right') => {
     const strip = stripRef.current;
@@ -1006,18 +1019,18 @@ export default function Home() {
   const isExternalHref = (href: string) => /^(https?:\/\/|mailto:|tel:)/i.test(String(href || ''));
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white" data-experience-mode={resolvedExperienceMode}>
       {sectionVisibility.hero ? (
-      <section className="relative h-screen w-full overflow-hidden">
+      <section className={`relative w-full overflow-hidden ${isLiteExperienceMode ? 'h-[72vh]' : 'h-screen'}`}>
         {heroSlides.map((slide, index) => (
           <div
             key={slide.id}
-            className={`absolute inset-0 transition-opacity duration-1000 ${
+            className={`absolute inset-0 ${useMotion ? 'transition-opacity duration-1000' : ''} ${
               index === currentSlide ? 'opacity-100' : 'opacity-0'
             }`}
           >
             <img src={slide.image} alt={slide.title} className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
+            <div className={`absolute inset-0 ${isLiteExperienceMode ? 'bg-gradient-to-r from-black/55 via-black/35 to-black/30' : 'bg-gradient-to-r from-black/60 via-black/30 to-transparent'}`} />
           </div>
         ))}
 
@@ -1027,7 +1040,7 @@ export default function Home() {
               {heroSlides.map((slide, index) => (
                 <div
                   key={slide.id}
-                  className={`transition-all duration-700 ${
+                  className={`${useMotion ? 'transition-all duration-700' : ''} ${
                     index === currentSlide ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 absolute'
                   }`}
                 >
@@ -1037,6 +1050,17 @@ export default function Home() {
                         {slide.title}
                       </h1>
                       <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-lg">{slide.subtitle}</p>
+                      <div className="mb-5 flex flex-wrap items-center gap-2">
+                        <Link to="/ready-to-wear" className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}>
+                          Shop RTW
+                        </Link>
+                        <Link to="/designs" className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}>
+                          Shop CTW
+                        </Link>
+                        <Link to="/fabrics" className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}>
+                          Shop Fabrics
+                        </Link>
+                      </div>
                       <Link to={slide.ctaLink || '/ready-to-wear'} className={CTA_BUTTON_LIGHT_CLASS}>
                         {(slide.ctaText || 'SHOP NOW').toUpperCase()}
                         <ArrowRight className="w-4 h-4" />
@@ -1049,7 +1073,7 @@ export default function Home() {
           </div>
         </div>
 
-        {sectionVisibility.countries ? (
+        {sectionVisibility.countries && !isLiteExperienceMode ? (
           <div className="absolute bottom-6 left-4 sm:left-6 lg:left-12 xl:left-20 right-4 sm:right-6 lg:right-12 xl:right-20">
             <div
               className="flex flex-nowrap gap-4 justify-start overflow-x-auto overflow-y-visible pt-2 pb-2 scrollbar-hide"
@@ -1081,21 +1105,23 @@ export default function Home() {
           </div>
         ) : null}
 
-        <div
-          className={`absolute left-1/2 -translate-x-1/2 flex gap-2 z-10 ${
-            sectionVisibility.countries ? 'bottom-28' : 'bottom-8'
-          }`}
-        >
-          {heroSlides.map((_, index) => (
-            <button
-              key={index}
-              onClick={() => setCurrentSlide(index)}
-              className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                index === currentSlide ? 'bg-white w-8' : 'bg-white/50 hover:bg-white/70'
-              }`}
-            />
-          ))}
-        </div>
+        {useMotion ? (
+          <div
+            className={`absolute left-1/2 -translate-x-1/2 flex gap-2 z-10 ${
+              sectionVisibility.countries && !isLiteExperienceMode ? 'bottom-28' : 'bottom-8'
+            }`}
+          >
+            {heroSlides.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => setCurrentSlide(index)}
+                className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                  index === currentSlide ? 'bg-white w-8' : 'bg-white/50 hover:bg-white/70'
+                }`}
+              />
+            ))}
+          </div>
+        ) : null}
       </section>
       ) : null}
 
@@ -1226,7 +1252,11 @@ export default function Home() {
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
             <div className="relative overflow-hidden rounded-xl">
               <img
-                src={asText(managedBannersBySection.get('BANNER_1')?.displayImage, managedBannersBySection.get('BANNER_1')?.images?.[0], 'https://picsum.photos/seed/banner-1/1600/700')}
+                src={asText(
+                  managedBannersBySection.get('BANNER_1')?.displayImage,
+                  managedBannersBySection.get('BANNER_1')?.images?.[0],
+                  '/kimi/featured_custom_right.jpg'
+                )}
                 alt={asText(managedBannersBySection.get('BANNER_1')?.title, 'Homepage Banner')}
                 className="h-[340px] w-full object-cover"
               />
@@ -1263,7 +1293,7 @@ export default function Home() {
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
             <div className="relative overflow-hidden rounded-xl">
               <img
-                src={asText(managedBannersBySection.get('BANNER_2')?.displayImage, managedBannersBySection.get('BANNER_2')?.images?.[0], 'https://picsum.photos/seed/banner-2/1600/700')}
+                src={asText(managedBannersBySection.get('BANNER_2')?.displayImage, managedBannersBySection.get('BANNER_2')?.images?.[0], '/kimi/featured_rw_right.jpg')}
                 alt={asText(managedBannersBySection.get('BANNER_2')?.title, 'Homepage Banner')}
                 className="h-[340px] w-full object-cover"
               />
@@ -1334,7 +1364,7 @@ export default function Home() {
                     managedBannersBySection.get('PROMO')?.images?.[0],
                     managedBannersBySection.get('HERO')?.displayImage,
                     managedBannersBySection.get('HERO')?.images?.[0],
-                    'https://picsum.photos/seed/kimi-fresh-drops/1200/1600'
+                    '/kimi/rw_full.jpg'
                   )}
                   alt="Fresh Drops"
                   className="w-full aspect-[3/4] object-cover rounded-xl"

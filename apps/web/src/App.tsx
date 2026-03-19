@@ -9,6 +9,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 
 // Public Pages
 import Home from './pages/Home';
+import ShopPage from './pages/Shop';
 import Designs from './pages/Designs';
 import DesignDetail from './pages/DesignDetail';
 import Fabrics from './pages/Fabrics';
@@ -151,6 +152,7 @@ function App() {
             {/* Public Routes */}
             <Route element={<MainLayout />}>
               <Route path="/" element={<Home />} />
+              <Route path="/shop" element={<ShopPage />} />
               <Route path="/designs" element={<Designs />} />
               <Route path="/designs/:id" element={<DesignDetail />} />
               <Route path="/fabrics" element={<Fabrics />} />

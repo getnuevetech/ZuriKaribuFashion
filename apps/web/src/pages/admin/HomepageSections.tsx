@@ -212,6 +212,20 @@ interface AuthPageSettings {
   showGoogleOnLogin: boolean;
   showGoogleOnRegister: boolean;
 }
+interface HomepageExperienceSettings {
+  enabledModes: Array<'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE'>;
+  defaultMode: 'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE';
+  allowUserModeOverride: boolean;
+  adaptiveByDevice: boolean;
+  adaptiveByConnection: boolean;
+  respectReducedMotion: boolean;
+  themeModes: Array<'SYSTEM' | 'LIGHT' | 'DARK'>;
+  defaultThemeMode: 'SYSTEM' | 'LIGHT' | 'DARK';
+  tokenSet: 'GLOBAL_PREMIUM_DARK' | 'GLOBAL_PREMIUM_LIGHT' | 'AFRO_EDITORIAL';
+  heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
+  categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
+  spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+}
 
 const FEATURED_DESCRIPTION_PREVIEW_TEXT =
   'Hand-finished African fashion piece crafted with premium fabric for modern style and everyday comfort.';
@@ -250,6 +264,20 @@ const FOOTER_POLICY_DEFAULTS = {
     blogPostId: '',
     externalUrl: '#',
   },
+};
+const HOMEPAGE_EXPERIENCE_DEFAULTS: HomepageExperienceSettings = {
+  enabledModes: ['LITE_COMMERCE', 'STANDARD_PREMIUM', 'EDITORIAL_IMMERSIVE'],
+  defaultMode: 'STANDARD_PREMIUM',
+  allowUserModeOverride: true,
+  adaptiveByDevice: true,
+  adaptiveByConnection: true,
+  respectReducedMotion: true,
+  themeModes: ['SYSTEM', 'LIGHT', 'DARK'],
+  defaultThemeMode: 'SYSTEM',
+  tokenSet: 'GLOBAL_PREMIUM_DARK',
+  heroVariant: 'SPLIT_EDITORIAL',
+  categoryEntryVariant: 'THREE_COLUMN_CORE',
+  spotlightVariant: 'CAROUSEL',
 };
 
 const trimPreviewToWordLimit = (text: string, limit: number) => {
@@ -513,6 +541,10 @@ export default function HomepageSections() {
     showGoogleOnRegister: true,
   });
   const [authPageSettingsSaving, setAuthPageSettingsSaving] = useState(false);
+  const [homepageExperienceSettings, setHomepageExperienceSettings] = useState<HomepageExperienceSettings>(
+    HOMEPAGE_EXPERIENCE_DEFAULTS
+  );
+  const [homepageExperienceSettingsSaving, setHomepageExperienceSettingsSaving] = useState(false);
   const [authPageImageUploadingField, setAuthPageImageUploadingField] = useState<
     'loginHeroImage' | 'registerHeroImage' | 'forgotPasswordHeroImage' | ''
   >('');
@@ -543,6 +575,9 @@ export default function HomepageSections() {
   }, []);
   useEffect(() => {
     fetchAuthPageSettings();
+  }, []);
+  useEffect(() => {
+    fetchHomepageExperienceSettings();
   }, []);
 
   useEffect(() => {
@@ -702,6 +737,39 @@ export default function HomepageSections() {
       console.error('Error fetching auth page settings:', error);
     }
   };
+  const fetchHomepageExperienceSettings = async () => {
+    try {
+      const response = await api.homepageSections.getAdminExperienceSettings();
+      if (response.success && response.data) {
+        setHomepageExperienceSettings({
+          enabledModes:
+            Array.isArray(response.data.enabledModes) && response.data.enabledModes.length > 0
+              ? response.data.enabledModes
+              : HOMEPAGE_EXPERIENCE_DEFAULTS.enabledModes,
+          defaultMode: response.data.defaultMode || HOMEPAGE_EXPERIENCE_DEFAULTS.defaultMode,
+          allowUserModeOverride:
+            response.data.allowUserModeOverride ?? HOMEPAGE_EXPERIENCE_DEFAULTS.allowUserModeOverride,
+          adaptiveByDevice: response.data.adaptiveByDevice ?? HOMEPAGE_EXPERIENCE_DEFAULTS.adaptiveByDevice,
+          adaptiveByConnection:
+            response.data.adaptiveByConnection ?? HOMEPAGE_EXPERIENCE_DEFAULTS.adaptiveByConnection,
+          respectReducedMotion:
+            response.data.respectReducedMotion ?? HOMEPAGE_EXPERIENCE_DEFAULTS.respectReducedMotion,
+          themeModes:
+            Array.isArray(response.data.themeModes) && response.data.themeModes.length > 0
+              ? response.data.themeModes
+              : HOMEPAGE_EXPERIENCE_DEFAULTS.themeModes,
+          defaultThemeMode: response.data.defaultThemeMode || HOMEPAGE_EXPERIENCE_DEFAULTS.defaultThemeMode,
+          tokenSet: response.data.tokenSet || HOMEPAGE_EXPERIENCE_DEFAULTS.tokenSet,
+          heroVariant: response.data.heroVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.heroVariant,
+          categoryEntryVariant:
+            response.data.categoryEntryVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.categoryEntryVariant,
+          spotlightVariant: response.data.spotlightVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.spotlightVariant,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching homepage experience settings:', error);
+    }
+  };
 
   const handleSaveHowItWorksStyleSettings = async () => {
     setHowItWorksStyleSaving(true);
@@ -803,6 +871,38 @@ export default function HomepageSections() {
       window.alert(error?.response?.data?.message || 'Failed to save authentication page settings.');
     } finally {
       setAuthPageSettingsSaving(false);
+    }
+  };
+  const handleSaveHomepageExperienceSettings = async () => {
+    setHomepageExperienceSettingsSaving(true);
+    try {
+      const response = await api.homepageSections.updateAdminExperienceSettings(homepageExperienceSettings);
+      if (response.success && response.data) {
+        setHomepageExperienceSettings({
+          enabledModes: response.data.enabledModes || HOMEPAGE_EXPERIENCE_DEFAULTS.enabledModes,
+          defaultMode: response.data.defaultMode || HOMEPAGE_EXPERIENCE_DEFAULTS.defaultMode,
+          allowUserModeOverride:
+            response.data.allowUserModeOverride ?? HOMEPAGE_EXPERIENCE_DEFAULTS.allowUserModeOverride,
+          adaptiveByDevice: response.data.adaptiveByDevice ?? HOMEPAGE_EXPERIENCE_DEFAULTS.adaptiveByDevice,
+          adaptiveByConnection:
+            response.data.adaptiveByConnection ?? HOMEPAGE_EXPERIENCE_DEFAULTS.adaptiveByConnection,
+          respectReducedMotion:
+            response.data.respectReducedMotion ?? HOMEPAGE_EXPERIENCE_DEFAULTS.respectReducedMotion,
+          themeModes: response.data.themeModes || HOMEPAGE_EXPERIENCE_DEFAULTS.themeModes,
+          defaultThemeMode: response.data.defaultThemeMode || HOMEPAGE_EXPERIENCE_DEFAULTS.defaultThemeMode,
+          tokenSet: response.data.tokenSet || HOMEPAGE_EXPERIENCE_DEFAULTS.tokenSet,
+          heroVariant: response.data.heroVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.heroVariant,
+          categoryEntryVariant:
+            response.data.categoryEntryVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.categoryEntryVariant,
+          spotlightVariant: response.data.spotlightVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.spotlightVariant,
+        });
+        window.alert('Homepage experience settings saved.');
+      }
+    } catch (error: any) {
+      console.error('Error saving homepage experience settings:', error);
+      window.alert(error?.response?.data?.message || 'Failed to save homepage experience settings.');
+    } finally {
+      setHomepageExperienceSettingsSaving(false);
     }
   };
 
@@ -1247,6 +1347,183 @@ export default function HomepageSections() {
         <div>
           <Button onClick={handleSaveAuthPageSettings} disabled={authPageSettingsSaving}>
             {authPageSettingsSaving ? 'Saving...' : 'Save Authentication Page Settings'}
+          </Button>
+        </div>
+      </div>
+
+      <div className="mb-8 rounded-lg border border-gray-200 bg-white p-4">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Homepage Experience Modes & Guardrails</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Configure adaptive Lite/Standard/Editorial behavior, theme options, and approved section variants.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Default Experience Mode</label>
+            <select
+              value={homepageExperienceSettings.defaultMode}
+              onChange={(e) =>
+                setHomepageExperienceSettings((prev) => ({
+                  ...prev,
+                  defaultMode: e.target.value as HomepageExperienceSettings['defaultMode'],
+                }))
+              }
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            >
+              <option value="LITE_COMMERCE">Lite Commerce</option>
+              <option value="STANDARD_PREMIUM">Standard Premium</option>
+              <option value="EDITORIAL_IMMERSIVE">Editorial Immersive</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Default Theme Mode</label>
+            <select
+              value={homepageExperienceSettings.defaultThemeMode}
+              onChange={(e) =>
+                setHomepageExperienceSettings((prev) => ({
+                  ...prev,
+                  defaultThemeMode: e.target.value as HomepageExperienceSettings['defaultThemeMode'],
+                }))
+              }
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            >
+              <option value="SYSTEM">System</option>
+              <option value="LIGHT">Light</option>
+              <option value="DARK">Dark</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Token Set</label>
+            <select
+              value={homepageExperienceSettings.tokenSet}
+              onChange={(e) =>
+                setHomepageExperienceSettings((prev) => ({
+                  ...prev,
+                  tokenSet: e.target.value as HomepageExperienceSettings['tokenSet'],
+                }))
+              }
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            >
+              <option value="GLOBAL_PREMIUM_DARK">Global Premium Dark</option>
+              <option value="GLOBAL_PREMIUM_LIGHT">Global Premium Light</option>
+              <option value="AFRO_EDITORIAL">Afro Editorial</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Hero Variant</label>
+            <select
+              value={homepageExperienceSettings.heroVariant}
+              onChange={(e) =>
+                setHomepageExperienceSettings((prev) => ({
+                  ...prev,
+                  heroVariant: e.target.value as HomepageExperienceSettings['heroVariant'],
+                }))
+              }
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            >
+              <option value="SPLIT_EDITORIAL">Split Editorial</option>
+              <option value="CLEAN_COMMERCE">Clean Commerce</option>
+              <option value="VIDEO_STORY">Video Story</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Category Entry Variant</label>
+            <select
+              value={homepageExperienceSettings.categoryEntryVariant}
+              onChange={(e) =>
+                setHomepageExperienceSettings((prev) => ({
+                  ...prev,
+                  categoryEntryVariant: e.target.value as HomepageExperienceSettings['categoryEntryVariant'],
+                }))
+              }
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            >
+              <option value="THREE_COLUMN_CORE">Three Column Core</option>
+              <option value="MEGA_GRID">Mega Grid</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Spotlight Variant</label>
+            <select
+              value={homepageExperienceSettings.spotlightVariant}
+              onChange={(e) =>
+                setHomepageExperienceSettings((prev) => ({
+                  ...prev,
+                  spotlightVariant: e.target.value as HomepageExperienceSettings['spotlightVariant'],
+                }))
+              }
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            >
+              <option value="CAROUSEL">Carousel</option>
+              <option value="SINGLE_FEATURE">Single Feature</option>
+              <option value="MOSAIC">Mosaic</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-2 md:grid-cols-2">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={homepageExperienceSettings.allowUserModeOverride}
+              onChange={(e) =>
+                setHomepageExperienceSettings((prev) => ({
+                  ...prev,
+                  allowUserModeOverride: e.target.checked,
+                }))
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            Allow user mode override (Auto/Lite/Standard/Editorial)
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={homepageExperienceSettings.adaptiveByDevice}
+              onChange={(e) =>
+                setHomepageExperienceSettings((prev) => ({
+                  ...prev,
+                  adaptiveByDevice: e.target.checked,
+                }))
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            Adaptive mode by device capability
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={homepageExperienceSettings.adaptiveByConnection}
+              onChange={(e) =>
+                setHomepageExperienceSettings((prev) => ({
+                  ...prev,
+                  adaptiveByConnection: e.target.checked,
+                }))
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            Adaptive mode by connection quality
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={homepageExperienceSettings.respectReducedMotion}
+              onChange={(e) =>
+                setHomepageExperienceSettings((prev) => ({
+                  ...prev,
+                  respectReducedMotion: e.target.checked,
+                }))
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            Force lite mode when reduced-motion is requested
+          </label>
+        </div>
+
+        <div className="mt-4">
+          <Button onClick={handleSaveHomepageExperienceSettings} disabled={homepageExperienceSettingsSaving}>
+            {homepageExperienceSettingsSaving ? 'Saving...' : 'Save Homepage Experience Settings'}
           </Button>
         </div>
       </div>
