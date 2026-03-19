@@ -52,10 +52,10 @@ export interface HomepageCapabilityProfile {
 
 export const HOMEPAGE_EXPERIENCE_DEFAULTS: HomepageExperienceSettings = {
   enabledModes: [...HOMEPAGE_EXPERIENCE_MODES],
-  defaultMode: 'STANDARD_PREMIUM',
+  defaultMode: 'EDITORIAL_IMMERSIVE',
   allowUserModeOverride: true,
-  adaptiveByDevice: true,
-  adaptiveByConnection: true,
+  adaptiveByDevice: false,
+  adaptiveByConnection: false,
   respectReducedMotion: true,
   themeModes: [...HOMEPAGE_THEME_MODES],
   defaultThemeMode: 'SYSTEM',

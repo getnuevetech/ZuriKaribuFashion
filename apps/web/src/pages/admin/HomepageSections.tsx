@@ -267,10 +267,10 @@ const FOOTER_POLICY_DEFAULTS = {
 };
 const HOMEPAGE_EXPERIENCE_DEFAULTS: HomepageExperienceSettings = {
   enabledModes: ['LITE_COMMERCE', 'STANDARD_PREMIUM', 'EDITORIAL_IMMERSIVE'],
-  defaultMode: 'STANDARD_PREMIUM',
+  defaultMode: 'EDITORIAL_IMMERSIVE',
   allowUserModeOverride: true,
-  adaptiveByDevice: true,
-  adaptiveByConnection: true,
+  adaptiveByDevice: false,
+  adaptiveByConnection: false,
   respectReducedMotion: true,
   themeModes: ['SYSTEM', 'LIGHT', 'DARK'],
   defaultThemeMode: 'SYSTEM',

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type WheelEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -14,7 +14,7 @@ import {
   Truck,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../services/api';
+import { api, resolveAssetUrl } from '../services/api';
 import { useCurrencyStore } from '../store/currencyStore';
 import { useHomepageExperienceStore } from '../store/homepageExperienceStore';
 
@@ -394,6 +394,29 @@ const asText = (...values: any[]) => {
   }
   return '';
 };
+const PUBLIC_BASE = (() => {
+  const base = String(import.meta.env.BASE_URL || '/').trim();
+  if (!base) return '/';
+  return base.endsWith('/') ? base : `${base}/`;
+})();
+const normalizeImageUrl = (value: unknown) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) {
+    return raw;
+  }
+  if (raw.startsWith('/kimi/')) {
+    return `${PUBLIC_BASE}${raw.slice(1)}`;
+  }
+  return resolveAssetUrl(raw) || raw;
+};
+const asImage = (...values: any[]) => {
+  for (const value of values) {
+    const normalized = normalizeImageUrl(value);
+    if (normalized) return normalized;
+  }
+  return '';
+};
 const trimToWordLimit = (text: string, limit: number) => {
   const words = String(text || '')
     .trim()
@@ -407,7 +430,7 @@ const normalizeCategoryCtaText = (_value: unknown) => 'SHOP NOW';
 const parseCategoryImages = (...values: unknown[]) => {
   const output: string[] = [];
   const pushValue = (value: unknown) => {
-    const text = String(value || '').trim();
+    const text = normalizeImageUrl(value);
     if (!text) return;
     output.push(text);
   };
@@ -581,6 +604,48 @@ function ProductCarousel({
             ))}
           </div>
         )}
+      </div>
+    </section>
+  );
+}
+
+function EditorialFeatureSection({
+  eyebrow,
+  title,
+  description,
+  ctaText,
+  ctaLink,
+  image,
+  imageOnRight = false,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  ctaText: string;
+  ctaLink: string;
+  image: string;
+  imageOnRight?: boolean;
+}) {
+  return (
+    <section className="bg-[#0b0b0c]">
+      <div className="grid min-h-[78vh] grid-cols-1 lg:grid-cols-12">
+        <div className={`relative overflow-hidden lg:col-span-7 ${imageOnRight ? 'lg:order-2' : ''}`}>
+          <img src={image} alt={title} className="h-full w-full object-cover" loading="lazy" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/35 via-black/10 to-black/20" />
+        </div>
+        <div className={`flex items-center bg-[#0b0b0c] px-6 py-10 lg:col-span-5 lg:px-12 ${imageOnRight ? 'lg:order-1' : ''}`}>
+          <div className="max-w-xl">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-white/55">{eyebrow}</p>
+            <h2 className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95] text-white md:text-5xl">
+              {title}
+            </h2>
+            <p className="mt-5 max-w-md text-sm leading-relaxed text-white/75">{description}</p>
+            <Link to={ctaLink} className={`${CTA_BUTTON_OVERLAY_CLASS} mt-6`}>
+              {ctaText}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -793,7 +858,7 @@ export default function Home() {
               .filter((row: any) => String(row?.section || '').toUpperCase() === 'HERO')
               .map((row: any, index: number) => ({
                 id: String(row?.id ?? `hero-banner-${index}`),
-                image: asText(row?.displayImage, row?.images?.[0], kimiHeroSlides[index % kimiHeroSlides.length].image),
+                image: asImage(row?.displayImage, row?.images?.[0], kimiHeroSlides[index % kimiHeroSlides.length].image),
                 title: asText(row?.title, kimiHeroSlides[index % kimiHeroSlides.length].title),
                 subtitle: asText(row?.subtitle, kimiHeroSlides[index % kimiHeroSlides.length].subtitle),
                 badge: kimiHeroSlides[index % kimiHeroSlides.length].badge,
@@ -809,7 +874,7 @@ export default function Home() {
             : kimiHeroSlides;
       return source.map((slide: any, index: number) => ({
         id: String(slide.id ?? index),
-        image: asText(slide.image, kimiHeroSlides[index % kimiHeroSlides.length].image),
+        image: asImage(slide.image, kimiHeroSlides[index % kimiHeroSlides.length].image),
         title: asText(slide.title, kimiHeroSlides[index % kimiHeroSlides.length].title),
         subtitle: asText(slide.subtitle, kimiHeroSlides[index % kimiHeroSlides.length].subtitle),
         badge: asText(slide.badge, kimiHeroSlides[index % kimiHeroSlides.length].badge),
@@ -876,6 +941,71 @@ export default function Home() {
         }),
     [categoriesData],
   );
+  const readyCategory = categories.find((item) => /ready/i.test(String(item.title || ''))) || categories[0];
+  const customCategory =
+    categories.find((item) => /custom/i.test(String(item.title || ''))) ||
+    categories.find((item) => /design/i.test(String(item.title || ''))) ||
+    categories[1] ||
+    categories[0];
+  const fabricsCategory =
+    categories.find((item) => /fabric/i.test(String(item.title || ''))) ||
+    categories[2] ||
+    categories[0];
+
+  const editorialReadyFeature = useMemo(
+    () => ({
+      eyebrow: 'Ready to wear',
+      title: asText(readyCategory?.title, 'Standardized African attire made to buy.'),
+      description: asText(
+        readyCategory?.description,
+        'Curated fits built for real life, tailored enough to feel special, versatile enough to wear anywhere.'
+      ),
+      ctaText: asText(readyCategory?.ctaText, 'Shop ready to wear'),
+      ctaLink: asText(readyCategory?.link, '/ready-to-wear'),
+      image: asImage(
+        managedBannersBySection.get('BANNER_2')?.displayImage,
+        managedBannersBySection.get('BANNER_2')?.images?.[0],
+        '/kimi/rw_full.jpg'
+      ),
+    }),
+    [readyCategory, managedBannersBySection]
+  );
+  const editorialFabricsFeature = useMemo(
+    () => ({
+      eyebrow: 'Fabrics to buy',
+      title: asText(fabricsCategory?.title, 'African fabrics across all edges of Africa.'),
+      description: asText(
+        fabricsCategory?.description,
+        'Source the same textiles artisans use, from wax prints to hand-woven heritage fabrics.'
+      ),
+      ctaText: asText(fabricsCategory?.ctaText, 'Browse fabrics'),
+      ctaLink: asText(fabricsCategory?.link, '/fabrics'),
+      image: asImage(
+        managedBannersBySection.get('BANNER_1')?.displayImage,
+        managedBannersBySection.get('BANNER_1')?.images?.[0],
+        '/kimi/fabrics_full.jpg'
+      ),
+    }),
+    [fabricsCategory, managedBannersBySection]
+  );
+  const editorialCustomFeature = useMemo(
+    () => ({
+      eyebrow: 'Custom to wear',
+      title: asText(customCategory?.title, 'Every stitch sewn by an African designer.'),
+      description: asText(
+        customCategory?.description,
+        'Submit your measurements, choose your fabric, and work directly with a maker who understands the details.'
+      ),
+      ctaText: asText(customCategory?.ctaText, 'Start a custom order'),
+      ctaLink: asText(customCategory?.link, '/designs'),
+      image: asImage(
+        managedBannersBySection.get('PROMO')?.displayImage,
+        managedBannersBySection.get('PROMO')?.images?.[0],
+        '/kimi/custom_full.jpg'
+      ),
+    }),
+    [customCategory, managedBannersBySection]
+  );
 
   const howItWorks = useMemo(
     () =>
@@ -904,7 +1034,7 @@ export default function Home() {
         flagCode: resolveCountryCode(asText(item.country, item.designer?.country, ''), asText(item.flag, '')),
         flag: resolveCountryFlag(asText(item.country, item.designer?.country, ''), asText(item.flag, '')),
         quote: asText(item.quote, kimiDesigners[index % kimiDesigners.length].quote),
-        image: asText(item.image, kimiDesigners[index % kimiDesigners.length].image),
+        image: asImage(item.image, kimiDesigners[index % kimiDesigners.length].image),
         linkMode: asText(item.linkMode, 'DEFAULT_STORE').toUpperCase(),
         externalUrl: asText(item.externalUrl, ''),
         blog: item.blog || null,
@@ -958,7 +1088,7 @@ export default function Home() {
         id: String(item.id ?? index),
         name: asText(item.name, kimiTestimonials[index % kimiTestimonials.length].name),
         location: asText(item.location, kimiTestimonials[index % kimiTestimonials.length].location),
-        avatar: asText(item.avatar, kimiTestimonials[index % kimiTestimonials.length].avatar),
+        avatar: asImage(item.avatar, kimiTestimonials[index % kimiTestimonials.length].avatar),
         quote: asText(item.quote, item.text, kimiTestimonials[index % kimiTestimonials.length].quote),
       })),
     [testimonialsData],
@@ -972,7 +1102,7 @@ export default function Home() {
         heritageData?.description,
         "Every pattern carries meaning. From Kente's bold geometry to Ankara's vibrant motifs, African textiles tell stories of identity, celebration, and legacy passed through generations.",
       ),
-      image: asText(heritageData?.image, '/kimi/heritage_story.jpg'),
+      image: asImage(heritageData?.image, '/kimi/heritage_story.jpg'),
       ctaText: asText(heritageData?.ctaText, 'READ OUR STORY'),
       ctaLink: asText(heritageData?.ctaLink, '/about'),
     }),
@@ -1018,16 +1148,6 @@ export default function Home() {
       left: direction === 'left' ? -320 : 320,
       behavior: 'smooth',
     });
-  };
-
-  const handleCountryStripWheel = (event: WheelEvent<HTMLDivElement>) => {
-    const strip = event.currentTarget;
-    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-    strip.scrollBy({
-      left: event.deltaY,
-      behavior: 'auto',
-    });
-    event.preventDefault();
   };
 
   const resolveSpotlightHref = (designer: any) => {
@@ -1218,42 +1338,10 @@ export default function Home() {
           </div>
         </div>
 
-        {sectionVisibility.countries && !isLiteExperienceMode ? (
-          <div className="absolute bottom-6 left-4 sm:left-6 lg:left-12 xl:left-20 right-4 sm:right-6 lg:right-12 xl:right-20">
-            <div
-              className="flex flex-nowrap gap-4 justify-start overflow-x-auto overflow-y-visible pt-2 pb-2 scrollbar-hide"
-              onWheel={handleCountryStripWheel}
-            >
-              {countries.map((country) => (
-                <Link
-                  key={country.name}
-                  to={`/country-products?country=${encodeURIComponent(country.name)}`}
-                  className="bg-white/95 backdrop-blur-sm px-4 py-3 rounded-lg flex items-center gap-3 card-hover cursor-pointer flex-shrink-0"
-                >
-                  {country.flagCode ? (
-                    <img
-                      src={`https://flagcdn.com/w80/${country.flagCode.toLowerCase()}.png`}
-                      alt={`${country.name} flag`}
-                      className="h-8 w-10 rounded-sm border border-black/10 object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <span className="text-2xl">{country.flag}</span>
-                  )}
-                  <div>
-                    <p className="font-semibold text-sm">{country.name}</p>
-                    <p className="text-xs text-gray-500">{country.fabrics}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
         {useMotion ? (
           <div
             className={`absolute left-1/2 -translate-x-1/2 flex gap-2 z-10 ${
-              sectionVisibility.countries && !isLiteExperienceMode ? 'bottom-28' : 'bottom-8'
+              sectionVisibility.countries && !isLiteExperienceMode ? 'bottom-10' : 'bottom-8'
             }`}
           >
             {heroSlides.map((_, index) => (
@@ -1282,6 +1370,43 @@ export default function Home() {
           </div>
         ) : null}
       </section>
+      ) : null}
+
+      {sectionVisibility.countries ? (
+        <section className="bg-[#0b0b0c] py-14 lg:py-20" data-analytics-section="shop-by-country">
+          <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+              <div className="lg:col-span-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/55">Shop by country</p>
+                <h2 className="mt-2 font-['Oswald'] text-4xl font-bold uppercase leading-[0.95] text-white md:text-5xl">
+                  Shop by Country
+                </h2>
+                <p className="mt-4 max-w-md text-sm leading-relaxed text-white/70">
+                  Browse styles rooted in place, from West African prints to East African beadwork.
+                </p>
+                <Link to="/shop" className={`${CTA_BUTTON_OVERLAY_CLASS} mt-7`}>
+                  Explore countries
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+              <div className="lg:col-span-7">
+                <div className="divide-y divide-white/10 rounded-md border border-white/10">
+                  {countries.slice(0, 8).map((country) => (
+                    <Link
+                      key={`${country.name}-${country.flag}`}
+                      to={`/country-products?country=${encodeURIComponent(country.name)}`}
+                      className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-white/80 transition-colors hover:bg-white/5 hover:text-white"
+                    >
+                      <span className="col-span-1 text-xl">{country.flag}</span>
+                      <span className="col-span-4 text-sm font-semibold">{country.name}</span>
+                      <span className="col-span-7 text-right text-xs text-white/60">{country.fabrics}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       ) : null}
 
       {sectionVisibility.statsStrip && activeStatsItems.length > 0 ? (
@@ -1323,6 +1448,36 @@ export default function Home() {
           </div>
         </div>
       </section>
+      ) : null}
+
+      {!isLiteExperienceMode ? (
+        <>
+          <EditorialFeatureSection
+            eyebrow={editorialReadyFeature.eyebrow}
+            title={editorialReadyFeature.title}
+            description={editorialReadyFeature.description}
+            ctaText={editorialReadyFeature.ctaText}
+            ctaLink={editorialReadyFeature.ctaLink}
+            image={editorialReadyFeature.image}
+          />
+          <EditorialFeatureSection
+            eyebrow={editorialFabricsFeature.eyebrow}
+            title={editorialFabricsFeature.title}
+            description={editorialFabricsFeature.description}
+            ctaText={editorialFabricsFeature.ctaText}
+            ctaLink={editorialFabricsFeature.ctaLink}
+            image={editorialFabricsFeature.image}
+            imageOnRight
+          />
+          <EditorialFeatureSection
+            eyebrow={editorialCustomFeature.eyebrow}
+            title={editorialCustomFeature.title}
+            description={editorialCustomFeature.description}
+            ctaText={editorialCustomFeature.ctaText}
+            ctaLink={editorialCustomFeature.ctaLink}
+            image={editorialCustomFeature.image}
+          />
+        </>
       ) : null}
 
       {sectionVisibility.categories ? (
@@ -1454,7 +1609,7 @@ export default function Home() {
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
             <div className="relative overflow-hidden rounded-xl">
               <img
-                src={asText(
+                src={asImage(
                   managedBannersBySection.get('BANNER_1')?.displayImage,
                   managedBannersBySection.get('BANNER_1')?.images?.[0],
                   '/kimi/featured_custom_right.jpg'
@@ -1495,7 +1650,11 @@ export default function Home() {
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
             <div className="relative overflow-hidden rounded-xl">
               <img
-                src={asText(managedBannersBySection.get('BANNER_2')?.displayImage, managedBannersBySection.get('BANNER_2')?.images?.[0], '/kimi/featured_rw_right.jpg')}
+                src={asImage(
+                  managedBannersBySection.get('BANNER_2')?.displayImage,
+                  managedBannersBySection.get('BANNER_2')?.images?.[0],
+                  '/kimi/featured_rw_right.jpg'
+                )}
                 alt={asText(managedBannersBySection.get('BANNER_2')?.title, 'Homepage Banner')}
                 className="h-[340px] w-full object-cover"
               />
@@ -1561,7 +1720,7 @@ export default function Home() {
             <div>
               <div className="relative">
                 <img
-                  src={asText(
+                  src={asImage(
                     managedBannersBySection.get('PROMO')?.displayImage,
                     managedBannersBySection.get('PROMO')?.images?.[0],
                     managedBannersBySection.get('HERO')?.displayImage,

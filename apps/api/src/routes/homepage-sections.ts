@@ -969,10 +969,10 @@ const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettings = {
 };
 const HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS: HomepageExperienceSettings = {
   enabledModes: [...HOMEPAGE_EXPERIENCE_MODES],
-  defaultMode: 'STANDARD_PREMIUM',
+  defaultMode: 'EDITORIAL_IMMERSIVE',
   allowUserModeOverride: true,
-  adaptiveByDevice: true,
-  adaptiveByConnection: true,
+  adaptiveByDevice: false,
+  adaptiveByConnection: false,
   respectReducedMotion: true,
   themeModes: [...HOMEPAGE_THEME_MODES],
   defaultThemeMode: 'SYSTEM',
