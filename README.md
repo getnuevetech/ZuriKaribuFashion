@@ -113,6 +113,7 @@ After database seeding:
 - [API Documentation](apps/api/README.md) - Backend API docs
 - [Modularization Blueprint (Draft)](docs/architecture/modularization-blueprint.md) - Domain split and service extraction plan
 - [Hybrid Kimi Adoption Blueprint (Draft)](docs/architecture/hybrid-kimi-adoption-blueprint.md) - Brand + conversion-safe rollout plan for premium editorial design
+- [Kimi Handoff + Remediation Plan (Draft)](docs/architecture/kimi-design-handoff-and-remediation.md) - Actionable handoff checklist and critical/non-critical issue resolution plan
 
 ## 📝 License
 
