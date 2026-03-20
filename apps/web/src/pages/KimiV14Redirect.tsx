@@ -1,15 +1,19 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
+const KIMI_V14_PUBLIC_BASE = '/kimi-v14-r20260320';
+const KIMI_V14_CACHE_BUST = '20260320-1';
+
 const buildKimiUrl = (targetPath: string) => {
   const normalizedTarget = targetPath.startsWith('/') ? targetPath : `/${targetPath}`;
-  if (normalizedTarget === '/') return '/kimi-v14/index.html';
-  if (normalizedTarget === '/ready-to-wear') return '/kimi-v14/index.html#ready-to-wear';
-  if (normalizedTarget === '/fabrics') return '/kimi-v14/index.html#fabrics';
+  const base = `${KIMI_V14_PUBLIC_BASE}/index.html?v=${KIMI_V14_CACHE_BUST}`;
+  if (normalizedTarget === '/') return base;
+  if (normalizedTarget === '/ready-to-wear') return `${base}#ready-to-wear`;
+  if (normalizedTarget === '/fabrics') return `${base}#fabrics`;
   if (normalizedTarget === '/designs' || normalizedTarget === '/custom' || normalizedTarget === '/custom-to-wear') {
-    return '/kimi-v14/index.html#custom';
+    return `${base}#custom`;
   }
-  return '/kimi-v14/index.html';
+  return base;
 };
 
 export function KimiV14Redirect({ targetPath }: { targetPath: string }) {
