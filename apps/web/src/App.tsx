@@ -155,6 +155,8 @@ function App() {
             <Route element={<MainLayout />}>
               <Route path="/" element={<Home />} />
               <Route path="/shop" element={<ShopPage />} />
+              <Route path="/custom" element={<Designs />} />
+              <Route path="/custom/:id" element={<DesignDetail />} />
               <Route path="/designs" element={<Designs />} />
               <Route path="/designs/:id" element={<DesignDetail />} />
               <Route path="/fabrics" element={<Fabrics />} />

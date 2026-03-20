@@ -17,6 +17,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api, resolveAssetUrl } from '../services/api';
 import { useCurrencyStore } from '../store/currencyStore';
 import { useHomepageExperienceStore } from '../store/homepageExperienceStore';
+import { AFRICAN_COUNTRIES, AFRICAN_REGION_OPTIONS, type AfricanRegion } from '../data/africanCountries';
 
 type HeroSlide = {
   id: string;
@@ -53,7 +54,10 @@ type CountryCard = {
   name: string;
   flag: string;
   flagCode?: string;
+  region?: AfricanRegion;
   fabrics: string;
+  productCount?: number;
+  href?: string;
 };
 
 type ManagedBanner = {
@@ -238,7 +242,7 @@ const kimiHeroSlides: HeroSlide[] = [
     title: 'Timeless Heritage',
     subtitle: 'Wear the story of African craftsmanship',
     ctaText: 'SHOP NOW',
-    ctaLink: '/designs',
+    ctaLink: '/custom',
   },
   {
     id: '3',
@@ -277,7 +281,7 @@ const kimiCategories = [
     title: 'Custom To Wear',
     description: 'Every stitch sewn by an African Designer',
     image: '/kimi/custom_full.jpg',
-    link: '/designs',
+    link: '/custom',
   },
 ];
 
@@ -317,6 +321,15 @@ const iconByNormalizedName: Record<string, any> = {
   delivery: Truck,
   shipped: Truck,
 };
+
+const TRUST_BADGES = [
+  { id: 'authentic', title: 'Authentic Guarantee', description: 'Verified sellers and designers only.' },
+  { id: 'shipping', title: 'Global Shipping', description: 'Reliable delivery across major markets.' },
+  { id: 'returns', title: 'Easy Returns', description: 'Clear return policy on eligible orders.' },
+  { id: 'support', title: '24/7 Support', description: 'Human support via chat, ticket, and call.' },
+  { id: 'secure', title: 'Secure Payment', description: 'Protected checkout and trusted processors.' },
+  { id: 'artisan', title: 'Artisan Made', description: 'Craft rooted in African heritage.' },
+] as const;
 
 const kimiFeaturedDesigns: FeaturedProduct[] = [
   { id: '1', name: 'Exclusive Gorgeous', price: 1428.57, image: '/kimi/product1.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
@@ -393,6 +406,21 @@ const asText = (...values: any[]) => {
     if (typeof value === 'string' && value.trim().length > 0) return value.trim();
   }
   return '';
+};
+const clampText = (value: unknown, maxLength: number, fallback = '') => {
+  const source = asText(value, fallback);
+  if (!source) return '';
+  return source.length > maxLength ? `${source.slice(0, Math.max(0, maxLength - 1)).trim()}…` : source;
+};
+const safeHref = (...values: any[]) => {
+  const fallback = asText(values[values.length - 1], '/shop') || '/shop';
+  const href = asText(...values)
+    .replace(/^\/designs(\/|$)/i, '/custom$1')
+    .replace(/^\/custom-to-wear(\/|$)/i, '/custom$1');
+  if (!href) return fallback;
+  if (/^https?:\/\//i.test(href)) return href;
+  if (!href.startsWith('/')) return fallback;
+  return href;
 };
 const PUBLIC_BASE = (() => {
   const base = String(import.meta.env.BASE_URL || '/').trim();
@@ -478,7 +506,7 @@ const CTA_BUTTON_LIGHT_CLASS = `${CTA_BUTTON_BASE_CLASS} border-black bg-white t
 const CTA_BUTTON_OVERLAY_CLASS = `${CTA_BUTTON_BASE_CLASS} border-white bg-transparent text-white hover:bg-white hover:text-black`;
 
 const productBasePath = (productType: string) => {
-  if (productType === 'DESIGN') return '/designs';
+  if (productType === 'DESIGN') return '/custom';
   if (productType === 'FABRIC') return '/fabrics';
   return '/ready-to-wear';
 };
@@ -490,7 +518,7 @@ function ProductCard({ product, descriptionWordLimit }: { product: FeaturedProdu
   return (
     <Link to={`${productBasePath(product.productType)}/${product.id}`} className="group block">
       <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-gray-100 mb-4 img-zoom">
-        <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+        <img src={product.image} alt={clampText(product.name, 60, 'Product')} className="w-full h-full object-cover" loading="lazy" />
         {(product.productLabels || []).length > 0 ? (
           <div className="absolute left-3 top-3 z-10 flex flex-wrap gap-1">
             {(product.productLabels || []).slice(0, 2).map((label) => (
@@ -531,7 +559,9 @@ function ProductCard({ product, descriptionWordLimit }: { product: FeaturedProdu
         </div>
       </div>
       <div>
-        <h3 className="font-semibold text-lg group-hover:text-gray-600 transition-colors">{product.name}</h3>
+        <h3 className="text-lg font-semibold line-clamp-2 transition-colors group-hover:text-gray-600">
+          {clampText(product.name, 60, 'Product')}
+        </h3>
         <p className="text-gray-500 text-sm line-clamp-1">{product.designer}</p>
         {description ? (
           <p className="text-gray-500 text-xs line-clamp-2 mt-1">{description}</p>
@@ -636,12 +666,14 @@ function EditorialFeatureSection({
         <div className={`flex items-center bg-[#0b0b0c] px-6 py-10 lg:col-span-5 lg:px-12 ${imageOnRight ? 'lg:order-1' : ''}`}>
           <div className="max-w-xl">
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-white/55">{eyebrow}</p>
-            <h2 className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95] text-white md:text-5xl">
-              {title}
+            <h2 className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95] text-white md:text-5xl max-w-[14ch] break-words">
+              {clampText(title, 56, 'Zuri Karibu')}
             </h2>
-            <p className="mt-5 max-w-md text-sm leading-relaxed text-white/75">{description}</p>
-            <Link to={ctaLink} className={`${CTA_BUTTON_OVERLAY_CLASS} mt-6`}>
-              {ctaText}
+            <p className="mt-5 max-w-[52ch] text-sm leading-relaxed text-white/75 line-clamp-4">
+              {clampText(description, 140, 'Discover premium African fashion stories.')}
+            </p>
+            <Link to={safeHref(ctaLink, '/shop')} className={`${CTA_BUTTON_OVERLAY_CLASS} mt-6`}>
+              {clampText(ctaText, 24, 'Explore')}
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
@@ -654,6 +686,7 @@ function EditorialFeatureSection({
 export default function Home() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
+  const [activeCountryRegion, setActiveCountryRegion] = useState<'ALL' | AfricanRegion>('ALL');
   const [hoveredHowItWorksId, setHoveredHowItWorksId] = useState<number | null>(null);
   const [categoryImageById, setCategoryImageById] = useState<Record<string, string>>({});
   const customStripRef = useRef<HTMLDivElement>(null);
@@ -859,11 +892,11 @@ export default function Home() {
               .map((row: any, index: number) => ({
                 id: String(row?.id ?? `hero-banner-${index}`),
                 image: asImage(row?.displayImage, row?.images?.[0], kimiHeroSlides[index % kimiHeroSlides.length].image),
-                title: asText(row?.title, kimiHeroSlides[index % kimiHeroSlides.length].title),
-                subtitle: asText(row?.subtitle, kimiHeroSlides[index % kimiHeroSlides.length].subtitle),
+                title: clampText(row?.title, 56, kimiHeroSlides[index % kimiHeroSlides.length].title),
+                subtitle: clampText(row?.subtitle, 120, kimiHeroSlides[index % kimiHeroSlides.length].subtitle),
                 badge: kimiHeroSlides[index % kimiHeroSlides.length].badge,
-                ctaText: asText(row?.ctaText, kimiHeroSlides[index % kimiHeroSlides.length].ctaText),
-                ctaLink: asText(row?.ctaLink, kimiHeroSlides[index % kimiHeroSlides.length].ctaLink),
+                ctaText: clampText(row?.ctaText, 24, kimiHeroSlides[index % kimiHeroSlides.length].ctaText),
+                ctaLink: safeHref(row?.ctaLink, kimiHeroSlides[index % kimiHeroSlides.length].ctaLink),
               }))
           : [];
       const source =
@@ -875,11 +908,11 @@ export default function Home() {
       return source.map((slide: any, index: number) => ({
         id: String(slide.id ?? index),
         image: asImage(slide.image, kimiHeroSlides[index % kimiHeroSlides.length].image),
-        title: asText(slide.title, kimiHeroSlides[index % kimiHeroSlides.length].title),
-        subtitle: asText(slide.subtitle, kimiHeroSlides[index % kimiHeroSlides.length].subtitle),
+        title: clampText(slide.title, 56, kimiHeroSlides[index % kimiHeroSlides.length].title),
+        subtitle: clampText(slide.subtitle, 120, kimiHeroSlides[index % kimiHeroSlides.length].subtitle),
         badge: asText(slide.badge, kimiHeroSlides[index % kimiHeroSlides.length].badge),
-        ctaText: asText(slide.ctaText, kimiHeroSlides[index % kimiHeroSlides.length].ctaText),
-        ctaLink: asText(slide.ctaLink, kimiHeroSlides[index % kimiHeroSlides.length].ctaLink),
+        ctaText: clampText(slide.ctaText, 24, kimiHeroSlides[index % kimiHeroSlides.length].ctaText),
+        ctaLink: safeHref(slide.ctaLink, kimiHeroSlides[index % kimiHeroSlides.length].ctaLink),
       }));
     },
     [heroSlidesData, managedBannersData],
@@ -905,22 +938,68 @@ export default function Home() {
     return map;
   }, [managedBannersData]);
 
-  const countries = useMemo<CountryCard[]>(
+  const countries = useMemo<CountryCard[]>(() => {
+    const backendRows = Array.isArray(countriesData) ? countriesData : [];
+    const backendByCode = new Map<string, any>();
+    const backendByName = new Map<string, any>();
+
+    for (const row of backendRows) {
+      const rowName = asText(row?.name, row?.country, '');
+      const rowCode = resolveCountryCode(rowName, asText(row?.flag, row?.code, ''));
+      if (rowCode) backendByCode.set(rowCode, row);
+      if (rowName) backendByName.set(rowName.toLowerCase(), row);
+    }
+
+    return AFRICAN_COUNTRIES.map((country) => {
+      const backend = backendByCode.get(country.code) || backendByName.get(country.name.toLowerCase()) || null;
+      const productCountRaw = Number(
+        backend?.productCount ?? backend?.count ?? backend?.products ?? backend?.itemsCount ?? 0
+      );
+      const productCount = Number.isFinite(productCountRaw) && productCountRaw > 0 ? Math.round(productCountRaw) : 0;
+      return {
+        name: country.name,
+        flag: countryCodeToFlag(country.code),
+        flagCode: country.code,
+        region: country.region,
+        fabrics: clampText(
+          asText(
+            backend?.fabrics,
+            backend?.textiles,
+            Array.isArray(country.textiles) ? country.textiles.slice(0, 2).join(', ') : ''
+          ),
+          48,
+          'African textiles'
+        ),
+        productCount,
+        href: `/country-products?country=${encodeURIComponent(country.name)}`,
+      };
+    });
+  }, [countriesData]);
+
+  const visibleCountries = useMemo(
     () =>
-      (Array.isArray(countriesData) && countriesData.length > 0 ? countriesData : kimiCountries)
-        .map((country: any) => {
-          const countryName = asText(country.name, 'Country');
-          const explicitFlag = asText(country.flag, '');
-          const flagCode = resolveCountryCode(countryName, explicitFlag);
-          return {
-          name: countryName,
-          flag: resolveCountryFlag(countryName, explicitFlag),
-          flagCode,
-          fabrics: asText(country.fabrics, 'African textiles'),
-        };
-        }),
-    [countriesData],
+      countries.filter((country) => {
+        if (activeCountryRegion === 'ALL') return true;
+        return country.region === activeCountryRegion;
+      }),
+    [activeCountryRegion, countries]
   );
+  const regionCountByKey = useMemo(() => {
+    const counts: Record<'ALL' | AfricanRegion, number> = {
+      ALL: countries.length,
+      North: 0,
+      West: 0,
+      Central: 0,
+      East: 0,
+      Southern: 0,
+    };
+    for (const country of countries) {
+      const region = country.region;
+      if (!region) continue;
+      counts[region] += 1;
+    }
+    return counts;
+  }, [countries]);
 
   const categories = useMemo(
     () =>
@@ -935,7 +1014,7 @@ export default function Home() {
             description: asText(item.description, fallback.description),
             image: images[0] || fallback.image,
             images,
-            link: asText(item.ctaLink, item.link, fallback.link),
+            link: safeHref(item.ctaLink || item.link, fallback.link),
             ctaText: normalizeCategoryCtaText(item.ctaText),
           };
         }),
@@ -961,7 +1040,7 @@ export default function Home() {
         'Curated fits built for real life, tailored enough to feel special, versatile enough to wear anywhere.'
       ),
       ctaText: asText(readyCategory?.ctaText, 'Shop ready to wear'),
-      ctaLink: asText(readyCategory?.link, '/ready-to-wear'),
+      ctaLink: safeHref(readyCategory?.link, '/ready-to-wear'),
       image: asImage(
         managedBannersBySection.get('BANNER_2')?.displayImage,
         managedBannersBySection.get('BANNER_2')?.images?.[0],
@@ -979,7 +1058,7 @@ export default function Home() {
         'Source the same textiles artisans use, from wax prints to hand-woven heritage fabrics.'
       ),
       ctaText: asText(fabricsCategory?.ctaText, 'Browse fabrics'),
-      ctaLink: asText(fabricsCategory?.link, '/fabrics'),
+      ctaLink: safeHref(fabricsCategory?.link, '/fabrics'),
       image: asImage(
         managedBannersBySection.get('BANNER_1')?.displayImage,
         managedBannersBySection.get('BANNER_1')?.images?.[0],
@@ -997,7 +1076,7 @@ export default function Home() {
         'Submit your measurements, choose your fabric, and work directly with a maker who understands the details.'
       ),
       ctaText: asText(customCategory?.ctaText, 'Start a custom order'),
-      ctaLink: asText(customCategory?.link, '/designs'),
+      ctaLink: safeHref(customCategory?.link, '/custom'),
       image: asImage(
         managedBannersBySection.get('PROMO')?.displayImage,
         managedBannersBySection.get('PROMO')?.images?.[0],
@@ -1104,7 +1183,7 @@ export default function Home() {
       ),
       image: asImage(heritageData?.image, '/kimi/heritage_story.jpg'),
       ctaText: asText(heritageData?.ctaText, 'READ OUR STORY'),
-      ctaLink: asText(heritageData?.ctaLink, '/about'),
+      ctaLink: safeHref(heritageData?.ctaLink, '/about'),
     }),
     [heritageData],
   );
@@ -1162,7 +1241,7 @@ export default function Home() {
     if (String(designer?.vendorType || '').toUpperCase() === 'SELLER') {
       return profileId ? `/fabrics?sellerId=${encodeURIComponent(profileId)}` : '/fabrics';
     }
-    return profileId ? `/designs?designerId=${encodeURIComponent(profileId)}` : '/designs';
+    return profileId ? `/custom?designerId=${encodeURIComponent(profileId)}` : '/custom';
   };
 
   const isExternalHref = (href: string) => /^(https?:\/\/|mailto:|tel:)/i.test(String(href || ''));
@@ -1290,27 +1369,31 @@ export default function Home() {
                           heroVariant === 'SPLIT_EDITORIAL'
                             ? 'text-4xl sm:text-5xl lg:text-6xl'
                             : 'text-4xl sm:text-5xl lg:text-6xl xl:text-7xl'
-                        }`}
+                        } max-w-[12ch] break-words`}
                         style={{ color: tokenPalette.heroText }}
                       >
-                        {slide.title}
+                        {clampText(slide.title, 56, 'ZURI KARIBU')}
                       </h1>
-                      <p className="text-lg sm:text-xl mb-8 max-w-lg" style={{ color: tokenPalette.heroMuted }}>
-                        {slide.subtitle}
+                      <p className="mb-8 max-w-[50ch] text-lg line-clamp-3 sm:text-xl" style={{ color: tokenPalette.heroMuted }}>
+                        {clampText(
+                          slide.subtitle,
+                          120,
+                          'Made by Africans. Worn by the world.'
+                        )}
                       </p>
                       <div className="mb-5 flex flex-wrap items-center gap-2">
                         <Link to="/ready-to-wear" className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}>
                           Shop RTW
                         </Link>
-                        <Link to="/designs" className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}>
+                        <Link to="/custom" className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}>
                           Shop CTW
                         </Link>
                         <Link to="/fabrics" className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}>
                           Shop Fabrics
                         </Link>
                       </div>
-                      <Link to={slide.ctaLink || '/ready-to-wear'} className={CTA_BUTTON_LIGHT_CLASS}>
-                        {(slide.ctaText || 'SHOP NOW').toUpperCase()}
+                      <Link to={safeHref(slide.ctaLink, '/ready-to-wear')} className={CTA_BUTTON_LIGHT_CLASS}>
+                        {clampText(slide.ctaText || 'SHOP NOW', 24, 'SHOP NOW').toUpperCase()}
                         <ArrowRight className="w-4 h-4" />
                       </Link>
                       {heroVariant === 'CLEAN_COMMERCE' ? (
@@ -1372,6 +1455,24 @@ export default function Home() {
       </section>
       ) : null}
 
+      <section className="border-y border-black/10 bg-[#f6f3ee] py-6 dark:border-white/10 dark:bg-[#141413]">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {TRUST_BADGES.map((badge) => (
+              <div
+                key={badge.id}
+                className="rounded-md border border-black/10 bg-white/70 px-4 py-3 dark:border-white/15 dark:bg-white/5"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-black/75 dark:text-white/85">
+                  {badge.title}
+                </p>
+                <p className="mt-1 text-xs text-black/60 dark:text-white/70">{badge.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {sectionVisibility.countries ? (
         <section className="bg-[#0b0b0c] py-14 lg:py-20" data-analytics-section="shop-by-country">
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
@@ -1384,6 +1485,21 @@ export default function Home() {
                 <p className="mt-4 max-w-md text-sm leading-relaxed text-white/70">
                   Browse styles rooted in place, from West African prints to East African beadwork.
                 </p>
+                <div className="mt-6 flex flex-wrap gap-2">
+                  {AFRICAN_REGION_OPTIONS.map((regionKey) => (
+                    <button
+                      key={regionKey}
+                      onClick={() => setActiveCountryRegion(regionKey)}
+                      className={`rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors ${
+                        activeCountryRegion === regionKey
+                          ? 'border-white bg-white text-black'
+                          : 'border-white/25 text-white/80 hover:border-white/60'
+                      }`}
+                    >
+                      {regionKey} ({regionCountByKey[regionKey]})
+                    </button>
+                  ))}
+                </div>
                 <Link to="/shop" className={`${CTA_BUTTON_OVERLAY_CLASS} mt-7`}>
                   Explore countries
                   <ArrowRight className="h-4 w-4" />
@@ -1391,15 +1507,25 @@ export default function Home() {
               </div>
               <div className="lg:col-span-7">
                 <div className="divide-y divide-white/10 rounded-md border border-white/10">
-                  {countries.slice(0, 8).map((country) => (
+                  {visibleCountries.slice(0, 12).map((country) => (
                     <Link
                       key={`${country.name}-${country.flag}`}
-                      to={`/country-products?country=${encodeURIComponent(country.name)}`}
+                      to={safeHref(country.href, `/country-products?country=${encodeURIComponent(country.name)}`)}
                       className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-white/80 transition-colors hover:bg-white/5 hover:text-white"
                     >
                       <span className="col-span-1 text-xl">{country.flag}</span>
-                      <span className="col-span-4 text-sm font-semibold">{country.name}</span>
-                      <span className="col-span-7 text-right text-xs text-white/60">{country.fabrics}</span>
+                      <span className="col-span-5 text-sm font-semibold">
+                        {country.name}
+                        <span className="ml-2 text-[10px] uppercase tracking-[0.14em] text-white/55">
+                          {country.region}
+                        </span>
+                      </span>
+                      <span className="col-span-6 text-right text-xs text-white/60">{country.fabrics}</span>
+                      <span className="col-span-12 text-right text-[10px] uppercase tracking-[0.14em] text-white/50">
+                        {country.productCount && country.productCount > 0
+                          ? `${country.productCount.toLocaleString()} products`
+                          : 'Explore products'}
+                      </span>
                     </Link>
                   ))}
                 </div>
@@ -1502,8 +1628,12 @@ export default function Home() {
                   </div>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                   <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                    <h3 className="font-['Oswald'] text-3xl font-bold mb-2">{categories[0].title}</h3>
-                    <p className="text-white/80 text-sm mb-4">{categories[0].description}</p>
+                    <h3 className="mb-2 font-['Oswald'] text-3xl font-bold line-clamp-2">
+                      {clampText(categories[0].title, 40, 'Ready To Wear')}
+                    </h3>
+                    <p className="mb-4 text-sm text-white/80 line-clamp-3">
+                      {clampText(categories[0].description, 100, 'Discover curated looks from African makers.')}
+                    </p>
                     <span className="inline-flex items-center justify-center border border-white text-white rounded-none px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200 group-hover:bg-white group-hover:text-black">
                       {categories[0].ctaText || 'SHOP NOW'}
                     </span>
@@ -1521,8 +1651,12 @@ export default function Home() {
                   </div>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                   <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                    <h3 className="font-['Oswald'] text-2xl font-bold mb-2">{category.title}</h3>
-                    <p className="text-white/80 text-sm mb-4">{category.description}</p>
+                    <h3 className="mb-2 font-['Oswald'] text-2xl font-bold line-clamp-2">
+                      {clampText(category.title, 40, 'Category')}
+                    </h3>
+                    <p className="mb-4 text-sm text-white/80 line-clamp-3">
+                      {clampText(category.description, 100, 'Explore standout products across African fashion.')}
+                    </p>
                     <span className="inline-flex items-center justify-center border border-white text-white rounded-none px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200 group-hover:bg-white group-hover:text-black">
                       {category.ctaText || 'SHOP NOW'}
                     </span>
@@ -1543,8 +1677,12 @@ export default function Home() {
                   </div>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                   <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                    <h3 className="font-['Oswald'] text-2xl font-bold mb-2">{category.title}</h3>
-                    <p className="text-white/80 text-sm mb-4">{category.description}</p>
+                    <h3 className="mb-2 font-['Oswald'] text-2xl font-bold line-clamp-2">
+                      {clampText(category.title, 40, 'Category')}
+                    </h3>
+                    <p className="mb-4 text-sm text-white/80 line-clamp-3">
+                      {clampText(category.description, 100, 'Explore standout products across African fashion.')}
+                    </p>
                     <span className="inline-flex items-center justify-center border border-white text-white rounded-none px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200 group-hover:bg-white group-hover:text-black">
                       {category.ctaText || 'SHOP NOW'}
                     </span>
@@ -1598,7 +1736,7 @@ export default function Home() {
           stripRef={customStripRef}
           onLeft={() => scrollStrip(customStripRef, 'left')}
           onRight={() => scrollStrip(customStripRef, 'right')}
-          viewAllLink="/designs"
+          viewAllLink="/custom"
           loading={featuredLoading}
           descriptionWordLimit={featuredDescriptionWordLimit}
         />
@@ -1702,7 +1840,7 @@ export default function Home() {
                 )}
               </h2>
               <Link
-                to={asText(
+                to={safeHref(
                   managedBannersBySection.get('PROMO')?.ctaLink,
                   managedBannersBySection.get('HERO')?.ctaLink,
                   '/ready-to-wear'
@@ -1787,7 +1925,7 @@ export default function Home() {
 
           <div className="text-center mt-10">
             <Link
-              to="/designs"
+              to="/custom"
               className={CTA_BUTTON_LIGHT_CLASS}
             >
               MEET ALL DESIGNERS
