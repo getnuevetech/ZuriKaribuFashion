@@ -9,7 +9,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 
 // Public Pages
 import HomeKimi from './pages/HomeKimi';
-import HomeEntry from './pages/HomeEntry';
+import Home from './pages/Home';
 import ShopPage from './pages/Shop';
 import Designs from './pages/Designs';
 import DesignDetail from './pages/DesignDetail';
@@ -154,7 +154,8 @@ function App() {
           <Routes>
             {/* Public Routes */}
             <Route element={<MainLayout />}>
-              <Route path="/" element={<HomeEntry />} />
+              <Route path="/" element={<HomeKimi />} />
+              <Route path="/home-legacy" element={<Home />} />
               <Route path="/home-kimi" element={<HomeKimi />} />
               <Route path="/shop" element={<ShopPage />} />
               <Route path="/custom" element={<Designs />} />
