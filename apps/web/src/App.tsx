@@ -83,7 +83,7 @@ import AdminVoipConfiguration from './pages/admin/VoipConfiguration';
 import AdminAuthenticatorSettings from './pages/admin/AuthenticatorSettings';
 import AdminHelpCenterContent from './pages/admin/HelpCenterContent';
 import AdminModuleRuntimeSettings from './pages/admin/ModuleRuntimeSettings';
-import { KimiV14ProductRedirect, KimiV14Redirect } from './pages/KimiV14Redirect';
+import { KimiV14Redirect } from './pages/KimiV14Redirect';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -146,18 +146,8 @@ function App() {
       <Elements stripe={stripePromise}>
         <Router>
           <Routes>
-            <Route path="/" element={<KimiV14Redirect targetPath="/" />} />
-            <Route path="/home-kimi" element={<KimiV14Redirect targetPath="/" />} />
-            <Route path="/ready-to-wear" element={<KimiV14Redirect targetPath="/ready-to-wear" />} />
-            <Route path="/fabrics" element={<KimiV14Redirect targetPath="/fabrics" />} />
-            <Route path="/designs" element={<KimiV14Redirect targetPath="/designs" />} />
-            <Route path="/custom-to-wear" element={<KimiV14Redirect targetPath="/custom-to-wear" />} />
-            <Route path="/custom" element={<KimiV14Redirect targetPath="/designs" />} />
-            <Route path="/product/:id" element={<KimiV14ProductRedirect />} />
-            <Route path="/ready-to-wear/:id" element={<KimiV14ProductRedirect />} />
-            <Route path="/fabrics/:id" element={<KimiV14ProductRedirect />} />
-            <Route path="/designs/:id" element={<KimiV14ProductRedirect />} />
-            <Route path="/custom/:id" element={<KimiV14ProductRedirect />} />
+            <Route path="/" element={<KimiV14Redirect />} />
+            <Route path="/home-kimi" element={<KimiV14Redirect />} />
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
