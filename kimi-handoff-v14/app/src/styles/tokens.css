@@ -1,0 +1,184 @@
+/**
+ * ZuriKaribu Design Tokens v1.0
+ * Kimi-ZK-Handoff-v1
+ */
+
+:root {
+  /* Brand Colors */
+  --color-brand-primary: #E85A3C;
+  --color-brand-primary-hover: #D14A2E;
+  --color-brand-primary-active: #B83D24;
+  --color-brand-secondary: #1A1A1A;
+  
+  /* Neutral Scale - Light */
+  --color-neutral-0: #FFFFFF;
+  --color-neutral-50: #F8F6F1;
+  --color-neutral-100: #F0EDE6;
+  --color-neutral-200: #E5E2DB;
+  --color-neutral-300: #D4D0C8;
+  --color-neutral-400: #A8A49C;
+  --color-neutral-500: #7A7770;
+  --color-neutral-600: #5C5954;
+  --color-neutral-700: #3D3B38;
+  --color-neutral-800: #2A2826;
+  --color-neutral-900: #1A1A1A;
+  
+  /* Semantic - Light */
+  --color-bg-primary: var(--color-neutral-50);
+  --color-bg-secondary: var(--color-neutral-0);
+  --color-bg-tertiary: var(--color-neutral-100);
+  --color-bg-elevated: var(--color-neutral-0);
+  
+  --color-text-primary: var(--color-neutral-900);
+  --color-text-secondary: var(--color-neutral-600);
+  --color-text-tertiary: var(--color-neutral-500);
+  --color-text-muted: var(--color-neutral-400);
+  --color-text-inverse: var(--color-neutral-0);
+  
+  --color-border-default: rgba(26, 26, 26, 0.12);
+  --color-border-strong: rgba(26, 26, 26, 0.20);
+  --color-border-subtle: rgba(26, 26, 26, 0.08);
+  
+  /* Status */
+  --color-success: #2D7A3E;
+  --color-warning: #B8860B;
+  --color-error: #C53030;
+  --color-info: #2B6CB0;
+  
+  /* Focus */
+  --color-focus-ring: rgba(232, 90, 60, 0.4);
+  
+  /* Typography */
+  --font-family-display: "Montserrat", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-body: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-mono: "IBM Plex Mono", monospace;
+  
+  --font-size-xs: 0.6875rem;
+  --font-size-sm: 0.8125rem;
+  --font-size-base: 0.9375rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  --font-size-4xl: 2.25rem;
+  --font-size-5xl: 3rem;
+  --font-size-6xl: 3.75rem;
+  
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+  
+  --line-height-tight: 0.95;
+  --line-height-snug: 1.1;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.625;
+  
+  --letter-spacing-tight: -0.03em;
+  --letter-spacing-normal: -0.01em;
+  --letter-spacing-wide: 0.04em;
+  --letter-spacing-wider: 0.08em;
+  
+  /* Spacing */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+  --space-32: 8rem;
+  
+  /* Layout */
+  --container-max: 1440px;
+  --container-narrow: 960px;
+  --section-padding-x: var(--space-6);
+  --section-padding-y: var(--space-20);
+  
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1);
+  --shadow-focus: 0 0 0 3px var(--color-focus-ring);
+  
+  /* Motion */
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 350ms;
+  --duration-slower: 500ms;
+  
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  
+  /* Z-Index */
+  --z-sticky: 200;
+  --z-modal: 400;
+  
+  /* Accessibility */
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+  --min-touch-target: 44px;
+}
+
+/* Dark Theme */
+.dark {
+  --color-bg-primary: #141414;
+  --color-bg-secondary: #1A1A1A;
+  --color-bg-tertiary: #242424;
+  --color-bg-elevated: #242424;
+  
+  --color-text-primary: #F5F5F5;
+  --color-text-secondary: #A6A6A6;
+  --color-text-tertiary: #8C8C8C;
+  --color-text-muted: #737373;
+  --color-text-inverse: #0D0D0D;
+  
+  --color-border-default: rgba(255, 255, 255, 0.12);
+  --color-border-strong: rgba(255, 255, 255, 0.20);
+  --color-border-subtle: rgba(255, 255, 255, 0.08);
+  
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+    --duration-slower: 0ms;
+  }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  :root {
+    --font-size-6xl: 2.25rem;
+    --font-size-5xl: 1.875rem;
+    --font-size-4xl: 1.5rem;
+  }
+}
+
+@media (max-width: 390px) {
+  :root {
+    --section-padding-x: var(--space-4);
+    --section-padding-y: var(--space-16);
+  }
+}

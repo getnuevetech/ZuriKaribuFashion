@@ -8,15 +8,8 @@ import MainLayout from './layouts/MainLayout';
 import DashboardLayout from './layouts/DashboardLayout';
 
 // Public Pages
-import HomeKimi from './pages/HomeKimi';
 import Home from './pages/Home';
 import ShopPage from './pages/Shop';
-import Designs from './pages/Designs';
-import DesignDetail from './pages/DesignDetail';
-import Fabrics from './pages/Fabrics';
-import FabricDetail from './pages/FabricDetail';
-import ReadyToWear from './pages/ReadyToWear';
-import ReadyToWearDetail from './pages/ReadyToWearDetail';
 import CountryProducts from './pages/CountryProducts';
 import ReadyToWearTryOn from './pages/ReadyToWearTryOn';
 import TryOn from './pages/TryOn';
@@ -90,6 +83,7 @@ import AdminVoipConfiguration from './pages/admin/VoipConfiguration';
 import AdminAuthenticatorSettings from './pages/admin/AuthenticatorSettings';
 import AdminHelpCenterContent from './pages/admin/HelpCenterContent';
 import AdminModuleRuntimeSettings from './pages/admin/ModuleRuntimeSettings';
+import { KimiV14ProductRedirect, KimiV14Redirect } from './pages/KimiV14Redirect';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -152,20 +146,23 @@ function App() {
       <Elements stripe={stripePromise}>
         <Router>
           <Routes>
+            <Route path="/" element={<KimiV14Redirect targetPath="/" />} />
+            <Route path="/home-kimi" element={<KimiV14Redirect targetPath="/" />} />
+            <Route path="/ready-to-wear" element={<KimiV14Redirect targetPath="/ready-to-wear" />} />
+            <Route path="/fabrics" element={<KimiV14Redirect targetPath="/fabrics" />} />
+            <Route path="/designs" element={<KimiV14Redirect targetPath="/designs" />} />
+            <Route path="/custom-to-wear" element={<KimiV14Redirect targetPath="/custom-to-wear" />} />
+            <Route path="/custom" element={<KimiV14Redirect targetPath="/designs" />} />
+            <Route path="/product/:id" element={<KimiV14ProductRedirect />} />
+            <Route path="/ready-to-wear/:id" element={<KimiV14ProductRedirect />} />
+            <Route path="/fabrics/:id" element={<KimiV14ProductRedirect />} />
+            <Route path="/designs/:id" element={<KimiV14ProductRedirect />} />
+            <Route path="/custom/:id" element={<KimiV14ProductRedirect />} />
+
             {/* Public Routes */}
             <Route element={<MainLayout />}>
-              <Route path="/" element={<HomeKimi />} />
               <Route path="/home-legacy" element={<Home />} />
-              <Route path="/home-kimi" element={<HomeKimi />} />
               <Route path="/shop" element={<ShopPage />} />
-              <Route path="/custom" element={<Designs />} />
-              <Route path="/custom/:id" element={<DesignDetail />} />
-              <Route path="/designs" element={<Designs />} />
-              <Route path="/designs/:id" element={<DesignDetail />} />
-              <Route path="/fabrics" element={<Fabrics />} />
-              <Route path="/fabrics/:id" element={<FabricDetail />} />
-              <Route path="/ready-to-wear" element={<ReadyToWear />} />
-              <Route path="/ready-to-wear/:id" element={<ReadyToWearDetail />} />
               <Route path="/country-products" element={<CountryProducts />} />
               <Route path="/ready-to-wear/:id/try-on" element={<ReadyToWearTryOn />} />
               <Route path="/try-on/:id" element={<TryOn />} />

@@ -1,0 +1,313 @@
+/**
+ * ZuriKaribu Design Tokens v14
+ * Kimi-ZK-Handoff-v14
+ * 
+ * Self-hosted design tokens - no external runtime dependencies
+ */
+
+:root {
+  /* ========================================
+     COLOR PALETTE - LIGHT THEME (Default)
+     ======================================== */
+  
+  /* Brand Colors */
+  --color-brand-primary: #E85A3C;
+  --color-brand-primary-hover: #D14A2E;
+  --color-brand-primary-active: #B83D24;
+  --color-brand-secondary: #1A1A1A;
+  
+  /* Neutral Scale */
+  --color-neutral-0: #FFFFFF;
+  --color-neutral-50: #FAF9F7;
+  --color-neutral-100: #F5F3EF;
+  --color-neutral-200: #EBE8E2;
+  --color-neutral-300: #DDD9D1;
+  --color-neutral-400: #B8B3A8;
+  --color-neutral-500: #8A857A;
+  --color-neutral-600: #6B665C;
+  --color-neutral-700: #4A4740;
+  --color-neutral-800: #2D2B27;
+  --color-neutral-900: #1A1917;
+  
+  /* Semantic Colors - Light */
+  --color-bg-primary: var(--color-neutral-50);
+  --color-bg-secondary: var(--color-neutral-0);
+  --color-bg-tertiary: var(--color-neutral-100);
+  --color-bg-elevated: var(--color-neutral-0);
+  --color-bg-inverse: var(--color-neutral-900);
+  
+  --color-text-primary: var(--color-neutral-900);
+  --color-text-secondary: var(--color-neutral-600);
+  --color-text-tertiary: var(--color-neutral-500);
+  --color-text-muted: var(--color-neutral-400);
+  --color-text-inverse: var(--color-neutral-0);
+  
+  /* Border Colors */
+  --color-border-default: rgba(26, 25, 23, 0.1);
+  --color-border-strong: rgba(26, 25, 23, 0.2);
+  --color-border-subtle: rgba(26, 25, 23, 0.05);
+  
+  /* Status Colors */
+  --color-success: #2D7A3E;
+  --color-warning: #B8860B;
+  --color-error: #C53030;
+  --color-info: #2B6CB0;
+  
+  /* Focus Ring */
+  --color-focus-ring: rgba(232, 90, 60, 0.4);
+  
+  /* ========================================
+     COLOR PALETTE - DARK THEME
+     ======================================== */
+  
+  /* Dark Neutral Scale */
+  --color-dark-neutral-0: #0D0D0D;
+  --color-dark-neutral-50: #141413;
+  --color-dark-neutral-100: #1A1917;
+  --color-dark-neutral-200: #242320;
+  --color-dark-neutral-300: #2E2D29;
+  --color-dark-neutral-400: #403E39;
+  --color-dark-neutral-500: #59564F;
+  --color-dark-neutral-600: #736F66;
+  --color-dark-neutral-700: #8C877D;
+  --color-dark-neutral-800: #A69F94;
+  --color-dark-neutral-900: #F5F0E8;
+}
+
+/* Dark Theme Override */
+.dark {
+  --color-bg-primary: var(--color-dark-neutral-50);
+  --color-bg-secondary: var(--color-dark-neutral-100);
+  --color-bg-tertiary: var(--color-dark-neutral-200);
+  --color-bg-elevated: var(--color-dark-neutral-200);
+  --color-bg-inverse: var(--color-dark-neutral-0);
+  
+  --color-text-primary: var(--color-dark-neutral-900);
+  --color-text-secondary: var(--color-dark-neutral-700);
+  --color-text-tertiary: var(--color-dark-neutral-600);
+  --color-text-muted: var(--color-dark-neutral-500);
+  --color-text-inverse: var(--color-dark-neutral-0);
+  
+  --color-border-default: rgba(245, 240, 232, 0.1);
+  --color-border-strong: rgba(245, 240, 232, 0.2);
+  --color-border-subtle: rgba(245, 240, 232, 0.05);
+  
+  /* Shadows - Dark */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.5);
+}
+
+/* ========================================
+   TYPOGRAPHY
+   ======================================== */
+
+:root {
+  /* Font Families */
+  --font-family-display: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-family-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-family-mono: "IBM Plex Mono", "SF Mono", Consolas, monospace;
+  
+  /* Font Sizes */
+  --font-size-2xs: 0.625rem;    /* 10px */
+  --font-size-xs: 0.6875rem;    /* 11px */
+  --font-size-sm: 0.8125rem;    /* 13px */
+  --font-size-base: 0.9375rem;  /* 15px */
+  --font-size-md: 1rem;         /* 16px */
+  --font-size-lg: 1.125rem;     /* 18px */
+  --font-size-xl: 1.25rem;      /* 20px */
+  --font-size-2xl: 1.5rem;      /* 24px */
+  --font-size-3xl: 1.875rem;    /* 30px */
+  --font-size-4xl: 2.25rem;     /* 36px */
+  --font-size-5xl: 3rem;        /* 48px */
+  --font-size-6xl: 3.75rem;     /* 60px */
+  --font-size-7xl: 4.5rem;      /* 72px */
+  --font-size-8xl: 6rem;        /* 96px */
+  
+  /* Font Weights */
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+  --font-weight-black: 900;
+  
+  /* Line Heights */
+  --line-height-tight: 0.95;
+  --line-height-snug: 1.1;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.625;
+  
+  /* Letter Spacing */
+  --letter-spacing-tight: -0.03em;
+  --letter-spacing-normal: -0.01em;
+  --letter-spacing-wide: 0.04em;
+  --letter-spacing-wider: 0.08em;
+  --letter-spacing-widest: 0.12em;
+}
+
+/* ========================================
+   SPACING
+   ======================================== */
+
+:root {
+  --space-0: 0;
+  --space-1: 0.25rem;   /* 4px */
+  --space-2: 0.5rem;    /* 8px */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px */
+  --space-5: 1.25rem;   /* 20px */
+  --space-6: 1.5rem;    /* 24px */
+  --space-8: 2rem;      /* 32px */
+  --space-10: 2.5rem;   /* 40px */
+  --space-12: 3rem;     /* 48px */
+  --space-16: 4rem;     /* 64px */
+  --space-20: 5rem;     /* 80px */
+  --space-24: 6rem;     /* 96px */
+  --space-32: 8rem;     /* 128px */
+  --space-40: 10rem;    /* 160px */
+}
+
+/* ========================================
+   LAYOUT
+   ======================================== */
+
+:root {
+  /* Container */
+  --container-max: 1440px;
+  --container-narrow: 960px;
+  --container-wide: 1600px;
+  
+  /* Grid */
+  --grid-columns: 12;
+  --grid-gap: var(--space-6);
+  
+  /* Section Padding */
+  --section-padding-x: var(--space-6);
+  --section-padding-y: var(--space-20);
+  
+  /* Border Radius */
+  --radius-none: 0;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+  
+  /* Border Width */
+  --border-width-thin: 1px;
+  --border-width-thick: 2px;
+}
+
+/* ========================================
+   SHADOWS
+   ======================================== */
+
+:root {
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1);
+  --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.15);
+  --shadow-focus: 0 0 0 3px var(--color-focus-ring);
+}
+
+/* ========================================
+   MOTION
+   ======================================== */
+
+:root {
+  /* Durations */
+  --duration-instant: 0ms;
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 350ms;
+  --duration-slower: 500ms;
+  
+  /* Easing */
+  --ease-linear: linear;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0ms;
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+    --duration-slower: 0ms;
+  }
+}
+
+/* ========================================
+   Z-INDEX SCALE
+   ======================================== */
+
+:root {
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal-backdrop: 300;
+  --z-modal: 400;
+  --z-popover: 500;
+  --z-tooltip: 600;
+  --z-toast: 700;
+}
+
+/* ========================================
+   ACCESSIBILITY
+   ======================================== */
+
+:root {
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+  --min-touch-target: 44px;
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+  :root {
+    --color-border-default: rgba(26, 25, 23, 0.3);
+    --color-border-strong: rgba(26, 25, 23, 0.5);
+  }
+  
+  .dark {
+    --color-border-default: rgba(245, 240, 232, 0.3);
+    --color-border-strong: rgba(245, 240, 232, 0.5);
+  }
+}
+
+/* ========================================
+   RESPONSIVE BREAKPOINTS
+   ======================================== */
+
+:root {
+  --breakpoint-mobile: 360px;
+  --breakpoint-mobile-lg: 390px;
+  --breakpoint-tablet: 768px;
+  --breakpoint-tablet-lg: 1024px;
+  --breakpoint-desktop: 1440px;
+}
+
+/* Mobile Font Size Adjustments */
+@media (max-width: 768px) {
+  :root {
+    --font-size-6xl: 2.25rem;
+    --font-size-5xl: 1.875rem;
+    --font-size-4xl: 1.5rem;
+  }
+}
+
+@media (max-width: 390px) {
+  :root {
+    --section-padding-x: var(--space-4);
+    --section-padding-y: var(--space-16);
+    --font-size-6xl: 2rem;
+  }
+}
