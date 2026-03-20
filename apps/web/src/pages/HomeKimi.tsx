@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import {
   ArrowRight,
   Calendar,
-  Gem,
   Globe,
   Headphones,
   RefreshCw,
@@ -12,6 +11,9 @@ import {
   Tag,
   Truck,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { api, resolveAssetUrl } from '../services/api';
+import { useCurrencyStore } from '../store/currencyStore';
 import {
   AFRICAN_COUNTRIES,
   AFRICAN_REGION_OPTIONS,
@@ -20,12 +22,84 @@ import {
 
 type ShopTab = 'category' | 'country' | 'occasion' | 'price';
 
+type ProductCardRow = {
+  id: string;
+  name: string;
+  priceUsd: number;
+  image: string;
+  country: string;
+  path: string;
+};
+
 const asFlag = (code: string) =>
   String(code || '')
     .toUpperCase()
     .replace(/[^A-Z]/g, '')
     .slice(0, 2)
     .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
+
+const asText = (...values: any[]) => {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  }
+  return '';
+};
+
+const toNumber = (...values: any[]) => {
+  for (const value of values) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+};
+
+const clampText = (value: unknown, maxLength: number, fallback = '') => {
+  const source = asText(value, fallback);
+  if (!source) return '';
+  if (source.length <= maxLength) return source;
+  return `${source.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
+};
+
+const safeHref = (...values: any[]) => {
+  const fallback = asText(values[values.length - 1], '/shop') || '/shop';
+  const href = asText(...values)
+    .replace(/^\/designs(\/|$)/i, '/custom$1')
+    .replace(/^\/custom-to-wear(\/|$)/i, '/custom$1');
+  if (!href) return fallback;
+  if (/^https?:\/\//i.test(href)) return href;
+  if (!href.startsWith('/')) return fallback;
+  return href;
+};
+
+const normalizeImageUrl = (value: unknown) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
+  return resolveAssetUrl(raw) || raw;
+};
+
+const asImage = (...values: any[]) => {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        const normalized = normalizeImageUrl(entry?.url || entry?.secureUrl || entry?.src || entry?.image || entry);
+        if (normalized) return normalized;
+      }
+      continue;
+    }
+    if (typeof value === 'object' && value) {
+      const obj = value as any;
+      const normalized = normalizeImageUrl(
+        obj.url || obj.secureUrl || obj.src || obj.image || obj.imageUrl || obj.displayImage
+      );
+      if (normalized) return normalized;
+      continue;
+    }
+    const normalized = normalizeImageUrl(value);
+    if (normalized) return normalized;
+  }
+  return '';
+};
 
 const categories = [
   { label: 'Ready to Wear', href: '/ready-to-wear', image: '/kimi/rw_full.jpg', count: '480+' },
@@ -55,37 +129,184 @@ const trustBadges = [
   { icon: Headphones, title: '24/7 Support', subtitle: 'Chat and ticket support anytime' },
 ];
 
+const toProductCard = (row: any, path: string): ProductCardRow => ({
+  id: String(row?.id || crypto.randomUUID()),
+  name: clampText(row?.name, 60, 'Featured Product'),
+  priceUsd: toNumber(row?.priceUsd, row?.price, row?.finalPrice, row?.basePrice, 0),
+  image: asImage(row?.image, row?.images, '/kimi/product1.jpg'),
+  country: clampText(row?.country, 30, 'Africa'),
+  path,
+});
+
+function ProductStrip({ title, rows }: { title: string; rows: ProductCardRow[] }) {
+  const { formatFromUsd } = useCurrencyStore();
+  if (!rows.length) return null;
+  return (
+    <section className="mx-auto w-full max-w-[1400px] px-4 py-8 lg:px-8">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="font-['Oswald'] text-3xl font-bold">{title}</h3>
+      </div>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        {rows.slice(0, 4).map((row) => (
+          <Link key={row.id} to={row.path} className="group block">
+            <div className="relative aspect-[3/4] overflow-hidden border border-black/15 bg-white">
+              <img src={row.image} alt={row.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+            </div>
+            <p className="mt-2 line-clamp-2 text-sm font-semibold">{row.name}</p>
+            <p className="text-xs text-black/60">{row.country}</p>
+            <p className="text-sm font-semibold">{formatFromUsd(row.priceUsd)}</p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function HomeKimi() {
   const [tab, setTab] = useState<ShopTab>('category');
   const [region, setRegion] = useState<'ALL' | AfricanRegion>('ALL');
+  const { data: heroSlidesData } = useQuery({
+    queryKey: ['homeKimiHeroSlides'],
+    queryFn: async () => {
+      const response = await api.homepage.getHeroSlides();
+      return response.success ? response.data : null;
+    },
+  });
+  const { data: categoriesData } = useQuery({
+    queryKey: ['homeKimiCategories'],
+    queryFn: async () => {
+      const response = await api.homepageSections.getCategories();
+      return response.success ? response.data : null;
+    },
+  });
+  const { data: countriesData } = useQuery({
+    queryKey: ['homeKimiCountries'],
+    queryFn: async () => {
+      const response = await api.homepageSections.getCountries();
+      return response.success ? response.data : null;
+    },
+  });
+  const { data: featuredData } = useQuery({
+    queryKey: ['homeKimiFeatured'],
+    queryFn: async () => {
+      const response = await api.homepage.getAllFeatured();
+      return response.success ? response.data : null;
+    },
+  });
+  const { data: designerSpotlightsData } = useQuery({
+    queryKey: ['homeKimiDesignerSpotlights'],
+    queryFn: async () => {
+      const response = await api.homepageSections.getDesignerSpotlights();
+      return response.success ? response.data : null;
+    },
+  });
+
+  const heroSlide = useMemo(() => {
+    const source = Array.isArray(heroSlidesData) && heroSlidesData.length > 0 ? heroSlidesData[0] : null;
+    return {
+      image: asImage(source?.image, '/kimi/hero_model.jpg'),
+      title: clampText(source?.title, 56, 'ZURI KARIBU'),
+      subtitle: clampText(source?.subtitle, 120, 'Made by Africans. Worn by the world.'),
+      ctaText: clampText(source?.ctaText, 24, 'Shop now'),
+      ctaLink: safeHref(source?.ctaLink, '/shop'),
+    };
+  }, [heroSlidesData]);
+
+  const dynamicCategories = useMemo(() => {
+    const source = Array.isArray(categoriesData) && categoriesData.length > 0 ? categoriesData : [];
+    if (!source.length) return categories;
+    return source.slice(0, 4).map((row: any, index: number) => ({
+      label: clampText(row?.title, 40, categories[index % categories.length].label),
+      href: safeHref(row?.ctaLink, row?.link, categories[index % categories.length].href),
+      image: asImage(row?.image, row?.images, categories[index % categories.length].image),
+      count: clampText(
+        row?.countText,
+        16,
+        toNumber(row?.count, row?.productCount, 0) > 0
+          ? `${toNumber(row?.count, row?.productCount, 0).toLocaleString()}+`
+          : categories[index % categories.length].count
+      ),
+    }));
+  }, [categoriesData]);
+
+  const mergedCountries = useMemo(() => {
+    const backendRows = Array.isArray(countriesData) ? countriesData : [];
+    const backendByName = new Map<string, any>();
+    for (const row of backendRows) {
+      const name = asText(row?.name, row?.country, '');
+      if (name) backendByName.set(name.toLowerCase(), row);
+    }
+    return AFRICAN_COUNTRIES.map((country) => {
+      const backend = backendByName.get(country.name.toLowerCase()) || null;
+      return {
+        ...country,
+        count: toNumber(backend?.count, backend?.productCount, backend?.products, 0),
+      };
+    });
+  }, [countriesData]);
+
   const filteredCountries = useMemo(
+    () => mergedCountries.filter((country) => (region === 'ALL' ? true : country.region === region)).slice(0, 12),
+    [mergedCountries, region]
+  );
+
+  const featuredDesigns = useMemo(
     () =>
-      AFRICAN_COUNTRIES.filter((country) => (region === 'ALL' ? true : country.region === region)).slice(0, 12),
-    [region]
+      (Array.isArray((featuredData as any)?.FEATURED_DESIGNS) ? (featuredData as any).FEATURED_DESIGNS : []).map(
+        (row: any) => toProductCard(row, `/custom/${row?.id}`)
+      ),
+    [featuredData]
+  );
+  const featuredRtw = useMemo(
+    () =>
+      (Array.isArray((featuredData as any)?.FEATURED_READY_TO_WEAR)
+        ? (featuredData as any).FEATURED_READY_TO_WEAR
+        : []
+      ).map((row: any) => toProductCard(row, `/ready-to-wear/${row?.id}`)),
+    [featuredData]
+  );
+  const featuredFabrics = useMemo(
+    () =>
+      (Array.isArray((featuredData as any)?.FEATURED_FABRICS) ? (featuredData as any).FEATURED_FABRICS : []).map(
+        (row: any) => toProductCard(row, `/fabrics/${row?.id}`)
+      ),
+    [featuredData]
+  );
+
+  const designers = useMemo(
+    () =>
+      (Array.isArray(designerSpotlightsData) ? designerSpotlightsData : []).slice(0, 3).map((row: any, index: number) => ({
+        id: String(row?.id || index),
+        name: clampText(row?.name, 40, 'Designer Spotlight'),
+        image: asImage(row?.image, row?.displayImage, '/kimi/designer_spotlight.jpg'),
+        country: clampText(row?.country, 28, 'Africa'),
+      })),
+    [designerSpotlightsData]
   );
 
   return (
     <div className="min-h-screen bg-[#f8f6f1] text-[#1a1a1a]">
       <section className="grid min-h-[86vh] grid-cols-1 lg:grid-cols-12">
         <div className="relative lg:col-span-7">
-          <img src="/kimi/hero_model.jpg" alt="Kimi hero" className="h-full w-full object-cover" />
+          <img src={heroSlide.image} alt="Kimi hero" className="h-full w-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/15 to-transparent lg:hidden" />
         </div>
         <div className="flex items-center bg-[#f8f6f1] px-6 py-10 lg:col-span-5 lg:px-12">
           <div className="max-w-xl">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6b665c]">Editorial premium</p>
             <h1 className="mt-3 font-['Oswald'] text-5xl font-bold leading-[0.9] md:text-6xl">
-              ZURI <span className="text-[#e85a3c]">KARIBU</span>
+              {heroSlide.title.replace(/KARIBU/i, '').trim()}{' '}
+              <span className="text-[#e85a3c]">KARIBU</span>
             </h1>
             <p className="mt-5 max-w-[46ch] text-base text-[#5b564d]">
-              Made by Africans. Worn by the world. Explore ready-to-wear, custom design, and fabrics in one place.
+              {heroSlide.subtitle}
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
               <Link
-                to="/shop"
+                to={heroSlide.ctaLink}
                 className="inline-flex items-center gap-2 border border-black bg-black px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
               >
-                Shop now
+                {heroSlide.ctaText}
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link to="/ready-to-wear" className="border border-black px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em]">
@@ -142,7 +363,7 @@ export default function HomeKimi() {
 
         {tab === 'category' ? (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            {categories.map((item) => (
+            {dynamicCategories.map((item) => (
               <Link key={item.label} to={item.href} className="group relative aspect-[3/4] overflow-hidden border border-black/15">
                 <img src={item.image} alt={item.label} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
@@ -176,6 +397,7 @@ export default function HomeKimi() {
                   <p className="text-2xl">{asFlag(country.code)}</p>
                   <p className="mt-1 text-xs font-semibold">{country.name}</p>
                   <p className="text-[10px] uppercase tracking-[0.12em] text-black/55">{country.region}</p>
+                  <p className="text-[10px] text-black/50">{country.count > 0 ? `${country.count} products` : 'Explore'}</p>
                 </Link>
               ))}
             </div>
@@ -202,6 +424,28 @@ export default function HomeKimi() {
           </div>
         ) : null}
       </section>
+
+      <ProductStrip title="Featured Ready to Wear" rows={featuredRtw} />
+      <ProductStrip title="Featured Fabrics" rows={featuredFabrics} />
+      <ProductStrip title="Featured Custom Designs" rows={featuredDesigns} />
+
+      {designers.length > 0 ? (
+        <section className="mx-auto w-full max-w-[1400px] px-4 pb-10 pt-2 lg:px-8">
+          <h3 className="mb-4 font-['Oswald'] text-3xl font-bold">Designer Spotlight</h3>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {designers.map((designer) => (
+              <article key={designer.id} className="relative overflow-hidden border border-black/15">
+                <img src={designer.image} alt={designer.name} className="h-[320px] w-full object-cover" loading="lazy" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 p-4 text-white">
+                  <p className="text-xs uppercase tracking-[0.16em] text-white/70">{designer.country}</p>
+                  <p className="font-['Oswald'] text-2xl">{designer.name}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="mx-auto grid w-full max-w-[1400px] grid-cols-1 gap-6 px-4 pb-20 lg:grid-cols-3 lg:px-8">
         <Link to="/ready-to-wear" className="group relative overflow-hidden border border-black/15">
