@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
-const KIMI_V14_PUBLIC_BASE = '/kimi-v14-r20260320-7';
-const KIMI_V14_CACHE_BUST = '20260320-7';
+const KIMI_V14_PUBLIC_BASE = '/kimi-v14-r20260320-8';
+const KIMI_V14_CACHE_BUST = '20260320-8';
 
 const buildKimiUrl = () => {
   const base = `${KIMI_V14_PUBLIC_BASE}/index.html?v=${KIMI_V14_CACHE_BUST}`;
