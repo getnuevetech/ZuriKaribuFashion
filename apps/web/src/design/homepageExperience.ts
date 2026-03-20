@@ -24,6 +24,42 @@ export type HomepageCategoryEntryVariant = (typeof HOMEPAGE_CATEGORY_ENTRY_VARIA
 export const HOMEPAGE_SPOTLIGHT_VARIANTS = ['CAROUSEL', 'SINGLE_FEATURE', 'MOSAIC'] as const;
 export type HomepageSpotlightVariant = (typeof HOMEPAGE_SPOTLIGHT_VARIANTS)[number];
 
+export const HOMEPAGE_TEMPLATES = ['LEGACY', 'KIMI'] as const;
+export type HomepageTemplate = (typeof HOMEPAGE_TEMPLATES)[number];
+
+export const HOMEPAGE_ROLLOUT_MODES = ['LIVE', 'PREVIEW_SAFE'] as const;
+export type HomepageRolloutMode = (typeof HOMEPAGE_ROLLOUT_MODES)[number];
+
+export const HOMEPAGE_TRUST_BADGE_ICONS = [
+  'SHIELD_CHECK',
+  'TRUCK',
+  'REFRESH_CW',
+  'HEADPHONES',
+  'GLOBE',
+  'SHOPPING_BAG',
+] as const;
+export type HomepageTrustBadgeIcon = (typeof HOMEPAGE_TRUST_BADGE_ICONS)[number];
+
+export interface HomepageTrustBadge {
+  title: string;
+  subtitle: string;
+  icon: HomepageTrustBadgeIcon;
+  enabled: boolean;
+}
+
+export interface HomepageKimiCopy {
+  heroEyebrow: string;
+  shopByEyebrow: string;
+  shopByTitle: string;
+  featuredRtwTitle: string;
+  featuredFabricsTitle: string;
+  featuredDesignsTitle: string;
+  designerSpotlightTitle: string;
+  quickPathRtwLabel: string;
+  quickPathCustomLabel: string;
+  quickPathFabricsLabel: string;
+}
+
 export interface HomepageExperienceSettings {
   enabledModes: HomepageExperienceMode[];
   defaultMode: HomepageExperienceMode;
@@ -37,6 +73,12 @@ export interface HomepageExperienceSettings {
   heroVariant: HomepageHeroVariant;
   categoryEntryVariant: HomepageCategoryEntryVariant;
   spotlightVariant: HomepageSpotlightVariant;
+  homepageTemplate: HomepageTemplate;
+  rolloutMode: HomepageRolloutMode;
+  allowPreviewQuery: boolean;
+  previewQueryParam: string;
+  trustBadges: HomepageTrustBadge[];
+  kimiCopy: HomepageKimiCopy;
 }
 
 export type HomepageCapabilityTier = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -63,6 +105,28 @@ export const HOMEPAGE_EXPERIENCE_DEFAULTS: HomepageExperienceSettings = {
   heroVariant: 'SPLIT_EDITORIAL',
   categoryEntryVariant: 'THREE_COLUMN_CORE',
   spotlightVariant: 'CAROUSEL',
+  homepageTemplate: 'LEGACY',
+  rolloutMode: 'PREVIEW_SAFE',
+  allowPreviewQuery: true,
+  previewQueryParam: 'zkHomePreview',
+  trustBadges: [
+    { icon: 'SHIELD_CHECK', title: 'Authentic Guarantee', subtitle: 'Verified sellers and designers', enabled: true },
+    { icon: 'TRUCK', title: 'Global Shipping', subtitle: 'Reliable delivery worldwide', enabled: true },
+    { icon: 'REFRESH_CW', title: 'Easy Returns', subtitle: 'Simple returns on eligible orders', enabled: true },
+    { icon: 'HEADPHONES', title: '24/7 Support', subtitle: 'Chat and ticket support anytime', enabled: true },
+  ],
+  kimiCopy: {
+    heroEyebrow: 'Editorial premium',
+    shopByEyebrow: 'Discover',
+    shopByTitle: 'Shop by',
+    featuredRtwTitle: 'Featured Ready to Wear',
+    featuredFabricsTitle: 'Featured Fabrics',
+    featuredDesignsTitle: 'Featured Custom Designs',
+    designerSpotlightTitle: 'Designer Spotlight',
+    quickPathRtwLabel: 'Ready to Wear',
+    quickPathCustomLabel: 'Custom',
+    quickPathFabricsLabel: 'Fabrics',
+  },
 };
 
 const asUniqueList = <T extends string>(values: unknown, allowed: readonly T[], fallback: readonly T[]): T[] => {
@@ -125,6 +189,67 @@ export const normalizeHomepageExperienceSettings = (
   )
     ? (String(row.spotlightVariant || '').trim().toUpperCase() as HomepageSpotlightVariant)
     : HOMEPAGE_EXPERIENCE_DEFAULTS.spotlightVariant;
+  const homepageTemplate = HOMEPAGE_TEMPLATES.includes(
+    String(row.homepageTemplate || '').trim().toUpperCase() as HomepageTemplate
+  )
+    ? (String(row.homepageTemplate || '').trim().toUpperCase() as HomepageTemplate)
+    : HOMEPAGE_EXPERIENCE_DEFAULTS.homepageTemplate;
+  const rolloutMode = HOMEPAGE_ROLLOUT_MODES.includes(
+    String(row.rolloutMode || '').trim().toUpperCase() as HomepageRolloutMode
+  )
+    ? (String(row.rolloutMode || '').trim().toUpperCase() as HomepageRolloutMode)
+    : HOMEPAGE_EXPERIENCE_DEFAULTS.rolloutMode;
+  const previewQueryParamCandidate = String(row.previewQueryParam || '').trim();
+  const previewQueryParam = /^[A-Za-z0-9_-]{2,40}$/.test(previewQueryParamCandidate)
+    ? previewQueryParamCandidate
+    : HOMEPAGE_EXPERIENCE_DEFAULTS.previewQueryParam;
+  const trustBadgeRows = Array.isArray(row.trustBadges) ? row.trustBadges : [];
+  const trustBadges = trustBadgeRows
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const item = entry as Record<string, unknown>;
+      const title = String(item.title || '').trim().slice(0, 48);
+      const subtitle = String(item.subtitle || '').trim().slice(0, 90);
+      if (!title || !subtitle) return null;
+      const iconCandidate = String(item.icon || '').trim().toUpperCase() as HomepageTrustBadgeIcon;
+      const icon = HOMEPAGE_TRUST_BADGE_ICONS.includes(iconCandidate)
+        ? iconCandidate
+        : HOMEPAGE_EXPERIENCE_DEFAULTS.trustBadges[0].icon;
+      return {
+        title,
+        subtitle,
+        icon,
+        enabled: item.enabled !== false,
+      } as HomepageTrustBadge;
+    })
+    .filter((entry): entry is HomepageTrustBadge => Boolean(entry))
+    .slice(0, 6);
+  const copyInput = row.kimiCopy && typeof row.kimiCopy === 'object' ? (row.kimiCopy as Record<string, unknown>) : {};
+  const copyDefaults = HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy;
+  const kimiCopy: HomepageKimiCopy = {
+    heroEyebrow: String(copyInput.heroEyebrow || copyDefaults.heroEyebrow).trim().slice(0, 40) || copyDefaults.heroEyebrow,
+    shopByEyebrow: String(copyInput.shopByEyebrow || copyDefaults.shopByEyebrow).trim().slice(0, 40) || copyDefaults.shopByEyebrow,
+    shopByTitle: String(copyInput.shopByTitle || copyDefaults.shopByTitle).trim().slice(0, 60) || copyDefaults.shopByTitle,
+    featuredRtwTitle:
+      String(copyInput.featuredRtwTitle || copyDefaults.featuredRtwTitle).trim().slice(0, 60) || copyDefaults.featuredRtwTitle,
+    featuredFabricsTitle:
+      String(copyInput.featuredFabricsTitle || copyDefaults.featuredFabricsTitle).trim().slice(0, 60) ||
+      copyDefaults.featuredFabricsTitle,
+    featuredDesignsTitle:
+      String(copyInput.featuredDesignsTitle || copyDefaults.featuredDesignsTitle).trim().slice(0, 60) ||
+      copyDefaults.featuredDesignsTitle,
+    designerSpotlightTitle:
+      String(copyInput.designerSpotlightTitle || copyDefaults.designerSpotlightTitle).trim().slice(0, 60) ||
+      copyDefaults.designerSpotlightTitle,
+    quickPathRtwLabel:
+      String(copyInput.quickPathRtwLabel || copyDefaults.quickPathRtwLabel).trim().slice(0, 32) || copyDefaults.quickPathRtwLabel,
+    quickPathCustomLabel:
+      String(copyInput.quickPathCustomLabel || copyDefaults.quickPathCustomLabel).trim().slice(0, 32) ||
+      copyDefaults.quickPathCustomLabel,
+    quickPathFabricsLabel:
+      String(copyInput.quickPathFabricsLabel || copyDefaults.quickPathFabricsLabel).trim().slice(0, 32) ||
+      copyDefaults.quickPathFabricsLabel,
+  };
 
   return {
     enabledModes,
@@ -139,6 +264,12 @@ export const normalizeHomepageExperienceSettings = (
     heroVariant,
     categoryEntryVariant,
     spotlightVariant,
+    homepageTemplate,
+    rolloutMode,
+    allowPreviewQuery: row.allowPreviewQuery !== false,
+    previewQueryParam,
+    trustBadges: trustBadges.length > 0 ? trustBadges : [...HOMEPAGE_EXPERIENCE_DEFAULTS.trustBadges],
+    kimiCopy,
   };
 };
 

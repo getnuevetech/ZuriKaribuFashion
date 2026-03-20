@@ -8727,6 +8727,28 @@ const homepageSectionsApi = {
         heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
         categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
         spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+        homepageTemplate: 'LEGACY' | 'KIMI';
+        rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
+        allowPreviewQuery: boolean;
+        previewQueryParam: string;
+        trustBadges: Array<{
+          title: string;
+          subtitle: string;
+          icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
+          enabled: boolean;
+        }>;
+        kimiCopy: {
+          heroEyebrow: string;
+          shopByEyebrow: string;
+          shopByTitle: string;
+          featuredRtwTitle: string;
+          featuredFabricsTitle: string;
+          featuredDesignsTitle: string;
+          designerSpotlightTitle: string;
+          quickPathRtwLabel: string;
+          quickPathCustomLabel: string;
+          quickPathFabricsLabel: string;
+        };
       };
     }>('/homepage-sections/experience-settings'),
 
@@ -8850,6 +8872,28 @@ const homepageSectionsApi = {
         heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
         categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
         spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+        homepageTemplate: 'LEGACY' | 'KIMI';
+        rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
+        allowPreviewQuery: boolean;
+        previewQueryParam: string;
+        trustBadges: Array<{
+          title: string;
+          subtitle: string;
+          icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
+          enabled: boolean;
+        }>;
+        kimiCopy: {
+          heroEyebrow: string;
+          shopByEyebrow: string;
+          shopByTitle: string;
+          featuredRtwTitle: string;
+          featuredFabricsTitle: string;
+          featuredDesignsTitle: string;
+          designerSpotlightTitle: string;
+          quickPathRtwLabel: string;
+          quickPathCustomLabel: string;
+          quickPathFabricsLabel: string;
+        };
         source?: 'DATABASE' | 'DEFAULT';
         updatedAt?: string | null;
       };
@@ -8867,6 +8911,28 @@ const homepageSectionsApi = {
     heroVariant?: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
     categoryEntryVariant?: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
     spotlightVariant?: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+    homepageTemplate?: 'LEGACY' | 'KIMI';
+    rolloutMode?: 'LIVE' | 'PREVIEW_SAFE';
+    allowPreviewQuery?: boolean;
+    previewQueryParam?: string;
+    trustBadges?: Array<{
+      title: string;
+      subtitle: string;
+      icon?: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
+      enabled?: boolean;
+    }>;
+    kimiCopy?: {
+      heroEyebrow?: string;
+      shopByEyebrow?: string;
+      shopByTitle?: string;
+      featuredRtwTitle?: string;
+      featuredFabricsTitle?: string;
+      featuredDesignsTitle?: string;
+      designerSpotlightTitle?: string;
+      quickPathRtwLabel?: string;
+      quickPathCustomLabel?: string;
+      quickPathFabricsLabel?: string;
+    };
   }) =>
     apiService.put<{
       success: boolean;
@@ -8883,6 +8949,28 @@ const homepageSectionsApi = {
         heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
         categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
         spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+        homepageTemplate: 'LEGACY' | 'KIMI';
+        rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
+        allowPreviewQuery: boolean;
+        previewQueryParam: string;
+        trustBadges: Array<{
+          title: string;
+          subtitle: string;
+          icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
+          enabled: boolean;
+        }>;
+        kimiCopy: {
+          heroEyebrow: string;
+          shopByEyebrow: string;
+          shopByTitle: string;
+          featuredRtwTitle: string;
+          featuredFabricsTitle: string;
+          featuredDesignsTitle: string;
+          designerSpotlightTitle: string;
+          quickPathRtwLabel: string;
+          quickPathCustomLabel: string;
+          quickPathFabricsLabel: string;
+        };
       };
     }>('/homepage-sections/admin/experience-settings', data),
   updateAdminAuthPageSettings: (data: Partial<AuthPageSettingsPayload>) =>

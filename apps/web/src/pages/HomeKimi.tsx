@@ -15,6 +15,10 @@ import { useQuery } from '@tanstack/react-query';
 import { api, resolveAssetUrl } from '../services/api';
 import { useCurrencyStore } from '../store/currencyStore';
 import {
+  HOMEPAGE_EXPERIENCE_DEFAULTS,
+  normalizeHomepageExperienceSettings,
+} from '../design/homepageExperience';
+import {
   AFRICAN_COUNTRIES,
   AFRICAN_REGION_OPTIONS,
   type AfricanRegion,
@@ -29,6 +33,11 @@ type ProductCardRow = {
   image: string;
   country: string;
   path: string;
+};
+type TrustBadgeRow = {
+  title: string;
+  subtitle: string;
+  Icon: typeof ShieldCheck;
 };
 
 const asFlag = (code: string) =>
@@ -122,12 +131,14 @@ const priceItems = [
   { label: '$500+', href: '/shop' },
 ];
 
-const trustBadges = [
-  { icon: ShieldCheck, title: 'Authentic Guarantee', subtitle: 'Verified sellers and designers' },
-  { icon: Truck, title: 'Global Shipping', subtitle: 'Reliable delivery worldwide' },
-  { icon: RefreshCw, title: 'Easy Returns', subtitle: 'Simple returns on eligible orders' },
-  { icon: Headphones, title: '24/7 Support', subtitle: 'Chat and ticket support anytime' },
-];
+const TRUST_BADGE_ICON_MAP: Record<string, typeof ShieldCheck> = {
+  SHIELD_CHECK: ShieldCheck,
+  TRUCK: Truck,
+  REFRESH_CW: RefreshCw,
+  HEADPHONES: Headphones,
+  GLOBE: Globe,
+  SHOPPING_BAG: ShoppingBag,
+};
 
 const toProductCard = (row: any, path: string): ProductCardRow => ({
   id: String(row?.id || crypto.randomUUID()),
@@ -200,6 +211,17 @@ export default function HomeKimi() {
       return response.success ? response.data : null;
     },
   });
+  const { data: homepageExperienceData } = useQuery({
+    queryKey: ['homepageExperienceSettings'],
+    queryFn: async () => {
+      const response = await api.homepageSections.getExperienceSettings();
+      return response.success ? response.data : null;
+    },
+  });
+  const homepageExperienceSettings = useMemo(
+    () => normalizeHomepageExperienceSettings(homepageExperienceData || HOMEPAGE_EXPERIENCE_DEFAULTS),
+    [homepageExperienceData]
+  );
 
   const heroSlide = useMemo(() => {
     const source = Array.isArray(heroSlidesData) && heroSlidesData.length > 0 ? heroSlidesData[0] : null;
@@ -283,6 +305,20 @@ export default function HomeKimi() {
       })),
     [designerSpotlightsData]
   );
+  const trustBadges = useMemo<TrustBadgeRow[]>(() => {
+    const source = Array.isArray(homepageExperienceSettings.trustBadges)
+      ? homepageExperienceSettings.trustBadges
+      : HOMEPAGE_EXPERIENCE_DEFAULTS.trustBadges;
+    const activeRows = source.filter((row) => row?.enabled !== false).slice(0, 4);
+    const fallbackRows = HOMEPAGE_EXPERIENCE_DEFAULTS.trustBadges.slice(0, 4);
+    const rows = activeRows.length > 0 ? activeRows : fallbackRows;
+    return rows.map((row) => ({
+      title: clampText(row.title, 48, 'Trust badge'),
+      subtitle: clampText(row.subtitle, 90, ''),
+      Icon: TRUST_BADGE_ICON_MAP[String(row.icon || '').toUpperCase()] || ShieldCheck,
+    }));
+  }, [homepageExperienceSettings.trustBadges]);
+  const kimiCopy = homepageExperienceSettings.kimiCopy || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy;
 
   return (
     <div className="min-h-screen bg-[#f8f6f1] text-[#1a1a1a]">
@@ -293,7 +329,7 @@ export default function HomeKimi() {
         </div>
         <div className="flex items-center bg-[#f8f6f1] px-6 py-10 lg:col-span-5 lg:px-12">
           <div className="max-w-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6b665c]">Editorial premium</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6b665c]">{kimiCopy.heroEyebrow}</p>
             <h1 className="mt-3 font-['Oswald'] text-5xl font-bold leading-[0.9] md:text-6xl">
               {heroSlide.title.replace(/KARIBU/i, '').trim()}{' '}
               <span className="text-[#e85a3c]">KARIBU</span>
@@ -310,13 +346,13 @@ export default function HomeKimi() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link to="/ready-to-wear" className="border border-black px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em]">
-                Ready to Wear
+                {kimiCopy.quickPathRtwLabel}
               </Link>
               <Link to="/custom" className="border border-black px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em]">
-                Custom
+                {kimiCopy.quickPathCustomLabel}
               </Link>
               <Link to="/fabrics" className="border border-black px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em]">
-                Fabrics
+                {kimiCopy.quickPathFabricsLabel}
               </Link>
             </div>
           </div>
@@ -325,9 +361,9 @@ export default function HomeKimi() {
 
       <section className="border-y border-black/10 bg-white py-6">
         <div className="mx-auto grid w-full max-w-[1400px] grid-cols-1 gap-3 px-4 sm:grid-cols-2 lg:grid-cols-4 lg:px-8">
-          {trustBadges.map((badge) => (
-            <div key={badge.title} className="flex items-center gap-3 rounded border border-black/10 px-4 py-3">
-              <badge.icon className="h-4 w-4 text-[#e85a3c]" />
+          {trustBadges.map((badge, index) => (
+            <div key={`${badge.title}-${index}`} className="flex items-center gap-3 rounded border border-black/10 px-4 py-3">
+              <badge.Icon className="h-4 w-4 text-[#e85a3c]" />
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.12em]">{badge.title}</p>
                 <p className="text-xs text-black/60">{badge.subtitle}</p>
@@ -339,8 +375,8 @@ export default function HomeKimi() {
 
       <section id="shop" className="mx-auto w-full max-w-[1400px] px-4 py-16 lg:px-8">
         <div className="mb-8 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#6b665c]">Discover</p>
-          <h2 className="mt-2 font-['Oswald'] text-4xl font-bold">Shop by</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#6b665c]">{kimiCopy.shopByEyebrow}</p>
+          <h2 className="mt-2 font-['Oswald'] text-4xl font-bold">{kimiCopy.shopByTitle}</h2>
         </div>
         <div className="mb-6 flex flex-wrap justify-center gap-2">
           <button onClick={() => setTab('category')} className={`px-4 py-2 text-sm border ${tab === 'category' ? 'bg-black text-white' : 'bg-white'}`}>
@@ -425,13 +461,13 @@ export default function HomeKimi() {
         ) : null}
       </section>
 
-      <ProductStrip title="Featured Ready to Wear" rows={featuredRtw} />
-      <ProductStrip title="Featured Fabrics" rows={featuredFabrics} />
-      <ProductStrip title="Featured Custom Designs" rows={featuredDesigns} />
+      <ProductStrip title={kimiCopy.featuredRtwTitle} rows={featuredRtw} />
+      <ProductStrip title={kimiCopy.featuredFabricsTitle} rows={featuredFabrics} />
+      <ProductStrip title={kimiCopy.featuredDesignsTitle} rows={featuredDesigns} />
 
       {designers.length > 0 ? (
         <section className="mx-auto w-full max-w-[1400px] px-4 pb-10 pt-2 lg:px-8">
-          <h3 className="mb-4 font-['Oswald'] text-3xl font-bold">Designer Spotlight</h3>
+          <h3 className="mb-4 font-['Oswald'] text-3xl font-bold">{kimiCopy.designerSpotlightTitle}</h3>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {designers.map((designer) => (
               <article key={designer.id} className="relative overflow-hidden border border-black/15">

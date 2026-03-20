@@ -225,6 +225,28 @@ interface HomepageExperienceSettings {
   heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
   categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
   spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+  homepageTemplate: 'LEGACY' | 'KIMI';
+  rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
+  allowPreviewQuery: boolean;
+  previewQueryParam: string;
+  trustBadges: Array<{
+    title: string;
+    subtitle: string;
+    icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
+    enabled: boolean;
+  }>;
+  kimiCopy: {
+    heroEyebrow: string;
+    shopByEyebrow: string;
+    shopByTitle: string;
+    featuredRtwTitle: string;
+    featuredFabricsTitle: string;
+    featuredDesignsTitle: string;
+    designerSpotlightTitle: string;
+    quickPathRtwLabel: string;
+    quickPathCustomLabel: string;
+    quickPathFabricsLabel: string;
+  };
 }
 
 const FEATURED_DESCRIPTION_PREVIEW_TEXT =
@@ -278,6 +300,114 @@ const HOMEPAGE_EXPERIENCE_DEFAULTS: HomepageExperienceSettings = {
   heroVariant: 'SPLIT_EDITORIAL',
   categoryEntryVariant: 'THREE_COLUMN_CORE',
   spotlightVariant: 'CAROUSEL',
+  homepageTemplate: 'LEGACY',
+  rolloutMode: 'PREVIEW_SAFE',
+  allowPreviewQuery: true,
+  previewQueryParam: 'zkHomePreview',
+  trustBadges: [
+    { icon: 'SHIELD_CHECK', title: 'Authentic Guarantee', subtitle: 'Verified sellers and designers', enabled: true },
+    { icon: 'TRUCK', title: 'Global Shipping', subtitle: 'Reliable delivery worldwide', enabled: true },
+    { icon: 'REFRESH_CW', title: 'Easy Returns', subtitle: 'Simple returns on eligible orders', enabled: true },
+    { icon: 'HEADPHONES', title: '24/7 Support', subtitle: 'Chat and ticket support anytime', enabled: true },
+  ],
+  kimiCopy: {
+    heroEyebrow: 'Editorial premium',
+    shopByEyebrow: 'Discover',
+    shopByTitle: 'Shop by',
+    featuredRtwTitle: 'Featured Ready to Wear',
+    featuredFabricsTitle: 'Featured Fabrics',
+    featuredDesignsTitle: 'Featured Custom Designs',
+    designerSpotlightTitle: 'Designer Spotlight',
+    quickPathRtwLabel: 'Ready to Wear',
+    quickPathCustomLabel: 'Custom',
+    quickPathFabricsLabel: 'Fabrics',
+  },
+};
+const normalizeHomepageExperienceState = (value: any): HomepageExperienceSettings => {
+  const source = value && typeof value === 'object' ? value : {};
+  const trustRows = Array.isArray(source.trustBadges) ? source.trustBadges : [];
+  const trustBadges = trustRows
+    .map((entry: any) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const iconCandidate = String(entry.icon || '').trim().toUpperCase();
+      const icon = (
+        ['SHIELD_CHECK', 'TRUCK', 'REFRESH_CW', 'HEADPHONES', 'GLOBE', 'SHOPPING_BAG'] as const
+      ).includes(iconCandidate as any)
+        ? (iconCandidate as HomepageExperienceSettings['trustBadges'][number]['icon'])
+        : HOMEPAGE_EXPERIENCE_DEFAULTS.trustBadges[0].icon;
+      const title = String(entry.title || '').trim().slice(0, 48);
+      const subtitle = String(entry.subtitle || '').trim().slice(0, 90);
+      if (!title || !subtitle) return null;
+      return {
+        icon,
+        title,
+        subtitle,
+        enabled: entry.enabled !== false,
+      };
+    })
+    .filter((entry): entry is HomepageExperienceSettings['trustBadges'][number] => Boolean(entry))
+    .slice(0, 6);
+  const copyInput = source.kimiCopy && typeof source.kimiCopy === 'object' ? source.kimiCopy : {};
+  return {
+    enabledModes:
+      Array.isArray(source.enabledModes) && source.enabledModes.length > 0
+        ? source.enabledModes
+        : HOMEPAGE_EXPERIENCE_DEFAULTS.enabledModes,
+    defaultMode: source.defaultMode || HOMEPAGE_EXPERIENCE_DEFAULTS.defaultMode,
+    allowUserModeOverride: source.allowUserModeOverride ?? HOMEPAGE_EXPERIENCE_DEFAULTS.allowUserModeOverride,
+    adaptiveByDevice: source.adaptiveByDevice ?? HOMEPAGE_EXPERIENCE_DEFAULTS.adaptiveByDevice,
+    adaptiveByConnection: source.adaptiveByConnection ?? HOMEPAGE_EXPERIENCE_DEFAULTS.adaptiveByConnection,
+    respectReducedMotion: source.respectReducedMotion ?? HOMEPAGE_EXPERIENCE_DEFAULTS.respectReducedMotion,
+    themeModes:
+      Array.isArray(source.themeModes) && source.themeModes.length > 0
+        ? source.themeModes
+        : HOMEPAGE_EXPERIENCE_DEFAULTS.themeModes,
+    defaultThemeMode: source.defaultThemeMode || HOMEPAGE_EXPERIENCE_DEFAULTS.defaultThemeMode,
+    tokenSet: source.tokenSet || HOMEPAGE_EXPERIENCE_DEFAULTS.tokenSet,
+    heroVariant: source.heroVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.heroVariant,
+    categoryEntryVariant: source.categoryEntryVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.categoryEntryVariant,
+    spotlightVariant: source.spotlightVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.spotlightVariant,
+    homepageTemplate: source.homepageTemplate || HOMEPAGE_EXPERIENCE_DEFAULTS.homepageTemplate,
+    rolloutMode: source.rolloutMode || HOMEPAGE_EXPERIENCE_DEFAULTS.rolloutMode,
+    allowPreviewQuery: source.allowPreviewQuery ?? HOMEPAGE_EXPERIENCE_DEFAULTS.allowPreviewQuery,
+    previewQueryParam:
+      /^[A-Za-z0-9_-]{2,40}$/.test(String(source.previewQueryParam || '').trim())
+        ? String(source.previewQueryParam).trim()
+        : HOMEPAGE_EXPERIENCE_DEFAULTS.previewQueryParam,
+    trustBadges: trustBadges.length > 0 ? trustBadges : HOMEPAGE_EXPERIENCE_DEFAULTS.trustBadges,
+    kimiCopy: {
+      heroEyebrow:
+        String(copyInput.heroEyebrow || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.heroEyebrow).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.heroEyebrow,
+      shopByEyebrow:
+        String(copyInput.shopByEyebrow || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.shopByEyebrow).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.shopByEyebrow,
+      shopByTitle:
+        String(copyInput.shopByTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.shopByTitle).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.shopByTitle,
+      featuredRtwTitle:
+        String(copyInput.featuredRtwTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.featuredRtwTitle).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.featuredRtwTitle,
+      featuredFabricsTitle:
+        String(copyInput.featuredFabricsTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.featuredFabricsTitle).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.featuredFabricsTitle,
+      featuredDesignsTitle:
+        String(copyInput.featuredDesignsTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.featuredDesignsTitle).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.featuredDesignsTitle,
+      designerSpotlightTitle:
+        String(copyInput.designerSpotlightTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.designerSpotlightTitle).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.designerSpotlightTitle,
+      quickPathRtwLabel:
+        String(copyInput.quickPathRtwLabel || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.quickPathRtwLabel).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.quickPathRtwLabel,
+      quickPathCustomLabel:
+        String(copyInput.quickPathCustomLabel || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.quickPathCustomLabel).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.quickPathCustomLabel,
+      quickPathFabricsLabel:
+        String(copyInput.quickPathFabricsLabel || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.quickPathFabricsLabel).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.quickPathFabricsLabel,
+    },
+  };
 };
 
 const trimPreviewToWordLimit = (text: string, limit: number) => {
@@ -741,30 +871,7 @@ export default function HomepageSections() {
     try {
       const response = await api.homepageSections.getAdminExperienceSettings();
       if (response.success && response.data) {
-        setHomepageExperienceSettings({
-          enabledModes:
-            Array.isArray(response.data.enabledModes) && response.data.enabledModes.length > 0
-              ? response.data.enabledModes
-              : HOMEPAGE_EXPERIENCE_DEFAULTS.enabledModes,
-          defaultMode: response.data.defaultMode || HOMEPAGE_EXPERIENCE_DEFAULTS.defaultMode,
-          allowUserModeOverride:
-            response.data.allowUserModeOverride ?? HOMEPAGE_EXPERIENCE_DEFAULTS.allowUserModeOverride,
-          adaptiveByDevice: response.data.adaptiveByDevice ?? HOMEPAGE_EXPERIENCE_DEFAULTS.adaptiveByDevice,
-          adaptiveByConnection:
-            response.data.adaptiveByConnection ?? HOMEPAGE_EXPERIENCE_DEFAULTS.adaptiveByConnection,
-          respectReducedMotion:
-            response.data.respectReducedMotion ?? HOMEPAGE_EXPERIENCE_DEFAULTS.respectReducedMotion,
-          themeModes:
-            Array.isArray(response.data.themeModes) && response.data.themeModes.length > 0
-              ? response.data.themeModes
-              : HOMEPAGE_EXPERIENCE_DEFAULTS.themeModes,
-          defaultThemeMode: response.data.defaultThemeMode || HOMEPAGE_EXPERIENCE_DEFAULTS.defaultThemeMode,
-          tokenSet: response.data.tokenSet || HOMEPAGE_EXPERIENCE_DEFAULTS.tokenSet,
-          heroVariant: response.data.heroVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.heroVariant,
-          categoryEntryVariant:
-            response.data.categoryEntryVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.categoryEntryVariant,
-          spotlightVariant: response.data.spotlightVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.spotlightVariant,
-        });
+        setHomepageExperienceSettings(normalizeHomepageExperienceState(response.data));
       }
     } catch (error) {
       console.error('Error fetching homepage experience settings:', error);
@@ -878,24 +985,7 @@ export default function HomepageSections() {
     try {
       const response = await api.homepageSections.updateAdminExperienceSettings(homepageExperienceSettings);
       if (response.success && response.data) {
-        setHomepageExperienceSettings({
-          enabledModes: response.data.enabledModes || HOMEPAGE_EXPERIENCE_DEFAULTS.enabledModes,
-          defaultMode: response.data.defaultMode || HOMEPAGE_EXPERIENCE_DEFAULTS.defaultMode,
-          allowUserModeOverride:
-            response.data.allowUserModeOverride ?? HOMEPAGE_EXPERIENCE_DEFAULTS.allowUserModeOverride,
-          adaptiveByDevice: response.data.adaptiveByDevice ?? HOMEPAGE_EXPERIENCE_DEFAULTS.adaptiveByDevice,
-          adaptiveByConnection:
-            response.data.adaptiveByConnection ?? HOMEPAGE_EXPERIENCE_DEFAULTS.adaptiveByConnection,
-          respectReducedMotion:
-            response.data.respectReducedMotion ?? HOMEPAGE_EXPERIENCE_DEFAULTS.respectReducedMotion,
-          themeModes: response.data.themeModes || HOMEPAGE_EXPERIENCE_DEFAULTS.themeModes,
-          defaultThemeMode: response.data.defaultThemeMode || HOMEPAGE_EXPERIENCE_DEFAULTS.defaultThemeMode,
-          tokenSet: response.data.tokenSet || HOMEPAGE_EXPERIENCE_DEFAULTS.tokenSet,
-          heroVariant: response.data.heroVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.heroVariant,
-          categoryEntryVariant:
-            response.data.categoryEntryVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.categoryEntryVariant,
-          spotlightVariant: response.data.spotlightVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.spotlightVariant,
-        });
+        setHomepageExperienceSettings(normalizeHomepageExperienceState(response.data));
         window.alert('Homepage experience settings saved.');
       }
     } catch (error: any) {
@@ -1522,6 +1612,53 @@ export default function HomepageSections() {
               <option value="MOSAIC">Mosaic</option>
             </select>
           </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Live Homepage Template</label>
+            <select
+              value={homepageExperienceSettings.homepageTemplate}
+              onChange={(e) =>
+                setHomepageExperienceSettings((prev) => ({
+                  ...prev,
+                  homepageTemplate: e.target.value as HomepageExperienceSettings['homepageTemplate'],
+                }))
+              }
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            >
+              <option value="LEGACY">Legacy Home</option>
+              <option value="KIMI">Kimi Home</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Rollout Mode</label>
+            <select
+              value={homepageExperienceSettings.rolloutMode}
+              onChange={(e) =>
+                setHomepageExperienceSettings((prev) => ({
+                  ...prev,
+                  rolloutMode: e.target.value as HomepageExperienceSettings['rolloutMode'],
+                }))
+              }
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            >
+              <option value="PREVIEW_SAFE">Preview-safe (legacy for everyone)</option>
+              <option value="LIVE">Live rollout (uses selected template)</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Preview Query Param</label>
+            <input
+              type="text"
+              value={homepageExperienceSettings.previewQueryParam}
+              onChange={(e) =>
+                setHomepageExperienceSettings((prev) => ({
+                  ...prev,
+                  previewQueryParam: e.target.value.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || 'zkHomePreview',
+                }))
+              }
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="zkHomePreview"
+            />
+          </div>
         </div>
 
         <div className="mt-4 grid gap-2 md:grid-cols-2">
@@ -1581,6 +1718,140 @@ export default function HomepageSections() {
             />
             Force lite mode when reduced-motion is requested
           </label>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={homepageExperienceSettings.allowPreviewQuery}
+              onChange={(e) =>
+                setHomepageExperienceSettings((prev) => ({
+                  ...prev,
+                  allowPreviewQuery: e.target.checked,
+                }))
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            Allow query preview override on "/" (for QA previews)
+          </label>
+        </div>
+
+        <div className="mt-4 rounded-md border border-gray-200 p-3">
+          <h3 className="text-sm font-semibold text-gray-800">Kimi Trust Badges</h3>
+          <p className="mt-1 text-xs text-gray-600">
+            Controls the trust row shown on the Kimi homepage.
+          </p>
+          <div className="mt-3 space-y-3">
+            {homepageExperienceSettings.trustBadges.map((badge, index) => (
+              <div key={`badge-${index}`} className="grid gap-2 rounded border border-gray-200 p-2 md:grid-cols-4">
+                <select
+                  value={badge.icon}
+                  onChange={(e) =>
+                    setHomepageExperienceSettings((prev) => ({
+                      ...prev,
+                      trustBadges: prev.trustBadges.map((row, rowIndex) =>
+                        rowIndex === index
+                          ? {
+                              ...row,
+                              icon: e.target.value as HomepageExperienceSettings['trustBadges'][number]['icon'],
+                            }
+                          : row
+                      ),
+                    }))
+                  }
+                  className="border border-gray-300 px-2 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                >
+                  <option value="SHIELD_CHECK">Shield</option>
+                  <option value="TRUCK">Truck</option>
+                  <option value="REFRESH_CW">Refresh</option>
+                  <option value="HEADPHONES">Headphones</option>
+                  <option value="GLOBE">Globe</option>
+                  <option value="SHOPPING_BAG">Shopping Bag</option>
+                </select>
+                <input
+                  type="text"
+                  value={badge.title}
+                  onChange={(e) =>
+                    setHomepageExperienceSettings((prev) => ({
+                      ...prev,
+                      trustBadges: prev.trustBadges.map((row, rowIndex) =>
+                        rowIndex === index ? { ...row, title: e.target.value.slice(0, 48) } : row
+                      ),
+                    }))
+                  }
+                  className="border border-gray-300 px-2 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                  placeholder="Badge title"
+                />
+                <input
+                  type="text"
+                  value={badge.subtitle}
+                  onChange={(e) =>
+                    setHomepageExperienceSettings((prev) => ({
+                      ...prev,
+                      trustBadges: prev.trustBadges.map((row, rowIndex) =>
+                        rowIndex === index ? { ...row, subtitle: e.target.value.slice(0, 90) } : row
+                      ),
+                    }))
+                  }
+                  className="border border-gray-300 px-2 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                  placeholder="Badge subtitle"
+                />
+                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={badge.enabled}
+                    onChange={(e) =>
+                      setHomepageExperienceSettings((prev) => ({
+                        ...prev,
+                        trustBadges: prev.trustBadges.map((row, rowIndex) =>
+                          rowIndex === index ? { ...row, enabled: e.target.checked } : row
+                        ),
+                      }))
+                    }
+                    className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  Enabled
+                </label>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-md border border-gray-200 p-3">
+          <h3 className="text-sm font-semibold text-gray-800">Kimi Copy Controls</h3>
+          <p className="mt-1 text-xs text-gray-600">
+            Controls key labels for Kimi sections without code changes.
+          </p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {[
+              ['heroEyebrow', 'Hero Eyebrow'],
+              ['shopByEyebrow', 'Shop by Eyebrow'],
+              ['shopByTitle', 'Shop by Title'],
+              ['featuredRtwTitle', 'Featured RTW Title'],
+              ['featuredFabricsTitle', 'Featured Fabrics Title'],
+              ['featuredDesignsTitle', 'Featured Custom Title'],
+              ['designerSpotlightTitle', 'Designer Spotlight Title'],
+              ['quickPathRtwLabel', 'Quick Link: RTW'],
+              ['quickPathCustomLabel', 'Quick Link: Custom'],
+              ['quickPathFabricsLabel', 'Quick Link: Fabrics'],
+            ].map(([key, label]) => (
+              <div key={key} className="space-y-1">
+                <label className="text-xs font-medium uppercase tracking-wide text-gray-600">{label}</label>
+                <input
+                  type="text"
+                  value={(homepageExperienceSettings.kimiCopy as any)[key]}
+                  onChange={(e) =>
+                    setHomepageExperienceSettings((prev) => ({
+                      ...prev,
+                      kimiCopy: {
+                        ...prev.kimiCopy,
+                        [key]: e.target.value,
+                      },
+                    }))
+                  }
+                  className="w-full border border-gray-300 px-2 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="mt-4">
