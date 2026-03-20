@@ -39,6 +39,18 @@ type TrustBadgeRow = {
   subtitle: string;
   Icon: typeof ShieldCheck;
 };
+type KimiCopyRow = {
+  heroEyebrow: string;
+  shopByEyebrow: string;
+  shopByTitle: string;
+  featuredRtwTitle: string;
+  featuredFabricsTitle: string;
+  featuredDesignsTitle: string;
+  designerSpotlightTitle: string;
+  quickPathRtwLabel: string;
+  quickPathCustomLabel: string;
+  quickPathFabricsLabel: string;
+};
 
 const asFlag = (code: string) =>
   String(code || '')
@@ -138,6 +150,24 @@ const TRUST_BADGE_ICON_MAP: Record<string, typeof ShieldCheck> = {
   HEADPHONES: Headphones,
   GLOBE: Globe,
   SHOPPING_BAG: ShoppingBag,
+};
+const V14_TRUST_BADGES_DEFAULTS: Array<{ icon: keyof typeof TRUST_BADGE_ICON_MAP; title: string; subtitle: string }> = [
+  { icon: 'SHIELD_CHECK', title: 'Authentic Guarantee', subtitle: 'Verified sellers and designers' },
+  { icon: 'TRUCK', title: 'Global Shipping', subtitle: 'Reliable delivery worldwide' },
+  { icon: 'REFRESH_CW', title: 'Easy Returns', subtitle: 'Simple returns on eligible orders' },
+  { icon: 'HEADPHONES', title: '24/7 Support', subtitle: 'Chat and ticket support anytime' },
+];
+const V14_KIMI_COPY_DEFAULTS: KimiCopyRow = {
+  heroEyebrow: 'Editorial premium',
+  shopByEyebrow: 'Discover',
+  shopByTitle: 'Shop by',
+  featuredRtwTitle: 'Featured Ready to Wear',
+  featuredFabricsTitle: 'Featured Fabrics',
+  featuredDesignsTitle: 'Featured Custom Designs',
+  designerSpotlightTitle: 'Designer Spotlight',
+  quickPathRtwLabel: 'Ready to Wear',
+  quickPathCustomLabel: 'Custom',
+  quickPathFabricsLabel: 'Fabrics',
 };
 
 const toProductCard = (row: any, path: string): ProductCardRow => ({
@@ -309,16 +339,39 @@ export default function HomeKimi() {
     const source = Array.isArray(homepageExperienceSettings.trustBadges)
       ? homepageExperienceSettings.trustBadges
       : HOMEPAGE_EXPERIENCE_DEFAULTS.trustBadges;
-    const activeRows = source.filter((row) => row?.enabled !== false).slice(0, 4);
-    const fallbackRows = HOMEPAGE_EXPERIENCE_DEFAULTS.trustBadges.slice(0, 4);
-    const rows = activeRows.length > 0 ? activeRows : fallbackRows;
-    return rows.map((row) => ({
-      title: clampText(row.title, 48, 'Trust badge'),
+    const activeRows = source.filter((row) => row?.enabled !== false);
+    const normalizedActiveRows = activeRows.map((row) => ({
+      title: clampText(row.title, 48, ''),
       subtitle: clampText(row.subtitle, 90, ''),
-      Icon: TRUST_BADGE_ICON_MAP[String(row.icon || '').toUpperCase()] || ShieldCheck,
+      icon: String(row.icon || '').toUpperCase(),
     }));
+    const rows: TrustBadgeRow[] = [];
+    for (let index = 0; index < V14_TRUST_BADGES_DEFAULTS.length; index += 1) {
+      const configured = normalizedActiveRows[index];
+      const fallback = V14_TRUST_BADGES_DEFAULTS[index];
+      rows.push({
+        title: configured?.title || fallback.title,
+        subtitle: configured?.subtitle || fallback.subtitle,
+        Icon: TRUST_BADGE_ICON_MAP[configured?.icon || fallback.icon] || TRUST_BADGE_ICON_MAP[fallback.icon],
+      });
+    }
+    return rows;
   }, [homepageExperienceSettings.trustBadges]);
-  const kimiCopy = homepageExperienceSettings.kimiCopy || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy;
+  const kimiCopy = useMemo<KimiCopyRow>(() => {
+    const source = homepageExperienceSettings.kimiCopy || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy || {};
+    return {
+      heroEyebrow: clampText(source.heroEyebrow, 40, V14_KIMI_COPY_DEFAULTS.heroEyebrow),
+      shopByEyebrow: clampText(source.shopByEyebrow, 40, V14_KIMI_COPY_DEFAULTS.shopByEyebrow),
+      shopByTitle: clampText(source.shopByTitle, 60, V14_KIMI_COPY_DEFAULTS.shopByTitle),
+      featuredRtwTitle: clampText(source.featuredRtwTitle, 60, V14_KIMI_COPY_DEFAULTS.featuredRtwTitle),
+      featuredFabricsTitle: clampText(source.featuredFabricsTitle, 60, V14_KIMI_COPY_DEFAULTS.featuredFabricsTitle),
+      featuredDesignsTitle: clampText(source.featuredDesignsTitle, 60, V14_KIMI_COPY_DEFAULTS.featuredDesignsTitle),
+      designerSpotlightTitle: clampText(source.designerSpotlightTitle, 60, V14_KIMI_COPY_DEFAULTS.designerSpotlightTitle),
+      quickPathRtwLabel: clampText(source.quickPathRtwLabel, 32, V14_KIMI_COPY_DEFAULTS.quickPathRtwLabel),
+      quickPathCustomLabel: clampText(source.quickPathCustomLabel, 32, V14_KIMI_COPY_DEFAULTS.quickPathCustomLabel),
+      quickPathFabricsLabel: clampText(source.quickPathFabricsLabel, 32, V14_KIMI_COPY_DEFAULTS.quickPathFabricsLabel),
+    };
+  }, [homepageExperienceSettings.kimiCopy]);
 
   return (
     <div className="min-h-screen bg-[#f8f6f1] text-[#1a1a1a]">
