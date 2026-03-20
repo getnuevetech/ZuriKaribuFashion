@@ -20,4 +20,5 @@ New parallel Kimi homepage preview route:
 Concrete integration blueprint:
 
 - `docs/architecture/kimi-v14-backend-integration-blueprint-v1.md`
+- `docs/architecture/kimi-v14-phase-b-mapping-matrix-v1.md`
 

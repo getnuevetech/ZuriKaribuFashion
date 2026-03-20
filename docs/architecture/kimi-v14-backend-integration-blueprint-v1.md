@@ -229,3 +229,10 @@ If you provide these, integration speed increases significantly:
 - your animated vs static mock references
 - business KPI thresholds for rollout go/no-go
 
+---
+
+## 13) Phase B concrete artifact
+
+- Mapping matrix v1 (Hero, Trust, ShopBy):  
+  `docs/architecture/kimi-v14-phase-b-mapping-matrix-v1.md`
+
