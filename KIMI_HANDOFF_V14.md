@@ -17,3 +17,7 @@ New parallel Kimi homepage preview route:
 
 - `/home-kimi`
 
+Concrete integration blueprint:
+
+- `docs/architecture/kimi-v14-backend-integration-blueprint-v1.md`
+
