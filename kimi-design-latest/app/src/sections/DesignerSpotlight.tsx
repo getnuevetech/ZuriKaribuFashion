@@ -9,120 +9,126 @@ interface DesignerSpotlightProps {
   className?: string;
 }
 
-const spotlightDesigners = [
-  {
-    id: 'west-africa-edit',
-    image: '/designer_spotlight.jpg',
-    title: 'Meet designers across Africa.',
-    description:
-      'Showcasing rotating talent from different countries — each piece carries a name, a place, and a story.',
-    cta: 'See the spotlight'
-  },
-  {
-    id: 'east-africa-edit',
-    image: '/featured_custom_right.jpg',
-    title: 'Discover emerging signatures.',
-    description:
-      'A second spotlight lane highlights rising labels and artisan houses shaping modern African style.',
-    cta: 'View featured designers'
-  }
-];
-
 export default function DesignerSpotlight({ className = '' }: DesignerSpotlightProps) {
   const sectionRef = useRef<HTMLElement>(null);
-  const leftCardRef = useRef<HTMLDivElement>(null);
-  const rightCardRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
-      const cards = [leftCardRef.current, rightCardRef.current].filter(Boolean);
-      if (!cards.length) return;
-
-      // Keep spotlight panels anchored to avoid perceived top gaps.
-      gsap.set(cards, { opacity: 0 });
-      gsap.to(cards, {
-        opacity: 1,
-        duration: 0.7,
-        stagger: 0.1,
-        ease: 'power2.out',
+      const scrollTl = gsap.timeline({
         scrollTrigger: {
           trigger: sectionRef.current,
-          start: 'top 78%',
-          toggleActions: 'play none none reverse',
+          start: 'top top',
+          end: '+=130%',
+          pin: true,
+          scrub: 0.6,
         }
       });
+
+      // ENTRANCE (0%-30%)
+      // Background image
+      scrollTl.fromTo(
+        imageRef.current,
+        { scale: 1.08, opacity: 0.7 },
+        { scale: 1.00, opacity: 1, ease: 'power2.out' },
+        0
+      );
+
+      // Label
+      scrollTl.fromTo(
+        labelRef.current,
+        { y: '-4vh', opacity: 0 },
+        { y: 0, opacity: 1, ease: 'power2.out' },
+        0.1
+      );
+
+      // Bottom panel
+      scrollTl.fromTo(
+        panelRef.current,
+        { y: '35vh', opacity: 0 },
+        { y: 0, opacity: 1, ease: 'power2.out' },
+        0.1
+      );
+
+      // SETTLE (30%-70%): Hold
+
+      // EXIT (70%-100%)
+      scrollTl.fromTo(
+        panelRef.current,
+        { y: 0, opacity: 1 },
+        { y: '12vh', opacity: 0, ease: 'power2.in' },
+        0.7
+      );
+
+      scrollTl.fromTo(
+        imageRef.current,
+        { scale: 1, opacity: 1 },
+        { scale: 1.05, opacity: 0.55, ease: 'power2.in' },
+        0.7
+      );
+
+      scrollTl.fromTo(
+        labelRef.current,
+        { opacity: 1 },
+        { opacity: 0, ease: 'power2.in' },
+        0.75
+      );
+
     }, sectionRef);
 
     return () => ctx.revert();
   }, []);
 
-  const leftDesigner = spotlightDesigners[0];
-  const rightDesigner = spotlightDesigners[1];
-
   return (
     <section 
       ref={sectionRef} 
       id="designers"
-      className={`relative w-full bg-[#F8F6F1] ${className}`}
+      className={`section-pinned bg-[#F8F6F1] ${className}`}
     >
-      <div className="flex flex-col lg:flex-row w-full min-h-screen">
-        <article
-          ref={leftCardRef}
-          className="designer-card relative w-full lg:w-1/2 h-[60vh] lg:h-screen overflow-hidden"
-        >
-          <img
-            src={leftDesigner.image}
-            alt={leftDesigner.title}
-            className="absolute inset-0 w-full h-full object-cover editorial-image"
-            onError={(event) => {
-              // Avoid broken-image icon if asset path is unavailable at runtime.
-              (event.currentTarget as HTMLImageElement).style.opacity = '0';
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/20" />
+      {/* Full-bleed Background Image */}
+      <div 
+        ref={imageRef}
+        className="absolute inset-0 w-full h-full"
+      >
+        <img 
+          src="/designer_spotlight.jpg" 
+          alt="Designer spotlight"
+          className="w-full h-full object-cover editorial-image"
+        />
+      </div>
 
-          <div className="absolute left-[6%] right-[6%] bottom-[6%] dark-panel p-6 md:p-8 z-10">
-            <h3 className="headline-lg text-[clamp(26px,2.8vw,44px)] text-white mb-4">
-              {leftDesigner.title}
+      {/* Top-left Label */}
+      <span 
+        ref={labelRef}
+        className="label-mono text-white/80 absolute left-[4vw] top-[6vh] z-10"
+      >
+        DESIGNER SPOTLIGHT
+      </span>
+
+      {/* Bottom-center Panel */}
+      <div 
+        ref={panelRef}
+        className="absolute left-[18vw] top-[68vh] w-[64vw] dark-panel p-8 z-10"
+      >
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+          <div>
+            <h3 className="headline-lg text-[clamp(28px,3vw,48px)] text-white mb-4">
+              Meet designers across Africa.
             </h3>
-            <p className="text-sm text-white/70 leading-relaxed max-w-xl mb-5">
-              {leftDesigner.description}
+            <p className="text-sm text-white/70 leading-relaxed max-w-lg">
+              Showcasing rotating talent from different countries — each piece carries a name, a place, and a story.
             </p>
-            <a href="#spotlight" className="cta-button inline-flex">
-              <span>{leftDesigner.cta}</span>
-              <ArrowRight className="w-4 h-4" />
-            </a>
           </div>
-        </article>
-
-        <article
-          ref={rightCardRef}
-          className="designer-card relative w-full lg:w-1/2 h-[60vh] lg:h-screen overflow-hidden"
-        >
-          <img
-            src={rightDesigner.image}
-            alt={rightDesigner.title}
-            className="absolute inset-0 w-full h-full object-cover editorial-image"
-            onError={(event) => {
-              // Avoid broken-image icon if asset path is unavailable at runtime.
-              (event.currentTarget as HTMLImageElement).style.opacity = '0';
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/20" />
-
-          <div className="absolute left-[6%] right-[6%] bottom-[6%] dark-panel p-6 md:p-8 z-10">
-            <h3 className="headline-lg text-[clamp(26px,2.8vw,44px)] text-white mb-4">
-              {rightDesigner.title}
-            </h3>
-            <p className="text-sm text-white/70 leading-relaxed max-w-xl mb-5">
-              {rightDesigner.description}
-            </p>
-            <a href="#spotlight" className="cta-button inline-flex">
-              <span>{rightDesigner.cta}</span>
-              <ArrowRight className="w-4 h-4" />
-            </a>
-          </div>
-        </article>
+          <a 
+            href="#spotlight" 
+            className="cta-button flex-shrink-0"
+          >
+            <span>See the spotlight</span>
+            <ArrowRight className="w-4 h-4" />
+          </a>
+        </div>
       </div>
     </section>
   );
