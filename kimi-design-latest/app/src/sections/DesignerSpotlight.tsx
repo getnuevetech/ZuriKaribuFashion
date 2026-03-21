@@ -36,33 +36,18 @@ export default function DesignerSpotlight({ className = '' }: DesignerSpotlightP
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
       const cards = [leftCardRef.current, rightCardRef.current].filter(Boolean);
-      
-      // Set initial state
-      gsap.set(cards, { opacity: 0, y: 40 });
-      
-      // Animate left card
-      gsap.to(leftCardRef.current, {
-        y: 0,
+      if (!cards.length) return;
+
+      // Keep spotlight panels anchored to avoid perceived top gaps.
+      gsap.set(cards, { opacity: 0 });
+      gsap.to(cards, {
         opacity: 1,
-        duration: 0.8,
-        ease: 'power3.out',
+        duration: 0.7,
+        stagger: 0.1,
+        ease: 'power2.out',
         scrollTrigger: {
           trigger: sectionRef.current,
-          start: 'top 75%',
-          toggleActions: 'play none none reverse',
-        }
-      });
-      
-      // Animate right card with delay
-      gsap.to(rightCardRef.current, {
-        y: 0,
-        opacity: 1,
-        duration: 0.8,
-        delay: 0.15,
-        ease: 'power3.out',
-        scrollTrigger: {
-          trigger: sectionRef.current,
-          start: 'top 75%',
+          start: 'top 78%',
           toggleActions: 'play none none reverse',
         }
       });
@@ -71,78 +56,73 @@ export default function DesignerSpotlight({ className = '' }: DesignerSpotlightP
     return () => ctx.revert();
   }, []);
 
+  const leftDesigner = spotlightDesigners[0];
+  const rightDesigner = spotlightDesigners[1];
+
   return (
     <section 
       ref={sectionRef} 
       id="designers"
-      className={`relative w-full min-h-screen bg-[#F8F6F1] ${className}`}
+      className={`relative w-full bg-[#F8F6F1] ${className}`}
     >
       <div className="flex flex-col lg:flex-row w-full min-h-screen">
-        {/* Left Column */}
-        <div 
+        <article
           ref={leftCardRef}
-          className="relative w-full lg:w-1/2 h-[60vh] lg:h-screen overflow-hidden"
+          className="designer-card relative w-full lg:w-1/2 h-[60vh] lg:h-screen overflow-hidden"
         >
-          <div className="absolute inset-0 bg-gray-800">
-            <img
-              src={spotlightDesigners[0].image}
-              alt={spotlightDesigners[0].title}
-              className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
-          </div>
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-          <div className="absolute left-6 right-6 lg:left-10 lg:right-10 bottom-8 lg:bottom-12 bg-black/60 backdrop-blur-sm rounded-xl p-6 lg:p-8 z-10 border border-white/10">
-            <h3 className="text-2xl lg:text-4xl font-semibold text-white mb-3 leading-tight">
-              {spotlightDesigners[0].title}
-            </h3>
-            <p className="text-sm lg:text-base text-white/80 leading-relaxed max-w-lg mb-5">
-              {spotlightDesigners[0].description}
-            </p>
-            <a 
-              href="#spotlight" 
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-full text-sm font-medium hover:bg-white/90 transition-colors"
-            >
-              <span>{spotlightDesigners[0].cta}</span>
-              <ArrowRight className="w-4 h-4" />
-            </a>
-          </div>
-        </div>
+          <img
+            src={leftDesigner.image}
+            alt={leftDesigner.title}
+            className="absolute inset-0 w-full h-full object-cover editorial-image"
+            onError={(event) => {
+              // Avoid broken-image icon if asset path is unavailable at runtime.
+              (event.currentTarget as HTMLImageElement).style.opacity = '0';
+            }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/20" />
 
-        {/* Right Column */}
-        <div 
-          ref={rightCardRef}
-          className="relative w-full lg:w-1/2 h-[60vh] lg:h-screen overflow-hidden"
-        >
-          <div className="absolute inset-0 bg-gray-800">
-            <img
-              src={spotlightDesigners[1].image}
-              alt={spotlightDesigners[1].title}
-              className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
-          </div>
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-          <div className="absolute left-6 right-6 lg:left-10 lg:right-10 bottom-8 lg:bottom-12 bg-black/60 backdrop-blur-sm rounded-xl p-6 lg:p-8 z-10 border border-white/10">
-            <h3 className="text-2xl lg:text-4xl font-semibold text-white mb-3 leading-tight">
-              {spotlightDesigners[1].title}
+          <div className="absolute left-[6%] right-[6%] bottom-[6%] dark-panel p-6 md:p-8 z-10">
+            <h3 className="headline-lg text-[clamp(26px,2.8vw,44px)] text-white mb-4">
+              {leftDesigner.title}
             </h3>
-            <p className="text-sm lg:text-base text-white/80 leading-relaxed max-w-lg mb-5">
-              {spotlightDesigners[1].description}
+            <p className="text-sm text-white/70 leading-relaxed max-w-xl mb-5">
+              {leftDesigner.description}
             </p>
-            <a 
-              href="#featured" 
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-full text-sm font-medium hover:bg-white/90 transition-colors"
-            >
-              <span>{spotlightDesigners[1].cta}</span>
+            <a href="#spotlight" className="cta-button inline-flex">
+              <span>{leftDesigner.cta}</span>
               <ArrowRight className="w-4 h-4" />
             </a>
           </div>
-        </div>
+        </article>
+
+        <article
+          ref={rightCardRef}
+          className="designer-card relative w-full lg:w-1/2 h-[60vh] lg:h-screen overflow-hidden"
+        >
+          <img
+            src={rightDesigner.image}
+            alt={rightDesigner.title}
+            className="absolute inset-0 w-full h-full object-cover editorial-image"
+            onError={(event) => {
+              // Avoid broken-image icon if asset path is unavailable at runtime.
+              (event.currentTarget as HTMLImageElement).style.opacity = '0';
+            }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/20" />
+
+          <div className="absolute left-[6%] right-[6%] bottom-[6%] dark-panel p-6 md:p-8 z-10">
+            <h3 className="headline-lg text-[clamp(26px,2.8vw,44px)] text-white mb-4">
+              {rightDesigner.title}
+            </h3>
+            <p className="text-sm text-white/70 leading-relaxed max-w-xl mb-5">
+              {rightDesigner.description}
+            </p>
+            <a href="#spotlight" className="cta-button inline-flex">
+              <span>{rightDesigner.cta}</span>
+              <ArrowRight className="w-4 h-4" />
+            </a>
+          </div>
+        </article>
       </div>
     </section>
   );
