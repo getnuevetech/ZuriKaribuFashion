@@ -36,23 +36,19 @@ export default function DesignerSpotlight({ className = '' }: DesignerSpotlightP
     const ctx = gsap.context(() => {
       if (!cardsRef.current) return;
       const cards = cardsRef.current.querySelectorAll('.designer-card');
-      gsap.fromTo(
-        cards,
-        { y: 0, opacity: 0.65, scale: 1.02 },
-        {
-          y: 0,
-          opacity: 1,
-          scale: 1,
-          duration: 0.65,
-          stagger: 0.1,
-          ease: 'power2.out',
-          scrollTrigger: {
-            trigger: cardsRef.current,
-            start: 'top 78%',
-            toggleActions: 'play none none reverse',
-          }
+      // Keep spotlight panels anchored to avoid perceived top gaps.
+      gsap.set(cards, { opacity: 0 });
+      gsap.to(cards, {
+        opacity: 1,
+        duration: 0.7,
+        stagger: 0.1,
+        ease: 'power2.out',
+        scrollTrigger: {
+          trigger: cardsRef.current,
+          start: 'top 78%',
+          toggleActions: 'play none none reverse',
         }
-      );
+      });
     }, sectionRef);
 
     return () => ctx.revert();
@@ -71,6 +67,10 @@ export default function DesignerSpotlight({ className = '' }: DesignerSpotlightP
                 src={designer.image}
                 alt={designer.title}
                 className="absolute inset-0 w-full h-full object-cover editorial-image"
+                onError={(event) => {
+                  // Avoid broken-image icon if asset path is unavailable at runtime.
+                  (event.currentTarget as HTMLImageElement).style.opacity = '0';
+                }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/20" />
 
