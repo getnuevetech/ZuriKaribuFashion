@@ -2059,30 +2059,33 @@ export default function AdminProducts() {
             <form onSubmit={saveProduct} className="flex h-[calc(92vh-120px)] flex-col">
               <div className="space-y-3 overflow-y-auto pr-1">
               {!editing && (
-                <select
-                  value={form.type}
-                  onChange={(e) =>
-                    setForm((prev) => {
-                      const nextType = e.target.value as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
-                      return {
-                        ...prev,
-                        type: nextType,
-                        featuredSection: getDefaultFeaturedSection(nextType),
-                        readyVariants:
-                          nextType === 'READY_TO_WEAR'
-                            ? prev.readyVariants.length > 0
-                              ? prev.readyVariants
-                              : [{ size: 'M', color: 'DEFAULT', price: Number(prev.price || 0), stock: minReadyVariantStock }]
-                            : prev.readyVariants,
-                      };
-                    })
-                  }
-                  className="w-full rounded border px-3 py-2"
-                >
-                  <option value="FABRIC">Fabric</option>
-                  <option value="DESIGN">Design</option>
-                  <option value="READY_TO_WEAR">Ready To Wear</option>
-                </select>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Product Type *</label>
+                  <select
+                    value={form.type}
+                    onChange={(e) =>
+                      setForm((prev) => {
+                        const nextType = e.target.value as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+                        return {
+                          ...prev,
+                          type: nextType,
+                          featuredSection: getDefaultFeaturedSection(nextType),
+                          readyVariants:
+                            nextType === 'READY_TO_WEAR'
+                              ? prev.readyVariants.length > 0
+                                ? prev.readyVariants
+                                : [{ size: 'M', color: 'DEFAULT', price: Number(prev.price || 0), stock: minReadyVariantStock }]
+                              : prev.readyVariants,
+                        };
+                      })
+                    }
+                    className="w-full rounded border px-3 py-2"
+                  >
+                    <option value="FABRIC">Fabric</option>
+                    <option value="DESIGN">Design</option>
+                    <option value="READY_TO_WEAR">Ready To Wear</option>
+                  </select>
+                </div>
               )}
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Product Name *</label>
@@ -2147,74 +2150,129 @@ export default function AdminProducts() {
                 </div>
                 {(editing?.type || form.type) === 'FABRIC' ? (
                   <>
-                    <select required={!editing} value={form.sellerId} onChange={(e) => setForm((prev) => ({ ...prev, sellerId: e.target.value }))} className="rounded border px-3 py-2">
-                      <option value="">Select seller</option>
-                      {options.sellers.length === 0 ? (
-                        <option value="" disabled>No sellers available</option>
-                      ) : null}
-                      {options.sellers.map((item) => (
-                        <option key={item.id} value={item.id}>{item.businessName} ({item.country})</option>
-                      ))}
-                    </select>
-                    <select required={!editing} value={form.materialTypeId} onChange={(e) => setForm((prev) => ({ ...prev, materialTypeId: e.target.value }))} className="rounded border px-3 py-2">
-                      <option value="">Select material</option>
-                      {options.materials.map((item) => (
-                        <option key={item.id} value={item.id}>{item.name}</option>
-                      ))}
-                    </select>
-                    <select
-                      required={!editing}
-                      value={form.fabricCategoryId}
-                      onChange={(e) => setForm((prev) => ({ ...prev, fabricCategoryId: e.target.value }))}
-                      className="rounded border px-3 py-2"
-                    >
-                      <option value="">Select fabric</option>
-                      {options.fabricCategories.map((item) => (
-                        <option key={item.id} value={item.id}>{item.name}</option>
-                      ))}
-                    </select>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Seller *</label>
+                      <select
+                        required={!editing}
+                        value={form.sellerId}
+                        onChange={(e) => setForm((prev) => ({ ...prev, sellerId: e.target.value }))}
+                        className="w-full rounded border px-3 py-2"
+                      >
+                        <option value="">Select seller</option>
+                        {options.sellers.length === 0 ? (
+                          <option value="" disabled>No sellers available</option>
+                        ) : null}
+                        {options.sellers.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.businessName} ({item.country})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Material Type *</label>
+                      <select
+                        required={!editing}
+                        value={form.materialTypeId}
+                        onChange={(e) => setForm((prev) => ({ ...prev, materialTypeId: e.target.value }))}
+                        className="w-full rounded border px-3 py-2"
+                      >
+                        <option value="">Select material</option>
+                        {options.materials.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Fabric Category (Fabric) *</label>
+                      <select
+                        required={!editing}
+                        value={form.fabricCategoryId}
+                        onChange={(e) => setForm((prev) => ({ ...prev, fabricCategoryId: e.target.value }))}
+                        className="w-full rounded border px-3 py-2"
+                      >
+                        <option value="">Select fabric</option>
+                        {options.fabricCategories.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </>
                 ) : (
                   <>
-                    <select required={!editing} value={form.designerId} onChange={(e) => setForm((prev) => ({ ...prev, designerId: e.target.value }))} className="rounded border px-3 py-2">
-                      <option value="">Select designer</option>
-                      {options.designers.length === 0 ? (
-                        <option value="" disabled>No designers available</option>
-                      ) : null}
-                      {options.designers.map((item) => (
-                        <option key={item.id} value={item.id}>{item.businessName} ({item.country})</option>
-                      ))}
-                    </select>
-                    <select required={!editing} value={form.categoryId} onChange={(e) => setForm((prev) => ({ ...prev, categoryId: e.target.value }))} className="rounded border px-3 py-2">
-                      <option value="">Select style</option>
-                      {options.categories.map((item) => (
-                        <option key={item.id} value={item.id}>{item.name}</option>
-                      ))}
-                    </select>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Designer *</label>
+                      <select
+                        required={!editing}
+                        value={form.designerId}
+                        onChange={(e) => setForm((prev) => ({ ...prev, designerId: e.target.value }))}
+                        className="w-full rounded border px-3 py-2"
+                      >
+                        <option value="">Select designer</option>
+                        {options.designers.length === 0 ? (
+                          <option value="" disabled>No designers available</option>
+                        ) : null}
+                        {options.designers.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.businessName} ({item.country})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Style Category *</label>
+                      <select
+                        required={!editing}
+                        value={form.categoryId}
+                        onChange={(e) => setForm((prev) => ({ ...prev, categoryId: e.target.value }))}
+                        className="w-full rounded border px-3 py-2"
+                      >
+                        <option value="">Select style</option>
+                        {options.categories.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     {(editing?.type || form.type) === 'READY_TO_WEAR' ? (
                       <>
-                        <select
-                          required
-                          value={form.materialTypeId}
-                          onChange={(e) => setForm((prev) => ({ ...prev, materialTypeId: e.target.value }))}
-                          className="rounded border px-3 py-2"
-                        >
-                          <option value="">Select material type</option>
-                          {options.materials.map((item) => (
-                            <option key={item.id} value={item.id}>{item.name}</option>
-                          ))}
-                        </select>
-                        <select
-                          required
-                          value={form.fabricCategoryId}
-                          onChange={(e) => setForm((prev) => ({ ...prev, fabricCategoryId: e.target.value }))}
-                          className="rounded border px-3 py-2"
-                        >
-                          <option value="">Select fabric</option>
-                          {options.fabricCategories.map((item) => (
-                            <option key={item.id} value={item.id}>{item.name}</option>
-                          ))}
-                        </select>
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-gray-700">Material Type *</label>
+                          <select
+                            required
+                            value={form.materialTypeId}
+                            onChange={(e) => setForm((prev) => ({ ...prev, materialTypeId: e.target.value }))}
+                            className="w-full rounded border px-3 py-2"
+                          >
+                            <option value="">Select material type</option>
+                            {options.materials.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-gray-700">Fabric Category (Fabric) *</label>
+                          <select
+                            required
+                            value={form.fabricCategoryId}
+                            onChange={(e) => setForm((prev) => ({ ...prev, fabricCategoryId: e.target.value }))}
+                            className="w-full rounded border px-3 py-2"
+                          >
+                            <option value="">Select fabric</option>
+                            {options.fabricCategories.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </>
                     ) : null}
                   </>
