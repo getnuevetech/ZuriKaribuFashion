@@ -19,7 +19,6 @@ import {
   DollarSign,
   Image as ImageIcon,
   FileText,
-  Eye,
   CreditCard,
   Truck,
   Sparkles,
@@ -65,7 +64,8 @@ interface DashboardSearchEntry {
   keywords: string[];
 }
 
-const LEGACY_HOMEPAGE_PATHS = ['/admin/homepage', '/admin/homepage-visibility', '/admin/homepage-sections'] as const;
+const LEGACY_HOMEPAGE_PATHS = ['/admin/homepage', '/admin/homepage-visibility'] as const;
+const KIMI_HOMEPAGE_PATHS = ['/admin/homepage-sections', '/admin/kimi-homepage'] as const;
 
 const navItems: Record<DashboardType, NavItem[]> = {
   admin: [
@@ -98,8 +98,8 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'VoIP Management', href: '/admin/voip', icon: PhoneCall },
     { label: 'Banners', href: '/admin/banners', icon: ImageIcon },
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
-    { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: Eye },
-    { label: 'Homepage Sections', href: '/admin/homepage-sections', icon: LayoutGrid },
+    { label: 'Kimi Homepage Manager', href: '/admin/homepage-sections', icon: LayoutGrid },
+    { label: 'Homepage Runtime Switchboard', href: '/admin/homepage-runtime', icon: LayoutGrid },
     { label: 'Category Pages', href: '/admin/category-pages', icon: LayoutGrid },
     { label: 'Blogs', href: '/admin/blogs', icon: FileText },
     { label: 'Help Center Content', href: '/admin/help-center-content', icon: FileText },
@@ -187,6 +187,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isTicketManagementMenuOpen, setIsTicketManagementMenuOpen] = useState(true);
   const [isPaymentMenuOpen, setIsPaymentMenuOpen] = useState(true);
   const [isLegacyMenuOpen, setIsLegacyMenuOpen] = useState(true);
+  const [isKimiMenuOpen, setIsKimiMenuOpen] = useState(true);
   const [isAdminAccountsMenuOpen, setIsAdminAccountsMenuOpen] = useState(true);
   const [isProductManagementMenuOpen, setIsProductManagementMenuOpen] = useState(true);
   const [isAutomationMenuOpen, setIsAutomationMenuOpen] = useState(true);
@@ -215,7 +216,8 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     if (
       (href === '/admin/homepage' ||
         href === '/admin/homepage-visibility' ||
-        href === '/admin/homepage-sections') &&
+        href === '/admin/homepage-sections' ||
+        href === '/admin/homepage-runtime') &&
       !isSuperAdmin
     ) {
       return false;
@@ -270,6 +272,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/homepage': ['homepage:manage'],
       '/admin/homepage-visibility': ['homepage:manage'],
       '/admin/homepage-sections': ['homepage:manage'],
+      '/admin/homepage-runtime': ['homepage:manage'],
       '/admin/category-pages': ['homepage:manage'],
       '/admin/blogs': ['homepage:manage'],
       '/admin/help-center-content': ['help_center:manage|homepage:manage'],
@@ -289,14 +292,16 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     .filter((item) => canAccessAdminNav(item.href) && canAccessModuleNav(item.href))
     .filter((item) => {
       if (userType !== 'admin' || !isSuperAdmin) return true;
-      return item.href !== '/admin/homepage-visibility' && item.href !== '/admin/homepage-sections';
+      return item.href !== '/admin/homepage-visibility';
     });
   const roleLabel = roleLabels[userType] || 'User';
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
   const legacySubmenu = [
-    { label: 'Homepage Manager', href: '/admin/homepage', icon: ChevronRight },
+    { label: 'Legacy Homepage Manager', href: '/admin/homepage', icon: ChevronRight },
     { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: ChevronRight },
-    { label: 'Homepage Sections', href: '/admin/homepage-sections', icon: ChevronRight },
+  ];
+  const kimiSubmenu = [
+    { label: 'Kimi Homepage Manager', href: '/admin/homepage-sections', icon: ChevronRight },
   ];
   const orderManagementSubmenu = [
     { label: 'Order List', href: '/admin/orders?tab=list', icon: ChevronRight },
@@ -516,6 +521,17 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
             })),
           { prefix: 'Legacy' }
         );
+        addSearchEntries(
+          entries,
+          kimiSubmenu
+            .filter((item) => canAccessAdminNav(item.href))
+            .map((item) => ({
+              label: item.label,
+              href: item.href,
+              keywords: ['kimi', 'homepage', 'trust badges', 'copy controls', 'experience'],
+            })),
+          { prefix: 'Kimi Homepage Manager' }
+        );
       }
       addSearchEntries(
         entries,
@@ -719,6 +735,62 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                     {isLegacyMenuOpen && isSidebarOpen ? (
                       <div className="ml-7 space-y-1">
                         {visibleLegacySubmenu.map((subItem) => {
+                          const subMeta = readHrefMeta(subItem.href);
+                          const subActive =
+                            location.pathname === subMeta.pathname &&
+                            (subMeta.tab ? currentTab === subMeta.tab : !currentTab);
+                          const SubIcon = subItem.icon;
+                          return (
+                            <Link
+                              key={subItem.href}
+                              to={subItem.href}
+                              className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
+                                subActive
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <SubIcon className="h-4 w-4" />
+                              <span>{subItem.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+
+              if (userType === 'admin' && item.href === '/admin/homepage-sections' && isSuperAdmin) {
+                const kimiMenuActive = KIMI_HOMEPAGE_PATHS.includes(location.pathname as (typeof KIMI_HOMEPAGE_PATHS)[number]);
+                const visibleKimiSubmenu = kimiSubmenu.filter((subItem) => canAccessAdminNav(subItem.href));
+                if (visibleKimiSubmenu.length === 0) {
+                  return null;
+                }
+                return (
+                  <div key={item.href} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsKimiMenuOpen((prev) => !prev)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
+                        kimiMenuActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {isSidebarOpen ? (
+                        <>
+                          <span className="text-sm font-medium">Kimi Homepage Manager</span>
+                          <span className="ml-auto">
+                            {isKimiMenuOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </span>
+                        </>
+                      ) : null}
+                    </button>
+                    {isKimiMenuOpen && isSidebarOpen ? (
+                      <div className="ml-7 space-y-1">
+                        {visibleKimiSubmenu.map((subItem) => {
                           const subMeta = readHrefMeta(subItem.href);
                           const subActive =
                             location.pathname === subMeta.pathname &&

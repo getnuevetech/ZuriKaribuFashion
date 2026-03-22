@@ -1102,8 +1102,8 @@ export default function HomepageSections() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Homepage Sections</h1>
-          <p className="text-gray-500 mt-1">Manage all dynamic homepage content</p>
+          <h1 className="text-2xl font-bold text-gray-900">Kimi Homepage Manager</h1>
+          <p className="text-gray-500 mt-1">Manage dynamic Kimi homepage content and presentation controls</p>
         </div>
         <Button onClick={() => openModal(activeTab === 'topStrip' ? topStripContent : activeTab === 'statsStrip' ? statsStripContent : null)} className="flex items-center gap-2">
           <Plus className="w-4 h-4" />
@@ -1443,7 +1443,7 @@ export default function HomepageSections() {
 
       <div className="mb-8 rounded-lg border border-gray-200 bg-white p-4">
         <div className="mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Homepage Experience Modes & Guardrails</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Kimi Experience Modes & Controls</h2>
           <p className="mt-1 text-sm text-gray-600">
             Configure adaptive Lite/Standard/Editorial behavior, theme options, and approved section variants.
           </p>
@@ -1612,53 +1612,6 @@ export default function HomepageSections() {
               <option value="MOSAIC">Mosaic</option>
             </select>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Live Homepage Template</label>
-            <select
-              value={homepageExperienceSettings.homepageTemplate}
-              onChange={(e) =>
-                setHomepageExperienceSettings((prev) => ({
-                  ...prev,
-                  homepageTemplate: e.target.value as HomepageExperienceSettings['homepageTemplate'],
-                }))
-              }
-              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
-            >
-              <option value="LEGACY">Legacy Home</option>
-              <option value="KIMI">Kimi Home</option>
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Rollout Mode</label>
-            <select
-              value={homepageExperienceSettings.rolloutMode}
-              onChange={(e) =>
-                setHomepageExperienceSettings((prev) => ({
-                  ...prev,
-                  rolloutMode: e.target.value as HomepageExperienceSettings['rolloutMode'],
-                }))
-              }
-              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
-            >
-              <option value="PREVIEW_SAFE">Preview-safe (legacy for everyone)</option>
-              <option value="LIVE">Live rollout (uses selected template)</option>
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Preview Query Param</label>
-            <input
-              type="text"
-              value={homepageExperienceSettings.previewQueryParam}
-              onChange={(e) =>
-                setHomepageExperienceSettings((prev) => ({
-                  ...prev,
-                  previewQueryParam: e.target.value.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || 'zkHomePreview',
-                }))
-              }
-              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
-              placeholder="zkHomePreview"
-            />
-          </div>
         </div>
 
         <div className="mt-4 grid gap-2 md:grid-cols-2">
@@ -1717,20 +1670,6 @@ export default function HomepageSections() {
               className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
             />
             Force lite mode when reduced-motion is requested
-          </label>
-          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={homepageExperienceSettings.allowPreviewQuery}
-              onChange={(e) =>
-                setHomepageExperienceSettings((prev) => ({
-                  ...prev,
-                  allowPreviewQuery: e.target.checked,
-                }))
-              }
-              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-            />
-            Allow query preview override on "/" (for QA previews)
           </label>
         </div>
 

@@ -83,6 +83,7 @@ import AdminVoipConfiguration from './pages/admin/VoipConfiguration';
 import AdminAuthenticatorSettings from './pages/admin/AuthenticatorSettings';
 import AdminHelpCenterContent from './pages/admin/HelpCenterContent';
 import AdminModuleRuntimeSettings from './pages/admin/ModuleRuntimeSettings';
+import AdminHomepageRuntimeSwitchboard from './pages/admin/HomepageRuntimeSwitchboard';
 import { KimiV14Redirect } from './pages/KimiV14Redirect';
 
 // Seller Pages
@@ -570,6 +571,22 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
                       <AdminHomepageSections />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/kimi-homepage"
+                  element={
+                    <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
+                      <AdminHomepageSections />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/homepage-runtime"
+                  element={
+                    <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
+                      <AdminHomepageRuntimeSwitchboard />
                     </AdminPermissionGuard>
                   }
                 />
