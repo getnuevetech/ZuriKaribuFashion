@@ -1048,6 +1048,12 @@ type HomepageRuntimeAuditEntry = {
   performedByEmail: string | null;
   createdAt: Date | null;
 };
+type HomepageRuntimeAuditFilters = {
+  action?: HomepageRuntimeAuditAction;
+  performedByEmail?: string;
+  from?: Date;
+  to?: Date;
+};
 
 const runtimeRollbackSchema = z.object({
   auditId: z.string().trim().min(1).max(128).optional(),
@@ -2002,8 +2008,60 @@ const parseHomepageRuntimeAuditEntry = (row: any): HomepageRuntimeAuditEntry | n
   };
 };
 
-const listHomepageRuntimeAudit = async (limit: number) => {
-  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.floor(limit))) : 25;
+const parseDateInput = (value: unknown): Date | null => {
+  const raw = getString(value);
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const normalizeHomepageRuntimeAuditFilters = (input: Record<string, unknown>): HomepageRuntimeAuditFilters => {
+  const actionCandidate = String(input.action || '')
+    .trim()
+    .toUpperCase() as HomepageRuntimeAuditAction;
+  const from = parseDateInput(input.from);
+  const to = parseDateInput(input.to);
+  const normalized: HomepageRuntimeAuditFilters = {
+    action: HOMEPAGE_RUNTIME_AUDIT_ACTIONS.includes(actionCandidate) ? actionCandidate : undefined,
+    performedByEmail: getString(input.performedByEmail)?.slice(0, 160),
+    from: from || undefined,
+    to: to || undefined,
+  };
+  if (normalized.from && normalized.to && normalized.from.getTime() > normalized.to.getTime()) {
+    const swap = normalized.from;
+    normalized.from = normalized.to;
+    normalized.to = swap;
+  }
+  return normalized;
+};
+
+const listHomepageRuntimeAudit = async (
+  limit: number,
+  filters: HomepageRuntimeAuditFilters = {},
+  maxLimit = 100
+) => {
+  const normalizedMaxLimit = Number.isFinite(maxLimit) ? Math.max(1, Math.floor(maxLimit)) : 100;
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(normalizedMaxLimit, Math.floor(limit))) : 25;
+  const params: unknown[] = [];
+  const whereParts: string[] = [];
+  if (filters.action) {
+    params.push(filters.action);
+    whereParts.push(`"action" = $${params.length}`);
+  }
+  if (filters.performedByEmail) {
+    params.push(`%${String(filters.performedByEmail).toLowerCase()}%`);
+    whereParts.push(`LOWER(COALESCE("performedByEmail", '')) LIKE $${params.length}`);
+  }
+  if (filters.from) {
+    params.push(filters.from);
+    whereParts.push(`"createdAt" >= $${params.length}`);
+  }
+  if (filters.to) {
+    params.push(filters.to);
+    whereParts.push(`"createdAt" <= $${params.length}`);
+  }
+  params.push(safeLimit);
+  const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
   const rows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT
         "id",
@@ -2017,13 +2075,50 @@ const listHomepageRuntimeAudit = async (limit: number) => {
         "performedByEmail",
         "createdAt"
       FROM "HomepageRuntimeAudit"
+      ${whereClause}
       ORDER BY "createdAt" DESC
-      LIMIT $1`,
-    safeLimit
+      LIMIT $${params.length}`,
+    ...params
   );
   return (Array.isArray(rows) ? rows : [])
     .map((entry) => parseHomepageRuntimeAuditEntry(entry))
     .filter((entry): entry is HomepageRuntimeAuditEntry => Boolean(entry));
+};
+
+const stringifyCsvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+const buildHomepageRuntimeAuditCsv = (entries: HomepageRuntimeAuditEntry[]) => {
+  const header = [
+    'id',
+    'createdAt',
+    'action',
+    'fromTemplate',
+    'fromRolloutMode',
+    'fromAllowPreviewQuery',
+    'fromPreviewQueryParam',
+    'toTemplate',
+    'toRolloutMode',
+    'toAllowPreviewQuery',
+    'toPreviewQueryParam',
+    'performedByEmail',
+    'reason',
+  ];
+  const rows = entries.map((entry) => [
+    entry.id,
+    entry.createdAt ? entry.createdAt.toISOString() : '',
+    entry.action,
+    entry.previous.homepageTemplate,
+    entry.previous.rolloutMode,
+    entry.previous.allowPreviewQuery ? 'true' : 'false',
+    entry.previous.previewQueryParam,
+    entry.next.homepageTemplate,
+    entry.next.rolloutMode,
+    entry.next.allowPreviewQuery ? 'true' : 'false',
+    entry.next.previewQueryParam,
+    entry.performedByEmail || '',
+    entry.reason || '',
+  ]);
+  return [header, ...rows].map((row) => row.map((cell) => stringifyCsvCell(cell)).join(',')).join('\n');
 };
 
 const writeHomepageRuntimeAuditEntry = async (input: {
@@ -3169,6 +3264,36 @@ router.get(
   }
 );
 
+router.post(
+  '/admin/runtime-health/dry-run',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (req, res) => {
+    try {
+      const payload = homepageExperienceSettingsUpdateSchema.parse(req.body || {});
+      const { settings: currentSettings } = await readHomepageExperienceSettings();
+      const nextSettings = normalizeHomepageExperienceSettings({
+        ...currentSettings,
+        ...payload,
+      });
+      const runtimeHealth = await buildHomepageRuntimeHealth(nextSettings);
+      res.json({
+        success: true,
+        data: {
+          runtime: getHomepageRuntimeSnapshot(nextSettings),
+          runtimeHealth,
+        },
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      console.error('Error running homepage runtime dry-run health check:', error);
+      res.status(500).json({ success: false, message: 'Failed to run runtime health dry-run.' });
+    }
+  }
+);
+
 router.get(
   '/admin/runtime-audit',
   authenticate,
@@ -3176,11 +3301,33 @@ router.get(
   async (req, res) => {
     try {
       const limit = Math.max(1, Math.min(100, Math.floor(Number(req.query.limit) || 25)));
-      const entries = await listHomepageRuntimeAudit(limit);
+      const filters = normalizeHomepageRuntimeAuditFilters(req.query as Record<string, unknown>);
+      const entries = await listHomepageRuntimeAudit(limit, filters);
       res.json({ success: true, data: entries });
     } catch (error) {
       console.error('Error fetching homepage runtime audit trail:', error);
       res.status(500).json({ success: false, message: 'Failed to fetch runtime audit trail.' });
+    }
+  }
+);
+
+router.get(
+  '/admin/runtime-audit/export',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (req, res) => {
+    try {
+      const limit = Math.max(1, Math.min(5000, Math.floor(Number(req.query.limit) || 1000)));
+      const filters = normalizeHomepageRuntimeAuditFilters(req.query as Record<string, unknown>);
+      const entries = await listHomepageRuntimeAudit(limit, filters, 5000);
+      const csv = buildHomepageRuntimeAuditCsv(entries);
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="homepage-runtime-audit-${stamp}.csv"`);
+      res.status(200).send(csv);
+    } catch (error) {
+      console.error('Error exporting homepage runtime audit trail:', error);
+      res.status(500).json({ success: false, message: 'Failed to export runtime audit trail.' });
     }
   }
 );

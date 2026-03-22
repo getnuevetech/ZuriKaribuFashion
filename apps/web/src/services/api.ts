@@ -8920,7 +8920,40 @@ const homepageSectionsApi = {
         };
       };
     }>('/homepage-sections/admin/runtime-health'),
-  getAdminRuntimeAudit: (limit = 25) =>
+  dryRunAdminRuntimeHealth: (data: {
+    homepageTemplate?: 'LEGACY' | 'KIMI';
+    rolloutMode?: 'LIVE' | 'PREVIEW_SAFE';
+    allowPreviewQuery?: boolean;
+    previewQueryParam?: string;
+  }) =>
+    apiService.post<{
+      success: boolean;
+      data: {
+        runtime: {
+          homepageTemplate: 'LEGACY' | 'KIMI';
+          rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
+          allowPreviewQuery: boolean;
+          previewQueryParam: string;
+        };
+        runtimeHealth: {
+          ok: boolean;
+          checkedAt: string;
+          checks: Array<{
+            key: string;
+            label: string;
+            status: 'PASS' | 'WARN' | 'FAIL';
+            detail: string;
+          }>;
+        };
+      };
+    }>('/homepage-sections/admin/runtime-health/dry-run', data),
+  getAdminRuntimeAudit: (options?: {
+    limit?: number;
+    action?: 'RUNTIME_SWITCH' | 'RUNTIME_ROLLBACK';
+    performedByEmail?: string;
+    from?: string;
+    to?: string;
+  }) =>
     apiService.get<{
       success: boolean;
       data: Array<{
@@ -8954,7 +8987,38 @@ const homepageSectionsApi = {
         performedByEmail: string | null;
         createdAt: string | null;
       }>;
-    }>(`/homepage-sections/admin/runtime-audit?limit=${Math.max(1, Math.min(100, Math.floor(limit)))}`),
+    }>(
+      (() => {
+        const params = new URLSearchParams();
+        params.set('limit', String(Math.max(1, Math.min(100, Math.floor(Number(options?.limit) || 25)))));
+        if (options?.action) params.set('action', options.action);
+        if (options?.performedByEmail) params.set('performedByEmail', String(options.performedByEmail).trim());
+        if (options?.from) params.set('from', options.from);
+        if (options?.to) params.set('to', options.to);
+        return `/homepage-sections/admin/runtime-audit?${params.toString()}`;
+      })()
+    ),
+  downloadAdminRuntimeAuditCsv: (options?: {
+    limit?: number;
+    action?: 'RUNTIME_SWITCH' | 'RUNTIME_ROLLBACK';
+    performedByEmail?: string;
+    from?: string;
+    to?: string;
+  }) =>
+    httpClient
+      .get<Blob>(
+        (() => {
+          const params = new URLSearchParams();
+          params.set('limit', String(Math.max(1, Math.min(5000, Math.floor(Number(options?.limit) || 1000)))));
+          if (options?.action) params.set('action', options.action);
+          if (options?.performedByEmail) params.set('performedByEmail', String(options.performedByEmail).trim());
+          if (options?.from) params.set('from', options.from);
+          if (options?.to) params.set('to', options.to);
+          return `/homepage-sections/admin/runtime-audit/export?${params.toString()}`;
+        })(),
+        { responseType: 'blob' }
+      )
+      .then((res) => res.data),
   rollbackAdminRuntime: (data?: { auditId?: string; reason?: string }) =>
     apiService.post<{
       success: boolean;

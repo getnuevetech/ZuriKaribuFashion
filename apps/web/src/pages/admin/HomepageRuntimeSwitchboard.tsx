@@ -28,6 +28,7 @@ type RuntimeAuditEntry = {
   performedByEmail: string | null;
   createdAt: string | null;
 };
+type RuntimeAuditFilterAction = 'ALL' | 'RUNTIME_SWITCH' | 'RUNTIME_ROLLBACK';
 
 const DEFAULT_RUNTIME_SETTINGS: HomepageRuntimeSettings = {
   homepageTemplate: 'LEGACY',
@@ -57,10 +58,18 @@ const runtimeSettingsEqual = (a: HomepageRuntimeSettings, b: HomepageRuntimeSett
   a.allowPreviewQuery === b.allowPreviewQuery &&
   a.previewQueryParam === b.previewQueryParam;
 
+const toIsoFromLocalDateTime = (value: string): string | undefined => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return undefined;
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+};
+
 export default function AdminHomepageRuntimeSwitchboard() {
   const [loading, setLoading] = useState(true);
   const [healthLoading, setHealthLoading] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [exportingAudit, setExportingAudit] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
   const [error, setError] = useState('');
@@ -71,6 +80,19 @@ export default function AdminHomepageRuntimeSwitchboard() {
   const [rollbackReason, setRollbackReason] = useState('');
   const [runtimeHealth, setRuntimeHealth] = useState<RuntimeHealth>(EMPTY_HEALTH);
   const [runtimeAudit, setRuntimeAudit] = useState<RuntimeAuditEntry[]>([]);
+  const [selectedRollbackAuditId, setSelectedRollbackAuditId] = useState('');
+  const [auditFilterAction, setAuditFilterAction] = useState<RuntimeAuditFilterAction>('ALL');
+  const [auditFilterEmail, setAuditFilterEmail] = useState('');
+  const [auditFilterFrom, setAuditFilterFrom] = useState('');
+  const [auditFilterTo, setAuditFilterTo] = useState('');
+
+  const buildAuditFilterParams = () => ({
+    limit: 50,
+    action: auditFilterAction === 'ALL' ? undefined : auditFilterAction,
+    performedByEmail: auditFilterEmail.trim() || undefined,
+    from: toIsoFromLocalDateTime(auditFilterFrom),
+    to: toIsoFromLocalDateTime(auditFilterTo),
+  });
 
   const fetchSettings = async () => {
     const response = await api.homepageSections.getAdminExperienceSettings();
@@ -96,18 +118,20 @@ export default function AdminHomepageRuntimeSwitchboard() {
   const fetchAudit = async () => {
     setAuditLoading(true);
     try {
-      const response = await api.homepageSections.getAdminRuntimeAudit(25);
+      const response = await api.homepageSections.getAdminRuntimeAudit(buildAuditFilterParams());
       if (response.success && Array.isArray(response.data)) {
-        setRuntimeAudit(
-          response.data.map((entry) => ({
-            id: String(entry.id || ''),
-            action: entry.action === 'RUNTIME_ROLLBACK' ? 'RUNTIME_ROLLBACK' : 'RUNTIME_SWITCH',
-            reason: String(entry.reason || ''),
-            previous: toRuntimeSettings(entry.previous),
-            next: toRuntimeSettings(entry.next),
-            performedByEmail: entry.performedByEmail ? String(entry.performedByEmail) : null,
-            createdAt: entry.createdAt ? String(entry.createdAt) : null,
-          }))
+        const mapped = response.data.map((entry) => ({
+          id: String(entry.id || ''),
+          action: entry.action === 'RUNTIME_ROLLBACK' ? 'RUNTIME_ROLLBACK' : 'RUNTIME_SWITCH',
+          reason: String(entry.reason || ''),
+          previous: toRuntimeSettings(entry.previous),
+          next: toRuntimeSettings(entry.next),
+          performedByEmail: entry.performedByEmail ? String(entry.performedByEmail) : null,
+          createdAt: entry.createdAt ? String(entry.createdAt) : null,
+        }));
+        setRuntimeAudit(mapped);
+        setSelectedRollbackAuditId((current) =>
+          mapped.some((entry) => entry.id === current) ? current : mapped[0]?.id || ''
         );
       }
     } finally {
@@ -168,12 +192,57 @@ export default function AdminHomepageRuntimeSwitchboard() {
     }
   };
 
+  const handleDryRunHealth = async () => {
+    setHealthLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await api.homepageSections.dryRunAdminRuntimeHealth({
+        homepageTemplate: settings.homepageTemplate,
+        rolloutMode: settings.rolloutMode,
+        allowPreviewQuery: settings.allowPreviewQuery,
+        previewQueryParam: settings.previewQueryParam,
+      });
+      if (response.success && response.data?.runtimeHealth) {
+        setRuntimeHealth(response.data.runtimeHealth);
+        setMessage('Dry-run health check completed for the unsaved runtime draft.');
+      }
+    } catch (healthError: any) {
+      setError(healthError?.response?.data?.message || 'Failed to run runtime health dry-run.');
+    } finally {
+      setHealthLoading(false);
+    }
+  };
+
+  const handleAuditExport = async () => {
+    setExportingAudit(true);
+    setError('');
+    setMessage('');
+    try {
+      const blob = await api.homepageSections.downloadAdminRuntimeAuditCsv(buildAuditFilterParams());
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `homepage-runtime-audit-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.URL.revokeObjectURL(url);
+      setMessage('Runtime audit CSV export downloaded.');
+    } catch (exportError: any) {
+      setError(exportError?.response?.data?.message || 'Failed to export runtime audit.');
+    } finally {
+      setExportingAudit(false);
+    }
+  };
+
   const handleRollback = async () => {
     setRollingBack(true);
     setError('');
     setMessage('');
     try {
       const response = await api.homepageSections.rollbackAdminRuntime({
+        auditId: selectedRollbackAuditId || undefined,
         reason: rollbackReason.trim() || undefined,
       });
       if (response.success) {
@@ -293,6 +362,9 @@ export default function AdminHomepageRuntimeSwitchboard() {
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-3">
+        <Button onClick={handleDryRunHealth} disabled={healthLoading || saving || rollingBack} variant="outline">
+          {healthLoading ? 'Running dry-run...' : 'Dry-run Health Check'}
+        </Button>
         <Button onClick={() => void fetchHealth()} disabled={healthLoading || saving || rollingBack} variant="outline">
           {healthLoading ? 'Checking health...' : 'Refresh Health'}
         </Button>
@@ -341,11 +413,16 @@ export default function AdminHomepageRuntimeSwitchboard() {
 
       <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-gray-900">One-click Rollback</h2>
-          <Button onClick={handleRollback} disabled={rollingBack || saving} variant="outline">
-            {rollingBack ? 'Rolling back...' : 'Rollback to previous runtime'}
+          <h2 className="text-base font-semibold text-gray-900">Rollback (select target from audit)</h2>
+          <Button onClick={handleRollback} disabled={rollingBack || saving || !selectedRollbackAuditId} variant="outline">
+            {rollingBack ? 'Rolling back...' : 'Rollback to selected snapshot'}
           </Button>
         </div>
+        <p className="text-xs text-gray-500">
+          {selectedRollbackAuditId
+            ? `Selected audit ID: ${selectedRollbackAuditId}`
+            : 'Select an audit row below to choose rollback target.'}
+        </p>
         <input
           type="text"
           value={rollbackReason}
@@ -358,14 +435,81 @@ export default function AdminHomepageRuntimeSwitchboard() {
       <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-gray-900">Runtime Audit Trail</h2>
-          <Button onClick={() => void fetchAudit()} disabled={auditLoading || saving || rollingBack} variant="outline">
-            {auditLoading ? 'Refreshing...' : 'Refresh Audit'}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={handleAuditExport} disabled={exportingAudit || auditLoading || saving || rollingBack} variant="outline">
+              {exportingAudit ? 'Exporting...' : 'Export CSV'}
+            </Button>
+            <Button onClick={() => void fetchAudit()} disabled={auditLoading || saving || rollingBack} variant="outline">
+              {auditLoading ? 'Refreshing...' : 'Refresh Audit'}
+            </Button>
+          </div>
         </div>
+
+        <div className="grid gap-3 rounded border border-gray-200 p-3 md:grid-cols-4">
+          <div className="space-y-1">
+            <label className="text-xs font-medium uppercase text-gray-500">Action</label>
+            <select
+              value={auditFilterAction}
+              onChange={(e) => setAuditFilterAction(e.target.value as RuntimeAuditFilterAction)}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            >
+              <option value="ALL">All</option>
+              <option value="RUNTIME_SWITCH">Switch</option>
+              <option value="RUNTIME_ROLLBACK">Rollback</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium uppercase text-gray-500">Performed by (email)</label>
+            <input
+              type="text"
+              value={auditFilterEmail}
+              onChange={(e) => setAuditFilterEmail(e.target.value.slice(0, 160))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="admin@zurikaribu.com"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium uppercase text-gray-500">From</label>
+            <input
+              type="datetime-local"
+              value={auditFilterFrom}
+              onChange={(e) => setAuditFilterFrom(e.target.value)}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium uppercase text-gray-500">To</label>
+            <input
+              type="datetime-local"
+              value={auditFilterTo}
+              onChange={(e) => setAuditFilterTo(e.target.value)}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            />
+          </div>
+          <div className="md:col-span-4 flex flex-wrap justify-end gap-2">
+            <Button onClick={() => void fetchAudit()} disabled={auditLoading || saving || rollingBack} variant="outline">
+              Apply Filters
+            </Button>
+            <Button
+              onClick={() => {
+                setAuditFilterAction('ALL');
+                setAuditFilterEmail('');
+                setAuditFilterFrom('');
+                setAuditFilterTo('');
+              }}
+              disabled={auditLoading || saving || rollingBack}
+              variant="ghost"
+            >
+              Reset Filters
+            </Button>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Select</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-600">When</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-600">Action</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-600">From</th>
@@ -376,7 +520,19 @@ export default function AdminHomepageRuntimeSwitchboard() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {runtimeAudit.map((entry) => (
-                <tr key={entry.id}>
+                <tr
+                  key={entry.id}
+                  className={entry.id === selectedRollbackAuditId ? 'bg-amber-50' : ''}
+                >
+                  <td className="px-3 py-2">
+                    <input
+                      type="radio"
+                      name="runtimeRollbackAuditRow"
+                      checked={entry.id === selectedRollbackAuditId}
+                      onChange={() => setSelectedRollbackAuditId(entry.id)}
+                      className="h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-500"
+                    />
+                  </td>
                   <td className="px-3 py-2 text-gray-600">
                     {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : '-'}
                   </td>
@@ -397,7 +553,7 @@ export default function AdminHomepageRuntimeSwitchboard() {
               ))}
               {runtimeAudit.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-3 text-sm text-gray-500" colSpan={6}>
+                  <td className="px-3 py-3 text-sm text-gray-500" colSpan={7}>
                     No runtime audit records found.
                   </td>
                 </tr>
