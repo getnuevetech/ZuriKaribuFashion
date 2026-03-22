@@ -53,15 +53,45 @@ const mergeAutomationFieldCatalog = async () => {
     ACCOUNT_APPROVAL: [...coreCatalog.ACCOUNT_APPROVAL],
   };
   const scopeSet = new Set(Object.keys(scopes));
+  const normalizeScopeToAutomationScope = (
+    rawScope: string
+  ): 'FABRIC' | 'READY_TO_WEAR' | 'DESIGN' | 'ACCOUNT_APPROVAL' | null => {
+    const token = String(rawScope || '')
+      .trim()
+      .toUpperCase();
+    if (token === 'FABRIC' || token === 'FABRICS' || token === 'FTB') return 'FABRIC';
+    if (
+      token === 'READY_TO_WEAR' ||
+      token === 'READYTOWEAR' ||
+      token === 'RTW' ||
+      token === 'READY_TO_WEAR_PRODUCTS'
+    ) {
+      return 'READY_TO_WEAR';
+    }
+    if (token === 'DESIGN' || token === 'DESIGNS' || token === 'CUSTOM' || token === 'CUSTOM_TO_WEAR' || token === 'CTW') {
+      return 'DESIGN';
+    }
+    if (token === 'ACCOUNT_APPROVAL' || token === 'ACCOUNT' || token === 'USER' || token === 'USERS') {
+      return 'ACCOUNT_APPROVAL';
+    }
+    return null;
+  };
+  const isProductWideScope = (rawScope: string) => {
+    const token = String(rawScope || '')
+      .trim()
+      .toUpperCase();
+    return token === '' || token === 'ALL' || token === 'ALL_PRODUCTS' || token === 'GLOBAL' || token === 'PRODUCT';
+  };
   for (const row of dynamicFields) {
     const module = String(row.module || '').toUpperCase();
     const scope = String(row.scope || '').toUpperCase();
     const mappedScope =
-      scopeSet.has(scope)
-        ? (scope as 'FABRIC' | 'READY_TO_WEAR' | 'DESIGN' | 'ACCOUNT_APPROVAL')
-        : module === 'PRODUCT' && (scope === 'ALL_PRODUCTS' || scope === 'ALL' || !scope)
-          ? null
-          : null;
+      (scopeSet.has(scope) ? scope : normalizeScopeToAutomationScope(scope)) as
+        | 'FABRIC'
+        | 'READY_TO_WEAR'
+        | 'DESIGN'
+        | 'ACCOUNT_APPROVAL'
+        | null;
     const entry = {
       key: String(row.key || '').trim(),
       label: String(row.label || row.key || '').trim(),
@@ -69,7 +99,7 @@ const mergeAutomationFieldCatalog = async () => {
       source: 'DYNAMIC' as const,
     };
     if (!entry.key) continue;
-    if (module === 'PRODUCT' && !mappedScope) {
+    if (module === 'PRODUCT' && !mappedScope && isProductWideScope(scope)) {
       scopes.FABRIC.push(entry);
       scopes.READY_TO_WEAR.push(entry);
       scopes.DESIGN.push(entry);
@@ -98,6 +128,68 @@ const mergeAutomationFieldCatalog = async () => {
     DESIGN: dedupe(scopes.DESIGN),
     ACCOUNT_APPROVAL: dedupe(scopes.ACCOUNT_APPROVAL),
   };
+};
+
+const autoFunctionForField = (fieldKey: string, dataType: string) => {
+  const key = String(fieldKey || '').trim().toLowerCase();
+  const type = String(dataType || '').trim().toUpperCase();
+  if (key.includes('image') || key.includes('photo') || key.includes('picture') || type === 'URL') {
+    return 'image_verification';
+  }
+  return 'text_grammar_enhancement';
+};
+const sanitizeCriterionKeyToken = (value: string) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+const injectDynamicFieldCriteriaRows = (settings: any, fieldCatalog: any) => {
+  const output = { ...(settings || {}) };
+  output.criteria = { ...(output.criteria || {}) };
+  const scopes: Array<'FABRIC' | 'READY_TO_WEAR' | 'DESIGN' | 'ACCOUNT_APPROVAL'> = [
+    'FABRIC',
+    'READY_TO_WEAR',
+    'DESIGN',
+    'ACCOUNT_APPROVAL',
+  ];
+  let added = 0;
+  for (const scope of scopes) {
+    const rows = Array.isArray(output.criteria?.[scope]) ? [...output.criteria[scope]] : [];
+    const rowsByKey = new Set(rows.map((row: any) => String(row?.key || '').trim()).filter(Boolean));
+    const rowsByTargetField = new Set(rows.map((row: any) => String(row?.targetField || '').trim()).filter(Boolean));
+    const dynamicFields = (Array.isArray(fieldCatalog?.[scope]) ? fieldCatalog[scope] : []).filter(
+      (entry: any) => String(entry?.source || '').toUpperCase() === 'DYNAMIC'
+    );
+    for (const entry of dynamicFields) {
+      const fieldKey = String(entry?.key || '').trim();
+      if (!fieldKey || rowsByTargetField.has(fieldKey)) continue;
+      const generatedKey = `dynamic_field_${scope.toLowerCase()}_${sanitizeCriterionKeyToken(fieldKey)}`;
+      if (rowsByKey.has(generatedKey)) continue;
+      const verifierFunction = autoFunctionForField(fieldKey, String(entry?.dataType || 'TEXT'));
+      rows.push({
+        key: generatedKey,
+        label: `Dynamic field verification: ${String(entry?.label || fieldKey)}`,
+        enabled: false,
+        requiresAi: true,
+        allowAiEdits: false,
+        targetField: fieldKey,
+        aiFunctionKey: verifierFunction,
+        verifierFunctionKey: verifierFunction,
+        fixerFunctionKey: verifierFunction === 'image_verification' ? 'image_regeneration' : 'text_grammar_enhancement',
+        aiProviderId: '',
+        verifierProviderId: '',
+        fixerProviderId: '',
+        passResultToFixer: true,
+      });
+      rowsByKey.add(generatedKey);
+      rowsByTargetField.add(fieldKey);
+      added += 1;
+    }
+    output.criteria[scope] = rows;
+  }
+  return { settings: output, added };
 };
 
 router.get('/settings', async (_req, res, next) => {
@@ -141,15 +233,19 @@ router.get('/field-catalog', async (_req, res, next) => {
 
 router.post('/field-catalog/sync', async (_req, res, next) => {
   try {
-    const settingsPayload = await readAutomationApprovalSettings();
-    const settings = settingsPayload.settings;
-    const synced = await saveAutomationApprovalSettings(settings);
     const data = await mergeAutomationFieldCatalog();
+    const settingsPayload = await readAutomationApprovalSettings();
+    const patched = injectDynamicFieldCriteriaRows(settingsPayload.settings, data);
+    const synced = await saveAutomationApprovalSettings(patched.settings);
     res.json({
       success: true,
-      message: 'Automation field catalog synced.',
+      message:
+        patched.added > 0
+          ? `Automation field catalog synced. Added ${patched.added} new dynamic field criterion row(s) to the field pipeline.`
+          : 'Automation field catalog synced. No new dynamic field criterion rows were required.',
       settings: synced,
       data,
+      addedCriteriaRows: patched.added,
     });
   } catch (error) {
     next(error);
