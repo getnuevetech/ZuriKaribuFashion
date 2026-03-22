@@ -16,6 +16,7 @@ import {
   readEnterpriseActorContext,
   readEnterpriseConfig,
 } from '../utils/enterprise';
+import { buildPasswordPolicyErrorMessage, evaluatePasswordSecurity } from '../utils/password-security';
 import { createPaymentSessionForUser, readPaymentProviderKeysForUseCase, verifyPaymentForUser } from './payments';
 
 const router = Router();
@@ -531,6 +532,18 @@ router.post('/subaccounts', async (req, res, next) => {
         phone: z.string().trim().optional(),
       })
       .parse(req.body || {});
+    const passwordSecurity = evaluatePasswordSecurity(payload.password);
+    if (!passwordSecurity.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: buildPasswordPolicyErrorMessage(passwordSecurity),
+        errors: passwordSecurity.missing.map((item) => ({
+          code: item.key,
+          message: item.label,
+          path: ['password'],
+        })),
+      });
+    }
     const seatLimit = Math.max(1, Number(actor.account.seatLimit || 1));
     const countRows = await prisma.$queryRawUnsafe<Array<{ count: bigint | number }>>(
       `SELECT COUNT(*)::bigint AS "count"

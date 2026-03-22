@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Copy, KeyRound, Plus, RefreshCw } from 'lucide-react';
+import { Copy, KeyRound, LockKeyhole, Plus, RefreshCw } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { api } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
+import PasswordStrengthMeter from '../../components/auth/PasswordStrengthMeter';
+import { evaluatePasswordSecurity } from '../../utils/passwordSecurity';
 
 export default function AdminResellerInfluencersPage() {
   const authUser = useAuthStore((state) => state.user);
@@ -18,6 +20,11 @@ export default function AdminResellerInfluencersPage() {
   const [savingCreate, setSavingCreate] = useState(false);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [sendingResetUserId, setSendingResetUserId] = useState<string | null>(null);
+  const [settingTempPasswordUserId, setSettingTempPasswordUserId] = useState<string | null>(null);
+  const [tempPasswordTarget, setTempPasswordTarget] = useState<{ userId: string; email?: string } | null>(null);
+  const [tempPassword, setTempPassword] = useState('');
+  const [tempPasswordReason, setTempPasswordReason] = useState('');
+  const [tempPasswordError, setTempPasswordError] = useState('');
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
   const [rows, setRows] = useState<any[]>([]);
@@ -120,6 +127,11 @@ export default function AdminResellerInfluencersPage() {
     try {
       setSavingCreate(true);
       setMessage('');
+      const passwordSecurity = evaluatePasswordSecurity(createForm.password);
+      if (!passwordSecurity.isValid) {
+        setMessage(passwordSecurity.message);
+        return;
+      }
       const payload = {
         email: createForm.email.trim(),
         firstName: createForm.firstName.trim(),
@@ -240,6 +252,44 @@ export default function AdminResellerInfluencersPage() {
       setMessage(readApiError(error, 'Failed to send password reset link.'));
     } finally {
       setSendingResetUserId(null);
+    }
+  };
+
+  const openTempPasswordModal = (userId: string, email?: string) => {
+    if (!userId) return;
+    setTempPasswordTarget({ userId, email });
+    setTempPassword('');
+    setTempPasswordReason('');
+    setTempPasswordError('');
+  };
+
+  const closeTempPasswordModal = () => {
+    setTempPasswordTarget(null);
+    setTempPassword('');
+    setTempPasswordReason('');
+    setTempPasswordError('');
+  };
+
+  const setTemporaryPassword = async () => {
+    if (!tempPasswordTarget?.userId) return;
+    const passwordSecurity = evaluatePasswordSecurity(tempPassword);
+    if (!passwordSecurity.isValid) {
+      setTempPasswordError(passwordSecurity.message);
+      return;
+    }
+    try {
+      setSettingTempPasswordUserId(tempPasswordTarget.userId);
+      setTempPasswordError('');
+      const response = await api.admin.setUserTemporaryPassword(tempPasswordTarget.userId, {
+        temporaryPassword: tempPassword,
+        reason: tempPasswordReason.trim() || undefined,
+      });
+      setMessage(response?.message || 'Temporary password set successfully.');
+      closeTempPasswordModal();
+    } catch (error: any) {
+      setTempPasswordError(readApiError(error, 'Failed to set temporary password.'));
+    } finally {
+      setSettingTempPasswordUserId(null);
     }
   };
 
@@ -543,14 +593,26 @@ export default function AdminResellerInfluencersPage() {
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => void sendPasswordResetLink(String(row?.userId || ''), String(row?.user?.email || ''))}
-                        disabled={sendingResetUserId === String(row?.userId || '')}
-                      >
-                        <KeyRound className="mr-1 h-4 w-4" />
-                        Reset Password
-                      </Button>
+                      {isSuperAdmin ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            onClick={() => void sendPasswordResetLink(String(row?.userId || ''), String(row?.user?.email || ''))}
+                            disabled={sendingResetUserId === String(row?.userId || '')}
+                          >
+                            <KeyRound className="mr-1 h-4 w-4" />
+                            Reset Password
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => openTempPasswordModal(String(row?.userId || ''), String(row?.user?.email || ''))}
+                            disabled={settingTempPasswordUserId === String(row?.userId || '')}
+                          >
+                            <LockKeyhole className="mr-1 h-4 w-4" />
+                            Temp Password
+                          </Button>
+                        </>
+                      ) : null}
                       <Button
                         variant="outline"
                         onClick={() => void toggleActive(row)}
@@ -618,6 +680,7 @@ export default function AdminResellerInfluencersPage() {
                 value={createForm.password}
                 onChange={(event) => setCreateForm((prev) => ({ ...prev, password: event.target.value }))}
               />
+              <PasswordStrengthMeter password={createForm.password} />
               <div className="grid gap-3 md:grid-cols-3">
                 <input
                   className="rounded border px-3 py-2 md:col-span-2"
@@ -761,6 +824,54 @@ export default function AdminResellerInfluencersPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+      {tempPasswordTarget ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-lg rounded-xl bg-white p-6">
+            <h3 className="text-xl font-semibold text-gray-900">Set Temporary Password</h3>
+            <p className="mt-1 text-sm text-gray-600">
+              User must change this password on next login before accessing platform features.
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              Target: <span className="font-medium">{tempPasswordTarget.email || tempPasswordTarget.userId}</span>
+            </p>
+            {tempPasswordError ? (
+              <div className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {tempPasswordError}
+              </div>
+            ) : null}
+            <div className="mt-4 space-y-3">
+              <input
+                type="password"
+                className="w-full rounded border px-3 py-2"
+                value={tempPassword}
+                onChange={(event) => setTempPassword(event.target.value)}
+                placeholder="Temporary password"
+              />
+              <PasswordStrengthMeter password={tempPassword} />
+              <textarea
+                className="w-full rounded border px-3 py-2 text-sm"
+                rows={3}
+                value={tempPasswordReason}
+                onChange={(event) => setTempPasswordReason(event.target.value)}
+                placeholder="Reason (optional)"
+              />
+            </div>
+            <div className="mt-4 flex gap-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={closeTempPasswordModal}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="flex-1"
+                onClick={() => void setTemporaryPassword()}
+                disabled={settingTempPasswordUserId === tempPasswordTarget.userId}
+              >
+                {settingTempPasswordUserId === tempPasswordTarget.userId ? 'Saving...' : 'Set Temporary Password'}
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}

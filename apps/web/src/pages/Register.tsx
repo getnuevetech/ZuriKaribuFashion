@@ -15,6 +15,8 @@ import {
 } from '../data/locationOptions';
 import { normalizePhoneWithCountryPrefix } from '../utils/phone';
 import { useAuthPageSettings } from '../hooks/useAuthPageSettings';
+import PasswordStrengthMeter from '../components/auth/PasswordStrengthMeter';
+import { evaluatePasswordSecurity } from '../utils/passwordSecurity';
 
 type UserRole = 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER';
 const DEFAULT_REFERRAL_CODE = 'PLATFORM-DEFAULT';
@@ -129,6 +131,11 @@ export default function Register() {
     e.preventDefault();
     setError('');
     setNotice('');
+    const passwordSecurity = evaluatePasswordSecurity(formData.password);
+    if (!passwordSecurity.isValid) {
+      setError(passwordSecurity.message);
+      return;
+    }
 
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
@@ -348,6 +355,9 @@ export default function Register() {
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
+                </div>
+                <div className="sm:col-span-2">
+                  <PasswordStrengthMeter password={formData.password} />
                 </div>
 
                 <input

@@ -18,6 +18,7 @@ import {
   saveReferralProgramSettings,
 } from '../utils/referral-program';
 import { markTemporaryPasswordRequired } from '../utils/password-policy';
+import { buildPasswordPolicyErrorMessage, evaluatePasswordSecurity } from '../utils/password-security';
 
 const router = Router();
 router.use(async (_req, _res, next) => {
@@ -424,6 +425,18 @@ router.post('/resellers', authorizePermissions(Permissions.USERS_MANAGE), async 
       });
     }
     const payload = parsed.data;
+    const passwordSecurity = evaluatePasswordSecurity(payload.password);
+    if (!passwordSecurity.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: buildPasswordPolicyErrorMessage(passwordSecurity),
+        errors: passwordSecurity.missing.map((item) => ({
+          code: item.key,
+          message: item.label,
+          path: ['password'],
+        })),
+      });
+    }
     const existing = await prisma.user.findFirst({
       where: {
         email: { equals: payload.email, mode: 'insensitive' },

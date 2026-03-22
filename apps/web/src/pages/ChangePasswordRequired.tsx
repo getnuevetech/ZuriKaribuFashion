@@ -4,6 +4,8 @@ import Button from '../components/ui/Button';
 import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { getHomeRouteForUser } from '../auth/rbac';
+import PasswordStrengthMeter from '../components/auth/PasswordStrengthMeter';
+import { evaluatePasswordSecurity } from '../utils/passwordSecurity';
 
 export default function ChangePasswordRequiredPage() {
   const navigate = useNavigate();
@@ -19,8 +21,9 @@ export default function ChangePasswordRequiredPage() {
     event.preventDefault();
     setError('');
     setMessage('');
-    if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters.');
+    const passwordSecurity = evaluatePasswordSecurity(newPassword);
+    if (!passwordSecurity.isValid) {
+      setError(passwordSecurity.message);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -68,6 +71,7 @@ export default function ChangePasswordRequiredPage() {
           value={newPassword}
           onChange={(event) => setNewPassword(event.target.value)}
         />
+        <PasswordStrengthMeter password={newPassword} />
         <input
           type="password"
           required

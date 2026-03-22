@@ -36,6 +36,7 @@ import {
 import { readCheckoutPricingSettings, saveCheckoutPricingSettings } from '../utils/checkout-pricing-settings';
 import { ensureResellerProfileForUser } from '../utils/referral-program';
 import { markTemporaryPasswordRequired } from '../utils/password-policy';
+import { buildPasswordPolicyErrorMessage, evaluatePasswordSecurity } from '../utils/password-security';
 import { readProductAutomationOutcomesForProducts } from '../utils/automation-approval';
 import { ensureProductTaxonomySchema } from '../utils/product-taxonomy-schema';
 
@@ -202,6 +203,62 @@ const appPublicBaseUrlForAdmin = () =>
     .trim()
     .replace(/\/+$/, '');
 const hashResetTokenForAdmin = (token: string) => createHash('sha256').update(String(token)).digest('hex');
+const ADMIN_PASSWORD_RESET_ACTION = 'ADMIN_PASSWORD_RESET_LINK_SENT';
+const ADMIN_TEMP_PASSWORD_ACTION = 'ADMIN_TEMP_PASSWORD_SET';
+const ADMIN_RESET_COOLDOWN_MINUTES = Math.max(1, Number(process.env.ADMIN_PASSWORD_RESET_COOLDOWN_MINUTES || 10));
+
+const readLatestAdminResetEventForUser = async (targetUserId: string) => {
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<{ createdAt: Date | string }>>(
+      `SELECT "createdAt"
+       FROM "ActivityLog"
+       WHERE "action" = $1
+         AND "details"->>'targetUserId' = $2
+       ORDER BY "createdAt" DESC
+       LIMIT 1`,
+      ADMIN_PASSWORD_RESET_ACTION,
+      targetUserId
+    );
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const createdAt = new Date(rows[0].createdAt);
+    return Number.isNaN(createdAt.getTime()) ? null : createdAt;
+  } catch {
+    return null;
+  }
+};
+
+const getRequestIpAddress = (req: any) => {
+  const forwardedFor = req?.headers?.['x-forwarded-for'];
+  const rawIp = Array.isArray(forwardedFor) ? String(forwardedFor[0] || '') : String(forwardedFor || req?.ip || '');
+  return rawIp.split(',')[0].trim() || null;
+};
+
+const logAdminPasswordAction = async (input: {
+  req: any;
+  actorUserId: string;
+  action: typeof ADMIN_PASSWORD_RESET_ACTION | typeof ADMIN_TEMP_PASSWORD_ACTION;
+  targetUserId: string;
+  targetEmail?: string;
+  metadata?: Record<string, unknown>;
+}) => {
+  try {
+    await prisma.activityLog.create({
+      data: {
+        userId: input.actorUserId,
+        action: input.action,
+        details: {
+          targetUserId: input.targetUserId,
+          targetEmail: input.targetEmail || null,
+          ...input.metadata,
+        },
+        ipAddress: getRequestIpAddress(input.req),
+        userAgent: String(input.req?.headers?.['user-agent'] || '').slice(0, 500),
+      },
+    });
+  } catch {
+    // Best effort; should not block critical auth recovery flows.
+  }
+};
 
 const getVendorDisplayName = (input: {
   id: string;
@@ -1312,6 +1369,10 @@ const adminUserUpdateSchema = z.object({
 const adminUserIdParamSchema = z.object({
   id: z.string().uuid(),
 });
+const adminSetTemporaryPasswordSchema = z.object({
+  temporaryPassword: z.string().min(1, 'Temporary password is required'),
+  reason: z.string().trim().max(500).optional(),
+});
 
 const vendorCreateMinimalSchema = z.object({
   role: z.enum(['FABRIC_SELLER', 'FASHION_DESIGNER']),
@@ -2147,6 +2208,18 @@ router.get('/users', async (req, res, next) => {
 router.post('/users', async (req, res, next) => {
   try {
     const data = adminUserCreateSchema.parse(req.body);
+    const passwordSecurity = evaluatePasswordSecurity(data.password);
+    if (!passwordSecurity.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: buildPasswordPolicyErrorMessage(passwordSecurity),
+        errors: passwordSecurity.missing.map((item) => ({
+          code: item.key,
+          message: item.label,
+          path: ['password'],
+        })),
+      });
+    }
     const superAdminActor = isSuperAdminRequest(req);
     const normalizedCallerId = String(data.callerId || '').trim() || null;
     if (normalizedCallerId && !superAdminActor) {
@@ -2500,6 +2573,18 @@ router.patch('/profile', async (req, res, next) => {
 const handleCreateMinimalVendor = async (req: any, res: any, next: any) => {
   try {
     const payload = vendorCreateMinimalSchema.parse(req.body);
+    const passwordSecurity = evaluatePasswordSecurity(payload.password);
+    if (!passwordSecurity.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: buildPasswordPolicyErrorMessage(passwordSecurity),
+        errors: passwordSecurity.missing.map((item) => ({
+          code: item.key,
+          message: item.label,
+          path: ['password'],
+        })),
+      });
+    }
     const hashedPassword = await bcrypt.hash(payload.password, 10);
     const role = payload.role === 'FABRIC_SELLER' ? UserRole.FABRIC_SELLER : UserRole.FASHION_DESIGNER;
 
@@ -2632,6 +2717,12 @@ router.patch('/users/:id/status', async (req, res, next) => {
 
 router.post('/users/:id/send-password-reset-link', async (req, res, next) => {
   try {
+    if (!isSuperAdminRequest(req)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only Super Admin can send password reset links.',
+      });
+    }
     const { id } = adminUserIdParamSchema.parse(req.params || {});
     const user = await prisma.user.findUnique({
       where: { id },
@@ -2648,6 +2739,19 @@ router.post('/users/:id/send-password-reset-link', async (req, res, next) => {
         success: false,
         message: 'User not found.',
       });
+    }
+
+    const latestResetAt = await readLatestAdminResetEventForUser(user.id);
+    if (latestResetAt) {
+      const cooldownMs = ADMIN_RESET_COOLDOWN_MINUTES * 60 * 1000;
+      const elapsedMs = Date.now() - latestResetAt.getTime();
+      if (elapsedMs < cooldownMs) {
+        const secondsRemaining = Math.max(1, Math.ceil((cooldownMs - elapsedMs) / 1000));
+        return res.status(429).json({
+          success: false,
+          message: `Password reset link was sent recently. Please wait ${secondsRemaining} seconds before sending another one.`,
+        });
+      }
     }
 
     await ensurePasswordResetSchemaForAdmin();
@@ -2686,10 +2790,98 @@ router.post('/users/:id/send-password-reset-link', async (req, res, next) => {
       text: `Hello ${firstName},\n\nUse this link to reset your password: ${resetUrl}\n\nThis link expires in 60 minutes.\n\nIf you did not request this, you can ignore this email.`,
       html: `<p>Hello ${firstName},</p><p>Use the link below to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>This link expires in <strong>60 minutes</strong>.</p><p>If you did not request this, you can ignore this email.</p>`,
     });
+    await logAdminPasswordAction({
+      req,
+      actorUserId: String(req.user?.id || ''),
+      action: ADMIN_PASSWORD_RESET_ACTION,
+      targetUserId: user.id,
+      targetEmail: user.email,
+      metadata: {
+        cooldownMinutes: ADMIN_RESET_COOLDOWN_MINUTES,
+        trigger: 'ADMIN_RESET_LINK',
+      },
+    });
 
     res.json({
       success: true,
       message: `Password reset link sent to ${user.email}.`,
+      data: {
+        userId: user.id,
+        email: user.email,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/users/:id/set-temporary-password', async (req, res, next) => {
+  try {
+    if (!isSuperAdminRequest(req)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only Super Admin can set temporary passwords.',
+      });
+    }
+    const { id } = adminUserIdParamSchema.parse(req.params || {});
+    const payload = adminSetTemporaryPasswordSchema.parse(req.body || {});
+    const passwordSecurity = evaluatePasswordSecurity(payload.temporaryPassword);
+    if (!passwordSecurity.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: buildPasswordPolicyErrorMessage(passwordSecurity),
+        errors: passwordSecurity.missing.map((item) => ({
+          code: item.key,
+          message: item.label,
+          path: ['temporaryPassword'],
+        })),
+      });
+    }
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+      },
+    });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found.',
+      });
+    }
+    const hashedPassword = await bcrypt.hash(payload.temporaryPassword, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+      },
+    });
+    await markTemporaryPasswordRequired(user.id);
+    await ensurePasswordResetSchemaForAdmin();
+    await prisma.$executeRawUnsafe(
+      `UPDATE "PasswordResetToken"
+       SET "usedAt" = NOW()
+       WHERE "userId" = $1 AND "usedAt" IS NULL`,
+      user.id
+    );
+    await logAdminPasswordAction({
+      req,
+      actorUserId: String(req.user?.id || ''),
+      action: ADMIN_TEMP_PASSWORD_ACTION,
+      targetUserId: user.id,
+      targetEmail: user.email,
+      metadata: {
+        targetRole: user.role,
+        reason: payload.reason || null,
+        trigger: 'ADMIN_TEMP_PASSWORD_SET',
+      },
+    });
+    return res.json({
+      success: true,
+      message:
+        'Temporary password set successfully. User must change password on next login before accessing the platform.',
       data: {
         userId: user.id,
         email: user.email,

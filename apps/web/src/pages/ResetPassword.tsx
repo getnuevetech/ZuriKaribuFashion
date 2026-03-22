@@ -3,6 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Lock, ArrowRight } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { api } from '../services/api';
+import PasswordStrengthMeter from '../components/auth/PasswordStrengthMeter';
+import { evaluatePasswordSecurity } from '../utils/passwordSecurity';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -22,8 +24,9 @@ export default function ResetPassword() {
       setError('Invalid reset link. Please request a new one.');
       return;
     }
-    if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters.');
+    const passwordSecurity = evaluatePasswordSecurity(newPassword);
+    if (!passwordSecurity.isValid) {
+      setError(passwordSecurity.message);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -101,6 +104,7 @@ export default function ResetPassword() {
               />
             </div>
           </div>
+          <PasswordStrengthMeter password={newPassword} />
 
           <Button type="submit" className="w-full" disabled={loading || !token}>
             {loading ? 'Resetting password...' : (

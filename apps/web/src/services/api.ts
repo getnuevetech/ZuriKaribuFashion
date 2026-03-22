@@ -6128,6 +6128,11 @@ const adminApi = {
       `/admin/users/${id}/send-password-reset-link`,
       {}
     ),
+  setUserTemporaryPassword: (id: string, data: { temporaryPassword: string; reason?: string }) =>
+    apiService.post<{ success: boolean; message?: string; data?: { userId: string; email: string } }>(
+      `/admin/users/${id}/set-temporary-password`,
+      data
+    ),
 
   getAdminProfile: () =>
     apiService.get<{ success: boolean; data: any }>('/admin/profile'),

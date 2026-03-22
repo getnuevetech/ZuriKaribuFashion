@@ -14,6 +14,7 @@ import {
   clearTemporaryPasswordRequirement,
   readPasswordPolicyForUser,
 } from '../utils/password-policy';
+import { buildPasswordPolicyErrorMessage, evaluatePasswordSecurity } from '../utils/password-security';
 import {
   AUTHENTICATOR_METHODS,
   type AuthenticatorMethod,
@@ -41,7 +42,7 @@ const router = Router();
 // Validation schemas
 const registerSchema = z.object({
   email: z.string().email('Invalid email address').transform((value) => value.toLowerCase().trim()),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z.string().min(1, 'Password is required'),
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
   fullName: z.string().min(2).optional(),
@@ -71,7 +72,11 @@ const forgotPasswordSchema = z.object({
 });
 const resetPasswordSchema = z.object({
   token: z.string().min(10, 'Reset token is required'),
-  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+  newPassword: z.string().min(1, 'New password is required'),
+});
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(1, 'New password is required'),
 });
 const mfaMethodSchema = z.enum(AUTHENTICATOR_METHODS);
 const mfaChallengeSchema = z.object({
@@ -995,6 +1000,18 @@ const upsertGoogleAuthLink = async (params: { userId: string; googleSub: string;
 router.post('/register', async (req, res, next) => {
   try {
     const data = registerSchema.parse(req.body);
+    const passwordSecurity = evaluatePasswordSecurity(data.password);
+    if (!passwordSecurity.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: buildPasswordPolicyErrorMessage(passwordSecurity),
+        errors: passwordSecurity.missing.map((item) => ({
+          code: item.key,
+          message: item.label,
+          path: ['password'],
+        })),
+      });
+    }
     const namesFromFullName = data.fullName ? data.fullName.trim().split(/\s+/) : [];
     const firstName = (data.firstName || namesFromFullName[0] || '').trim();
     const lastName = (data.lastName || namesFromFullName.slice(1).join(' ') || firstName).trim();
@@ -1467,6 +1484,18 @@ router.post('/forgot-password', async (req, res, next) => {
 router.post('/reset-password', async (req, res, next) => {
   try {
     const payload = resetPasswordSchema.parse(req.body || {});
+    const passwordSecurity = evaluatePasswordSecurity(payload.newPassword);
+    if (!passwordSecurity.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: buildPasswordPolicyErrorMessage(passwordSecurity),
+        errors: passwordSecurity.missing.map((item) => ({
+          code: item.key,
+          message: item.label,
+          path: ['newPassword'],
+        })),
+      });
+    }
     await ensurePasswordResetSchema();
     const tokenHash = hashResetToken(payload.token);
     const now = new Date();
@@ -2192,7 +2221,19 @@ router.patch('/profile', authenticate, async (req, res, next) => {
 // Change password
 router.post('/change-password', authenticate, async (req, res, next) => {
   try {
-    const { currentPassword, newPassword } = req.body;
+    const { currentPassword, newPassword } = changePasswordSchema.parse(req.body || {});
+    const passwordSecurity = evaluatePasswordSecurity(newPassword);
+    if (!passwordSecurity.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: buildPasswordPolicyErrorMessage(passwordSecurity),
+        errors: passwordSecurity.missing.map((item) => ({
+          code: item.key,
+          message: item.label,
+          path: ['newPassword'],
+        })),
+      });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: req.user!.id },
@@ -2213,6 +2254,12 @@ router.post('/change-password', authenticate, async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Current password is incorrect.',
+      });
+    }
+    if (currentPassword === newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be different from your current password.',
       });
     }
 
