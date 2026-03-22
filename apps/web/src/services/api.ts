@@ -8755,6 +8755,7 @@ const homepageSectionsApi = {
         rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
         allowPreviewQuery: boolean;
         previewQueryParam: string;
+        requireReasonForRuntimeActions: boolean;
         trustBadges: Array<{
           title: string;
           subtitle: string;
@@ -9074,6 +9075,7 @@ const homepageSectionsApi = {
     rolloutMode?: 'LIVE' | 'PREVIEW_SAFE';
     allowPreviewQuery?: boolean;
     previewQueryParam?: string;
+    requireReasonForRuntimeActions?: boolean;
     changeReason?: string;
     trustBadges?: Array<{
       title: string;
@@ -9113,6 +9115,7 @@ const homepageSectionsApi = {
         rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
         allowPreviewQuery: boolean;
         previewQueryParam: string;
+        requireReasonForRuntimeActions: boolean;
         trustBadges: Array<{
           title: string;
           subtitle: string;

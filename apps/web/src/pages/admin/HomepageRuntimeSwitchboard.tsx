@@ -7,6 +7,7 @@ type HomepageRuntimeSettings = {
   rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
   allowPreviewQuery: boolean;
   previewQueryParam: string;
+  requireReasonForRuntimeActions: boolean;
 };
 type RuntimeHealthCheck = {
   key: string;
@@ -35,6 +36,7 @@ const DEFAULT_RUNTIME_SETTINGS: HomepageRuntimeSettings = {
   rolloutMode: 'PREVIEW_SAFE',
   allowPreviewQuery: true,
   previewQueryParam: 'zkHomePreview',
+  requireReasonForRuntimeActions: false,
 };
 const EMPTY_HEALTH: RuntimeHealth = {
   ok: true,
@@ -50,9 +52,17 @@ const toRuntimeSettings = (input: any): HomepageRuntimeSettings => ({
     /^[A-Za-z0-9_-]{2,40}$/.test(String(input?.previewQueryParam || '').trim())
       ? String(input.previewQueryParam).trim()
       : DEFAULT_RUNTIME_SETTINGS.previewQueryParam,
+  requireReasonForRuntimeActions: input?.requireReasonForRuntimeActions === true,
 });
 
 const runtimeSettingsEqual = (a: HomepageRuntimeSettings, b: HomepageRuntimeSettings) =>
+  a.homepageTemplate === b.homepageTemplate &&
+  a.rolloutMode === b.rolloutMode &&
+  a.allowPreviewQuery === b.allowPreviewQuery &&
+  a.previewQueryParam === b.previewQueryParam &&
+  a.requireReasonForRuntimeActions === b.requireReasonForRuntimeActions;
+
+const runtimeSwitchFieldsEqual = (a: HomepageRuntimeSettings, b: HomepageRuntimeSettings) =>
   a.homepageTemplate === b.homepageTemplate &&
   a.rolloutMode === b.rolloutMode &&
   a.allowPreviewQuery === b.allowPreviewQuery &&
@@ -85,6 +95,7 @@ export default function AdminHomepageRuntimeSwitchboard() {
   const [auditFilterEmail, setAuditFilterEmail] = useState('');
   const [auditFilterFrom, setAuditFilterFrom] = useState('');
   const [auditFilterTo, setAuditFilterTo] = useState('');
+  const [showRollbackConfirm, setShowRollbackConfirm] = useState(false);
 
   const buildAuditFilterParams = () => ({
     limit: 50,
@@ -155,16 +166,31 @@ export default function AdminHomepageRuntimeSwitchboard() {
     void refreshAll();
   }, []);
 
+  const selectedRollbackAuditEntry =
+    runtimeAudit.find((entry) => entry.id === selectedRollbackAuditId) || null;
+  const rollbackTargetRuntime = selectedRollbackAuditEntry?.previous || null;
+  const formatRuntimeSummary = (runtime: HomepageRuntimeSettings) =>
+    `${runtime.homepageTemplate}/${runtime.rolloutMode} • preview ${
+      runtime.allowPreviewQuery ? 'ON' : 'OFF'
+    } (${runtime.previewQueryParam})`;
+
   const handleSave = async () => {
     setSaving(true);
     setError('');
     setMessage('');
     try {
+      const runtimeSwitchChanged = !runtimeSwitchFieldsEqual(settings, loadedSettings);
+      if (runtimeSwitchChanged && settings.requireReasonForRuntimeActions && !changeReason.trim()) {
+        setError('Reason is required before switching homepage runtime.');
+        setSaving(false);
+        return;
+      }
       const response = await api.homepageSections.updateAdminExperienceSettings({
         homepageTemplate: settings.homepageTemplate,
         rolloutMode: settings.rolloutMode,
         allowPreviewQuery: settings.allowPreviewQuery,
         previewQueryParam: settings.previewQueryParam,
+        requireReasonForRuntimeActions: settings.requireReasonForRuntimeActions,
         changeReason: changeReason.trim() || undefined,
       });
       if (response.success) {
@@ -237,10 +263,23 @@ export default function AdminHomepageRuntimeSwitchboard() {
   };
 
   const handleRollback = async () => {
+    if (!selectedRollbackAuditId) {
+      setError('Select an audit row to choose rollback target.');
+      return;
+    }
+    setShowRollbackConfirm(true);
+  };
+
+  const confirmRollback = async () => {
     setRollingBack(true);
     setError('');
     setMessage('');
     try {
+      if (settings.requireReasonForRuntimeActions && !rollbackReason.trim()) {
+        setError('Reason is required before rolling back homepage runtime.');
+        setRollingBack(false);
+        return;
+      }
       const response = await api.homepageSections.rollbackAdminRuntime({
         auditId: selectedRollbackAuditId || undefined,
         reason: rollbackReason.trim() || undefined,
@@ -248,6 +287,7 @@ export default function AdminHomepageRuntimeSwitchboard() {
       if (response.success) {
         setMessage(response.message || 'Runtime rollback completed.');
         setRollbackReason('');
+        setShowRollbackConfirm(false);
         await refreshAll();
       }
     } catch (rollbackError: any) {
@@ -349,6 +389,22 @@ export default function AdminHomepageRuntimeSwitchboard() {
             Allow query preview override on "/" (for QA previews)
           </label>
         </div>
+        <div className="md:col-span-2">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={settings.requireReasonForRuntimeActions}
+              onChange={(e) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  requireReasonForRuntimeActions: e.target.checked,
+                }))
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            Require reason for runtime switch + rollback actions
+          </label>
+        </div>
         <div className="space-y-2 md:col-span-2">
           <label className="text-sm font-medium text-gray-700">Change Reason (for audit trail)</label>
           <input
@@ -356,7 +412,11 @@ export default function AdminHomepageRuntimeSwitchboard() {
             value={changeReason}
             onChange={(e) => setChangeReason(e.target.value.slice(0, 280))}
             className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
-            placeholder="Why are you changing runtime behavior?"
+            placeholder={
+              settings.requireReasonForRuntimeActions
+                ? 'Reason required when runtime changes.'
+                : 'Optional: why are you changing runtime behavior?'
+            }
           />
         </div>
       </div>
@@ -415,7 +475,7 @@ export default function AdminHomepageRuntimeSwitchboard() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-gray-900">Rollback (select target from audit)</h2>
           <Button onClick={handleRollback} disabled={rollingBack || saving || !selectedRollbackAuditId} variant="outline">
-            {rollingBack ? 'Rolling back...' : 'Rollback to selected snapshot'}
+            {rollingBack ? 'Rolling back...' : 'Review rollback'}
           </Button>
         </div>
         <p className="text-xs text-gray-500">
@@ -428,7 +488,11 @@ export default function AdminHomepageRuntimeSwitchboard() {
           value={rollbackReason}
           onChange={(e) => setRollbackReason(e.target.value.slice(0, 280))}
           className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
-          placeholder="Optional rollback reason"
+          placeholder={
+            settings.requireReasonForRuntimeActions
+              ? 'Reason required by policy.'
+              : 'Optional rollback reason'
+          }
         />
       </div>
 
@@ -562,6 +626,54 @@ export default function AdminHomepageRuntimeSwitchboard() {
           </table>
         </div>
       </div>
+
+      {showRollbackConfirm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
+            <div className="border-b border-gray-200 px-5 py-4">
+              <h3 className="text-base font-semibold text-gray-900">Confirm runtime rollback</h3>
+              <p className="mt-1 text-sm text-gray-600">
+                Review the runtime transition before applying rollback.
+              </p>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              <div className="rounded border border-gray-200 p-3 text-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">From (current)</p>
+                <p className="mt-1 text-gray-900">{formatRuntimeSummary(loadedSettings)}</p>
+              </div>
+              <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">To (rollback target)</p>
+                <p className="mt-1 text-amber-900">
+                  {rollbackTargetRuntime ? formatRuntimeSummary(rollbackTargetRuntime) : 'No target selected.'}
+                </p>
+                {selectedRollbackAuditEntry?.createdAt ? (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Source audit: {new Date(selectedRollbackAuditEntry.createdAt).toLocaleString()}
+                  </p>
+                ) : null}
+              </div>
+              {settings.requireReasonForRuntimeActions ? (
+                <p className="text-xs text-red-600">Reason is required by runtime policy for this rollback.</p>
+              ) : null}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowRollbackConfirm(false)}
+                disabled={rollingBack}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmRollback}
+                disabled={rollingBack || !selectedRollbackAuditId || !rollbackTargetRuntime}
+              >
+                {rollingBack ? 'Rolling back...' : 'Confirm rollback'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

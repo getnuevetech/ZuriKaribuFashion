@@ -883,6 +883,7 @@ const homepageExperienceSettingsUpdateSchema = z.object({
   rolloutMode: z.enum(HOMEPAGE_ROLLOUT_MODES).optional(),
   allowPreviewQuery: z.boolean().optional(),
   previewQueryParam: z.string().trim().min(2).max(40).regex(/^[A-Za-z0-9_-]+$/).optional(),
+  requireReasonForRuntimeActions: z.boolean().optional(),
   trustBadges: z
     .array(
       z.object({
@@ -1013,6 +1014,7 @@ type HomepageExperienceSettings = {
   rolloutMode: HomepageRolloutMode;
   allowPreviewQuery: boolean;
   previewQueryParam: string;
+  requireReasonForRuntimeActions: boolean;
   trustBadges: HomepageTrustBadge[];
   kimiCopy: HomepageKimiCopy;
 };
@@ -1136,6 +1138,7 @@ const HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS: HomepageExperienceSettings = {
   rolloutMode: 'PREVIEW_SAFE',
   allowPreviewQuery: true,
   previewQueryParam: 'zkHomePreview',
+  requireReasonForRuntimeActions: false,
   trustBadges: [
     { icon: 'SHIELD_CHECK', title: 'Authentic Guarantee', subtitle: 'Verified sellers and designers', enabled: true },
     { icon: 'TRUCK', title: 'Global Shipping', subtitle: 'Reliable delivery worldwide', enabled: true },
@@ -1415,6 +1418,9 @@ const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSe
     rolloutMode,
     allowPreviewQuery: getBoolean(row.allowPreviewQuery) ?? HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.allowPreviewQuery,
     previewQueryParam,
+    requireReasonForRuntimeActions:
+      getBoolean(row.requireReasonForRuntimeActions) ??
+      HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.requireReasonForRuntimeActions,
     trustBadges: trustBadges.length > 0 ? trustBadges : fallbackTrustBadges,
     kimiCopy,
   };
@@ -3183,6 +3189,14 @@ const applyHomepageExperienceSettingsUpdate = async (req: any, res: any) => {
     });
     const nextRuntime = getHomepageRuntimeSnapshot(nextMergedSettings);
     const runtimeChanged = !areHomepageRuntimeSnapshotsEqual(currentRuntime, nextRuntime);
+    const reasonRequired = nextMergedSettings.requireReasonForRuntimeActions === true;
+
+    if (runtimeChanged && reasonRequired && !reason) {
+      return res.status(400).json({
+        success: false,
+        message: 'A reason is required before switching homepage runtime.',
+      });
+    }
 
     let runtimeHealth: HomepageRuntimeHealthResult | null = null;
     if (runtimeChanged && nextRuntime.homepageTemplate === 'KIMI' && nextRuntime.rolloutMode === 'LIVE') {
@@ -3366,6 +3380,13 @@ router.post(
       const { settings: currentSettings } = await readHomepageExperienceSettings();
       const currentRuntime = getHomepageRuntimeSnapshot(currentSettings);
       const targetRuntime = selectedEntry.previous;
+      const reasonRequired = currentSettings.requireReasonForRuntimeActions === true;
+      if (reasonRequired && !String(payload.reason || '').trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'A reason is required before rolling back homepage runtime.',
+        });
+      }
 
       if (areHomepageRuntimeSnapshotsEqual(currentRuntime, targetRuntime)) {
         return res.json({
