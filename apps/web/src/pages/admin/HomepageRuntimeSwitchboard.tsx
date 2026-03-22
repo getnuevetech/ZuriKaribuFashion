@@ -8,6 +8,26 @@ type HomepageRuntimeSettings = {
   allowPreviewQuery: boolean;
   previewQueryParam: string;
 };
+type RuntimeHealthCheck = {
+  key: string;
+  label: string;
+  status: 'PASS' | 'WARN' | 'FAIL';
+  detail: string;
+};
+type RuntimeHealth = {
+  ok: boolean;
+  checkedAt: string;
+  checks: RuntimeHealthCheck[];
+};
+type RuntimeAuditEntry = {
+  id: string;
+  action: 'RUNTIME_SWITCH' | 'RUNTIME_ROLLBACK';
+  reason: string;
+  previous: HomepageRuntimeSettings;
+  next: HomepageRuntimeSettings;
+  performedByEmail: string | null;
+  createdAt: string | null;
+};
 
 const DEFAULT_RUNTIME_SETTINGS: HomepageRuntimeSettings = {
   homepageTemplate: 'LEGACY',
@@ -15,39 +35,100 @@ const DEFAULT_RUNTIME_SETTINGS: HomepageRuntimeSettings = {
   allowPreviewQuery: true,
   previewQueryParam: 'zkHomePreview',
 };
+const EMPTY_HEALTH: RuntimeHealth = {
+  ok: true,
+  checkedAt: '',
+  checks: [],
+};
+
+const toRuntimeSettings = (input: any): HomepageRuntimeSettings => ({
+  homepageTemplate: input?.homepageTemplate === 'KIMI' ? 'KIMI' : 'LEGACY',
+  rolloutMode: input?.rolloutMode === 'LIVE' ? 'LIVE' : 'PREVIEW_SAFE',
+  allowPreviewQuery: input?.allowPreviewQuery !== false,
+  previewQueryParam:
+    /^[A-Za-z0-9_-]{2,40}$/.test(String(input?.previewQueryParam || '').trim())
+      ? String(input.previewQueryParam).trim()
+      : DEFAULT_RUNTIME_SETTINGS.previewQueryParam,
+});
+
+const runtimeSettingsEqual = (a: HomepageRuntimeSettings, b: HomepageRuntimeSettings) =>
+  a.homepageTemplate === b.homepageTemplate &&
+  a.rolloutMode === b.rolloutMode &&
+  a.allowPreviewQuery === b.allowPreviewQuery &&
+  a.previewQueryParam === b.previewQueryParam;
 
 export default function AdminHomepageRuntimeSwitchboard() {
   const [loading, setLoading] = useState(true);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [auditLoading, setAuditLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [settings, setSettings] = useState<HomepageRuntimeSettings>(DEFAULT_RUNTIME_SETTINGS);
+  const [loadedSettings, setLoadedSettings] = useState<HomepageRuntimeSettings>(DEFAULT_RUNTIME_SETTINGS);
+  const [changeReason, setChangeReason] = useState('');
+  const [rollbackReason, setRollbackReason] = useState('');
+  const [runtimeHealth, setRuntimeHealth] = useState<RuntimeHealth>(EMPTY_HEALTH);
+  const [runtimeAudit, setRuntimeAudit] = useState<RuntimeAuditEntry[]>([]);
 
   const fetchSettings = async () => {
+    const response = await api.homepageSections.getAdminExperienceSettings();
+    if (response.success && response.data) {
+      const next = toRuntimeSettings(response.data);
+      setSettings(next);
+      setLoadedSettings(next);
+    }
+  };
+
+  const fetchHealth = async () => {
+    setHealthLoading(true);
+    try {
+      const response = await api.homepageSections.getAdminRuntimeHealth();
+      if (response.success && response.data?.runtimeHealth) {
+        setRuntimeHealth(response.data.runtimeHealth);
+      }
+    } finally {
+      setHealthLoading(false);
+    }
+  };
+
+  const fetchAudit = async () => {
+    setAuditLoading(true);
+    try {
+      const response = await api.homepageSections.getAdminRuntimeAudit(25);
+      if (response.success && Array.isArray(response.data)) {
+        setRuntimeAudit(
+          response.data.map((entry) => ({
+            id: String(entry.id || ''),
+            action: entry.action === 'RUNTIME_ROLLBACK' ? 'RUNTIME_ROLLBACK' : 'RUNTIME_SWITCH',
+            reason: String(entry.reason || ''),
+            previous: toRuntimeSettings(entry.previous),
+            next: toRuntimeSettings(entry.next),
+            performedByEmail: entry.performedByEmail ? String(entry.performedByEmail) : null,
+            createdAt: entry.createdAt ? String(entry.createdAt) : null,
+          }))
+        );
+      }
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  const refreshAll = async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await api.homepageSections.getAdminExperienceSettings();
-      if (response.success && response.data) {
-        setSettings({
-          homepageTemplate: response.data.homepageTemplate === 'KIMI' ? 'KIMI' : 'LEGACY',
-          rolloutMode: response.data.rolloutMode === 'LIVE' ? 'LIVE' : 'PREVIEW_SAFE',
-          allowPreviewQuery: response.data.allowPreviewQuery !== false,
-          previewQueryParam:
-            /^[A-Za-z0-9_-]{2,40}$/.test(String(response.data.previewQueryParam || '').trim())
-              ? String(response.data.previewQueryParam).trim()
-              : 'zkHomePreview',
-        });
-      }
+      await Promise.all([fetchSettings(), fetchHealth(), fetchAudit()]);
     } catch (fetchError: any) {
-      setError(fetchError?.response?.data?.message || 'Failed to load homepage runtime settings.');
+      setError(fetchError?.response?.data?.message || 'Failed to load homepage runtime switchboard.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    void fetchSettings();
+    void refreshAll();
   }, []);
 
   const handleSave = async () => {
@@ -60,14 +141,50 @@ export default function AdminHomepageRuntimeSwitchboard() {
         rolloutMode: settings.rolloutMode,
         allowPreviewQuery: settings.allowPreviewQuery,
         previewQueryParam: settings.previewQueryParam,
+        changeReason: changeReason.trim() || undefined,
       });
       if (response.success) {
         setMessage('Homepage runtime switchboard updated.');
+        const next = toRuntimeSettings(response.data);
+        setSettings(next);
+        setLoadedSettings(next);
+        setChangeReason('');
+        if (response.runtimeHealth) {
+          setRuntimeHealth(response.runtimeHealth);
+        } else {
+          await fetchHealth();
+        }
+        await fetchAudit();
       }
     } catch (saveError: any) {
-      setError(saveError?.response?.data?.message || 'Failed to update homepage runtime settings.');
+      const serverMessage = saveError?.response?.data?.message || 'Failed to update homepage runtime settings.';
+      const maybeHealth = saveError?.response?.data?.data?.runtimeHealth;
+      if (maybeHealth?.checks) {
+        setRuntimeHealth(maybeHealth);
+      }
+      setError(serverMessage);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRollback = async () => {
+    setRollingBack(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await api.homepageSections.rollbackAdminRuntime({
+        reason: rollbackReason.trim() || undefined,
+      });
+      if (response.success) {
+        setMessage(response.message || 'Runtime rollback completed.');
+        setRollbackReason('');
+        await refreshAll();
+      }
+    } catch (rollbackError: any) {
+      setError(rollbackError?.response?.data?.message || 'Failed to roll back homepage runtime.');
+    } finally {
+      setRollingBack(false);
     }
   };
 
@@ -163,12 +280,131 @@ export default function AdminHomepageRuntimeSwitchboard() {
             Allow query preview override on "/" (for QA previews)
           </label>
         </div>
+        <div className="space-y-2 md:col-span-2">
+          <label className="text-sm font-medium text-gray-700">Change Reason (for audit trail)</label>
+          <input
+            type="text"
+            value={changeReason}
+            onChange={(e) => setChangeReason(e.target.value.slice(0, 280))}
+            className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            placeholder="Why are you changing runtime behavior?"
+          />
+        </div>
       </div>
 
-      <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving}>
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <Button onClick={() => void fetchHealth()} disabled={healthLoading || saving || rollingBack} variant="outline">
+          {healthLoading ? 'Checking health...' : 'Refresh Health'}
+        </Button>
+        <Button onClick={handleSave} disabled={saving || rollingBack || runtimeSettingsEqual(settings, loadedSettings)}>
           {saving ? 'Saving...' : 'Save Runtime Switchboard'}
         </Button>
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold text-gray-900">Runtime Health Checks</h2>
+          <span
+            className={`rounded px-2 py-1 text-xs font-semibold ${
+              runtimeHealth.ok ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+            }`}
+          >
+            {runtimeHealth.ok ? 'Healthy' : 'Action required'}
+          </span>
+        </div>
+        {runtimeHealth.checkedAt ? (
+          <p className="text-xs text-gray-500">Last checked: {new Date(runtimeHealth.checkedAt).toLocaleString()}</p>
+        ) : null}
+        <div className="space-y-2">
+          {runtimeHealth.checks.map((check) => (
+            <div key={check.key} className="rounded border border-gray-200 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-gray-900">{check.label}</p>
+                <span
+                  className={`rounded px-2 py-0.5 text-[11px] font-semibold ${
+                    check.status === 'PASS'
+                      ? 'bg-green-100 text-green-700'
+                      : check.status === 'WARN'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-red-100 text-red-700'
+                  }`}
+                >
+                  {check.status}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-gray-600">{check.detail}</p>
+            </div>
+          ))}
+          {runtimeHealth.checks.length === 0 ? <p className="text-sm text-gray-500">No health data yet.</p> : null}
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold text-gray-900">One-click Rollback</h2>
+          <Button onClick={handleRollback} disabled={rollingBack || saving} variant="outline">
+            {rollingBack ? 'Rolling back...' : 'Rollback to previous runtime'}
+          </Button>
+        </div>
+        <input
+          type="text"
+          value={rollbackReason}
+          onChange={(e) => setRollbackReason(e.target.value.slice(0, 280))}
+          className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+          placeholder="Optional rollback reason"
+        />
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold text-gray-900">Runtime Audit Trail</h2>
+          <Button onClick={() => void fetchAudit()} disabled={auditLoading || saving || rollingBack} variant="outline">
+            {auditLoading ? 'Refreshing...' : 'Refresh Audit'}
+          </Button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">When</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Action</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">From</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">To</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">By</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">Reason</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {runtimeAudit.map((entry) => (
+                <tr key={entry.id}>
+                  <td className="px-3 py-2 text-gray-600">
+                    {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : '-'}
+                  </td>
+                  <td className="px-3 py-2 text-gray-900">
+                    {entry.action === 'RUNTIME_ROLLBACK' ? 'Rollback' : 'Switch'}
+                  </td>
+                  <td className="px-3 py-2 text-gray-700">
+                    {entry.previous.homepageTemplate}/{entry.previous.rolloutMode}
+                  </td>
+                  <td className="px-3 py-2 text-gray-700">
+                    {entry.next.homepageTemplate}/{entry.next.rolloutMode}
+                  </td>
+                  <td className="px-3 py-2 text-gray-600">{entry.performedByEmail || '-'}</td>
+                  <td className="max-w-xs truncate px-3 py-2 text-gray-600" title={entry.reason || ''}>
+                    {entry.reason || '-'}
+                  </td>
+                </tr>
+              ))}
+              {runtimeAudit.length === 0 ? (
+                <tr>
+                  <td className="px-3 py-3 text-sm text-gray-500" colSpan={6}>
+                    No runtime audit records found.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

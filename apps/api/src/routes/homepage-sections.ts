@@ -16,6 +16,7 @@ const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
 const HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY = 'HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION';
 const HOMEPAGE_EXPERIENCE_SETTINGS_KEY = 'HOMEPAGE_EXPERIENCE_SETTINGS';
 const AUTH_PAGE_SETTINGS_KEY = 'AUTH_PAGE_SETTINGS';
+const HOMEPAGE_RUNTIME_AUDIT_ACTIONS = ['RUNTIME_SWITCH', 'RUNTIME_ROLLBACK'] as const;
 const SPOTLIGHT_LINK_MODES = ['DEFAULT_STORE', 'CUSTOM_URL', 'BLOG'] as const;
 type SpotlightLinkMode = (typeof SPOTLIGHT_LINK_MODES)[number];
 const HOMEPAGE_EXPERIENCE_MODES = ['LITE_COMMERCE', 'STANDARD_PREMIUM', 'EDITORIAL_IMMERSIVE'] as const;
@@ -34,6 +35,7 @@ const HOMEPAGE_TRUST_BADGE_ICONS = [
   'GLOBE',
   'SHOPPING_BAG',
 ] as const;
+type HomepageRuntimeAuditAction = (typeof HOMEPAGE_RUNTIME_AUDIT_ACTIONS)[number];
 const HOMEPAGE_SECTION_VISIBILITY_META = [
   { key: 'topStrip', label: 'Top Announcement Strip', description: 'Scrolling announcement bar above the hero banner.' },
   { key: 'hero', label: 'Hero Banner', description: 'Top hero carousel section.' },
@@ -85,6 +87,45 @@ const ensureHomepageSettingsSchema = async () => {
     await homepageSettingsSchemaPromise;
   } finally {
     homepageSettingsSchemaPromise = null;
+  }
+};
+
+let homepageRuntimeAuditSchemaEnsured = false;
+let homepageRuntimeAuditSchemaPromise: Promise<void> | null = null;
+const ensureHomepageRuntimeAuditSchema = async () => {
+  if (homepageRuntimeAuditSchemaEnsured) return;
+  if (homepageRuntimeAuditSchemaPromise) {
+    await homepageRuntimeAuditSchemaPromise;
+    return;
+  }
+  homepageRuntimeAuditSchemaPromise = (async () => {
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "HomepageRuntimeAudit" (
+        "id" TEXT NOT NULL,
+        "action" TEXT NOT NULL,
+        "reason" TEXT NOT NULL DEFAULT '',
+        "previousValue" TEXT NOT NULL,
+        "nextValue" TEXT NOT NULL,
+        "healthSummary" TEXT,
+        "metadata" TEXT,
+        "performedByUserId" TEXT,
+        "performedByEmail" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "HomepageRuntimeAudit_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "HomepageRuntimeAudit_createdAt_idx" ON "HomepageRuntimeAudit"("createdAt")`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "HomepageRuntimeAudit_action_idx" ON "HomepageRuntimeAudit"("action")`
+    );
+    homepageRuntimeAuditSchemaEnsured = true;
+  })();
+  try {
+    await homepageRuntimeAuditSchemaPromise;
+  } finally {
+    homepageRuntimeAuditSchemaPromise = null;
   }
 };
 
@@ -420,6 +461,7 @@ const ensureHomepageSectionContentSchema = async () => {
 router.use(async (_req, _res, next) => {
   try {
     await ensureHomepageSettingsSchema();
+    await ensureHomepageRuntimeAuditSchema();
     await ensureSpotlightLinkSchema();
     await ensureBlogSchema();
     await ensureHomepageSectionContentSchema();
@@ -978,6 +1020,39 @@ type HomepageExperienceSettingsPatch = Omit<Partial<HomepageExperienceSettings>,
   trustBadges?: Array<Partial<HomepageTrustBadge>>;
   kimiCopy?: Partial<HomepageKimiCopy>;
 };
+type HomepageRuntimeSnapshot = Pick<
+  HomepageExperienceSettings,
+  'homepageTemplate' | 'rolloutMode' | 'allowPreviewQuery' | 'previewQueryParam'
+>;
+type HomepageRuntimeHealthStatus = 'PASS' | 'WARN' | 'FAIL';
+type HomepageRuntimeHealthCheck = {
+  key: string;
+  label: string;
+  status: HomepageRuntimeHealthStatus;
+  detail: string;
+};
+type HomepageRuntimeHealthResult = {
+  ok: boolean;
+  checkedAt: string;
+  checks: HomepageRuntimeHealthCheck[];
+};
+type HomepageRuntimeAuditEntry = {
+  id: string;
+  action: HomepageRuntimeAuditAction;
+  reason: string;
+  previous: HomepageRuntimeSnapshot;
+  next: HomepageRuntimeSnapshot;
+  healthSummary: HomepageRuntimeHealthResult | null;
+  metadata: Record<string, unknown>;
+  performedByUserId: string | null;
+  performedByEmail: string | null;
+  createdAt: Date | null;
+};
+
+const runtimeRollbackSchema = z.object({
+  auditId: z.string().trim().min(1).max(128).optional(),
+  reason: z.string().trim().max(280).optional(),
+});
 
 const TOP_STRIP_DEFAULTS: TopStripSettings = {
   messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
@@ -1843,6 +1918,247 @@ const saveHomepageExperienceSettings = async (next: HomepageExperienceSettingsPa
     payload
   );
   return merged;
+};
+
+const getHomepageRuntimeSnapshot = (settings: HomepageExperienceSettings): HomepageRuntimeSnapshot => ({
+  homepageTemplate: settings.homepageTemplate,
+  rolloutMode: settings.rolloutMode,
+  allowPreviewQuery: settings.allowPreviewQuery,
+  previewQueryParam: settings.previewQueryParam,
+});
+
+const areHomepageRuntimeSnapshotsEqual = (a: HomepageRuntimeSnapshot, b: HomepageRuntimeSnapshot) =>
+  a.homepageTemplate === b.homepageTemplate &&
+  a.rolloutMode === b.rolloutMode &&
+  a.allowPreviewQuery === b.allowPreviewQuery &&
+  a.previewQueryParam === b.previewQueryParam;
+
+const normalizeHomepageRuntimeSnapshot = (input: unknown): HomepageRuntimeSnapshot | null => {
+  if (!input || typeof input !== 'object') return null;
+  const row = input as Record<string, unknown>;
+  const homepageTemplate = String(row.homepageTemplate || '').trim().toUpperCase() as HomepageTemplate;
+  const rolloutMode = String(row.rolloutMode || '').trim().toUpperCase() as HomepageRolloutMode;
+  const allowPreviewQuery = getBoolean(row.allowPreviewQuery);
+  const previewQueryParam = String(row.previewQueryParam || '').trim();
+  if (!HOMEPAGE_TEMPLATES.includes(homepageTemplate)) return null;
+  if (!HOMEPAGE_ROLLOUT_MODES.includes(rolloutMode)) return null;
+  if (typeof allowPreviewQuery !== 'boolean') return null;
+  if (!/^[A-Za-z0-9_-]{2,40}$/.test(previewQueryParam)) return null;
+  return {
+    homepageTemplate,
+    rolloutMode,
+    allowPreviewQuery,
+    previewQueryParam,
+  };
+};
+
+const parseHomepageRuntimeAuditEntry = (row: any): HomepageRuntimeAuditEntry | null => {
+  const action = String(row?.action || '').trim().toUpperCase() as HomepageRuntimeAuditAction;
+  if (!HOMEPAGE_RUNTIME_AUDIT_ACTIONS.includes(action)) return null;
+  let previousRaw: unknown = null;
+  let nextRaw: unknown = null;
+  let healthSummaryRaw: unknown = null;
+  let metadataRaw: unknown = null;
+  try {
+    previousRaw = JSON.parse(String(row?.previousValue || '{}'));
+  } catch {
+    previousRaw = null;
+  }
+  try {
+    nextRaw = JSON.parse(String(row?.nextValue || '{}'));
+  } catch {
+    nextRaw = null;
+  }
+  try {
+    healthSummaryRaw = row?.healthSummary ? JSON.parse(String(row.healthSummary)) : null;
+  } catch {
+    healthSummaryRaw = null;
+  }
+  try {
+    metadataRaw = row?.metadata ? JSON.parse(String(row.metadata)) : {};
+  } catch {
+    metadataRaw = {};
+  }
+  const previous = normalizeHomepageRuntimeSnapshot(previousRaw);
+  const next = normalizeHomepageRuntimeSnapshot(nextRaw);
+  if (!previous || !next) return null;
+  const parsedHealthSummary =
+    healthSummaryRaw && typeof healthSummaryRaw === 'object'
+      ? (healthSummaryRaw as HomepageRuntimeHealthResult)
+      : null;
+  const metadata =
+    metadataRaw && typeof metadataRaw === 'object' ? (metadataRaw as Record<string, unknown>) : {};
+  return {
+    id: String(row?.id || ''),
+    action,
+    reason: String(row?.reason || '').trim(),
+    previous,
+    next,
+    healthSummary: parsedHealthSummary,
+    metadata,
+    performedByUserId: getString(row?.performedByUserId) || null,
+    performedByEmail: getString(row?.performedByEmail) || null,
+    createdAt: row?.createdAt ? new Date(row.createdAt) : null,
+  };
+};
+
+const listHomepageRuntimeAudit = async (limit: number) => {
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.floor(limit))) : 25;
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT
+        "id",
+        "action",
+        "reason",
+        "previousValue",
+        "nextValue",
+        "healthSummary",
+        "metadata",
+        "performedByUserId",
+        "performedByEmail",
+        "createdAt"
+      FROM "HomepageRuntimeAudit"
+      ORDER BY "createdAt" DESC
+      LIMIT $1`,
+    safeLimit
+  );
+  return (Array.isArray(rows) ? rows : [])
+    .map((entry) => parseHomepageRuntimeAuditEntry(entry))
+    .filter((entry): entry is HomepageRuntimeAuditEntry => Boolean(entry));
+};
+
+const writeHomepageRuntimeAuditEntry = async (input: {
+  action: HomepageRuntimeAuditAction;
+  reason?: string;
+  previous: HomepageRuntimeSnapshot;
+  next: HomepageRuntimeSnapshot;
+  healthSummary?: HomepageRuntimeHealthResult | null;
+  metadata?: Record<string, unknown>;
+  performedByUserId?: string | null;
+  performedByEmail?: string | null;
+}) => {
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageRuntimeAudit"
+      ("id", "action", "reason", "previousValue", "nextValue", "healthSummary", "metadata", "performedByUserId", "performedByEmail", "createdAt")
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
+    randomUUID(),
+    input.action,
+    String(input.reason || '').trim(),
+    JSON.stringify(input.previous),
+    JSON.stringify(input.next),
+    input.healthSummary ? JSON.stringify(input.healthSummary) : null,
+    input.metadata ? JSON.stringify(input.metadata) : null,
+    input.performedByUserId || null,
+    input.performedByEmail || null
+  );
+};
+
+const buildHomepageRuntimeHealth = async (nextSettings: HomepageExperienceSettings): Promise<HomepageRuntimeHealthResult> => {
+  const checks: HomepageRuntimeHealthCheck[] = [];
+
+  try {
+    await prisma.$queryRawUnsafe(`SELECT 1`);
+    checks.push({
+      key: 'database',
+      label: 'Database connectivity',
+      status: 'PASS',
+      detail: 'Database read check passed.',
+    });
+  } catch {
+    checks.push({
+      key: 'database',
+      label: 'Database connectivity',
+      status: 'FAIL',
+      detail: 'Failed to query the database.',
+    });
+  }
+
+  const previewParamValid = /^[A-Za-z0-9_-]{2,40}$/.test(nextSettings.previewQueryParam);
+  checks.push({
+    key: 'previewParam',
+    label: 'Preview query parameter',
+    status: previewParamValid ? 'PASS' : 'FAIL',
+    detail: previewParamValid
+      ? `Preview query parameter "${nextSettings.previewQueryParam}" is valid.`
+      : 'Preview query parameter must match /^[A-Za-z0-9_-]{2,40}$/',
+  });
+
+  const enabledBadgesCount = (Array.isArray(nextSettings.trustBadges) ? nextSettings.trustBadges : []).filter(
+    (badge) => badge.enabled !== false
+  ).length;
+  checks.push({
+    key: 'trustBadges',
+    label: 'Trust badges',
+    status: enabledBadgesCount > 0 ? 'PASS' : 'FAIL',
+    detail:
+      enabledBadgesCount > 0
+        ? `${enabledBadgesCount} trust badge(s) enabled.`
+        : 'No trust badges are enabled for the selected runtime.',
+  });
+
+  try {
+    const [activeCountries, activeCategories] = await Promise.all([
+      prisma.countryMarquee.count({ where: { isActive: true } }),
+      prisma.shopCategory.count({ where: { isActive: true } }),
+    ]);
+    checks.push({
+      key: 'contentCountries',
+      label: 'Country content readiness',
+      status: activeCountries >= 6 ? 'PASS' : 'WARN',
+      detail: `${activeCountries} active country card(s) found.`,
+    });
+    checks.push({
+      key: 'contentCategories',
+      label: 'Category content readiness',
+      status: activeCategories >= 3 ? 'PASS' : 'WARN',
+      detail: `${activeCategories} active category card(s) found.`,
+    });
+  } catch {
+    checks.push({
+      key: 'contentCountries',
+      label: 'Country content readiness',
+      status: 'FAIL',
+      detail: 'Could not validate country content readiness.',
+    });
+    checks.push({
+      key: 'contentCategories',
+      label: 'Category content readiness',
+      status: 'FAIL',
+      detail: 'Could not validate category content readiness.',
+    });
+  }
+
+  if (nextSettings.homepageTemplate === 'KIMI') {
+    const requiredCopyFields: Array<keyof HomepageKimiCopy> = [
+      'heroEyebrow',
+      'shopByEyebrow',
+      'shopByTitle',
+      'featuredRtwTitle',
+      'featuredFabricsTitle',
+      'featuredDesignsTitle',
+      'designerSpotlightTitle',
+      'quickPathRtwLabel',
+      'quickPathCustomLabel',
+      'quickPathFabricsLabel',
+    ];
+    const missingCopyFields = requiredCopyFields.filter((key) => !String(nextSettings.kimiCopy?.[key] || '').trim());
+    checks.push({
+      key: 'kimiCopy',
+      label: 'Kimi copy completeness',
+      status: missingCopyFields.length === 0 ? 'PASS' : 'FAIL',
+      detail:
+        missingCopyFields.length === 0
+          ? 'All required Kimi copy fields are configured.'
+          : `Missing Kimi copy fields: ${missingCopyFields.join(', ')}`,
+    });
+  }
+
+  const ok = checks.every((check) => check.status !== 'FAIL');
+  return {
+    ok,
+    checkedAt: new Date().toISOString(),
+    checks,
+  };
 };
 
 const readCountryImageGenerationSettings = async () => {
@@ -2750,40 +3066,200 @@ router.get(
   }
 );
 
+const resolveRuntimeActor = (req: any) => {
+  const user = req?.user || {};
+  return {
+    performedByUserId: getString(user.id) || null,
+    performedByEmail: getString(user.email) || null,
+  };
+};
+
+const applyHomepageExperienceSettingsUpdate = async (req: any, res: any) => {
+  try {
+    const payload = homepageExperienceSettingsUpdateSchema.parse(req.body);
+    const reason =
+      typeof req.body?.changeReason === 'string' ? String(req.body.changeReason).trim().slice(0, 280) : '';
+
+    const existing = await readHomepageExperienceSettings();
+    const currentRuntime = getHomepageRuntimeSnapshot(existing.settings);
+    const nextMergedSettings = normalizeHomepageExperienceSettings({
+      ...existing.settings,
+      ...payload,
+    });
+    const nextRuntime = getHomepageRuntimeSnapshot(nextMergedSettings);
+    const runtimeChanged = !areHomepageRuntimeSnapshotsEqual(currentRuntime, nextRuntime);
+
+    let runtimeHealth: HomepageRuntimeHealthResult | null = null;
+    if (runtimeChanged && nextRuntime.homepageTemplate === 'KIMI' && nextRuntime.rolloutMode === 'LIVE') {
+      runtimeHealth = await buildHomepageRuntimeHealth(nextMergedSettings);
+      if (!runtimeHealth.ok) {
+        return res.status(409).json({
+          success: false,
+          message: 'Runtime health checks failed. Resolve failing checks before switching Kimi live.',
+          data: { runtimeHealth },
+        });
+      }
+    }
+
+    const settings = await saveHomepageExperienceSettings(payload);
+
+    if (runtimeChanged) {
+      if (!runtimeHealth && settings.homepageTemplate === 'KIMI' && settings.rolloutMode === 'LIVE') {
+        runtimeHealth = await buildHomepageRuntimeHealth(settings);
+      }
+      const actor = resolveRuntimeActor(req);
+      await writeHomepageRuntimeAuditEntry({
+        action: 'RUNTIME_SWITCH',
+        reason,
+        previous: currentRuntime,
+        next: getHomepageRuntimeSnapshot(settings),
+        healthSummary: runtimeHealth,
+        metadata: {
+          source: 'admin-experience-settings',
+          changedFields: Object.keys(payload || {}),
+        },
+        performedByUserId: actor.performedByUserId,
+        performedByEmail: actor.performedByEmail,
+      });
+    }
+
+    res.json({ success: true, data: settings, runtimeHealth });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating homepage experience settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update homepage experience settings.' });
+  }
+};
+
 router.put(
   '/admin/experience-settings',
   authenticate,
   authorizePermissions(Permissions.HOMEPAGE_MANAGE),
-  async (req, res) => {
-    try {
-      const payload = homepageExperienceSettingsUpdateSchema.parse(req.body);
-      const settings = await saveHomepageExperienceSettings(payload);
-      res.json({ success: true, data: settings });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
-      }
-      console.error('Error updating homepage experience settings:', error);
-      res.status(500).json({ success: false, message: 'Failed to update homepage experience settings.' });
-    }
-  }
+  applyHomepageExperienceSettingsUpdate
 );
 
 router.patch(
   '/admin/experience-settings',
   authenticate,
   authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  applyHomepageExperienceSettingsUpdate
+);
+
+router.get(
+  '/admin/runtime-health',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (_req, res) => {
+    try {
+      const { settings } = await readHomepageExperienceSettings();
+      const runtimeHealth = await buildHomepageRuntimeHealth(settings);
+      res.json({
+        success: true,
+        data: {
+          runtime: getHomepageRuntimeSnapshot(settings),
+          runtimeHealth,
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching homepage runtime health:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch runtime health.' });
+    }
+  }
+);
+
+router.get(
+  '/admin/runtime-audit',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
   async (req, res) => {
     try {
-      const payload = homepageExperienceSettingsUpdateSchema.parse(req.body);
-      const settings = await saveHomepageExperienceSettings(payload);
-      res.json({ success: true, data: settings });
+      const limit = Math.max(1, Math.min(100, Math.floor(Number(req.query.limit) || 25)));
+      const entries = await listHomepageRuntimeAudit(limit);
+      res.json({ success: true, data: entries });
+    } catch (error) {
+      console.error('Error fetching homepage runtime audit trail:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch runtime audit trail.' });
+    }
+  }
+);
+
+router.post(
+  '/admin/runtime-rollback',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (req, res) => {
+    try {
+      const payload = runtimeRollbackSchema.parse(req.body || {});
+      const rows = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT
+            "id",
+            "action",
+            "reason",
+            "previousValue",
+            "nextValue",
+            "healthSummary",
+            "metadata",
+            "performedByUserId",
+            "performedByEmail",
+            "createdAt"
+         FROM "HomepageRuntimeAudit"
+         ${payload.auditId ? 'WHERE "id" = $1' : ''}
+         ORDER BY "createdAt" DESC
+         LIMIT 1`,
+        ...(payload.auditId ? [payload.auditId] : [])
+      );
+      const selectedEntry =
+        Array.isArray(rows) && rows.length > 0 ? parseHomepageRuntimeAuditEntry(rows[0]) : null;
+      if (!selectedEntry) {
+        return res.status(404).json({ success: false, message: 'No runtime audit entry found to roll back.' });
+      }
+
+      const { settings: currentSettings } = await readHomepageExperienceSettings();
+      const currentRuntime = getHomepageRuntimeSnapshot(currentSettings);
+      const targetRuntime = selectedEntry.previous;
+
+      if (areHomepageRuntimeSnapshotsEqual(currentRuntime, targetRuntime)) {
+        return res.json({
+          success: true,
+          message: 'Runtime already matches selected rollback snapshot.',
+          data: {
+            settings: currentSettings,
+            rolledBackFromAuditId: selectedEntry.id,
+          },
+        });
+      }
+
+      const nextSettings = await saveHomepageExperienceSettings(targetRuntime);
+      const actor = resolveRuntimeActor(req);
+      await writeHomepageRuntimeAuditEntry({
+        action: 'RUNTIME_ROLLBACK',
+        reason:
+          payload.reason ||
+          `Rollback applied from audit ${selectedEntry.id}`,
+        previous: currentRuntime,
+        next: getHomepageRuntimeSnapshot(nextSettings),
+        metadata: {
+          source: 'admin-runtime-rollback',
+          rollbackFromAuditId: selectedEntry.id,
+        },
+        performedByUserId: actor.performedByUserId,
+        performedByEmail: actor.performedByEmail,
+      });
+      res.json({
+        success: true,
+        data: {
+          settings: nextSettings,
+          rolledBackFromAuditId: selectedEntry.id,
+        },
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
       }
-      console.error('Error updating homepage experience settings:', error);
-      res.status(500).json({ success: false, message: 'Failed to update homepage experience settings.' });
+      console.error('Error rolling back homepage runtime:', error);
+      res.status(500).json({ success: false, message: 'Failed to roll back homepage runtime.' });
     }
   }
 );

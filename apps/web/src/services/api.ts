@@ -8898,6 +8898,77 @@ const homepageSectionsApi = {
         updatedAt?: string | null;
       };
     }>('/homepage-sections/admin/experience-settings'),
+  getAdminRuntimeHealth: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        runtime: {
+          homepageTemplate: 'LEGACY' | 'KIMI';
+          rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
+          allowPreviewQuery: boolean;
+          previewQueryParam: string;
+        };
+        runtimeHealth: {
+          ok: boolean;
+          checkedAt: string;
+          checks: Array<{
+            key: string;
+            label: string;
+            status: 'PASS' | 'WARN' | 'FAIL';
+            detail: string;
+          }>;
+        };
+      };
+    }>('/homepage-sections/admin/runtime-health'),
+  getAdminRuntimeAudit: (limit = 25) =>
+    apiService.get<{
+      success: boolean;
+      data: Array<{
+        id: string;
+        action: 'RUNTIME_SWITCH' | 'RUNTIME_ROLLBACK';
+        reason: string;
+        previous: {
+          homepageTemplate: 'LEGACY' | 'KIMI';
+          rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
+          allowPreviewQuery: boolean;
+          previewQueryParam: string;
+        };
+        next: {
+          homepageTemplate: 'LEGACY' | 'KIMI';
+          rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
+          allowPreviewQuery: boolean;
+          previewQueryParam: string;
+        };
+        healthSummary: {
+          ok: boolean;
+          checkedAt: string;
+          checks: Array<{
+            key: string;
+            label: string;
+            status: 'PASS' | 'WARN' | 'FAIL';
+            detail: string;
+          }>;
+        } | null;
+        metadata: Record<string, unknown>;
+        performedByUserId: string | null;
+        performedByEmail: string | null;
+        createdAt: string | null;
+      }>;
+    }>(`/homepage-sections/admin/runtime-audit?limit=${Math.max(1, Math.min(100, Math.floor(limit)))}`),
+  rollbackAdminRuntime: (data?: { auditId?: string; reason?: string }) =>
+    apiService.post<{
+      success: boolean;
+      data: {
+        settings: {
+          homepageTemplate: 'LEGACY' | 'KIMI';
+          rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
+          allowPreviewQuery: boolean;
+          previewQueryParam: string;
+        } & Record<string, unknown>;
+        rolledBackFromAuditId: string;
+      };
+      message?: string;
+    }>('/homepage-sections/admin/runtime-rollback', data || {}),
   updateAdminExperienceSettings: (data: {
     enabledModes?: Array<'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE'>;
     defaultMode?: 'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE';
@@ -8915,6 +8986,7 @@ const homepageSectionsApi = {
     rolloutMode?: 'LIVE' | 'PREVIEW_SAFE';
     allowPreviewQuery?: boolean;
     previewQueryParam?: string;
+    changeReason?: string;
     trustBadges?: Array<{
       title: string;
       subtitle: string;
@@ -8972,6 +9044,16 @@ const homepageSectionsApi = {
           quickPathFabricsLabel: string;
         };
       };
+      runtimeHealth?: {
+        ok: boolean;
+        checkedAt: string;
+        checks: Array<{
+          key: string;
+          label: string;
+          status: 'PASS' | 'WARN' | 'FAIL';
+          detail: string;
+        }>;
+      } | null;
     }>('/homepage-sections/admin/experience-settings', data),
   updateAdminAuthPageSettings: (data: Partial<AuthPageSettingsPayload>) =>
     writeAuthPageSettingsWithFallback<{
