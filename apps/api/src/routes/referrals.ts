@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma, UserRole, UserStatus } from '../db';
-import { authenticate, authorizePermissions } from '../middleware/auth';
+import { authenticate, authorizePermissions, isSuperAdminPermissions } from '../middleware/auth';
 import { Permissions, sanitizePermissionGrants } from '../rbac';
 import {
   createReferralMaterial,
@@ -32,10 +32,11 @@ router.use(async (_req, _res, next) => {
 
 const isSuperAdminRequest = (req: any) => {
   const grants = sanitizePermissionGrants(Array.isArray(req?.user?.permissions) ? req.user.permissions : []);
-  const grantSet = new Set(grants.map((entry) => String(entry || '').trim()));
-  const lowerGrantSet = new Set(grants.map((entry) => String(entry || '').trim().toLowerCase()));
-  return grantSet.has('*') || grantSet.has('ALL') || lowerGrantSet.has('all');
+  if (isSuperAdminPermissions(grants)) return true;
+  const exact = new Set(grants.map((entry) => String(entry || '').trim()));
+  return exact.has(Permissions.ADMIN_ROLE_MANAGE) && exact.has(Permissions.USERS_MANAGE);
 };
+const LOGIN_ACTIVITY_ACTIONS = ['USER_LOGIN_SUCCESS', 'VENDOR_SESSION_STARTED', 'VENDOR_SESSION_REPLACED'] as const;
 
 let callerIdSchemaEnsured = false;
 async function ensureCallerIdSchemaAndBackfill() {
@@ -232,13 +233,46 @@ router.get('/resellers', authorizePermissions(Permissions.USERS_READ), async (re
             userIds
           )
         : [];
+    const loginMetricRows =
+      userIds.length > 0
+        ? await prisma.$queryRawUnsafe<Array<{ id: string; lastLogin: Date | string | null; totalLoginCount: number | bigint }>>(
+            `SELECT u."id",
+                    u."lastLogin",
+                    COALESCE(logins."totalLoginCount", 0)::bigint AS "totalLoginCount"
+             FROM "User" u
+             LEFT JOIN (
+               SELECT "userId", COUNT(*)::bigint AS "totalLoginCount"
+               FROM "ActivityLog"
+               WHERE "action" = ANY($2::text[])
+               GROUP BY "userId"
+             ) logins ON logins."userId" = u."id"
+             WHERE u."id" = ANY($1::text[])`,
+            userIds,
+            [...LOGIN_ACTIVITY_ACTIONS]
+          )
+        : [];
     const callerIdByUserId = new Map(
       callerIdRows.map((row) => [String(row.id), String(row.callerId || '').trim() || null])
+    );
+    const loginMetricsByUserId = new Map(
+      loginMetricRows.map((row) => [
+        String(row.id),
+        {
+          lastLogin: row.lastLogin ? new Date(row.lastLogin).toISOString() : null,
+          totalLoginCount: Number(row.totalLoginCount || 0),
+        },
+      ])
     );
     const mappedRows = rows.map((row) => ({
       ...row,
       user: {
         ...(row?.user || {}),
+        lastLogin: loginMetricsByUserId.get(String(row?.userId || ''))?.lastLogin || null,
+        totalLoginCount: (() => {
+          const metrics = loginMetricsByUserId.get(String(row?.userId || ''));
+          const fallbackCount = metrics?.lastLogin ? 1 : 0;
+          return Number((metrics?.totalLoginCount || 0) > 0 ? metrics?.totalLoginCount : fallbackCount);
+        })(),
         callerId: superAdminViewer ? callerIdByUserId.get(String(row?.userId || '')) || null : null,
       },
     }));

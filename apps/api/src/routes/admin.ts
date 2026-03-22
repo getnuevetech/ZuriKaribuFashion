@@ -7,7 +7,7 @@ import * as XLSX from 'xlsx';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma, UserRole, UserStatus, ProductStatus, ProductType } from '../db';
-import { authenticate, authorizePermissions } from '../middleware/auth';
+import { authenticate, authorizePermissions, isSuperAdminPermissions } from '../middleware/auth';
 import { autoCloseOverdueDeliveredOrders } from '../utils/order-workflow';
 import {
   getPermissionCatalog,
@@ -96,9 +96,42 @@ function parsePagination(pageValue: unknown, limitValue: unknown, defaultLimit =
 
 const isSuperAdminRequest = (req: any) => {
   const grants = sanitizePermissionGrants(Array.isArray(req?.user?.permissions) ? req.user.permissions : []);
-  const grantSet = new Set(grants.map((entry) => String(entry || '').trim()));
-  const lowerGrantSet = new Set(grants.map((entry) => String(entry || '').trim().toLowerCase()));
-  return grantSet.has('*') || grantSet.has('ALL') || lowerGrantSet.has('all');
+  if (isSuperAdminPermissions(grants)) return true;
+  const exact = new Set(grants.map((entry) => String(entry || '').trim()));
+  return exact.has(Permissions.ADMIN_ROLE_MANAGE) && exact.has(Permissions.USERS_MANAGE);
+};
+const LOGIN_ACTIVITY_ACTIONS = ['USER_LOGIN_SUCCESS', 'VENDOR_SESSION_STARTED', 'VENDOR_SESSION_REPLACED'] as const;
+
+const readLoginMetricsByUserIds = async (userIds: string[]) => {
+  if (!Array.isArray(userIds) || userIds.length === 0) return new Map<string, number>();
+  const safeUserIds = Array.from(new Set(userIds.map((entry) => String(entry || '').trim()).filter(Boolean)));
+  if (safeUserIds.length === 0) return new Map<string, number>();
+  const countRows = await prisma.$queryRawUnsafe<Array<{ userId: string; total: number | bigint }>>(
+    `SELECT "userId", COUNT(*)::bigint AS total
+     FROM "ActivityLog"
+     WHERE "userId" = ANY($1::text[])
+       AND "action" = ANY($2::text[])
+     GROUP BY "userId"`,
+    safeUserIds,
+    [...LOGIN_ACTIVITY_ACTIONS]
+  );
+  const lastLoginRows = await prisma.$queryRawUnsafe<Array<{ id: string; lastLogin: Date | string | null }>>(
+    `SELECT "id","lastLogin"
+     FROM "User"
+     WHERE "id" = ANY($1::text[])`,
+    safeUserIds
+  );
+  const countByUserId = new Map<string, number>(
+    (Array.isArray(countRows) ? countRows : []).map((row) => [String(row.userId), Number(row.total || 0)])
+  );
+  (Array.isArray(lastLoginRows) ? lastLoginRows : []).forEach((row) => {
+    const userId = String(row.id || '').trim();
+    if (!userId) return;
+    const existing = Number(countByUserId.get(userId) || 0);
+    if (existing > 0) return;
+    if (row.lastLogin) countByUserId.set(userId, 1);
+  });
+  return countByUserId;
 };
 
 let userCallerIdSchemaEnsured = false;
@@ -2144,6 +2177,7 @@ router.get('/users', async (req, res, next) => {
     ]);
 
     const userIds = users.map((user) => user.id);
+    const loginCountByUserId = await readLoginMetricsByUserIds(userIds);
     const adminRoleRows =
       userIds.length > 0
         ? await prisma.$queryRawUnsafe<Array<{ userId: string; adminRoleId: string | null; country: string | null }>>(
@@ -2177,6 +2211,7 @@ router.get('/users', async (req, res, next) => {
     );
     const usersWithAdminMeta = users.map((user) => ({
       ...user,
+      totalLoginCount: Number(loginCountByUserId.get(user.id) || 0),
       country: user.role === UserRole.ADMINISTRATOR ? adminMetaByUserId.get(user.id)?.country || '' : '',
       callerId: superAdminViewer ? callerIdByUserId.get(user.id) || null : null,
       adminProfile: user.adminProfile
@@ -3891,7 +3926,7 @@ router.get('/vendor-profiles', async (req, res, next) => {
         : prisma.fabricSellerProfile.findMany({
             include: {
               user: {
-                select: { id: true, email: true, firstName: true, lastName: true, status: true },
+                select: { id: true, email: true, firstName: true, lastName: true, status: true, lastLogin: true },
               },
             },
             orderBy: { updatedAt: 'desc' },
@@ -3901,7 +3936,7 @@ router.get('/vendor-profiles', async (req, res, next) => {
         : prisma.designerProfile.findMany({
             include: {
               user: {
-                select: { id: true, email: true, firstName: true, lastName: true, status: true },
+                select: { id: true, email: true, firstName: true, lastName: true, status: true, lastLogin: true },
               },
             },
             orderBy: { updatedAt: 'desc' },
@@ -3927,6 +3962,14 @@ router.get('/vendor-profiles', async (req, res, next) => {
         });
       }
     }
+    const vendorUserIds = Array.from(
+      new Set(
+        [...(Array.isArray(sellers) ? sellers : []), ...(Array.isArray(designers) ? designers : [])]
+          .map((profile: any) => String(profile?.userId || '').trim())
+          .filter(Boolean)
+      )
+    );
+    const loginCountByUserId = await readLoginMetricsByUserIds(vendorUserIds);
 
     const rows = [
       ...sellers.map((profile) => {
@@ -3955,6 +3998,7 @@ router.get('/vendor-profiles', async (req, res, next) => {
           profileData: submission?.profileData || {},
           user: {
             ...profile.user,
+            totalLoginCount: Number(loginCountByUserId.get(String(profile.userId || '')) || 0),
             callerId: superAdminViewer ? callerIdByUserId.get(String(profile.userId || '')) || null : null,
           },
           updatedAt: submission?.updatedAt || profile.updatedAt,
@@ -3986,6 +4030,7 @@ router.get('/vendor-profiles', async (req, res, next) => {
           profileData: submission?.profileData || {},
           user: {
             ...profile.user,
+            totalLoginCount: Number(loginCountByUserId.get(String(profile.userId || '')) || 0),
             callerId: superAdminViewer ? callerIdByUserId.get(String(profile.userId || '')) || null : null,
           },
           updatedAt: submission?.updatedAt || profile.updatedAt,
@@ -4063,7 +4108,7 @@ router.get('/vendor-profiles/:role/:userId', async (req, res, next) => {
     if (role === 'FABRIC_SELLER') {
       const profile = await prisma.fabricSellerProfile.findFirst({
         where: { userId },
-        include: { user: { select: { id: true, email: true, firstName: true, lastName: true, status: true } } },
+        include: { user: { select: { id: true, email: true, firstName: true, lastName: true, status: true, lastLogin: true } } },
       });
       if (!profile) {
         return res.status(404).json({ success: false, message: 'Vendor profile not found.' });
@@ -4076,12 +4121,14 @@ router.get('/vendor-profiles/:role/:userId', async (req, res, next) => {
             )
           : [];
       const callerId = superAdminViewer ? String(callerIdRows[0]?.callerId || '').trim() || null : null;
+      const loginCountByUserId = await readLoginMetricsByUserIds([userId]);
       return res.json({
         success: true,
         data: {
           role,
           user: {
             ...profile.user,
+            totalLoginCount: Number(loginCountByUserId.get(userId) || 0),
             callerId,
           },
           profile: {
@@ -4105,7 +4152,7 @@ router.get('/vendor-profiles/:role/:userId', async (req, res, next) => {
 
     const profile = await prisma.designerProfile.findFirst({
       where: { userId },
-      include: { user: { select: { id: true, email: true, firstName: true, lastName: true, status: true } } },
+      include: { user: { select: { id: true, email: true, firstName: true, lastName: true, status: true, lastLogin: true } } },
     });
     if (!profile) {
       return res.status(404).json({ success: false, message: 'Vendor profile not found.' });
@@ -4118,12 +4165,14 @@ router.get('/vendor-profiles/:role/:userId', async (req, res, next) => {
           )
         : [];
     const callerId = superAdminViewer ? String(callerIdRows[0]?.callerId || '').trim() || null : null;
+    const loginCountByUserId = await readLoginMetricsByUserIds([userId]);
     return res.json({
       success: true,
       data: {
         role,
         user: {
           ...profile.user,
+          totalLoginCount: Number(loginCountByUserId.get(userId) || 0),
           callerId,
         },
         profile: {

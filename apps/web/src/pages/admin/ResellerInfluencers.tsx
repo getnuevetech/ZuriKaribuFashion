@@ -6,15 +6,11 @@ import { api } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import PasswordStrengthMeter from '../../components/auth/PasswordStrengthMeter';
 import { evaluatePasswordSecurity } from '../../utils/passwordSecurity';
+import { isSuperAdminUser } from '../../auth/superAdmin';
 
 export default function AdminResellerInfluencersPage() {
   const authUser = useAuthStore((state) => state.user);
-  const isSuperAdmin = useMemo(() => {
-    const grants = Array.isArray(authUser?.permissions) ? authUser.permissions : [];
-    const normalized = grants.map((entry) => String(entry || '').trim());
-    const lower = normalized.map((entry) => entry.toLowerCase());
-    return normalized.includes('*') || normalized.includes('ALL') || lower.includes('all');
-  }, [authUser?.permissions]);
+  const isSuperAdmin = useMemo(() => isSuperAdminUser(authUser as any), [authUser]);
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingCreate, setSavingCreate] = useState(false);
@@ -534,6 +530,8 @@ export default function AdminResellerInfluencersPage() {
                 <th className="px-3 py-2">Referrals</th>
                 <th className="px-3 py-2">Commission</th>
                 <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Last Login</th>
+                <th className="px-3 py-2">Total Logins</th>
                 <th className="px-3 py-2">Actions</th>
               </tr>
             </thead>
@@ -592,27 +590,27 @@ export default function AdminResellerInfluencersPage() {
                     </div>
                   </td>
                   <td className="px-3 py-2">
+                    {row?.user?.lastLogin ? new Date(row.user.lastLogin).toLocaleString() : 'Never'}
+                  </td>
+                  <td className="px-3 py-2">{Number(row?.user?.totalLoginCount || 0)}</td>
+                  <td className="px-3 py-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      {isSuperAdmin ? (
-                        <>
-                          <Button
-                            variant="outline"
-                            onClick={() => void sendPasswordResetLink(String(row?.userId || ''), String(row?.user?.email || ''))}
-                            disabled={sendingResetUserId === String(row?.userId || '')}
-                          >
-                            <KeyRound className="mr-1 h-4 w-4" />
-                            Reset Password
-                          </Button>
-                          <Button
-                            variant="outline"
-                            onClick={() => openTempPasswordModal(String(row?.userId || ''), String(row?.user?.email || ''))}
-                            disabled={settingTempPasswordUserId === String(row?.userId || '')}
-                          >
-                            <LockKeyhole className="mr-1 h-4 w-4" />
-                            Temp Password
-                          </Button>
-                        </>
-                      ) : null}
+                      <Button
+                        variant="outline"
+                        onClick={() => void sendPasswordResetLink(String(row?.userId || ''), String(row?.user?.email || ''))}
+                        disabled={sendingResetUserId === String(row?.userId || '')}
+                      >
+                        <KeyRound className="mr-1 h-4 w-4" />
+                        Reset Password
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => openTempPasswordModal(String(row?.userId || ''), String(row?.user?.email || ''))}
+                        disabled={settingTempPasswordUserId === String(row?.userId || '')}
+                      >
+                        <LockKeyhole className="mr-1 h-4 w-4" />
+                        Temp Password
+                      </Button>
                       <Button
                         variant="outline"
                         onClick={() => void toggleActive(row)}
@@ -633,7 +631,7 @@ export default function AdminResellerInfluencersPage() {
               ))}
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-6 text-center text-sm text-gray-500" colSpan={7}>
+                  <td className="px-3 py-6 text-center text-sm text-gray-500" colSpan={9}>
                     No reseller records found.
                   </td>
                 </tr>

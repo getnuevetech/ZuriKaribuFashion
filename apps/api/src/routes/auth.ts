@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { OAuth2Client } from 'google-auth-library';
 import { prisma, UserRole, UserStatus } from '../db';
-import { generateToken, authenticate } from '../middleware/auth';
+import { generateToken, authenticate, isSuperAdminPermissions } from '../middleware/auth';
 import { getRolePermissions, ROLE_HOME_ROUTE, sanitizePermissionGrants } from '../rbac';
 import { bootstrapAdminConfig } from '../bootstrap';
 import { attributeReferredUser } from '../utils/referral-program';
@@ -701,6 +701,27 @@ async function issueLoginSuccessResponse(input: {
       // Best effort.
     }
   }
+  try {
+    const forwardedFor = input.req.headers['x-forwarded-for'];
+    const rawIp = Array.isArray(forwardedFor) ? String(forwardedFor[0] || '') : String(forwardedFor || input.req.ip || '');
+    const ipAddress = rawIp.split(',')[0].trim() || null;
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: 'USER_LOGIN_SUCCESS',
+        details: {
+          role: user.role,
+          sessionIssuedAt,
+          previousSessionAt: previousLastLoginAt ? previousLastLoginAt.toISOString() : null,
+          authProvider: input.authProvider || 'password',
+        },
+        ipAddress,
+        userAgent: String(input.req.headers['user-agent'] || '').slice(0, 500),
+      },
+    });
+  } catch {
+    // Best effort.
+  }
 
   const token = generateToken({
     id: user.id,
@@ -709,6 +730,7 @@ async function issueLoginSuccessResponse(input: {
     sessionIssuedAt,
   });
   const effectivePermissions = await resolveEffectivePermissions(user.id, user.role);
+  const isSuperAdmin = user.role === UserRole.ADMINISTRATOR && isSuperAdminPermissions(effectivePermissions);
   const passwordPolicy = await readPasswordPolicyForUser(user.id);
   const requiresPasswordChange = passwordPolicy.requiresPasswordChange;
 
@@ -724,6 +746,7 @@ async function issueLoginSuccessResponse(input: {
         role: user.role,
         status: user.status,
         permissions: effectivePermissions,
+        isSuperAdmin,
         requirePasswordChange: requiresPasswordChange,
       },
       token,
@@ -2157,6 +2180,7 @@ router.get('/me', authenticate, async (req, res, next) => {
     }
 
     const effectivePermissions = await resolveEffectivePermissions(user.id, user.role);
+    const isSuperAdmin = user.role === UserRole.ADMINISTRATOR && isSuperAdminPermissions(effectivePermissions);
     const passwordPolicy = await readPasswordPolicyForUser(user.id);
     const requiresPasswordChange = passwordPolicy.requiresPasswordChange;
 
@@ -2171,6 +2195,8 @@ router.get('/me', authenticate, async (req, res, next) => {
         avatar: user.avatar,
         role: user.role,
         status: user.status,
+        permissions: effectivePermissions,
+        isSuperAdmin,
         requirePasswordChange: requiresPasswordChange,
         profile: user.customerProfile || user.fabricSellerProfile || user.designerProfile || user.qaProfile || user.adminProfile,
         access: {

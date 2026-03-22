@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyRound, LockKeyhole } from 'lucide-react';
+import { Edit, KeyRound, LockKeyhole, PhoneCall } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { api } from '../../services/api';
@@ -8,6 +8,7 @@ import { normalizePhoneWithCountryPrefix } from '../../utils/phone';
 import { useAuthStore } from '../../store/authStore';
 import PasswordStrengthMeter from '../../components/auth/PasswordStrengthMeter';
 import { evaluatePasswordSecurity } from '../../utils/passwordSecurity';
+import { isSuperAdminUser } from '../../auth/superAdmin';
 
 type VendorRole = 'FABRIC_SELLER' | 'FASHION_DESIGNER';
 type VendorProfileStatus = 'INCOMPLETE' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
@@ -309,12 +310,7 @@ const extractDownloadLinks = (value: unknown): string[] => {
 
 export default function AdminVendorProfiles() {
   const authUser = useAuthStore((state) => state.user);
-  const isSuperAdmin = useMemo(() => {
-    const grants = Array.isArray(authUser?.permissions) ? authUser.permissions : [];
-    const normalized = grants.map((entry) => String(entry || '').trim());
-    const lower = normalized.map((entry) => entry.toLowerCase());
-    return normalized.includes('*') || normalized.includes('ALL') || lower.includes('all');
-  }, [authUser?.permissions]);
+  const isSuperAdmin = useMemo(() => isSuperAdminUser(authUser as any), [authUser]);
   const [tab, setTab] = useState<'fields' | 'reviews' | 'dashboard' | 'sellerAccounts' | 'designerAccounts' | 'enterprise'>('fields');
   const [role, setRole] = useState<VendorRole>('FABRIC_SELLER');
   const [loading, setLoading] = useState(true);
@@ -640,6 +636,22 @@ export default function AdminVendorProfiles() {
       setError(err?.response?.data?.message || 'Failed to update vendor account.');
     } finally {
       setSavingVendorAccount(false);
+    }
+  };
+
+  const startVoipCall = async (userId: string) => {
+    if (!userId) return;
+    try {
+      const response = await api.customerService.startVoipCall({
+        contextType: 'DIRECT',
+        contextId: `admin-vendor-${userId}`,
+        toUserId: userId,
+      });
+      if (response?.data?.callLink) {
+        window.open(response.data.callLink, '_blank', 'noopener,noreferrer');
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to start VoIP call.');
     }
   };
 
@@ -1310,6 +1322,8 @@ export default function AdminVendorProfiles() {
                   <th className="py-2 pr-3">Type</th>
                   <th className="py-2 pr-3">Country</th>
                   <th className="py-2 pr-3">Status</th>
+                  <th className="py-2 pr-3">Last Login</th>
+                  <th className="py-2 pr-3">Total Logins</th>
                   <th className="py-2 pr-3">Joined</th>
                   <th className="py-2">Action</th>
                 </tr>
@@ -1349,42 +1363,55 @@ export default function AdminVendorProfiles() {
                       </Badge>
                     </td>
                     <td className="py-2 pr-3">
+                      {account.lastLogin ? new Date(account.lastLogin).toLocaleString() : 'Never'}
+                    </td>
+                    <td className="py-2 pr-3">{Number(account.totalLoginCount || 0)}</td>
+                    <td className="py-2 pr-3">
                       {account.createdAt ? new Date(account.createdAt).toLocaleString() : '-'}
                     </td>
                     <td className="py-2">
                       <div className="flex items-center gap-2">
-                        {isSuperAdmin ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void sendPasswordResetLink(String(account.id || ''), String(account.email || ''))}
-                              disabled={sendingPasswordResetUserId === String(account.id || '')}
-                            >
-                              <KeyRound className="mr-1 h-4 w-4" />
-                              Reset Password
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openTempPasswordModal(String(account.id || ''), String(account.email || ''))}
-                              disabled={settingTempPasswordUserId === String(account.id || '')}
-                            >
-                              <LockKeyhole className="mr-1 h-4 w-4" />
-                              Temp Password
-                            </Button>
-                          </>
-                        ) : null}
-                        <Button size="sm" variant="outline" onClick={() => openVendorAccountModal(account)}>
-                          Edit
-                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => void sendPasswordResetLink(String(account.id || ''), String(account.email || ''))}
+                          disabled={sendingPasswordResetUserId === String(account.id || '')}
+                          className="rounded-lg p-2 text-violet-700 hover:bg-violet-50 disabled:opacity-60"
+                          title="Send password reset link"
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openTempPasswordModal(String(account.id || ''), String(account.email || ''))}
+                          disabled={settingTempPasswordUserId === String(account.id || '')}
+                          className="rounded-lg p-2 text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
+                          title="Set temporary password"
+                        >
+                          <LockKeyhole className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void startVoipCall(String(account.id || ''))}
+                          className="rounded-lg p-2 text-amber-700 hover:bg-amber-50"
+                          title="Call vendor"
+                        >
+                          <PhoneCall className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openVendorAccountModal(account)}
+                          className="rounded-lg p-2 text-blue-700 hover:bg-blue-50"
+                          title="Edit vendor account"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
                 ))}
                 {vendorAccounts.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-gray-500">
+                    <td colSpan={8} className="py-8 text-center text-gray-500">
                       No {activeAccountRoleLabel.toLowerCase()} accounts found.
                     </td>
                   </tr>
@@ -1693,28 +1720,24 @@ export default function AdminVendorProfiles() {
                           </td>
                           <td className="py-2">
                             <div className="flex flex-wrap gap-2">
-                              {isSuperAdmin ? (
-                                <>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => void sendPasswordResetLink(ownerId, String(account.email || ''))}
-                                    disabled={savingEnterprise || sendingPasswordResetUserId === ownerId}
-                                  >
-                                    <KeyRound className="mr-1 h-4 w-4" />
-                                    Reset Password
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => openTempPasswordModal(ownerId, String(account.email || ''))}
-                                    disabled={savingEnterprise || settingTempPasswordUserId === ownerId}
-                                  >
-                                    <LockKeyhole className="mr-1 h-4 w-4" />
-                                    Temp Password
-                                  </Button>
-                                </>
-                              ) : null}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void sendPasswordResetLink(ownerId, String(account.email || ''))}
+                                disabled={savingEnterprise || sendingPasswordResetUserId === ownerId}
+                              >
+                                <KeyRound className="mr-1 h-4 w-4" />
+                                Reset Password
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openTempPasswordModal(ownerId, String(account.email || ''))}
+                                disabled={savingEnterprise || settingTempPasswordUserId === ownerId}
+                              >
+                                <LockKeyhole className="mr-1 h-4 w-4" />
+                                Temp Password
+                              </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1875,38 +1898,34 @@ export default function AdminVendorProfiles() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {isSuperAdmin ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        void sendPasswordResetLink(
-                          String(selectedProfile.user?.id || ''),
-                          String(selectedProfile.user?.email || '')
-                        )
-                      }
-                      disabled={sendingPasswordResetUserId === String(selectedProfile.user?.id || '')}
-                    >
-                      <KeyRound className="mr-1 h-4 w-4" />
-                      Reset Password
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        openTempPasswordModal(
-                          String(selectedProfile.user?.id || ''),
-                          String(selectedProfile.user?.email || '')
-                        )
-                      }
-                      disabled={settingTempPasswordUserId === String(selectedProfile.user?.id || '')}
-                    >
-                      <LockKeyhole className="mr-1 h-4 w-4" />
-                      Temp Password
-                    </Button>
-                  </>
-                ) : null}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    void sendPasswordResetLink(
+                      String(selectedProfile.user?.id || ''),
+                      String(selectedProfile.user?.email || '')
+                    )
+                  }
+                  disabled={sendingPasswordResetUserId === String(selectedProfile.user?.id || '')}
+                >
+                  <KeyRound className="mr-1 h-4 w-4" />
+                  Reset Password
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    openTempPasswordModal(
+                      String(selectedProfile.user?.id || ''),
+                      String(selectedProfile.user?.email || '')
+                    )
+                  }
+                  disabled={settingTempPasswordUserId === String(selectedProfile.user?.id || '')}
+                >
+                  <LockKeyhole className="mr-1 h-4 w-4" />
+                  Temp Password
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => setSelectedProfile(null)}>
                   Close
                 </Button>

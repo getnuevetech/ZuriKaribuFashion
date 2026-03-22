@@ -23,6 +23,7 @@ export interface User {
   createdAt: string;
   bio?: string;
   permissions?: string[];
+  isSuperAdmin?: boolean;
 }
 
 export interface AuthState {

@@ -8,6 +8,7 @@ import { useAuthStore } from '../../store/authStore';
 import { getCountryOptions, resolveCountryCode, resolveCountryName } from '../../data/locationOptions';
 import PasswordStrengthMeter from '../../components/auth/PasswordStrengthMeter';
 import { evaluatePasswordSecurity } from '../../utils/passwordSecurity';
+import { isSuperAdminUser } from '../../auth/superAdmin';
 
 interface User {
   id: string;
@@ -23,6 +24,8 @@ interface User {
   orderCount?: number;
   adminRoleId?: string | null;
   callerId?: string | null;
+  lastLogin?: string | null;
+  totalLoginCount?: number;
 }
 
 interface AdminRoleOption {
@@ -82,12 +85,7 @@ export default function AdminUsers() {
   });
   const authUser = useAuthStore((state) => state.user);
   const countryOptions = useMemo(() => getCountryOptions(), []);
-  const isSuperAdmin = useMemo(() => {
-    const grants = Array.isArray(authUser?.permissions) ? authUser.permissions : [];
-    const normalized = grants.map((entry) => String(entry || '').trim());
-    const lower = normalized.map((entry) => entry.toLowerCase());
-    return normalized.includes('*') || normalized.includes('ALL') || lower.includes('all');
-  }, [authUser?.permissions]);
+  const isSuperAdmin = useMemo(() => isSuperAdminUser(authUser as any), [authUser]);
   const createCountryCode = resolveCountryCode(createForm.country);
   const editCountryCode = resolveCountryCode(editForm.country);
 
@@ -141,6 +139,8 @@ export default function AdminUsers() {
           callerId: user.callerId ? String(user.callerId) : null,
           createdAt: user.createdAt,
           orderCount: 0,
+          lastLogin: user.lastLogin ? String(user.lastLogin) : null,
+          totalLoginCount: Number(user.totalLoginCount || 0),
           adminRoleId: user?.adminProfile?.adminRoleId ? String(user.adminProfile.adminRoleId) : null,
           }))
           .filter((user) =>
@@ -458,6 +458,8 @@ export default function AdminUsers() {
                   <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Assigned Admin Role</th>
                 ) : null}
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Status</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Last Login</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Total Logins</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Country</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Orders</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Joined</th>
@@ -502,6 +504,10 @@ export default function AdminUsers() {
                       {user.status}
                     </Badge>
                   </td>
+                  <td className="py-3 px-4 text-gray-600">
+                    {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Never'}
+                  </td>
+                  <td className="py-3 px-4 text-gray-600">{Number(user.totalLoginCount || 0)}</td>
                   <td className="py-3 px-4 text-gray-600">{user.country || '-'}</td>
                   <td className="py-3 px-4 text-gray-600">{user.orderCount || 0}</td>
                   <td className="py-3 px-4 text-gray-500">
@@ -509,25 +515,21 @@ export default function AdminUsers() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex gap-2">
-                      {isSuperAdmin ? (
-                        <>
-                          <button
-                            onClick={() => void sendPasswordResetLink(user)}
-                            disabled={sendingResetUserId === user.id}
-                            className="p-2 text-violet-700 hover:bg-violet-50 rounded-lg disabled:cursor-not-allowed disabled:opacity-60"
-                            title="Send password reset link"
-                          >
-                            <KeyRound className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => openTempPasswordModal(user)}
-                            className="p-2 text-indigo-700 hover:bg-indigo-50 rounded-lg"
-                            title="Set temporary password"
-                          >
-                            <LockKeyhole className="w-4 h-4" />
-                          </button>
-                        </>
-                      ) : null}
+                      <button
+                        onClick={() => void sendPasswordResetLink(user)}
+                        disabled={sendingResetUserId === user.id}
+                        className="p-2 text-violet-700 hover:bg-violet-50 rounded-lg disabled:cursor-not-allowed disabled:opacity-60"
+                        title="Send password reset link"
+                      >
+                        <KeyRound className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => openTempPasswordModal(user)}
+                        className="p-2 text-indigo-700 hover:bg-indigo-50 rounded-lg"
+                        title="Set temporary password"
+                      >
+                        <LockKeyhole className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => openEditModal(user)}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"

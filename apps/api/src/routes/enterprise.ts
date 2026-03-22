@@ -3,7 +3,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma, UserRole, UserStatus } from '../db';
-import { authenticate, authorizePermissions } from '../middleware/auth';
+import { authenticate, authorizePermissions, isSuperAdminPermissions } from '../middleware/auth';
 import { Permissions, sanitizePermissionGrants } from '../rbac';
 import {
   ENTERPRISE_PERMISSION_CATALOG,
@@ -29,9 +29,9 @@ const parsePagination = (pageInput: unknown, limitInput: unknown, fallbackLimit 
 
 const isSuperAdminRequest = (req: any) => {
   const grants = sanitizePermissionGrants(Array.isArray(req?.user?.permissions) ? req.user.permissions : []);
-  const grantSet = new Set(grants.map((entry) => String(entry || '').trim()));
-  const lowerGrantSet = new Set(grants.map((entry) => String(entry || '').trim().toLowerCase()));
-  return grantSet.has('*') || grantSet.has('ALL') || lowerGrantSet.has('all');
+  if (isSuperAdminPermissions(grants)) return true;
+  const exact = new Set(grants.map((entry) => String(entry || '').trim()));
+  return exact.has(Permissions.ADMIN_ROLE_MANAGE) && exact.has(Permissions.USERS_MANAGE);
 };
 
 let callerIdSchemaEnsured = false;

@@ -33,7 +33,7 @@ import {
 import { useAuthStore } from '../store/authStore';
 import DashboardErrorBoundary from '../components/DashboardErrorBoundary';
 import { api } from '../services/api';
-import { isSuperAdminGrants } from '../auth/superAdmin';
+import { isSuperAdminUser } from '../auth/superAdmin';
 
 import { 
   User, 
@@ -202,7 +202,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
 
   const items = navItems[userType] || [];
   const userPermissions = Array.isArray(user?.permissions) ? user.permissions : [];
-  const isSuperAdmin = useMemo(() => isSuperAdminGrants(userPermissions), [userPermissions]);
+  const isSuperAdmin = useMemo(() => isSuperAdminUser(user as any), [user]);
   const hasPermissionRequirement = (requirement: string) => {
     const alternatives = String(requirement || '')
       .split('|')
@@ -294,7 +294,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       if (userType !== 'admin' || !isSuperAdmin) return true;
       return item.href !== '/admin/homepage-visibility';
     });
-  const roleLabel = roleLabels[userType] || 'User';
+  const roleLabel = userType === 'admin' && isSuperAdmin ? 'Super Admin' : roleLabels[userType] || 'User';
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
   const legacySubmenu = [
     { label: 'Legacy Homepage Manager', href: '/admin/homepage', icon: ChevronRight },
