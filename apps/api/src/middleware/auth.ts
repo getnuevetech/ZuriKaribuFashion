@@ -403,6 +403,29 @@ export function authorizePermissions(...requiredPermissions: Permission[]) {
   };
 }
 
+export function isSuperAdminPermissions(grants: string[] | undefined | null): boolean {
+  const normalized = sanitizePermissionGrants(Array.isArray(grants) ? grants : []);
+  const exact = new Set(normalized.map((entry) => String(entry || '').trim()));
+  const lower = new Set(normalized.map((entry) => String(entry || '').trim().toLowerCase()));
+  return exact.has('*') || exact.has('ALL') || lower.has('all');
+}
+
+export function authorizeSuperAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required.',
+    });
+  }
+  if (!isSuperAdminPermissions(req.user.permissions)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Super Admin access is required for this resource.',
+    });
+  }
+  next();
+}
+
 // Optional authentication (for public routes that can be enhanced for logged-in users)
 export async function optionalAuth(req: Request, res: Response, next: NextFunction) {
   try {

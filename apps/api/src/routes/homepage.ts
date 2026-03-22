@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
-import { authenticate, authorizePermissions } from '../middleware/auth';
+import { authenticate, authorizePermissions, authorizeSuperAdmin } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import { applyActivePricingRules, readActivePricingRules } from '../utils/pricing-rules';
 
@@ -943,6 +943,13 @@ router.get('/featured', async (req, res) => {
 });
 
 // ==================== ADMIN ENDPOINTS ====================
+
+router.use(
+  '/admin',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  authorizeSuperAdmin
+);
 
 router.get('/admin/top-strip', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
   try {

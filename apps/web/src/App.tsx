@@ -552,7 +552,7 @@ function App() {
                 <Route
                   path="/admin/homepage"
                   element={
-                    <AdminPermissionGuard required={['homepage:manage']}>
+                    <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
                       <AdminHomepage />
                     </AdminPermissionGuard>
                   }
@@ -560,7 +560,7 @@ function App() {
                 <Route
                   path="/admin/homepage-visibility"
                   element={
-                    <AdminPermissionGuard required={['homepage:manage']}>
+                    <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
                       <AdminHomepageVisibility />
                     </AdminPermissionGuard>
                   }
@@ -568,7 +568,7 @@ function App() {
                 <Route
                   path="/admin/homepage-sections"
                   element={
-                    <AdminPermissionGuard required={['homepage:manage']}>
+                    <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
                       <AdminHomepageSections />
                     </AdminPermissionGuard>
                   }

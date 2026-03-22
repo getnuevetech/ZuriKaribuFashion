@@ -5,6 +5,7 @@ import { getAdminHomeRouteForPermissions, getHomeRouteForRole } from '../auth/rb
 
 interface AdminPermissionGuardProps {
   required?: string[];
+  superAdminOnly?: boolean;
   children: ReactNode;
 }
 
@@ -17,7 +18,14 @@ const hasPermissionRequirement = (grants: string[], requirement: string) => {
   return alternatives.some((permission) => grants.includes(permission));
 };
 
-export default function AdminPermissionGuard({ required = [], children }: AdminPermissionGuardProps) {
+const isSuperAdminGrants = (grants: string[]) => {
+  if (!Array.isArray(grants) || grants.length === 0) return false;
+  const normalized = grants.map((entry) => String(entry || '').trim());
+  const lowered = normalized.map((entry) => entry.toLowerCase());
+  return normalized.includes('*') || normalized.includes('ALL') || lowered.includes('all');
+};
+
+export default function AdminPermissionGuard({ required = [], superAdminOnly = false, children }: AdminPermissionGuardProps) {
   const { user } = useAuthStore();
   const location = useLocation();
   const role = String(user?.role || '');
@@ -25,11 +33,24 @@ export default function AdminPermissionGuard({ required = [], children }: AdminP
     return <Navigate to={getHomeRouteForRole(role)} replace />;
   }
 
+  const grants = Array.isArray(user?.permissions) ? user.permissions : [];
+  const isSuperAdmin = isSuperAdminGrants(grants);
+  if (superAdminOnly && !isSuperAdmin) {
+    const fallbackRoute = getAdminHomeRouteForPermissions(grants);
+    if (fallbackRoute === location.pathname) {
+      return (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          This page is restricted to Super Admin access.
+        </div>
+      );
+    }
+    return <Navigate to={fallbackRoute} replace />;
+  }
+
   if (required.length === 0) {
     return <>{children}</>;
   }
 
-  const grants = Array.isArray(user?.permissions) ? user.permissions : [];
   if (grants.length === 0 || grants.includes('*')) {
     return <>{children}</>;
   }

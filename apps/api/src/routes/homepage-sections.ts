@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma, UserRole } from '../db';
-import { authenticate, authorizePermissions } from '../middleware/auth';
+import { authenticate, authorizePermissions, authorizeSuperAdmin } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import { AFRICAN_CURRENCY_BASELINE } from '../constants/africanCurrencies';
 
@@ -2464,6 +2464,13 @@ router.get('/footer', async (req, res) => {
 });
 
 // ==================== ADMIN ENDPOINTS ====================
+
+router.use(
+  '/admin',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  authorizeSuperAdmin
+);
 
 router.get('/admin/visibility', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
   try {

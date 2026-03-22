@@ -197,6 +197,11 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
 
   const items = navItems[userType] || [];
   const userPermissions = Array.isArray(user?.permissions) ? user.permissions : [];
+  const isSuperAdmin = useMemo(() => {
+    const normalized = userPermissions.map((entry) => String(entry || '').trim());
+    const lowered = normalized.map((entry) => entry.toLowerCase());
+    return normalized.includes('*') || normalized.includes('ALL') || lowered.includes('all');
+  }, [userPermissions]);
   const hasPermissionRequirement = (requirement: string) => {
     const alternatives = String(requirement || '')
       .split('|')
@@ -207,6 +212,14 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   };
   const canAccessAdminNav = (href: string) => {
     if (userType !== 'admin') return true;
+    if (
+      (href === '/admin/homepage' ||
+        href === '/admin/homepage-visibility' ||
+        href === '/admin/homepage-sections') &&
+      !isSuperAdmin
+    ) {
+      return false;
+    }
     if (!userPermissions || userPermissions.length === 0 || userPermissions.includes('*')) return true;
     const permissionByHref: Record<string, string[]> = {
       '/admin/users': ['users:read'],
