@@ -26,6 +26,9 @@ interface Fabric {
     storefrontPath?: string;
   };
   materialType: { id: string; name: string };
+  materialTypeName?: string;
+  fabricCategory?: { id: string; name: string };
+  fabricCategoryName?: string;
   productLabels?: Array<{
     id: string;
     name: string;
@@ -321,7 +324,10 @@ export default function FabricDetail() {
               <div className="mb-2 flex items-start justify-between">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
-                    {fabric.materialType?.name || 'Fabric'}
+                    Fabric: {fabric.fabricCategory?.name || fabric.fabricCategoryName || 'General'}
+                  </span>
+                  <span className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                    Material Type: {fabric.materialType?.name || fabric.materialTypeName || 'Material'}
                   </span>
                   {fabric.predominantColor ? (
                     <span className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
@@ -465,6 +471,18 @@ export default function FabricDetail() {
                       <p className="font-medium">Fabric Width</p>
                       <p className="text-sm text-gray-500">120cm (47 inches)</p>
                     </div>
+                  </div>
+                  <div>
+                    <p className="font-medium">Fabric</p>
+                    <p className="text-sm text-gray-500">
+                      {fabric.fabricCategory?.name || fabric.fabricCategoryName || 'General'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-medium">Material Type</p>
+                    <p className="text-sm text-gray-500">
+                      {fabric.materialType?.name || fabric.materialTypeName || 'Material'}
+                    </p>
                   </div>
                   <div>
                     <p className="font-medium">Care Instructions</p>

@@ -33,6 +33,7 @@ import {
   readAutomationApprovalSettings,
   saveProductAutomationOutcome,
 } from '../utils/automation-approval';
+import { ensureProductTaxonomySchema } from '../utils/product-taxonomy-schema';
 
 const router = Router();
 let sellerGovernanceSchemaEnsured = false;
@@ -60,6 +61,14 @@ const readTableColumns = async (tableName: string): Promise<Set<string>> => {
 
 router.use(authenticate);
 router.use(authorizePermissions(Permissions.SELLER_ACCESS));
+router.use(async (_req, _res, next) => {
+  try {
+    await ensureProductTaxonomySchema();
+  } catch (error) {
+    console.error('Failed to ensure product taxonomy schema for seller routes:', error);
+  }
+  next();
+});
 
 async function resolveSellerProfile(userId: string) {
   const existing = await prisma.fabricSellerProfile.findFirst({
@@ -582,6 +591,7 @@ router.get('/fabrics', async (req, res, next) => {
       where: { sellerId: profile.id },
       include: {
         materialType: true,
+        fabricCategory: true,
         images: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -932,6 +942,7 @@ router.post('/fabrics', async (req, res, next) => {
       name: z.string().min(2),
       description: z.string().min(10),
       materialTypeId: z.string().uuid(),
+      fabricCategoryId: z.string().uuid(),
       predominantColor: z.string().trim().min(2).max(40).optional(),
       sellerPrice: z.number().positive(),
       priceCurrencyCode: z.string().min(3).max(8).optional(),
@@ -964,6 +975,7 @@ router.post('/fabrics', async (req, res, next) => {
         name: data.name,
         description: data.description,
         materialTypeId: data.materialTypeId,
+        fabricCategoryId: data.fabricCategoryId,
         sellerPrice: pricing.usdPrice,
         finalPrice,
         minYards: Math.max(3, Number(data.minYards || 3)),
@@ -979,6 +991,7 @@ router.post('/fabrics', async (req, res, next) => {
       },
       include: {
         materialType: true,
+        fabricCategory: true,
         images: true,
       },
     });
@@ -1155,6 +1168,7 @@ router.patch('/fabrics/:id', async (req, res, next) => {
       name: z.string().min(2).optional(),
       description: z.string().min(10).optional(),
       materialTypeId: z.string().uuid().optional(),
+      fabricCategoryId: z.string().uuid().optional(),
       predominantColor: z.string().trim().min(2).max(40).optional(),
       sellerPrice: z.number().positive().optional(),
       priceCurrencyCode: z.string().min(3).max(8).optional(),
@@ -1256,6 +1270,7 @@ router.patch('/fabrics/:id', async (req, res, next) => {
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.description !== undefined ? { description: data.description } : {}),
         ...(data.materialTypeId !== undefined ? { materialTypeId: data.materialTypeId } : {}),
+        ...(data.fabricCategoryId !== undefined ? { fabricCategoryId: data.fabricCategoryId } : {}),
         ...(data.sellerPrice !== undefined ? { sellerPrice: nextSellerPriceUsd } : {}),
         ...(data.minYards !== undefined ? { minYards: Math.max(3, Number(data.minYards || 3)) } : {}),
         ...(data.stockYards !== undefined ? { stockYards: data.stockYards } : {}),
@@ -1279,6 +1294,7 @@ router.patch('/fabrics/:id', async (req, res, next) => {
         data: payload,
         include: {
           materialType: true,
+          fabricCategory: true,
           images: true,
         },
       });

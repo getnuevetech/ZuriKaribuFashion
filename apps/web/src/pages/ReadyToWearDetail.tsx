@@ -33,6 +33,10 @@ interface ReadyToWearProduct {
     user?: { avatar?: string };
   };
   category?: { id: string; name: string };
+  materialType?: { id: string; name: string };
+  fabricCategory?: { id: string; name: string };
+  materialTypeName?: string;
+  fabricCategoryName?: string;
   sizeVariations?: Array<{ id?: string; size: string; color?: string; variantKey?: string; price: number; stock?: number }>;
   productLabels?: Array<{
     id: string;
@@ -45,6 +49,7 @@ interface ReadyToWearProduct {
   }>;
   colors?: string[];
   material?: string;
+  fabric?: string;
   careInstructions?: string;
   shippingInfo?: string;
   inStock?: boolean;
@@ -803,10 +808,18 @@ export default function ReadyToWearDetail() {
             {activeInfoTab === 'DESCRIPTION' ? (
               <div className="space-y-4">
                 <p className="text-sm leading-6 text-gray-700">{product.description}</p>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-3">
                   <div className="rounded-lg border border-gray-200 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Material</p>
-                    <p className="mt-1 text-sm text-gray-800">{product.material || 'Not specified'}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Material Type</p>
+                    <p className="mt-1 text-sm text-gray-800">
+                      {product.materialType?.name || product.materialTypeName || product.material || 'Not specified'}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Fabric</p>
+                    <p className="mt-1 text-sm text-gray-800">
+                      {product.fabricCategory?.name || product.fabricCategoryName || product.fabric || 'Not specified'}
+                    </p>
                   </div>
                   <div className="rounded-lg border border-gray-200 p-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Care Instructions</p>

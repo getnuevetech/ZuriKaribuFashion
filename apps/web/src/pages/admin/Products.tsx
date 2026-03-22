@@ -22,6 +22,10 @@ interface Product {
   ownerCountry?: string | null;
   categoryId?: string | null;
   category: string;
+  materialTypeId?: string | null;
+  materialTypeName?: string | null;
+  fabricCategoryId?: string | null;
+  fabricCategoryName?: string | null;
   orderCount: number;
   image?: string | null;
   images?: string[];
@@ -165,12 +169,14 @@ export default function AdminProducts() {
   const [taxonomySaving, setTaxonomySaving] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newMaterialName, setNewMaterialName] = useState('');
+  const [newFabricCategoryName, setNewFabricCategoryName] = useState('');
   const [options, setOptions] = useState<{
     categories: Array<{ id: string; name: string }>;
     materials: Array<{ id: string; name: string }>;
+    fabricCategories: Array<{ id: string; name: string }>;
     sellers: Array<{ id: string; businessName: string; country: string; ownerUserId?: string }>;
     designers: Array<{ id: string; businessName: string; country: string; ownerUserId?: string }>;
-  }>({ categories: [], materials: [], sellers: [], designers: [] });
+  }>({ categories: [], materials: [], fabricCategories: [], sellers: [], designers: [] });
   const [designerFabricAccessRows, setDesignerFabricAccessRows] = useState<DesignerFabricCountryAccessRow[]>([]);
   const [designerFabricAccessCountries, setDesignerFabricAccessCountries] = useState<string[]>([]);
   const [designerFabricAccessDrafts, setDesignerFabricAccessDrafts] = useState<Record<string, string[]>>({});
@@ -195,6 +201,7 @@ export default function AdminProducts() {
     description: '',
     price: 0,
     materialTypeId: '',
+    fabricCategoryId: '',
     categoryId: '',
     sellerId: '',
     designerId: '',
@@ -387,6 +394,7 @@ export default function AdminProducts() {
       ownerResult,
       categoriesResult,
       materialsResult,
+      fabricCategoriesResult,
       sellerProfilesResult,
       designerProfilesResult,
       readySizesSettingsResult,
@@ -397,6 +405,7 @@ export default function AdminProducts() {
       api.homepageSections.getAdminDesignerOptions(),
       api.admin.getCategories(),
       api.admin.getMaterials(),
+      api.admin.getFabricCategories(),
       api.admin.getVendorProfiles({ role: 'FABRIC_SELLER', page: 1, limit: 500 }),
       api.admin.getVendorProfiles({ role: 'FASHION_DESIGNER', page: 1, limit: 500 }),
       api.admin.getReadyToWearSizesSettings(),
@@ -408,6 +417,9 @@ export default function AdminProducts() {
         : null;
     const categoriesFromProducts = Array.isArray(productOptions?.categories) ? productOptions.categories : [];
     const materialsFromProducts = Array.isArray(productOptions?.materials) ? productOptions.materials : [];
+    const fabricCategoriesFromProducts = Array.isArray((productOptions as any)?.fabricCategories)
+      ? (productOptions as any).fabricCategories
+      : [];
     const sellersFromProducts = Array.isArray(productOptions?.sellers) ? productOptions.sellers : [];
     const designersFromProducts = Array.isArray(productOptions?.designers) ? productOptions.designers : [];
 
@@ -418,6 +430,12 @@ export default function AdminProducts() {
     const materialsFromAdmin =
       materialsResult.status === 'fulfilled' && materialsResult.value.success && Array.isArray(materialsResult.value.data)
         ? materialsResult.value.data
+        : [];
+    const fabricCategoriesFromAdmin =
+      fabricCategoriesResult.status === 'fulfilled' &&
+      fabricCategoriesResult.value.success &&
+      Array.isArray(fabricCategoriesResult.value.data)
+        ? fabricCategoriesResult.value.data
         : [];
 
     const ownerFallbackRows =
@@ -515,6 +533,13 @@ export default function AdminProducts() {
           id: String(item.id || ''),
           name: String(item.name || '').trim(),
         })),
+      fabricCategories:
+        (fabricCategoriesFromProducts.length > 0 ? fabricCategoriesFromProducts : fabricCategoriesFromAdmin).map(
+          (item: any) => ({
+            id: String(item.id || ''),
+            name: String(item.name || '').trim(),
+          })
+        ),
       sellers:
         sellerSource.map((item: any) => ({
           id: String(item.id || '').trim(),
@@ -701,6 +726,32 @@ export default function AdminProducts() {
     }
   };
 
+  const createFabricCategory = async () => {
+    const name = newFabricCategoryName.trim();
+    if (!name) return;
+    if (name.length < 2) {
+      setError('Fabric category name must be at least 2 characters.');
+      return;
+    }
+    try {
+      setTaxonomySaving(true);
+      setError('');
+      await api.admin.createFabricCategory({
+        name,
+        slug: slugify(name),
+        description: '',
+        sortOrder: options.fabricCategories.length,
+      });
+      setNewFabricCategoryName('');
+      await fetchOptions();
+      setSuccess('Fabric category saved.');
+    } catch (createError: any) {
+      setError(createError?.response?.data?.message || 'Failed to create fabric category.');
+    } finally {
+      setTaxonomySaving(false);
+    }
+  };
+
   const renameCategory = async (id: string, currentName: string) => {
     const nextName = window.prompt('Update style name', currentName)?.trim();
     if (!nextName || nextName === currentName) return;
@@ -763,6 +814,37 @@ export default function AdminProducts() {
     }
   };
 
+  const renameFabricCategory = async (id: string, currentName: string) => {
+    const nextName = window.prompt('Update fabric category name', currentName)?.trim();
+    if (!nextName || nextName === currentName) return;
+    try {
+      setTaxonomySaving(true);
+      setError('');
+      await api.admin.updateFabricCategory(id, { name: nextName });
+      await fetchOptions();
+      setSuccess('Fabric category updated.');
+    } catch (updateError: any) {
+      setError(updateError?.response?.data?.message || 'Failed to update fabric category.');
+    } finally {
+      setTaxonomySaving(false);
+    }
+  };
+
+  const removeFabricCategory = async (id: string) => {
+    if (!window.confirm('Delete this fabric category?')) return;
+    try {
+      setTaxonomySaving(true);
+      setError('');
+      await api.admin.deleteFabricCategory(id);
+      await fetchOptions();
+      setSuccess('Fabric category deleted.');
+    } catch (deleteError: any) {
+      setError(deleteError?.response?.data?.message || 'Failed to delete fabric category.');
+    } finally {
+      setTaxonomySaving(false);
+    }
+  };
+
   const fetchProducts = async (pageOverride?: number) => {
     try {
       setLoading(true);
@@ -803,6 +885,7 @@ export default function AdminProducts() {
       description: '',
       price: 0,
       materialTypeId: '',
+      fabricCategoryId: '',
       categoryId: '',
       sellerId: '',
       designerId: '',
@@ -877,7 +960,21 @@ export default function AdminProducts() {
       options.categories.find((item) => String(item.name || '').trim().toLowerCase() === String(sourceProduct.category || '').trim().toLowerCase())?.id ||
       '';
     const matchedMaterialTypeId =
+      String(sourceProduct.materialTypeId || '').trim() ||
+      options.materials.find(
+        (item) =>
+          String(item.name || '').trim().toLowerCase() ===
+          String(sourceProduct.materialTypeName || sourceProduct.category || '').trim().toLowerCase()
+      )?.id ||
       options.materials.find((item) => String(item.name || '').trim().toLowerCase() === String(sourceProduct.category || '').trim().toLowerCase())?.id ||
+      '';
+    const matchedFabricCategoryId =
+      String(sourceProduct.fabricCategoryId || '').trim() ||
+      options.fabricCategories.find(
+        (item) =>
+          String(item.name || '').trim().toLowerCase() ===
+          String(sourceProduct.fabricCategoryName || '').trim().toLowerCase()
+      )?.id ||
       '';
     const existingReadyVariants = (
       Array.isArray((sourceProduct as any).readyVariants)
@@ -908,6 +1005,7 @@ export default function AdminProducts() {
       description: sourceProduct.description || '',
       price: Number(sourceProduct.finalPrice || 0),
       materialTypeId: matchedMaterialTypeId,
+      fabricCategoryId: matchedFabricCategoryId,
       categoryId: matchedCategoryId,
       sellerId: sourceProduct.sellerId || '',
       designerId: sourceProduct.designerId || '',
@@ -969,8 +1067,13 @@ export default function AdminProducts() {
           setSaving(false);
           return;
         }
-        if (!editing && !form.materialTypeId) {
+        if (!form.materialTypeId) {
           setModalError('Please select a material type for this fabric product.');
+          setSaving(false);
+          return;
+        }
+        if (!form.fabricCategoryId) {
+          setModalError('Please select a fabric category for this fabric product.');
           setSaving(false);
           return;
         }
@@ -980,10 +1083,22 @@ export default function AdminProducts() {
           setSaving(false);
           return;
         }
-        if (!editing && !form.categoryId) {
+        if (!form.categoryId) {
           setModalError('Please select a style for this product.');
           setSaving(false);
           return;
+        }
+        if (currentType === 'READY_TO_WEAR') {
+          if (!form.materialTypeId) {
+            setModalError('Please select a material type for this ready-to-wear product.');
+            setSaving(false);
+            return;
+          }
+          if (!form.fabricCategoryId) {
+            setModalError('Please select a fabric category for this ready-to-wear product.');
+            setSaving(false);
+            return;
+          }
         }
       }
       const imagePolicy = getImagePolicy(currentType);
@@ -1052,6 +1167,7 @@ export default function AdminProducts() {
           isAvailable: resolvedIsAvailable,
           images: imagesDirty ? form.images : undefined,
           materialTypeId: form.materialTypeId || undefined,
+          fabricCategoryId: form.fabricCategoryId || undefined,
           categoryId: form.categoryId || undefined,
           stock: isFabricEdit ? form.stock : undefined,
           stockYards: isFabricEdit ? form.stockYards : undefined,
@@ -1080,7 +1196,11 @@ export default function AdminProducts() {
           ownerUserId: selectedOwnerUserId || undefined,
           sellerId: form.type === 'FABRIC' ? form.sellerId : undefined,
           designerId: form.type !== 'FABRIC' ? form.designerId : undefined,
-          materialTypeId: form.type === 'FABRIC' || form.type === 'DESIGN' ? form.materialTypeId || undefined : undefined,
+          materialTypeId:
+            form.type === 'FABRIC' || form.type === 'READY_TO_WEAR' || form.type === 'DESIGN'
+              ? form.materialTypeId || undefined
+              : undefined,
+          fabricCategoryId: form.type === 'FABRIC' || form.type === 'READY_TO_WEAR' ? form.fabricCategoryId || undefined : undefined,
           categoryId: form.type !== 'FABRIC' ? form.categoryId : undefined,
           status: resolvedStatus,
           isAvailable: resolvedIsAvailable,
@@ -1339,10 +1459,10 @@ export default function AdminProducts() {
         <div className="mb-3">
           <h2 className="text-sm font-semibold text-gray-900">Product Taxonomy Management</h2>
           <p className="text-xs text-gray-500">
-            Manage material types used for Fabrics and styles used for Custom/Ready-to-Wear uploads.
+            Manage styles, material types, and fabric categories used across FTB/CTW/RTW uploads.
           </p>
         </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="rounded-lg border p-3">
             <p className="mb-2 text-sm font-medium text-gray-800">Styles (Custom/Ready-to-Wear)</p>
             <div className="mb-2 flex gap-2">
@@ -1394,6 +1514,48 @@ export default function AdminProducts() {
                       Edit
                     </button>
                     <button type="button" onClick={() => removeMaterial(item.id)} className="text-red-600 hover:text-red-800">
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="mb-2 text-sm font-medium text-gray-800">Fabric Categories (FTB)</p>
+            <div className="mb-2 flex gap-2">
+              <input
+                value={newFabricCategoryName}
+                onChange={(e) => setNewFabricCategoryName(e.target.value)}
+                placeholder="Add fabric category"
+                className="w-full rounded border px-3 py-2 text-sm"
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={createFabricCategory}
+                disabled={taxonomySaving || !newFabricCategoryName.trim()}
+              >
+                Add
+              </Button>
+            </div>
+            <div className="max-h-36 space-y-1 overflow-y-auto pr-1">
+              {options.fabricCategories.map((item) => (
+                <div key={item.id} className="flex items-center justify-between rounded border px-2 py-1 text-sm">
+                  <span className="truncate">{item.name}</span>
+                  <div className="ml-2 flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => renameFabricCategory(item.id, item.name)}
+                      className="text-amber-600 hover:text-amber-800"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeFabricCategory(item.id)}
+                      className="text-red-600 hover:text-red-800"
+                    >
                       Delete
                     </button>
                   </div>
@@ -2000,6 +2162,17 @@ export default function AdminProducts() {
                         <option key={item.id} value={item.id}>{item.name}</option>
                       ))}
                     </select>
+                    <select
+                      required={!editing}
+                      value={form.fabricCategoryId}
+                      onChange={(e) => setForm((prev) => ({ ...prev, fabricCategoryId: e.target.value }))}
+                      className="rounded border px-3 py-2"
+                    >
+                      <option value="">Select fabric</option>
+                      {options.fabricCategories.map((item) => (
+                        <option key={item.id} value={item.id}>{item.name}</option>
+                      ))}
+                    </select>
                   </>
                 ) : (
                   <>
@@ -2018,6 +2191,32 @@ export default function AdminProducts() {
                         <option key={item.id} value={item.id}>{item.name}</option>
                       ))}
                     </select>
+                    {(editing?.type || form.type) === 'READY_TO_WEAR' ? (
+                      <>
+                        <select
+                          required
+                          value={form.materialTypeId}
+                          onChange={(e) => setForm((prev) => ({ ...prev, materialTypeId: e.target.value }))}
+                          className="rounded border px-3 py-2"
+                        >
+                          <option value="">Select material type</option>
+                          {options.materials.map((item) => (
+                            <option key={item.id} value={item.id}>{item.name}</option>
+                          ))}
+                        </select>
+                        <select
+                          required
+                          value={form.fabricCategoryId}
+                          onChange={(e) => setForm((prev) => ({ ...prev, fabricCategoryId: e.target.value }))}
+                          className="rounded border px-3 py-2"
+                        >
+                          <option value="">Select fabric</option>
+                          {options.fabricCategories.map((item) => (
+                            <option key={item.id} value={item.id}>{item.name}</option>
+                          ))}
+                        </select>
+                      </>
+                    ) : null}
                   </>
                 )}
               </div>

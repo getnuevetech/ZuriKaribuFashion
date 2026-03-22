@@ -7,8 +7,18 @@ import { readFabricPredominantColorMap } from '../utils/fabric-attributes';
 import { readCategoryPageSettings, type CategoryPageType } from '../utils/category-page-settings';
 import { readOrderWorkflowSettings } from '../utils/order-workflow';
 import { applyActivePricingRules, readActivePricingRules } from '../utils/pricing-rules';
+import { ensureProductTaxonomySchema } from '../utils/product-taxonomy-schema';
 
 const router = Router();
+router.use(async (_req, _res, next) => {
+  try {
+    await ensureProductTaxonomySchema();
+  } catch (error) {
+    console.error('Failed to ensure product taxonomy schema:', error);
+  }
+  next();
+});
+
 const HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE_SETTINGS_KEY = 'HOMEPAGE_READY_TO_WEAR_SIZE_GUIDE';
 const HOMEPAGE_PRODUCT_LABEL_SETTINGS_KEY = 'HOMEPAGE_PRODUCT_LABELS';
 const DEFAULT_READY_TO_WEAR_SIZE_GUIDE = {
@@ -686,6 +696,22 @@ router.get('/materials', async (req, res, next) => {
   }
 });
 
+// Get all fabric categories
+router.get('/fabric-categories', async (_req, res, next) => {
+  try {
+    const categories = await prisma.fabricCategory.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+    res.json({
+      success: true,
+      data: categories,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/ready-to-wear-size-guide', async (_req, res) => {
   const data = await readReadyToWearSizeGuide();
   res.json({ success: true, data });
@@ -694,7 +720,7 @@ router.get('/ready-to-wear-size-guide', async (_req, res) => {
 // Get fabrics with filters
 router.get('/fabrics', async (req, res, next) => {
   try {
-    const { country, materialTypeId, color, sellerId, search, page, limit } = req.query;
+    const { country, materialTypeId, fabricCategoryId, color, sellerId, search, page, limit } = req.query;
 
     const where: any = {
       status: ProductStatus.APPROVED,
@@ -707,6 +733,9 @@ router.get('/fabrics', async (req, res, next) => {
 
     if (materialTypeId) {
       where.materialTypeId = materialTypeId as string;
+    }
+    if (fabricCategoryId) {
+      where.fabricCategoryId = fabricCategoryId as string;
     }
     if (sellerId) {
       where.sellerId = sellerId as string;
@@ -738,6 +767,7 @@ router.get('/fabrics', async (req, res, next) => {
         take: pagination.limit,
         include: {
           materialType: true,
+          fabricCategory: true,
           seller: {
             select: { id: true, country: true, city: true, businessName: true },
           },
@@ -775,6 +805,8 @@ router.get('/fabrics', async (req, res, next) => {
         }),
         settings: labelSettings,
       }),
+      materialTypeName: item.materialType?.name || 'Material',
+      fabricCategoryName: item.fabricCategory?.name || 'Fabric',
     }));
 
     res.json({
@@ -803,6 +835,7 @@ router.get('/fabrics/:id', async (req, res, next) => {
       where: { id },
       include: {
         materialType: true,
+        fabricCategory: true,
         seller: {
           select: {
             id: true,
@@ -850,6 +883,8 @@ router.get('/fabrics/:id', async (req, res, next) => {
         ...fabric,
         finalPrice: adjustedFinalPrice,
         predominantColor: colorMap[fabric.id] || null,
+        materialTypeName: fabric.materialType?.name || 'Material',
+        fabricCategoryName: fabric.fabricCategory?.name || 'Fabric',
         productLabels: buildProductLabels({
           productType: 'FABRIC',
           productId: fabric.id,
@@ -1117,7 +1152,7 @@ router.get('/designs/:id', async (req, res, next) => {
 // Get ready-to-wear with filters
 router.get('/ready-to-wear', async (req, res, next) => {
   try {
-    const { categoryId, country, material, size, color, designerId, search, page, limit } = req.query;
+    const { categoryId, country, material, materialTypeId, fabricCategoryId, size, color, designerId, search, page, limit } = req.query;
 
     const where: any = {
       status: ProductStatus.APPROVED,
@@ -1127,6 +1162,8 @@ router.get('/ready-to-wear', async (req, res, next) => {
     if (categoryId) where.categoryId = categoryId as string;
     if (country) where.designer = { country: country as string };
     if (designerId) where.designerId = designerId as string;
+    if (materialTypeId) where.materialTypeId = materialTypeId as string;
+    if (fabricCategoryId) where.fabricCategoryId = fabricCategoryId as string;
 
     const orConditions: any[] = [];
     if (search) {
@@ -1138,7 +1175,9 @@ router.get('/ready-to-wear', async (req, res, next) => {
     if (material) {
       orConditions.push(
         { name: { contains: material as string, mode: 'insensitive' } },
-        { description: { contains: material as string, mode: 'insensitive' } }
+        { description: { contains: material as string, mode: 'insensitive' } },
+        { materialType: { is: { name: { contains: material as string, mode: 'insensitive' } } } },
+        { fabricCategory: { is: { name: { contains: material as string, mode: 'insensitive' } } } }
       );
     }
     if (orConditions.length > 0) {
@@ -1182,6 +1221,8 @@ router.get('/ready-to-wear', async (req, res, next) => {
         take: pagination.limit,
         include: {
           category: true,
+          materialType: true,
+          fabricCategory: true,
           designer: {
             select: {
               id: true,
@@ -1256,6 +1297,8 @@ router.get('/ready-to-wear', async (req, res, next) => {
         }),
         settings: labelSettings,
       }),
+      materialTypeName: item.materialType?.name || 'Material',
+      fabricCategoryName: item.fabricCategory?.name || 'Fabric',
     }));
 
     res.json({
@@ -1284,6 +1327,8 @@ router.get('/ready-to-wear/:id', async (req, res, next) => {
       where: { id },
       include: {
         category: true,
+        materialType: true,
+        fabricCategory: true,
         designer: {
           select: {
             id: true,
@@ -1361,6 +1406,8 @@ router.get('/ready-to-wear/:id', async (req, res, next) => {
           }),
           settings: labelSettings,
         }),
+        materialTypeName: product.materialType?.name || 'Material',
+        fabricCategoryName: product.fabricCategory?.name || 'Fabric',
       },
     });
   } catch (error) {

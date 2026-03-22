@@ -68,6 +68,7 @@ interface Fabric {
   name: string;
   description: string;
   materialTypeId?: string;
+  fabricCategoryId?: string;
   predominantColor?: string;
   pricePerMeter: number;
   stockMeters: number;
@@ -75,6 +76,7 @@ interface Fabric {
   orderCount: number;
   status: string;
   materialType: { name: string };
+  fabricCategory?: { name: string };
   minOrderMeters: number;
   isFeatured?: boolean;
   featuredSections?: string[];
@@ -129,10 +131,16 @@ interface MaterialOption {
   name: string;
 }
 
+interface FabricCategoryOption {
+  id: string;
+  name: string;
+}
+
 interface FabricFormState {
   name: string;
   description: string;
   materialTypeId: string;
+  fabricCategoryId: string;
   predominantColor: string;
   sellerPrice: string;
   minYards: string;
@@ -167,6 +175,7 @@ const ALL_FABRIC_EDITABLE_FIELDS = [
   'name',
   'description',
   'materialTypeId',
+  'fabricCategoryId',
   'predominantColor',
   'sellerPrice',
   'minYards',
@@ -514,6 +523,7 @@ export default function SellerDashboard() {
   const [dashboardLoadError, setDashboardLoadError] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [materialOptions, setMaterialOptions] = useState<MaterialOption[]>([]);
+  const [fabricCategoryOptions, setFabricCategoryOptions] = useState<FabricCategoryOption[]>([]);
   const [uploadingProductImage, setUploadingProductImage] = useState(false);
   const [productImageUrlInput, setProductImageUrlInput] = useState('');
   const [selectedFabric, setSelectedFabric] = useState<Fabric | null>(null);
@@ -522,6 +532,7 @@ export default function SellerDashboard() {
     name: '',
     description: '',
     materialTypeId: '',
+    fabricCategoryId: '',
     predominantColor: 'MULTI',
     sellerPrice: '',
     minYards: '3',
@@ -650,6 +661,12 @@ export default function SellerDashboard() {
     }
   }, [materialOptions, productForm.materialTypeId]);
 
+  useEffect(() => {
+    if (fabricCategoryOptions.length > 0 && !productForm.fabricCategoryId) {
+      setProductForm((prev) => ({ ...prev, fabricCategoryId: fabricCategoryOptions[0].id }));
+    }
+  }, [fabricCategoryOptions, productForm.fabricCategoryId]);
+
   const resolveDefaultFeaturedProvider = (countryName?: string) => {
     const available = featuredPaymentProviders.map((entry) => String(entry.providerKey || '').toUpperCase()).filter(Boolean);
     if (available.length === 0) return '';
@@ -699,6 +716,7 @@ export default function SellerDashboard() {
         fabricsResult,
         ordersResult,
         materialsResult,
+        fabricCategoriesResult,
         currencyResult,
         governanceResult,
         tryOnInsightsResult,
@@ -710,6 +728,7 @@ export default function SellerDashboard() {
         api.seller.getFabrics(),
         api.seller.getOrders(),
         api.products.getMaterials(),
+        api.products.getFabricCategories(),
         api.currency.getMyOptions(),
         api.seller.getDashboardGovernance(),
         api.seller.getTryOnInsights(),
@@ -721,6 +740,7 @@ export default function SellerDashboard() {
       const fabricsRes = fabricsResult.status === 'fulfilled' ? fabricsResult.value : null;
       const ordersRes = ordersResult.status === 'fulfilled' ? ordersResult.value : null;
       const materialsRes = materialsResult.status === 'fulfilled' ? materialsResult.value : null;
+      const fabricCategoriesRes = fabricCategoriesResult.status === 'fulfilled' ? fabricCategoriesResult.value : null;
       const currencyRes = currencyResult.status === 'fulfilled' ? currencyResult.value : null;
       const governanceRes = governanceResult.status === 'fulfilled' ? governanceResult.value : null;
       const tryOnInsightsRes = tryOnInsightsResult.status === 'fulfilled' ? tryOnInsightsResult.value : null;
@@ -799,6 +819,7 @@ export default function SellerDashboard() {
           name: item.name || 'Fabric',
           description: item.description || '',
           materialTypeId: item.materialTypeId || item.materialType?.id || '',
+          fabricCategoryId: item.fabricCategoryId || item.fabricCategory?.id || '',
           predominantColor: String(item.predominantColor || 'MULTI').toUpperCase(),
           pricePerMeter: Number(item.finalPrice ?? item.sellerPrice ?? 0),
           stockMeters: Number(item.stockYards ?? 0),
@@ -808,6 +829,7 @@ export default function SellerDashboard() {
           orderCount: Number(item?._count?.orderItems ?? 0),
           status: item.status || 'DRAFT',
           materialType: item.materialType || { name: 'Material' },
+          fabricCategory: item.fabricCategory || { name: 'Fabric' },
           minOrderMeters: Math.max(3, Number(item.minYards ?? 3)),
           isFeatured: Boolean(item.isFeatured),
           featuredSections: Array.isArray(item.featuredSections) ? item.featuredSections : [],
@@ -840,6 +862,12 @@ export default function SellerDashboard() {
           ? materialsRes.data.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Material') }))
           : [];
         setMaterialOptions(options);
+      }
+      if (fabricCategoriesRes?.success) {
+        const options = Array.isArray(fabricCategoriesRes.data)
+          ? fabricCategoriesRes.data.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Fabric') }))
+          : [];
+        setFabricCategoryOptions(options);
       }
       if (ordersRes?.success) {
         const mappedOrders = (ordersRes.data || []).map((item: any) => {
@@ -1181,6 +1209,7 @@ export default function SellerDashboard() {
       name: '',
       description: '',
       materialTypeId: materialOptions[0]?.id || '',
+      fabricCategoryId: fabricCategoryOptions[0]?.id || '',
       predominantColor: 'MULTI',
       sellerPrice: '',
       minYards: '3',
@@ -1214,6 +1243,7 @@ export default function SellerDashboard() {
       name: fabric.name,
       description: fabric.description || '',
       materialTypeId: fabric.materialTypeId || materialOptions[0]?.id || '',
+      fabricCategoryId: fabric.fabricCategoryId || fabricCategoryOptions[0]?.id || '',
       predominantColor: String(fabric.predominantColor || 'MULTI').toUpperCase(),
       sellerPrice: String(fabric.listingLocalPrice || fabric.pricePerMeter || ''),
       minYards: String(Math.max(3, Number(fabric.minOrderMeters || 3))),
@@ -1348,6 +1378,14 @@ export default function SellerDashboard() {
           }
           payload.materialTypeId = productForm.materialTypeId;
         }
+        if (editableFieldSet.has('fabricCategoryId')) {
+          if (!productForm.fabricCategoryId) {
+            setProductError('Please select a fabric category.');
+            setIsSavingProduct(false);
+            return;
+          }
+          payload.fabricCategoryId = productForm.fabricCategoryId;
+        }
         if (editableFieldSet.has('predominantColor')) {
           payload.predominantColor = String(productForm.predominantColor || 'MULTI').toUpperCase();
         }
@@ -1380,6 +1418,11 @@ export default function SellerDashboard() {
           setIsSavingProduct(false);
           return;
         }
+        if (!productForm.fabricCategoryId) {
+          setProductError('Please select a fabric category.');
+          setIsSavingProduct(false);
+          return;
+        }
         if (Number(productForm.sellerPrice || 0) <= 0) {
           setProductError('Seller price must be greater than zero.');
           setIsSavingProduct(false);
@@ -1403,6 +1446,7 @@ export default function SellerDashboard() {
         payload.name = productForm.name.trim();
         payload.description = productForm.description.trim();
         payload.materialTypeId = productForm.materialTypeId;
+        payload.fabricCategoryId = productForm.fabricCategoryId;
         payload.predominantColor = String(productForm.predominantColor || 'MULTI').toUpperCase();
         payload.sellerPrice = Number(productForm.sellerPrice || 0);
         payload.priceCurrencyCode = productForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD';
@@ -2890,6 +2934,24 @@ export default function SellerDashboard() {
                     <option value="">No material types found</option>
                   ) : null}
                   {materialOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className={isFieldHidden(dashboardGovernance.fields.materialType) ? 'hidden' : ''}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fabric</label>
+                <select
+                  value={productForm.fabricCategoryId}
+                  onChange={(e) => setProductForm((prev) => ({ ...prev, fabricCategoryId: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.materialType) || isApprovedFieldLocked('fabricCategoryId')}
+                >
+                  {fabricCategoryOptions.length === 0 ? (
+                    <option value="">No fabric categories found</option>
+                  ) : null}
+                  {fabricCategoryOptions.map((option) => (
                     <option key={option.id} value={option.id}>
                       {option.name}
                     </option>

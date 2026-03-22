@@ -4334,6 +4334,8 @@ const normalizeFabricDetailPayload = (raw: any) => {
     minYards: minOrderMeters,
     stockMeters,
     stockYards: stockMeters,
+    materialTypeName: String(raw?.materialTypeName || raw?.materialType?.name || 'Material').trim() || 'Material',
+    fabricCategoryName: String(raw?.fabricCategoryName || raw?.fabricCategory?.name || 'Fabric').trim() || 'Fabric',
   };
 };
 
@@ -4417,6 +4419,10 @@ const normalizeReadyToWearDetailPayload = (raw: any) => {
     basePrice: toFiniteNumber(raw?.basePrice, raw?.finalPrice, firstVariantPrice, price),
     finalPrice: toFiniteNumber(raw?.finalPrice, price),
     price,
+    materialTypeName: String(raw?.materialTypeName || raw?.materialType?.name || raw?.material || 'Material').trim() || 'Material',
+    fabricCategoryName: String(raw?.fabricCategoryName || raw?.fabricCategory?.name || raw?.fabric || 'Fabric').trim() || 'Fabric',
+    material: String(raw?.materialTypeName || raw?.materialType?.name || raw?.material || 'Material').trim() || 'Material',
+    fabric: String(raw?.fabricCategoryName || raw?.fabricCategory?.name || raw?.fabric || 'Fabric').trim() || 'Fabric',
     inStock: sizeVariations.some((entry: any) => Number(entry?.stock || 0) > 0),
   };
 };
@@ -4428,9 +4434,13 @@ const productsApi = {
   getMaterials: () =>
     apiService.get<{ success: boolean; data: any[] }>('/products/materials'),
 
+  getFabricCategories: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/products/fabric-categories'),
+
   getFabrics: async (params?: {
     country?: string;
     materialTypeId?: string;
+    fabricCategoryId?: string;
     color?: string;
     sellerId?: string;
     search?: string;
@@ -4522,6 +4532,8 @@ const productsApi = {
     categoryId?: string;
     country?: string;
     material?: string;
+    materialTypeId?: string;
+    fabricCategoryId?: string;
     size?: string;
     color?: string;
     designerId?: string;
@@ -7092,6 +7104,18 @@ const adminApi = {
 
   deleteMaterial: (id: string) =>
     apiService.delete(`/admin/materials/${id}`),
+
+  getFabricCategories: () =>
+    apiService.get<{ success: boolean; data: any[] }>('/admin/fabric-categories'),
+
+  createFabricCategory: (data: any) =>
+    apiService.post<{ success: boolean; data: any }>('/admin/fabric-categories', data),
+
+  updateFabricCategory: (id: string, data: any) =>
+    apiService.patch(`/admin/fabric-categories/${id}`, data),
+
+  deleteFabricCategory: (id: string) =>
+    apiService.delete(`/admin/fabric-categories/${id}`),
 
   getPricingRules: (scope: 'CATALOG' | 'CHECKOUT' = 'CATALOG') =>
     apiService.get<{ success: boolean; data: any[] }>('/admin/pricing-rules', {

@@ -37,6 +37,7 @@ import { readCheckoutPricingSettings, saveCheckoutPricingSettings } from '../uti
 import { ensureResellerProfileForUser } from '../utils/referral-program';
 import { markTemporaryPasswordRequired } from '../utils/password-policy';
 import { readProductAutomationOutcomesForProducts } from '../utils/automation-approval';
+import { ensureProductTaxonomySchema } from '../utils/product-taxonomy-schema';
 
 const router = Router();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
@@ -1301,6 +1302,7 @@ const adminProductCreateSchema = z.object({
   description: z.string().min(1),
   categoryId: z.string().optional(),
   materialTypeId: z.string().optional(),
+  fabricCategoryId: z.string().optional(),
   sellerId: z.string().optional(),
   designerId: z.string().optional(),
   price: z.coerce.number().positive().optional(),
@@ -1332,6 +1334,7 @@ const adminProductUpdateSchema = z.object({
   description: z.string().min(1).optional(),
   categoryId: z.string().optional(),
   materialTypeId: z.string().optional(),
+  fabricCategoryId: z.string().optional(),
   price: z.coerce.number().positive().optional(),
   basePrice: z.coerce.number().positive().optional(),
   sellerPrice: z.coerce.number().positive().optional(),
@@ -1820,8 +1823,9 @@ const ensureAdminRbacSchema = async () => {
 router.use(async (_req, _res, next) => {
   try {
     await ensureAdminRbacSchema();
+    await ensureProductTaxonomySchema();
   } catch (error) {
-    console.error('Failed to ensure admin RBAC schema:', error);
+    console.error('Failed to ensure admin bootstrap schemas:', error);
   }
   next();
 });
@@ -1858,7 +1862,12 @@ const resolveAdminRoutePermissions = (method: string, path: string) => {
   if (path.startsWith('/vendor-profiles')) {
     return method === 'GET' ? [Permissions.VENDOR_PROFILES_READ] : [Permissions.VENDOR_PROFILES_REVIEW];
   }
-  if (path.startsWith('/products') || path.startsWith('/categories') || path.startsWith('/materials')) {
+  if (
+    path.startsWith('/products') ||
+    path.startsWith('/categories') ||
+    path.startsWith('/materials') ||
+    path.startsWith('/fabric-categories')
+  ) {
     return method === 'GET' ? [Permissions.ADMIN_DASHBOARD_READ] : [Permissions.PRODUCTS_MANAGE];
   }
   if (path.startsWith('/product-labels')) return [Permissions.PRODUCTS_MANAGE];
@@ -4865,7 +4874,7 @@ router.patch('/users/:id/admin-access', authorizePermissions(Permissions.ADMIN_R
 router.get('/products/options', async (_req, res, next) => {
   try {
     await ensureVendorProfilesForRoleUsers();
-    const [categories, materials, sellersRaw, designersRaw] = await Promise.all([
+    const [categories, materials, fabricCategories, sellersRaw, designersRaw] = await Promise.all([
       prisma.productCategory.findMany({
         where: { isActive: true },
         orderBy: { sortOrder: 'asc' },
@@ -4874,6 +4883,11 @@ router.get('/products/options', async (_req, res, next) => {
       prisma.materialType.findMany({
         where: { isActive: true },
         orderBy: { name: 'asc' },
+        select: { id: true, name: true },
+      }),
+      prisma.fabricCategory.findMany({
+        where: { isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
         select: { id: true, name: true },
       }),
       prisma.fabricSellerProfile.findMany({
@@ -4933,6 +4947,7 @@ router.get('/products/options', async (_req, res, next) => {
       data: {
         categories,
         materials,
+        fabricCategories,
         sellers,
         designers,
       },
@@ -5032,6 +5047,7 @@ router.get('/products', async (req, res, next) => {
             include: {
               seller: { select: { id: true, businessName: true, country: true } },
               materialType: { select: { name: true } },
+              fabricCategory: { select: { id: true, name: true } },
               images: { select: { url: true }, orderBy: { sortOrder: 'asc' } },
             },
             orderBy: { createdAt: 'desc' },
@@ -5074,6 +5090,8 @@ router.get('/products', async (req, res, next) => {
             include: {
               designer: { select: { id: true, businessName: true, country: true } },
               category: { select: { id: true, name: true } },
+              materialType: { select: { id: true, name: true } },
+              fabricCategory: { select: { id: true, name: true } },
               images: { select: { url: true }, orderBy: { sortOrder: 'asc' } },
               sizeVariations: true,
             },
@@ -5110,6 +5128,10 @@ router.get('/products', async (req, res, next) => {
         ownerName: item.seller?.businessName || 'Fabric Seller',
         ownerCountry: item.seller?.country || null,
         category: item.materialType?.name || 'Material',
+        materialTypeId: item.materialTypeId,
+        materialTypeName: item.materialType?.name || 'Material',
+        fabricCategoryId: item.fabricCategory?.id || null,
+        fabricCategoryName: item.fabricCategory?.name || 'Fabric',
         orderCount: Number((item as any)?.totalSold || 0),
         images: (Array.isArray(item.images) ? item.images : []).map((entry) => entry?.url).filter(Boolean),
         image: item.images?.[0]?.url || null,
@@ -5155,6 +5177,10 @@ router.get('/products', async (req, res, next) => {
         ownerCountry: item.designer?.country || null,
         categoryId: item.category?.id || null,
         category: item.category?.name || 'Category',
+        materialTypeId: item.materialType?.id || item.materialTypeId || null,
+        materialTypeName: item.materialType?.name || 'Material',
+        fabricCategoryId: item.fabricCategory?.id || item.fabricCategoryId || null,
+        fabricCategoryName: item.fabricCategory?.name || 'Fabric',
         orderCount: Number((item as any)?.totalSold || 0),
         images: (Array.isArray(item.images) ? item.images : []).map((entry) => entry?.url).filter(Boolean),
         image: item.images?.[0]?.url || null,
@@ -5640,13 +5666,17 @@ router.post('/products', async (req, res, next) => {
       });
     }
     if (payload.type === ProductType.FABRIC) {
-      if (!payload.sellerId || !payload.materialTypeId) {
-        return res.status(400).json({ success: false, message: 'sellerId and materialTypeId are required for fabric.' });
+      if (!payload.sellerId || !payload.materialTypeId || !payload.fabricCategoryId) {
+        return res.status(400).json({
+          success: false,
+          message: 'sellerId, materialTypeId, and fabricCategoryId are required for fabric.',
+        });
       }
       const created = await prisma.fabric.create({
         data: {
           sellerId: payload.sellerId,
           materialTypeId: payload.materialTypeId,
+          fabricCategoryId: payload.fabricCategoryId,
           name: payload.name.trim(),
           description: payload.description.trim(),
           sellerPrice: resolvedPrice,
@@ -5691,8 +5721,11 @@ router.post('/products', async (req, res, next) => {
       return res.status(201).json({ success: true, data: { id: created.id, type: payload.type }, message: 'Product created.' });
     }
 
-    if (!payload.designerId || !payload.categoryId) {
-      return res.status(400).json({ success: false, message: 'designerId and categoryId are required for ready-to-wear.' });
+    if (!payload.designerId || !payload.categoryId || !payload.materialTypeId || !payload.fabricCategoryId) {
+      return res.status(400).json({
+        success: false,
+        message: 'designerId, categoryId, materialTypeId, and fabricCategoryId are required for ready-to-wear.',
+      });
     }
     const { settings: readyToWearSizeSettings } = await readAdminReadyToWearSizesSettings();
     const minVariantStock = Math.max(2, Number(readyToWearSizeSettings?.minVariantStock || 2));
@@ -5730,6 +5763,8 @@ router.post('/products', async (req, res, next) => {
       data: {
         designerId: payload.designerId,
         categoryId: payload.categoryId,
+        materialTypeId: payload.materialTypeId,
+        fabricCategoryId: payload.fabricCategoryId,
         name: payload.name.trim(),
         description: payload.description.trim(),
         basePrice: resolvedPrice,
@@ -5789,6 +5824,7 @@ router.patch('/products/:type/:id', async (req, res, next) => {
           name: payload.name?.trim(),
           description: payload.description?.trim(),
           materialTypeId: payload.materialTypeId,
+          fabricCategoryId: payload.fabricCategoryId,
           sellerPrice: resolvedPrice,
           finalPrice: resolvedPrice,
           minYards: payload.minYards,
@@ -5850,6 +5886,8 @@ router.patch('/products/:type/:id', async (req, res, next) => {
         name: payload.name?.trim(),
         description: payload.description?.trim(),
         categoryId: payload.categoryId,
+        materialTypeId: payload.materialTypeId,
+        fabricCategoryId: payload.fabricCategoryId,
         basePrice: resolvedPrice,
         status: payload.status,
         isAvailable: payload.isAvailable,
@@ -6466,6 +6504,81 @@ router.delete('/materials/:id', async (req, res, next) => {
     res.json({
       success: true,
       message: 'Material type deleted successfully.',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ==================== FABRIC CATEGORIES ====================
+
+// Get all fabric categories
+router.get('/fabric-categories', async (_req, res, next) => {
+  try {
+    const categories = await prisma.fabricCategory.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+    res.json({
+      success: true,
+      data: categories,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Create fabric category
+router.post('/fabric-categories', async (req, res, next) => {
+  try {
+    const schema = z.object({
+      name: z.string().min(2),
+      slug: z.string().min(2),
+      description: z.string().optional(),
+      sortOrder: z.number().int().default(0),
+    });
+    const data = schema.parse(req.body);
+    const category = await prisma.fabricCategory.create({
+      data,
+    });
+    res.status(201).json({
+      success: true,
+      message: 'Fabric category created successfully.',
+      data: category,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Update fabric category
+router.patch('/fabric-categories/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { name, description, isActive, sortOrder } = req.body || {};
+    const category = await prisma.fabricCategory.update({
+      where: { id },
+      data: { name, description, isActive, sortOrder },
+    });
+    res.json({
+      success: true,
+      message: 'Fabric category updated successfully.',
+      data: category,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Delete fabric category
+router.delete('/fabric-categories/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await prisma.fabricCategory.delete({
+      where: { id },
+    });
+    res.json({
+      success: true,
+      message: 'Fabric category deleted successfully.',
     });
   } catch (error) {
     next(error);

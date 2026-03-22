@@ -27,6 +27,7 @@ const PRODUCT_EDIT_FIELD_CATALOG: Record<ProductChangeProductType, ProductEditFi
     { key: 'name', label: 'Product name', productType: 'FABRIC' },
     { key: 'description', label: 'Description', productType: 'FABRIC' },
     { key: 'materialTypeId', label: 'Material type', productType: 'FABRIC' },
+    { key: 'fabricCategoryId', label: 'Fabric category', productType: 'FABRIC' },
     { key: 'predominantColor', label: 'Predominant color', productType: 'FABRIC' },
     { key: 'sellerPrice', label: 'Price', productType: 'FABRIC' },
     { key: 'minYards', label: 'Minimum yard', productType: 'FABRIC' },
@@ -47,6 +48,8 @@ const PRODUCT_EDIT_FIELD_CATALOG: Record<ProductChangeProductType, ProductEditFi
     { key: 'name', label: 'Product name', productType: 'READY_TO_WEAR' },
     { key: 'description', label: 'Description', productType: 'READY_TO_WEAR' },
     { key: 'categoryId', label: 'Style/category', productType: 'READY_TO_WEAR' },
+    { key: 'materialTypeId', label: 'Material type', productType: 'READY_TO_WEAR' },
+    { key: 'fabricCategoryId', label: 'Fabric category', productType: 'READY_TO_WEAR' },
     { key: 'predominantColor', label: 'Predominant color', productType: 'READY_TO_WEAR' },
     { key: 'basePrice', label: 'Price', productType: 'READY_TO_WEAR' },
     { key: 'sizes', label: 'Variants (add/edit)', productType: 'READY_TO_WEAR' },
@@ -58,14 +61,14 @@ const PRODUCT_EDIT_POLICY_DEFAULTS: ProductEditPolicySettings = {
   defaultGrantDurationHours: 48,
   allowedFieldsByRole: {
     FABRIC_SELLER: {
-      FABRIC: ['sellerPrice', 'stockYards', 'minYards'],
+      FABRIC: ['sellerPrice', 'stockYards', 'minYards', 'materialTypeId', 'fabricCategoryId'],
       DESIGN: [],
       READY_TO_WEAR: [],
     },
     FASHION_DESIGNER: {
       FABRIC: [],
       DESIGN: ['basePrice', 'measurementVariables'],
-      READY_TO_WEAR: ['basePrice', 'sizes'],
+      READY_TO_WEAR: ['basePrice', 'sizes', 'materialTypeId', 'fabricCategoryId'],
     },
   },
 };

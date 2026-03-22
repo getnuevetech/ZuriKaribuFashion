@@ -21,6 +21,11 @@ interface Fabric {
     name: string;
   };
   materialTypeId?: string;
+  fabricCategory?: {
+    id: string;
+    name: string;
+  };
+  fabricCategoryId?: string;
   productLabels?: Array<{
     id: string;
     name: string;
@@ -73,7 +78,7 @@ type FeaturedProduct = {
 
 const DEFAULT_SETTINGS: CategoryPageSettings = {
   bannerTitle: 'Fabrics To Buy',
-  bannerSubtitle: 'Choose quality fabrics by material and country.',
+  bannerSubtitle: 'Choose quality fabrics by fabric category and country.',
   bannerImage: '/images/hero-fabrics.jpg',
   designPreset: 'STANDARD',
   bannerHeight: 320,
@@ -261,12 +266,12 @@ export default function Fabrics() {
     const loadMaterials = async () => {
       try {
         const [materialResponse, countryResponse] = await Promise.all([
-          api.products.getMaterials(),
+          api.products.getFabricCategories(),
           api.products.getCountries(),
         ]);
         if (materialResponse.success && Array.isArray(materialResponse.data)) {
           setMaterials(
-            materialResponse.data.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Material') }))
+            materialResponse.data.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Fabric') }))
           );
         }
         if (countryResponse.success && Array.isArray(countryResponse.data)) {
@@ -295,7 +300,7 @@ export default function Fabrics() {
       try {
         const response = await api.products.getFabrics({
           search: appliedFilters.search || undefined,
-          materialTypeId: selectedMaterialId,
+          fabricCategoryId: selectedMaterialId,
           country: appliedFilters.country || undefined,
           color: appliedFilters.color || undefined,
           page: appliedFilters.page,
@@ -385,7 +390,7 @@ export default function Fabrics() {
             Home &gt; Shop &gt; Fabrics <span className="mx-2">|</span>{' '}
             <span className="font-semibold text-gray-900">{pagination?.total ?? fabrics.length}</span> products
           </p>
-          <p className="text-sm text-gray-600">Material: {filters.material || 'All'}</p>
+          <p className="text-sm text-gray-600">Fabric: {filters.material || 'All'}</p>
         </div>
 
         <div className="bg-white border border-gray-200 p-3 flex flex-wrap items-center gap-2">
@@ -422,7 +427,7 @@ export default function Fabrics() {
             onChange={(event) => updateFilter('material', event.target.value)}
             className="rounded-md border px-3 py-2 text-sm"
           >
-            <option value="">Material (All)</option>
+            <option value="">Fabric (All)</option>
             {materials.map((material) => (
               <option key={material.id} value={material.id}>
                 {material.name}

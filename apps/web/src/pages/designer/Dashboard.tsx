@@ -105,6 +105,10 @@ interface ReadyProduct {
   description: string;
   predominantColor?: string | null;
   category: { name: string };
+  materialTypeId?: string;
+  materialTypeName?: string;
+  fabricCategoryId?: string;
+  fabricCategoryName?: string;
   basePrice: number;
   status: string;
   images: string[];
@@ -235,6 +239,8 @@ interface ReadyToWearFormState {
   description: string;
   predominantColor: string;
   categoryId: string;
+  materialTypeId: string;
+  fabricCategoryId: string;
   basePrice: string;
   imageUrls: string;
   priceCurrencyCode: string;
@@ -575,6 +581,8 @@ const ALL_READY_TO_WEAR_EDITABLE_FIELDS = [
   'name',
   'description',
   'categoryId',
+  'materialTypeId',
+  'fabricCategoryId',
   'predominantColor',
   'basePrice',
   'sizes',
@@ -703,6 +711,8 @@ export default function DesignerDashboard() {
   const [readyProducts, setReadyProducts] = useState<ReadyProduct[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [categories, setCategories] = useState<ProductCategoryOption[]>([]);
+  const [materialOptions, setMaterialOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [fabricCategoryOptions, setFabricCategoryOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [fabricOptions, setFabricOptions] = useState<FabricOption[]>([]);
   const [fabricCountryOptions, setFabricCountryOptions] = useState<string[]>([]);
   const [fabricMaterialOptions, setFabricMaterialOptions] = useState<FabricMaterialOption[]>([]);
@@ -759,6 +769,8 @@ export default function DesignerDashboard() {
     description: '',
     predominantColor: '',
     categoryId: '',
+    materialTypeId: '',
+    fabricCategoryId: '',
     basePrice: '',
     imageUrls: '',
     priceCurrencyCode: 'USD',
@@ -939,6 +951,8 @@ export default function DesignerDashboard() {
         readyResult,
         ordersResult,
         categoriesResult,
+        materialsResult,
+        fabricCategoriesResult,
         fabricOptionsResult,
         measurementTemplatesResult,
         currencyResult,
@@ -955,6 +969,8 @@ export default function DesignerDashboard() {
         api.designer.getReadyToWear(),
         api.designer.getOrders(),
         api.products.getCategories(),
+        api.products.getMaterials(),
+        api.products.getFabricCategories(),
         api.designer.getDesignFabricOptions({ limit: 300 }),
         api.designer.getMeasurementTemplateOptions(),
         api.currency.getMyOptions(),
@@ -971,6 +987,8 @@ export default function DesignerDashboard() {
       const readyRes = readyResult.status === 'fulfilled' ? readyResult.value : null;
       const ordersRes = ordersResult.status === 'fulfilled' ? ordersResult.value : null;
       const categoriesRes = categoriesResult.status === 'fulfilled' ? categoriesResult.value : null;
+      const materialsRes = materialsResult.status === 'fulfilled' ? materialsResult.value : null;
+      const fabricCategoriesRes = fabricCategoriesResult.status === 'fulfilled' ? fabricCategoriesResult.value : null;
       const fabricOptionsRes = fabricOptionsResult.status === 'fulfilled' ? fabricOptionsResult.value : null;
       const measurementTemplatesRes =
         measurementTemplatesResult.status === 'fulfilled' ? measurementTemplatesResult.value : null;
@@ -1140,6 +1158,10 @@ export default function DesignerDashboard() {
           description: item.description || '',
           predominantColor: item.predominantColor ? String(item.predominantColor).toUpperCase() : null,
           category: item.category || { name: 'Style' },
+          materialTypeId: String(item.materialTypeId || item.materialType?.id || ''),
+          materialTypeName: String(item.materialTypeName || item.materialType?.name || 'Material'),
+          fabricCategoryId: String(item.fabricCategoryId || item.fabricCategory?.id || ''),
+          fabricCategoryName: String(item.fabricCategoryName || item.fabricCategory?.name || 'Fabric'),
           basePrice: Number(item.basePrice || 0),
           status: item.status || 'DRAFT',
           images: normalizeImageUrlList(item.images),
@@ -1174,6 +1196,20 @@ export default function DesignerDashboard() {
         setCategories(
           Array.isArray(categoriesRes.data)
             ? categoriesRes.data.map((item: any) => ({ id: String(item.id), name: String(item.name || 'Style') }))
+            : []
+        );
+      }
+      if (materialsRes?.success) {
+        setMaterialOptions(
+          Array.isArray(materialsRes.data)
+            ? materialsRes.data.map((item: any) => ({ id: String(item.id || ''), name: String(item.name || 'Material') }))
+            : []
+        );
+      }
+      if (fabricCategoriesRes?.success) {
+        setFabricCategoryOptions(
+          Array.isArray(fabricCategoriesRes.data)
+            ? fabricCategoriesRes.data.map((item: any) => ({ id: String(item.id || ''), name: String(item.name || 'Fabric') }))
             : []
         );
       }
@@ -1554,6 +1590,24 @@ export default function DesignerDashboard() {
     }
   }, [categories, designForm.categoryId]);
 
+  useEffect(() => {
+    if (categories.length > 0 && !readyForm.categoryId) {
+      setReadyForm((prev) => ({ ...prev, categoryId: categories[0].id }));
+    }
+  }, [categories, readyForm.categoryId]);
+
+  useEffect(() => {
+    if (materialOptions.length > 0 && !readyForm.materialTypeId) {
+      setReadyForm((prev) => ({ ...prev, materialTypeId: materialOptions[0].id }));
+    }
+  }, [materialOptions, readyForm.materialTypeId]);
+
+  useEffect(() => {
+    if (fabricCategoryOptions.length > 0 && !readyForm.fabricCategoryId) {
+      setReadyForm((prev) => ({ ...prev, fabricCategoryId: fabricCategoryOptions[0].id }));
+    }
+  }, [fabricCategoryOptions, readyForm.fabricCategoryId]);
+
   const resetDesignForm = () => {
     const defaultMeasurements = measurementTemplateOptions
       .filter((item) => item.isRequired)
@@ -1594,6 +1648,8 @@ export default function DesignerDashboard() {
       description: '',
       predominantColor: '',
       categoryId: categories[0]?.id || '',
+      materialTypeId: materialOptions[0]?.id || '',
+      fabricCategoryId: fabricCategoryOptions[0]?.id || '',
       basePrice: '',
       imageUrls: '',
       priceCurrencyCode: currencyOptions.defaultCurrency || 'USD',
@@ -1677,6 +1733,21 @@ export default function DesignerDashboard() {
       categories.find((entry) => String(entry.name || '').trim().toLowerCase() === String(product.category?.name || '').trim().toLowerCase())?.id ||
       categories[0]?.id ||
       '';
+    const matchedMaterialTypeId =
+      String(product.materialTypeId || '').trim() ||
+      materialOptions.find(
+        (entry) => String(entry.name || '').trim().toLowerCase() === String(product.materialTypeName || '').trim().toLowerCase()
+      )?.id ||
+      materialOptions[0]?.id ||
+      '';
+    const matchedFabricCategoryId =
+      String(product.fabricCategoryId || '').trim() ||
+      fabricCategoryOptions.find(
+        (entry) =>
+          String(entry.name || '').trim().toLowerCase() === String(product.fabricCategoryName || '').trim().toLowerCase()
+      )?.id ||
+      fabricCategoryOptions[0]?.id ||
+      '';
     const mappedVariants =
       Array.isArray(product.sizeVariations) && product.sizeVariations.length > 0
         ? product.sizeVariations.map((entry) => ({
@@ -1703,6 +1774,8 @@ export default function DesignerDashboard() {
       description: product.description || '',
       predominantColor: String(product.predominantColor || '').toUpperCase(),
       categoryId: matchedCategoryId,
+      materialTypeId: matchedMaterialTypeId,
+      fabricCategoryId: matchedFabricCategoryId,
       basePrice: String(product.listingLocalPrice || product.basePrice || 0),
       imageUrls: Array.isArray(product.images) ? product.images.join('\n') : '',
       priceCurrencyCode: String(product.listingCurrencyCode || currencyOptions.defaultCurrency || 'USD'),
@@ -2246,6 +2319,20 @@ export default function DesignerDashboard() {
         }
         payload.categoryId = readyForm.categoryId;
       }
+      if (editableFieldSet.has('materialTypeId')) {
+        if (!readyForm.materialTypeId) {
+          setReadyError('Please select a material type.');
+          return;
+        }
+        payload.materialTypeId = readyForm.materialTypeId;
+      }
+      if (editableFieldSet.has('fabricCategoryId')) {
+        if (!readyForm.fabricCategoryId) {
+          setReadyError('Please select a fabric.');
+          return;
+        }
+        payload.fabricCategoryId = readyForm.fabricCategoryId;
+      }
       if (editableFieldSet.has('basePrice')) {
         if (basePrice <= 0) {
           setReadyError('Base price must be greater than zero.');
@@ -2316,6 +2403,14 @@ export default function DesignerDashboard() {
         setReadyError('Please select a style.');
         return;
       }
+      if (!readyForm.materialTypeId) {
+        setReadyError('Please select a material type.');
+        return;
+      }
+      if (!readyForm.fabricCategoryId) {
+        setReadyError('Please select a fabric.');
+        return;
+      }
       if (basePrice <= 0) {
         setReadyError('Base price must be greater than zero.');
         return;
@@ -2351,6 +2446,8 @@ export default function DesignerDashboard() {
       payload.name = readyForm.name.trim();
       payload.description = readyForm.description.trim();
       payload.categoryId = readyForm.categoryId;
+      payload.materialTypeId = readyForm.materialTypeId;
+      payload.fabricCategoryId = readyForm.fabricCategoryId;
       payload.basePrice = basePrice;
       payload.priceCurrencyCode = readyForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD';
       payload.sizes = normalizedVariants.map((row) => ({
@@ -4055,6 +4152,40 @@ export default function DesignerDashboard() {
                   {categories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className={isFieldHidden(dashboardGovernance.fields.readyPredominantColor) ? 'hidden' : ''}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Material Type</label>
+                <select
+                  value={readyForm.materialTypeId}
+                  onChange={(e) => setReadyForm((prev) => ({ ...prev, materialTypeId: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.readyStyle) || isApprovedReadyFieldLocked('materialTypeId')}
+                >
+                  {materialOptions.length === 0 ? <option value="">No material types found</option> : null}
+                  {materialOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className={isFieldHidden(dashboardGovernance.fields.readyPredominantColor) ? 'hidden' : ''}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fabric</label>
+                <select
+                  value={readyForm.fabricCategoryId}
+                  onChange={(e) => setReadyForm((prev) => ({ ...prev, fabricCategoryId: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  disabled={isFieldReadOnly(dashboardGovernance.fields.readyStyle) || isApprovedReadyFieldLocked('fabricCategoryId')}
+                >
+                  {fabricCategoryOptions.length === 0 ? <option value="">No fabric options found</option> : null}
+                  {fabricCategoryOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name}
                     </option>
                   ))}
                 </select>

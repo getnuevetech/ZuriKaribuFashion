@@ -242,9 +242,27 @@ model MaterialType {
   // Relations
   fabrics     Fabric[]
   designs     Design[] // Designs that use this material
+  readyToWear ReadyToWear[]
   
   isActive    Boolean @default(true)
   
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FabricCategory {
+  id          String @id @default(uuid())
+  name        String @unique
+  slug        String @unique
+  description String?
+
+  // Relations
+  fabrics     Fabric[]
+  readyToWear ReadyToWear[]
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -265,6 +283,8 @@ model Fabric {
   // Category & Material
   materialTypeId String
   materialType   MaterialType @relation(fields: [materialTypeId], references: [id])
+  fabricCategoryId String?
+  fabricCategory   FabricCategory? @relation(fields: [fabricCategoryId], references: [id])
   
   // Pricing (seller's price - admin adds markup)
   sellerPrice     Decimal @db.Decimal(10, 2)
@@ -293,6 +313,7 @@ model Fabric {
   
   @@index([sellerId])
   @@index([materialTypeId])
+  @@index([fabricCategoryId])
   @@index([status])
   @@index([isAvailable])
 }
@@ -424,6 +445,12 @@ model ReadyToWear {
   // Category (Admin defined)
   categoryId  String
   category    ProductCategory @relation(fields: [categoryId], references: [id])
+
+  // Material metadata (required by business rules; DB remains nullable for backfill safety)
+  materialTypeId String?
+  materialType   MaterialType? @relation(fields: [materialTypeId], references: [id])
+  fabricCategoryId String?
+  fabricCategory   FabricCategory? @relation(fields: [fabricCategoryId], references: [id])
   
   // Base Price (before size variations)
   basePrice   Decimal @db.Decimal(10, 2)
@@ -449,6 +476,8 @@ model ReadyToWear {
   
   @@index([designerId])
   @@index([categoryId])
+  @@index([materialTypeId])
+  @@index([fabricCategoryId])
   @@index([status])
 }
 

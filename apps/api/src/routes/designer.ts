@@ -45,6 +45,7 @@ import {
   readAutomationApprovalSettings,
   saveProductAutomationOutcome,
 } from '../utils/automation-approval';
+import { ensureProductTaxonomySchema } from '../utils/product-taxonomy-schema';
 
 const router = Router();
 let designerGovernanceSchemaEnsured = false;
@@ -72,6 +73,14 @@ const readTableColumns = async (tableName: string): Promise<Set<string>> => {
 
 router.use(authenticate);
 router.use(authorizePermissions(Permissions.DESIGNER_ACCESS));
+router.use(async (_req, _res, next) => {
+  try {
+    await ensureProductTaxonomySchema();
+  } catch (error) {
+    console.error('Failed to ensure product taxonomy schema for designer routes:', error);
+  }
+  next();
+});
 
 async function resolveDesignerProfile(userId: string) {
   const existing = await prisma.designerProfile.findFirst({
@@ -1502,6 +1511,7 @@ router.post('/designs', async (req, res, next) => {
       name: z.string().min(2),
       description: z.string().min(10),
       categoryId: z.string().uuid(),
+      materialTypeId: z.string().uuid().optional(),
       basePrice: z.number().positive(),
       priceCurrencyCode: z.string().min(3).max(8).optional(),
       suitableFabricIds: z.array(z.object({
@@ -1644,6 +1654,7 @@ router.post('/designs', async (req, res, next) => {
         name: data.name,
         description: data.description,
         categoryId: data.categoryId,
+        materialTypeId: data.materialTypeId,
         basePrice: pricing.usdPrice,
         finalPrice,
         status: ProductStatus.PENDING_REVIEW,
@@ -1842,6 +1853,7 @@ router.patch('/designs/:id', async (req, res, next) => {
       name: z.string().min(2).optional(),
       description: z.string().min(10).optional(),
       categoryId: z.string().uuid().optional(),
+      materialTypeId: z.string().uuid().optional(),
       basePrice: z.number().positive().optional(),
       priceCurrencyCode: z.string().min(3).max(8).optional(),
       suitableFabricIds: z
@@ -2176,6 +2188,8 @@ router.get('/ready-to-wear', async (req, res, next) => {
       where: { designerId: profile.id },
       include: {
         category: true,
+        materialType: { select: { id: true, name: true } },
+        fabricCategory: { select: { id: true, name: true } },
         images: true,
         sizeVariations: true,
       },
@@ -2243,6 +2257,10 @@ router.get('/ready-to-wear', async (req, res, next) => {
         const automationOutcome = automationOutcomesByProductId[item.id] || null;
         return {
           ...item,
+          materialTypeId: item.materialType?.id || item.materialTypeId || null,
+          materialTypeName: item.materialType?.name || 'Material',
+          fabricCategoryId: item.fabricCategory?.id || item.fabricCategoryId || null,
+          fabricCategoryName: item.fabricCategory?.name || 'Fabric',
           sizeVariations: Array.isArray(item.sizeVariations)
             ? item.sizeVariations.map((variation: any) => {
                 const decoded = decodeReadyToWearVariantKey(variation?.size);
@@ -2308,6 +2326,8 @@ router.post('/ready-to-wear', async (req, res, next) => {
       name: z.string().min(2),
       description: z.string().min(10),
       categoryId: z.string().uuid(),
+      materialTypeId: z.string().uuid(),
+      fabricCategoryId: z.string().uuid(),
       basePrice: z.number().positive(),
       priceCurrencyCode: z.string().min(3).max(8).optional(),
       predominantColor: z.string().trim().min(2).max(40).optional(),
@@ -2370,6 +2390,8 @@ router.post('/ready-to-wear', async (req, res, next) => {
         name: data.name,
         description: data.description,
         categoryId: data.categoryId,
+        materialTypeId: data.materialTypeId,
+        fabricCategoryId: data.fabricCategoryId,
         basePrice: pricing.usdPrice,
         status: ProductStatus.PENDING_REVIEW,
         sizeVariations: {
@@ -2389,6 +2411,8 @@ router.post('/ready-to-wear', async (req, res, next) => {
       },
       include: {
         category: true,
+        materialType: { select: { id: true, name: true } },
+        fabricCategory: { select: { id: true, name: true } },
         sizeVariations: true,
         images: true,
       },
@@ -2540,6 +2564,10 @@ router.post('/ready-to-wear', async (req, res, next) => {
       message: responseMessage,
       data: {
         ...product,
+        materialTypeId: product.materialType?.id || product.materialTypeId || null,
+        materialTypeName: product.materialType?.name || 'Material',
+        fabricCategoryId: product.fabricCategory?.id || product.fabricCategoryId || null,
+        fabricCategoryName: product.fabricCategory?.name || 'Fabric',
         status: responseStatus,
         isAvailable: responseAvailability,
         predominantColor: String(data.predominantColor || '').trim().toUpperCase() || null,
@@ -2574,6 +2602,8 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
       name: z.string().min(2).optional(),
       description: z.string().min(10).optional(),
       categoryId: z.string().uuid().optional(),
+      materialTypeId: z.string().uuid().optional(),
+      fabricCategoryId: z.string().uuid().optional(),
       basePrice: z.number().positive().optional(),
       priceCurrencyCode: z.string().min(3).max(8).optional(),
       predominantColor: z.string().trim().min(2).max(40).optional(),
@@ -2720,6 +2750,8 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.description !== undefined ? { description: data.description } : {}),
         ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
+        ...(data.materialTypeId !== undefined ? { materialTypeId: data.materialTypeId } : {}),
+        ...(data.fabricCategoryId !== undefined ? { fabricCategoryId: data.fabricCategoryId } : {}),
         ...(data.basePrice !== undefined ? { basePrice: nextBasePriceUsd } : {}),
         status:
           String(existing.status || '').toUpperCase() === 'APPROVED'
@@ -2750,6 +2782,8 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         data: payload,
         include: {
           category: true,
+          materialType: { select: { id: true, name: true } },
+          fabricCategory: { select: { id: true, name: true } },
           sizeVariations: true,
           images: true,
         },
@@ -2781,6 +2815,10 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
       message: 'Ready-to-wear product updated successfully.',
       data: {
         ...updated,
+        materialTypeId: updated.materialType?.id || (updated as any).materialTypeId || null,
+        materialTypeName: updated.materialType?.name || 'Material',
+        fabricCategoryId: updated.fabricCategory?.id || (updated as any).fabricCategoryId || null,
+        fabricCategoryName: updated.fabricCategory?.name || 'Fabric',
         predominantColor: latestReadyColorMap[id] || null,
         sizeVariations: Array.isArray(updated.sizeVariations)
           ? updated.sizeVariations.map((variation: any) => {
