@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto';
 import { prisma, UserRole, UserStatus } from '../db';
 import {
   Permission,
+  Permissions,
   getRolePermissions,
   hasAnyPermission,
   hasAnyPermissionFromGrants,
@@ -407,7 +408,21 @@ export function isSuperAdminPermissions(grants: string[] | undefined | null): bo
   const normalized = sanitizePermissionGrants(Array.isArray(grants) ? grants : []);
   const exact = new Set(normalized.map((entry) => String(entry || '').trim()));
   const lower = new Set(normalized.map((entry) => String(entry || '').trim().toLowerCase()));
-  return exact.has('*') || exact.has('ALL') || lower.has('all');
+  if (exact.has('*') || exact.has('ALL') || lower.has('all')) {
+    return true;
+  }
+  const allPermissionKeys = Object.values(Permissions);
+  const hasAllPermissions = allPermissionKeys.every((permission) => exact.has(permission));
+  if (hasAllPermissions) {
+    return true;
+  }
+  const controlPlanePermissions = [
+    Permissions.ADMIN_ROLE_MANAGE,
+    Permissions.USERS_MANAGE,
+    Permissions.HOMEPAGE_MANAGE,
+    Permissions.MODULES_MANAGE,
+  ];
+  return controlPlanePermissions.every((permission) => exact.has(permission));
 }
 
 export function authorizeSuperAdmin(req: Request, res: Response, next: NextFunction) {

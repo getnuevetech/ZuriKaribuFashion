@@ -34,6 +34,7 @@ import {
 import { useAuthStore } from '../store/authStore';
 import DashboardErrorBoundary from '../components/DashboardErrorBoundary';
 import { api } from '../services/api';
+import { isSuperAdminGrants } from '../auth/superAdmin';
 
 import { 
   User, 
@@ -197,11 +198,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
 
   const items = navItems[userType] || [];
   const userPermissions = Array.isArray(user?.permissions) ? user.permissions : [];
-  const isSuperAdmin = useMemo(() => {
-    const normalized = userPermissions.map((entry) => String(entry || '').trim());
-    const lowered = normalized.map((entry) => entry.toLowerCase());
-    return normalized.includes('*') || normalized.includes('ALL') || lowered.includes('all');
-  }, [userPermissions]);
+  const isSuperAdmin = useMemo(() => isSuperAdminGrants(userPermissions), [userPermissions]);
   const hasPermissionRequirement = (requirement: string) => {
     const alternatives = String(requirement || '')
       .split('|')

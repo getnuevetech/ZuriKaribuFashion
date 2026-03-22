@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { getAdminHomeRouteForPermissions, getHomeRouteForRole } from '../auth/rbac';
+import { isSuperAdminGrants } from '../auth/superAdmin';
 
 interface AdminPermissionGuardProps {
   required?: string[];
@@ -16,13 +17,6 @@ const hasPermissionRequirement = (grants: string[], requirement: string) => {
     .filter(Boolean);
   if (alternatives.length === 0) return true;
   return alternatives.some((permission) => grants.includes(permission));
-};
-
-const isSuperAdminGrants = (grants: string[]) => {
-  if (!Array.isArray(grants) || grants.length === 0) return false;
-  const normalized = grants.map((entry) => String(entry || '').trim());
-  const lowered = normalized.map((entry) => entry.toLowerCase());
-  return normalized.includes('*') || normalized.includes('ALL') || lowered.includes('all');
 };
 
 export default function AdminPermissionGuard({ required = [], superAdminOnly = false, children }: AdminPermissionGuardProps) {
