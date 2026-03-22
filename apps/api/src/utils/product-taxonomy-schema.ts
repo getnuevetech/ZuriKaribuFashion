@@ -36,6 +36,12 @@ export async function ensureProductTaxonomySchema() {
       await prisma.$executeRawUnsafe(`ALTER TABLE "ReadyToWear" ADD COLUMN IF NOT EXISTS "materialTypeId" TEXT`);
       await prisma.$executeRawUnsafe(`ALTER TABLE "ReadyToWear" ADD COLUMN IF NOT EXISTS "fabricCategoryId" TEXT`);
       await prisma.$executeRawUnsafe(
+        `ALTER TABLE "ReadyToWear" ADD COLUMN IF NOT EXISTS "hasAdditionalMaterialOrFabric" BOOLEAN NOT NULL DEFAULT false`
+      );
+      await prisma.$executeRawUnsafe(
+        `ALTER TABLE "Design" ADD COLUMN IF NOT EXISTS "hasAdditionalMaterialOrFabric" BOOLEAN NOT NULL DEFAULT false`
+      );
+      await prisma.$executeRawUnsafe(
         `CREATE INDEX IF NOT EXISTS "Fabric_fabricCategoryId_idx" ON "Fabric"("fabricCategoryId")`
       );
       await prisma.$executeRawUnsafe(

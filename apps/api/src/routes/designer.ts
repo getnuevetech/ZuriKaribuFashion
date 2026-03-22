@@ -1512,6 +1512,7 @@ router.post('/designs', async (req, res, next) => {
       description: z.string().min(10),
       categoryId: z.string().uuid(),
       materialTypeId: z.string().uuid().optional(),
+      hasAdditionalMaterialOrFabric: z.boolean().optional(),
       basePrice: z.number().positive(),
       priceCurrencyCode: z.string().min(3).max(8).optional(),
       suitableFabricIds: z.array(z.object({
@@ -1655,6 +1656,7 @@ router.post('/designs', async (req, res, next) => {
         description: data.description,
         categoryId: data.categoryId,
         materialTypeId: data.materialTypeId,
+        hasAdditionalMaterialOrFabric: data.hasAdditionalMaterialOrFabric === true,
         basePrice: pricing.usdPrice,
         finalPrice,
         status: ProductStatus.PENDING_REVIEW,
@@ -1854,6 +1856,7 @@ router.patch('/designs/:id', async (req, res, next) => {
       description: z.string().min(10).optional(),
       categoryId: z.string().uuid().optional(),
       materialTypeId: z.string().uuid().optional(),
+      hasAdditionalMaterialOrFabric: z.boolean().optional(),
       basePrice: z.number().positive().optional(),
       priceCurrencyCode: z.string().min(3).max(8).optional(),
       suitableFabricIds: z
@@ -2096,6 +2099,10 @@ router.patch('/designs/:id', async (req, res, next) => {
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.description !== undefined ? { description: data.description } : {}),
         ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
+        ...(data.materialTypeId !== undefined ? { materialTypeId: data.materialTypeId } : {}),
+        ...(data.hasAdditionalMaterialOrFabric !== undefined
+          ? { hasAdditionalMaterialOrFabric: data.hasAdditionalMaterialOrFabric === true }
+          : {}),
         ...(data.basePrice !== undefined ? { basePrice: nextBasePriceUsd } : {}),
         finalPrice: nextFinalPrice,
         status:
@@ -2328,6 +2335,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
       categoryId: z.string().uuid(),
       materialTypeId: z.string().uuid(),
       fabricCategoryId: z.string().uuid(),
+      hasAdditionalMaterialOrFabric: z.boolean().optional(),
       basePrice: z.number().positive(),
       priceCurrencyCode: z.string().min(3).max(8).optional(),
       predominantColor: z.string().trim().min(2).max(40).optional(),
@@ -2392,6 +2400,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
         categoryId: data.categoryId,
         materialTypeId: data.materialTypeId,
         fabricCategoryId: data.fabricCategoryId,
+        hasAdditionalMaterialOrFabric: data.hasAdditionalMaterialOrFabric === true,
         basePrice: pricing.usdPrice,
         status: ProductStatus.PENDING_REVIEW,
         sizeVariations: {
@@ -2604,6 +2613,7 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
       categoryId: z.string().uuid().optional(),
       materialTypeId: z.string().uuid().optional(),
       fabricCategoryId: z.string().uuid().optional(),
+      hasAdditionalMaterialOrFabric: z.boolean().optional(),
       basePrice: z.number().positive().optional(),
       priceCurrencyCode: z.string().min(3).max(8).optional(),
       predominantColor: z.string().trim().min(2).max(40).optional(),
@@ -2752,6 +2762,9 @@ router.patch('/ready-to-wear/:id', async (req, res, next) => {
         ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
         ...(data.materialTypeId !== undefined ? { materialTypeId: data.materialTypeId } : {}),
         ...(data.fabricCategoryId !== undefined ? { fabricCategoryId: data.fabricCategoryId } : {}),
+        ...(data.hasAdditionalMaterialOrFabric !== undefined
+          ? { hasAdditionalMaterialOrFabric: data.hasAdditionalMaterialOrFabric === true }
+          : {}),
         ...(data.basePrice !== undefined ? { basePrice: nextBasePriceUsd } : {}),
         status:
           String(existing.status || '').toUpperCase() === 'APPROVED'

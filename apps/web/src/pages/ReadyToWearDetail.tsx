@@ -50,6 +50,7 @@ interface ReadyToWearProduct {
   colors?: string[];
   material?: string;
   fabric?: string;
+  hasAdditionalMaterialOrFabric?: boolean;
   careInstructions?: string;
   shippingInfo?: string;
   inStock?: boolean;
@@ -808,6 +809,11 @@ export default function ReadyToWearDetail() {
             {activeInfoTab === 'DESCRIPTION' ? (
               <div className="space-y-4">
                 <p className="text-sm leading-6 text-gray-700">{product.description}</p>
+                {product.hasAdditionalMaterialOrFabric ? (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    Additional fabric/material outside of the primary fabric was used in making this design.
+                  </p>
+                ) : null}
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div className="rounded-lg border border-gray-200 p-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Material Type</p>

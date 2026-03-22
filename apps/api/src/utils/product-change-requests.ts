@@ -38,6 +38,7 @@ const PRODUCT_EDIT_FIELD_CATALOG: Record<ProductChangeProductType, ProductEditFi
     { key: 'name', label: 'Product name', productType: 'DESIGN' },
     { key: 'description', label: 'Description', productType: 'DESIGN' },
     { key: 'categoryId', label: 'Style/category', productType: 'DESIGN' },
+    { key: 'hasAdditionalMaterialOrFabric', label: 'Additional material/fabric indicator', productType: 'DESIGN' },
     { key: 'predominantColor', label: 'Predominant color', productType: 'DESIGN' },
     { key: 'basePrice', label: 'Price', productType: 'DESIGN' },
     { key: 'suitableFabricIds', label: 'Suitable fabrics', productType: 'DESIGN' },
@@ -50,6 +51,7 @@ const PRODUCT_EDIT_FIELD_CATALOG: Record<ProductChangeProductType, ProductEditFi
     { key: 'categoryId', label: 'Style/category', productType: 'READY_TO_WEAR' },
     { key: 'materialTypeId', label: 'Material type', productType: 'READY_TO_WEAR' },
     { key: 'fabricCategoryId', label: 'Fabric category', productType: 'READY_TO_WEAR' },
+    { key: 'hasAdditionalMaterialOrFabric', label: 'Additional material/fabric indicator', productType: 'READY_TO_WEAR' },
     { key: 'predominantColor', label: 'Predominant color', productType: 'READY_TO_WEAR' },
     { key: 'basePrice', label: 'Price', productType: 'READY_TO_WEAR' },
     { key: 'sizes', label: 'Variants (add/edit)', productType: 'READY_TO_WEAR' },
@@ -67,8 +69,8 @@ const PRODUCT_EDIT_POLICY_DEFAULTS: ProductEditPolicySettings = {
     },
     FASHION_DESIGNER: {
       FABRIC: [],
-      DESIGN: ['basePrice', 'measurementVariables'],
-      READY_TO_WEAR: ['basePrice', 'sizes', 'materialTypeId', 'fabricCategoryId'],
+      DESIGN: ['basePrice', 'measurementVariables', 'hasAdditionalMaterialOrFabric'],
+      READY_TO_WEAR: ['basePrice', 'sizes', 'materialTypeId', 'fabricCategoryId', 'hasAdditionalMaterialOrFabric'],
     },
   },
 };

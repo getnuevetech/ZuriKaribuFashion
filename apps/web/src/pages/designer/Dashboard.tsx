@@ -93,6 +93,7 @@ interface Design {
   listingCurrencyCode?: string;
   listingLocalPrice?: number;
   listingUsdPrice?: number;
+  hasAdditionalMaterialOrFabric?: boolean;
   approvedEditableFields?: string[];
   approvedEditAccessEndsAt?: string | null;
   automationOutcome?: ProductAutomationOutcome | null;
@@ -119,6 +120,7 @@ interface ReadyProduct {
   listingCurrencyCode?: string;
   listingLocalPrice?: number;
   listingUsdPrice?: number;
+  hasAdditionalMaterialOrFabric?: boolean;
   approvedEditableFields?: string[];
   approvedEditAccessEndsAt?: string | null;
   automationOutcome?: ProductAutomationOutcome | null;
@@ -225,6 +227,7 @@ interface DesignFormState {
   requiredFabricYards: string;
   selectedMeasurementNames: string[];
   priceCurrencyCode: string;
+  hasAdditionalMaterialOrFabric: boolean;
 }
 
 interface ReadyVariantFormRow {
@@ -245,6 +248,7 @@ interface ReadyToWearFormState {
   imageUrls: string;
   priceCurrencyCode: string;
   variants: ReadyVariantFormRow[];
+  hasAdditionalMaterialOrFabric: boolean;
 }
 
 interface PaymentProviderOption {
@@ -571,6 +575,7 @@ const ALL_DESIGN_EDITABLE_FIELDS = [
   'name',
   'description',
   'categoryId',
+  'hasAdditionalMaterialOrFabric',
   'predominantColor',
   'basePrice',
   'suitableFabricIds',
@@ -583,6 +588,7 @@ const ALL_READY_TO_WEAR_EDITABLE_FIELDS = [
   'categoryId',
   'materialTypeId',
   'fabricCategoryId',
+  'hasAdditionalMaterialOrFabric',
   'predominantColor',
   'basePrice',
   'sizes',
@@ -754,6 +760,7 @@ export default function DesignerDashboard() {
     requiredFabricYards: '',
     selectedMeasurementNames: [],
     priceCurrencyCode: 'USD',
+    hasAdditionalMaterialOrFabric: false,
   });
   const [showReadyModal, setShowReadyModal] = useState(false);
   const [isSavingReady, setIsSavingReady] = useState(false);
@@ -775,6 +782,7 @@ export default function DesignerDashboard() {
     imageUrls: '',
     priceCurrencyCode: 'USD',
     variants: [{ size: 'M', color: 'DEFAULT', price: '', stock: '2' }],
+    hasAdditionalMaterialOrFabric: false,
   });
   const [currencyOptions, setCurrencyOptions] = useState<{
     defaultCurrency: string;
@@ -1144,6 +1152,7 @@ export default function DesignerDashboard() {
           listingCurrencyCode: String(design.listingCurrencyCode || 'USD'),
           listingLocalPrice: Number(design.listingLocalPrice || design.basePrice || 0),
           listingUsdPrice: Number(design.listingUsdPrice || design.basePrice || 0),
+          hasAdditionalMaterialOrFabric: design.hasAdditionalMaterialOrFabric === true,
           approvedEditableFields: Array.isArray(design.approvedEditableFields) ? design.approvedEditableFields : [],
           approvedEditAccessEndsAt: design.approvedEditAccessEndsAt ? String(design.approvedEditAccessEndsAt) : null,
           automationOutcome: normalizeAutomationOutcome(design.automationOutcome),
@@ -1184,6 +1193,7 @@ export default function DesignerDashboard() {
           listingCurrencyCode: String(item.listingCurrencyCode || 'USD'),
           listingLocalPrice: Number(item.listingLocalPrice || item.basePrice || 0),
           listingUsdPrice: Number(item.listingUsdPrice || item.basePrice || 0),
+          hasAdditionalMaterialOrFabric: item.hasAdditionalMaterialOrFabric === true,
           approvedEditableFields: Array.isArray(item.approvedEditableFields) ? item.approvedEditableFields : [],
           approvedEditAccessEndsAt: item.approvedEditAccessEndsAt ? String(item.approvedEditAccessEndsAt) : null,
           automationOutcome: normalizeAutomationOutcome(item.automationOutcome),
@@ -1623,6 +1633,7 @@ export default function DesignerDashboard() {
       requiredFabricYards: '',
       selectedMeasurementNames: defaultMeasurements,
       priceCurrencyCode: currencyOptions.defaultCurrency || 'USD',
+      hasAdditionalMaterialOrFabric: false,
     });
     setSelectedDesign(null);
     setIsEditMode(false);
@@ -1654,6 +1665,7 @@ export default function DesignerDashboard() {
       imageUrls: '',
       priceCurrencyCode: currencyOptions.defaultCurrency || 'USD',
       variants: [{ size: defaultSize, color: 'DEFAULT', price: '', stock: String(minReadyVariantStock) }],
+      hasAdditionalMaterialOrFabric: false,
     });
     setIsReadyEditMode(false);
     setSelectedReadyForEdit(null);
@@ -1694,6 +1706,7 @@ export default function DesignerDashboard() {
       requiredFabricYards,
       selectedMeasurementNames: (design.measurementVariables || []).map((item) => item.name).filter(Boolean),
       priceCurrencyCode: String(design.listingCurrencyCode || currencyOptions.defaultCurrency || 'USD'),
+      hasAdditionalMaterialOrFabric: design.hasAdditionalMaterialOrFabric === true,
     });
     const firstSellerCountry = String(design.suitableFabrics?.[0]?.sellerCountry || '').trim();
     if (firstSellerCountry) {
@@ -1780,6 +1793,7 @@ export default function DesignerDashboard() {
       imageUrls: Array.isArray(product.images) ? product.images.join('\n') : '',
       priceCurrencyCode: String(product.listingCurrencyCode || currencyOptions.defaultCurrency || 'USD'),
       variants: mappedVariants,
+      hasAdditionalMaterialOrFabric: product.hasAdditionalMaterialOrFabric === true,
     });
     setFeaturedRequestNotes('');
     setProductChangeRequestMessage('');
@@ -2155,6 +2169,9 @@ export default function DesignerDashboard() {
         }
         payload.categoryId = designForm.categoryId;
       }
+      if (editableFieldSet.has('hasAdditionalMaterialOrFabric')) {
+        payload.hasAdditionalMaterialOrFabric = designForm.hasAdditionalMaterialOrFabric === true;
+      }
       if (editableFieldSet.has('basePrice')) {
         if (Number(designForm.basePrice || 0) <= 0) {
           setDesignError('Base price must be greater than zero.');
@@ -2239,6 +2256,7 @@ export default function DesignerDashboard() {
       payload.name = designForm.name.trim();
       payload.description = designForm.description.trim();
       payload.categoryId = designForm.categoryId;
+      payload.hasAdditionalMaterialOrFabric = designForm.hasAdditionalMaterialOrFabric === true;
       payload.basePrice = Number(designForm.basePrice);
       payload.priceCurrencyCode = designForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD';
       payload.suitableFabricIds = suitableFabricIds;
@@ -2332,6 +2350,9 @@ export default function DesignerDashboard() {
           return;
         }
         payload.fabricCategoryId = readyForm.fabricCategoryId;
+      }
+      if (editableFieldSet.has('hasAdditionalMaterialOrFabric')) {
+        payload.hasAdditionalMaterialOrFabric = readyForm.hasAdditionalMaterialOrFabric === true;
       }
       if (editableFieldSet.has('basePrice')) {
         if (basePrice <= 0) {
@@ -2448,6 +2469,7 @@ export default function DesignerDashboard() {
       payload.categoryId = readyForm.categoryId;
       payload.materialTypeId = readyForm.materialTypeId;
       payload.fabricCategoryId = readyForm.fabricCategoryId;
+      payload.hasAdditionalMaterialOrFabric = readyForm.hasAdditionalMaterialOrFabric === true;
       payload.basePrice = basePrice;
       payload.priceCurrencyCode = readyForm.priceCurrencyCode || currencyOptions.defaultCurrency || 'USD';
       payload.sizes = normalizedVariants.map((row) => ({
@@ -4211,6 +4233,26 @@ export default function DesignerDashboard() {
                 </select>
               </div>
 
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Did you use any other material/fabric besides the primary fabric for the design?
+                </label>
+                <select
+                  value={readyForm.hasAdditionalMaterialOrFabric ? 'YES' : 'NO'}
+                  onChange={(e) =>
+                    setReadyForm((prev) => ({ ...prev, hasAdditionalMaterialOrFabric: e.target.value === 'YES' }))
+                  }
+                  className="w-full px-4 py-2 border rounded-lg"
+                  disabled={
+                    isFieldReadOnly(dashboardGovernance.fields.readyPredominantColor) ||
+                    isApprovedReadyFieldLocked('hasAdditionalMaterialOrFabric')
+                  }
+                >
+                  <option value="NO">No</option>
+                  <option value="YES">Yes</option>
+                </select>
+              </div>
+
               <div className={isFieldHidden(dashboardGovernance.fields.readyBasePrice) ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Base Price ({readyForm.priceCurrencyCode})</label>
                 <input
@@ -4724,6 +4766,26 @@ export default function DesignerDashboard() {
                       {color}
                     </option>
                   ))}
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Will you use any other material/fabric besides the primary fabric for this design?
+                </label>
+                <select
+                  value={designForm.hasAdditionalMaterialOrFabric ? 'YES' : 'NO'}
+                  onChange={(e) =>
+                    setDesignForm((prev) => ({ ...prev, hasAdditionalMaterialOrFabric: e.target.value === 'YES' }))
+                  }
+                  className="w-full px-4 py-2 border rounded-lg"
+                  disabled={
+                    isFieldReadOnly(dashboardGovernance.fields.designPredominantColor) ||
+                    isApprovedDesignFieldLocked('hasAdditionalMaterialOrFabric')
+                  }
+                >
+                  <option value="NO">No</option>
+                  <option value="YES">Yes</option>
                 </select>
               </div>
 

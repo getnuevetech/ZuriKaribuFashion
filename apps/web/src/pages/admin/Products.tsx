@@ -45,6 +45,7 @@ interface Product {
   }>;
   requiredFabricYards?: number;
   predominantColor?: string | null;
+  hasAdditionalMaterialOrFabric?: boolean;
   isFeatured?: boolean;
   featuredSections?: string[];
   aiAutomationApprovedTag?: boolean;
@@ -216,6 +217,7 @@ export default function AdminProducts() {
     stock: 2,
     size: 'M',
     readyVariants: [{ size: 'M', color: 'DEFAULT', price: 0, stock: 2 }] as ReadyVariantRow[],
+    hasAdditionalMaterialOrFabric: false,
   });
 
   const getDefaultFeaturedSection = (type: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR') => {
@@ -900,6 +902,7 @@ export default function AdminProducts() {
       stock: minReadyVariantStock,
       size: 'M',
       readyVariants: [{ size: 'M', color: 'DEFAULT', price: 0, stock: minReadyVariantStock }],
+      hasAdditionalMaterialOrFabric: false,
     });
     setImagesDirty(false);
     setReadyVariantsDirty(false);
@@ -1028,6 +1031,7 @@ export default function AdminProducts() {
         existingReadyVariants.length > 0
           ? existingReadyVariants
           : [{ size: 'M', color: 'DEFAULT', price: Number(sourceProduct.finalPrice || 0), stock: minReadyVariantStock }],
+      hasAdditionalMaterialOrFabric: sourceProduct.hasAdditionalMaterialOrFabric === true,
     });
     setImagesDirty(false);
     setReadyVariantsDirty(shouldForceVariantSave);
@@ -1175,6 +1179,10 @@ export default function AdminProducts() {
           variants: readyVariantPayload,
           // Backward compatibility for older admin APIs that expect `sizes`.
           sizes: readyVariantPayload,
+          hasAdditionalMaterialOrFabric:
+            editing.type === 'DESIGN' || editing.type === 'READY_TO_WEAR'
+              ? form.hasAdditionalMaterialOrFabric === true
+              : undefined,
         });
       } else {
         const readyVariantPayload =
@@ -1212,6 +1220,10 @@ export default function AdminProducts() {
           variants: readyVariantPayload,
           // Backward compatibility for older admin APIs that expect `sizes`.
           sizes: readyVariantPayload,
+          hasAdditionalMaterialOrFabric:
+            form.type === 'DESIGN' || form.type === 'READY_TO_WEAR'
+              ? form.hasAdditionalMaterialOrFabric === true
+              : undefined,
         });
         savedId = created.data?.id || null;
         savedType = (created.data?.type as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR') || form.type;
@@ -2275,6 +2287,23 @@ export default function AdminProducts() {
                         </div>
                       </>
                     ) : null}
+                    <div className="md:col-span-2">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        {(editing?.type || form.type) === 'READY_TO_WEAR'
+                          ? 'Did you use any other material/fabric besides the primary fabric for the design?'
+                          : 'Will you use any other material/fabric besides the primary fabric for this design?'}
+                      </label>
+                      <select
+                        value={form.hasAdditionalMaterialOrFabric ? 'YES' : 'NO'}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, hasAdditionalMaterialOrFabric: e.target.value === 'YES' }))
+                        }
+                        className="w-full rounded border px-3 py-2"
+                      >
+                        <option value="NO">No</option>
+                        <option value="YES">Yes</option>
+                      </select>
+                    </div>
                   </>
                 )}
               </div>

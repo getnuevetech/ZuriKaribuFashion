@@ -396,7 +396,7 @@ const buildVendorAiRecommendations = (input: {
     const field = String(entry.field || '').trim();
     const label = String(entry.label || entry.key || '').trim();
     const reason = String(entry.reason || '').trim();
-    if (field === 'images[0]') {
+    if (field === 'images[0]' || field === 'images[*]') {
       add(
         `Upload a clearer image of the exact same product/angle (enhancement only). Note: ${
           reason || 'Regeneration must preserve original product identity.'
@@ -597,7 +597,7 @@ const defaultCriterionTargetField = (criterionKey: string, productType?: Product
   if (key === 'minimum_yards') return 'minYards';
   if (key === 'stock_vs_minimum') return 'stockYards';
   if (key === 'predominant_color_match') return 'predominantColor';
-  if (key === 'image_quality') return 'images[0]';
+  if (key === 'image_quality') return 'images[*]';
   if (key === 'account_notes_grammar') return 'account.notes';
   return '';
 };
@@ -629,7 +629,11 @@ const normalizeCriterionFunctionKey = (value: unknown, criterionKey: string) => 
 
 const defaultFixerFunctionForCriterionKey = (criterionKey: string, targetField: string) => {
   const normalizedField = String(targetField || '').trim().toLowerCase();
-  if (normalizedField === 'images[0]' || String(criterionKey || '').trim().toLowerCase() === 'image_quality') {
+  if (
+    normalizedField === 'images[0]' ||
+    normalizedField === 'images[*]' ||
+    String(criterionKey || '').trim().toLowerCase() === 'image_quality'
+  ) {
     return 'image_regeneration';
   }
   return 'text_grammar_enhancement';
@@ -1282,9 +1286,9 @@ const formatAutomationMessageLines = (value: string, maxLineLength = 520, maxLin
 const FIELD_FALLBACK_BY_CRITERION_KEY: Record<string, string[]> = {
   name_grammar: ['name'],
   description_grammar: ['description'],
-  image_quality: ['images[0]'],
+  image_quality: ['images[*]'],
   predominant_color_match: ['predominantColor'],
-  material_match: ['images[0]'],
+  material_match: ['images[*]'],
   style_match: ['name', 'description'],
   price_outlier: ['finalPrice/basePrice'],
   currency_sanity: ['finalPrice/basePrice'],
@@ -1298,6 +1302,7 @@ const HUMAN_FIELD_LABELS: Record<string, string> = {
   name: 'Product title',
   description: 'Product description',
   'images[0]': 'Primary product image',
+  'images[*]': 'All product images',
   finalPrice: 'Final price',
   basePrice: 'Base price',
   'finalPrice/basePrice': 'Product pricing',
@@ -2499,49 +2504,61 @@ const CORE_FIELD_CATALOG_BY_SCOPE: Record<
   AutomationFieldCatalogOption[]
 > = {
   FABRIC: [
-    { key: 'name', label: 'Fabric Name', dataType: 'TEXT', source: 'CORE' },
-    { key: 'description', label: 'Fabric Description', dataType: 'LONG_TEXT', source: 'CORE' },
-    { key: 'basePrice', label: 'Base Price', dataType: 'DECIMAL', source: 'CORE' },
-    { key: 'finalPrice', label: 'Final Price', dataType: 'DECIMAL', source: 'CORE' },
-    { key: 'minYards', label: 'Minimum Yards', dataType: 'NUMBER', source: 'CORE' },
-    { key: 'stockYards', label: 'Stock Yards', dataType: 'NUMBER', source: 'CORE' },
-    { key: 'currency', label: 'Currency', dataType: 'TEXT', source: 'CORE' },
-    { key: 'material', label: 'Material', dataType: 'TEXT', source: 'CORE' },
-    { key: 'width', label: 'Fabric Width', dataType: 'TEXT', source: 'CORE' },
-    { key: 'country', label: 'Country', dataType: 'TEXT', source: 'CORE' },
-    { key: 'careInstructions', label: 'Care Instructions', dataType: 'LONG_TEXT', source: 'CORE' },
-    { key: 'predominantColor', label: 'Predominant Color', dataType: 'TEXT', source: 'CORE' },
-    { key: 'images[0]', label: 'Primary Image', dataType: 'URL', source: 'CORE' },
-    { key: 'images[*]', label: 'All Images', dataType: 'MULTI_ENUM', source: 'CORE' },
+    { key: 'name', label: 'Fabric Product Name', dataType: 'TEXT', source: 'CORE' },
+    { key: 'description', label: 'Fabric Product Description', dataType: 'LONG_TEXT', source: 'CORE' },
+    { key: 'basePrice', label: 'Fabric Base Price', dataType: 'DECIMAL', source: 'CORE' },
+    { key: 'finalPrice', label: 'Fabric Final Price', dataType: 'DECIMAL', source: 'CORE' },
+    { key: 'minYards', label: 'Minimum Order Quantity (yards)', dataType: 'NUMBER', source: 'CORE' },
+    { key: 'stockYards', label: 'Available Stock Quantity (yards)', dataType: 'NUMBER', source: 'CORE' },
+    { key: 'currency', label: 'Listing Currency Code', dataType: 'TEXT', source: 'CORE' },
+    { key: 'material', label: 'Primary Material Name', dataType: 'TEXT', source: 'CORE' },
+    { key: 'width', label: 'Fabric Width / Roll Width', dataType: 'TEXT', source: 'CORE' },
+    { key: 'country', label: 'Seller Country', dataType: 'TEXT', source: 'CORE' },
+    { key: 'careInstructions', label: 'Fabric Care & Washing Instructions', dataType: 'LONG_TEXT', source: 'CORE' },
+    { key: 'predominantColor', label: 'Predominant Product Color', dataType: 'TEXT', source: 'CORE' },
+    { key: 'images[0]', label: 'Primary Product Image (first image)', dataType: 'URL', source: 'CORE' },
+    { key: 'images[*]', label: 'All Product Images (verify every uploaded image)', dataType: 'MULTI_ENUM', source: 'CORE' },
   ],
   READY_TO_WEAR: [
     { key: 'name', label: 'Product Name', dataType: 'TEXT', source: 'CORE' },
     { key: 'description', label: 'Product Description', dataType: 'LONG_TEXT', source: 'CORE' },
     { key: 'basePrice', label: 'Base Price', dataType: 'DECIMAL', source: 'CORE' },
-    { key: 'currency', label: 'Currency', dataType: 'TEXT', source: 'CORE' },
-    { key: 'categoryId', label: 'Category ID', dataType: 'TEXT', source: 'CORE' },
-    { key: 'categoryName', label: 'Category Name', dataType: 'TEXT', source: 'CORE' },
-    { key: 'material', label: 'Material', dataType: 'TEXT', source: 'CORE' },
-    { key: 'careInstructions', label: 'Care Instructions', dataType: 'LONG_TEXT', source: 'CORE' },
-    { key: 'gender', label: 'Gender', dataType: 'TEXT', source: 'CORE' },
-    { key: 'predominantColor', label: 'Predominant Color', dataType: 'TEXT', source: 'CORE' },
-    { key: 'images[0]', label: 'Primary Image', dataType: 'URL', source: 'CORE' },
-    { key: 'images[*]', label: 'All Images', dataType: 'MULTI_ENUM', source: 'CORE' },
+    { key: 'currency', label: 'Listing Currency Code', dataType: 'TEXT', source: 'CORE' },
+    { key: 'categoryId', label: 'Style Category (system ID)', dataType: 'TEXT', source: 'CORE' },
+    { key: 'categoryName', label: 'Style Category Name', dataType: 'TEXT', source: 'CORE' },
+    { key: 'material', label: 'Primary Material/Fabric Name', dataType: 'TEXT', source: 'CORE' },
+    { key: 'careInstructions', label: 'Product Care Instructions', dataType: 'LONG_TEXT', source: 'CORE' },
+    { key: 'gender', label: 'Target Gender', dataType: 'TEXT', source: 'CORE' },
+    { key: 'predominantColor', label: 'Predominant Product Color', dataType: 'TEXT', source: 'CORE' },
+    {
+      key: 'hasAdditionalMaterialOrFabric',
+      label: 'Additional Material/Fabric Used (Yes/No)',
+      dataType: 'BOOLEAN',
+      source: 'CORE',
+    },
+    { key: 'images[0]', label: 'Primary Product Image (first image)', dataType: 'URL', source: 'CORE' },
+    { key: 'images[*]', label: 'All Product Images (verify every uploaded image)', dataType: 'MULTI_ENUM', source: 'CORE' },
     { key: 'variants[*].size', label: 'Variant Size', dataType: 'TEXT', source: 'CORE' },
     { key: 'variants[*].color', label: 'Variant Color', dataType: 'TEXT', source: 'CORE' },
     { key: 'variants[*].price', label: 'Variant Price', dataType: 'DECIMAL', source: 'CORE' },
-    { key: 'variants[*].stock', label: 'Variant Stock', dataType: 'NUMBER', source: 'CORE' },
+    { key: 'variants[*].stock', label: 'Variant Stock Quantity', dataType: 'NUMBER', source: 'CORE' },
   ],
   DESIGN: [
     { key: 'name', label: 'Design Name', dataType: 'TEXT', source: 'CORE' },
     { key: 'description', label: 'Design Description', dataType: 'LONG_TEXT', source: 'CORE' },
     { key: 'basePrice', label: 'Base Price', dataType: 'DECIMAL', source: 'CORE' },
-    { key: 'currency', label: 'Currency', dataType: 'TEXT', source: 'CORE' },
-    { key: 'categoryId', label: 'Category ID', dataType: 'TEXT', source: 'CORE' },
-    { key: 'categoryName', label: 'Category Name', dataType: 'TEXT', source: 'CORE' },
-    { key: 'predominantColor', label: 'Predominant Color', dataType: 'TEXT', source: 'CORE' },
-    { key: 'images[0]', label: 'Primary Image', dataType: 'URL', source: 'CORE' },
-    { key: 'images[*]', label: 'All Images', dataType: 'MULTI_ENUM', source: 'CORE' },
+    { key: 'currency', label: 'Listing Currency Code', dataType: 'TEXT', source: 'CORE' },
+    { key: 'categoryId', label: 'Style Category (system ID)', dataType: 'TEXT', source: 'CORE' },
+    { key: 'categoryName', label: 'Style Category Name', dataType: 'TEXT', source: 'CORE' },
+    { key: 'predominantColor', label: 'Predominant Product Color', dataType: 'TEXT', source: 'CORE' },
+    {
+      key: 'hasAdditionalMaterialOrFabric',
+      label: 'Additional Material/Fabric Planned (Yes/No)',
+      dataType: 'BOOLEAN',
+      source: 'CORE',
+    },
+    { key: 'images[0]', label: 'Primary Product Image (first image)', dataType: 'URL', source: 'CORE' },
+    { key: 'images[*]', label: 'All Product Images (verify every uploaded image)', dataType: 'MULTI_ENUM', source: 'CORE' },
     { key: 'suitableFabrics[*]', label: 'Suitable Fabrics', dataType: 'MULTI_ENUM', source: 'CORE' },
     { key: 'requiredMeasurements[*]', label: 'Required Measurements', dataType: 'MULTI_ENUM', source: 'CORE' },
     { key: 'deliveryWindowDays', label: 'Delivery Window (days)', dataType: 'NUMBER', source: 'CORE' },
@@ -2738,7 +2755,7 @@ export const evaluateProductAutomationChecks = async (input: {
         return null;
     }
   };
-  const imageFieldForCriterion = (criterionKey: string) => (criterionKey === 'image_quality' ? 'images[0]' : '');
+  const imageFieldForCriterion = (criterionKey: string) => (criterionKey === 'image_quality' ? 'images[*]' : '');
   const normalizeComparableAutomationFieldValue = (field: string, value: string) => {
     const normalizedField = String(field || '').trim();
     const raw = String(value || '').trim();
@@ -2752,7 +2769,7 @@ export const evaluateProductAutomationChecks = async (input: {
       const numeric = Number(raw);
       return Number.isFinite(numeric) ? String(Number(numeric.toFixed(6))) : raw;
     }
-    if (normalizedField === 'images[0]') return raw;
+    if (normalizedField === 'images[0]' || normalizedField === 'images[*]') return raw;
     return raw.replace(/\s+/g, ' ').trim();
   };
   const previousAppliedEditByCriterionField = (() => {
@@ -3315,7 +3332,9 @@ Rules:
           previousAppliedEditByCriterionField.byField.get(mappedField);
         if (previousApplied) {
           const currentRawValue =
-            mappedField === 'images[0]' ? String(readStagedImageUrls()[0] || '').trim() : readStagedProductField(mappedField);
+            mappedField === 'images[0]' || mappedField === 'images[*]'
+              ? String(readStagedImageUrls()[0] || '').trim()
+              : readStagedProductField(mappedField);
           const currentComparable = normalizeComparableAutomationFieldValue(mappedField, currentRawValue);
           const previousComparable = normalizeComparableAutomationFieldValue(
             mappedField,
@@ -3550,12 +3569,12 @@ Rules:
             nextRow = {
               ...nextRow,
               status: 'PASS',
-              message: `${nextRow.message} AI auto-edit applied to primary image.`,
+              message: `${nextRow.message} AI auto-edit applied to product images (primary image updated).`,
             };
             changeReport.push({
               key: row.key,
               label: row.label,
-              field: 'images[0]',
+              field: 'images[*]',
               beforeValue: imageResult.before,
               afterValue: imageResult.after,
               status: 'APPLIED',
@@ -3577,7 +3596,7 @@ Rules:
             changeReport.push({
               key: row.key,
               label: row.label,
-              field: 'images[0]',
+              field: 'images[*]',
               beforeValue: imageResult.before,
               afterValue: imageResult.after,
               status: 'SKIPPED',
@@ -3698,6 +3717,7 @@ Rules:
       minYards: Number(product.minYards || 0),
       stockYards: Number(product.stockYards || 0),
       imageCount: product.images.length,
+      imageUrls: stagedImageUrls,
     });
     addResult({
       key: 'name_grammar',
@@ -3876,6 +3896,7 @@ Rules:
       basePrice: Number(product.basePrice || 0),
       variants: product.sizeVariations.length,
       imageCount: product.images.length,
+      imageUrls: stagedImageUrls,
     });
     addResult({
       key: 'name_grammar',
@@ -4044,6 +4065,7 @@ Rules:
       suitableFabrics: product.suitableFabrics.length,
       requiredMeasurements: product.measurementVariables.filter((row) => row.isRequired !== false).length,
       imageCount: product.images.length,
+      imageUrls: stagedImageUrls,
     });
     addResult({
       key: 'name_grammar',

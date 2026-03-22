@@ -66,6 +66,7 @@ interface Design {
   rating: number;
   reviewCount: number;
   orderCount: number;
+  hasAdditionalMaterialOrFabric?: boolean;
   productLabels?: Array<{
     id: string;
     name: string;
@@ -696,6 +697,11 @@ export default function DesignDetail() {
               {activeTab === 'details' && (
                 <div className="space-y-4">
                   <p className="text-gray-600 leading-relaxed">{design.description}</p>
+                  {design.hasAdditionalMaterialOrFabric ? (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      Additional fabric/material outside of the primary fabric will be used in making this design.
+                    </p>
+                  ) : null}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
                       <Shirt className="w-5 h-5 text-black" />

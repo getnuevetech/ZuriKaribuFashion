@@ -350,6 +350,7 @@ model Design {
   // Material Type
   materialTypeId String?
   materialType   MaterialType? @relation(fields: [materialTypeId], references: [id])
+  hasAdditionalMaterialOrFabric Boolean @default(false)
   
   // Pricing
   basePrice   Decimal @db.Decimal(10, 2) // Designer's price
@@ -451,6 +452,7 @@ model ReadyToWear {
   materialType   MaterialType? @relation(fields: [materialTypeId], references: [id])
   fabricCategoryId String?
   fabricCategory   FabricCategory? @relation(fields: [fabricCategoryId], references: [id])
+  hasAdditionalMaterialOrFabric Boolean @default(false)
   
   // Base Price (before size variations)
   basePrice   Decimal @db.Decimal(10, 2)
