@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, RefreshCw, ShieldCheck } from 'lucide-react';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
+import QRCode from 'qrcode';
 import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import Button from '../components/ui/Button';
@@ -41,6 +42,8 @@ export default function Login() {
   const [mfaError, setMfaError] = useState('');
   const [mfaCode, setMfaCode] = useState('');
   const [mfaChallenge, setMfaChallenge] = useState<LoginMfaChallenge | null>(null);
+  const [mfaSetupQrDataUrl, setMfaSetupQrDataUrl] = useState('');
+  const [mfaSetupQrError, setMfaSetupQrError] = useState('');
   const googleClientId = String(
     import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || ''
   ).trim();
@@ -92,6 +95,34 @@ export default function Login() {
     const targetRoute = resolvePostLoginRoute(user);
     navigate(targetRoute, { replace: true });
   }, [isAuthenticated, token, navigate, user, location.state, location.search]);
+
+  useEffect(() => {
+    const otpauthUrl = String(mfaChallenge?.setup?.otpauthUrl || '').trim();
+    if (!otpauthUrl) {
+      setMfaSetupQrDataUrl('');
+      setMfaSetupQrError('');
+      return;
+    }
+    let cancelled = false;
+    QRCode.toDataURL(otpauthUrl, {
+      width: 220,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+    })
+      .then((dataUrl) => {
+        if (cancelled) return;
+        setMfaSetupQrDataUrl(dataUrl);
+        setMfaSetupQrError('');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setMfaSetupQrDataUrl('');
+        setMfaSetupQrError('Unable to generate QR code. Use the setup key below.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mfaChallenge?.setup?.otpauthUrl]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -266,7 +297,19 @@ export default function Login() {
                 {mfaChallenge.method === 'TOTP_AUTHENTICATOR' && mfaChallenge.requiresTotpSetup ? (
                   <div className="space-y-2 rounded border border-gray-200 bg-white p-3">
                     <p className="text-xs font-semibold text-gray-800">Set up Google Authenticator</p>
-                    <p className="text-xs text-gray-600">Add a new account in your authenticator app using this setup key:</p>
+                    <p className="text-xs text-gray-600">
+                      Scan this barcode in your authenticator app. If scanning is unavailable, use the setup key.
+                    </p>
+                    {mfaSetupQrDataUrl ? (
+                      <div className="flex justify-center">
+                        <img
+                          src={mfaSetupQrDataUrl}
+                          alt="Authenticator setup QR code"
+                          className="h-44 w-44 rounded border border-gray-200 bg-white p-1"
+                        />
+                      </div>
+                    ) : null}
+                    {mfaSetupQrError ? <p className="text-[11px] text-amber-700">{mfaSetupQrError}</p> : null}
                     <code className="block break-all rounded bg-gray-100 p-2 text-[11px] text-gray-900">
                       {mfaChallenge.setup?.secret}
                     </code>

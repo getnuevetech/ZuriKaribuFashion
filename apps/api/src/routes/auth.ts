@@ -574,7 +574,14 @@ function getMailer(): nodemailer.Transporter | null {
 async function sendEmail(input: { to: string; subject: string; text: string; html: string }) {
   const transporter = getMailer();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-  if (!transporter || !from || !input.to) return;
+  if (!input.to) {
+    throw new Error('Missing email recipient.');
+  }
+  if (!transporter || !from) {
+    const error = new Error('SMTP is not configured for outbound email.');
+    (error as any).code = 'SMTP_NOT_CONFIGURED';
+    throw error;
+  }
   await transporter.sendMail({
     from,
     to: input.to,
@@ -617,6 +624,15 @@ const maskEmail = (value: string) => {
   const safeLocal =
     localPart.length <= 2 ? `${localPart.charAt(0)}*` : `${localPart.slice(0, 2)}${'*'.repeat(Math.max(1, localPart.length - 2))}`;
   return `${safeLocal}@${domain}`;
+};
+
+const buildMfaEmailDeliveryError = (
+  message = 'Email OTP delivery is currently unavailable. Please use Authenticator App or contact support.'
+) => {
+  const error = new Error(message) as Error & { code?: string; statusCode?: number };
+  error.code = 'MFA_EMAIL_DELIVERY_FAILED';
+  error.statusCode = 503;
+  return error;
 };
 
 async function issueLoginSuccessResponse(input: {
@@ -735,7 +751,7 @@ async function initiateMfaLoginChallenge(input: {
   if (methods.length === 0) return null;
   const mfaProfile = await readUserMfaProfile(input.user.id);
   const requestedMethod = normalizeMfaMethod(input.requestedMethod);
-  const selectedMethod =
+  let selectedMethod: AuthenticatorMethod =
     (requestedMethod && methods.includes(requestedMethod) && requestedMethod) ||
     (mfaProfile.preferredMethod && methods.includes(mfaProfile.preferredMethod) ? mfaProfile.preferredMethod : methods[0]);
   const expiresAt = new Date(Date.now() + settings.otpExpiryMinutes * 60 * 1000);
@@ -755,20 +771,29 @@ async function initiateMfaLoginChallenge(input: {
     }
     const codeHash = hashChallengeCode(challenge.id, code);
     await updateLoginChallenge(challenge.id, { codeHash });
-    void sendEmail({
-      to: input.user.email,
-      subject: 'Your sign-in verification code',
-      text: `Hello ${input.user.firstName || 'there'},\n\nYour one-time login code is: ${code}\n\nThe code expires in ${settings.otpExpiryMinutes} minute(s).`,
-      html: `<p>Hello ${input.user.firstName || 'there'},</p><p>Your one-time login code is:</p><p style="font-size: 24px; font-weight: 700; letter-spacing: 2px;">${code}</p><p>The code expires in <strong>${settings.otpExpiryMinutes} minute(s)</strong>.</p>`,
-    }).catch(() => undefined);
-    return {
-      challengeId: challenge.id,
-      method: selectedMethod,
-      methods,
-      expiresAt: expiresAt.toISOString(),
-      requiresTotpSetup: false,
-      deliveryHint: `Verification code sent to ${maskEmail(input.user.email)}`,
-    };
+    try {
+      await sendEmail({
+        to: input.user.email,
+        subject: 'Your sign-in verification code',
+        text: `Hello ${input.user.firstName || 'there'},\n\nYour one-time login code is: ${code}\n\nThe code expires in ${settings.otpExpiryMinutes} minute(s).`,
+        html: `<p>Hello ${input.user.firstName || 'there'},</p><p>Your one-time login code is:</p><p style="font-size: 24px; font-weight: 700; letter-spacing: 2px;">${code}</p><p>The code expires in <strong>${settings.otpExpiryMinutes} minute(s)</strong>.</p>`,
+      });
+      return {
+        challengeId: challenge.id,
+        method: selectedMethod,
+        methods,
+        expiresAt: expiresAt.toISOString(),
+        requiresTotpSetup: false,
+        deliveryHint: `Verification code sent to ${maskEmail(input.user.email)}`,
+      };
+    } catch (emailError) {
+      console.error('[auth/mfa] Failed to send email OTP challenge:', emailError);
+      await deleteLoginChallenge(challenge.id).catch(() => undefined);
+      if (!methods.includes('TOTP_AUTHENTICATOR')) {
+        throw buildMfaEmailDeliveryError();
+      }
+      selectedMethod = 'TOTP_AUTHENTICATOR';
+    }
   }
 
   const decryptedExistingSecret = mfaProfile.totpSecret ? decryptTotpSecret(mfaProfile.totpSecret) : '';
@@ -1360,6 +1385,13 @@ router.post('/login', async (req, res, next) => {
       authProvider: 'password',
     });
   } catch (error: any) {
+    if (error?.code === 'MFA_EMAIL_DELIVERY_FAILED') {
+      return res.status(Number(error?.statusCode || 503)).json({
+        success: false,
+        code: 'MFA_EMAIL_DELIVERY_FAILED',
+        message: String(error?.message || 'Email OTP delivery is currently unavailable.'),
+      });
+    }
     const message = String(error?.message || '');
     const knownPrismaConnectionIssue =
       /database_url/i.test(message) ||
@@ -1648,7 +1680,14 @@ const handleGoogleLogin = async (req: any, res: any, next: any) => {
       authProvider: 'google',
       avatarOverride: user.avatar || String(payload.picture || '').trim() || null,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 'MFA_EMAIL_DELIVERY_FAILED') {
+      return res.status(Number(error?.statusCode || 503)).json({
+        success: false,
+        code: 'MFA_EMAIL_DELIVERY_FAILED',
+        message: String(error?.message || 'Email OTP delivery is currently unavailable.'),
+      });
+    }
     return next(error);
   }
 };
@@ -1805,12 +1844,21 @@ router.post('/mfa/challenge/select', async (req, res, next) => {
       if (!updated) {
         return res.status(400).json({ success: false, message: 'Unable to refresh authentication challenge.' });
       }
-      void sendEmail({
-        to: user.email,
-        subject: 'Your sign-in verification code',
-        text: `Hello ${user.firstName || 'there'},\n\nYour one-time login code is: ${code}\n\nThe code expires in ${settings.otpExpiryMinutes} minute(s).`,
-        html: `<p>Hello ${user.firstName || 'there'},</p><p>Your one-time login code is:</p><p style="font-size:24px;font-weight:700;letter-spacing:2px;">${code}</p><p>The code expires in <strong>${settings.otpExpiryMinutes} minute(s)</strong>.</p>`,
-      }).catch(() => undefined);
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: 'Your sign-in verification code',
+          text: `Hello ${user.firstName || 'there'},\n\nYour one-time login code is: ${code}\n\nThe code expires in ${settings.otpExpiryMinutes} minute(s).`,
+          html: `<p>Hello ${user.firstName || 'there'},</p><p>Your one-time login code is:</p><p style="font-size:24px;font-weight:700;letter-spacing:2px;">${code}</p><p>The code expires in <strong>${settings.otpExpiryMinutes} minute(s)</strong>.</p>`,
+        });
+      } catch (emailError) {
+        console.error('[auth/mfa] Failed to send selected email OTP challenge:', emailError);
+        return res.status(503).json({
+          success: false,
+          code: 'MFA_EMAIL_DELIVERY_FAILED',
+          message: 'Email OTP delivery is currently unavailable. Please switch to Authenticator App.',
+        });
+      }
       return res.json({
         success: true,
         message: 'Verification code sent.',
