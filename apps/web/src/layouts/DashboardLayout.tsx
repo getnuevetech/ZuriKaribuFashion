@@ -80,7 +80,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Measurement Templates', href: '/admin/measurement-templates', icon: Ruler },
     { label: 'Currency Matrix', href: '/admin/currency', icon: DollarSign },
     { label: 'Product Management', href: '/admin/products', icon: Package },
-    { label: 'Automation', href: '/admin/automation/approvals', icon: Sparkles },
+    { label: 'Automation', href: '/admin/automation/system', icon: Sparkles },
     { label: 'Dynamic Fields', href: '/admin/dynamic-fields', icon: Layers },
     { label: 'Pricing Rules', href: '/admin/pricing', icon: DollarSign },
     { label: 'Promo Codes', href: '/admin/promo-codes', icon: CreditCard },
@@ -340,8 +340,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   ];
   const automationSubmenu = [
     { label: 'Automation System Switchboard', href: '/admin/automation/system', icon: ChevronRight },
-    { label: 'Automated Product Approval', href: '/admin/automation/approvals', icon: ChevronRight },
-    { label: 'Account Approval Automation', href: '/admin/automation/approvals?tab=account', icon: ChevronRight },
+    { label: 'Automation Outcomes', href: '/admin/automation/approvals', icon: ChevronRight },
     { label: 'AI API Integrations', href: '/admin/automation/ai-integrations', icon: ChevronRight },
   ];
   const referralSubmenu = [
@@ -1122,7 +1121,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                 );
               }
 
-              if (userType === 'admin' && item.href === '/admin/automation/approvals') {
+              if (userType === 'admin' && item.href === '/admin/automation/system') {
                 const automationMenuActive = location.pathname.startsWith('/admin/automation');
                 const visibleAutomationSubmenu = automationSubmenu.filter((subItem) => canAccessAdminNav(subItem.href));
                 if (visibleAutomationSubmenu.length === 0) {
