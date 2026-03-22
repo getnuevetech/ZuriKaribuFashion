@@ -194,12 +194,18 @@ const countryNameToCode: Record<string, string> = {
   zimbabwe: 'ZW',
 };
 
-const countryCodeToFlag = (countryCode: string) =>
+const sanitizeCountryCode = (countryCode: string) =>
   String(countryCode || '')
+    .trim()
     .toUpperCase()
     .replace(/[^A-Z]/g, '')
-    .slice(0, 2)
-    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
+    .slice(0, 2);
+
+const countryCodeToFlagImageUrl = (countryCode: string, size: 80 | 40 = 80) => {
+  const normalizedCode = sanitizeCountryCode(countryCode).toLowerCase();
+  if (!normalizedCode) return '';
+  return `https://flagcdn.com/w${size}/${normalizedCode}.png`;
+};
 
 const resolveCountryCode = (country?: string | null, explicitFlag?: string | null) => {
   const explicit = String(explicitFlag || '').trim();
@@ -213,16 +219,6 @@ const resolveCountryCode = (country?: string | null, explicitFlag?: string | nul
     countryNameToCode[normalized.split(',')[0]?.trim() || ''] ||
     ''
   );
-};
-
-const resolveCountryFlag = (country?: string | null, explicitFlag?: string | null) => {
-  const explicit = String(explicitFlag || '').trim();
-  if (/^[a-z]{2}$/i.test(explicit)) return countryCodeToFlag(explicit);
-  if (explicit) return explicit;
-  const raw = String(country || '').trim();
-  if (!raw) return '🌍';
-  const mappedCode = resolveCountryCode(raw, explicit);
-  return mappedCode ? countryCodeToFlag(mappedCode) : '🌍';
 };
 
 const kimiHeroSlides: HeroSlide[] = [
@@ -546,14 +542,14 @@ function ProductCard({ product, descriptionWordLimit }: { product: FeaturedProdu
         <div className="absolute bottom-3 right-3 text-xs font-medium flex items-center gap-1">
           {productFlagCode ? (
             <img
-              src={`https://flagcdn.com/w40/${productFlagCode.toLowerCase()}.png`}
+              src={countryCodeToFlagImageUrl(productFlagCode, 40)}
               alt={`${product.country} flag`}
               className="h-4 w-6 rounded-sm object-cover shadow-lg"
               loading="lazy"
             />
           ) : (
-            <span className="text-sm drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-              {resolveCountryFlag(product.country, product.flag)}
+            <span className="text-[10px] font-semibold uppercase text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+              {sanitizeCountryCode(product.country || '') || '--'}
             </span>
           )}
         </div>
@@ -958,7 +954,7 @@ export default function Home() {
       const productCount = Number.isFinite(productCountRaw) && productCountRaw > 0 ? Math.round(productCountRaw) : 0;
       return {
         name: country.name,
-        flag: countryCodeToFlag(country.code),
+        flag: '',
         flagCode: country.code,
         region: country.region,
         fabrics: clampText(
@@ -1111,7 +1107,7 @@ export default function Home() {
         name: asText(item.name, item.designer?.businessName, kimiDesigners[index % kimiDesigners.length].name),
         country: asText(item.country, item.designer?.country, kimiDesigners[index % kimiDesigners.length].country),
         flagCode: resolveCountryCode(asText(item.country, item.designer?.country, ''), asText(item.flag, '')),
-        flag: resolveCountryFlag(asText(item.country, item.designer?.country, ''), asText(item.flag, '')),
+        flag: '',
         quote: asText(item.quote, kimiDesigners[index % kimiDesigners.length].quote),
         image: asImage(item.image, kimiDesigners[index % kimiDesigners.length].image),
         linkMode: asText(item.linkMode, 'DEFAULT_STORE').toUpperCase(),
@@ -1262,13 +1258,15 @@ export default function Home() {
           <div className="flex items-center gap-2 mb-2">
             {designer.flagCode ? (
               <img
-                src={`https://flagcdn.com/w40/${String(designer.flagCode || '').toLowerCase()}.png`}
+                src={countryCodeToFlagImageUrl(String(designer.flagCode || ''), 40)}
                 alt={`${designer.country} flag`}
                 className="h-5 w-7 rounded-sm object-cover shadow-md"
                 loading="lazy"
               />
             ) : (
-              <span className="text-2xl">{designer.flag}</span>
+              <span className="text-[10px] font-semibold uppercase text-white/80">
+                {sanitizeCountryCode(designer.country || '') || '--'}
+              </span>
             )}
             <span className="text-white/70 text-sm">{designer.country}</span>
           </div>
@@ -1509,11 +1507,22 @@ export default function Home() {
                 <div className="divide-y divide-white/10 rounded-md border border-white/10">
                   {visibleCountries.slice(0, 12).map((country) => (
                     <Link
-                      key={`${country.name}-${country.flag}`}
+                      key={`${country.name}-${country.flagCode || 'na'}`}
                       to={safeHref(country.href, `/country-products?country=${encodeURIComponent(country.name)}`)}
                       className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-white/80 transition-colors hover:bg-white/5 hover:text-white"
                     >
-                      <span className="col-span-1 text-xl">{country.flag}</span>
+                      <span className="col-span-1 flex items-center justify-center">
+                        {country.flagCode ? (
+                          <img
+                            src={countryCodeToFlagImageUrl(country.flagCode)}
+                            alt={`${country.name} flag`}
+                            className="h-5 w-7 rounded-sm object-cover shadow-sm"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span className="text-[10px] font-semibold uppercase">{sanitizeCountryCode(country.name) || '--'}</span>
+                        )}
+                      </span>
                       <span className="col-span-5 text-sm font-semibold">
                         {country.name}
                         <span className="ml-2 text-[10px] uppercase tracking-[0.14em] text-white/55">

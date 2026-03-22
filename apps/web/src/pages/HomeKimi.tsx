@@ -84,12 +84,15 @@ const DESIGNERS = [
   { id: 'd-3', name: 'Sahara Tailoring', country: 'Morocco', image: KIMI_FEATURE_IMAGES.customToWear },
 ];
 
-const asFlag = (code: string) =>
-  String(code || '')
-    .toUpperCase()
-    .replace(/[^A-Z]/g, '')
-    .slice(0, 2)
-    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
+const asFlagImageUrl = (code: string) => {
+  const normalized = String(code || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]/g, '')
+    .slice(0, 2);
+  if (!normalized) return '';
+  return `https://flagcdn.com/w80/${normalized}.png`;
+};
 
 function ProductStrip({ title, rows }: { title: string; rows: Array<{ id: string; name: string; price: string; country: string; image: string; href: string }> }) {
   return (
@@ -234,7 +237,16 @@ export default function HomeKimi() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               {filteredCountries.map((country) => (
                 <Link key={country.code} to={`/country-products?country=${encodeURIComponent(country.name)}`} className="border bg-white p-3 text-center hover:border-[#e85a3c]">
-                  <p className="text-2xl">{asFlag(country.code)}</p>
+                  {asFlagImageUrl(country.code) ? (
+                    <img
+                      src={asFlagImageUrl(country.code)}
+                      alt={`${country.name} flag`}
+                      className="mx-auto h-6 w-9 rounded-sm object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <p className="text-xs font-semibold uppercase">{country.code}</p>
+                  )}
                   <p className="mt-1 text-xs font-semibold">{country.name}</p>
                   <p className="text-[10px] uppercase tracking-[0.12em] text-black/55">{country.region}</p>
                   <p className="text-[10px] text-black/50">Explore</p>
