@@ -65,6 +65,8 @@ interface DashboardSearchEntry {
   keywords: string[];
 }
 
+const LEGACY_HOMEPAGE_PATHS = ['/admin/homepage', '/admin/homepage-visibility', '/admin/homepage-sections'] as const;
+
 const navItems: Record<DashboardType, NavItem[]> = {
   admin: [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -184,6 +186,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isOrderMenuOpen, setIsOrderMenuOpen] = useState(true);
   const [isTicketManagementMenuOpen, setIsTicketManagementMenuOpen] = useState(true);
   const [isPaymentMenuOpen, setIsPaymentMenuOpen] = useState(true);
+  const [isLegacyMenuOpen, setIsLegacyMenuOpen] = useState(true);
   const [isAdminAccountsMenuOpen, setIsAdminAccountsMenuOpen] = useState(true);
   const [isProductManagementMenuOpen, setIsProductManagementMenuOpen] = useState(true);
   const [isAutomationMenuOpen, setIsAutomationMenuOpen] = useState(true);
@@ -282,9 +285,19 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     if (!moduleAccessMap) return true;
     return moduleAccessMap[moduleKey]?.allowed !== false;
   };
-  const visibleItems = items.filter((item) => canAccessAdminNav(item.href) && canAccessModuleNav(item.href));
+  const visibleItems = items
+    .filter((item) => canAccessAdminNav(item.href) && canAccessModuleNav(item.href))
+    .filter((item) => {
+      if (userType !== 'admin' || !isSuperAdmin) return true;
+      return item.href !== '/admin/homepage-visibility' && item.href !== '/admin/homepage-sections';
+    });
   const roleLabel = roleLabels[userType] || 'User';
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
+  const legacySubmenu = [
+    { label: 'Homepage Manager', href: '/admin/homepage', icon: ChevronRight },
+    { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: ChevronRight },
+    { label: 'Homepage Sections', href: '/admin/homepage-sections', icon: ChevronRight },
+  ];
   const orderManagementSubmenu = [
     { label: 'Order List', href: '/admin/orders?tab=list', icon: ChevronRight },
     { label: 'Processing Workflow', href: '/admin/orders?tab=processing-workflow', icon: ChevronRight },
@@ -491,6 +504,19 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
           })),
         { prefix: 'Referral/Influence' }
       );
+      if (isSuperAdmin) {
+        addSearchEntries(
+          entries,
+          legacySubmenu
+            .filter((item) => canAccessAdminNav(item.href))
+            .map((item) => ({
+              label: item.label,
+              href: item.href,
+              keywords: ['legacy', 'homepage', 'frontpage', 'visibility', 'sections'],
+            })),
+          { prefix: 'Legacy' }
+        );
+      }
       addSearchEntries(
         entries,
         [
@@ -533,7 +559,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       }
     }
     return Array.from(deduped.values());
-  }, [userType, visibleItems, userPermissions, enterpriseRoleManagementAllowed]);
+  }, [userType, visibleItems, userPermissions, enterpriseRoleManagementAllowed, isSuperAdmin]);
 
   const dashboardSearchResults = useMemo(() => {
     const query = normalizeSearchToken(dashboardSearchQuery);
@@ -662,6 +688,62 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                 location.pathname === hrefMeta.pathname &&
                 (hrefMeta.tab ? currentTab === hrefMeta.tab : !currentTab);
               const Icon = item.icon;
+
+              if (userType === 'admin' && item.href === '/admin/homepage' && isSuperAdmin) {
+                const legacyMenuActive = LEGACY_HOMEPAGE_PATHS.includes(location.pathname as (typeof LEGACY_HOMEPAGE_PATHS)[number]);
+                const visibleLegacySubmenu = legacySubmenu.filter((subItem) => canAccessAdminNav(subItem.href));
+                if (visibleLegacySubmenu.length === 0) {
+                  return null;
+                }
+                return (
+                  <div key={item.href} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsLegacyMenuOpen((prev) => !prev)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
+                        legacyMenuActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {isSidebarOpen ? (
+                        <>
+                          <span className="text-sm font-medium">Legacy</span>
+                          <span className="ml-auto">
+                            {isLegacyMenuOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </span>
+                        </>
+                      ) : null}
+                    </button>
+                    {isLegacyMenuOpen && isSidebarOpen ? (
+                      <div className="ml-7 space-y-1">
+                        {visibleLegacySubmenu.map((subItem) => {
+                          const subMeta = readHrefMeta(subItem.href);
+                          const subActive =
+                            location.pathname === subMeta.pathname &&
+                            (subMeta.tab ? currentTab === subMeta.tab : !currentTab);
+                          const SubIcon = subItem.icon;
+                          return (
+                            <Link
+                              key={subItem.href}
+                              to={subItem.href}
+                              className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
+                                subActive
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <SubIcon className="h-4 w-4" />
+                              <span>{subItem.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
 
               if (userType === 'admin' && item.href === '/admin/payments') {
                 const paymentMenuActive = location.pathname === '/admin/payments' || location.pathname === '/admin/vendor-payments';
