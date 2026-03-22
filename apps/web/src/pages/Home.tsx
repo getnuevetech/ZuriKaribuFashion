@@ -24,8 +24,14 @@ import { useCurrencyStore } from '../store/currencyStore';
 import { useHomepageExperienceStore } from '../store/homepageExperienceStore';
 import { AFRICAN_COUNTRIES, AFRICAN_REGION_OPTIONS, type AfricanRegion } from '../data/africanCountries';
 import { trackHomeEvent } from '../mappers/homepage/analytics';
+import {
+  mapFeaturedCollections,
+  mapFeaturedSectionTitles,
+  type FeaturedProductDTO,
+} from '../mappers/homepage/featuredMapper';
 import { mapHeroQuickLinks, mapHeroSlides } from '../mappers/homepage/heroMapper';
 import { mapShopByCategories, mapShopByCountries } from '../mappers/homepage/shopByMapper';
+import { mapDesignerSpotlightTitle, mapDesignerSpotlights } from '../mappers/homepage/spotlightMapper';
 import { mapTrustBadges, type TrustBadgeDTO } from '../mappers/homepage/trustMapper';
 
 type HeroSlide = {
@@ -38,7 +44,8 @@ type HeroSlide = {
   ctaLink: string;
 };
 
-type FeaturedProduct = {
+type FeaturedProduct = FeaturedProductDTO;
+type LegacyFeaturedProduct = {
   id: string;
   name: string;
   description?: string;
@@ -381,19 +388,19 @@ const TRUST_ICON_BY_NAME = {
   SHOPPING_BAG: ShoppingBag,
 } as const;
 
-const kimiFeaturedDesigns: FeaturedProduct[] = [
+const kimiFeaturedDesigns: LegacyFeaturedProduct[] = [
   { id: '1', name: 'Exclusive Gorgeous', price: 1428.57, image: '/kimi/product1.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
   { id: '2', name: 'My Skkentele', price: 714.29, image: '/kimi/product2.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
   { id: '3', name: 'Ankara Gbasibe', price: 857.14, image: '/kimi/product3.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
 ];
 
-const kimiReadyToWear: FeaturedProduct[] = [
+const kimiReadyToWear: LegacyFeaturedProduct[] = [
   { id: 'r1', name: 'Bridal Traditional', price: 2285.71, image: '/kimi/product4.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
   { id: 'r2', name: 'Afigan', price: 1642.86, image: '/kimi/product5.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
   { id: 'r3', name: 'Kakaki Africa', price: 1507.14, image: '/kimi/product6.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
 ];
 
-const kimiFabrics: FeaturedProduct[] = [
+const kimiFabrics: LegacyFeaturedProduct[] = [
   { id: 'f1', name: 'Ankara Mummy', price: 2142.86, image: '/kimi/fabrics_full.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
   { id: 'f2', name: 'Dancing Queen Adire', price: 785.71, image: '/kimi/featured_rw_left.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
   { id: 'f3', name: 'Ankara Party', price: 928.57, image: '/kimi/featured_rw_right.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
@@ -923,16 +930,23 @@ export default function Home() {
     () => clampText(experienceSettings?.kimiCopy?.shopByTitle, 60, 'Shop by Country'),
     [experienceSettings?.kimiCopy?.shopByTitle]
   );
-
-  const featuredDesigns = (Array.isArray(featuredData?.FEATURED_DESIGNS) && featuredData.FEATURED_DESIGNS.length > 0
-    ? featuredData.FEATURED_DESIGNS
-    : kimiFeaturedDesigns) as FeaturedProduct[];
-  const featuredRTW = (Array.isArray(featuredData?.FEATURED_READY_TO_WEAR) && featuredData.FEATURED_READY_TO_WEAR.length > 0
-    ? featuredData.FEATURED_READY_TO_WEAR
-    : kimiReadyToWear) as FeaturedProduct[];
-  const featuredFabrics = (Array.isArray(featuredData?.FEATURED_FABRICS) && featuredData.FEATURED_FABRICS.length > 0
-    ? featuredData.FEATURED_FABRICS
-    : kimiFabrics) as FeaturedProduct[];
+  const featuredCollections = useMemo(
+    () =>
+      mapFeaturedCollections({
+        featuredData,
+        fallbackCustomToWear: kimiFeaturedDesigns,
+        fallbackReadyToWear: kimiReadyToWear,
+        fallbackFabricsToBuy: kimiFabrics,
+      }),
+    [featuredData]
+  );
+  const featuredSectionTitles = useMemo(
+    () => mapFeaturedSectionTitles(experienceSettings?.kimiCopy),
+    [experienceSettings?.kimiCopy]
+  );
+  const featuredDesigns = featuredCollections.customToWear;
+  const featuredRTW = featuredCollections.readyToWear;
+  const featuredFabrics = featuredCollections.fabricsToBuy;
   const managedBannersBySection = useMemo(() => {
     const map = new Map<string, ManagedBanner>();
     if (!Array.isArray(managedBannersData)) return map;
@@ -1068,33 +1082,18 @@ export default function Home() {
   const useCustomHowItWorksColors = Boolean(howItWorksStyleData?.enabled);
   const howItWorksIconColor = asText(howItWorksStyleData?.iconColor, '#111827');
   const howItWorksIconHoverColor = asText(howItWorksStyleData?.iconHoverColor, '#ffffff');
-  const designers = useMemo(() => {
-    if (Array.isArray(designerSpotlightsData) && designerSpotlightsData.length > 0) {
-      return designerSpotlightsData.slice(0, 3).map((item: any, index: number) => ({
-        id: String(item.id ?? index),
-        profileId: String(item.designerId || ''),
-        vendorType: String(item.vendorType || 'DESIGNER').toUpperCase(),
-        name: asText(item.name, item.designer?.businessName, kimiDesigners[index % kimiDesigners.length].name),
-        country: asText(item.country, item.designer?.country, kimiDesigners[index % kimiDesigners.length].country),
-        flagCode: resolveCountryCode(asText(item.country, item.designer?.country, ''), asText(item.flag, '')),
-        flag: '',
-        quote: asText(item.quote, kimiDesigners[index % kimiDesigners.length].quote),
-        image: asImage(item.image, kimiDesigners[index % kimiDesigners.length].image),
-        linkMode: asText(item.linkMode, 'DEFAULT_STORE').toUpperCase(),
-        externalUrl: asText(item.externalUrl, ''),
-        blog: item.blog || null,
-      }));
-    }
-    return kimiDesigners.map((item) => ({
-      ...item,
-      flagCode: resolveCountryCode(item.country, item.flag),
-      profileId: '',
-      vendorType: 'DESIGNER',
-      linkMode: 'DEFAULT_STORE',
-      externalUrl: '',
-      blog: null,
-    }));
-  }, [designerSpotlightsData]);
+  const designers = useMemo(
+    () =>
+      mapDesignerSpotlights({
+        designerSpotlightsData,
+        fallbackDesigners: kimiDesigners,
+      }),
+    [designerSpotlightsData]
+  );
+  const designerSpotlightTitle = useMemo(
+    () => mapDesignerSpotlightTitle(experienceSettings?.kimiCopy),
+    [experienceSettings?.kimiCopy]
+  );
 
   useEffect(() => {
     if (categories.length === 0) return;
@@ -1230,6 +1229,14 @@ export default function Home() {
   const isExternalHref = (href: string) => /^(https?:\/\/|mailto:|tel:)/i.test(String(href || ''));
   const renderSpotlightCard = (designer: any, className = '', imageClassName = 'aspect-[3/4]') => {
     const href = resolveSpotlightHref(designer);
+    const handleSpotlightClick = () => {
+      trackHomeEvent('home_designer_spotlight_click', {
+        designerId: String(designer?.id || ''),
+        profileId: String(designer?.profileId || ''),
+        vendorType: String(designer?.vendorType || 'DESIGNER'),
+        href,
+      });
+    };
     const content = (
       <>
         <div className={`${imageClassName} overflow-hidden`}>
@@ -1264,13 +1271,25 @@ export default function Home() {
     );
     if (isExternalHref(href)) {
       return (
-        <a key={designer.id} href={href} target="_blank" rel="noopener noreferrer" className={`group relative overflow-hidden rounded-xl block ${className}`}>
+        <a
+          key={designer.id}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleSpotlightClick}
+          className={`group relative overflow-hidden rounded-xl block ${className}`}
+        >
           {content}
         </a>
       );
     }
     return (
-      <Link key={designer.id} to={href} className={`group relative overflow-hidden rounded-xl block ${className}`}>
+      <Link
+        key={designer.id}
+        to={href}
+        onClick={handleSpotlightClick}
+        className={`group relative overflow-hidden rounded-xl block ${className}`}
+      >
         {content}
       </Link>
     );
@@ -1754,7 +1773,7 @@ export default function Home() {
 
       {sectionVisibility.featuredCustomToWear ? (
         <ProductCarousel
-          title="Custom To Wear"
+          title={featuredSectionTitles.customToWear}
           subtitle="Made To Fit by an African with Love"
           products={featuredDesigns}
           stripRef={customStripRef}
@@ -1795,7 +1814,7 @@ export default function Home() {
 
       {sectionVisibility.featuredReadyToWear ? (
         <ProductCarousel
-          title="Ready To Wear"
+          title={featuredSectionTitles.readyToWear}
           subtitle="Made To Standard sizes for all"
           products={featuredRTW}
           stripRef={rtwStripRef}
@@ -1836,7 +1855,7 @@ export default function Home() {
 
       {sectionVisibility.featuredFabrics ? (
         <ProductCarousel
-          title="Fabrics To Buy"
+          title={featuredSectionTitles.fabricsToBuy}
           subtitle="Fabrics from all across the edges of Africa"
           products={featuredFabrics}
           stripRef={fabricsStripRef}
@@ -1910,7 +1929,7 @@ export default function Home() {
             <span className="mb-4 rounded-none border-black text-xs tracking-wider inline-flex border px-2.5 py-0.5 font-medium">
               DESIGNER SPOTLIGHT
             </span>
-            <h2 className="font-['Oswald'] text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">Meet Designers Across Africa</h2>
+            <h2 className="font-['Oswald'] text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">{designerSpotlightTitle}</h2>
             <p className="text-gray-600 max-w-xl mx-auto">Showcasing rotating talent from different countries.</p>
           </div>
 
