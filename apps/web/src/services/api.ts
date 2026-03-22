@@ -6123,6 +6123,12 @@ const adminApi = {
   updateUserStatus: (id: string, status: string, reason?: string) =>
     apiService.patch(`/admin/users/${id}/status`, { status, reason }),
 
+  sendUserPasswordResetLink: (id: string) =>
+    apiService.post<{ success: boolean; message?: string; data?: { userId: string; email: string } }>(
+      `/admin/users/${id}/send-password-reset-link`,
+      {}
+    ),
+
   getAdminProfile: () =>
     apiService.get<{ success: boolean; data: any }>('/admin/profile'),
 

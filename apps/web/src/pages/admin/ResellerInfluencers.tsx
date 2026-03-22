@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Copy, Plus, RefreshCw } from 'lucide-react';
+import { Copy, KeyRound, Plus, RefreshCw } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { api } from '../../services/api';
@@ -17,6 +17,7 @@ export default function AdminResellerInfluencersPage() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingCreate, setSavingCreate] = useState(false);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [sendingResetUserId, setSendingResetUserId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
   const [rows, setRows] = useState<any[]>([]);
@@ -225,6 +226,20 @@ export default function AdminResellerInfluencersPage() {
       setMessage('Copied to clipboard.');
     } catch {
       setMessage('Could not copy. Please copy manually.');
+    }
+  };
+
+  const sendPasswordResetLink = async (userId: string, email?: string) => {
+    if (!userId) return;
+    try {
+      setSendingResetUserId(userId);
+      setMessage('');
+      const response = await api.admin.sendUserPasswordResetLink(userId);
+      setMessage(response?.message || `Password reset link sent${email ? ` to ${email}` : ''}.`);
+    } catch (error: any) {
+      setMessage(readApiError(error, 'Failed to send password reset link.'));
+    } finally {
+      setSendingResetUserId(null);
     }
   };
 
@@ -527,20 +542,30 @@ export default function AdminResellerInfluencersPage() {
                     </div>
                   </td>
                   <td className="px-3 py-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => void toggleActive(row)}
-                      disabled={savingUserId === String(row?.userId || '')}
-                    >
-                      {row?.isActive !== false ? 'Pause' : 'Activate'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => openEdit(row)}
-                      disabled={savingUserId === String(row?.userId || '')}
-                    >
-                      Edit
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => void sendPasswordResetLink(String(row?.userId || ''), String(row?.user?.email || ''))}
+                        disabled={sendingResetUserId === String(row?.userId || '')}
+                      >
+                        <KeyRound className="mr-1 h-4 w-4" />
+                        Reset Password
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => void toggleActive(row)}
+                        disabled={savingUserId === String(row?.userId || '')}
+                      >
+                        {row?.isActive !== false ? 'Pause' : 'Activate'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => openEdit(row)}
+                        disabled={savingUserId === String(row?.userId || '')}
+                      >
+                        Edit
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

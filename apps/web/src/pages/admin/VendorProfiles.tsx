@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { KeyRound } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { api } from '../../services/api';
@@ -338,6 +339,7 @@ export default function AdminVendorProfiles() {
   const [vendorAccountCountryFilter, setVendorAccountCountryFilter] = useState('');
   const [showVendorAccountModal, setShowVendorAccountModal] = useState(false);
   const [savingVendorAccount, setSavingVendorAccount] = useState(false);
+  const [sendingPasswordResetUserId, setSendingPasswordResetUserId] = useState<string | null>(null);
   const [vendorAccountForm, setVendorAccountForm] = useState({
     id: '',
     role: 'FABRIC_SELLER' as VendorRole,
@@ -631,6 +633,20 @@ export default function AdminVendorProfiles() {
       setError(err?.response?.data?.message || 'Failed to update vendor account.');
     } finally {
       setSavingVendorAccount(false);
+    }
+  };
+
+  const sendPasswordResetLink = async (userId: string, email?: string) => {
+    if (!userId) return;
+    setSendingPasswordResetUserId(userId);
+    setError('');
+    try {
+      const response = await api.admin.sendUserPasswordResetLink(userId);
+      setSuccess(response?.message || `Password reset link sent${email ? ` to ${email}` : ''}.`);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to send password reset link.');
+    } finally {
+      setSendingPasswordResetUserId(null);
     }
   };
 
@@ -1286,9 +1302,20 @@ export default function AdminVendorProfiles() {
                       {account.createdAt ? new Date(account.createdAt).toLocaleString() : '-'}
                     </td>
                     <td className="py-2">
-                      <Button size="sm" variant="outline" onClick={() => openVendorAccountModal(account)}>
-                        Edit
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void sendPasswordResetLink(String(account.id || ''), String(account.email || ''))}
+                          disabled={sendingPasswordResetUserId === String(account.id || '')}
+                        >
+                          <KeyRound className="mr-1 h-4 w-4" />
+                          Reset Password
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => openVendorAccountModal(account)}>
+                          Edit
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1606,6 +1633,15 @@ export default function AdminVendorProfiles() {
                               <Button
                                 size="sm"
                                 variant="outline"
+                                onClick={() => void sendPasswordResetLink(ownerId, String(account.email || ''))}
+                                disabled={savingEnterprise || sendingPasswordResetUserId === ownerId}
+                              >
+                                <KeyRound className="mr-1 h-4 w-4" />
+                                Reset Password
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
                                 onClick={() => convertVendorEnterprise(ownerId, !Boolean(account.isEnterprise))}
                                 disabled={savingEnterprise}
                               >
@@ -1762,9 +1798,25 @@ export default function AdminVendorProfiles() {
                   {(selectedProfile.role === 'FABRIC_SELLER' ? 'Seller' : 'Designer')} • {selectedProfile.user?.email}
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setSelectedProfile(null)}>
-                Close
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    void sendPasswordResetLink(
+                      String(selectedProfile.user?.id || ''),
+                      String(selectedProfile.user?.email || '')
+                    )
+                  }
+                  disabled={sendingPasswordResetUserId === String(selectedProfile.user?.id || '')}
+                >
+                  <KeyRound className="mr-1 h-4 w-4" />
+                  Reset Password
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setSelectedProfile(null)}>
+                  Close
+                </Button>
+              </div>
             </div>
 
             <div className="mb-4 rounded-lg border bg-gray-50 p-3 text-sm">

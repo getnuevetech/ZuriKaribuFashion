@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Search, Filter, XCircle, UserCheck, UserX, Mail, Plus, Edit, PhoneCall } from 'lucide-react';
+import { Search, Filter, XCircle, UserCheck, UserX, Mail, Plus, Edit, PhoneCall, KeyRound } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -49,6 +49,8 @@ export default function AdminUsers() {
   const [updating, setUpdating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [editError, setEditError] = useState('');
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [sendingResetUserId, setSendingResetUserId] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState({
     email: '',
     firstName: '',
@@ -280,6 +282,26 @@ export default function AdminUsers() {
     }
   };
 
+  const sendPasswordResetLink = async (user: User) => {
+    if (!user?.id || !user?.email) return;
+    try {
+      setSendingResetUserId(user.id);
+      setNotice(null);
+      const response = await api.admin.sendUserPasswordResetLink(user.id);
+      setNotice({
+        tone: 'success',
+        text: response?.message || `Password reset link sent to ${user.email}.`,
+      });
+    } catch (error: any) {
+      setNotice({
+        tone: 'error',
+        text: error?.response?.data?.message || error?.message || 'Failed to send password reset link.',
+      });
+    } finally {
+      setSendingResetUserId(null);
+    }
+  };
+
   const adminRoleNameById = useMemo(
     () =>
       new Map(
@@ -321,6 +343,18 @@ export default function AdminUsers() {
           </Button>
         </div>
       </div>
+
+      {notice ? (
+        <div
+          className={`rounded-lg border px-3 py-2 text-sm ${
+            notice.tone === 'success'
+              ? 'border-green-200 bg-green-50 text-green-700'
+              : 'border-red-200 bg-red-50 text-red-700'
+          }`}
+        >
+          {notice.text}
+        </div>
+      ) : null}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4">
@@ -417,6 +451,14 @@ export default function AdminUsers() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex gap-2">
+                      <button
+                        onClick={() => void sendPasswordResetLink(user)}
+                        disabled={sendingResetUserId === user.id}
+                        className="p-2 text-violet-700 hover:bg-violet-50 rounded-lg disabled:cursor-not-allowed disabled:opacity-60"
+                        title="Send password reset link"
+                      >
+                        <KeyRound className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => openEditModal(user)}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"

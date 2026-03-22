@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { randomUUID } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
 import PDFDocument from 'pdfkit';
@@ -147,6 +147,61 @@ async function ensureCallerIdsBackfilled() {
   );
   userCallerIdBackfillEnsured = true;
 }
+
+let passwordResetSchemaEnsuredForAdmin = false;
+let passwordResetSchemaPromiseForAdmin: Promise<void> | null = null;
+const ensurePasswordResetSchemaForAdmin = async () => {
+  if (passwordResetSchemaEnsuredForAdmin) return;
+  if (!passwordResetSchemaPromiseForAdmin) {
+    passwordResetSchemaPromiseForAdmin = (async () => {
+      await prisma.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS "PasswordResetToken" (
+          "id" TEXT NOT NULL,
+          "userId" TEXT NOT NULL,
+          "tokenHash" TEXT NOT NULL,
+          "expiresAt" TIMESTAMP(3) NOT NULL,
+          "usedAt" TIMESTAMP(3),
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "PasswordResetToken_pkey" PRIMARY KEY ("id")
+        )`
+      );
+      await prisma.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS "PasswordResetToken_userId_idx" ON "PasswordResetToken"("userId")`
+      );
+      await prisma.$executeRawUnsafe(
+        `CREATE UNIQUE INDEX IF NOT EXISTS "PasswordResetToken_tokenHash_key" ON "PasswordResetToken"("tokenHash")`
+      );
+      await prisma.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS "PasswordResetToken_expiresAt_idx" ON "PasswordResetToken"("expiresAt")`
+      );
+      await prisma
+        .$executeRawUnsafe(
+          `ALTER TABLE "PasswordResetToken"
+           ADD CONSTRAINT "PasswordResetToken_userId_fkey"
+           FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`
+        )
+        .catch(() => undefined);
+      passwordResetSchemaEnsuredForAdmin = true;
+    })();
+  }
+  try {
+    await passwordResetSchemaPromiseForAdmin;
+  } finally {
+    passwordResetSchemaPromiseForAdmin = null;
+  }
+};
+
+const appPublicBaseUrlForAdmin = () =>
+  String(
+    process.env.APP_BASE_URL ||
+      process.env.FRONTEND_URL ||
+      process.env.WEB_BASE_URL ||
+      process.env.VITE_APP_URL ||
+      'https://african-fashion-zurikaribu.vercel.app'
+  )
+    .trim()
+    .replace(/\/+$/, '');
+const hashResetTokenForAdmin = (token: string) => createHash('sha256').update(String(token)).digest('hex');
 
 const getVendorDisplayName = (input: {
   id: string;
@@ -1253,6 +1308,9 @@ const adminUserUpdateSchema = z.object({
   phone: z.string().nullable().optional(),
   country: z.string().nullable().optional(),
   callerId: z.string().trim().max(64).nullable().optional(),
+});
+const adminUserIdParamSchema = z.object({
+  id: z.string().uuid(),
 });
 
 const vendorCreateMinimalSchema = z.object({
@@ -2566,6 +2624,76 @@ router.patch('/users/:id/status', async (req, res, next) => {
       success: true,
       message: `User ${status.toLowerCase()} successfully.`,
       data: user,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/users/:id/send-password-reset-link', async (req, res, next) => {
+  try {
+    const { id } = adminUserIdParamSchema.parse(req.params || {});
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        role: true,
+        status: true,
+      },
+    });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found.',
+      });
+    }
+
+    await ensurePasswordResetSchemaForAdmin();
+    const transporter = getMailer();
+    const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+    if (!transporter || !from) {
+      return res.status(503).json({
+        success: false,
+        message: 'SMTP is not configured. Unable to send password reset email.',
+      });
+    }
+
+    const resetToken = randomBytes(32).toString('hex');
+    const tokenHash = hashResetTokenForAdmin(resetToken);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    await prisma.$executeRawUnsafe(
+      `UPDATE "PasswordResetToken"
+       SET "usedAt" = NOW()
+       WHERE "userId" = $1 AND "usedAt" IS NULL`,
+      user.id
+    );
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "PasswordResetToken" ("id","userId","tokenHash","expiresAt")
+       VALUES ($1,$2,$3,$4)`,
+      randomUUID(),
+      user.id,
+      tokenHash,
+      expiresAt
+    );
+
+    const resetUrl = `${appPublicBaseUrlForAdmin()}/reset-password?token=${encodeURIComponent(resetToken)}`;
+    const firstName = String(user.firstName || '').trim() || 'there';
+    await sendEmail({
+      to: user.email,
+      subject: 'Reset your African Fashion password',
+      text: `Hello ${firstName},\n\nUse this link to reset your password: ${resetUrl}\n\nThis link expires in 60 minutes.\n\nIf you did not request this, you can ignore this email.`,
+      html: `<p>Hello ${firstName},</p><p>Use the link below to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>This link expires in <strong>60 minutes</strong>.</p><p>If you did not request this, you can ignore this email.</p>`,
+    });
+
+    res.json({
+      success: true,
+      message: `Password reset link sent to ${user.email}.`,
+      data: {
+        userId: user.id,
+        email: user.email,
+      },
     });
   } catch (error) {
     next(error);
