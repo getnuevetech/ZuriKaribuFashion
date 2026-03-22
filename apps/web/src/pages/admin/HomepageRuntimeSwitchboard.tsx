@@ -307,8 +307,19 @@ export default function AdminHomepageRuntimeSwitchboard() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900">Homepage Runtime Switchboard</h1>
+        <span
+          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+            settings.requireReasonForRuntimeActions
+              ? 'bg-amber-100 text-amber-700'
+              : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          Runtime reason policy: {settings.requireReasonForRuntimeActions ? 'ON' : 'OFF'}
+        </span>
+      </div>
+      <div>
         <p className="mt-1 text-sm text-gray-500">
           Master runtime switch for live homepage template routing and preview-safe behavior.
         </p>

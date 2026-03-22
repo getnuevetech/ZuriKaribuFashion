@@ -156,21 +156,21 @@ type ShopByDTO = {
 ## 5) Implementation checklist (Phase B)
 
 ### B1. Hero integration
-- [ ] Create `heroMapper.ts`
-- [ ] Bind Hero section fields from `HeroDTO`
-- [ ] Add null/long-text guards
-- [ ] Add events: `home_hero_cta_click`, `home_quicklink_click`
+- [x] Create `heroMapper.ts`
+- [x] Bind Hero section fields from `HeroDTO`
+- [x] Add null/long-text guards
+- [x] Add events: `home_hero_cta_click`, `home_quicklink_click`
 
 ### B2. Trust integration
-- [ ] Create `trustMapper.ts`
-- [ ] Bind `trustBadges` from experience settings
-- [ ] Keep static fallback if payload absent
+- [x] Create `trustMapper.ts`
+- [x] Bind `trustBadges` from experience settings
+- [x] Keep static fallback if payload absent
 
 ### B3. ShopBy integration
-- [ ] Create `shopByMapper.ts`
-- [ ] Categories: enforce top 3 and valid hrefs
-- [ ] Countries: merge backend rows + static 54-country set
-- [ ] Occasion/Price: keep static placeholders for now
+- [x] Create `shopByMapper.ts`
+- [x] Categories: enforce top 3 and valid hrefs
+- [x] Countries: merge backend rows + static 54-country set
+- [x] Occasion/Price: keep static placeholders for now
 
 ### B4. QA gates
 - [ ] Desktop/tablet/mobile snapshots pass

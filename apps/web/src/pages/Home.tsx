@@ -6,9 +6,14 @@ import {
   ChevronRight,
   CreditCard,
   Eye,
+  Globe,
+  Headphones,
   Heart,
   Loader2,
+  RefreshCw,
   Search,
+  ShieldCheck,
+  ShoppingBag,
   Sparkles,
   Star,
   Truck,
@@ -18,6 +23,10 @@ import { api, resolveAssetUrl } from '../services/api';
 import { useCurrencyStore } from '../store/currencyStore';
 import { useHomepageExperienceStore } from '../store/homepageExperienceStore';
 import { AFRICAN_COUNTRIES, AFRICAN_REGION_OPTIONS, type AfricanRegion } from '../data/africanCountries';
+import { trackHomeEvent } from '../mappers/homepage/analytics';
+import { mapHeroQuickLinks, mapHeroSlides } from '../mappers/homepage/heroMapper';
+import { mapShopByCategories, mapShopByCountries } from '../mappers/homepage/shopByMapper';
+import { mapTrustBadges, type TrustBadgeDTO } from '../mappers/homepage/trustMapper';
 
 type HeroSlide = {
   id: string;
@@ -52,7 +61,7 @@ type FeaturedProduct = {
 
 type CountryCard = {
   name: string;
-  flag: string;
+  flag?: string;
   flagCode?: string;
   region?: AfricanRegion;
   fabrics: string;
@@ -318,14 +327,59 @@ const iconByNormalizedName: Record<string, any> = {
   shipped: Truck,
 };
 
-const TRUST_BADGES = [
-  { id: 'authentic', title: 'Authentic Guarantee', description: 'Verified sellers and designers only.' },
-  { id: 'shipping', title: 'Global Shipping', description: 'Reliable delivery across major markets.' },
-  { id: 'returns', title: 'Easy Returns', description: 'Clear return policy on eligible orders.' },
-  { id: 'support', title: '24/7 Support', description: 'Human support via chat, ticket, and call.' },
-  { id: 'secure', title: 'Secure Payment', description: 'Protected checkout and trusted processors.' },
-  { id: 'artisan', title: 'Artisan Made', description: 'Craft rooted in African heritage.' },
-] as const;
+const TRUST_BADGES: TrustBadgeDTO[] = [
+  {
+    id: 'authentic',
+    title: 'Authentic Guarantee',
+    subtitle: 'Verified sellers and designers only.',
+    icon: 'SHIELD_CHECK',
+    enabled: true,
+  },
+  {
+    id: 'shipping',
+    title: 'Global Shipping',
+    subtitle: 'Reliable delivery across major markets.',
+    icon: 'TRUCK',
+    enabled: true,
+  },
+  {
+    id: 'returns',
+    title: 'Easy Returns',
+    subtitle: 'Clear return policy on eligible orders.',
+    icon: 'REFRESH_CW',
+    enabled: true,
+  },
+  {
+    id: 'support',
+    title: '24/7 Support',
+    subtitle: 'Human support via chat, ticket, and call.',
+    icon: 'HEADPHONES',
+    enabled: true,
+  },
+  {
+    id: 'secure',
+    title: 'Secure Payment',
+    subtitle: 'Protected checkout and trusted processors.',
+    icon: 'SHOPPING_BAG',
+    enabled: true,
+  },
+  {
+    id: 'artisan',
+    title: 'Artisan Made',
+    subtitle: 'Craft rooted in African heritage.',
+    icon: 'GLOBE',
+    enabled: true,
+  },
+];
+
+const TRUST_ICON_BY_NAME = {
+  SHIELD_CHECK: ShieldCheck,
+  TRUCK: Truck,
+  REFRESH_CW: RefreshCw,
+  HEADPHONES: Headphones,
+  GLOBE: Globe,
+  SHOPPING_BAG: ShoppingBag,
+} as const;
 
 const kimiFeaturedDesigns: FeaturedProduct[] = [
   { id: '1', name: 'Exclusive Gorgeous', price: 1428.57, image: '/kimi/product1.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
@@ -450,51 +504,6 @@ const trimToWordLimit = (text: string, limit: number) => {
   return `${words.slice(0, limit).join(' ')}…`;
 };
 
-const normalizeCategoryCtaText = (_value: unknown) => 'SHOP NOW';
-const parseCategoryImages = (...values: unknown[]) => {
-  const output: string[] = [];
-  const pushValue = (value: unknown) => {
-    const text = normalizeImageUrl(value);
-    if (!text) return;
-    output.push(text);
-  };
-  for (const value of values) {
-    if (!value) continue;
-    if (Array.isArray(value)) {
-      value.forEach((entry) => pushValue(entry));
-      continue;
-    }
-    if (typeof value === 'string') {
-      const raw = value.trim();
-      if (!raw) continue;
-      if (raw.startsWith('[') && raw.endsWith(']')) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            parsed.forEach((entry) => pushValue(entry));
-            continue;
-          }
-        } catch {
-          // Continue to plain text parsing below.
-        }
-      }
-      raw
-        .split(/\r?\n|,|\|/g)
-        .map((part) => part.trim())
-        .filter(Boolean)
-        .forEach((entry) => pushValue(entry));
-      continue;
-    }
-    if (typeof value === 'object') {
-      const row = value as Record<string, unknown>;
-      if (Array.isArray(row.images)) {
-        row.images.forEach((entry) => pushValue(entry));
-      }
-      pushValue(row.image);
-    }
-  }
-  return Array.from(new Set(output)).slice(0, 5);
-};
 const CTA_BUTTON_BASE_CLASS =
   'inline-flex items-center justify-center gap-2 rounded-none border px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200';
 const CTA_BUTTON_DARK_CLASS = `${CTA_BUTTON_BASE_CLASS} border-black bg-black text-white hover:bg-white hover:text-black`;
@@ -880,38 +889,39 @@ export default function Home() {
   }, [featuredDescriptionSettingsData]);
 
   const heroSlides = useMemo(
-    () => {
-      const heroBanners =
-        Array.isArray(managedBannersData)
-          ? managedBannersData
-              .filter((row: any) => String(row?.section || '').toUpperCase() === 'HERO')
-              .map((row: any, index: number) => ({
-                id: String(row?.id ?? `hero-banner-${index}`),
-                image: asImage(row?.displayImage, row?.images?.[0], kimiHeroSlides[index % kimiHeroSlides.length].image),
-                title: clampText(row?.title, 56, kimiHeroSlides[index % kimiHeroSlides.length].title),
-                subtitle: clampText(row?.subtitle, 120, kimiHeroSlides[index % kimiHeroSlides.length].subtitle),
-                badge: kimiHeroSlides[index % kimiHeroSlides.length].badge,
-                ctaText: clampText(row?.ctaText, 24, kimiHeroSlides[index % kimiHeroSlides.length].ctaText),
-                ctaLink: safeHref(row?.ctaLink, kimiHeroSlides[index % kimiHeroSlides.length].ctaLink),
-              }))
-          : [];
-      const source =
-        heroBanners.length > 0
-          ? heroBanners
-          : Array.isArray(heroSlidesData) && heroSlidesData.length > 0
-            ? heroSlidesData
-            : kimiHeroSlides;
-      return source.map((slide: any, index: number) => ({
-        id: String(slide.id ?? index),
-        image: asImage(slide.image, kimiHeroSlides[index % kimiHeroSlides.length].image),
-        title: clampText(slide.title, 56, kimiHeroSlides[index % kimiHeroSlides.length].title),
-        subtitle: clampText(slide.subtitle, 120, kimiHeroSlides[index % kimiHeroSlides.length].subtitle),
-        badge: asText(slide.badge, kimiHeroSlides[index % kimiHeroSlides.length].badge),
-        ctaText: clampText(slide.ctaText, 24, kimiHeroSlides[index % kimiHeroSlides.length].ctaText),
-        ctaLink: safeHref(slide.ctaLink, kimiHeroSlides[index % kimiHeroSlides.length].ctaLink),
-      }));
-    },
-    [heroSlidesData, managedBannersData],
+    () =>
+      mapHeroSlides({
+        heroSlidesData,
+        managedBannersData,
+        fallbackSlides: kimiHeroSlides,
+      }),
+    [heroSlidesData, managedBannersData]
+  );
+  const heroQuickLinks = useMemo(
+    () => mapHeroQuickLinks(experienceSettings?.kimiCopy),
+    [experienceSettings?.kimiCopy]
+  );
+  const trustBadges = useMemo(
+    () => mapTrustBadges(experienceSettings?.trustBadges, TRUST_BADGES),
+    [experienceSettings?.trustBadges]
+  );
+  const showTrustSection = Boolean(sectionVisibility.statsStrip) && trustBadges.length > 0;
+  const heroEyebrowText = useMemo(
+    () =>
+      clampText(
+        experienceSettings?.kimiCopy?.heroEyebrow,
+        40,
+        heroVariant === 'VIDEO_STORY' ? 'Cinematic Story' : 'Global African Fashion'
+      ),
+    [experienceSettings?.kimiCopy?.heroEyebrow, heroVariant]
+  );
+  const shopByEyebrowText = useMemo(
+    () => clampText(experienceSettings?.kimiCopy?.shopByEyebrow, 40, 'Shop by country'),
+    [experienceSettings?.kimiCopy?.shopByEyebrow]
+  );
+  const shopByTitleText = useMemo(
+    () => clampText(experienceSettings?.kimiCopy?.shopByTitle, 60, 'Shop by Country'),
+    [experienceSettings?.kimiCopy?.shopByTitle]
   );
 
   const featuredDesigns = (Array.isArray(featuredData?.FEATURED_DESIGNS) && featuredData.FEATURED_DESIGNS.length > 0
@@ -934,43 +944,14 @@ export default function Home() {
     return map;
   }, [managedBannersData]);
 
-  const countries = useMemo<CountryCard[]>(() => {
-    const backendRows = Array.isArray(countriesData) ? countriesData : [];
-    const backendByCode = new Map<string, any>();
-    const backendByName = new Map<string, any>();
-
-    for (const row of backendRows) {
-      const rowName = asText(row?.name, row?.country, '');
-      const rowCode = resolveCountryCode(rowName, asText(row?.flag, row?.code, ''));
-      if (rowCode) backendByCode.set(rowCode, row);
-      if (rowName) backendByName.set(rowName.toLowerCase(), row);
-    }
-
-    return AFRICAN_COUNTRIES.map((country) => {
-      const backend = backendByCode.get(country.code) || backendByName.get(country.name.toLowerCase()) || null;
-      const productCountRaw = Number(
-        backend?.productCount ?? backend?.count ?? backend?.products ?? backend?.itemsCount ?? 0
-      );
-      const productCount = Number.isFinite(productCountRaw) && productCountRaw > 0 ? Math.round(productCountRaw) : 0;
-      return {
-        name: country.name,
-        flag: '',
-        flagCode: country.code,
-        region: country.region,
-        fabrics: clampText(
-          asText(
-            backend?.fabrics,
-            backend?.textiles,
-            Array.isArray(country.textiles) ? country.textiles.slice(0, 2).join(', ') : ''
-          ),
-          48,
-          'African textiles'
-        ),
-        productCount,
-        href: `/country-products?country=${encodeURIComponent(country.name)}`,
-      };
-    });
-  }, [countriesData]);
+  const countries = useMemo<CountryCard[]>(
+    () =>
+      mapShopByCountries({
+        countriesData,
+        staticCountries: AFRICAN_COUNTRIES,
+      }),
+    [countriesData]
+  );
 
   const visibleCountries = useMemo(
     () =>
@@ -999,22 +980,11 @@ export default function Home() {
 
   const categories = useMemo(
     () =>
-      (Array.isArray(categoriesData) && categoriesData.length > 0 ? categoriesData : kimiCategories)
-        .slice(0, 3)
-        .map((item: any, index: number) => {
-          const fallback = kimiCategories[index % kimiCategories.length];
-          const images = parseCategoryImages(item?.images, item?.image, fallback.image);
-          return {
-            id: String(item.id ?? index),
-            title: asText(item.title, fallback.title),
-            description: asText(item.description, fallback.description),
-            image: images[0] || fallback.image,
-            images,
-            link: safeHref(item.ctaLink || item.link, fallback.link),
-            ctaText: normalizeCategoryCtaText(item.ctaText),
-          };
-        }),
-    [categoriesData],
+      mapShopByCategories({
+        categoriesData,
+        fallbackCategories: kimiCategories,
+      }),
+    [categoriesData]
   );
   const readyCategory = categories.find((item) => /ready/i.test(String(item.title || ''))) || categories[0];
   const customCategory =
@@ -1224,6 +1194,23 @@ export default function Home() {
       behavior: 'smooth',
     });
   };
+  const handleHeroQuickLinkClick = (label: string, href: string) => {
+    trackHomeEvent('home_quicklink_click', {
+      label,
+      href,
+      slideIndex: currentSlide,
+      variant: heroVariant,
+    });
+  };
+  const handleHeroCtaClick = (slide: { id: string; ctaText: string; ctaLink: string }) => {
+    trackHomeEvent('home_hero_cta_click', {
+      slideId: slide.id,
+      ctaText: slide.ctaText,
+      ctaLink: slide.ctaLink,
+      slideIndex: currentSlide,
+      variant: heroVariant,
+    });
+  };
 
   const resolveSpotlightHref = (designer: any) => {
     const linkMode = String(designer?.linkMode || 'DEFAULT_STORE').toUpperCase();
@@ -1360,7 +1347,7 @@ export default function Home() {
                         className="mb-3 text-[11px] font-semibold tracking-[0.25em] uppercase"
                         style={{ color: tokenPalette.heroMuted }}
                       >
-                        {heroVariant === 'VIDEO_STORY' ? 'Cinematic Story' : 'Global African Fashion'}
+                        {heroEyebrowText}
                       </p>
                       <h1
                         className={`font-['Oswald'] font-bold mb-6 leading-tight ${
@@ -1380,17 +1367,22 @@ export default function Home() {
                         )}
                       </p>
                       <div className="mb-5 flex flex-wrap items-center gap-2">
-                        <Link to="/ready-to-wear" className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}>
-                          Shop RTW
-                        </Link>
-                        <Link to="/custom" className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}>
-                          Shop CTW
-                        </Link>
-                        <Link to="/fabrics" className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}>
-                          Shop Fabrics
-                        </Link>
+                        {heroQuickLinks.map((quickLink) => (
+                          <Link
+                            key={`${slide.id}-${quickLink.href}`}
+                            to={safeHref(quickLink.href, '/shop')}
+                            onClick={() => handleHeroQuickLinkClick(quickLink.label, quickLink.href)}
+                            className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}
+                          >
+                            {clampText(quickLink.label, 32, 'Explore').toUpperCase()}
+                          </Link>
+                        ))}
                       </div>
-                      <Link to={safeHref(slide.ctaLink, '/ready-to-wear')} className={CTA_BUTTON_LIGHT_CLASS}>
+                      <Link
+                        to={safeHref(slide.ctaLink, '/ready-to-wear')}
+                        onClick={() => handleHeroCtaClick(slide)}
+                        className={CTA_BUTTON_LIGHT_CLASS}
+                      >
                         {clampText(slide.ctaText || 'SHOP NOW', 24, 'SHOP NOW').toUpperCase()}
                         <ArrowRight className="w-4 h-4" />
                       </Link>
@@ -1453,32 +1445,40 @@ export default function Home() {
       </section>
       ) : null}
 
-      <section className="border-y border-black/10 bg-[#f6f3ee] py-6 dark:border-white/10 dark:bg-[#141413]">
-        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {TRUST_BADGES.map((badge) => (
-              <div
-                key={badge.id}
-                className="rounded-md border border-black/10 bg-white/70 px-4 py-3 dark:border-white/15 dark:bg-white/5"
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-black/75 dark:text-white/85">
-                  {badge.title}
-                </p>
-                <p className="mt-1 text-xs text-black/60 dark:text-white/70">{badge.description}</p>
-              </div>
-            ))}
+      {showTrustSection ? (
+        <section className="border-y border-black/10 bg-[#f6f3ee] py-6 dark:border-white/10 dark:bg-[#141413]">
+          <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {trustBadges.map((badge) => {
+                const BadgeIcon = TRUST_ICON_BY_NAME[badge.icon] || ShieldCheck;
+                return (
+                  <div
+                    key={badge.id}
+                    className="rounded-md border border-black/10 bg-white/70 px-4 py-3 dark:border-white/15 dark:bg-white/5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <BadgeIcon className="h-4 w-4 text-black/70 dark:text-white/80" />
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-black/75 dark:text-white/85">
+                        {badge.title}
+                      </p>
+                    </div>
+                    <p className="mt-1 text-xs text-black/60 dark:text-white/70">{badge.subtitle}</p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       {sectionVisibility.countries ? (
         <section className="bg-[#0b0b0c] py-14 lg:py-20" data-analytics-section="shop-by-country">
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
               <div className="lg:col-span-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/55">Shop by country</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/55">{shopByEyebrowText}</p>
                 <h2 className="mt-2 font-['Oswald'] text-4xl font-bold uppercase leading-[0.95] text-white md:text-5xl">
-                  Shop by Country
+                  {shopByTitleText}
                 </h2>
                 <p className="mt-4 max-w-md text-sm leading-relaxed text-white/70">
                   Browse styles rooted in place, from West African prints to East African beadwork.
@@ -1643,6 +1643,11 @@ export default function Home() {
                     <p className="mb-4 text-sm text-white/80 line-clamp-3">
                       {clampText(categories[0].description, 100, 'Discover curated looks from African makers.')}
                     </p>
+                    {categories[0].countLabel ? (
+                      <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">
+                        {categories[0].countLabel}
+                      </p>
+                    ) : null}
                     <span className="inline-flex items-center justify-center border border-white text-white rounded-none px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200 group-hover:bg-white group-hover:text-black">
                       {categories[0].ctaText || 'SHOP NOW'}
                     </span>
@@ -1666,6 +1671,11 @@ export default function Home() {
                     <p className="mb-4 text-sm text-white/80 line-clamp-3">
                       {clampText(category.description, 100, 'Explore standout products across African fashion.')}
                     </p>
+                    {category.countLabel ? (
+                      <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">
+                        {category.countLabel}
+                      </p>
+                    ) : null}
                     <span className="inline-flex items-center justify-center border border-white text-white rounded-none px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200 group-hover:bg-white group-hover:text-black">
                       {category.ctaText || 'SHOP NOW'}
                     </span>
@@ -1692,6 +1702,11 @@ export default function Home() {
                     <p className="mb-4 text-sm text-white/80 line-clamp-3">
                       {clampText(category.description, 100, 'Explore standout products across African fashion.')}
                     </p>
+                    {category.countLabel ? (
+                      <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">
+                        {category.countLabel}
+                      </p>
+                    ) : null}
                     <span className="inline-flex items-center justify-center border border-white text-white rounded-none px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200 group-hover:bg-white group-hover:text-black">
                       {category.ctaText || 'SHOP NOW'}
                     </span>
