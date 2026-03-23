@@ -715,7 +715,7 @@ export default function Home() {
   const capabilityProfile = useHomepageExperienceStore((state) => state.capability);
   const isLiteExperienceMode = resolvedExperienceMode === 'LITE_COMMERCE';
   const useMotion = !isLiteExperienceMode && !capabilityProfile?.prefersReducedMotion;
-  const strictCanonicalMode = location.pathname === '/home-kimi';
+  const strictCanonicalMode = location.pathname === '/home-jenks';
   const heroVariant = experienceSettings.heroVariant || 'SPLIT_EDITORIAL';
   const categoryEntryVariant = experienceSettings.categoryEntryVariant || 'THREE_COLUMN_CORE';
   const spotlightVariant = experienceSettings.spotlightVariant || 'CAROUSEL';
@@ -746,9 +746,9 @@ export default function Home() {
   );
 
   const { data: kimiHomepagePayloadData, isLoading: kimiHomepagePayloadLoading } = useQuery({
-    queryKey: ['homepageKimiPayloadV1'],
+    queryKey: ['homepageJenksPayloadV1'],
     queryFn: async () => {
-      const response = await api.homepageSections.getKimiHomepagePayload();
+      const response = await api.homepageSections.getJenksHomepagePayload();
       return response.success ? response.data : null;
     },
   });

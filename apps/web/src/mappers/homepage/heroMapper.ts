@@ -125,19 +125,19 @@ export const mapHeroSlides = (args: HeroMapperArgs): HeroSlideDTO[] => {
   return mapped.length > 0 ? mapped : fallbackSlides;
 };
 
-export const mapHeroQuickLinks = (rawKimiCopy: unknown): HeroQuickLinkDTO[] => {
-  const kimiCopy = rawKimiCopy && typeof rawKimiCopy === 'object' ? (rawKimiCopy as Record<string, unknown>) : {};
+export const mapHeroQuickLinks = (rawJenksCopy: unknown): HeroQuickLinkDTO[] => {
+  const jenksCopy = rawJenksCopy && typeof rawJenksCopy === 'object' ? (rawJenksCopy as Record<string, unknown>) : {};
   return [
     {
-      label: clampText(kimiCopy.quickPathRtwLabel, 32, 'Ready to Wear'),
+      label: clampText(jenksCopy.quickPathRtwLabel, 32, 'Ready to Wear'),
       href: '/ready-to-wear',
     },
     {
-      label: clampText(kimiCopy.quickPathCustomLabel, 32, 'Custom'),
+      label: clampText(jenksCopy.quickPathCustomLabel, 32, 'Custom'),
       href: '/custom',
     },
     {
-      label: clampText(kimiCopy.quickPathFabricsLabel, 32, 'Fabrics'),
+      label: clampText(jenksCopy.quickPathFabricsLabel, 32, 'Fabrics'),
       href: '/fabrics',
     },
   ];

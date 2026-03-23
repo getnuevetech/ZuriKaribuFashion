@@ -8,7 +8,7 @@ type ShopTab = 'category' | 'country' | 'occasion' | 'price';
 const HERO_IMAGE =
   'https://images.unsplash.com/photo-1594736797933-d0d9e022f7f1?auto=format&fit=crop&w=1600&q=80';
 
-const KIMI_FEATURE_IMAGES = {
+const JENKS_FEATURE_IMAGES = {
   readyToWear:
     'https://images.unsplash.com/photo-1551232864-3f0890e580d9?auto=format&fit=crop&w=1200&q=80',
   customToWear:
@@ -37,10 +37,10 @@ const TRUST_BADGES = [
 ];
 
 const SHOP_BY_CATEGORIES = [
-  { label: 'Ready to Wear', href: '/ready-to-wear', image: KIMI_FEATURE_IMAGES.readyToWear, count: '480+' },
-  { label: 'Custom to Wear', href: '/custom', image: KIMI_FEATURE_IMAGES.customToWear, count: '220+' },
-  { label: 'Fabrics', href: '/fabrics', image: KIMI_FEATURE_IMAGES.fabrics, count: '640+' },
-  { label: 'Fresh Drops', href: '/shop', image: KIMI_FEATURE_IMAGES.freshDrops, count: '80+' },
+  { label: 'Ready to Wear', href: '/ready-to-wear', image: JENKS_FEATURE_IMAGES.readyToWear, count: '480+' },
+  { label: 'Custom to Wear', href: '/custom', image: JENKS_FEATURE_IMAGES.customToWear, count: '220+' },
+  { label: 'Fabrics', href: '/fabrics', image: JENKS_FEATURE_IMAGES.fabrics, count: '640+' },
+  { label: 'Fresh Drops', href: '/shop', image: JENKS_FEATURE_IMAGES.freshDrops, count: '80+' },
 ];
 
 const OCCASION_ITEMS = [
@@ -59,29 +59,29 @@ const PRICE_ITEMS = [
 
 const STATIC_PRODUCTS = {
   rtw: [
-    { id: 'rtw-1', name: 'Ankara Midi Dress', price: '$240', country: 'Nigeria', image: KIMI_FEATURE_IMAGES.readyToWear, href: '/ready-to-wear' },
-    { id: 'rtw-2', name: 'Kente Street Set', price: '$280', country: 'Ghana', image: KIMI_FEATURE_IMAGES.freshDrops, href: '/ready-to-wear' },
-    { id: 'rtw-3', name: 'Boubou Luxe', price: '$320', country: 'Senegal', image: KIMI_FEATURE_IMAGES.customToWear, href: '/ready-to-wear' },
-    { id: 'rtw-4', name: 'Aso Oke Signature', price: '$360', country: 'Nigeria', image: KIMI_FEATURE_IMAGES.spotlight, href: '/ready-to-wear' },
+    { id: 'rtw-1', name: 'Ankara Midi Dress', price: '$240', country: 'Nigeria', image: JENKS_FEATURE_IMAGES.readyToWear, href: '/ready-to-wear' },
+    { id: 'rtw-2', name: 'Kente Street Set', price: '$280', country: 'Ghana', image: JENKS_FEATURE_IMAGES.freshDrops, href: '/ready-to-wear' },
+    { id: 'rtw-3', name: 'Boubou Luxe', price: '$320', country: 'Senegal', image: JENKS_FEATURE_IMAGES.customToWear, href: '/ready-to-wear' },
+    { id: 'rtw-4', name: 'Aso Oke Signature', price: '$360', country: 'Nigeria', image: JENKS_FEATURE_IMAGES.spotlight, href: '/ready-to-wear' },
   ],
   fabrics: [
-    { id: 'fab-1', name: 'Premium Ankara Roll', price: '$90', country: 'Nigeria', image: KIMI_FEATURE_IMAGES.fabrics, href: '/fabrics' },
-    { id: 'fab-2', name: 'Kente Woven Cloth', price: '$120', country: 'Ghana', image: KIMI_FEATURE_IMAGES.readyToWear, href: '/fabrics' },
-    { id: 'fab-3', name: 'Adire Indigo Print', price: '$75', country: 'Nigeria', image: KIMI_FEATURE_IMAGES.customToWear, href: '/fabrics' },
-    { id: 'fab-4', name: 'Bogolan Heritage', price: '$110', country: 'Mali', image: KIMI_FEATURE_IMAGES.freshDrops, href: '/fabrics' },
+    { id: 'fab-1', name: 'Premium Ankara Roll', price: '$90', country: 'Nigeria', image: JENKS_FEATURE_IMAGES.fabrics, href: '/fabrics' },
+    { id: 'fab-2', name: 'Kente Woven Cloth', price: '$120', country: 'Ghana', image: JENKS_FEATURE_IMAGES.readyToWear, href: '/fabrics' },
+    { id: 'fab-3', name: 'Adire Indigo Print', price: '$75', country: 'Nigeria', image: JENKS_FEATURE_IMAGES.customToWear, href: '/fabrics' },
+    { id: 'fab-4', name: 'Bogolan Heritage', price: '$110', country: 'Mali', image: JENKS_FEATURE_IMAGES.freshDrops, href: '/fabrics' },
   ],
   custom: [
-    { id: 'ctw-1', name: 'Tailored Kaftan Experience', price: 'From $260', country: 'Morocco', image: KIMI_FEATURE_IMAGES.customToWear, href: '/custom' },
-    { id: 'ctw-2', name: 'Bridal Couture Edit', price: 'From $490', country: 'South Africa', image: KIMI_FEATURE_IMAGES.spotlight, href: '/custom' },
-    { id: 'ctw-3', name: 'Diaspora Signature Fit', price: 'From $300', country: 'Kenya', image: KIMI_FEATURE_IMAGES.readyToWear, href: '/custom' },
-    { id: 'ctw-4', name: 'Festival Bespoke Look', price: 'From $340', country: 'Cote d’Ivoire', image: KIMI_FEATURE_IMAGES.freshDrops, href: '/custom' },
+    { id: 'ctw-1', name: 'Tailored Kaftan Experience', price: 'From $260', country: 'Morocco', image: JENKS_FEATURE_IMAGES.customToWear, href: '/custom' },
+    { id: 'ctw-2', name: 'Bridal Couture Edit', price: 'From $490', country: 'South Africa', image: JENKS_FEATURE_IMAGES.spotlight, href: '/custom' },
+    { id: 'ctw-3', name: 'Diaspora Signature Fit', price: 'From $300', country: 'Kenya', image: JENKS_FEATURE_IMAGES.readyToWear, href: '/custom' },
+    { id: 'ctw-4', name: 'Festival Bespoke Look', price: 'From $340', country: 'Cote d’Ivoire', image: JENKS_FEATURE_IMAGES.freshDrops, href: '/custom' },
   ],
 };
 
 const DESIGNERS = [
-  { id: 'd-1', name: 'Amina Atelier', country: 'Nigeria', image: KIMI_FEATURE_IMAGES.spotlight },
-  { id: 'd-2', name: 'Kente House', country: 'Ghana', image: KIMI_FEATURE_IMAGES.readyToWear },
-  { id: 'd-3', name: 'Sahara Tailoring', country: 'Morocco', image: KIMI_FEATURE_IMAGES.customToWear },
+  { id: 'd-1', name: 'Amina Atelier', country: 'Nigeria', image: JENKS_FEATURE_IMAGES.spotlight },
+  { id: 'd-2', name: 'Kente House', country: 'Ghana', image: JENKS_FEATURE_IMAGES.readyToWear },
+  { id: 'd-3', name: 'Sahara Tailoring', country: 'Morocco', image: JENKS_FEATURE_IMAGES.customToWear },
 ];
 
 const asFlagImageUrl = (code: string) => {
@@ -121,7 +121,7 @@ function ProductStrip({ title, rows }: { title: string; rows: Array<{ id: string
   );
 }
 
-export default function HomeKimi() {
+export default function HomeJenks() {
   const [tab, setTab] = useState<ShopTab>('category');
   const [region, setRegion] = useState<'ALL' | AfricanRegion>('ALL');
 
@@ -134,7 +134,7 @@ export default function HomeKimi() {
     <div className="min-h-screen bg-[#f8f6f1] text-[#1a1a1a]">
       <section className="grid min-h-[86vh] grid-cols-1 lg:grid-cols-12">
         <div className="relative lg:col-span-7">
-          <img src={HERO_IMAGE} alt="Kimi hero" className="h-full w-full object-cover" />
+          <img src={HERO_IMAGE} alt="Jenks hero" className="h-full w-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/15 to-transparent lg:hidden" />
         </div>
         <div className="flex items-center bg-[#f8f6f1] px-6 py-10 lg:col-span-5 lg:px-12">
@@ -299,7 +299,7 @@ export default function HomeKimi() {
 
       <section className="mx-auto grid w-full max-w-[1400px] grid-cols-1 gap-6 px-4 pb-20 lg:grid-cols-3 lg:px-8">
         <Link to="/ready-to-wear" className="group relative overflow-hidden border border-black/15">
-          <img src={KIMI_FEATURE_IMAGES.readyToWear} alt="Ready to wear feature" className="h-[340px] w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <img src={JENKS_FEATURE_IMAGES.readyToWear} alt="Ready to wear feature" className="h-[340px] w-full object-cover transition-transform duration-500 group-hover:scale-105" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
           <div className="absolute bottom-0 p-5 text-white">
             <p className="text-xs uppercase tracking-[0.2em] text-white/65">Ready to Wear</p>
@@ -307,7 +307,7 @@ export default function HomeKimi() {
           </div>
         </Link>
         <Link to="/fabrics" className="group relative overflow-hidden border border-black/15">
-          <img src={KIMI_FEATURE_IMAGES.fabrics} alt="Fabrics feature" className="h-[340px] w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <img src={JENKS_FEATURE_IMAGES.fabrics} alt="Fabrics feature" className="h-[340px] w-full object-cover transition-transform duration-500 group-hover:scale-105" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
           <div className="absolute bottom-0 p-5 text-white">
             <p className="text-xs uppercase tracking-[0.2em] text-white/65">Fabrics</p>
@@ -315,7 +315,7 @@ export default function HomeKimi() {
           </div>
         </Link>
         <Link to="/custom" className="group relative overflow-hidden border border-black/15">
-          <img src={KIMI_FEATURE_IMAGES.customToWear} alt="Custom feature" className="h-[340px] w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <img src={JENKS_FEATURE_IMAGES.customToWear} alt="Custom feature" className="h-[340px] w-full object-cover transition-transform duration-500 group-hover:scale-105" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
           <div className="absolute bottom-0 p-5 text-white">
             <p className="text-xs uppercase tracking-[0.2em] text-white/65">Custom to Wear</p>

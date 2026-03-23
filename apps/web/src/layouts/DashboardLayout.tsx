@@ -65,7 +65,7 @@ interface DashboardSearchEntry {
 }
 
 const LEGACY_HOMEPAGE_PATHS = ['/admin/homepage', '/admin/homepage-visibility'] as const;
-const KIMI_HOMEPAGE_PATHS = ['/admin/homepage-sections', '/admin/kimi-homepage'] as const;
+const JENKS_HOMEPAGE_PATHS = ['/admin/homepage-sections', '/admin/jenks-homepage'] as const;
 
 const navItems: Record<DashboardType, NavItem[]> = {
   admin: [
@@ -98,7 +98,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'VoIP Management', href: '/admin/voip', icon: PhoneCall },
     { label: 'Banners', href: '/admin/banners', icon: ImageIcon },
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
-    { label: 'Kimi Homepage Manager', href: '/admin/homepage-sections', icon: LayoutGrid },
+    { label: 'Jenks Homepage Manager', href: '/admin/homepage-sections', icon: LayoutGrid },
     { label: 'Homepage Runtime Switchboard', href: '/admin/homepage-runtime', icon: LayoutGrid },
     { label: 'Category Pages', href: '/admin/category-pages', icon: LayoutGrid },
     { label: 'Blogs', href: '/admin/blogs', icon: FileText },
@@ -187,7 +187,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isTicketManagementMenuOpen, setIsTicketManagementMenuOpen] = useState(true);
   const [isPaymentMenuOpen, setIsPaymentMenuOpen] = useState(true);
   const [isLegacyMenuOpen, setIsLegacyMenuOpen] = useState(true);
-  const [isKimiMenuOpen, setIsKimiMenuOpen] = useState(true);
+  const [isJenksMenuOpen, setIsJenksMenuOpen] = useState(true);
   const [isAdminAccountsMenuOpen, setIsAdminAccountsMenuOpen] = useState(true);
   const [isProductManagementMenuOpen, setIsProductManagementMenuOpen] = useState(true);
   const [isAutomationMenuOpen, setIsAutomationMenuOpen] = useState(true);
@@ -300,8 +300,8 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Legacy Homepage Manager', href: '/admin/homepage', icon: ChevronRight },
     { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: ChevronRight },
   ];
-  const kimiSubmenu = [
-    { label: 'Kimi Homepage Manager', href: '/admin/homepage-sections', icon: ChevronRight },
+  const jenksSubmenu = [
+    { label: 'Jenks Homepage Manager', href: '/admin/homepage-sections', icon: ChevronRight },
   ];
   const orderManagementSubmenu = [
     { label: 'Order List', href: '/admin/orders?tab=list', icon: ChevronRight },
@@ -522,14 +522,14 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
         );
         addSearchEntries(
           entries,
-          kimiSubmenu
+          jenksSubmenu
             .filter((item) => canAccessAdminNav(item.href))
             .map((item) => ({
               label: item.label,
               href: item.href,
-              keywords: ['kimi', 'homepage', 'trust badges', 'copy controls', 'experience'],
+              keywords: ['jenks', 'kimi', 'homepage', 'trust badges', 'copy controls', 'experience'],
             })),
-          { prefix: 'Kimi Homepage Manager' }
+          { prefix: 'Jenks Homepage Manager' }
         );
       }
       addSearchEntries(
@@ -761,18 +761,18 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
               }
 
               if (userType === 'admin' && item.href === '/admin/homepage-sections' && isSuperAdmin) {
-                const kimiMenuActive = KIMI_HOMEPAGE_PATHS.includes(location.pathname as (typeof KIMI_HOMEPAGE_PATHS)[number]);
-                const visibleKimiSubmenu = kimiSubmenu.filter((subItem) => canAccessAdminNav(subItem.href));
-                if (visibleKimiSubmenu.length === 0) {
+                const jenksMenuActive = JENKS_HOMEPAGE_PATHS.includes(location.pathname as (typeof JENKS_HOMEPAGE_PATHS)[number]);
+                const visibleJenksSubmenu = jenksSubmenu.filter((subItem) => canAccessAdminNav(subItem.href));
+                if (visibleJenksSubmenu.length === 0) {
                   return null;
                 }
                 return (
                   <div key={item.href} className="space-y-1">
                     <button
                       type="button"
-                      onClick={() => setIsKimiMenuOpen((prev) => !prev)}
+                      onClick={() => setIsJenksMenuOpen((prev) => !prev)}
                       className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
-                        kimiMenuActive
+                        jenksMenuActive
                           ? 'bg-white/10 text-white'
                           : 'text-white/70 hover:bg-white/5 hover:text-white'
                       }`}
@@ -780,16 +780,16 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                       <Icon className="w-5 h-5 flex-shrink-0" />
                       {isSidebarOpen ? (
                         <>
-                          <span className="text-sm font-medium">Kimi Homepage Manager</span>
+                          <span className="text-sm font-medium">Jenks Homepage Manager</span>
                           <span className="ml-auto">
-                            {isKimiMenuOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            {isJenksMenuOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                           </span>
                         </>
                       ) : null}
                     </button>
-                    {isKimiMenuOpen && isSidebarOpen ? (
+                    {isJenksMenuOpen && isSidebarOpen ? (
                       <div className="ml-7 space-y-1">
-                        {visibleKimiSubmenu.map((subItem) => {
+                        {visibleJenksSubmenu.map((subItem) => {
                           const subMeta = readHrefMeta(subItem.href);
                           const subActive =
                             location.pathname === subMeta.pathname &&

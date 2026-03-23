@@ -8834,7 +8834,7 @@ const homepageSectionsApi = {
         heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
         categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
         spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
-        homepageTemplate: 'LEGACY' | 'KIMI';
+        homepageTemplate: 'LEGACY' | 'JENKS';
         rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
         allowPreviewQuery: boolean;
         previewQueryParam: string;
@@ -8859,7 +8859,7 @@ const homepageSectionsApi = {
         };
       };
     }>('/homepage-sections/experience-settings'),
-  getKimiHomepagePayload: () =>
+  getJenksHomepagePayload: () =>
     apiService.get<{
       success: boolean;
       data: {
@@ -8908,7 +8908,7 @@ const homepageSectionsApi = {
           heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
           categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
           spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
-          homepageTemplate: 'LEGACY' | 'KIMI';
+          homepageTemplate: 'LEGACY' | 'JENKS';
           rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
           allowPreviewQuery: boolean;
           previewQueryParam: string;
@@ -8977,7 +8977,7 @@ const homepageSectionsApi = {
           subscribeEndpoint: string;
         };
       };
-    }>('/homepage-sections/kimi-homepage-payload'),
+    }>('/homepage-sections/jenks-homepage-payload'),
   subscribeHomepageNewsletter: (payload: { email: string; source?: string; metadata?: Record<string, unknown> }) =>
     apiService.post<{
       success: boolean;
@@ -9150,7 +9150,7 @@ const homepageSectionsApi = {
         heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
         categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
         spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
-        homepageTemplate: 'LEGACY' | 'KIMI';
+        homepageTemplate: 'LEGACY' | 'JENKS';
         rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
         allowPreviewQuery: boolean;
         previewQueryParam: string;
@@ -9181,7 +9181,7 @@ const homepageSectionsApi = {
       success: boolean;
       data: {
         runtime: {
-          homepageTemplate: 'LEGACY' | 'KIMI';
+          homepageTemplate: 'LEGACY' | 'JENKS';
           rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
           allowPreviewQuery: boolean;
           previewQueryParam: string;
@@ -9199,7 +9199,7 @@ const homepageSectionsApi = {
       };
     }>('/homepage-sections/admin/runtime-health'),
   dryRunAdminRuntimeHealth: (data: {
-    homepageTemplate?: 'LEGACY' | 'KIMI';
+    homepageTemplate?: 'LEGACY' | 'JENKS';
     rolloutMode?: 'LIVE' | 'PREVIEW_SAFE';
     allowPreviewQuery?: boolean;
     previewQueryParam?: string;
@@ -9208,7 +9208,7 @@ const homepageSectionsApi = {
       success: boolean;
       data: {
         runtime: {
-          homepageTemplate: 'LEGACY' | 'KIMI';
+          homepageTemplate: 'LEGACY' | 'JENKS';
           rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
           allowPreviewQuery: boolean;
           previewQueryParam: string;
@@ -9239,13 +9239,13 @@ const homepageSectionsApi = {
         action: 'RUNTIME_SWITCH' | 'RUNTIME_ROLLBACK';
         reason: string;
         previous: {
-          homepageTemplate: 'LEGACY' | 'KIMI';
+          homepageTemplate: 'LEGACY' | 'JENKS';
           rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
           allowPreviewQuery: boolean;
           previewQueryParam: string;
         };
         next: {
-          homepageTemplate: 'LEGACY' | 'KIMI';
+          homepageTemplate: 'LEGACY' | 'JENKS';
           rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
           allowPreviewQuery: boolean;
           previewQueryParam: string;
@@ -9302,7 +9302,7 @@ const homepageSectionsApi = {
       success: boolean;
       data: {
         settings: {
-          homepageTemplate: 'LEGACY' | 'KIMI';
+          homepageTemplate: 'LEGACY' | 'JENKS';
           rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
           allowPreviewQuery: boolean;
           previewQueryParam: string;
@@ -9324,7 +9324,7 @@ const homepageSectionsApi = {
     heroVariant?: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
     categoryEntryVariant?: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
     spotlightVariant?: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
-    homepageTemplate?: 'LEGACY' | 'KIMI';
+    homepageTemplate?: 'LEGACY' | 'JENKS';
     rolloutMode?: 'LIVE' | 'PREVIEW_SAFE';
     allowPreviewQuery?: boolean;
     previewQueryParam?: string;
@@ -9364,7 +9364,7 @@ const homepageSectionsApi = {
         heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
         categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
         spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
-        homepageTemplate: 'LEGACY' | 'KIMI';
+        homepageTemplate: 'LEGACY' | 'JENKS';
         rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
         allowPreviewQuery: boolean;
         previewQueryParam: string;

@@ -91,7 +91,7 @@ import AdminAuthenticatorSettings from './pages/admin/AuthenticatorSettings';
 import AdminHelpCenterContent from './pages/admin/HelpCenterContent';
 import AdminModuleRuntimeSettings from './pages/admin/ModuleRuntimeSettings';
 import AdminHomepageRuntimeSwitchboard from './pages/admin/HomepageRuntimeSwitchboard';
-import { KimiV14Redirect } from './pages/KimiV14Redirect';
+import { JenksV14Redirect } from './pages/KimiV14Redirect';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -155,12 +155,14 @@ function App() {
         <Router>
           <Routes>
             <Route path="/" element={<HomeEntry />} />
-            <Route path="/home-kimi-static" element={<KimiV14Redirect />} />
+            <Route path="/home-jenks-static" element={<JenksV14Redirect />} />
+            <Route path="/home-kimi-static" element={<Navigate to="/home-jenks-static" replace />} />
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
               <Route path="/home-legacy" element={<Home />} />
-              <Route path="/home-kimi" element={<Home />} />
+              <Route path="/home-jenks" element={<Home />} />
+              <Route path="/home-kimi" element={<Navigate to="/home-jenks" replace />} />
               <Route path="/shop" element={<ShopPage />} />
               <Route path="/country-products" element={<CountryProducts />} />
               <Route path="/ready-to-wear" element={<ReadyToWear />} />
@@ -593,13 +595,14 @@ function App() {
                   }
                 />
                 <Route
-                  path="/admin/kimi-homepage"
+                  path="/admin/jenks-homepage"
                   element={
                     <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
                       <AdminHomepageSections />
                     </AdminPermissionGuard>
                   }
                 />
+                <Route path="/admin/kimi-homepage" element={<Navigate to="/admin/jenks-homepage" replace />} />
                 <Route
                   path="/admin/homepage-runtime"
                   element={

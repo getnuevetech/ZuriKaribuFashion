@@ -225,7 +225,7 @@ interface HomepageExperienceSettings {
   heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
   categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
   spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
-  homepageTemplate: 'LEGACY' | 'KIMI';
+  homepageTemplate: 'LEGACY' | 'JENKS';
   rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
   allowPreviewQuery: boolean;
   previewQueryParam: string;
@@ -522,7 +522,10 @@ const normalizeHomepageExperienceState = (value: any): HomepageExperienceSetting
     heroVariant: source.heroVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.heroVariant,
     categoryEntryVariant: source.categoryEntryVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.categoryEntryVariant,
     spotlightVariant: source.spotlightVariant || HOMEPAGE_EXPERIENCE_DEFAULTS.spotlightVariant,
-    homepageTemplate: source.homepageTemplate || HOMEPAGE_EXPERIENCE_DEFAULTS.homepageTemplate,
+    homepageTemplate:
+      String(source.homepageTemplate || '').trim().toUpperCase() === 'KIMI'
+        ? 'JENKS'
+        : source.homepageTemplate || HOMEPAGE_EXPERIENCE_DEFAULTS.homepageTemplate,
     rolloutMode: source.rolloutMode || HOMEPAGE_EXPERIENCE_DEFAULTS.rolloutMode,
     allowPreviewQuery: source.allowPreviewQuery ?? HOMEPAGE_EXPERIENCE_DEFAULTS.allowPreviewQuery,
     previewQueryParam:
@@ -1374,8 +1377,8 @@ export default function HomepageSections() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Kimi Homepage Manager</h1>
-          <p className="text-gray-500 mt-1">Manage dynamic Kimi homepage content and presentation controls</p>
+          <h1 className="text-2xl font-bold text-gray-900">Jenks Homepage Manager</h1>
+          <p className="text-gray-500 mt-1">Manage dynamic Jenks homepage content and presentation controls</p>
         </div>
         <Button onClick={() => openModal(activeTab === 'topStrip' ? topStripContent : activeTab === 'statsStrip' ? statsStripContent : null)} className="flex items-center gap-2">
           <Plus className="w-4 h-4" />
@@ -1729,7 +1732,7 @@ export default function HomepageSections() {
 
       <div className="mb-8 rounded-lg border border-gray-200 bg-white p-4">
         <div className="mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Kimi Experience Modes & Controls</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Jenks Experience Modes & Controls</h2>
           <p className="mt-1 text-sm text-gray-600">
             Configure adaptive Lite/Standard/Editorial behavior, theme options, and approved section variants.
           </p>
@@ -1960,9 +1963,9 @@ export default function HomepageSections() {
         </div>
 
         <div className="mt-4 rounded-md border border-gray-200 p-3">
-          <h3 className="text-sm font-semibold text-gray-800">Kimi Trust Badges</h3>
+          <h3 className="text-sm font-semibold text-gray-800">Jenks Trust Badges</h3>
           <p className="mt-1 text-xs text-gray-600">
-            Controls the trust row shown on the Kimi homepage.
+            Controls the trust row shown on the Jenks homepage.
           </p>
           <div className="mt-3 space-y-3">
             {homepageExperienceSettings.trustBadges.map((badge, index) => (
@@ -2041,9 +2044,9 @@ export default function HomepageSections() {
         </div>
 
         <div className="mt-4 rounded-md border border-gray-200 p-3">
-          <h3 className="text-sm font-semibold text-gray-800">Kimi Copy Controls</h3>
+          <h3 className="text-sm font-semibold text-gray-800">Jenks Copy Controls</h3>
           <p className="mt-1 text-xs text-gray-600">
-            Controls key labels for Kimi sections without code changes.
+            Controls key labels for Jenks sections without code changes.
           </p>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             {[
@@ -2088,7 +2091,7 @@ export default function HomepageSections() {
 
       <div className="mb-8 space-y-5 rounded-lg border border-gray-200 bg-white p-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Canonical Kimi Payload Controls</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Canonical Jenks Payload Controls</h2>
           <p className="mt-1 text-sm text-gray-600">
             Manage Shop By blocks, Fresh Drops, and Newsletter content used by the canonical homepage payload.
           </p>

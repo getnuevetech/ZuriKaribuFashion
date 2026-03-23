@@ -14,7 +14,7 @@ const readArg = (name) => {
 const baseUrlInput = readArg('base') || process.env.API_BASE_URL || 'http://localhost:3001/api';
 const timeoutMs = Number(readArg('timeout') || process.env.API_SMOKE_TIMEOUT_MS || 12000);
 const baseUrl = String(baseUrlInput || '').trim().replace(/\/+$/, '');
-const payloadEndpoint = '/homepage-sections/kimi-homepage-payload';
+const payloadEndpoint = '/homepage-sections/jenks-homepage-payload';
 const experienceEndpoint = '/homepage-sections/experience-settings';
 
 if (!baseUrl) {
@@ -60,12 +60,12 @@ const requiredFeaturedSections = [
 ];
 
 const printFail = (message) => {
-  console.error(`\nKimi payload smoke test FAILED: ${message}`);
+  console.error(`\nJenks payload smoke test FAILED: ${message}`);
   process.exit(2);
 };
 
 try {
-  console.log(`\nKimi payload smoke test: ${baseUrl}${payloadEndpoint}`);
+  console.log(`\nJenks payload smoke test: ${baseUrl}${payloadEndpoint}`);
   console.log(`Timeout: ${timeoutMs}ms`);
 
   const response = await fetch(`${baseUrl}${payloadEndpoint}`, {
@@ -99,7 +99,7 @@ try {
     printFail(`missing required keys: ${missingKeys.join(', ')}`);
   }
 
-  if (String(data.contractVersion || '') !== 'KIMI_HOMEPAGE_PAYLOAD_V1') {
+  if (String(data.contractVersion || '') !== 'JENKS_HOMEPAGE_PAYLOAD_V1') {
     printFail(`unexpected contractVersion: ${String(data.contractVersion || '')}`);
   }
   if (!data.generatedAt || Number.isNaN(Date.parse(String(data.generatedAt)))) {
@@ -192,7 +192,7 @@ try {
   if (missingExperienceKeys.length > 0) {
     printFail(`experience settings missing required keys: ${missingExperienceKeys.join(', ')}`);
   }
-  if (!['LEGACY', 'KIMI'].includes(String(experience.homepageTemplate || ''))) {
+  if (!['LEGACY', 'JENKS', 'KIMI'].includes(String(experience.homepageTemplate || ''))) {
     printFail(`experience settings homepageTemplate is invalid: ${String(experience.homepageTemplate || '')}`);
   }
   if (!['LIVE', 'PREVIEW_SAFE'].includes(String(experience.rolloutMode || ''))) {
@@ -222,7 +222,7 @@ try {
     `Runtime settings: ${String(experience.homepageTemplate || 'UNKNOWN')}/${String(experience.rolloutMode || 'UNKNOWN')}`
   );
   console.log(`Duration: ${elapsedMs}ms`);
-  console.log('\nKimi payload smoke test passed.');
+  console.log('\nJenks payload smoke test passed.');
 } catch (error) {
   printFail(error instanceof Error ? error.message : String(error || 'Request failed'));
 } finally {

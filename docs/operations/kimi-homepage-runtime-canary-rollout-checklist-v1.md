@@ -1,6 +1,6 @@
-# Kimi Homepage Runtime Canary Rollout Checklist (v1)
+# Jenks Homepage Runtime Canary Rollout Checklist (v1)
 
-This runbook defines a safe rollout sequence for promoting Kimi homepage runtime from preview-safe to live.
+This runbook defines a safe rollout sequence for promoting Jenks homepage runtime from preview-safe to live.
 
 ## Scope
 
@@ -13,31 +13,31 @@ This runbook defines a safe rollout sequence for promoting Kimi homepage runtime
 ## Preconditions
 
 1. Canonical payload smoke test passes:
-   - `npm run smoke:kimi:payload -- --base=https://<api-domain>/api`
+   - `npm run smoke:jenks:payload -- --base=https://<api-domain>/api`
 2. Frontend build passes:
    - `npm run build`
 3. Super Admin access is available for:
-   - `Kimi Homepage Manager`
+   - `Jenks Homepage Manager`
    - `Homepage Runtime Switchboard`
 4. Incident/owner contacts are set for rollback authority.
 
 ## Phase 1: Preview-safe validation (no live user impact)
 
 1. In **Homepage Runtime Switchboard**, set:
-   - `homepageTemplate = KIMI`
+   - `homepageTemplate = JENKS`
    - `rolloutMode = PREVIEW_SAFE`
 2. Run **Dry-run Health Check**.
 3. Ensure all health checks are `PASS` or approved `WARN`.
 4. Validate preview behavior using query override on `/`:
-   - `?zkHomePreview=kimi` (dynamic Kimi path)
-   - `?zkHomePreview=kimi-static` (static fallback)
+   - `?zkHomePreview=jenks` (dynamic Jenks path)
+   - `?zkHomePreview=jenks-static` (static fallback)
    - `?zkHomePreview=legacy` (legacy path)
 5. Verify key sections from canonical payload:
    - Hero, Shop By, Featured Collections, Fresh Drops, Newsletter.
 
 ## Phase 2: Canary live rollout
 
-1. Keep `homepageTemplate = KIMI`.
+1. Keep `homepageTemplate = JENKS`.
 2. Change `rolloutMode = LIVE`.
 3. Provide reason in runtime switch form (required if policy enabled).
 4. Save switchboard and confirm audit entry exists.

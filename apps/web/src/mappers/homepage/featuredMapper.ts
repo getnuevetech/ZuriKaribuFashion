@@ -192,11 +192,11 @@ export const mapFeaturedCollections = (args: FeaturedMapperArgs): FeaturedCollec
   };
 };
 
-export const mapFeaturedSectionTitles = (rawKimiCopy: unknown): FeaturedSectionTitlesDTO => {
-  const kimiCopy = rawKimiCopy && typeof rawKimiCopy === 'object' ? (rawKimiCopy as Record<string, unknown>) : {};
+export const mapFeaturedSectionTitles = (rawJenksCopy: unknown): FeaturedSectionTitlesDTO => {
+  const jenksCopy = rawJenksCopy && typeof rawJenksCopy === 'object' ? (rawJenksCopy as Record<string, unknown>) : {};
   return {
-    customToWear: clampText(kimiCopy.featuredDesignsTitle, 60, 'Custom To Wear'),
-    readyToWear: clampText(kimiCopy.featuredRtwTitle, 60, 'Ready To Wear'),
-    fabricsToBuy: clampText(kimiCopy.featuredFabricsTitle, 60, 'Fabrics To Buy'),
+    customToWear: clampText(jenksCopy.featuredDesignsTitle, 60, 'Custom To Wear'),
+    readyToWear: clampText(jenksCopy.featuredRtwTitle, 60, 'Ready To Wear'),
+    fabricsToBuy: clampText(jenksCopy.featuredFabricsTitle, 60, 'Fabrics To Buy'),
   };
 };

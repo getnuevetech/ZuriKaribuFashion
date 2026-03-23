@@ -1,14 +1,14 @@
-# Kimi v14 Phase D - Canonical Homepage Payload (v1)
+# Jenks v14 Phase D - Canonical Homepage Payload (v1)
 
 ## Goal
 
-Move Kimi homepage runtime from many fragmented frontend calls to a single canonical backend payload contract.
+Move Jenks homepage runtime from many fragmented frontend calls to a single canonical backend payload contract.
 
 ## Delivered in this stage
 
 - Added new public endpoint:
-  - `GET /api/homepage-sections/kimi-homepage-payload`
-- Endpoint aggregates Kimi homepage data into one response object:
+  - `GET /api/homepage-sections/jenks-homepage-payload`
+- Endpoint aggregates Jenks homepage data into one response object:
   - `visibility`
   - `topStrip`
   - `statsStrip`
@@ -33,7 +33,7 @@ Move Kimi homepage runtime from many fragmented frontend calls to a single canon
 
 ## Contract metadata
 
-- `contractVersion: "KIMI_HOMEPAGE_PAYLOAD_V1"`
+- `contractVersion: "JENKS_HOMEPAGE_PAYLOAD_V1"`
 - `generatedAt: ISO timestamp`
 - `payloadChecksum: SHA-256 hash` (computed from `contractVersion` + payload body, excluding `generatedAt`)
 
@@ -45,7 +45,7 @@ Move Kimi homepage runtime from many fragmented frontend calls to a single canon
 
 ## Regression safety
 
-- Added smoke script: `npm run smoke:kimi:payload`
+- Added smoke scripts: `npm run smoke:jenks:payload` (legacy alias: `npm run smoke:kimi:payload`)
 - Script validates:
   - Contract version and required keys
   - `featuredCollections` section arrays

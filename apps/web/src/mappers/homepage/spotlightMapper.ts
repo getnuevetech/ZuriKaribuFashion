@@ -160,7 +160,7 @@ export const mapDesignerSpotlights = (args: SpotlightMapperArgs): DesignerSpotli
   }));
 };
 
-export const mapDesignerSpotlightTitle = (rawKimiCopy: unknown): string => {
-  const kimiCopy = rawKimiCopy && typeof rawKimiCopy === 'object' ? (rawKimiCopy as Record<string, unknown>) : {};
-  return clampText(kimiCopy.designerSpotlightTitle, 60, 'Meet Designers Across Africa');
+export const mapDesignerSpotlightTitle = (rawJenksCopy: unknown): string => {
+  const jenksCopy = rawJenksCopy && typeof rawJenksCopy === 'object' ? (rawJenksCopy as Record<string, unknown>) : {};
+  return clampText(jenksCopy.designerSpotlightTitle, 60, 'Meet Designers Across Africa');
 };

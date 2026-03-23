@@ -24,7 +24,7 @@ export type HomepageCategoryEntryVariant = (typeof HOMEPAGE_CATEGORY_ENTRY_VARIA
 export const HOMEPAGE_SPOTLIGHT_VARIANTS = ['CAROUSEL', 'SINGLE_FEATURE', 'MOSAIC'] as const;
 export type HomepageSpotlightVariant = (typeof HOMEPAGE_SPOTLIGHT_VARIANTS)[number];
 
-export const HOMEPAGE_TEMPLATES = ['LEGACY', 'KIMI'] as const;
+export const HOMEPAGE_TEMPLATES = ['LEGACY', 'JENKS'] as const;
 export type HomepageTemplate = (typeof HOMEPAGE_TEMPLATES)[number];
 
 export const HOMEPAGE_ROLLOUT_MODES = ['LIVE', 'PREVIEW_SAFE'] as const;
@@ -143,6 +143,13 @@ const asUniqueList = <T extends string>(values: unknown, allowed: readonly T[], 
   return normalized.length > 0 ? normalized : [...fallback];
 };
 
+const normalizeHomepageTemplateValue = (value: unknown): HomepageTemplate | null => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'KIMI') return 'JENKS';
+  if (normalized === 'JENKS' || normalized === 'LEGACY') return normalized as HomepageTemplate;
+  return null;
+};
+
 export const normalizeHomepageExperienceSettings = (
   raw: unknown
 ): HomepageExperienceSettings => {
@@ -189,11 +196,7 @@ export const normalizeHomepageExperienceSettings = (
   )
     ? (String(row.spotlightVariant || '').trim().toUpperCase() as HomepageSpotlightVariant)
     : HOMEPAGE_EXPERIENCE_DEFAULTS.spotlightVariant;
-  const homepageTemplate = HOMEPAGE_TEMPLATES.includes(
-    String(row.homepageTemplate || '').trim().toUpperCase() as HomepageTemplate
-  )
-    ? (String(row.homepageTemplate || '').trim().toUpperCase() as HomepageTemplate)
-    : HOMEPAGE_EXPERIENCE_DEFAULTS.homepageTemplate;
+  const homepageTemplate = normalizeHomepageTemplateValue(row.homepageTemplate) || HOMEPAGE_EXPERIENCE_DEFAULTS.homepageTemplate;
   const rolloutMode = HOMEPAGE_ROLLOUT_MODES.includes(
     String(row.rolloutMode || '').trim().toUpperCase() as HomepageRolloutMode
   )

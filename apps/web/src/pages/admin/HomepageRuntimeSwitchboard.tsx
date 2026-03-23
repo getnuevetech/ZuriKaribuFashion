@@ -3,7 +3,7 @@ import Button from '../../components/ui/Button';
 import { api } from '../../services/api';
 
 type HomepageRuntimeSettings = {
-  homepageTemplate: 'LEGACY' | 'KIMI';
+  homepageTemplate: 'LEGACY' | 'JENKS';
   rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
   allowPreviewQuery: boolean;
   previewQueryParam: string;
@@ -45,7 +45,8 @@ const EMPTY_HEALTH: RuntimeHealth = {
 };
 
 const toRuntimeSettings = (input: any): HomepageRuntimeSettings => ({
-  homepageTemplate: input?.homepageTemplate === 'KIMI' ? 'KIMI' : 'LEGACY',
+  homepageTemplate:
+    input?.homepageTemplate === 'JENKS' || input?.homepageTemplate === 'KIMI' ? 'JENKS' : 'LEGACY',
   rolloutMode: input?.rolloutMode === 'LIVE' ? 'LIVE' : 'PREVIEW_SAFE',
   allowPreviewQuery: input?.allowPreviewQuery !== false,
   previewQueryParam:
@@ -340,13 +341,13 @@ export default function AdminHomepageRuntimeSwitchboard() {
             onChange={(e) =>
               setSettings((prev) => ({
                 ...prev,
-                homepageTemplate: e.target.value === 'KIMI' ? 'KIMI' : 'LEGACY',
+                homepageTemplate: e.target.value === 'JENKS' ? 'JENKS' : 'LEGACY',
               }))
             }
             className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
           >
             <option value="LEGACY">Legacy Home</option>
-            <option value="KIMI">Kimi Home</option>
+            <option value="JENKS">Jenks Home</option>
           </select>
         </div>
 

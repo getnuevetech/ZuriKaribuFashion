@@ -33,7 +33,7 @@ const HOMEPAGE_TOKEN_SETS = ['GLOBAL_PREMIUM_DARK', 'GLOBAL_PREMIUM_LIGHT', 'AFR
 const HOMEPAGE_HERO_VARIANTS = ['SPLIT_EDITORIAL', 'CLEAN_COMMERCE', 'VIDEO_STORY'] as const;
 const HOMEPAGE_CATEGORY_ENTRY_VARIANTS = ['THREE_COLUMN_CORE', 'MEGA_GRID'] as const;
 const HOMEPAGE_SPOTLIGHT_VARIANTS = ['CAROUSEL', 'SINGLE_FEATURE', 'MOSAIC'] as const;
-const HOMEPAGE_TEMPLATES = ['LEGACY', 'KIMI'] as const;
+const HOMEPAGE_TEMPLATES = ['LEGACY', 'JENKS'] as const;
 const HOMEPAGE_ROLLOUT_MODES = ['LIVE', 'PREVIEW_SAFE'] as const;
 const HOMEPAGE_TRUST_BADGE_ICONS = [
   'SHIELD_CHECK',
@@ -1584,7 +1584,9 @@ const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSe
     ? spotlightVariantCandidate
     : HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.spotlightVariant;
 
-  const homepageTemplateCandidate = String(row.homepageTemplate || '').trim().toUpperCase() as HomepageTemplate;
+  const homepageTemplateCandidateRaw = String(row.homepageTemplate || '').trim().toUpperCase();
+  const homepageTemplateCandidate =
+    homepageTemplateCandidateRaw === 'KIMI' ? 'JENKS' : (homepageTemplateCandidateRaw as HomepageTemplate);
   const homepageTemplate = HOMEPAGE_TEMPLATES.includes(homepageTemplateCandidate)
     ? homepageTemplateCandidate
     : HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.homepageTemplate;
@@ -2366,7 +2368,9 @@ const areHomepageRuntimeSnapshotsEqual = (a: HomepageRuntimeSnapshot, b: Homepag
 const normalizeHomepageRuntimeSnapshot = (input: unknown): HomepageRuntimeSnapshot | null => {
   if (!input || typeof input !== 'object') return null;
   const row = input as Record<string, unknown>;
-  const homepageTemplate = String(row.homepageTemplate || '').trim().toUpperCase() as HomepageTemplate;
+  const homepageTemplateRaw = String(row.homepageTemplate || '').trim().toUpperCase();
+  const homepageTemplate =
+    (homepageTemplateRaw === 'KIMI' ? 'JENKS' : homepageTemplateRaw) as HomepageTemplate;
   const rolloutMode = String(row.rolloutMode || '').trim().toUpperCase() as HomepageRolloutMode;
   const allowPreviewQuery = getBoolean(row.allowPreviewQuery);
   const previewQueryParam = String(row.previewQueryParam || '').trim();
@@ -2647,7 +2651,7 @@ const buildHomepageRuntimeHealth = async (nextSettings: HomepageExperienceSettin
     });
   }
 
-  if (nextSettings.homepageTemplate === 'KIMI') {
+  if (nextSettings.homepageTemplate === 'JENKS') {
     const requiredCopyFields: Array<keyof HomepageKimiCopy> = [
       'heroEyebrow',
       'shopByEyebrow',
@@ -2662,13 +2666,13 @@ const buildHomepageRuntimeHealth = async (nextSettings: HomepageExperienceSettin
     ];
     const missingCopyFields = requiredCopyFields.filter((key) => !String(nextSettings.kimiCopy?.[key] || '').trim());
     checks.push({
-      key: 'kimiCopy',
-      label: 'Kimi copy completeness',
+      key: 'jenksCopy',
+      label: 'Jenks copy completeness',
       status: missingCopyFields.length === 0 ? 'PASS' : 'FAIL',
       detail:
         missingCopyFields.length === 0
-          ? 'All required Kimi copy fields are configured.'
-          : `Missing Kimi copy fields: ${missingCopyFields.join(', ')}`,
+          ? 'All required Jenks copy fields are configured.'
+          : `Missing Jenks copy fields: ${missingCopyFields.join(', ')}`,
     });
   }
 
@@ -3126,7 +3130,7 @@ router.post('/newsletter-subscribe', async (req, res) => {
   }
 });
 
-router.get('/kimi-homepage-payload', async (_req, res) => {
+router.get(['/jenks-homepage-payload', '/kimi-homepage-payload'], async (_req, res) => {
   const safeResult = <T,>(result: PromiseSettledResult<T>, fallback: T): T =>
     result.status === 'fulfilled' ? result.value : fallback;
 
@@ -3480,7 +3484,7 @@ router.get('/kimi-homepage-payload', async (_req, res) => {
         subscribeEndpoint: '/api/homepage-sections/newsletter-subscribe',
       },
     };
-    const contractVersion = 'KIMI_HOMEPAGE_PAYLOAD_V1';
+    const contractVersion = 'JENKS_HOMEPAGE_PAYLOAD_V1';
     const payloadChecksum = createHash('sha256')
       .update(JSON.stringify({ contractVersion, payload: payloadBody }))
       .digest('hex');
@@ -3494,10 +3498,10 @@ router.get('/kimi-homepage-payload', async (_req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error fetching kimi homepage payload:', error);
+    console.error('Error fetching jenks homepage payload:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch kimi homepage payload',
+      message: 'Failed to fetch jenks homepage payload',
     });
   }
 });
@@ -4070,12 +4074,12 @@ const applyHomepageExperienceSettingsUpdate = async (req: any, res: any) => {
     }
 
     let runtimeHealth: HomepageRuntimeHealthResult | null = null;
-    if (runtimeChanged && nextRuntime.homepageTemplate === 'KIMI' && nextRuntime.rolloutMode === 'LIVE') {
+    if (runtimeChanged && nextRuntime.homepageTemplate === 'JENKS' && nextRuntime.rolloutMode === 'LIVE') {
       runtimeHealth = await buildHomepageRuntimeHealth(nextMergedSettings);
       if (!runtimeHealth.ok) {
         return res.status(409).json({
           success: false,
-          message: 'Runtime health checks failed. Resolve failing checks before switching Kimi live.',
+          message: 'Runtime health checks failed. Resolve failing checks before switching Jenks live.',
           data: { runtimeHealth },
         });
       }
@@ -4084,7 +4088,7 @@ const applyHomepageExperienceSettingsUpdate = async (req: any, res: any) => {
     const settings = await saveHomepageExperienceSettings(payload);
 
     if (runtimeChanged) {
-      if (!runtimeHealth && settings.homepageTemplate === 'KIMI' && settings.rolloutMode === 'LIVE') {
+      if (!runtimeHealth && settings.homepageTemplate === 'JENKS' && settings.rolloutMode === 'LIVE') {
         runtimeHealth = await buildHomepageRuntimeHealth(settings);
       }
       const actor = resolveRuntimeActor(req);

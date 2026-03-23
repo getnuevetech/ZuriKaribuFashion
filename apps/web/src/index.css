@@ -127,7 +127,7 @@ body[data-zk-scope='public'][data-zk-theme='light'] {
   animation: marquee 20s linear infinite;
 }
 
-/* Kimi motion utilities */
+/* Jenks motion utilities */
 .img-zoom {
   overflow: hidden;
 }
