@@ -726,7 +726,10 @@ export default function Home() {
   const isLiteExperienceMode = resolvedExperienceMode === 'LITE_COMMERCE';
   const useMotion = !isLiteExperienceMode && !capabilityProfile?.prefersReducedMotion;
   const strictCanonicalMode =
-    location.pathname === '/jenks-dynamic' || location.pathname === '/jenks' || location.pathname === '/home-jenks';
+    location.pathname === '/home' ||
+    location.pathname === '/jenks-dynamic' ||
+    location.pathname === '/jenks' ||
+    location.pathname === '/home-jenks';
   const heroVariant = experienceSettings.heroVariant || 'SPLIT_EDITORIAL';
   const categoryEntryVariant = experienceSettings.categoryEntryVariant || 'THREE_COLUMN_CORE';
   const spotlightVariant = experienceSettings.spotlightVariant || 'CAROUSEL';

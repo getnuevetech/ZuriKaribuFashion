@@ -1,16 +1,10 @@
 import { useEffect } from 'react';
 
-const KIMI_V14_PUBLIC_BASE = '/kimi-v14-r20260320-35';
-const KIMI_V14_CACHE_BUST = '20260322-1';
+const CLEAN_STATIC_HOME_PATH = '/main/';
 
 const buildJenksUrl = () => {
-  const base = `${KIMI_V14_PUBLIC_BASE}/index.html?v=${KIMI_V14_CACHE_BUST}`;
-  if (typeof window === 'undefined') return base;
-  const rawSearch = String(window.location.search || '').trim();
-  const search = rawSearch.startsWith('?') ? rawSearch.slice(1) : rawSearch;
-  const hash = String(window.location.hash || '');
-  const withSearch = search ? `${base}&${search}` : base;
-  return `${withSearch}${hash}`;
+  if (typeof window === 'undefined') return CLEAN_STATIC_HOME_PATH;
+  return `${CLEAN_STATIC_HOME_PATH}${window.location.search || ''}${window.location.hash || ''}`;
 };
 
 export function JenksV14Redirect() {

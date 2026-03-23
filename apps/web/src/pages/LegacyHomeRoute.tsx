@@ -37,7 +37,7 @@ export default function LegacyHomeRoute() {
   }
 
   if (!legacyEnabled) {
-    return <Navigate to="/jenks" replace />;
+    return <Navigate to="/home" replace />;
   }
 
   return <Home />;

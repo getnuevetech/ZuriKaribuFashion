@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zuri Karibu</title>
+    <script>
+      (function () {
+        var rawHash = String(window.location.hash || '').trim();
+        if (!rawHash || rawHash.indexOf('#/') !== 0) return;
+        var value = rawHash.slice(1);
+        var queryIndex = value.indexOf('?');
+        var pathPart = (queryIndex >= 0 ? value.slice(0, queryIndex) : value).toLowerCase();
+        var queryPart = queryIndex >= 0 ? value.slice(queryIndex) : '';
+        var routeMap = {
+          '/': '/home',
+          '/home': '/home',
+          '/main': '/main',
+          '/shop': '/shop',
+          '/ready-to-wear': '/ready-to-wear',
+          '/rtw': '/ready-to-wear',
+          '/fabrics': '/fabrics',
+          '/ftb': '/fabrics',
+          '/fabric-to-buy': '/fabrics',
+          '/custom': '/custom',
+          '/ctw': '/custom',
+          '/contact': '/contact',
+          '/contact-us': '/contact',
+          '/login': '/login',
+          '/signin': '/login',
+          '/register': '/register',
+          '/signup': '/register',
+          '/forgot-password': '/forgot-password',
+          '/reset-password': '/reset-password'
+        };
+        var target = routeMap[pathPart];
+        if (!target) return;
+        window.location.replace(target + queryPart);
+      })();
+    </script>
+    <script type="module" crossorigin src="/kimi-v14-r20260320-35/assets/index-D3KtpC4K.js"></script>
+    <link rel="stylesheet" crossorigin href="/kimi-v14-r20260320-35/assets/index-BeQQTtR9.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

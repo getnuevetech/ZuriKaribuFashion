@@ -2,6 +2,14 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/main",
+      "destination": "/main/index.html"
+    },
+    {
+      "source": "/main/",
+      "destination": "/main/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

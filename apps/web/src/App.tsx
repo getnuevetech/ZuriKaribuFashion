@@ -163,14 +163,15 @@ function App() {
             <Route path="/" element={<HomeEntry />} />
             <Route path="/jenks" element={<JenksV14Redirect />} />
             <Route path="/home-jenks-static" element={<JenksV14Redirect />} />
-            <Route path="/home-kimi-static" element={<Navigate to="/home-jenks-static" replace />} />
+            <Route path="/home-kimi-static" element={<JenksV14Redirect />} />
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
               <Route path="/home-legacy" element={<LegacyHomeRoute />} />
-              <Route path="/jenks-dynamic" element={<Home />} />
-              <Route path="/home-jenks" element={<Navigate to="/jenks" replace />} />
-              <Route path="/home-kimi" element={<Navigate to="/jenks" replace />} />
+              <Route path="/home" element={<Home />} />
+              <Route path="/jenks-dynamic" element={<NavigateWithSearch to="/home" />} />
+              <Route path="/home-jenks" element={<NavigateWithSearch to="/home" />} />
+              <Route path="/home-kimi" element={<NavigateWithSearch to="/home" />} />
               <Route path="/rtw" element={<Navigate to="/ready-to-wear" replace />} />
               <Route path="/readytowear" element={<Navigate to="/ready-to-wear" replace />} />
               <Route path="/ftb" element={<Navigate to="/fabrics" replace />} />
@@ -180,8 +181,8 @@ function App() {
               <Route path="/ctw" element={<Navigate to="/custom" replace />} />
               <Route path="/customtowear" element={<Navigate to="/custom" replace />} />
               <Route path="/contact-us" element={<Navigate to="/contact" replace />} />
-              <Route path="/about" element={<Navigate to="/jenks#about" replace />} />
-              <Route path="/about-us" element={<Navigate to="/jenks#about" replace />} />
+              <Route path="/about" element={<Navigate to="/home#about" replace />} />
+              <Route path="/about-us" element={<Navigate to="/home#about" replace />} />
               <Route path="/designers" element={<Navigate to="/custom" replace />} />
               <Route path="/support" element={<Navigate to="/help-center" replace />} />
               <Route path="/faq" element={<Navigate to="/help-center" replace />} />

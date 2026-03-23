@@ -6,13 +6,11 @@ import {
   type HomepageExperienceSettings,
 } from '../design/homepageExperience';
 
-const JENKS_V14_PUBLIC_BASE = '/kimi-v14-r20260320-35';
-const JENKS_V14_CACHE_BUST = '20260322-1';
 const LEGACY_HOME_PATH = '/home-legacy';
-const JENKS_HOME_PATH = '/jenks';
-const JENKS_STATIC_HOME_PATH = '/home-jenks-static';
+const JENKS_HOME_PATH = '/home';
+const JENKS_STATIC_HOME_PATH = '/main';
 
-const buildJenksStaticUrl = () => `${JENKS_V14_PUBLIC_BASE}/index.html?v=${JENKS_V14_CACHE_BUST}`;
+const buildJenksStaticUrl = () => JENKS_STATIC_HOME_PATH;
 
 const normalizePreviewChoice = (
   value: string | null
