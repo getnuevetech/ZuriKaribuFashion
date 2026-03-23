@@ -9,7 +9,8 @@
     "dev": "cd apps/web && npm run dev",
     "build": "cd apps/web && npm run build",
     "smoke:api:routes": "node ./scripts/smoke-api-routes.mjs",
-    "smoke:automation:routes": "node ./scripts/smoke-automation-routes.mjs"
+    "smoke:automation:routes": "node ./scripts/smoke-automation-routes.mjs",
+    "smoke:kimi:payload": "node ./scripts/smoke-kimi-homepage-payload.mjs"
   },
   "engines": {
     "node": "20.x"

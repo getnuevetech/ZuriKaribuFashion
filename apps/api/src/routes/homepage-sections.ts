@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma, UserRole } from '../db';
 import { authenticate, authorizePermissions, authorizeSuperAdmin } from '../middleware/auth';
@@ -2927,36 +2927,44 @@ router.get('/kimi-homepage-payload', async (_req, res) => {
       prisma.footerContent.findFirst(),
     ]);
 
+    const payloadBody = {
+      visibility: safeResult(visibilityResult, { ...HOMEPAGE_SECTION_VISIBILITY_DEFAULTS }),
+      topStrip: safeResult(topStripResult, { ...TOP_STRIP_DEFAULTS }),
+      statsStrip: safeResult(statsStripResult, { ...STATS_STRIP_DEFAULTS }),
+      howItWorksStyle: safeResult(howItWorksStyleResult, { ...HOW_IT_WORKS_STYLE_DEFAULTS }),
+      featuredProductDescription: safeResult(featuredDescriptionResult, {
+        ...FEATURED_PRODUCT_DESCRIPTION_DEFAULTS,
+      }),
+      authPageSettings: safeResult(authPageSettingsResult, { ...AUTH_PAGE_SETTINGS_DEFAULTS }),
+      experienceSettings: safeResult(experienceSettingsResult, { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS }),
+      heroSlides: safeResult(heroSlidesResult, []),
+      managedBanners: safeResult(managedBannersResult, []),
+      promoBadge: safeResult(promoBadgeResult, { ...PROMO_BADGE_DEFAULTS }),
+      countries: safeResult(countriesResult, []),
+      categories: safeResult(categoriesResult, []),
+      howItWorks: safeResult(howItWorksResult, []),
+      designerSpotlights: safeResult(designerSpotlightsResult, []),
+      featuredCollections: safeResult(featuredCollectionsResult, {
+        FEATURED_DESIGNS: [],
+        FEATURED_FABRICS: [],
+        FEATURED_READY_TO_WEAR: [],
+        TRENDING_NOW: [],
+      }),
+      heritage: safeResult(heritageResult, null),
+      testimonials: safeResult(testimonialsResult, []),
+      footer: safeResult(footerResult, null),
+    };
+    const contractVersion = 'KIMI_HOMEPAGE_PAYLOAD_V1';
+    const payloadChecksum = createHash('sha256')
+      .update(JSON.stringify({ contractVersion, payload: payloadBody }))
+      .digest('hex');
     res.json({
       success: true,
       data: {
-        contractVersion: 'KIMI_HOMEPAGE_PAYLOAD_V1',
+        contractVersion,
         generatedAt: new Date().toISOString(),
-        visibility: safeResult(visibilityResult, { ...HOMEPAGE_SECTION_VISIBILITY_DEFAULTS }),
-        topStrip: safeResult(topStripResult, { ...TOP_STRIP_DEFAULTS }),
-        statsStrip: safeResult(statsStripResult, { ...STATS_STRIP_DEFAULTS }),
-        howItWorksStyle: safeResult(howItWorksStyleResult, { ...HOW_IT_WORKS_STYLE_DEFAULTS }),
-        featuredProductDescription: safeResult(featuredDescriptionResult, {
-          ...FEATURED_PRODUCT_DESCRIPTION_DEFAULTS,
-        }),
-        authPageSettings: safeResult(authPageSettingsResult, { ...AUTH_PAGE_SETTINGS_DEFAULTS }),
-        experienceSettings: safeResult(experienceSettingsResult, { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS }),
-        heroSlides: safeResult(heroSlidesResult, []),
-        managedBanners: safeResult(managedBannersResult, []),
-        promoBadge: safeResult(promoBadgeResult, { ...PROMO_BADGE_DEFAULTS }),
-        countries: safeResult(countriesResult, []),
-        categories: safeResult(categoriesResult, []),
-        howItWorks: safeResult(howItWorksResult, []),
-        designerSpotlights: safeResult(designerSpotlightsResult, []),
-        featuredCollections: safeResult(featuredCollectionsResult, {
-          FEATURED_DESIGNS: [],
-          FEATURED_FABRICS: [],
-          FEATURED_READY_TO_WEAR: [],
-          TRENDING_NOW: [],
-        }),
-        heritage: safeResult(heritageResult, null),
-        testimonials: safeResult(testimonialsResult, []),
-        footer: safeResult(footerResult, null),
+        payloadChecksum,
+        ...payloadBody,
       },
     });
   } catch (error) {

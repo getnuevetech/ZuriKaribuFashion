@@ -8865,6 +8865,7 @@ const homepageSectionsApi = {
       data: {
         contractVersion: string;
         generatedAt: string;
+        payloadChecksum: string;
         visibility: Record<string, boolean>;
         topStrip: {
           messages: string[];

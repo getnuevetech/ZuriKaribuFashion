@@ -746,137 +746,20 @@ export default function Home() {
     },
   });
 
-  const { data: heroSlidesData } = useQuery({
-    queryKey: ['heroSlides'],
-    enabled: false,
-    queryFn: async () => {
-      const response = await api.homepage.getHeroSlides();
-      return response.success ? response.data : null;
-    },
-  });
-
-  const { data: managedBannersData } = useQuery({
-    queryKey: ['homepageManagedBanners'],
-    enabled: false,
-    queryFn: async () => {
-      const response = await api.banners.getBanners();
-      return response.success ? response.data : null;
-    },
-  });
-
-  const { data: promoBadgeData } = useQuery({
-    queryKey: ['homepagePromoBadge'],
-    enabled: false,
-    queryFn: async () => {
-      const response = await api.banners.getPromoBadgeSettings();
-      return response.success ? response.data : null;
-    },
-  });
-
-  const { data: countriesData } = useQuery({
-    queryKey: ['homepageCountries'],
-    enabled: false,
-    queryFn: async () => {
-      const response = await api.homepageSections.getCountries();
-      return response.success ? response.data : null;
-    },
-  });
-
-  const { data: categoriesData } = useQuery({
-    queryKey: ['homepageCategories'],
-    enabled: false,
-    queryFn: async () => {
-      const response = await api.homepageSections.getCategories();
-      return response.success ? response.data : null;
-    },
-  });
-
-  const { data: howItWorksData } = useQuery({
-    queryKey: ['homepageHowItWorks'],
-    enabled: false,
-    queryFn: async () => {
-      const response = await api.homepageSections.getHowItWorks();
-      return response.success ? response.data : null;
-    },
-  });
-
-  const { data: howItWorksStyleData } = useQuery({
-    queryKey: ['homepageHowItWorksStyle'],
-    enabled: false,
-    queryFn: async () => {
-      const response = await api.homepageSections.getHowItWorksStyle();
-      return response.success ? response.data : null;
-    },
-  });
-
-  const { data: designerSpotlightsData } = useQuery({
-    queryKey: ['designerSpotlightsPublic'],
-    enabled: false,
-    queryFn: async () => {
-      const response = await api.homepageSections.getDesignerSpotlights();
-      return response.success ? response.data : null;
-    },
-  });
-
-  const { data: heritageData } = useQuery({
-    queryKey: ['heritagePublic'],
-    enabled: false,
-    queryFn: async () => {
-      const response = await api.homepageSections.getHeritage();
-      return response.success ? response.data : null;
-    },
-  });
-
-  const { data: testimonialsData } = useQuery({
-    queryKey: ['testimonialsPublic'],
-    enabled: false,
-    queryFn: async () => {
-      const response = await api.homepageSections.getTestimonials();
-      return response.success ? response.data : null;
-    },
-  });
-  const { data: statsStripData } = useQuery({
-    queryKey: ['homepageStatsStrip'],
-    enabled: false,
-    queryFn: async () => {
-      const response = await api.homepageSections.getStatsStrip();
-      return response.success ? response.data : null;
-    },
-  });
-  const { data: featuredDescriptionSettingsData } = useQuery({
-    queryKey: ['homepageFeaturedDescriptionSettings'],
-    enabled: false,
-    queryFn: async () => {
-      const response = await api.homepageSections.getFeaturedProductDescriptionSettings();
-      return response.success ? response.data : null;
-    },
-  });
-
-  const { data: visibilityData } = useQuery({
-    queryKey: ['homepageVisibility'],
-    enabled: false,
-    queryFn: async () => {
-      const response = await api.homepageSections.getVisibility();
-      return response.success ? response.data : null;
-    },
-  });
-
-  const heroSlidesDataResolved = (kimiHomepagePayloadData as any)?.heroSlides ?? heroSlidesData;
+  const heroSlidesDataResolved = (kimiHomepagePayloadData as any)?.heroSlides;
   const featuredDataResolved = (kimiHomepagePayloadData as any)?.featuredCollections ?? null;
-  const managedBannersDataResolved = (kimiHomepagePayloadData as any)?.managedBanners ?? managedBannersData;
-  const promoBadgeDataResolved = (kimiHomepagePayloadData as any)?.promoBadge ?? promoBadgeData;
-  const countriesDataResolved = (kimiHomepagePayloadData as any)?.countries ?? countriesData;
-  const categoriesDataResolved = (kimiHomepagePayloadData as any)?.categories ?? categoriesData;
-  const howItWorksDataResolved = (kimiHomepagePayloadData as any)?.howItWorks ?? howItWorksData;
-  const howItWorksStyleDataResolved = (kimiHomepagePayloadData as any)?.howItWorksStyle ?? howItWorksStyleData;
-  const designerSpotlightsDataResolved =
-    (kimiHomepagePayloadData as any)?.designerSpotlights ?? designerSpotlightsData;
-  const heritageDataResolved = (kimiHomepagePayloadData as any)?.heritage ?? heritageData;
-  const testimonialsDataResolved = (kimiHomepagePayloadData as any)?.testimonials ?? testimonialsData;
-  const statsStripDataResolved = (kimiHomepagePayloadData as any)?.statsStrip ?? statsStripData;
-  const featuredDescriptionSettingsDataResolved =
-    (kimiHomepagePayloadData as any)?.featuredProductDescription ?? featuredDescriptionSettingsData;
-  const visibilityDataResolved = (kimiHomepagePayloadData as any)?.visibility ?? visibilityData;
+  const managedBannersDataResolved = (kimiHomepagePayloadData as any)?.managedBanners;
+  const promoBadgeDataResolved = (kimiHomepagePayloadData as any)?.promoBadge;
+  const countriesDataResolved = (kimiHomepagePayloadData as any)?.countries;
+  const categoriesDataResolved = (kimiHomepagePayloadData as any)?.categories;
+  const howItWorksDataResolved = (kimiHomepagePayloadData as any)?.howItWorks;
+  const howItWorksStyleDataResolved = (kimiHomepagePayloadData as any)?.howItWorksStyle;
+  const designerSpotlightsDataResolved = (kimiHomepagePayloadData as any)?.designerSpotlights;
+  const heritageDataResolved = (kimiHomepagePayloadData as any)?.heritage;
+  const testimonialsDataResolved = (kimiHomepagePayloadData as any)?.testimonials;
+  const statsStripDataResolved = (kimiHomepagePayloadData as any)?.statsStrip;
+  const featuredDescriptionSettingsDataResolved = (kimiHomepagePayloadData as any)?.featuredProductDescription;
+  const visibilityDataResolved = (kimiHomepagePayloadData as any)?.visibility;
 
   const sectionVisibility = useMemo<HomepageVisibility>(() => {
     if (!visibilityDataResolved) {

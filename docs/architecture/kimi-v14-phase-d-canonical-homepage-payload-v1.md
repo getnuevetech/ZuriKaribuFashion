@@ -32,14 +32,22 @@ Move Kimi homepage runtime from many fragmented frontend calls to a single canon
 
 - `contractVersion: "KIMI_HOMEPAGE_PAYLOAD_V1"`
 - `generatedAt: ISO timestamp`
+- `payloadChecksum: SHA-256 hash` (computed from `contractVersion` + payload body, excluding `generatedAt`)
 
 ## Frontend integration status
 
-- `apps/web/src/pages/Home.tsx` now consumes canonical payload first.
+- `apps/web/src/pages/Home.tsx` now consumes canonical payload as the single homepage source.
 - Featured strips now read from canonical payload `featuredCollections`.
-- Legacy per-section queries are disabled in Home runtime to reduce duplicate homepage fetches.
+- Legacy per-section query branches were removed from Home runtime to reduce duplicate homepage fetches and drift.
+
+## Regression safety
+
+- Added smoke script: `npm run smoke:kimi:payload`
+- Script validates:
+  - Contract version and required keys
+  - `featuredCollections` section arrays
+  - Checksum integrity when `payloadChecksum` is present
 
 ## Next step (Phase D.3)
 
-- Validate canonical payload field coverage against all mapper modules and remove legacy fallback branches that are no longer needed.
-- Add optional payload checksum + lightweight smoke assertion script for contract regression detection.
+- Extend canonical payload coverage for remaining homepage subsections (e.g. shop-by style/price behavior, newsletter binding) and retire any remaining legacy section-specific API usage.
