@@ -24,7 +24,3 @@ export function JenksV14Redirect() {
     </div>
   );
 }
-
-// Backward-compatible named export for existing imports.
-export const KimiV14Redirect = JenksV14Redirect;
-

@@ -92,7 +92,7 @@ import AdminAuthenticatorSettings from './pages/admin/AuthenticatorSettings';
 import AdminHelpCenterContent from './pages/admin/HelpCenterContent';
 import AdminModuleRuntimeSettings from './pages/admin/ModuleRuntimeSettings';
 import AdminHomepageRuntimeSwitchboard from './pages/admin/HomepageRuntimeSwitchboard';
-import { JenksV14Redirect } from './pages/KimiV14Redirect';
+import { JenksV14Redirect } from './pages/JenksV14Redirect';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -161,17 +161,18 @@ function App() {
         <Router>
           <Routes>
             <Route path="/" element={<HomeEntry />} />
+            <Route path="/main" element={<JenksV14Redirect />} />
+            <Route path="/main/" element={<JenksV14Redirect />} />
             <Route path="/jenks" element={<JenksV14Redirect />} />
             <Route path="/home-jenks-static" element={<JenksV14Redirect />} />
-            <Route path="/home-kimi-static" element={<JenksV14Redirect />} />
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
               <Route path="/home-legacy" element={<LegacyHomeRoute />} />
-              <Route path="/home" element={<Home />} />
-              <Route path="/jenks-dynamic" element={<NavigateWithSearch to="/home" />} />
+              <Route path="/home" element={<JenksV14Redirect />} />
+              <Route path="/home-live" element={<Home />} />
+              <Route path="/jenks-dynamic" element={<NavigateWithSearch to="/home-live" />} />
               <Route path="/home-jenks" element={<NavigateWithSearch to="/home" />} />
-              <Route path="/home-kimi" element={<NavigateWithSearch to="/home" />} />
               <Route path="/rtw" element={<Navigate to="/ready-to-wear" replace />} />
               <Route path="/readytowear" element={<Navigate to="/ready-to-wear" replace />} />
               <Route path="/ftb" element={<Navigate to="/fabrics" replace />} />
@@ -638,7 +639,6 @@ function App() {
                     </AdminPermissionGuard>
                   }
                 />
-                <Route path="/admin/kimi-homepage" element={<Navigate to="/admin/jenks-homepage" replace />} />
                 <Route
                   path="/admin/homepage-runtime"
                   element={

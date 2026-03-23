@@ -602,7 +602,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
             .map((item) => ({
               label: item.label,
               href: item.href,
-              keywords: ['jenks', 'kimi', 'homepage', 'trust badges', 'copy controls', 'experience'],
+              keywords: ['jenks', 'homepage', 'trust badges', 'copy controls', 'experience'],
             })),
           { prefix: 'Jenks Homepage Manager' }
         );

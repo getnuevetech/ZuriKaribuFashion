@@ -725,11 +725,7 @@ export default function Home() {
   const capabilityProfile = useHomepageExperienceStore((state) => state.capability);
   const isLiteExperienceMode = resolvedExperienceMode === 'LITE_COMMERCE';
   const useMotion = !isLiteExperienceMode && !capabilityProfile?.prefersReducedMotion;
-  const strictCanonicalMode =
-    location.pathname === '/home' ||
-    location.pathname === '/jenks-dynamic' ||
-    location.pathname === '/jenks' ||
-    location.pathname === '/home-jenks';
+  const strictCanonicalMode = true;
   const heroVariant = experienceSettings.heroVariant || 'SPLIT_EDITORIAL';
   const categoryEntryVariant = experienceSettings.categoryEntryVariant || 'THREE_COLUMN_CORE';
   const spotlightVariant = experienceSettings.spotlightVariant || 'CAROUSEL';
@@ -870,9 +866,9 @@ export default function Home() {
   const heroQuickLinks = useMemo(
     () => {
       if (heroSettings.quickLinks.length > 0) return heroSettings.quickLinks;
-      return mapHeroQuickLinks(experienceSettings?.kimiCopy);
+      return mapHeroQuickLinks(experienceSettings?.jenksCopy);
     },
-    [experienceSettings?.kimiCopy, heroSettings.quickLinks]
+    [experienceSettings?.jenksCopy, heroSettings.quickLinks]
   );
   const trustBadges = useMemo(
     () => mapTrustBadges(experienceSettings?.trustBadges, TRUST_BADGES),
@@ -882,19 +878,19 @@ export default function Home() {
   const heroEyebrowText = useMemo(
     () =>
       clampText(
-        experienceSettings?.kimiCopy?.heroEyebrow,
+        experienceSettings?.jenksCopy?.heroEyebrow,
         40,
         heroVariant === 'VIDEO_STORY' ? 'Cinematic Story' : 'Global African Fashion'
       ),
-    [experienceSettings?.kimiCopy?.heroEyebrow, heroVariant]
+    [experienceSettings?.jenksCopy?.heroEyebrow, heroVariant]
   );
   const shopByEyebrowText = useMemo(
-    () => clampText(experienceSettings?.kimiCopy?.shopByEyebrow, 40, 'Shop by country'),
-    [experienceSettings?.kimiCopy?.shopByEyebrow]
+    () => clampText(experienceSettings?.jenksCopy?.shopByEyebrow, 40, 'Shop by country'),
+    [experienceSettings?.jenksCopy?.shopByEyebrow]
   );
   const shopByTitleText = useMemo(
-    () => clampText(experienceSettings?.kimiCopy?.shopByTitle, 60, 'Shop by Country'),
-    [experienceSettings?.kimiCopy?.shopByTitle]
+    () => clampText(experienceSettings?.jenksCopy?.shopByTitle, 60, 'Shop by Country'),
+    [experienceSettings?.jenksCopy?.shopByTitle]
   );
   const featuredCollections = useMemo(
     () =>
@@ -908,8 +904,8 @@ export default function Home() {
   );
   const featuredLoading = kimiHomepagePayloadLoading && !featuredDataResolved;
   const featuredSectionTitles = useMemo(
-    () => mapFeaturedSectionTitles(experienceSettings?.kimiCopy),
-    [experienceSettings?.kimiCopy]
+    () => mapFeaturedSectionTitles(experienceSettings?.jenksCopy),
+    [experienceSettings?.jenksCopy]
   );
   const featuredDesigns = featuredCollections.customToWear;
   const featuredRTW = featuredCollections.readyToWear;
@@ -1086,8 +1082,8 @@ export default function Home() {
     [designerSpotlightsDataResolved, strictCanonicalMode]
   );
   const designerSpotlightTitle = useMemo(
-    () => mapDesignerSpotlightTitle(experienceSettings?.kimiCopy),
-    [experienceSettings?.kimiCopy]
+    () => mapDesignerSpotlightTitle(experienceSettings?.jenksCopy),
+    [experienceSettings?.jenksCopy]
   );
 
   useEffect(() => {

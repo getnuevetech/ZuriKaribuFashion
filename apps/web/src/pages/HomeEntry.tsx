@@ -8,7 +8,7 @@ import {
 
 const LEGACY_HOME_PATH = '/home-legacy';
 const JENKS_HOME_PATH = '/home';
-const JENKS_STATIC_HOME_PATH = '/main';
+const JENKS_STATIC_HOME_PATH = '/home';
 
 const buildJenksStaticUrl = () => JENKS_STATIC_HOME_PATH;
 
@@ -17,10 +17,10 @@ const normalizePreviewChoice = (
 ): 'JENKS_DYNAMIC' | 'JENKS_STATIC' | 'LEGACY' | null => {
   const normalized = String(value || '').trim().toLowerCase();
   if (!normalized) return null;
-  if (['jenks', 'jenks-dynamic', 'dynamic', 'react', '1', 'true', 'on', 'kimi', 'kimi-dynamic'].includes(normalized)) {
+  if (['jenks', 'jenks-dynamic', 'dynamic', 'react', '1', 'true', 'on'].includes(normalized)) {
     return 'JENKS_DYNAMIC';
   }
-  if (['jenks-static', 'v14', 'static', 'kimi-static'].includes(normalized)) return 'JENKS_STATIC';
+  if (['jenks-static', 'v14', 'static'].includes(normalized)) return 'JENKS_STATIC';
   if (['legacy', '0', 'false', 'off'].includes(normalized)) return 'LEGACY';
   return null;
 };
