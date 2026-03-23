@@ -548,7 +548,7 @@ export default function ReadyToWearDetail() {
               <div className="flex items-start justify-between">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
-                    {product.category?.name || 'Ready to Wear'}
+                    {product.category?.name || 'Ready To Wear'}
                   </span>
                   {flagCode ? (
                     <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
@@ -904,7 +904,7 @@ export default function ReadyToWearDetail() {
           {discoverProducts.length === 0 ? (
             <p className="text-sm text-gray-500">No recommendations available yet.</p>
           ) : (
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="flex gap-4 overflow-x-auto pb-2">
               {discoverProducts.map((entry) => {
                 const href =
                   entry.productType === 'DESIGN'
@@ -916,18 +916,22 @@ export default function ReadyToWearDetail() {
                   <Link
                     key={`${entry.productType}-${entry.id}`}
                     to={href}
-                    className="group min-w-[220px] max-w-[220px]"
+                    className="group min-w-[220px] max-w-[220px] overflow-hidden rounded-xl border bg-white"
                   >
-                    <div className="overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
+                    <div className="relative aspect-[3/4] overflow-hidden bg-gray-100">
                       <img
                         src={entry.image || '/images/placeholder.jpg'}
                         alt={entry.name}
-                        className="h-44 w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
+                      <div className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-0.5 text-xs text-white">
+                        {entry.country || 'Africa'}
+                      </div>
                     </div>
-                    <div className="pt-2 text-sm">
-                      <p className="line-clamp-1 font-medium text-gray-900">{entry.name}</p>
-                      <p className="line-clamp-1 text-gray-500">{formatFromUsd(Number(entry.priceUsd || 0))}</p>
+                    <div className="p-3">
+                      <p className="line-clamp-1 text-sm font-semibold text-gray-900">{entry.name}</p>
+                      <p className="line-clamp-1 text-xs text-gray-500">{entry.ownerName || 'Designer'}</p>
+                      <p className="mt-1 text-sm font-semibold text-black">{formatFromUsd(Number(entry.priceUsd || 0))}</p>
                     </div>
                   </Link>
                 );

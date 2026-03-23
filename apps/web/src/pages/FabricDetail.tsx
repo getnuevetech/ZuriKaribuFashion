@@ -163,7 +163,7 @@ export default function FabricDetail() {
         <div className="text-center">
           <p className="text-gray-500 mb-4">{error || 'Fabric not found'}</p>
           <Link to="/fabrics" className="text-black hover:underline">
-            Back to Fabrics
+            Back to Fabrics To Buy
           </Link>
         </div>
       </div>
@@ -319,7 +319,7 @@ export default function FabricDetail() {
           </div>
 
           {/* Details */}
-          <div className="space-y-5">
+          <div className="space-y-6">
             <div>
               <div className="mb-2 flex items-start justify-between">
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -357,9 +357,6 @@ export default function FabricDetail() {
                 </button>
               </div>
               <h1 className="text-3xl font-semibold text-gray-900">{fabric.name}</h1>
-              {(fabric.productLabels || []).length > 0 ? (
-                <div className="mt-2 text-xs text-gray-500">Tagged by merchandising</div>
-              ) : null}
               <div className="flex items-center gap-4 mt-3">
                 <div className="flex items-center gap-1">
                   <Star className="w-5 h-5 text-yellow-400 fill-current" />
@@ -404,12 +401,12 @@ export default function FabricDetail() {
             </div>
 
             {/* Price */}
-            <div className="border border-gray-200 bg-white p-3">
+            <div className="bg-gray-100 p-4">
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-semibold text-black">
+                <span className="text-3xl font-bold text-black">
                   {formatFromUsd(fabric.pricePerMeter)}
                 </span>
-                <span className="text-gray-500">/ yard</span>
+                <span className="text-gray-500">unit price (/ yard)</span>
               </div>
               <p className="mt-1 text-sm text-gray-600">
                 Estimated total ({Math.max(minimumYards, Number(quantity || minimumYards))} yd):{' '}
