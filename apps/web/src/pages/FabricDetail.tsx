@@ -250,13 +250,13 @@ export default function FabricDetail() {
         {/* Breadcrumb */}
         <Link to="/fabrics" className="mb-6 inline-flex items-center text-gray-500 hover:text-black">
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Fabrics
+          Back to Fabrics To Buy
         </Link>
 
-        <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
+        <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
           {/* Images */}
           <div className="space-y-4">
-            <div className="relative aspect-square overflow-hidden rounded-xl bg-gray-100">
+            <div className="relative overflow-hidden rounded-xl bg-gray-100" style={{ aspectRatio: '3/4' }}>
               <img
                 src={fabric.images?.[selectedImage]?.url || '/images/placeholder.jpg'}
                 alt={fabric.name}
@@ -319,7 +319,7 @@ export default function FabricDetail() {
           </div>
 
           {/* Details */}
-          <div className="space-y-6">
+          <div className="space-y-5">
             <div>
               <div className="mb-2 flex items-start justify-between">
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -356,7 +356,7 @@ export default function FabricDetail() {
                   <Share2 className="h-5 w-5 text-gray-600" />
                 </button>
               </div>
-              <h1 className="text-3xl font-bold text-gray-900">{fabric.name}</h1>
+              <h1 className="text-3xl font-semibold text-gray-900">{fabric.name}</h1>
               {(fabric.productLabels || []).length > 0 ? (
                 <div className="mt-2 text-xs text-gray-500">Tagged by merchandising</div>
               ) : null}
@@ -372,7 +372,7 @@ export default function FabricDetail() {
             </div>
 
             {/* Seller Info */}
-            <div className="border bg-white p-4">
+            <div className="border border-gray-200 bg-white p-3">
               <div className="flex items-center gap-4">
                 <div className="flex h-14 w-14 items-center justify-center overflow-hidden bg-gray-100">
                   {flagCode ? (
@@ -404,20 +404,21 @@ export default function FabricDetail() {
             </div>
 
             {/* Price */}
-            <div className="bg-gray-100 p-4">
+            <div className="border border-gray-200 bg-white p-3">
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-black">
-                  {formatFromUsd(fabric.pricePerMeter * Math.max(minimumYards, Number(quantity || minimumYards)))}
+                <span className="text-3xl font-semibold text-black">
+                  {formatFromUsd(fabric.pricePerMeter)}
                 </span>
-                <span className="text-gray-500">total price</span>
+                <span className="text-gray-500">/ yard</span>
               </div>
               <p className="mt-1 text-sm text-gray-600">
-                Fabric Price: {formatFromUsd(fabric.pricePerMeter)} / yard
+                Estimated total ({Math.max(minimumYards, Number(quantity || minimumYards))} yd):{' '}
+                {formatFromUsd(fabric.pricePerMeter * Math.max(minimumYards, Number(quantity || minimumYards)))}
               </p>
             </div>
 
             {/* Tabs */}
-            <div className="border-b">
+            <div className="rounded-t-2xl border border-b-0 border-gray-200 bg-white px-4 sm:px-6">
               <div className="flex gap-6">
                 {[
                   { key: 'details' as const, label: 'Details' },
@@ -440,7 +441,7 @@ export default function FabricDetail() {
             </div>
 
             {/* Tab content */}
-            <div className="min-h-[220px]">
+            <div className="min-h-[220px] rounded-b-2xl border border-t-0 border-gray-200 bg-white px-4 py-5 sm:px-6">
               {activeTab === 'details' ? (
                 <div className="space-y-4">
                   <p className="leading-relaxed text-gray-600">{fabric.description}</p>
@@ -545,7 +546,7 @@ export default function FabricDetail() {
             </div>
 
             {/* Quantity Selector + CTA */}
-            <div className="space-y-3">
+            <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-4">
               <div className="flex items-center gap-4">
                 <span className="font-medium">Quantity (yards):</span>
                 <div className="flex items-center border">
@@ -570,7 +571,7 @@ export default function FabricDetail() {
               <div className="grid grid-cols-2 gap-3">
                 <Button className="w-full rounded-none py-3" onClick={handleAddToCart}>
                   <ShoppingCart className="mr-2 h-4 w-4" />
-                  Add Fabric
+                  Add to Cart
                 </Button>
                 <Button
                   variant="ghost"
@@ -578,7 +579,7 @@ export default function FabricDetail() {
                   className={`w-full rounded-none border-0 bg-black py-3 text-white hover:bg-gray-800 ${isWishlisted ? 'bg-gray-800' : ''}`}
                 >
                   <Heart className={`mr-2 h-4 w-4 ${isWishlisted ? 'fill-current' : ''}`} />
-                  Save
+                  Save to Wishlist
                 </Button>
               </div>
               {cartMessage ? <p className="text-sm text-emerald-700">{cartMessage}</p> : null}
@@ -586,8 +587,8 @@ export default function FabricDetail() {
           </div>
         </div>
 
-        <section className="mt-8">
-          <h2 className="mb-4 text-xl font-semibold text-gray-900">You May Also Like</h2>
+        <section className="mt-6 rounded-2xl border border-gray-200 bg-white px-4 py-5 sm:px-6">
+          <h2 className="mb-4 text-2xl font-semibold text-gray-900">You May Also Like</h2>
           {discoverProducts.length === 0 ? (
             <p className="text-sm text-gray-500">No recommendations available yet.</p>
           ) : (

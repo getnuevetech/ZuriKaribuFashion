@@ -459,7 +459,7 @@ export default function ReadyToWearDetail() {
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
         <Link to="/ready-to-wear" className="mb-6 inline-flex items-center text-gray-500 hover:text-black">
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Ready to Wear
+          Back to Ready To Wear
         </Link>
 
         <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
@@ -698,7 +698,7 @@ export default function ReadyToWearDetail() {
 
               <div className="flex items-end justify-between gap-4">
                 <div>
-                  <p className="text-xs text-gray-500">The Designer</p>
+                  <p className="text-xs text-gray-500">Unit Price</p>
                   <p className="text-4xl font-semibold text-gray-900">{formatFromUsd(selectedUnitPrice)}</p>
                   {hasDiscount ? (
                     <p className="text-sm text-gray-400 line-through">{formatFromUsd(Number(product.originalPrice || 0))}</p>
