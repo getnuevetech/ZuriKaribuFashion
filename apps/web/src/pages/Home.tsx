@@ -738,7 +738,7 @@ export default function Home() {
     [tokenSet]
   );
 
-  const { data: kimiHomepagePayloadData } = useQuery({
+  const { data: kimiHomepagePayloadData, isLoading: kimiHomepagePayloadLoading } = useQuery({
     queryKey: ['homepageKimiPayloadV1'],
     queryFn: async () => {
       const response = await api.homepageSections.getKimiHomepagePayload();
@@ -748,22 +748,16 @@ export default function Home() {
 
   const { data: heroSlidesData } = useQuery({
     queryKey: ['heroSlides'],
+    enabled: false,
     queryFn: async () => {
       const response = await api.homepage.getHeroSlides();
       return response.success ? response.data : null;
     },
   });
 
-  const { data: featuredData, isLoading: featuredLoading } = useQuery({
-    queryKey: ['featuredProducts'],
-    queryFn: async () => {
-      const response = await api.homepage.getAllFeatured();
-      return response.success ? response.data : null;
-    },
-  });
-
   const { data: managedBannersData } = useQuery({
     queryKey: ['homepageManagedBanners'],
+    enabled: false,
     queryFn: async () => {
       const response = await api.banners.getBanners();
       return response.success ? response.data : null;
@@ -772,6 +766,7 @@ export default function Home() {
 
   const { data: promoBadgeData } = useQuery({
     queryKey: ['homepagePromoBadge'],
+    enabled: false,
     queryFn: async () => {
       const response = await api.banners.getPromoBadgeSettings();
       return response.success ? response.data : null;
@@ -780,6 +775,7 @@ export default function Home() {
 
   const { data: countriesData } = useQuery({
     queryKey: ['homepageCountries'],
+    enabled: false,
     queryFn: async () => {
       const response = await api.homepageSections.getCountries();
       return response.success ? response.data : null;
@@ -788,6 +784,7 @@ export default function Home() {
 
   const { data: categoriesData } = useQuery({
     queryKey: ['homepageCategories'],
+    enabled: false,
     queryFn: async () => {
       const response = await api.homepageSections.getCategories();
       return response.success ? response.data : null;
@@ -796,6 +793,7 @@ export default function Home() {
 
   const { data: howItWorksData } = useQuery({
     queryKey: ['homepageHowItWorks'],
+    enabled: false,
     queryFn: async () => {
       const response = await api.homepageSections.getHowItWorks();
       return response.success ? response.data : null;
@@ -804,6 +802,7 @@ export default function Home() {
 
   const { data: howItWorksStyleData } = useQuery({
     queryKey: ['homepageHowItWorksStyle'],
+    enabled: false,
     queryFn: async () => {
       const response = await api.homepageSections.getHowItWorksStyle();
       return response.success ? response.data : null;
@@ -812,6 +811,7 @@ export default function Home() {
 
   const { data: designerSpotlightsData } = useQuery({
     queryKey: ['designerSpotlightsPublic'],
+    enabled: false,
     queryFn: async () => {
       const response = await api.homepageSections.getDesignerSpotlights();
       return response.success ? response.data : null;
@@ -820,6 +820,7 @@ export default function Home() {
 
   const { data: heritageData } = useQuery({
     queryKey: ['heritagePublic'],
+    enabled: false,
     queryFn: async () => {
       const response = await api.homepageSections.getHeritage();
       return response.success ? response.data : null;
@@ -828,6 +829,7 @@ export default function Home() {
 
   const { data: testimonialsData } = useQuery({
     queryKey: ['testimonialsPublic'],
+    enabled: false,
     queryFn: async () => {
       const response = await api.homepageSections.getTestimonials();
       return response.success ? response.data : null;
@@ -835,6 +837,7 @@ export default function Home() {
   });
   const { data: statsStripData } = useQuery({
     queryKey: ['homepageStatsStrip'],
+    enabled: false,
     queryFn: async () => {
       const response = await api.homepageSections.getStatsStrip();
       return response.success ? response.data : null;
@@ -842,6 +845,7 @@ export default function Home() {
   });
   const { data: featuredDescriptionSettingsData } = useQuery({
     queryKey: ['homepageFeaturedDescriptionSettings'],
+    enabled: false,
     queryFn: async () => {
       const response = await api.homepageSections.getFeaturedProductDescriptionSettings();
       return response.success ? response.data : null;
@@ -850,6 +854,7 @@ export default function Home() {
 
   const { data: visibilityData } = useQuery({
     queryKey: ['homepageVisibility'],
+    enabled: false,
     queryFn: async () => {
       const response = await api.homepageSections.getVisibility();
       return response.success ? response.data : null;
@@ -857,6 +862,7 @@ export default function Home() {
   });
 
   const heroSlidesDataResolved = (kimiHomepagePayloadData as any)?.heroSlides ?? heroSlidesData;
+  const featuredDataResolved = (kimiHomepagePayloadData as any)?.featuredCollections ?? null;
   const managedBannersDataResolved = (kimiHomepagePayloadData as any)?.managedBanners ?? managedBannersData;
   const promoBadgeDataResolved = (kimiHomepagePayloadData as any)?.promoBadge ?? promoBadgeData;
   const countriesDataResolved = (kimiHomepagePayloadData as any)?.countries ?? countriesData;
@@ -957,13 +963,14 @@ export default function Home() {
   const featuredCollections = useMemo(
     () =>
       mapFeaturedCollections({
-        featuredData,
+        featuredData: featuredDataResolved,
         fallbackCustomToWear: kimiFeaturedDesigns,
         fallbackReadyToWear: kimiReadyToWear,
         fallbackFabricsToBuy: kimiFabrics,
       }),
-    [featuredData]
+    [featuredDataResolved]
   );
+  const featuredLoading = kimiHomepagePayloadLoading && !featuredDataResolved;
   const featuredSectionTitles = useMemo(
     () => mapFeaturedSectionTitles(experienceSettings?.kimiCopy),
     [experienceSettings?.kimiCopy]

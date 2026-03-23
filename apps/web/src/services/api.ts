@@ -8938,6 +8938,12 @@ const homepageSectionsApi = {
         categories: any[];
         howItWorks: any[];
         designerSpotlights: any[];
+        featuredCollections: {
+          FEATURED_DESIGNS: any[];
+          FEATURED_FABRICS: any[];
+          FEATURED_READY_TO_WEAR: any[];
+          TRENDING_NOW: any[];
+        };
         heritage: any;
         testimonials: any[];
         footer: any;

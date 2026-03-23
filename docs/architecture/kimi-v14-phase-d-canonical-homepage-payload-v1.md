@@ -26,6 +26,7 @@ Move Kimi homepage runtime from many fragmented frontend calls to a single canon
   - `heritage`
   - `testimonials`
   - `footer`
+  - `featuredCollections` (`FEATURED_DESIGNS`, `FEATURED_FABRICS`, `FEATURED_READY_TO_WEAR`, `TRENDING_NOW`)
 
 ## Contract metadata
 
@@ -35,10 +36,10 @@ Move Kimi homepage runtime from many fragmented frontend calls to a single canon
 ## Frontend integration status
 
 - `apps/web/src/pages/Home.tsx` now consumes canonical payload first.
-- Existing per-section endpoints remain in place as fallback inputs during transition.
-- No runtime behavior was removed in this stage; this is a safe migration step.
+- Featured strips now read from canonical payload `featuredCollections`.
+- Legacy per-section queries are disabled in Home runtime to reduce duplicate homepage fetches.
 
-## Next step (Phase D.2)
+## Next step (Phase D.3)
 
-- Remove duplicate homepage fetches in `Home.tsx` after payload stability is validated in staging/production.
-- Move Featured collections and any remaining legacy homepage sources into the canonical payload, then fully switch Home runtime to one network call.
+- Validate canonical payload field coverage against all mapper modules and remove legacy fallback branches that are no longer needed.
+- Add optional payload checksum + lightweight smoke assertion script for contract regression detection.

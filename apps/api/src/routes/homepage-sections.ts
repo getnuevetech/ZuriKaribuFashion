@@ -2640,6 +2640,153 @@ router.get('/kimi-homepage-payload', async (_req, res) => {
   const safeResult = <T,>(result: PromiseSettledResult<T>, fallback: T): T =>
     result.status === 'fulfilled' ? result.value : fallback;
 
+  const readFeaturedCollectionsPayload = async () => {
+    const sections = ['FEATURED_DESIGNS', 'FEATURED_FABRICS', 'FEATURED_READY_TO_WEAR', 'TRENDING_NOW'] as const;
+    const result: Record<string, any[]> = {
+      FEATURED_DESIGNS: [],
+      FEATURED_FABRICS: [],
+      FEATURED_READY_TO_WEAR: [],
+      TRENDING_NOW: [],
+    };
+    const rows = await prisma.featuredProduct.findMany({
+      where: {
+        isActive: true,
+        section: { in: [...sections] as any[] },
+      },
+      orderBy: [{ section: 'asc' }, { displayOrder: 'asc' }],
+      take: 100,
+    });
+
+    const toImage = (images: Array<{ url: string }> | null | undefined) =>
+      Array.isArray(images) && images.length > 0 ? String(images[0]?.url || '') : '';
+
+    const hydrate = async (row: any) => {
+      const productType = String(row?.productType || '').toUpperCase();
+      if (productType === 'DESIGN') {
+        const product = await prisma.design.findUnique({
+          where: { id: String(row.productId || '') },
+          include: {
+            designer: {
+              select: {
+                businessName: true,
+                country: true,
+              },
+            },
+            images: {
+              take: 1,
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+        });
+        if (!product) return null;
+        return {
+          id: product.id,
+          name: String(row?.customTitle || product.name || ''),
+          description: String(row?.customDescription || product.description || ''),
+          price: Number(product.basePrice ?? product.finalPrice ?? 0),
+          image: toImage(product.images as any) || '/images/placeholder.jpg',
+          designer: product.designer?.businessName || 'Designer',
+          country: product.designer?.country || '',
+          productType: 'DESIGN',
+          productLabels: [],
+        };
+      }
+      if (productType === 'FABRIC') {
+        const product = await prisma.fabric.findUnique({
+          where: { id: String(row.productId || '') },
+          include: {
+            seller: {
+              select: {
+                businessName: true,
+                country: true,
+              },
+            },
+            images: {
+              take: 1,
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+        });
+        if (!product) return null;
+        return {
+          id: product.id,
+          name: String(row?.customTitle || product.name || ''),
+          description: String(row?.customDescription || product.description || ''),
+          price: Number(product.sellerPrice ?? product.finalPrice ?? 0),
+          image: toImage(product.images as any) || '/images/placeholder.jpg',
+          designer: product.seller?.businessName || 'Fabric Seller',
+          country: product.seller?.country || '',
+          productType: 'FABRIC',
+          productLabels: [],
+        };
+      }
+      if (productType === 'READY_TO_WEAR') {
+        const product = await prisma.readyToWear.findUnique({
+          where: { id: String(row.productId || '') },
+          include: {
+            designer: {
+              select: {
+                businessName: true,
+                country: true,
+              },
+            },
+            images: {
+              take: 1,
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+        });
+        if (!product) return null;
+        return {
+          id: product.id,
+          name: String(row?.customTitle || product.name || ''),
+          description: String(row?.customDescription || product.description || ''),
+          price: Number(product.basePrice || 0),
+          image: toImage(product.images as any) || '/images/placeholder.jpg',
+          designer: product.designer?.businessName || 'Designer',
+          country: product.designer?.country || '',
+          productType: 'READY_TO_WEAR',
+          productLabels: [],
+        };
+      }
+      return null;
+    };
+
+    const hydrated = await Promise.all(
+      rows.map(async (row) => {
+        const data = await hydrate(row);
+        if (!data) return null;
+        return {
+          section: String(row.section || ''),
+          displayOrder: Number(row.displayOrder || 0),
+          data,
+        };
+      })
+    );
+
+    for (const entry of hydrated) {
+      if (!entry) continue;
+      if (!Array.isArray(result[entry.section])) continue;
+      result[entry.section].push({
+        ...entry.data,
+        __displayOrder: entry.displayOrder,
+      });
+    }
+
+    for (const sectionKey of sections) {
+      result[sectionKey] = (result[sectionKey] || [])
+        .sort((a, b) => Number(a?.__displayOrder || 0) - Number(b?.__displayOrder || 0))
+        .slice(0, 6)
+        .map((entry) => {
+          const next = { ...entry };
+          delete (next as any).__displayOrder;
+          return next;
+        });
+    }
+
+    return result;
+  };
+
   const readManagedBanners = async () => {
     const rows = await prisma.banner.findMany({
       where: { isActive: true },
@@ -2737,6 +2884,7 @@ router.get('/kimi-homepage-payload', async (_req, res) => {
       categoriesResult,
       howItWorksResult,
       designerSpotlightsResult,
+      featuredCollectionsResult,
       heritageResult,
       testimonialsResult,
       footerResult,
@@ -2767,6 +2915,7 @@ router.get('/kimi-homepage-payload', async (_req, res) => {
         orderBy: { stepNumber: 'asc' },
       }),
       readDesignerSpotlightsPayload(),
+      readFeaturedCollectionsPayload(),
       prisma.heritageSection.findFirst({
         where: { isActive: true },
         orderBy: { displayOrder: 'asc' },
@@ -2799,6 +2948,12 @@ router.get('/kimi-homepage-payload', async (_req, res) => {
         categories: safeResult(categoriesResult, []),
         howItWorks: safeResult(howItWorksResult, []),
         designerSpotlights: safeResult(designerSpotlightsResult, []),
+        featuredCollections: safeResult(featuredCollectionsResult, {
+          FEATURED_DESIGNS: [],
+          FEATURED_FABRICS: [],
+          FEATURED_READY_TO_WEAR: [],
+          TRENDING_NOW: [],
+        }),
         heritage: safeResult(heritageResult, null),
         testimonials: safeResult(testimonialsResult, []),
         footer: safeResult(footerResult, null),
