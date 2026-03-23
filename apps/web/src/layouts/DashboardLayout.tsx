@@ -1432,64 +1432,67 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center gap-3 px-4 lg:px-8">
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <Menu className="w-5 h-5 text-gray-600" />
-          </button>
-
-          <div ref={searchContainerRef} className="relative flex-1 max-w-2xl">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={dashboardSearchQuery}
-              onChange={(event) => {
-                setDashboardSearchQuery(event.target.value);
-                setIsDashboardSearchOpen(true);
-              }}
-              onFocus={() => setIsDashboardSearchOpen(true)}
-              onKeyDown={handleDashboardSearchKeyDown}
-              placeholder="Search dashboard functions (orders, products, payments, tickets...)"
-              className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-10 pr-3 text-sm text-gray-800 focus:border-amber-500 focus:outline-none"
-            />
-            {isDashboardSearchOpen ? (
-              <div className="absolute left-0 right-0 top-11 z-20 rounded-lg border border-gray-200 bg-white shadow-lg">
-                <div className="max-h-80 overflow-y-auto py-1">
-                  {dashboardSearchResults.length > 0 ? (
-                    dashboardSearchResults.map((entry, index) => (
-                      <button
-                        key={`${entry.label}-${entry.href}-${index}`}
-                        type="button"
-                        onClick={() => handleDashboardSearchNavigate(entry)}
-                        className={`flex w-full items-start justify-between gap-2 px-3 py-2 text-left text-sm ${
-                          index === highlightedSearchResultIndex ? 'bg-amber-50 text-amber-900' : 'text-gray-700 hover:bg-gray-50'
-                        }`}
-                      >
-                        <span className="font-medium">{entry.label}</span>
-                        <span className="shrink-0 text-xs text-gray-400">{entry.href}</span>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="px-3 py-3 text-sm text-gray-500">No dashboard functions found.</div>
-                  )}
-                </div>
-              </div>
-            ) : null}
+        <header className="relative bg-white border-b border-gray-200 px-4 py-3 lg:px-8">
+          <div className="absolute right-4 top-2 text-right leading-tight lg:right-8">
+            <span className="block text-base font-bold text-red-600">{dashboardTimeLabel}</span>
+            <span className="block text-xs font-semibold text-gray-500">
+              {dashboardDateLabel} ({userTimeZone})
+            </span>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden md:flex flex-col items-end leading-tight">
-              <span className="text-base font-bold text-gray-900">{dashboardTimeLabel}</span>
-              <span className="text-xs font-semibold text-gray-500">
-                {dashboardDateLabel} ({userTimeZone})
-              </span>
+          <div className="flex items-center gap-3 pr-28 sm:pr-32 lg:pr-56">
+            <button
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <Menu className="w-5 h-5 text-gray-600" />
+            </button>
+
+            <div ref={searchContainerRef} className="relative flex-1 max-w-2xl">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={dashboardSearchQuery}
+                onChange={(event) => {
+                  setDashboardSearchQuery(event.target.value);
+                  setIsDashboardSearchOpen(true);
+                }}
+                onFocus={() => setIsDashboardSearchOpen(true)}
+                onKeyDown={handleDashboardSearchKeyDown}
+                placeholder="Search dashboard functions (orders, products, payments, tickets...)"
+                className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-10 pr-3 text-sm text-gray-800 focus:border-amber-500 focus:outline-none"
+              />
+              {isDashboardSearchOpen ? (
+                <div className="absolute left-0 right-0 top-11 z-20 rounded-lg border border-gray-200 bg-white shadow-lg">
+                  <div className="max-h-80 overflow-y-auto py-1">
+                    {dashboardSearchResults.length > 0 ? (
+                      dashboardSearchResults.map((entry, index) => (
+                        <button
+                          key={`${entry.label}-${entry.href}-${index}`}
+                          type="button"
+                          onClick={() => handleDashboardSearchNavigate(entry)}
+                          className={`flex w-full items-start justify-between gap-2 px-3 py-2 text-left text-sm ${
+                            index === highlightedSearchResultIndex
+                              ? 'bg-amber-50 text-amber-900'
+                              : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <span className="font-medium">{entry.label}</span>
+                          <span className="shrink-0 text-xs text-gray-400">{entry.href}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-3 text-sm text-gray-500">No dashboard functions found.</div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
             </div>
+
             <Link
               to="/"
-              className="text-sm text-gray-600 hover:text-coral-500 transition-colors whitespace-nowrap"
+              className="shrink-0 text-sm text-gray-600 hover:text-coral-500 transition-colors whitespace-nowrap"
             >
               View Store
             </Link>
