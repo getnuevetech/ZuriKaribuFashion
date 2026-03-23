@@ -1401,7 +1401,7 @@ const HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS: HomepageExperienceSettings = {
   heroVariant: 'SPLIT_EDITORIAL',
   categoryEntryVariant: 'THREE_COLUMN_CORE',
   spotlightVariant: 'CAROUSEL',
-  homepageTemplate: 'LEGACY',
+  homepageTemplate: 'JENKS',
   rolloutMode: 'PREVIEW_SAFE',
   allowPreviewQuery: true,
   previewQueryParam: 'zkHomePreview',

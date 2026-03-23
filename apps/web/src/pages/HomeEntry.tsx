@@ -40,10 +40,20 @@ const resolveHomepageTarget = (
     const previewChoice = normalizePreviewChoice(search.get(previewParam));
     if (previewChoice) return previewChoice;
   }
-  if (settings.rolloutMode !== 'LIVE') {
-    return 'LEGACY';
+  if (settings.homepageTemplate === 'JENKS') {
+    // In preview-safe mode, send users to the static v14 experience
+    // instead of legacy fallback.
+    if (settings.rolloutMode !== 'LIVE') {
+      return 'JENKS_STATIC';
+    }
+    return 'JENKS_DYNAMIC';
   }
-  return settings.homepageTemplate === 'JENKS' ? 'JENKS_DYNAMIC' : 'LEGACY';
+  // If legacy is not explicitly live, bias to static JENKS so
+  // users do not get stuck on an outdated homepage surface.
+  if (settings.rolloutMode !== 'LIVE') {
+    return 'JENKS_STATIC';
+  }
+  return 'LEGACY';
 };
 
 export default function HomeEntry() {
@@ -73,7 +83,7 @@ export default function HomeEntry() {
         redirectTo(target);
       } catch (error) {
         console.error('Failed to resolve homepage runtime route:', error);
-        redirectTo('LEGACY');
+        redirectTo('JENKS_STATIC');
       }
     };
 
