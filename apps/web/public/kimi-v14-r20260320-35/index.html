@@ -6,6 +6,15 @@
     <title>Zuri Karibu</title>
     <script>
       (function () {
+        var rawPath = String(window.location.pathname || '');
+        if (rawPath !== '/kimi-v14-r20260320-35/index.html') return;
+        var target = '/main' + String(window.location.search || '') + String(window.location.hash || '');
+        // Keep the URL clean while preserving the current document instance.
+        window.history.replaceState({}, '', target);
+      })();
+    </script>
+    <script>
+      (function () {
         var rawHash = String(window.location.hash || '').trim();
         if (!rawHash || rawHash.indexOf('#/') !== 0) return;
         var value = rawHash.slice(1);
@@ -38,8 +47,8 @@
         window.location.replace(target + queryPart);
       })();
     </script>
-    <script type="module" crossorigin src="./assets/index-D3KtpC4K.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-BeQQTtR9.css">
+    <script type="module" crossorigin src="/kimi-v14-r20260320-35/assets/index-D3KtpC4K.js"></script>
+    <link rel="stylesheet" crossorigin href="/kimi-v14-r20260320-35/assets/index-BeQQTtR9.css">
   </head>
   <body>
     <div id="root"></div>
