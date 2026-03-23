@@ -763,7 +763,7 @@ export default function Checkout() {
             name: String(row.name || 'Design'),
             image: String(row.images?.[0]?.url || '/images/placeholder.jpg'),
             subtitle: String(row.category?.name || 'Design'),
-            href: `/designs/${row.id}`,
+            href: `/custom/${row.id}`,
           };
         }
         return {

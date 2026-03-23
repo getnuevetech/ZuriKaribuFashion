@@ -602,7 +602,7 @@ export default function AdminBanners() {
                     value={formData.ctaLink}
                     onChange={(e) => setFormData({ ...formData, ctaLink: e.target.value })}
                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-transparent"
-                    placeholder="e.g., /designs"
+                    placeholder="e.g., /custom"
                   />
                 </div>
               </div>

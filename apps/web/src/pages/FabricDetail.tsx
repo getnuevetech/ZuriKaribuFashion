@@ -595,7 +595,7 @@ export default function FabricDetail() {
               {discoverProducts.map((entry) => {
                 const href =
                   entry.productType === 'DESIGN'
-                    ? `/designs/${entry.id}`
+                    ? `/custom/${entry.id}`
                     : entry.productType === 'FABRIC'
                       ? `/fabrics/${entry.id}`
                       : `/ready-to-wear/${entry.id}`;

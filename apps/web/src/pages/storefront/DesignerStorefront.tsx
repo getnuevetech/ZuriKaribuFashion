@@ -76,7 +76,7 @@ export default function DesignerStorefront() {
             <h2 className="text-lg font-semibold text-gray-900">Custom To Wear</h2>
             <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
               {designs.map((item) => (
-                <Link key={item.id} to={`/designs/${item.id}`} className="rounded-xl border bg-white p-3 hover:shadow-sm">
+                <Link key={item.id} to={`/custom/${item.id}`} className="rounded-xl border bg-white p-3 hover:shadow-sm">
                   <img
                     src={item.images?.[0]?.url || '/images/placeholder.jpg'}
                     alt={item.name}

@@ -107,7 +107,7 @@ export default function AdminTraffic() {
           <input
             value={filters.page}
             onChange={(e) => setFilters((prev) => ({ ...prev, page: e.target.value }))}
-            placeholder="Page (e.g. /designs/...)"
+            placeholder="Page (e.g. /custom/...)"
             className="rounded-lg border px-3 py-2"
           />
           <button

@@ -67,7 +67,7 @@ export default function Cart() {
   const resolveCartItemPath = (item: any) => {
     if (item.kind === 'READY_TO_WEAR' && item.readyToWearId) return `/ready-to-wear/${item.readyToWearId}`;
     if (item.kind === 'FABRIC_ONLY' && item.fabricId) return `/fabrics/${item.fabricId}`;
-    if (item.kind === 'CUSTOM_DESIGN' && item.designId) return `/designs/${item.designId}`;
+    if (item.kind === 'CUSTOM_DESIGN' && item.designId) return `/custom/${item.designId}`;
     return '';
   };
 
@@ -152,7 +152,7 @@ export default function Cart() {
             <Button variant="outline" onClick={() => navigate('/fabrics')}>
               Shop Fabrics
             </Button>
-            <Button variant="outline" onClick={() => navigate('/designs')}>
+            <Button variant="outline" onClick={() => navigate('/custom')}>
               Shop Custom To Wear
             </Button>
           </div>

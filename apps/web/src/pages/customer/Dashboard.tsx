@@ -648,7 +648,7 @@ export default function CustomerDashboard() {
           <p className="text-gray-500 mt-1">Track your orders and manage your account</p>
         </div>
         <Button asChild>
-          <Link to="/designs">
+          <Link to="/custom">
             <ShoppingBag className="w-4 h-4 mr-2" />
             Shop Now
           </Link>
@@ -917,7 +917,7 @@ export default function CustomerDashboard() {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-gray-900">My Wishlist</h2>
             <Button variant="outline" size="sm" asChild>
-              <Link to="/designs">
+              <Link to="/custom">
                 Continue Shopping
               </Link>
             </Button>
@@ -929,8 +929,8 @@ export default function CustomerDashboard() {
               <h3 className="text-lg font-medium text-gray-900 mb-2">Your wishlist is empty</h3>
               <p className="text-gray-500 mb-4">Save items you love for later</p>
               <Button asChild>
-                <Link to="/designs">
-                  Browse Designs
+                <Link to="/custom">
+                  Browse Custom To Wear
                 </Link>
               </Button>
             </div>

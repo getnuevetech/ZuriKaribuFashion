@@ -480,7 +480,7 @@ export default function DesignDetail() {
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Design Not Found</h2>
           <p className="text-gray-600 mb-4">The design you're looking for doesn't exist.</p>
-          <Button onClick={() => navigate('/designs')}>Browse Designs</Button>
+          <Button onClick={() => navigate('/custom')}>Browse Custom To Wear</Button>
         </div>
       </div>
     );
@@ -504,11 +504,11 @@ export default function DesignDetail() {
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <button 
-            onClick={() => navigate('/designs')}
+            onClick={() => navigate('/custom')}
             className="flex items-center text-gray-600 hover:text-black transition-colors"
           >
             <ChevronLeft className="w-4 h-4 mr-1" />
-            Back to Designs
+            Back to Custom To Wear
           </button>
         </div>
       </div>
@@ -1092,7 +1092,7 @@ export default function DesignDetail() {
               {discoverProducts.map((entry) => {
                 const href =
                   entry.productType === 'DESIGN'
-                    ? `/designs/${entry.id}`
+                    ? `/custom/${entry.id}`
                     : entry.productType === 'FABRIC'
                       ? `/fabrics/${entry.id}`
                       : `/ready-to-wear/${entry.id}`;

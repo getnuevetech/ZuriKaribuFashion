@@ -482,7 +482,7 @@ export default function TryOn() {
               <Button 
                 variant="outline" 
                 className="w-full"
-                onClick={() => navigate(`/designs/${id}`)}
+                onClick={() => navigate(`/custom/${id}`)}
               >
                 Change Selection
               </Button>

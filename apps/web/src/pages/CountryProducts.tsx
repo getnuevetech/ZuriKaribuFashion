@@ -152,13 +152,13 @@ export default function CountryProducts() {
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-gray-900">Custom To Wear ({designRows.length})</h2>
-                <Link to={`/designs?country=${encodeURIComponent(country)}`} className="text-sm font-medium text-black hover:underline">
+                <Link to={`/custom?country=${encodeURIComponent(country)}`} className="text-sm font-medium text-black hover:underline">
                   View all
                 </Link>
               </div>
               <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
                 {designRows.slice(0, 15).map((row) => (
-                  <Link key={`country-design-${row.id}`} to={`/designs/${row.id}`} className="group overflow-hidden border bg-white">
+                  <Link key={`country-design-${row.id}`} to={`/custom/${row.id}`} className="group overflow-hidden border bg-white">
                     <div className="relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
                       <img
                         src={row.images?.[0]?.url || '/images/placeholder.jpg'}

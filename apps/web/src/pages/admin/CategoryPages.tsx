@@ -42,7 +42,7 @@ type ProductOption = {
 const PAGE_TABS: Array<{ key: CategoryPageType; label: string; description: string }> = [
   { key: 'READY_TO_WEAR', label: 'Ready To Wear', description: 'Controls /ready-to-wear listing page.' },
   { key: 'FABRIC_TO_BUY', label: 'Fabrics To Buy', description: 'Controls /fabrics listing page.' },
-  { key: 'CUSTOM_TO_WEAR', label: 'Custom To Wear', description: 'Controls /designs listing page.' },
+  { key: 'CUSTOM_TO_WEAR', label: 'Custom To Wear', description: 'Controls /custom listing page.' },
 ];
 
 const emptySettings: CategoryPageSettingsForm = {
