@@ -32,7 +32,7 @@ const FALLBACK_CATEGORIES: ShopCategoryItem[] = [
     title: 'Custom To Wear',
     description: 'Made-to-measure pieces produced by African designers.',
     image: '/kimi/custom_full.jpg',
-    ctaLink: '/designs',
+    ctaLink: '/custom',
   },
   {
     id: 'fabrics-to-buy',
@@ -121,7 +121,7 @@ export default function ShopPage() {
             </span>
           </Link>
           <Link
-            to="/designs"
+            to="/custom"
             className="group rounded-xl border border-gray-200 bg-gray-50 p-6 transition-colors hover:border-gray-300 hover:bg-gray-100"
           >
             <p className="text-xs font-semibold tracking-[0.24em] text-gray-500">ROW 2</p>

@@ -11,6 +11,12 @@ import DashboardLayout from './layouts/DashboardLayout';
 import Home from './pages/Home';
 import ShopPage from './pages/Shop';
 import CountryProducts from './pages/CountryProducts';
+import ReadyToWear from './pages/ReadyToWear';
+import ReadyToWearDetail from './pages/ReadyToWearDetail';
+import Fabrics from './pages/Fabrics';
+import FabricDetail from './pages/FabricDetail';
+import Designs from './pages/Designs';
+import DesignDetail from './pages/DesignDetail';
 import ReadyToWearTryOn from './pages/ReadyToWearTryOn';
 import TryOn from './pages/TryOn';
 import Cart from './pages/Cart';
@@ -155,6 +161,16 @@ function App() {
               <Route path="/home-legacy" element={<Home />} />
               <Route path="/shop" element={<ShopPage />} />
               <Route path="/country-products" element={<CountryProducts />} />
+              <Route path="/ready-to-wear" element={<ReadyToWear />} />
+              <Route path="/ready-to-wear/:id" element={<ReadyToWearDetail />} />
+              <Route path="/fabrics" element={<Fabrics />} />
+              <Route path="/fabrics/:id" element={<FabricDetail />} />
+              <Route path="/custom" element={<Designs />} />
+              <Route path="/custom/:id" element={<DesignDetail />} />
+              <Route path="/designs" element={<Designs />} />
+              <Route path="/designs/:id" element={<DesignDetail />} />
+              <Route path="/custom-to-wear" element={<Navigate to="/custom" replace />} />
+              <Route path="/custom-to-wear/:id" element={<DesignDetail />} />
               <Route path="/ready-to-wear/:id/try-on" element={<ReadyToWearTryOn />} />
               <Route path="/try-on/:id" element={<TryOn />} />
               <Route path="/cart" element={<Cart />} />

@@ -254,13 +254,13 @@ const FEATURED_DESCRIPTION_PREVIEW_TEXT =
 const FOOTER_MENU_DEFAULTS: Record<FooterMenuKey, FooterMenuLink[]> = {
   shop: [
     { label: 'Ready To Wear', href: '/ready-to-wear' },
-    { label: 'Custom To Wear', href: '/designs' },
+    { label: 'Custom To Wear', href: '/custom' },
     { label: 'Fabrics To Buy', href: '/fabrics' },
     { label: 'New Arrivals', href: '/ready-to-wear' },
   ],
   company: [
     { label: 'About Us', href: '/#about' },
-    { label: 'Our Designers', href: '/designs' },
+    { label: 'Our Designers', href: '/custom' },
     { label: 'Sustainability', href: '/#about' },
     { label: 'Careers', href: '/#contact' },
   ],

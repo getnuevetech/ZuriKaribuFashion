@@ -1380,7 +1380,7 @@ const resolveActiveFeaturedIdsFromSettings = (settings: any) => {
 };
 
 const toCategoryPageHref = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR', id: string) =>
-  pageType === 'FABRIC_TO_BUY' ? `/fabrics/${id}` : pageType === 'CUSTOM_TO_WEAR' ? `/designs/${id}` : `/ready-to-wear/${id}`;
+  pageType === 'FABRIC_TO_BUY' ? `/fabrics/${id}` : pageType === 'CUSTOM_TO_WEAR' ? `/custom/${id}` : `/ready-to-wear/${id}`;
 
 const optionToPreview = (
   pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
