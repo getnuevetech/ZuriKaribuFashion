@@ -738,6 +738,14 @@ export default function Home() {
     [tokenSet]
   );
 
+  const { data: kimiHomepagePayloadData } = useQuery({
+    queryKey: ['homepageKimiPayloadV1'],
+    queryFn: async () => {
+      const response = await api.homepageSections.getKimiHomepagePayload();
+      return response.success ? response.data : null;
+    },
+  });
+
   const { data: heroSlidesData } = useQuery({
     queryKey: ['heroSlides'],
     queryFn: async () => {
@@ -848,21 +856,37 @@ export default function Home() {
     },
   });
 
+  const heroSlidesDataResolved = (kimiHomepagePayloadData as any)?.heroSlides ?? heroSlidesData;
+  const managedBannersDataResolved = (kimiHomepagePayloadData as any)?.managedBanners ?? managedBannersData;
+  const promoBadgeDataResolved = (kimiHomepagePayloadData as any)?.promoBadge ?? promoBadgeData;
+  const countriesDataResolved = (kimiHomepagePayloadData as any)?.countries ?? countriesData;
+  const categoriesDataResolved = (kimiHomepagePayloadData as any)?.categories ?? categoriesData;
+  const howItWorksDataResolved = (kimiHomepagePayloadData as any)?.howItWorks ?? howItWorksData;
+  const howItWorksStyleDataResolved = (kimiHomepagePayloadData as any)?.howItWorksStyle ?? howItWorksStyleData;
+  const designerSpotlightsDataResolved =
+    (kimiHomepagePayloadData as any)?.designerSpotlights ?? designerSpotlightsData;
+  const heritageDataResolved = (kimiHomepagePayloadData as any)?.heritage ?? heritageData;
+  const testimonialsDataResolved = (kimiHomepagePayloadData as any)?.testimonials ?? testimonialsData;
+  const statsStripDataResolved = (kimiHomepagePayloadData as any)?.statsStrip ?? statsStripData;
+  const featuredDescriptionSettingsDataResolved =
+    (kimiHomepagePayloadData as any)?.featuredProductDescription ?? featuredDescriptionSettingsData;
+  const visibilityDataResolved = (kimiHomepagePayloadData as any)?.visibility ?? visibilityData;
+
   const sectionVisibility = useMemo<HomepageVisibility>(() => {
-    if (!visibilityData) {
+    if (!visibilityDataResolved) {
       return DEFAULT_HOMEPAGE_VISIBILITY;
     }
     return {
       ...DEFAULT_HOMEPAGE_VISIBILITY,
-      ...visibilityData,
+      ...visibilityDataResolved,
     };
-  }, [visibilityData]);
+  }, [visibilityDataResolved]);
   const statsStrip = useMemo<StatsStripSettings>(() => {
     const fallback = { ...DEFAULT_STATS_STRIP, items: [...DEFAULT_STATS_STRIP.items] };
-    if (!statsStripData || typeof statsStripData !== 'object') {
+    if (!statsStripDataResolved || typeof statsStripDataResolved !== 'object') {
       return fallback;
     }
-    const row = statsStripData as Record<string, any>;
+    const row = statsStripDataResolved as Record<string, any>;
     const items = Array.isArray(row.items)
       ? row.items
           .map((item: any, index: number) => ({
@@ -885,24 +909,24 @@ export default function Home() {
       suffixColor: asText(row.suffixColor, DEFAULT_STATS_STRIP.suffixColor),
       labelColor: asText(row.labelColor, DEFAULT_STATS_STRIP.labelColor),
     };
-  }, [statsStripData]);
+  }, [statsStripDataResolved]);
   const activeStatsItems = useMemo(
     () => (Array.isArray(statsStrip.items) ? statsStrip.items.filter((item) => item.isActive !== false) : []),
     [statsStrip.items]
   );
   const featuredDescriptionWordLimit = useMemo(() => {
-    const raw = Number((featuredDescriptionSettingsData as any)?.wordLimit);
+    const raw = Number((featuredDescriptionSettingsDataResolved as any)?.wordLimit);
     return Number.isFinite(raw) ? Math.max(5, Math.min(60, Math.round(raw))) : 12;
-  }, [featuredDescriptionSettingsData]);
+  }, [featuredDescriptionSettingsDataResolved]);
 
   const heroSlides = useMemo(
     () =>
       mapHeroSlides({
-        heroSlidesData,
-        managedBannersData,
+        heroSlidesData: heroSlidesDataResolved,
+        managedBannersData: managedBannersDataResolved,
         fallbackSlides: kimiHeroSlides,
       }),
-    [heroSlidesData, managedBannersData]
+    [heroSlidesDataResolved, managedBannersDataResolved]
   );
   const heroQuickLinks = useMemo(
     () => mapHeroQuickLinks(experienceSettings?.kimiCopy),
@@ -949,22 +973,22 @@ export default function Home() {
   const featuredFabrics = featuredCollections.fabricsToBuy;
   const managedBannersBySection = useMemo(() => {
     const map = new Map<string, ManagedBanner>();
-    if (!Array.isArray(managedBannersData)) return map;
-    for (const row of managedBannersData) {
+    if (!Array.isArray(managedBannersDataResolved)) return map;
+    for (const row of managedBannersDataResolved) {
       const key = String(row?.section || '').toUpperCase();
       if (!key || map.has(key)) continue;
       map.set(key, row);
     }
     return map;
-  }, [managedBannersData]);
+  }, [managedBannersDataResolved]);
 
   const countries = useMemo<CountryCard[]>(
     () =>
       mapShopByCountries({
-        countriesData,
+        countriesData: countriesDataResolved,
         staticCountries: AFRICAN_COUNTRIES,
       }),
-    [countriesData]
+    [countriesDataResolved]
   );
 
   const visibleCountries = useMemo(
@@ -995,10 +1019,10 @@ export default function Home() {
   const categories = useMemo(
     () =>
       mapShopByCategories({
-        categoriesData,
+        categoriesData: categoriesDataResolved,
         fallbackCategories: kimiCategories,
       }),
-    [categoriesData]
+    [categoriesDataResolved]
   );
   const readyCategory = categories.find((item) => /ready/i.test(String(item.title || ''))) || categories[0];
   const customCategory =
@@ -1068,7 +1092,9 @@ export default function Home() {
 
   const howItWorks = useMemo(
     () =>
-      (Array.isArray(howItWorksData) && howItWorksData.length > 0 ? howItWorksData : kimiHowItWorks).slice(0, 6).map((item: any, index: number) => ({
+      (Array.isArray(howItWorksDataResolved) && howItWorksDataResolved.length > 0 ? howItWorksDataResolved : kimiHowItWorks)
+        .slice(0, 6)
+        .map((item: any, index: number) => ({
         id: Number(item.id ?? index + 1),
         title: asText(item.title, kimiHowItWorks[index % kimiHowItWorks.length].title),
         subtitle: asText(item.subtitle, item.description, kimiHowItWorks[index % kimiHowItWorks.length].subtitle),
@@ -1076,19 +1102,19 @@ export default function Home() {
           iconByName[asText(item.icon, '')] ||
           iconByNormalizedName[normalizeIconKey(item.icon)] ||
           kimiHowItWorks[index % kimiHowItWorks.length].icon,
-      })),
-    [howItWorksData],
+        })),
+    [howItWorksDataResolved],
   );
-  const useCustomHowItWorksColors = Boolean(howItWorksStyleData?.enabled);
-  const howItWorksIconColor = asText(howItWorksStyleData?.iconColor, '#111827');
-  const howItWorksIconHoverColor = asText(howItWorksStyleData?.iconHoverColor, '#ffffff');
+  const useCustomHowItWorksColors = Boolean(howItWorksStyleDataResolved?.enabled);
+  const howItWorksIconColor = asText(howItWorksStyleDataResolved?.iconColor, '#111827');
+  const howItWorksIconHoverColor = asText(howItWorksStyleDataResolved?.iconHoverColor, '#ffffff');
   const designers = useMemo(
     () =>
       mapDesignerSpotlights({
-        designerSpotlightsData,
+        designerSpotlightsData: designerSpotlightsDataResolved,
         fallbackDesigners: kimiDesigners,
       }),
-    [designerSpotlightsData]
+    [designerSpotlightsDataResolved]
   );
   const designerSpotlightTitle = useMemo(
     () => mapDesignerSpotlightTitle(experienceSettings?.kimiCopy),
@@ -1128,37 +1154,40 @@ export default function Home() {
 
   const testimonials = useMemo(
     () =>
-      (Array.isArray(testimonialsData) && testimonialsData.length > 0 ? testimonialsData : kimiTestimonials).map((item: any, index: number) => ({
+      (Array.isArray(testimonialsDataResolved) && testimonialsDataResolved.length > 0
+        ? testimonialsDataResolved
+        : kimiTestimonials
+      ).map((item: any, index: number) => ({
         id: String(item.id ?? index),
         name: asText(item.name, kimiTestimonials[index % kimiTestimonials.length].name),
         location: asText(item.location, kimiTestimonials[index % kimiTestimonials.length].location),
         avatar: asImage(item.avatar, kimiTestimonials[index % kimiTestimonials.length].avatar),
         quote: asText(item.quote, item.text, kimiTestimonials[index % kimiTestimonials.length].quote),
       })),
-    [testimonialsData],
+    [testimonialsDataResolved],
   );
 
   const heritage = useMemo(
     () => ({
-      title: asText(heritageData?.title, 'Rooted in Culture'),
+      title: asText(heritageDataResolved?.title, 'Rooted in Culture'),
       content: asText(
-        heritageData?.subtitle,
-        heritageData?.description,
+        heritageDataResolved?.subtitle,
+        heritageDataResolved?.description,
         "Every pattern carries meaning. From Kente's bold geometry to Ankara's vibrant motifs, African textiles tell stories of identity, celebration, and legacy passed through generations.",
       ),
-      image: asImage(heritageData?.image, '/kimi/heritage_story.jpg'),
-      ctaText: asText(heritageData?.ctaText, 'READ OUR STORY'),
-      ctaLink: safeHref(heritageData?.ctaLink, '/about'),
+      image: asImage(heritageDataResolved?.image, '/kimi/heritage_story.jpg'),
+      ctaText: asText(heritageDataResolved?.ctaText, 'READ OUR STORY'),
+      ctaLink: safeHref(heritageDataResolved?.ctaLink, '/about'),
     }),
-    [heritageData],
+    [heritageDataResolved],
   );
   const promoBadgeValue = asText(
-    promoBadgeData?.valueText,
+    promoBadgeDataResolved?.valueText,
     managedBannersBySection.get('PROMO_BADGE')?.title,
     '50+'
   );
   const promoBadgeLabel = asText(
-    promoBadgeData?.labelText,
+    promoBadgeDataResolved?.labelText,
     managedBannersBySection.get('PROMO_BADGE')?.subtitle,
     'New Arrivals'
   );

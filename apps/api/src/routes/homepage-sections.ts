@@ -16,6 +16,11 @@ const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
 const HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY = 'HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION';
 const HOMEPAGE_EXPERIENCE_SETTINGS_KEY = 'HOMEPAGE_EXPERIENCE_SETTINGS';
 const AUTH_PAGE_SETTINGS_KEY = 'AUTH_PAGE_SETTINGS';
+const HOMEPAGE_PROMO_BADGE_SETTINGS_KEY = 'HOMEPAGE_PROMO_BADGE';
+const PROMO_BADGE_DEFAULTS = {
+  valueText: '50+',
+  labelText: 'New Arrivals',
+};
 const HOMEPAGE_RUNTIME_AUDIT_ACTIONS = ['RUNTIME_SWITCH', 'RUNTIME_ROLLBACK'] as const;
 const SPOTLIGHT_LINK_MODES = ['DEFAULT_STORE', 'CUSTOM_URL', 'BLOG'] as const;
 type SpotlightLinkMode = (typeof SPOTLIGHT_LINK_MODES)[number];
@@ -2628,6 +2633,183 @@ router.get('/experience-settings', async (_req, res) => {
   } catch (error) {
     console.error('Error fetching homepage experience settings:', error);
     res.json({ success: true, data: { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS } });
+  }
+});
+
+router.get('/kimi-homepage-payload', async (_req, res) => {
+  const safeResult = <T,>(result: PromiseSettledResult<T>, fallback: T): T =>
+    result.status === 'fulfilled' ? result.value : fallback;
+
+  const readManagedBanners = async () => {
+    const rows = await prisma.banner.findMany({
+      where: { isActive: true },
+      orderBy: { displayOrder: 'asc' },
+    });
+    return rows.map((banner) => ({
+      ...banner,
+      displayImage:
+        Array.isArray(banner.images) && banner.images.length > 0
+          ? banner.images[Math.floor(Math.random() * banner.images.length)]
+          : null,
+    }));
+  };
+
+  const readPromoBadgeSettings = async () => {
+    const rows = await prisma.$queryRawUnsafe<Array<{ value: string }>>(
+      `SELECT "value"
+       FROM "HomepageSectionSetting"
+       WHERE "key" = $1
+       LIMIT 1`,
+      HOMEPAGE_PROMO_BADGE_SETTINGS_KEY
+    );
+    const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+    if (!row?.value) return { ...PROMO_BADGE_DEFAULTS };
+    try {
+      const parsed = JSON.parse(String(row.value || '{}')) as Record<string, unknown>;
+      const valueText = getString(parsed.valueText) || PROMO_BADGE_DEFAULTS.valueText;
+      const labelText = getString(parsed.labelText) || PROMO_BADGE_DEFAULTS.labelText;
+      return { valueText, labelText };
+    } catch {
+      return { ...PROMO_BADGE_DEFAULTS };
+    }
+  };
+
+  const readDesignerSpotlightsPayload = async () => {
+    const spotlights = await prisma.designerSpotlight.findMany({
+      where: { isActive: true },
+      orderBy: { displayOrder: 'asc' },
+    });
+    const designerIds = spotlights.map((spotlight) => spotlight.designerId);
+    const spotlightIds = spotlights.map((spotlight) => spotlight.id);
+    const [profilesById, spotlightLinkMap] = await Promise.all([
+      readSpotlightProfilesByIds(designerIds),
+      readSpotlightLinkMap(spotlightIds),
+    ]);
+    const blogIds = Array.from(
+      new Set(
+        spotlights
+          .map((spotlight) => spotlightLinkMap.get(spotlight.id)?.blogPostId || null)
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+    const blogMap = await readBlogLinkMetaMap(blogIds, true);
+    return spotlights.map((spotlight) => ({
+      ...spotlight,
+      designer: profilesById.get(spotlight.designerId)
+        ? {
+            id: profilesById.get(spotlight.designerId)!.id,
+            businessName: profilesById.get(spotlight.designerId)!.businessName,
+            country: profilesById.get(spotlight.designerId)!.country,
+            bio: profilesById.get(spotlight.designerId)!.bio || null,
+          }
+        : null,
+      vendorType: profilesById.get(spotlight.designerId)?.vendorType || null,
+      linkMode: spotlightLinkMap.get(spotlight.id)?.linkMode || 'DEFAULT_STORE',
+      externalUrl: spotlightLinkMap.get(spotlight.id)?.externalUrl || null,
+      blogPostId: spotlightLinkMap.get(spotlight.id)?.blogPostId || null,
+      blog:
+        spotlightLinkMap.get(spotlight.id)?.blogPostId &&
+        blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))
+          ? {
+              id: blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.id,
+              slug: blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.slug,
+              title: blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.title,
+              audienceType: blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.audienceType,
+              url: `/stories/${blogMap.get(String(spotlightLinkMap.get(spotlight.id)?.blogPostId || ''))!.slug}`,
+            }
+          : null,
+    }));
+  };
+
+  try {
+    const [
+      visibilityResult,
+      topStripResult,
+      statsStripResult,
+      howItWorksStyleResult,
+      featuredDescriptionResult,
+      authPageSettingsResult,
+      experienceSettingsResult,
+      heroSlidesResult,
+      managedBannersResult,
+      promoBadgeResult,
+      countriesResult,
+      categoriesResult,
+      howItWorksResult,
+      designerSpotlightsResult,
+      heritageResult,
+      testimonialsResult,
+      footerResult,
+    ] = await Promise.allSettled([
+      readHomepageSectionVisibility().then((row) => row.visibility),
+      readTopStripSettings().then((row) => row.settings),
+      readStatsStripSettings().then((row) => row.settings),
+      readHowItWorksStyleSettings().then((row) => row.settings),
+      readFeaturedProductDescriptionSettings().then((row) => row.settings),
+      readAuthPageSettings().then((row) => row.settings),
+      readHomepageExperienceSettings().then((row) => row.settings),
+      prisma.heroSlide.findMany({
+        where: { isActive: true },
+        orderBy: { displayOrder: 'asc' },
+      }),
+      readManagedBanners(),
+      readPromoBadgeSettings(),
+      prisma.countryMarquee.findMany({
+        where: { isActive: true },
+        orderBy: { displayOrder: 'asc' },
+      }),
+      prisma.shopCategory.findMany({
+        where: { isActive: true },
+        orderBy: { displayOrder: 'asc' },
+      }),
+      prisma.howItWorksStep.findMany({
+        where: { isActive: true },
+        orderBy: { stepNumber: 'asc' },
+      }),
+      readDesignerSpotlightsPayload(),
+      prisma.heritageSection.findFirst({
+        where: { isActive: true },
+        orderBy: { displayOrder: 'asc' },
+      }),
+      prisma.testimonial.findMany({
+        where: { isActive: true },
+        orderBy: { displayOrder: 'asc' },
+      }),
+      prisma.footerContent.findFirst(),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        contractVersion: 'KIMI_HOMEPAGE_PAYLOAD_V1',
+        generatedAt: new Date().toISOString(),
+        visibility: safeResult(visibilityResult, { ...HOMEPAGE_SECTION_VISIBILITY_DEFAULTS }),
+        topStrip: safeResult(topStripResult, { ...TOP_STRIP_DEFAULTS }),
+        statsStrip: safeResult(statsStripResult, { ...STATS_STRIP_DEFAULTS }),
+        howItWorksStyle: safeResult(howItWorksStyleResult, { ...HOW_IT_WORKS_STYLE_DEFAULTS }),
+        featuredProductDescription: safeResult(featuredDescriptionResult, {
+          ...FEATURED_PRODUCT_DESCRIPTION_DEFAULTS,
+        }),
+        authPageSettings: safeResult(authPageSettingsResult, { ...AUTH_PAGE_SETTINGS_DEFAULTS }),
+        experienceSettings: safeResult(experienceSettingsResult, { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS }),
+        heroSlides: safeResult(heroSlidesResult, []),
+        managedBanners: safeResult(managedBannersResult, []),
+        promoBadge: safeResult(promoBadgeResult, { ...PROMO_BADGE_DEFAULTS }),
+        countries: safeResult(countriesResult, []),
+        categories: safeResult(categoriesResult, []),
+        howItWorks: safeResult(howItWorksResult, []),
+        designerSpotlights: safeResult(designerSpotlightsResult, []),
+        heritage: safeResult(heritageResult, null),
+        testimonials: safeResult(testimonialsResult, []),
+        footer: safeResult(footerResult, null),
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching kimi homepage payload:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch kimi homepage payload',
+    });
   }
 });
 

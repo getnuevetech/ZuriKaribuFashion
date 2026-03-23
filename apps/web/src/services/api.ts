@@ -8859,6 +8859,90 @@ const homepageSectionsApi = {
         };
       };
     }>('/homepage-sections/experience-settings'),
+  getKimiHomepagePayload: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        contractVersion: string;
+        generatedAt: string;
+        visibility: Record<string, boolean>;
+        topStrip: {
+          messages: string[];
+          separator: string;
+          repeatCount: number;
+          animationSeconds: number;
+          fontSize: number;
+          isBold: boolean;
+          pauseOnHover: boolean;
+          textColor: string;
+          backgroundColor: string;
+        };
+        statsStrip: {
+          items: Array<{ value: string; suffix?: string; label: string; displayOrder?: number; isActive?: boolean }>;
+          backgroundImage?: string;
+          backgroundColor?: string;
+          overlayColor?: string;
+          overlayOpacity?: number;
+          valueColor?: string;
+          suffixColor?: string;
+          labelColor?: string;
+        };
+        howItWorksStyle: {
+          enabled: boolean;
+          iconColor: string;
+          iconHoverColor: string;
+        };
+        featuredProductDescription: { wordLimit: number };
+        authPageSettings: AuthPageSettingsPayload;
+        experienceSettings: {
+          enabledModes: Array<'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE'>;
+          defaultMode: 'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE';
+          allowUserModeOverride: boolean;
+          adaptiveByDevice: boolean;
+          adaptiveByConnection: boolean;
+          respectReducedMotion: boolean;
+          themeModes: Array<'SYSTEM' | 'LIGHT' | 'DARK'>;
+          defaultThemeMode: 'SYSTEM' | 'LIGHT' | 'DARK';
+          tokenSet: 'GLOBAL_PREMIUM_DARK' | 'GLOBAL_PREMIUM_LIGHT' | 'AFRO_EDITORIAL';
+          heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
+          categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
+          spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+          homepageTemplate: 'LEGACY' | 'KIMI';
+          rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
+          allowPreviewQuery: boolean;
+          previewQueryParam: string;
+          requireReasonForRuntimeActions: boolean;
+          trustBadges: Array<{
+            title: string;
+            subtitle: string;
+            icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
+            enabled: boolean;
+          }>;
+          kimiCopy: {
+            heroEyebrow: string;
+            shopByEyebrow: string;
+            shopByTitle: string;
+            featuredRtwTitle: string;
+            featuredFabricsTitle: string;
+            featuredDesignsTitle: string;
+            designerSpotlightTitle: string;
+            quickPathRtwLabel: string;
+            quickPathCustomLabel: string;
+            quickPathFabricsLabel: string;
+          };
+        };
+        heroSlides: any[];
+        managedBanners: any[];
+        promoBadge: { valueText: string; labelText: string };
+        countries: any[];
+        categories: any[];
+        howItWorks: any[];
+        designerSpotlights: any[];
+        heritage: any;
+        testimonials: any[];
+        footer: any;
+      };
+    }>('/homepage-sections/kimi-homepage-payload'),
 
   getCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/countries'),
