@@ -7,6 +7,7 @@ type HomepageRuntimeSettings = {
   rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
   allowPreviewQuery: boolean;
   previewQueryParam: string;
+  legacyHomepageEnabled: boolean;
   requireReasonForRuntimeActions: boolean;
 };
 type RuntimeHealthCheck = {
@@ -32,10 +33,11 @@ type RuntimeAuditEntry = {
 type RuntimeAuditFilterAction = 'ALL' | 'RUNTIME_SWITCH' | 'RUNTIME_ROLLBACK';
 
 const DEFAULT_RUNTIME_SETTINGS: HomepageRuntimeSettings = {
-  homepageTemplate: 'LEGACY',
+  homepageTemplate: 'JENKS',
   rolloutMode: 'PREVIEW_SAFE',
   allowPreviewQuery: true,
   previewQueryParam: 'zkHomePreview',
+  legacyHomepageEnabled: false,
   requireReasonForRuntimeActions: false,
 };
 const EMPTY_HEALTH: RuntimeHealth = {
@@ -44,30 +46,37 @@ const EMPTY_HEALTH: RuntimeHealth = {
   checks: [],
 };
 
-const toRuntimeSettings = (input: any): HomepageRuntimeSettings => ({
-  homepageTemplate:
-    input?.homepageTemplate === 'JENKS' || input?.homepageTemplate === 'KIMI' ? 'JENKS' : 'LEGACY',
-  rolloutMode: input?.rolloutMode === 'LIVE' ? 'LIVE' : 'PREVIEW_SAFE',
-  allowPreviewQuery: input?.allowPreviewQuery !== false,
-  previewQueryParam:
-    /^[A-Za-z0-9_-]{2,40}$/.test(String(input?.previewQueryParam || '').trim())
-      ? String(input.previewQueryParam).trim()
-      : DEFAULT_RUNTIME_SETTINGS.previewQueryParam,
-  requireReasonForRuntimeActions: input?.requireReasonForRuntimeActions === true,
-});
+const toRuntimeSettings = (input: any): HomepageRuntimeSettings => {
+  const legacyHomepageEnabled = input?.legacyHomepageEnabled === true;
+  const templateRaw =
+    input?.homepageTemplate === 'JENKS' || input?.homepageTemplate === 'KIMI' ? 'JENKS' : 'LEGACY';
+  return {
+    homepageTemplate: !legacyHomepageEnabled && templateRaw === 'LEGACY' ? 'JENKS' : templateRaw,
+    rolloutMode: input?.rolloutMode === 'LIVE' ? 'LIVE' : 'PREVIEW_SAFE',
+    allowPreviewQuery: input?.allowPreviewQuery !== false,
+    previewQueryParam:
+      /^[A-Za-z0-9_-]{2,40}$/.test(String(input?.previewQueryParam || '').trim())
+        ? String(input.previewQueryParam).trim()
+        : DEFAULT_RUNTIME_SETTINGS.previewQueryParam,
+    legacyHomepageEnabled,
+    requireReasonForRuntimeActions: input?.requireReasonForRuntimeActions === true,
+  };
+};
 
 const runtimeSettingsEqual = (a: HomepageRuntimeSettings, b: HomepageRuntimeSettings) =>
   a.homepageTemplate === b.homepageTemplate &&
   a.rolloutMode === b.rolloutMode &&
   a.allowPreviewQuery === b.allowPreviewQuery &&
   a.previewQueryParam === b.previewQueryParam &&
+  a.legacyHomepageEnabled === b.legacyHomepageEnabled &&
   a.requireReasonForRuntimeActions === b.requireReasonForRuntimeActions;
 
 const runtimeSwitchFieldsEqual = (a: HomepageRuntimeSettings, b: HomepageRuntimeSettings) =>
   a.homepageTemplate === b.homepageTemplate &&
   a.rolloutMode === b.rolloutMode &&
   a.allowPreviewQuery === b.allowPreviewQuery &&
-  a.previewQueryParam === b.previewQueryParam;
+  a.previewQueryParam === b.previewQueryParam &&
+  a.legacyHomepageEnabled === b.legacyHomepageEnabled;
 
 const toIsoFromLocalDateTime = (value: string): string | undefined => {
   const trimmed = String(value || '').trim();
@@ -173,7 +182,7 @@ export default function AdminHomepageRuntimeSwitchboard() {
   const formatRuntimeSummary = (runtime: HomepageRuntimeSettings) =>
     `${runtime.homepageTemplate}/${runtime.rolloutMode} • preview ${
       runtime.allowPreviewQuery ? 'ON' : 'OFF'
-    } (${runtime.previewQueryParam})`;
+    } (${runtime.previewQueryParam}) • legacy ${runtime.legacyHomepageEnabled ? 'ENABLED' : 'DISABLED'}`;
 
   const handleSave = async () => {
     setSaving(true);
@@ -191,6 +200,7 @@ export default function AdminHomepageRuntimeSwitchboard() {
         rolloutMode: settings.rolloutMode,
         allowPreviewQuery: settings.allowPreviewQuery,
         previewQueryParam: settings.previewQueryParam,
+        legacyHomepageEnabled: settings.legacyHomepageEnabled,
         requireReasonForRuntimeActions: settings.requireReasonForRuntimeActions,
         changeReason: changeReason.trim() || undefined,
       });
@@ -229,6 +239,7 @@ export default function AdminHomepageRuntimeSwitchboard() {
         rolloutMode: settings.rolloutMode,
         allowPreviewQuery: settings.allowPreviewQuery,
         previewQueryParam: settings.previewQueryParam,
+        legacyHomepageEnabled: settings.legacyHomepageEnabled,
       });
       if (response.success && response.data?.runtimeHealth) {
         setRuntimeHealth(response.data.runtimeHealth);
@@ -341,14 +352,22 @@ export default function AdminHomepageRuntimeSwitchboard() {
             onChange={(e) =>
               setSettings((prev) => ({
                 ...prev,
-                homepageTemplate: e.target.value === 'JENKS' ? 'JENKS' : 'LEGACY',
+                homepageTemplate:
+                  e.target.value === 'JENKS'
+                    ? 'JENKS'
+                    : prev.legacyHomepageEnabled
+                      ? 'LEGACY'
+                      : 'JENKS',
               }))
             }
             className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
           >
-            <option value="LEGACY">Legacy Home</option>
+            {settings.legacyHomepageEnabled ? <option value="LEGACY">Legacy Home</option> : null}
             <option value="JENKS">Jenks Home</option>
           </select>
+          {!settings.legacyHomepageEnabled ? (
+            <p className="text-xs text-amber-700">Legacy disabled: only Jenks templates are available.</p>
+          ) : null}
         </div>
 
         <div className="space-y-2">
@@ -363,8 +382,8 @@ export default function AdminHomepageRuntimeSwitchboard() {
             }
             className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
           >
-            <option value="PREVIEW_SAFE">Preview-safe (legacy for everyone)</option>
-            <option value="LIVE">Live rollout (uses selected template)</option>
+            <option value="PREVIEW_SAFE">Preview-safe (Static Jenks)</option>
+            <option value="LIVE">Live rollout (Animated Jenks)</option>
           </select>
         </div>
 
@@ -385,6 +404,23 @@ export default function AdminHomepageRuntimeSwitchboard() {
           />
         </div>
 
+        <div className="md:col-span-2">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={settings.legacyHomepageEnabled}
+              onChange={(e) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  legacyHomepageEnabled: e.target.checked,
+                  homepageTemplate: e.target.checked ? prev.homepageTemplate : 'JENKS',
+                }))
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            Enable Legacy Homepage Runtime (disable to enforce Jenks-only frontpage)
+          </label>
+        </div>
         <div className="md:col-span-2">
           <label className="inline-flex items-center gap-2 text-sm text-gray-700">
             <input

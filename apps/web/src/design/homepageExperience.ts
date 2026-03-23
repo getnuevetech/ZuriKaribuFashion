@@ -77,6 +77,7 @@ export interface HomepageExperienceSettings {
   rolloutMode: HomepageRolloutMode;
   allowPreviewQuery: boolean;
   previewQueryParam: string;
+  legacyHomepageEnabled: boolean;
   trustBadges: HomepageTrustBadge[];
   kimiCopy: HomepageKimiCopy;
 }
@@ -109,6 +110,7 @@ export const HOMEPAGE_EXPERIENCE_DEFAULTS: HomepageExperienceSettings = {
   rolloutMode: 'PREVIEW_SAFE',
   allowPreviewQuery: true,
   previewQueryParam: 'zkHomePreview',
+  legacyHomepageEnabled: false,
   trustBadges: [
     { icon: 'SHIELD_CHECK', title: 'Authentic Guarantee', subtitle: 'Verified sellers and designers', enabled: true },
     { icon: 'TRUCK', title: 'Global Shipping', subtitle: 'Reliable delivery worldwide', enabled: true },
@@ -206,6 +208,10 @@ export const normalizeHomepageExperienceSettings = (
   const previewQueryParam = /^[A-Za-z0-9_-]{2,40}$/.test(previewQueryParamCandidate)
     ? previewQueryParamCandidate
     : HOMEPAGE_EXPERIENCE_DEFAULTS.previewQueryParam;
+  const legacyHomepageEnabled =
+    typeof row.legacyHomepageEnabled === 'boolean'
+      ? row.legacyHomepageEnabled
+      : HOMEPAGE_EXPERIENCE_DEFAULTS.legacyHomepageEnabled;
   const trustBadgeRows = Array.isArray(row.trustBadges) ? row.trustBadges : [];
   const trustBadges = trustBadgeRows
     .map((entry) => {
@@ -271,6 +277,7 @@ export const normalizeHomepageExperienceSettings = (
     rolloutMode,
     allowPreviewQuery: row.allowPreviewQuery !== false,
     previewQueryParam,
+    legacyHomepageEnabled,
     trustBadges: trustBadges.length > 0 ? trustBadges : [...HOMEPAGE_EXPERIENCE_DEFAULTS.trustBadges],
     kimiCopy,
   };

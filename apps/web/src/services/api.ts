@@ -8838,6 +8838,7 @@ const homepageSectionsApi = {
         rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
         allowPreviewQuery: boolean;
         previewQueryParam: string;
+        legacyHomepageEnabled: boolean;
         requireReasonForRuntimeActions: boolean;
         trustBadges: Array<{
           title: string;
@@ -8945,6 +8946,7 @@ const homepageSectionsApi = {
           rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
           allowPreviewQuery: boolean;
           previewQueryParam: string;
+          legacyHomepageEnabled: boolean;
           requireReasonForRuntimeActions: boolean;
           trustBadges: Array<{
             title: string;
@@ -9249,6 +9251,7 @@ const homepageSectionsApi = {
         rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
         allowPreviewQuery: boolean;
         previewQueryParam: string;
+        legacyHomepageEnabled: boolean;
         trustBadges: Array<{
           title: string;
           subtitle: string;
@@ -9280,6 +9283,7 @@ const homepageSectionsApi = {
           rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
           allowPreviewQuery: boolean;
           previewQueryParam: string;
+          legacyHomepageEnabled: boolean;
         };
         runtimeHealth: {
           ok: boolean;
@@ -9298,6 +9302,7 @@ const homepageSectionsApi = {
     rolloutMode?: 'LIVE' | 'PREVIEW_SAFE';
     allowPreviewQuery?: boolean;
     previewQueryParam?: string;
+    legacyHomepageEnabled?: boolean;
   }) =>
     apiService.post<{
       success: boolean;
@@ -9307,6 +9312,7 @@ const homepageSectionsApi = {
           rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
           allowPreviewQuery: boolean;
           previewQueryParam: string;
+          legacyHomepageEnabled: boolean;
         };
         runtimeHealth: {
           ok: boolean;
@@ -9338,12 +9344,14 @@ const homepageSectionsApi = {
           rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
           allowPreviewQuery: boolean;
           previewQueryParam: string;
+          legacyHomepageEnabled: boolean;
         };
         next: {
           homepageTemplate: 'LEGACY' | 'JENKS';
           rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
           allowPreviewQuery: boolean;
           previewQueryParam: string;
+          legacyHomepageEnabled: boolean;
         };
         healthSummary: {
           ok: boolean;
@@ -9423,6 +9431,7 @@ const homepageSectionsApi = {
     rolloutMode?: 'LIVE' | 'PREVIEW_SAFE';
     allowPreviewQuery?: boolean;
     previewQueryParam?: string;
+    legacyHomepageEnabled?: boolean;
     requireReasonForRuntimeActions?: boolean;
     changeReason?: string;
     trustBadges?: Array<{
@@ -9463,6 +9472,7 @@ const homepageSectionsApi = {
         rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
         allowPreviewQuery: boolean;
         previewQueryParam: string;
+        legacyHomepageEnabled: boolean;
         requireReasonForRuntimeActions: boolean;
         trustBadges: Array<{
           title: string;

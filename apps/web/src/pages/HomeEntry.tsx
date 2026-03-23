@@ -38,6 +38,9 @@ const resolveHomepageTarget = (
   const search = new URLSearchParams(window.location.search);
   if (settings.allowPreviewQuery) {
     const previewChoice = normalizePreviewChoice(search.get(previewParam));
+    if (previewChoice === 'LEGACY' && settings.legacyHomepageEnabled !== true) {
+      return 'JENKS_STATIC';
+    }
     if (previewChoice) return previewChoice;
   }
   if (settings.homepageTemplate === 'JENKS') {
@@ -52,6 +55,9 @@ const resolveHomepageTarget = (
   // users do not get stuck on an outdated homepage surface.
   if (settings.rolloutMode !== 'LIVE') {
     return 'JENKS_STATIC';
+  }
+  if (settings.legacyHomepageEnabled !== true) {
+    return 'JENKS_DYNAMIC';
   }
   return 'LEGACY';
 };

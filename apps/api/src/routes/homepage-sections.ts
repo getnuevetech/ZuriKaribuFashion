@@ -1003,6 +1003,7 @@ const homepageExperienceSettingsUpdateSchema = z.object({
   rolloutMode: z.enum(HOMEPAGE_ROLLOUT_MODES).optional(),
   allowPreviewQuery: z.boolean().optional(),
   previewQueryParam: z.string().trim().min(2).max(40).regex(/^[A-Za-z0-9_-]+$/).optional(),
+  legacyHomepageEnabled: z.boolean().optional(),
   requireReasonForRuntimeActions: z.boolean().optional(),
   trustBadges: z
     .array(
@@ -1200,6 +1201,7 @@ type HomepageExperienceSettings = {
   rolloutMode: HomepageRolloutMode;
   allowPreviewQuery: boolean;
   previewQueryParam: string;
+  legacyHomepageEnabled: boolean;
   requireReasonForRuntimeActions: boolean;
   trustBadges: HomepageTrustBadge[];
   kimiCopy: HomepageKimiCopy;
@@ -1210,7 +1212,7 @@ type HomepageExperienceSettingsPatch = Omit<Partial<HomepageExperienceSettings>,
 };
 type HomepageRuntimeSnapshot = Pick<
   HomepageExperienceSettings,
-  'homepageTemplate' | 'rolloutMode' | 'allowPreviewQuery' | 'previewQueryParam'
+  'homepageTemplate' | 'rolloutMode' | 'allowPreviewQuery' | 'previewQueryParam' | 'legacyHomepageEnabled'
 >;
 type HomepageRuntimeHealthStatus = 'PASS' | 'WARN' | 'FAIL';
 type HomepageRuntimeHealthCheck = {
@@ -1405,6 +1407,7 @@ const HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS: HomepageExperienceSettings = {
   rolloutMode: 'PREVIEW_SAFE',
   allowPreviewQuery: true,
   previewQueryParam: 'zkHomePreview',
+  legacyHomepageEnabled: false,
   requireReasonForRuntimeActions: false,
   trustBadges: [
     { icon: 'SHIELD_CHECK', title: 'Authentic Guarantee', subtitle: 'Verified sellers and designers', enabled: true },
@@ -1791,7 +1794,7 @@ const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSe
   const homepageTemplateCandidateRaw = String(row.homepageTemplate || '').trim().toUpperCase();
   const homepageTemplateCandidate =
     homepageTemplateCandidateRaw === 'KIMI' ? 'JENKS' : (homepageTemplateCandidateRaw as HomepageTemplate);
-  const homepageTemplate = HOMEPAGE_TEMPLATES.includes(homepageTemplateCandidate)
+  const homepageTemplateRaw = HOMEPAGE_TEMPLATES.includes(homepageTemplateCandidate)
     ? homepageTemplateCandidate
     : HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.homepageTemplate;
   const rolloutModeCandidate = String(row.rolloutMode || '').trim().toUpperCase() as HomepageRolloutMode;
@@ -1802,6 +1805,10 @@ const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSe
   const previewQueryParam = /^[A-Za-z0-9_-]{2,40}$/.test(previewQueryParamCandidate)
     ? previewQueryParamCandidate
     : HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.previewQueryParam;
+  const legacyHomepageEnabled =
+    getBoolean(row.legacyHomepageEnabled) ?? HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.legacyHomepageEnabled;
+  const homepageTemplate =
+    !legacyHomepageEnabled && homepageTemplateRaw === 'LEGACY' ? 'JENKS' : homepageTemplateRaw;
 
   const trustBadgeRows = Array.isArray(row.trustBadges) ? row.trustBadges : [];
   const trustBadges = trustBadgeRows
@@ -1862,6 +1869,7 @@ const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSe
     rolloutMode,
     allowPreviewQuery: getBoolean(row.allowPreviewQuery) ?? HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.allowPreviewQuery,
     previewQueryParam,
+    legacyHomepageEnabled,
     requireReasonForRuntimeActions:
       getBoolean(row.requireReasonForRuntimeActions) ??
       HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.requireReasonForRuntimeActions,
@@ -2681,13 +2689,15 @@ const getHomepageRuntimeSnapshot = (settings: HomepageExperienceSettings): Homep
   rolloutMode: settings.rolloutMode,
   allowPreviewQuery: settings.allowPreviewQuery,
   previewQueryParam: settings.previewQueryParam,
+  legacyHomepageEnabled: settings.legacyHomepageEnabled,
 });
 
 const areHomepageRuntimeSnapshotsEqual = (a: HomepageRuntimeSnapshot, b: HomepageRuntimeSnapshot) =>
   a.homepageTemplate === b.homepageTemplate &&
   a.rolloutMode === b.rolloutMode &&
   a.allowPreviewQuery === b.allowPreviewQuery &&
-  a.previewQueryParam === b.previewQueryParam;
+  a.previewQueryParam === b.previewQueryParam &&
+  a.legacyHomepageEnabled === b.legacyHomepageEnabled;
 
 const normalizeHomepageRuntimeSnapshot = (input: unknown): HomepageRuntimeSnapshot | null => {
   if (!input || typeof input !== 'object') return null;
@@ -2698,15 +2708,20 @@ const normalizeHomepageRuntimeSnapshot = (input: unknown): HomepageRuntimeSnapsh
   const rolloutMode = String(row.rolloutMode || '').trim().toUpperCase() as HomepageRolloutMode;
   const allowPreviewQuery = getBoolean(row.allowPreviewQuery);
   const previewQueryParam = String(row.previewQueryParam || '').trim();
+  const legacyHomepageEnabled = getBoolean(row.legacyHomepageEnabled);
+  const resolvedLegacyHomepageEnabled =
+    typeof legacyHomepageEnabled === 'boolean' ? legacyHomepageEnabled : true;
   if (!HOMEPAGE_TEMPLATES.includes(homepageTemplate)) return null;
   if (!HOMEPAGE_ROLLOUT_MODES.includes(rolloutMode)) return null;
   if (typeof allowPreviewQuery !== 'boolean') return null;
   if (!/^[A-Za-z0-9_-]{2,40}$/.test(previewQueryParam)) return null;
   return {
-    homepageTemplate,
+    homepageTemplate:
+      !resolvedLegacyHomepageEnabled && homepageTemplate === 'LEGACY' ? 'JENKS' : homepageTemplate,
     rolloutMode,
     allowPreviewQuery,
     previewQueryParam,
+    legacyHomepageEnabled: resolvedLegacyHomepageEnabled,
   };
 };
 
@@ -2928,6 +2943,20 @@ const buildHomepageRuntimeHealth = async (nextSettings: HomepageExperienceSettin
     detail: previewParamValid
       ? `Preview query parameter "${nextSettings.previewQueryParam}" is valid.`
       : 'Preview query parameter must match /^[A-Za-z0-9_-]{2,40}$/',
+  });
+  checks.push({
+    key: 'legacyRuntimeGate',
+    label: 'Legacy runtime gate',
+    status:
+      nextSettings.legacyHomepageEnabled || nextSettings.homepageTemplate !== 'LEGACY'
+        ? 'PASS'
+        : 'FAIL',
+    detail:
+      nextSettings.legacyHomepageEnabled
+        ? 'Legacy homepage is enabled by runtime policy.'
+        : nextSettings.homepageTemplate === 'LEGACY'
+          ? 'Legacy homepage is disabled. Switch template to JENKS.'
+          : 'Legacy homepage is disabled; Jenks-only mode is active.',
   });
 
   const enabledBadgesCount = (Array.isArray(nextSettings.trustBadges) ? nextSettings.trustBadges : []).filter(
