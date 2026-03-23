@@ -27,6 +27,9 @@ Move Kimi homepage runtime from many fragmented frontend calls to a single canon
   - `testimonials`
   - `footer`
   - `featuredCollections` (`FEATURED_DESIGNS`, `FEATURED_FABRICS`, `FEATURED_READY_TO_WEAR`, `TRENDING_NOW`)
+  - `shopByBlocks` (style/price behavior + tab configuration)
+  - `freshDrops` (headline/CTA/badge configuration)
+  - `newsletter` (newsletter content + subscribe endpoint metadata)
 
 ## Contract metadata
 
@@ -46,6 +49,7 @@ Move Kimi homepage runtime from many fragmented frontend calls to a single canon
 - Script validates:
   - Contract version and required keys
   - `featuredCollections` section arrays
+  - `shopByBlocks`/`freshDrops`/`newsletter` contract presence
   - Checksum integrity when `payloadChecksum` is present
 
 ## Next step (Phase D.3)

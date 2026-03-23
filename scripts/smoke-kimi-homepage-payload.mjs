@@ -46,6 +46,9 @@ const requiredKeys = [
   'heritage',
   'testimonials',
   'footer',
+  'shopByBlocks',
+  'freshDrops',
+  'newsletter',
 ];
 
 const requiredFeaturedSections = [
@@ -132,6 +135,9 @@ try {
     heritage: data.heritage,
     testimonials: data.testimonials,
     footer: data.footer,
+    shopByBlocks: data.shopByBlocks,
+    freshDrops: data.freshDrops,
+    newsletter: data.newsletter,
   };
 
   const recomputedChecksum = createHash('sha256')

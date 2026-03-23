@@ -8948,8 +8948,42 @@ const homepageSectionsApi = {
         heritage: any;
         testimonials: any[];
         footer: any;
+        shopByBlocks: {
+          title: string;
+          subtitle: string;
+          styleOptions: Array<{ label: string; href: string }>;
+          priceOptions: Array<{ label: string; href: string }>;
+          enabledTabs: Array<'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE'>;
+          defaultTab: 'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE';
+        };
+        freshDrops: {
+          eyebrow: string;
+          title: string;
+          subtitle: string;
+          ctaText: string;
+          ctaLink: string;
+          badgeValueText: string;
+          badgeLabelText: string;
+          showBadge: boolean;
+        };
+        newsletter: {
+          enabled: boolean;
+          title: string;
+          subtitle: string;
+          emailPlaceholder: string;
+          submitLabel: string;
+          successMessage: string;
+          duplicateMessage: string;
+          subscribeEndpoint: string;
+        };
       };
     }>('/homepage-sections/kimi-homepage-payload'),
+  subscribeHomepageNewsletter: (payload: { email: string; source?: string; metadata?: Record<string, unknown> }) =>
+    apiService.post<{
+      success: boolean;
+      data?: { status: 'SUBSCRIBED' | 'ALREADY_SUBSCRIBED'; email: string };
+      message?: string;
+    }>('/homepage-sections/newsletter-subscribe', payload),
 
   getCountries: () =>
     apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/countries'),

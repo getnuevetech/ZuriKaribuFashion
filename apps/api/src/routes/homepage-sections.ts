@@ -17,6 +17,9 @@ const HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY = 'HOMEPAGE_FEATURED_PR
 const HOMEPAGE_EXPERIENCE_SETTINGS_KEY = 'HOMEPAGE_EXPERIENCE_SETTINGS';
 const AUTH_PAGE_SETTINGS_KEY = 'AUTH_PAGE_SETTINGS';
 const HOMEPAGE_PROMO_BADGE_SETTINGS_KEY = 'HOMEPAGE_PROMO_BADGE';
+const HOMEPAGE_SHOP_BY_BLOCKS_SETTINGS_KEY = 'HOMEPAGE_SHOP_BY_BLOCKS';
+const HOMEPAGE_FRESH_DROPS_SETTINGS_KEY = 'HOMEPAGE_FRESH_DROPS';
+const HOMEPAGE_NEWSLETTER_SETTINGS_KEY = 'HOMEPAGE_NEWSLETTER';
 const PROMO_BADGE_DEFAULTS = {
   valueText: '50+',
   labelText: 'New Arrivals',
@@ -463,6 +466,41 @@ const ensureHomepageSectionContentSchema = async () => {
   }
 };
 
+let newsletterSubscriptionSchemaEnsured = false;
+let newsletterSubscriptionSchemaPromise: Promise<void> | null = null;
+const ensureNewsletterSubscriptionSchema = async () => {
+  if (newsletterSubscriptionSchemaEnsured) return;
+  if (newsletterSubscriptionSchemaPromise) {
+    await newsletterSubscriptionSchemaPromise;
+    return;
+  }
+  newsletterSubscriptionSchemaPromise = (async () => {
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "NewsletterSubscription" (
+        "id" TEXT NOT NULL,
+        "email" TEXT NOT NULL,
+        "source" TEXT NOT NULL DEFAULT 'HOMEPAGE',
+        "metadata" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "NewsletterSubscription_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "NewsletterSubscription_email_key" ON "NewsletterSubscription"("email")`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "NewsletterSubscription_createdAt_idx" ON "NewsletterSubscription"("createdAt")`
+    );
+    newsletterSubscriptionSchemaEnsured = true;
+  })();
+  try {
+    await newsletterSubscriptionSchemaPromise;
+  } finally {
+    newsletterSubscriptionSchemaPromise = null;
+  }
+};
+
 router.use(async (_req, _res, next) => {
   try {
     await ensureHomepageSettingsSchema();
@@ -470,6 +508,7 @@ router.use(async (_req, _res, next) => {
     await ensureSpotlightLinkSchema();
     await ensureBlogSchema();
     await ensureHomepageSectionContentSchema();
+    await ensureNewsletterSubscriptionSchema();
   } catch (error) {
     console.error('Failed to ensure homepage settings schema:', error);
   }
@@ -849,6 +888,46 @@ const howItWorksStyleUpdateSchema = z.object({
   iconColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
   iconHoverColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
 });
+const shopByOptionUpdateSchema = z.object({
+  label: z.string().trim().min(1).max(60),
+  href: z.string().trim().min(1).max(260),
+});
+const shopByBlocksUpdateSchema = z.object({
+  title: z.string().trim().min(1).max(80).optional(),
+  subtitle: z.string().trim().min(1).max(240).optional(),
+  styleOptions: z.array(shopByOptionUpdateSchema).max(8).optional(),
+  priceOptions: z.array(shopByOptionUpdateSchema).max(8).optional(),
+  enabledTabs: z
+    .array(z.enum(['CATEGORY', 'COUNTRY', 'OCCASION_STYLE', 'PRICE']))
+    .min(1)
+    .max(4)
+    .optional(),
+  defaultTab: z.enum(['CATEGORY', 'COUNTRY', 'OCCASION_STYLE', 'PRICE']).optional(),
+});
+const freshDropsSettingsUpdateSchema = z.object({
+  eyebrow: z.string().trim().min(1).max(40).optional(),
+  title: z.string().trim().min(1).max(180).optional(),
+  subtitle: z.string().trim().min(1).max(260).optional(),
+  ctaText: z.string().trim().min(1).max(60).optional(),
+  ctaLink: z.string().trim().min(1).max(260).optional(),
+  badgeValueText: z.string().trim().min(1).max(20).optional(),
+  badgeLabelText: z.string().trim().min(1).max(80).optional(),
+  showBadge: z.boolean().optional(),
+});
+const newsletterSettingsUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  title: z.string().trim().min(1).max(120).optional(),
+  subtitle: z.string().trim().min(1).max(260).optional(),
+  emailPlaceholder: z.string().trim().min(1).max(120).optional(),
+  submitLabel: z.string().trim().min(1).max(60).optional(),
+  successMessage: z.string().trim().min(1).max(200).optional(),
+  duplicateMessage: z.string().trim().min(1).max(200).optional(),
+});
+const newsletterSubscribeSchema = z.object({
+  email: z.string().trim().email().max(200),
+  source: z.string().trim().min(1).max(80).optional(),
+  metadata: z.record(z.any()).optional(),
+});
 const authPageSettingsUpdateSchema = z.object({
   brandName: z.string().trim().min(1).max(80).optional(),
   loginHeroImage: z.string().trim().max(2000).optional(),
@@ -953,6 +1032,38 @@ type HowItWorksStyleSettings = {
   enabled: boolean;
   iconColor: string;
   iconHoverColor: string;
+};
+type ShopByOption = {
+  label: string;
+  href: string;
+};
+type ShopByTab = 'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE';
+type ShopByBlocksSettings = {
+  title: string;
+  subtitle: string;
+  styleOptions: ShopByOption[];
+  priceOptions: ShopByOption[];
+  enabledTabs: ShopByTab[];
+  defaultTab: ShopByTab;
+};
+type FreshDropsSettings = {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  ctaText: string;
+  ctaLink: string;
+  badgeValueText: string;
+  badgeLabelText: string;
+  showBadge: boolean;
+};
+type NewsletterSettings = {
+  enabled: boolean;
+  title: string;
+  subtitle: string;
+  emailPlaceholder: string;
+  submitLabel: string;
+  successMessage: string;
+  duplicateMessage: string;
 };
 type AuthPageSettings = {
   brandName: string;
@@ -1101,6 +1212,41 @@ const HOW_IT_WORKS_STYLE_DEFAULTS: HowItWorksStyleSettings = {
   enabled: false,
   iconColor: '#111827',
   iconHoverColor: '#ffffff',
+};
+const SHOP_BY_BLOCKS_DEFAULTS: ShopByBlocksSettings = {
+  title: 'Shop by',
+  subtitle: 'Browse by category, country, style, or budget.',
+  styleOptions: [
+    { label: 'Wedding', href: '/ready-to-wear?occasion=wedding' },
+    { label: 'Casual', href: '/ready-to-wear?occasion=casual' },
+    { label: 'Festival', href: '/ready-to-wear?occasion=festival' },
+  ],
+  priceOptions: [
+    { label: 'Under $100', href: '/shop?price=under-100' },
+    { label: '$100 - $300', href: '/shop?price=100-300' },
+    { label: 'Above $300', href: '/shop?price=above-300' },
+  ],
+  enabledTabs: ['CATEGORY', 'COUNTRY', 'OCCASION_STYLE', 'PRICE'],
+  defaultTab: 'CATEGORY',
+};
+const FRESH_DROPS_SETTINGS_DEFAULTS: FreshDropsSettings = {
+  eyebrow: 'FRESH DROPS',
+  title: 'New arrivals from the most talented designers across the continent.',
+  subtitle: 'Curated highlights from ready-to-wear, custom, and fabrics.',
+  ctaText: 'SHOP NEW ARRIVALS',
+  ctaLink: '/ready-to-wear',
+  badgeValueText: PROMO_BADGE_DEFAULTS.valueText,
+  badgeLabelText: PROMO_BADGE_DEFAULTS.labelText,
+  showBadge: true,
+};
+const NEWSLETTER_SETTINGS_DEFAULTS: NewsletterSettings = {
+  enabled: true,
+  title: 'Join the Movement',
+  subtitle: 'Subscribe to our newsletter for exclusive offers, new arrivals, and stories from the continent.',
+  emailPlaceholder: 'Enter your email',
+  submitLabel: 'SUBSCRIBE',
+  successMessage: 'You are subscribed. We will keep you updated.',
+  duplicateMessage: 'You are already subscribed to our newsletter.',
 };
 const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettings = {
   brandName: 'ZuriKaribu',
@@ -1252,6 +1398,93 @@ const normalizeHowItWorksStyleSettings = (raw: unknown): HowItWorksStyleSettings
     enabled: getBoolean(row.enabled) ?? HOW_IT_WORKS_STYLE_DEFAULTS.enabled,
     iconColor: normalizeHexColor(row.iconColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconColor),
     iconHoverColor: normalizeHexColor(row.iconHoverColor, HOW_IT_WORKS_STYLE_DEFAULTS.iconHoverColor),
+  };
+};
+const normalizeHref = (value: unknown, fallback: string) => {
+  const raw = getString(value);
+  if (!raw) return fallback;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (!raw.startsWith('/')) return fallback;
+  return raw;
+};
+const normalizeShopByOption = (value: unknown): ShopByOption | null => {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  const label = getString(row.label);
+  const href = getString(row.href);
+  if (!label || !href) return null;
+  return {
+    label: label.slice(0, 60),
+    href: normalizeHref(href, '/shop'),
+  };
+};
+const normalizeShopByBlocksSettings = (raw: unknown): ShopByBlocksSettings => {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      ...SHOP_BY_BLOCKS_DEFAULTS,
+      styleOptions: [...SHOP_BY_BLOCKS_DEFAULTS.styleOptions],
+      priceOptions: [...SHOP_BY_BLOCKS_DEFAULTS.priceOptions],
+      enabledTabs: [...SHOP_BY_BLOCKS_DEFAULTS.enabledTabs],
+    };
+  }
+  const row = raw as Record<string, unknown>;
+  const styleOptions = Array.isArray(row.styleOptions)
+    ? row.styleOptions
+        .map((entry) => normalizeShopByOption(entry))
+        .filter((entry): entry is ShopByOption => Boolean(entry))
+        .slice(0, 8)
+    : [];
+  const priceOptions = Array.isArray(row.priceOptions)
+    ? row.priceOptions
+        .map((entry) => normalizeShopByOption(entry))
+        .filter((entry): entry is ShopByOption => Boolean(entry))
+        .slice(0, 8)
+    : [];
+  const allowedTabs: ShopByTab[] = ['CATEGORY', 'COUNTRY', 'OCCASION_STYLE', 'PRICE'];
+  const enabledTabs = Array.isArray(row.enabledTabs)
+    ? row.enabledTabs
+        .map((entry) => String(entry || '').trim().toUpperCase() as ShopByTab)
+        .filter((entry) => allowedTabs.includes(entry))
+    : [];
+  const defaultTabCandidate = String(row.defaultTab || '').trim().toUpperCase() as ShopByTab;
+  const resolvedEnabledTabs = enabledTabs.length > 0 ? Array.from(new Set(enabledTabs)) : [...SHOP_BY_BLOCKS_DEFAULTS.enabledTabs];
+  const defaultTab = resolvedEnabledTabs.includes(defaultTabCandidate)
+    ? defaultTabCandidate
+    : resolvedEnabledTabs[0] || SHOP_BY_BLOCKS_DEFAULTS.defaultTab;
+  return {
+    title: (getString(row.title) || SHOP_BY_BLOCKS_DEFAULTS.title).slice(0, 80),
+    subtitle: (getString(row.subtitle) || SHOP_BY_BLOCKS_DEFAULTS.subtitle).slice(0, 240),
+    styleOptions: styleOptions.length > 0 ? styleOptions : [...SHOP_BY_BLOCKS_DEFAULTS.styleOptions],
+    priceOptions: priceOptions.length > 0 ? priceOptions : [...SHOP_BY_BLOCKS_DEFAULTS.priceOptions],
+    enabledTabs: resolvedEnabledTabs,
+    defaultTab,
+  };
+};
+const normalizeFreshDropsSettings = (raw: unknown): FreshDropsSettings => {
+  if (!raw || typeof raw !== 'object') return { ...FRESH_DROPS_SETTINGS_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  return {
+    eyebrow: (getString(row.eyebrow) || FRESH_DROPS_SETTINGS_DEFAULTS.eyebrow).slice(0, 40),
+    title: (getString(row.title) || FRESH_DROPS_SETTINGS_DEFAULTS.title).slice(0, 180),
+    subtitle: (getString(row.subtitle) || FRESH_DROPS_SETTINGS_DEFAULTS.subtitle).slice(0, 260),
+    ctaText: (getString(row.ctaText) || FRESH_DROPS_SETTINGS_DEFAULTS.ctaText).slice(0, 60),
+    ctaLink: normalizeHref(row.ctaLink, FRESH_DROPS_SETTINGS_DEFAULTS.ctaLink),
+    badgeValueText: (getString(row.badgeValueText) || FRESH_DROPS_SETTINGS_DEFAULTS.badgeValueText).slice(0, 20),
+    badgeLabelText: (getString(row.badgeLabelText) || FRESH_DROPS_SETTINGS_DEFAULTS.badgeLabelText).slice(0, 80),
+    showBadge: getBoolean(row.showBadge) ?? FRESH_DROPS_SETTINGS_DEFAULTS.showBadge,
+  };
+};
+const normalizeNewsletterSettings = (raw: unknown): NewsletterSettings => {
+  if (!raw || typeof raw !== 'object') return { ...NEWSLETTER_SETTINGS_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  return {
+    enabled: getBoolean(row.enabled) ?? NEWSLETTER_SETTINGS_DEFAULTS.enabled,
+    title: (getString(row.title) || NEWSLETTER_SETTINGS_DEFAULTS.title).slice(0, 120),
+    subtitle: (getString(row.subtitle) || NEWSLETTER_SETTINGS_DEFAULTS.subtitle).slice(0, 260),
+    emailPlaceholder: (getString(row.emailPlaceholder) || NEWSLETTER_SETTINGS_DEFAULTS.emailPlaceholder).slice(0, 120),
+    submitLabel: (getString(row.submitLabel) || NEWSLETTER_SETTINGS_DEFAULTS.submitLabel).slice(0, 60),
+    successMessage: (getString(row.successMessage) || NEWSLETTER_SETTINGS_DEFAULTS.successMessage).slice(0, 200),
+    duplicateMessage: (getString(row.duplicateMessage) || NEWSLETTER_SETTINGS_DEFAULTS.duplicateMessage).slice(0, 200),
   };
 };
 const normalizeAuthPageSettings = (raw: unknown): AuthPageSettings => {
@@ -1932,6 +2165,186 @@ const saveHomepageExperienceSettings = async (next: HomepageExperienceSettingsPa
      VALUES ($1, $2, $3, NOW(), NOW())`,
     randomUUID(),
     HOMEPAGE_EXPERIENCE_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+
+const readShopByBlocksSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_SHOP_BY_BLOCKS_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: normalizeShopByBlocksSettings({}),
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizeShopByBlocksSettings(JSON.parse(String(row.value || '{}'))),
+      source: 'DATABASE' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  } catch {
+    return {
+      rowId: String(row.id),
+      settings: normalizeShopByBlocksSettings({}),
+      source: 'DEFAULT' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  }
+};
+const saveShopByBlocksSettings = async (next: Partial<ShopByBlocksSettings>) => {
+  const existing = await readShopByBlocksSettings();
+  const merged = normalizeShopByBlocksSettings({
+    ...existing.settings,
+    ...next,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_SHOP_BY_BLOCKS_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+
+const readFreshDropsSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_FRESH_DROPS_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: { ...FRESH_DROPS_SETTINGS_DEFAULTS },
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizeFreshDropsSettings(JSON.parse(String(row.value || '{}'))),
+      source: 'DATABASE' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  } catch {
+    return {
+      rowId: String(row.id),
+      settings: { ...FRESH_DROPS_SETTINGS_DEFAULTS },
+      source: 'DEFAULT' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  }
+};
+const saveFreshDropsSettings = async (next: Partial<FreshDropsSettings>) => {
+  const existing = await readFreshDropsSettings();
+  const merged = normalizeFreshDropsSettings({
+    ...existing.settings,
+    ...next,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_FRESH_DROPS_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+
+const readNewsletterSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_NEWSLETTER_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: { ...NEWSLETTER_SETTINGS_DEFAULTS },
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizeNewsletterSettings(JSON.parse(String(row.value || '{}'))),
+      source: 'DATABASE' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  } catch {
+    return {
+      rowId: String(row.id),
+      settings: { ...NEWSLETTER_SETTINGS_DEFAULTS },
+      source: 'DEFAULT' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  }
+};
+const saveNewsletterSettings = async (next: Partial<NewsletterSettings>) => {
+  const existing = await readNewsletterSettings();
+  const merged = normalizeNewsletterSettings({
+    ...existing.settings,
+    ...next,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_NEWSLETTER_SETTINGS_KEY,
     payload
   );
   return merged;
@@ -2635,6 +3048,83 @@ router.get('/experience-settings', async (_req, res) => {
     res.json({ success: true, data: { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS } });
   }
 });
+router.get('/shop-by-blocks-settings', async (_req, res) => {
+  try {
+    const { settings } = await readShopByBlocksSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching shop-by blocks settings:', error);
+    res.json({ success: true, data: normalizeShopByBlocksSettings({}) });
+  }
+});
+router.get('/fresh-drops-settings', async (_req, res) => {
+  try {
+    const { settings } = await readFreshDropsSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching fresh drops settings:', error);
+    res.json({ success: true, data: { ...FRESH_DROPS_SETTINGS_DEFAULTS } });
+  }
+});
+router.get('/newsletter-settings', async (_req, res) => {
+  try {
+    const { settings } = await readNewsletterSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching newsletter settings:', error);
+    res.json({ success: true, data: { ...NEWSLETTER_SETTINGS_DEFAULTS } });
+  }
+});
+router.post('/newsletter-subscribe', async (req, res) => {
+  try {
+    const payload = newsletterSubscribeSchema.parse(req.body || {});
+    const normalizedEmail = String(payload.email || '').trim().toLowerCase();
+    const source = String(payload.source || 'HOMEPAGE').trim().toUpperCase().slice(0, 80) || 'HOMEPAGE';
+    const metadata = payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {};
+    await ensureNewsletterSubscriptionSchema();
+    const existingRows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT "id"
+       FROM "NewsletterSubscription"
+       WHERE LOWER("email") = LOWER($1)
+       LIMIT 1`,
+      normalizedEmail
+    );
+    const existing = Array.isArray(existingRows) && existingRows.length > 0 ? existingRows[0] : null;
+    if (existing?.id) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "NewsletterSubscription"
+         SET "source" = $1, "metadata" = $2, "updatedAt" = NOW()
+         WHERE "id" = $3`,
+        source,
+        JSON.stringify(metadata),
+        String(existing.id)
+      );
+      return res.json({
+        success: true,
+        data: { status: 'ALREADY_SUBSCRIBED', email: normalizedEmail },
+      });
+    }
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "NewsletterSubscription"
+       ("id", "email", "source", "metadata", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, NOW(), NOW())`,
+      randomUUID(),
+      normalizedEmail,
+      source,
+      JSON.stringify(metadata)
+    );
+    return res.status(201).json({
+      success: true,
+      data: { status: 'SUBSCRIBED', email: normalizedEmail },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error subscribing newsletter:', error);
+    return res.status(500).json({ success: false, message: 'Failed to subscribe newsletter.' });
+  }
+});
 
 router.get('/kimi-homepage-payload', async (_req, res) => {
   const safeResult = <T,>(result: PromiseSettledResult<T>, fallback: T): T =>
@@ -2888,6 +3378,9 @@ router.get('/kimi-homepage-payload', async (_req, res) => {
       heritageResult,
       testimonialsResult,
       footerResult,
+      shopByBlocksResult,
+      freshDropsResult,
+      newsletterResult,
     ] = await Promise.allSettled([
       readHomepageSectionVisibility().then((row) => row.visibility),
       readTopStripSettings().then((row) => row.settings),
@@ -2925,8 +3418,18 @@ router.get('/kimi-homepage-payload', async (_req, res) => {
         orderBy: { displayOrder: 'asc' },
       }),
       prisma.footerContent.findFirst(),
+      readShopByBlocksSettings().then((row) => row.settings),
+      readFreshDropsSettings().then((row) => row.settings),
+      readNewsletterSettings().then((row) => row.settings),
     ]);
 
+    const managedBanners = safeResult(managedBannersResult, []);
+    const promoBadge = safeResult(promoBadgeResult, { ...PROMO_BADGE_DEFAULTS });
+    const freshDropsSettings = safeResult(freshDropsResult, { ...FRESH_DROPS_SETTINGS_DEFAULTS });
+    const promoBanner =
+      (Array.isArray(managedBanners)
+        ? managedBanners.find((row: any) => String(row?.section || '').toUpperCase() === 'PROMO')
+        : null) || null;
     const payloadBody = {
       visibility: safeResult(visibilityResult, { ...HOMEPAGE_SECTION_VISIBILITY_DEFAULTS }),
       topStrip: safeResult(topStripResult, { ...TOP_STRIP_DEFAULTS }),
@@ -2938,8 +3441,8 @@ router.get('/kimi-homepage-payload', async (_req, res) => {
       authPageSettings: safeResult(authPageSettingsResult, { ...AUTH_PAGE_SETTINGS_DEFAULTS }),
       experienceSettings: safeResult(experienceSettingsResult, { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS }),
       heroSlides: safeResult(heroSlidesResult, []),
-      managedBanners: safeResult(managedBannersResult, []),
-      promoBadge: safeResult(promoBadgeResult, { ...PROMO_BADGE_DEFAULTS }),
+      managedBanners,
+      promoBadge,
       countries: safeResult(countriesResult, []),
       categories: safeResult(categoriesResult, []),
       howItWorks: safeResult(howItWorksResult, []),
@@ -2953,6 +3456,29 @@ router.get('/kimi-homepage-payload', async (_req, res) => {
       heritage: safeResult(heritageResult, null),
       testimonials: safeResult(testimonialsResult, []),
       footer: safeResult(footerResult, null),
+      shopByBlocks: safeResult(shopByBlocksResult, normalizeShopByBlocksSettings({})),
+      freshDrops: {
+        ...freshDropsSettings,
+        title: getString(freshDropsSettings?.title) || getString(promoBanner?.title) || FRESH_DROPS_SETTINGS_DEFAULTS.title,
+        subtitle:
+          getString(freshDropsSettings?.subtitle) ||
+          getString(promoBanner?.subtitle) ||
+          FRESH_DROPS_SETTINGS_DEFAULTS.subtitle,
+        ctaText:
+          getString(freshDropsSettings?.ctaText) ||
+          getString(promoBanner?.ctaText) ||
+          FRESH_DROPS_SETTINGS_DEFAULTS.ctaText,
+        ctaLink:
+          getString(freshDropsSettings?.ctaLink) ||
+          getString(promoBanner?.ctaLink) ||
+          FRESH_DROPS_SETTINGS_DEFAULTS.ctaLink,
+        badgeValueText: getString(freshDropsSettings?.badgeValueText) || getString(promoBadge?.valueText) || PROMO_BADGE_DEFAULTS.valueText,
+        badgeLabelText: getString(freshDropsSettings?.badgeLabelText) || getString(promoBadge?.labelText) || PROMO_BADGE_DEFAULTS.labelText,
+      },
+      newsletter: {
+        ...safeResult(newsletterResult, { ...NEWSLETTER_SETTINGS_DEFAULTS }),
+        subscribeEndpoint: '/api/homepage-sections/newsletter-subscribe',
+      },
     };
     const contractVersion = 'KIMI_HOMEPAGE_PAYLOAD_V1';
     const payloadChecksum = createHash('sha256')
@@ -3600,6 +4126,114 @@ router.patch(
   authorizePermissions(Permissions.HOMEPAGE_MANAGE),
   applyHomepageExperienceSettingsUpdate
 );
+
+router.get('/admin/shop-by-blocks-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings, source, updatedAt } = await readShopByBlocksSettings();
+    res.json({ success: true, data: { ...settings, source, updatedAt } });
+  } catch (error) {
+    console.error('Error fetching shop-by blocks settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch shop-by blocks settings.' });
+  }
+});
+router.put('/admin/shop-by-blocks-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = shopByBlocksUpdateSchema.parse(req.body || {});
+    const settings = await saveShopByBlocksSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating shop-by blocks settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update shop-by blocks settings.' });
+  }
+});
+router.patch('/admin/shop-by-blocks-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = shopByBlocksUpdateSchema.parse(req.body || {});
+    const settings = await saveShopByBlocksSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating shop-by blocks settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update shop-by blocks settings.' });
+  }
+});
+
+router.get('/admin/fresh-drops-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings, source, updatedAt } = await readFreshDropsSettings();
+    res.json({ success: true, data: { ...settings, source, updatedAt } });
+  } catch (error) {
+    console.error('Error fetching fresh drops settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch fresh drops settings.' });
+  }
+});
+router.put('/admin/fresh-drops-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = freshDropsSettingsUpdateSchema.parse(req.body || {});
+    const settings = await saveFreshDropsSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating fresh drops settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update fresh drops settings.' });
+  }
+});
+router.patch('/admin/fresh-drops-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = freshDropsSettingsUpdateSchema.parse(req.body || {});
+    const settings = await saveFreshDropsSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating fresh drops settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update fresh drops settings.' });
+  }
+});
+
+router.get('/admin/newsletter-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings, source, updatedAt } = await readNewsletterSettings();
+    res.json({ success: true, data: { ...settings, source, updatedAt } });
+  } catch (error) {
+    console.error('Error fetching newsletter settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch newsletter settings.' });
+  }
+});
+router.put('/admin/newsletter-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = newsletterSettingsUpdateSchema.parse(req.body || {});
+    const settings = await saveNewsletterSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating newsletter settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update newsletter settings.' });
+  }
+});
+router.patch('/admin/newsletter-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = newsletterSettingsUpdateSchema.parse(req.body || {});
+    const settings = await saveNewsletterSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating newsletter settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update newsletter settings.' });
+  }
+});
 
 router.get(
   '/admin/runtime-health',

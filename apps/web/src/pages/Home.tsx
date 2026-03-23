@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -701,6 +701,11 @@ export default function Home() {
   const [activeCountryRegion, setActiveCountryRegion] = useState<'ALL' | AfricanRegion>('ALL');
   const [hoveredHowItWorksId, setHoveredHowItWorksId] = useState<number | null>(null);
   const [categoryImageById, setCategoryImageById] = useState<Record<string, string>>({});
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterStatus, setNewsletterStatus] = useState<{
+    kind: 'idle' | 'loading' | 'success' | 'error';
+    message: string;
+  }>({ kind: 'idle', message: '' });
   const customStripRef = useRef<HTMLDivElement>(null);
   const rtwStripRef = useRef<HTMLDivElement>(null);
   const fabricsStripRef = useRef<HTMLDivElement>(null);
@@ -760,6 +765,9 @@ export default function Home() {
   const statsStripDataResolved = (kimiHomepagePayloadData as any)?.statsStrip;
   const featuredDescriptionSettingsDataResolved = (kimiHomepagePayloadData as any)?.featuredProductDescription;
   const visibilityDataResolved = (kimiHomepagePayloadData as any)?.visibility;
+  const shopByBlocksDataResolved = (kimiHomepagePayloadData as any)?.shopByBlocks;
+  const freshDropsDataResolved = (kimiHomepagePayloadData as any)?.freshDrops;
+  const newsletterDataResolved = (kimiHomepagePayloadData as any)?.newsletter;
 
   const sectionVisibility = useMemo<HomepageVisibility>(() => {
     if (!visibilityDataResolved) {
@@ -1072,14 +1080,78 @@ export default function Home() {
     [heritageDataResolved],
   );
   const promoBadgeValue = asText(
+    freshDropsDataResolved?.badgeValueText,
     promoBadgeDataResolved?.valueText,
     managedBannersBySection.get('PROMO_BADGE')?.title,
     '50+'
   );
   const promoBadgeLabel = asText(
+    freshDropsDataResolved?.badgeLabelText,
     promoBadgeDataResolved?.labelText,
     managedBannersBySection.get('PROMO_BADGE')?.subtitle,
     'New Arrivals'
+  );
+  const shopByStyleOptions = useMemo(
+    () =>
+      (Array.isArray(shopByBlocksDataResolved?.styleOptions) ? shopByBlocksDataResolved.styleOptions : []).filter(
+        (item: any) => asText(item?.label) && asText(item?.href)
+      ),
+    [shopByBlocksDataResolved]
+  );
+  const shopByPriceOptions = useMemo(
+    () =>
+      (Array.isArray(shopByBlocksDataResolved?.priceOptions) ? shopByBlocksDataResolved.priceOptions : []).filter(
+        (item: any) => asText(item?.label) && asText(item?.href)
+      ),
+    [shopByBlocksDataResolved]
+  );
+  const freshDropsConfig = useMemo(
+    () => ({
+      eyebrow: asText(freshDropsDataResolved?.eyebrow, 'FRESH DROPS'),
+      title: asText(
+        freshDropsDataResolved?.title,
+        managedBannersBySection.get('PROMO')?.title,
+        managedBannersBySection.get('HERO')?.title,
+        'New arrivals from the most talented designers across the continent.'
+      ),
+      subtitle: asText(
+        freshDropsDataResolved?.subtitle,
+        managedBannersBySection.get('PROMO')?.subtitle,
+        'Curated highlights from ready-to-wear, custom, and fabrics.'
+      ),
+      ctaText: asText(
+        freshDropsDataResolved?.ctaText,
+        managedBannersBySection.get('PROMO')?.ctaText,
+        managedBannersBySection.get('HERO')?.ctaText,
+        'SHOP NEW ARRIVALS'
+      ),
+      ctaLink: safeHref(
+        freshDropsDataResolved?.ctaLink,
+        managedBannersBySection.get('PROMO')?.ctaLink,
+        managedBannersBySection.get('HERO')?.ctaLink,
+        '/ready-to-wear'
+      ),
+      showBadge: freshDropsDataResolved?.showBadge !== false,
+    }),
+    [freshDropsDataResolved, managedBannersBySection]
+  );
+  const newsletterConfig = useMemo(
+    () => ({
+      enabled: newsletterDataResolved?.enabled !== false,
+      title: asText(newsletterDataResolved?.title, 'Join the Movement'),
+      subtitle: asText(
+        newsletterDataResolved?.subtitle,
+        'Subscribe to our newsletter for exclusive offers, new arrivals, and stories from the continent.'
+      ),
+      emailPlaceholder: asText(newsletterDataResolved?.emailPlaceholder, 'Enter your email'),
+      submitLabel: asText(newsletterDataResolved?.submitLabel, 'SUBSCRIBE'),
+      successMessage: asText(newsletterDataResolved?.successMessage, 'You are subscribed. We will keep you updated.'),
+      duplicateMessage: asText(
+        newsletterDataResolved?.duplicateMessage,
+        'You are already subscribed to our newsletter.'
+      ),
+    }),
+    [newsletterDataResolved]
   );
 
   useEffect(() => {
@@ -1128,6 +1200,35 @@ export default function Home() {
       slideIndex: currentSlide,
       variant: heroVariant,
     });
+  };
+  const handleNewsletterSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedEmail = String(newsletterEmail || '').trim().toLowerCase();
+    if (!normalizedEmail) {
+      setNewsletterStatus({ kind: 'error', message: 'Please enter a valid email address.' });
+      return;
+    }
+    setNewsletterStatus({ kind: 'loading', message: '' });
+    try {
+      const response = await api.homepageSections.subscribeHomepageNewsletter({
+        email: normalizedEmail,
+        source: 'HOMEPAGE',
+        metadata: { path: window.location.pathname },
+      });
+      if (!response.success) {
+        throw new Error(response.message || 'Subscription failed');
+      }
+      const status = response.data?.status;
+      const successMessage =
+        status === 'ALREADY_SUBSCRIBED' ? newsletterConfig.duplicateMessage : newsletterConfig.successMessage;
+      setNewsletterStatus({ kind: 'success', message: successMessage });
+      setNewsletterEmail('');
+    } catch (error) {
+      setNewsletterStatus({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Unable to subscribe right now.',
+      });
+    }
   };
 
   const resolveSpotlightHref = (designer: any) => {
@@ -1436,6 +1537,32 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
+                {shopByStyleOptions.length > 0 ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {shopByStyleOptions.map((option: any, index: number) => (
+                      <Link
+                        key={`style-${index}-${asText(option?.label)}`}
+                        to={safeHref(option?.href, '/shop')}
+                        className="rounded border border-white/20 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.08em] text-white/80 hover:border-white/60 hover:text-white"
+                      >
+                        {clampText(option?.label, 40, 'Style')}
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+                {shopByPriceOptions.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {shopByPriceOptions.map((option: any, index: number) => (
+                      <Link
+                        key={`price-${index}-${asText(option?.label)}`}
+                        to={safeHref(option?.href, '/shop')}
+                        className="rounded border border-white/15 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.08em] text-white/70 hover:border-white/50 hover:text-white"
+                      >
+                        {clampText(option?.label, 40, 'Price')}
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
                 <Link to="/shop" className={`${CTA_BUTTON_OVERLAY_CLASS} mt-7`}>
                   Explore countries
                   <ArrowRight className="h-4 w-4" />
@@ -1557,9 +1684,14 @@ export default function Home() {
       <section id="shop" className="py-10 lg:py-16 bg-white">
         <div className="w-full px-2 sm:px-4 lg:px-8 xl:px-12">
           <div className="text-center mb-16">
-            <h2 className="font-['Oswald'] text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">Shop by Category</h2>
+            <h2 className="font-['Oswald'] text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
+              {asText(shopByBlocksDataResolved?.title, 'Shop by Category')}
+            </h2>
             <p className="text-gray-600 max-w-xl mx-auto">
-              Choose what fits your moment, ready pieces, custom fits, or raw fabrics.
+              {asText(
+                shopByBlocksDataResolved?.subtitle,
+                'Choose what fits your moment, ready pieces, custom fits, or raw fabrics.'
+              )}
             </p>
           </div>
           {categoryEntryVariant === 'MEGA_GRID' ? (
@@ -1792,28 +1924,17 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
               <span className="mb-4 rounded-none border-black text-xs tracking-wider inline-flex border px-2.5 py-0.5 font-medium">
-                FRESH DROPS
+                {freshDropsConfig.eyebrow}
               </span>
               <h2 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
-                {asText(
-                  managedBannersBySection.get('PROMO')?.title,
-                  managedBannersBySection.get('HERO')?.title,
-                  'New arrivals from the most talented designers across the continent.'
-                )}
+                {freshDropsConfig.title}
               </h2>
+              <p className="mb-6 text-gray-600 max-w-2xl">{freshDropsConfig.subtitle}</p>
               <Link
-                to={safeHref(
-                  managedBannersBySection.get('PROMO')?.ctaLink,
-                  managedBannersBySection.get('HERO')?.ctaLink,
-                  '/ready-to-wear'
-                )}
+                to={freshDropsConfig.ctaLink}
                 className={CTA_BUTTON_DARK_CLASS}
               >
-                {asText(
-                  managedBannersBySection.get('PROMO')?.ctaText,
-                  managedBannersBySection.get('HERO')?.ctaText,
-                  'SHOP NEW ARRIVALS'
-                )}
+                {freshDropsConfig.ctaText}
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
@@ -1830,10 +1951,12 @@ export default function Home() {
                   alt="Fresh Drops"
                   className="w-full aspect-[3/4] object-cover rounded-xl"
                 />
-                <div className="absolute -bottom-6 -left-6 bg-black text-white p-6 rounded-xl">
-                  <p className="font-['Oswald'] text-3xl font-bold">{promoBadgeValue}</p>
-                  <p className="text-sm text-white/70">{promoBadgeLabel}</p>
-                </div>
+                {freshDropsConfig.showBadge ? (
+                  <div className="absolute -bottom-6 -left-6 bg-black text-white p-6 rounded-xl">
+                    <p className="font-['Oswald'] text-3xl font-bold">{promoBadgeValue}</p>
+                    <p className="text-sm text-white/70">{promoBadgeLabel}</p>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -2010,24 +2133,35 @@ export default function Home() {
       </section>
       ) : null}
 
-      {sectionVisibility.cta ? (
+      {sectionVisibility.cta && newsletterConfig.enabled ? (
       <section id="contact" className="py-8 lg:py-12 bg-white border-t border-gray-100">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="max-w-xl mx-auto text-center">
-            <h2 className="font-['Oswald'] text-2xl sm:text-3xl font-bold mb-3">Join the Movement</h2>
-            <p className="text-gray-600 mb-6">
-              Subscribe to our newsletter for exclusive offers, new arrivals, and stories from the continent.
-            </p>
-            <form className="flex flex-col sm:flex-row gap-3" onSubmit={(event) => event.preventDefault()}>
+            <h2 className="font-['Oswald'] text-2xl sm:text-3xl font-bold mb-3">{newsletterConfig.title}</h2>
+            <p className="text-gray-600 mb-6">{newsletterConfig.subtitle}</p>
+            <form className="flex flex-col sm:flex-row gap-3" onSubmit={handleNewsletterSubmit}>
               <input
                 type="email"
-                placeholder="Enter your email"
+                value={newsletterEmail}
+                onChange={(event) => setNewsletterEmail(event.target.value)}
+                placeholder={newsletterConfig.emailPlaceholder}
                 className="flex-1 rounded-none border-black/20 focus:border-black h-12"
+                required
               />
-              <button type="submit" className={`${CTA_BUTTON_DARK_CLASS} whitespace-nowrap`}>
-                SUBSCRIBE
+              <button
+                type="submit"
+                className={`${CTA_BUTTON_DARK_CLASS} whitespace-nowrap ${newsletterStatus.kind === 'loading' ? 'opacity-70' : ''}`}
+                disabled={newsletterStatus.kind === 'loading'}
+              >
+                {newsletterStatus.kind === 'loading' ? 'SUBSCRIBING…' : newsletterConfig.submitLabel}
               </button>
             </form>
+            {newsletterStatus.kind === 'success' ? (
+              <p className="mt-3 text-sm text-green-700">{newsletterStatus.message}</p>
+            ) : null}
+            {newsletterStatus.kind === 'error' ? (
+              <p className="mt-3 text-sm text-red-600">{newsletterStatus.message}</p>
+            ) : null}
           </div>
         </div>
       </section>
