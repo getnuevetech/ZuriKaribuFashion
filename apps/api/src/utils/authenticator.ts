@@ -78,6 +78,7 @@ const toMethod = (value: unknown): AuthenticatorMethod | null => {
 
 const normalizeSettings = (input: unknown): AuthenticatorSettings => {
   const row = (input && typeof input === 'object' ? input : {}) as RawSettings;
+  const hasRequiredUserRoles = Object.prototype.hasOwnProperty.call(row, 'requiredUserRoles');
   const requiredUserRoles = Array.from(
     new Set(
       parseArray(row.requiredUserRoles)
@@ -112,7 +113,7 @@ const normalizeSettings = (input: unknown): AuthenticatorSettings => {
     totpDigits: Number.isFinite(Number(row.totpDigits))
       ? Math.max(6, Math.min(8, Math.round(Number(row.totpDigits))))
       : DEFAULT_AUTHENTICATOR_SETTINGS.totpDigits,
-    requiredUserRoles: requiredUserRoles.length > 0 ? requiredUserRoles : [...DEFAULT_AUTHENTICATOR_SETTINGS.requiredUserRoles],
+    requiredUserRoles: hasRequiredUserRoles ? requiredUserRoles : [...DEFAULT_AUTHENTICATOR_SETTINGS.requiredUserRoles],
     requiredAdminRoleIds,
   };
 };

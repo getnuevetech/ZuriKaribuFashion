@@ -177,6 +177,49 @@ const roleLabels: Record<DashboardType, string> = {
   customer: 'Customer',
 };
 
+const COUNTRY_TIMEZONE_MAP: Record<string, string> = {
+  NG: 'Africa/Lagos',
+  GH: 'Africa/Accra',
+  KE: 'Africa/Nairobi',
+  ZA: 'Africa/Johannesburg',
+  EG: 'Africa/Cairo',
+  SN: 'Africa/Dakar',
+  RW: 'Africa/Kigali',
+  TZ: 'Africa/Dar_es_Salaam',
+  UG: 'Africa/Kampala',
+  ET: 'Africa/Addis_Ababa',
+  CM: 'Africa/Douala',
+  DZ: 'Africa/Algiers',
+  MA: 'Africa/Casablanca',
+  US: 'America/New_York',
+  CA: 'America/Toronto',
+  GB: 'Europe/London',
+  FR: 'Europe/Paris',
+};
+const resolveTimezoneFromCountry = (countryRaw: string) => {
+  const value = String(countryRaw || '').trim().toUpperCase();
+  if (!value) return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  if (COUNTRY_TIMEZONE_MAP[value]) return COUNTRY_TIMEZONE_MAP[value];
+  const compact = value.replace(/[^A-Z]/g, '');
+  if (COUNTRY_TIMEZONE_MAP[compact]) return COUNTRY_TIMEZONE_MAP[compact];
+  const keywordMap: Array<[string, string]> = [
+    ['NIGERIA', 'Africa/Lagos'],
+    ['GHANA', 'Africa/Accra'],
+    ['KENYA', 'Africa/Nairobi'],
+    ['SOUTH AFRICA', 'Africa/Johannesburg'],
+    ['EGYPT', 'Africa/Cairo'],
+    ['SENEGAL', 'Africa/Dakar'],
+    ['TANZANIA', 'Africa/Dar_es_Salaam'],
+    ['UGANDA', 'Africa/Kampala'],
+    ['ETHIOPIA', 'Africa/Addis_Ababa'],
+    ['UNITED STATES', 'America/New_York'],
+    ['CANADA', 'America/Toronto'],
+    ['UNITED KINGDOM', 'Europe/London'],
+  ];
+  const match = keywordMap.find(([key]) => value.includes(key));
+  return match?.[1] || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+};
+
 interface DashboardLayoutProps {
   userType: DashboardType;
 }
@@ -196,6 +239,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [enterpriseRoleManagementAllowed, setEnterpriseRoleManagementAllowed] = useState(false);
   const [supportCalling, setSupportCalling] = useState(false);
   const [moduleAccessMap, setModuleAccessMap] = useState<Record<string, { allowed: boolean }> | null>(null);
+  const [clockNow, setClockNow] = useState<Date>(() => new Date());
   const { user, token, logout } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -296,6 +340,32 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     });
   const roleLabel = userType === 'admin' && isSuperAdmin ? 'Super Admin' : roleLabels[userType] || 'User';
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
+  const userTimeZone = useMemo(
+    () => resolveTimezoneFromCountry(String((user as any)?.country || (user as any)?.location || '')),
+    [user]
+  );
+  const dashboardTimeLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        timeZone: userTimeZone,
+      }).format(clockNow),
+    [clockNow, userTimeZone]
+  );
+  const dashboardDateLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-GB', {
+        weekday: 'short',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        timeZone: userTimeZone,
+      }).format(clockNow),
+    [clockNow, userTimeZone]
+  );
   const legacySubmenu = [
     { label: 'Legacy Homepage Manager', href: '/admin/homepage', icon: ChevronRight },
     { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: ChevronRight },
@@ -408,6 +478,11 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       cancelled = true;
     };
   }, [userType, user?.id, token]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setClockNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!token) {
@@ -1406,6 +1481,12 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
           </div>
 
           <div className="flex items-center gap-4">
+            <div className="hidden md:flex flex-col items-end leading-tight">
+              <span className="text-base font-bold text-gray-900">{dashboardTimeLabel}</span>
+              <span className="text-xs font-semibold text-gray-500">
+                {dashboardDateLabel} ({userTimeZone})
+              </span>
+            </div>
             <Link
               to="/"
               className="text-sm text-gray-600 hover:text-coral-500 transition-colors whitespace-nowrap"
