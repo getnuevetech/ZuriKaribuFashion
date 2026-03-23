@@ -163,6 +163,11 @@ function App() {
               <Route path="/home-legacy" element={<Home />} />
               <Route path="/home-jenks" element={<Home />} />
               <Route path="/home-kimi" element={<Navigate to="/home-jenks" replace />} />
+              <Route path="/rtw" element={<Navigate to="/ready-to-wear" replace />} />
+              <Route path="/ftb" element={<Navigate to="/fabrics" replace />} />
+              <Route path="/fabrics-to-buy" element={<Navigate to="/fabrics" replace />} />
+              <Route path="/ctw" element={<Navigate to="/custom" replace />} />
+              <Route path="/contact-us" element={<Navigate to="/contact" replace />} />
               <Route path="/shop" element={<ShopPage />} />
               <Route path="/country-products" element={<CountryProducts />} />
               <Route path="/ready-to-wear" element={<ReadyToWear />} />
@@ -188,11 +193,21 @@ function App() {
 
             {/* Auth Routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/signin" element={<Navigate to="/login" replace />} />
+            <Route path="/sign-in" element={<Navigate to="/login" replace />} />
+            <Route path="/auth/login" element={<Navigate to="/login" replace />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/forgot" element={<Navigate to="/forgot-password" replace />} />
+            <Route path="/forgotpassword" element={<Navigate to="/forgot-password" replace />} />
+            <Route path="/auth/forgot-password" element={<Navigate to="/forgot-password" replace />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/auth/reset-password" element={<Navigate to="/reset-password" replace />} />
             <Route path="/register" element={
               isAuthenticated ? <Navigate to={authenticatedHomeRoute} replace /> : <Register />
             } />
+            <Route path="/signup" element={<Navigate to="/register" replace />} />
+            <Route path="/sign-up" element={<Navigate to="/register" replace />} />
+            <Route path="/auth/register" element={<Navigate to="/register" replace />} />
             <Route path="/:referralCode" element={<ReferralCodeRedirect />} />
 
             <Route element={<ProtectedRoute />}>
