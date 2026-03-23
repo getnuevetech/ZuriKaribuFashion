@@ -9,6 +9,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 
 // Public Pages
 import Home from './pages/Home';
+import HomeEntry from './pages/HomeEntry';
 import ShopPage from './pages/Shop';
 import CountryProducts from './pages/CountryProducts';
 import ReadyToWear from './pages/ReadyToWear';
@@ -153,7 +154,7 @@ function App() {
       <Elements stripe={stripePromise}>
         <Router>
           <Routes>
-            <Route path="/" element={<KimiV14Redirect />} />
+            <Route path="/" element={<HomeEntry />} />
             <Route path="/home-kimi" element={<KimiV14Redirect />} />
 
             {/* Public Routes */}
