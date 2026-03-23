@@ -7,7 +7,7 @@ import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import Button from '../components/ui/Button';
 import { getHomeRouteForUser } from '../auth/rbac';
-import { useAuthPageSettings } from '../hooks/useAuthPageSettings';
+import { AUTH_PAGE_SETTINGS_DEFAULTS, useAuthPageSettings } from '../hooks/useAuthPageSettings';
 
 type LoginMfaMethod = 'EMAIL_OTP' | 'TOTP_AUTHENTICATOR';
 
@@ -218,6 +218,12 @@ export default function Login() {
             src={authPageSettings.loginHeroImage}
             alt={`${authPageSettings.brandName} login`}
             className="h-full w-full object-cover"
+            onError={(event) => {
+              const fallback = AUTH_PAGE_SETTINGS_DEFAULTS.loginHeroImage;
+              if (event.currentTarget.src !== fallback) {
+                event.currentTarget.src = fallback;
+              }
+            }}
           />
           <div className="absolute inset-0 bg-black/20" />
           <p className="absolute left-6 top-5 font-['Oswald'] text-3xl font-bold text-white md:text-4xl">

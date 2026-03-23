@@ -9,6 +9,14 @@ const API_URL = import.meta.env.VITE_API_URL || defaultApiUrl;
 const resolveApiAssetUrl = (value: unknown): string => {
   const raw = String(value || '').trim();
   if (!raw) return '';
+  const resolveApiOrigin = () => {
+    try {
+      const fallbackBase = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
+      return new URL(API_URL, fallbackBase).origin;
+    } catch {
+      return '';
+    }
+  };
   const normalizeUploadPath = (pathValue: string) => {
     if (pathValue.startsWith('/api/uploads/')) {
       return `/uploads/${pathValue.slice('/api/uploads/'.length)}`;
@@ -23,7 +31,8 @@ const resolveApiAssetUrl = (value: unknown): string => {
       const parsed = new URL(raw);
       const uploadPath = normalizeUploadPath(parsed.pathname);
       if (!uploadPath) return raw;
-      const normalized = new URL(uploadPath, parsed.origin);
+      const preferredOrigin = resolveApiOrigin() || parsed.origin;
+      const normalized = new URL(uploadPath, preferredOrigin);
       return normalized.toString();
     } catch {
       return raw;
@@ -34,9 +43,8 @@ const resolveApiAssetUrl = (value: unknown): string => {
   const uploadPath = normalizeUploadPath(normalizedPath);
   if (!uploadPath) return raw;
   try {
-    const fallbackBase = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
-    const apiBase = new URL(API_URL, fallbackBase);
-    return `${apiBase.origin}${uploadPath}`;
+    const apiOrigin = resolveApiOrigin();
+    return apiOrigin ? `${apiOrigin}${uploadPath}` : uploadPath;
   } catch {
     return uploadPath;
   }
@@ -7036,6 +7044,15 @@ const adminApi = {
           requiredUserRoles: string[];
           requiredAdminRoleIds: string[];
         };
+        smtpSettings?: {
+          enabled: boolean;
+          host: string;
+          port: number;
+          secure: boolean;
+          user: string;
+          from: string;
+          hasPassword: boolean;
+        };
         userRoles: string[];
         adminRoles: Array<{ id: string; name: string; isActive: boolean }>;
       };
@@ -7053,16 +7070,71 @@ const adminApi = {
     totpDigits: number;
     requiredUserRoles: string[];
     requiredAdminRoleIds: string[];
+    smtpSettings: Partial<{
+      enabled: boolean;
+      host: string;
+      port: number;
+      secure: boolean;
+      user: string;
+      from: string;
+      password: string;
+    }>;
   }>) =>
     apiService.patch<{
       success: boolean;
       message?: string;
       data: {
         settings: any;
+        smtpSettings?: {
+          enabled: boolean;
+          host: string;
+          port: number;
+          secure: boolean;
+          user: string;
+          from: string;
+          hasPassword: boolean;
+        };
         userRoles: string[];
         adminRoles: Array<{ id: string; name: string; isActive: boolean }>;
       };
     }>('/admin/authenticator/settings', payload),
+
+  getSmtpSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        enabled: boolean;
+        host: string;
+        port: number;
+        secure: boolean;
+        user: string;
+        from: string;
+        hasPassword: boolean;
+      };
+    }>('/admin/authenticator/smtp-settings'),
+
+  updateSmtpSettings: (payload: Partial<{
+    enabled: boolean;
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    from: string;
+    password: string;
+  }>) =>
+    apiService.patch<{
+      success: boolean;
+      message?: string;
+      data: {
+        enabled: boolean;
+        host: string;
+        port: number;
+        secure: boolean;
+        user: string;
+        from: string;
+        hasPassword: boolean;
+      };
+    }>('/admin/authenticator/smtp-settings', payload),
 
   createAdminRole: (data: {
     name: string;

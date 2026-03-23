@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
-import nodemailer from 'nodemailer';
 import PDFDocument from 'pdfkit';
 import * as XLSX from 'xlsx';
 import { Prisma } from '@prisma/client';
@@ -39,6 +38,7 @@ import { markTemporaryPasswordRequired } from '../utils/password-policy';
 import { buildPasswordPolicyErrorMessage, evaluatePasswordSecurity } from '../utils/password-security';
 import { readProductAutomationOutcomesForProducts } from '../utils/automation-approval';
 import { ensureProductTaxonomySchema } from '../utils/product-taxonomy-schema';
+import { isSmtpConfigured, readSmtpSettings, sendEmailWithRuntimeSmtp } from '../utils/smtp-settings';
 
 const router = Router();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
@@ -99,6 +99,43 @@ const isSuperAdminRequest = (req: any) => {
   if (isSuperAdminPermissions(grants)) return true;
   const exact = new Set(grants.map((entry) => String(entry || '').trim()));
   return exact.has(Permissions.ADMIN_ROLE_MANAGE) && exact.has(Permissions.USERS_MANAGE);
+};
+
+const parsePermissionGrantsFromJson = (input: unknown): string[] => {
+  if (Array.isArray(input)) {
+    return sanitizePermissionGrants(input.map((entry) => String(entry || '').trim()));
+  }
+  if (typeof input === 'string') {
+    try {
+      const parsed = JSON.parse(input);
+      if (Array.isArray(parsed)) {
+        return sanitizePermissionGrants(parsed.map((entry) => String(entry || '').trim()));
+      }
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const formatAuditRoleDesignation = (role: unknown, isSuperAdmin = false) => {
+  const token = String(role || '').trim().toUpperCase();
+  if (token === 'ADMINISTRATOR') return isSuperAdmin ? 'Super Admin' : 'Administrator';
+  if (token === 'FABRIC_SELLER') return 'Fabric Seller';
+  if (token === 'FASHION_DESIGNER') return 'Fashion Designer';
+  if (token === 'RESELLER_INFLUENCER') return 'Reseller / Influencer';
+  if (token === 'QA_TEAM') return 'QA Team';
+  if (token === 'CUSTOMER') return 'Customer';
+  return token ? token.replace(/_/g, ' ') : 'User';
+};
+
+const resolveAdminAuditDesignation = (role: unknown, adminPermissions: unknown) => {
+  const grants = parsePermissionGrantsFromJson(adminPermissions);
+  const isSuperAdmin = String(role || '').trim().toUpperCase() === 'ADMINISTRATOR' && isSuperAdminPermissions(grants);
+  return {
+    isSuperAdmin,
+    designation: formatAuditRoleDesignation(role, isSuperAdmin),
+  };
 };
 const LOGIN_ACTIVITY_ACTIONS = ['USER_LOGIN_SUCCESS', 'VENDOR_SESSION_STARTED', 'VENDOR_SESSION_REPLACED'] as const;
 
@@ -1540,35 +1577,9 @@ const vendorProfileFieldSchema = z.object({
   isActive: z.boolean().optional().default(true),
 });
 
-let cachedTransporter: nodemailer.Transporter | null | undefined;
-function getMailer(): nodemailer.Transporter | null {
-  if (cachedTransporter !== undefined) return cachedTransporter;
-  const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT || 587);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!host || !user || !pass) {
-    cachedTransporter = null;
-    return null;
-  }
-  cachedTransporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
-    auth: { user, pass },
-  });
-  return cachedTransporter;
-}
 async function sendEmail(input: { to: string; subject: string; text: string; html: string }) {
-  const transporter = getMailer();
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-  if (!transporter || !from || !input.to) return;
-  await transporter.sendMail({
-    from,
-    to: input.to,
-    subject: input.subject,
-    text: input.text,
-    html: input.html,
+  await sendEmailWithRuntimeSmtp(input, {
+    requireConfigured: false,
   });
 }
 const stripHtmlForText = (value: string) =>
@@ -2790,9 +2801,8 @@ router.post('/users/:id/send-password-reset-link', async (req, res, next) => {
     }
 
     await ensurePasswordResetSchemaForAdmin();
-    const transporter = getMailer();
-    const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-    if (!transporter || !from) {
+    const smtpSettings = await readSmtpSettings();
+    if (!isSmtpConfigured(smtpSettings)) {
       return res.status(503).json({
         success: false,
         message: 'SMTP is not configured. Unable to send password reset email.',
@@ -3415,6 +3425,11 @@ router.get('/security/session-audit', authorizePermissions(Permissions.SESSION_A
               firstName: true,
               lastName: true,
               role: true,
+              adminProfile: {
+                select: {
+                  permissions: true,
+                },
+              },
             },
           },
         },
@@ -3427,15 +3442,29 @@ router.get('/security/session-audit', authorizePermissions(Permissions.SESSION_A
       data: {
         events: events.map((event) => {
           const details = (event.details as any) || {};
+          const designationMeta = resolveAdminAuditDesignation(
+            event.user?.role,
+            event.user?.adminProfile?.permissions
+          );
           return {
             id: event.id,
             action: event.action,
             createdAt: event.createdAt,
             ipAddress: event.ipAddress,
             userAgent: event.userAgent,
-            user: event.user,
+            user: event.user
+              ? {
+                  id: event.user.id,
+                  email: event.user.email,
+                  firstName: event.user.firstName,
+                  lastName: event.user.lastName,
+                  role: event.user.role,
+                  isSuperAdmin: designationMeta.isSuperAdmin,
+                  designation: designationMeta.designation,
+                }
+              : null,
             details: {
-              role: details.role || event.user?.role || null,
+              role: details.role || designationMeta.designation || event.user?.role || null,
               deviceType: details.deviceType || 'unknown',
               sessionIssuedAt: details.sessionIssuedAt || null,
               previousSessionAt: details.previousSessionAt || null,
@@ -3514,6 +3543,11 @@ router.get('/activity-logs', authorizePermissions(Permissions.SESSION_AUDIT_READ
               firstName: true,
               lastName: true,
               role: true,
+              adminProfile: {
+                select: {
+                  permissions: true,
+                },
+              },
             },
           },
         },
@@ -3524,10 +3558,27 @@ router.get('/activity-logs', authorizePermissions(Permissions.SESSION_AUDIT_READ
     res.json({
       success: true,
       data: {
-        logs: rows.map((row) => ({
-          ...row,
-          details: row.details && typeof row.details === 'object' ? row.details : null,
-        })),
+        logs: rows.map((row) => {
+          const designationMeta = resolveAdminAuditDesignation(
+            row.user?.role,
+            row.user?.adminProfile?.permissions
+          );
+          return {
+            ...row,
+            user: row.user
+              ? {
+                  id: row.user.id,
+                  email: row.user.email,
+                  firstName: row.user.firstName,
+                  lastName: row.user.lastName,
+                  role: row.user.role,
+                  isSuperAdmin: designationMeta.isSuperAdmin,
+                  designation: designationMeta.designation,
+                }
+              : null,
+            details: row.details && typeof row.details === 'object' ? row.details : null,
+          };
+        }),
         pagination: {
           page: pagination.page,
           limit: pagination.limit,
@@ -3593,6 +3644,11 @@ router.get('/activity-logs/export', authorizePermissions(Permissions.SESSION_AUD
             firstName: true,
             lastName: true,
             role: true,
+            adminProfile: {
+              select: {
+                permissions: true,
+              },
+            },
           },
         },
       },
@@ -3603,11 +3659,15 @@ router.get('/activity-logs/export', authorizePermissions(Permissions.SESSION_AUD
       const endpoint = details?.path
         ? `${String(details?.method || 'GET').toUpperCase()} ${String(details.path || '')}`
         : '';
+      const designationMeta = resolveAdminAuditDesignation(
+        row.user?.role,
+        row.user?.adminProfile?.permissions
+      );
       return {
         Time: new Date(row.createdAt).toISOString(),
         User: userName || String(row.user?.email || 'Unknown user'),
         Email: String(row.user?.email || ''),
-        Role: String(row.user?.role || ''),
+        Role: designationMeta.designation || String(row.user?.role || ''),
         Action: String(row.action || ''),
         Endpoint: endpoint,
         StatusCode: details?.statusCode ?? '',

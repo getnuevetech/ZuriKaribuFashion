@@ -14,7 +14,7 @@ import {
   resolveCountryName,
 } from '../data/locationOptions';
 import { normalizePhoneWithCountryPrefix } from '../utils/phone';
-import { useAuthPageSettings } from '../hooks/useAuthPageSettings';
+import { AUTH_PAGE_SETTINGS_DEFAULTS, useAuthPageSettings } from '../hooks/useAuthPageSettings';
 import PasswordStrengthMeter from '../components/auth/PasswordStrengthMeter';
 import { evaluatePasswordSecurity } from '../utils/passwordSecurity';
 
@@ -225,6 +225,12 @@ export default function Register() {
             src={authPageSettings.registerHeroImage}
             alt={`${authPageSettings.brandName} register`}
             className="h-full w-full object-cover"
+            onError={(event) => {
+              const fallback = AUTH_PAGE_SETTINGS_DEFAULTS.registerHeroImage;
+              if (event.currentTarget.src !== fallback) {
+                event.currentTarget.src = fallback;
+              }
+            }}
           />
           <div className="absolute inset-0 bg-black/20" />
           <p className="absolute left-6 top-5 text-3xl font-bold text-white md:text-4xl">

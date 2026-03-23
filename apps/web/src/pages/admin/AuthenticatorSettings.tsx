@@ -16,6 +16,17 @@ type AuthenticatorSettingsState = {
   requiredAdminRoleIds: string[];
 };
 
+type SmtpSettingsState = {
+  enabled: boolean;
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  from: string;
+  password: string;
+  hasPassword: boolean;
+};
+
 const DEFAULT_SETTINGS: AuthenticatorSettingsState = {
   enabled: false,
   allowEmailOtp: true,
@@ -30,12 +41,24 @@ const DEFAULT_SETTINGS: AuthenticatorSettingsState = {
   requiredAdminRoleIds: [],
 };
 
+const DEFAULT_SMTP_SETTINGS: SmtpSettingsState = {
+  enabled: false,
+  host: '',
+  port: 587,
+  secure: false,
+  user: '',
+  from: '',
+  password: '',
+  hasPassword: false,
+};
+
 export default function AuthenticatorSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [settings, setSettings] = useState<AuthenticatorSettingsState>(DEFAULT_SETTINGS);
+  const [smtpSettings, setSmtpSettings] = useState<SmtpSettingsState>(DEFAULT_SMTP_SETTINGS);
   const [userRoles, setUserRoles] = useState<string[]>([]);
   const [adminRoles, setAdminRoles] = useState<Array<{ id: string; name: string; isActive: boolean }>>([]);
 
@@ -62,6 +85,12 @@ export default function AuthenticatorSettings() {
       });
       setUserRoles(Array.isArray(response.data?.userRoles) ? response.data.userRoles : []);
       setAdminRoles(Array.isArray(response.data?.adminRoles) ? response.data.adminRoles : []);
+      setSmtpSettings({
+        ...DEFAULT_SMTP_SETTINGS,
+        ...(response.data?.smtpSettings || {}),
+        password: '',
+        hasPassword: Boolean(response.data?.smtpSettings?.hasPassword),
+      });
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to load authenticator settings.');
     } finally {
@@ -96,7 +125,19 @@ export default function AuthenticatorSettings() {
     setError('');
     setMessage('');
     try {
-      const response = await api.admin.updateAuthenticatorSettings(settings);
+      const smtpPayload = {
+        enabled: smtpSettings.enabled,
+        host: smtpSettings.host.trim(),
+        port: Math.max(1, Math.min(65535, Number(smtpSettings.port || 587))),
+        secure: smtpSettings.secure,
+        user: smtpSettings.user.trim(),
+        from: smtpSettings.from.trim(),
+        ...(smtpSettings.password.trim() ? { password: smtpSettings.password.trim() } : {}),
+      };
+      const response = await api.admin.updateAuthenticatorSettings({
+        ...settings,
+        smtpSettings: smtpPayload,
+      });
       if (!response.success) {
         setError('Failed to save authenticator settings.');
         return;
@@ -113,7 +154,13 @@ export default function AuthenticatorSettings() {
       });
       setUserRoles(Array.isArray(response.data?.userRoles) ? response.data.userRoles : []);
       setAdminRoles(Array.isArray(response.data?.adminRoles) ? response.data.adminRoles : []);
-      setMessage(response.message || 'Authenticator settings saved.');
+      setSmtpSettings((prev) => ({
+        ...prev,
+        ...(response.data?.smtpSettings || {}),
+        password: '',
+        hasPassword: Boolean(response.data?.smtpSettings?.hasPassword),
+      }));
+      setMessage(response.message || 'Authenticator and SMTP settings saved.');
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to save authenticator settings.');
     } finally {
@@ -274,11 +321,93 @@ export default function AuthenticatorSettings() {
             {adminRoles.length === 0 ? <p className="text-sm text-gray-500">No admin roles available.</p> : null}
           </div>
         </section>
+
+        <section className="space-y-4 rounded-xl border border-gray-200 bg-white p-5 xl:col-span-2">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">SMTP / Outbound Email Configuration</h2>
+            <p className="text-xs text-gray-500">
+              Configure password reset and OTP email delivery from admin dashboard. This overrides environment defaults.
+            </p>
+          </div>
+
+          <label className="flex items-center gap-3 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={smtpSettings.enabled}
+              onChange={(event) => setSmtpSettings((prev) => ({ ...prev, enabled: event.target.checked }))}
+            />
+            Enable SMTP email sending
+          </label>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <label className="space-y-1 text-sm text-gray-700">
+              <span className="block text-xs font-medium uppercase tracking-wide text-gray-500">SMTP host</span>
+              <input
+                type="text"
+                value={smtpSettings.host}
+                onChange={(event) => setSmtpSettings((prev) => ({ ...prev, host: event.target.value }))}
+                className="h-10 w-full rounded border border-gray-300 px-3 text-sm"
+                placeholder="smtp.sendgrid.net"
+              />
+            </label>
+            <label className="space-y-1 text-sm text-gray-700">
+              <span className="block text-xs font-medium uppercase tracking-wide text-gray-500">SMTP port</span>
+              <input
+                type="number"
+                min={1}
+                max={65535}
+                value={smtpSettings.port}
+                onChange={(event) => setSmtpSettings((prev) => ({ ...prev, port: Number(event.target.value || 587) }))}
+                className="h-10 w-full rounded border border-gray-300 px-3 text-sm"
+              />
+            </label>
+            <label className="flex items-center gap-3 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={smtpSettings.secure}
+                onChange={(event) => setSmtpSettings((prev) => ({ ...prev, secure: event.target.checked }))}
+              />
+              Use secure TLS (SMTPS)
+            </label>
+            <label className="space-y-1 text-sm text-gray-700">
+              <span className="block text-xs font-medium uppercase tracking-wide text-gray-500">SMTP username</span>
+              <input
+                type="text"
+                value={smtpSettings.user}
+                onChange={(event) => setSmtpSettings((prev) => ({ ...prev, user: event.target.value }))}
+                className="h-10 w-full rounded border border-gray-300 px-3 text-sm"
+                placeholder="apikey or username"
+              />
+            </label>
+            <label className="space-y-1 text-sm text-gray-700">
+              <span className="block text-xs font-medium uppercase tracking-wide text-gray-500">
+                SMTP password {smtpSettings.hasPassword ? '(saved)' : '(required)'}
+              </span>
+              <input
+                type="password"
+                value={smtpSettings.password}
+                onChange={(event) => setSmtpSettings((prev) => ({ ...prev, password: event.target.value }))}
+                className="h-10 w-full rounded border border-gray-300 px-3 text-sm"
+                placeholder={smtpSettings.hasPassword ? 'Leave blank to keep current password' : 'Enter SMTP password'}
+              />
+            </label>
+            <label className="space-y-1 text-sm text-gray-700">
+              <span className="block text-xs font-medium uppercase tracking-wide text-gray-500">From email</span>
+              <input
+                type="email"
+                value={smtpSettings.from}
+                onChange={(event) => setSmtpSettings((prev) => ({ ...prev, from: event.target.value }))}
+                className="h-10 w-full rounded border border-gray-300 px-3 text-sm"
+                placeholder="support@yourdomain.com"
+              />
+            </label>
+          </div>
+        </section>
       </div>
 
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving...' : 'Save Authenticator Settings'}
+          {saving ? 'Saving...' : 'Save Authenticator + SMTP Settings'}
         </Button>
       </div>
     </div>

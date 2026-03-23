@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Mail, ArrowRight } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { api } from '../services/api';
-import { useAuthPageSettings } from '../hooks/useAuthPageSettings';
+import { AUTH_PAGE_SETTINGS_DEFAULTS, useAuthPageSettings } from '../hooks/useAuthPageSettings';
 
 export default function ForgotPassword() {
   const { settings: authPageSettings } = useAuthPageSettings();
@@ -44,6 +44,12 @@ export default function ForgotPassword() {
             src={authPageSettings.forgotPasswordHeroImage}
             alt={`${authPageSettings.brandName} forgot password`}
             className="h-full w-full object-cover"
+            onError={(event) => {
+              const fallback = AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordHeroImage;
+              if (event.currentTarget.src !== fallback) {
+                event.currentTarget.src = fallback;
+              }
+            }}
           />
           <div className="absolute inset-0 bg-black/20" />
           <p className="absolute left-6 top-5 text-3xl font-bold text-white md:text-4xl">

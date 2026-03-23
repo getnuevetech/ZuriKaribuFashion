@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import nodemailer from 'nodemailer';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { OAuth2Client } from 'google-auth-library';
@@ -36,6 +35,7 @@ import {
   updateUserMfaPreferredMethod,
   verifyTotpCode,
 } from '../utils/authenticator';
+import { sendEmailWithRuntimeSmtp } from '../utils/smtp-settings';
 
 const router = Router();
 
@@ -555,44 +555,11 @@ let googleAuthSchemaEnsured = false;
 let googleAuthSchemaPromise: Promise<void> | null = null;
 let passwordResetSchemaEnsured = false;
 let passwordResetSchemaPromise: Promise<void> | null = null;
-let cachedTransporter: nodemailer.Transporter | null | undefined;
-
-function getMailer(): nodemailer.Transporter | null {
-  if (cachedTransporter !== undefined) return cachedTransporter;
-  const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT || 587);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!host || !user || !pass) {
-    cachedTransporter = null;
-    return null;
-  }
-  cachedTransporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
-    auth: { user, pass },
-  });
-  return cachedTransporter;
-}
 
 async function sendEmail(input: { to: string; subject: string; text: string; html: string }) {
-  const transporter = getMailer();
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-  if (!input.to) {
-    throw new Error('Missing email recipient.');
-  }
-  if (!transporter || !from) {
-    const error = new Error('SMTP is not configured for outbound email.');
-    (error as any).code = 'SMTP_NOT_CONFIGURED';
-    throw error;
-  }
-  await transporter.sendMail({
-    from,
-    to: input.to,
-    subject: input.subject,
-    text: input.text,
-    html: input.html,
+  await sendEmailWithRuntimeSmtp(input, {
+    requireConfigured: true,
+    missingConfigMessage: 'SMTP is not configured for outbound email.',
   });
 }
 

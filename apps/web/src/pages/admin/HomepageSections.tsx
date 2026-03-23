@@ -1310,6 +1310,20 @@ export default function HomepageSections() {
                     src={resolveAssetUrl(authPageSettings[entry.field])}
                     alt={entry.label}
                     className="h-full w-full object-cover"
+                    onError={(event) => {
+                      const fallbackByField: Record<typeof entry.field, string> = {
+                        loginHeroImage:
+                          'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+                        registerHeroImage:
+                          'https://images.unsplash.com/photo-1485230895905-ec40ba36b9bc?auto=format&fit=crop&w=1200&q=80',
+                        forgotPasswordHeroImage:
+                          'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+                      };
+                      const fallback = fallbackByField[entry.field];
+                      if (event.currentTarget.src !== fallback) {
+                        event.currentTarget.src = fallback;
+                      }
+                    }}
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center text-xs text-gray-400">No image</div>

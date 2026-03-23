@@ -16,6 +16,8 @@ type ActivityLogRow = {
     firstName?: string;
     lastName?: string;
     role?: string;
+    designation?: string;
+    isSuperAdmin?: boolean;
   } | null;
 };
 
@@ -133,6 +135,8 @@ export default function AdminSessionAudit() {
     const fullName = `${row.user?.firstName || ''} ${row.user?.lastName || ''}`.trim();
     return fullName || row.user?.email || 'Unknown user';
   };
+  const displayDesignation = (row: ActivityLogRow) =>
+    String(row.user?.designation || row.user?.role || '-');
 
   return (
     <div className="space-y-6">
@@ -249,7 +253,9 @@ export default function AdminSessionAudit() {
                         <p className="font-medium text-gray-900">{userName(row)}</p>
                         <p className="text-xs text-gray-500">{row.user?.email || '-'}</p>
                       </td>
-                      <td className="py-2 pr-3">{row.user?.role || '-'}</td>
+                      <td className="py-2 pr-3">
+                        <span className="font-medium text-gray-800">{displayDesignation(row)}</span>
+                      </td>
                       <td className="py-2 pr-3">
                         <p className="font-medium text-gray-900">{row.action}</p>
                       </td>
