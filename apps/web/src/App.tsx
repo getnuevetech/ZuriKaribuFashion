@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
@@ -146,6 +146,11 @@ const configuredStripeKey = String(runtimeStripeKey || '').trim();
 const hasUsableStripeKey = /^pk_(test|live)_/i.test(configuredStripeKey);
 const stripePromise = hasUsableStripeKey ? loadStripe(configuredStripeKey) : null;
 
+function NavigateWithSearch({ to }: { to: string }) {
+  const location = useLocation();
+  return <Navigate to={`${to}${location.search || ''}${location.hash || ''}`} replace />;
+}
+
 function App() {
   const { isAuthenticated, user } = useAuthStore();
   const authenticatedHomeRoute = getHomeRouteForUser(user);
@@ -213,9 +218,9 @@ function App() {
             <Route path="/forgotpassword" element={<Navigate to="/forgot-password" replace />} />
             <Route path="/auth/forgot-password" element={<Navigate to="/forgot-password" replace />} />
             <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/password-reset" element={<Navigate to="/reset-password" replace />} />
-            <Route path="/reset" element={<Navigate to="/reset-password" replace />} />
-            <Route path="/auth/reset-password" element={<Navigate to="/reset-password" replace />} />
+            <Route path="/password-reset" element={<NavigateWithSearch to="/reset-password" />} />
+            <Route path="/reset" element={<NavigateWithSearch to="/reset-password" />} />
+            <Route path="/auth/reset-password" element={<NavigateWithSearch to="/reset-password" />} />
             <Route path="/register" element={
               isAuthenticated ? <Navigate to={authenticatedHomeRoute} replace /> : <Register />
             } />
