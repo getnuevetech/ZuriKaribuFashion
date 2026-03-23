@@ -248,6 +248,38 @@ interface HomepageExperienceSettings {
     quickPathFabricsLabel: string;
   };
 }
+type ShopByTab = 'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE';
+interface ShopByOption {
+  label: string;
+  href: string;
+}
+interface ShopByBlocksSettings {
+  title: string;
+  subtitle: string;
+  styleOptions: ShopByOption[];
+  priceOptions: ShopByOption[];
+  enabledTabs: ShopByTab[];
+  defaultTab: ShopByTab;
+}
+interface FreshDropsSettings {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  ctaText: string;
+  ctaLink: string;
+  badgeValueText: string;
+  badgeLabelText: string;
+  showBadge: boolean;
+}
+interface NewsletterSettings {
+  enabled: boolean;
+  title: string;
+  subtitle: string;
+  emailPlaceholder: string;
+  submitLabel: string;
+  successMessage: string;
+  duplicateMessage: string;
+}
 
 const FEATURED_DESCRIPTION_PREVIEW_TEXT =
   'Hand-finished African fashion piece crafted with premium fabric for modern style and everyday comfort.';
@@ -323,6 +355,129 @@ const HOMEPAGE_EXPERIENCE_DEFAULTS: HomepageExperienceSettings = {
     quickPathFabricsLabel: 'Fabrics',
   },
 };
+const SHOP_BY_TAB_OPTIONS: Array<{ value: ShopByTab; label: string }> = [
+  { value: 'CATEGORY', label: 'Category' },
+  { value: 'COUNTRY', label: 'Country' },
+  { value: 'OCCASION_STYLE', label: 'Occasion / Style' },
+  { value: 'PRICE', label: 'Price' },
+];
+const SHOP_BY_BLOCKS_DEFAULTS: ShopByBlocksSettings = {
+  title: 'Shop by',
+  subtitle: 'Browse by category, country, style, or budget.',
+  styleOptions: [
+    { label: 'Wedding', href: '/ready-to-wear?occasion=wedding' },
+    { label: 'Casual', href: '/ready-to-wear?occasion=casual' },
+    { label: 'Festival', href: '/ready-to-wear?occasion=festival' },
+  ],
+  priceOptions: [
+    { label: 'Under $100', href: '/shop?price=under-100' },
+    { label: '$100 - $300', href: '/shop?price=100-300' },
+    { label: 'Above $300', href: '/shop?price=above-300' },
+  ],
+  enabledTabs: ['CATEGORY', 'COUNTRY', 'OCCASION_STYLE', 'PRICE'],
+  defaultTab: 'CATEGORY',
+};
+const FRESH_DROPS_DEFAULTS: FreshDropsSettings = {
+  eyebrow: 'FRESH DROPS',
+  title: 'New arrivals from the most talented designers across the continent.',
+  subtitle: 'Curated highlights from ready-to-wear, custom, and fabrics.',
+  ctaText: 'SHOP NEW ARRIVALS',
+  ctaLink: '/ready-to-wear',
+  badgeValueText: '40%',
+  badgeLabelText: 'UP TO OFF',
+  showBadge: true,
+};
+const NEWSLETTER_DEFAULTS: NewsletterSettings = {
+  enabled: true,
+  title: 'Join the Movement',
+  subtitle: 'Subscribe to our newsletter for exclusive offers, new arrivals, and stories from the continent.',
+  emailPlaceholder: 'Enter your email',
+  submitLabel: 'SUBSCRIBE',
+  successMessage: 'You are subscribed. We will keep you updated.',
+  duplicateMessage: 'You are already subscribed to our newsletter.',
+};
+const normalizeShopByOptionRow = (entry: any): ShopByOption | null => {
+  if (!entry || typeof entry !== 'object') return null;
+  const label = String(entry.label || '').trim().slice(0, 50);
+  const href = String(entry.href || '').trim().slice(0, 255);
+  if (!label || !href) return null;
+  return { label, href };
+};
+const normalizeShopByBlocksState = (value: any): ShopByBlocksSettings => {
+  const source = value && typeof value === 'object' ? value : {};
+  const enabledTabs = Array.from(
+    new Set(
+      (Array.isArray(source.enabledTabs) ? source.enabledTabs : [])
+        .map((entry: any) => String(entry || '').trim().toUpperCase())
+        .filter((entry: string): entry is ShopByTab => SHOP_BY_TAB_OPTIONS.some((option) => option.value === entry))
+    )
+  );
+  const safeEnabledTabs = enabledTabs.length > 0 ? enabledTabs : [...SHOP_BY_BLOCKS_DEFAULTS.enabledTabs];
+  const defaultTabCandidate = String(source.defaultTab || '').trim().toUpperCase() as ShopByTab;
+  const defaultTab = safeEnabledTabs.includes(defaultTabCandidate) ? defaultTabCandidate : safeEnabledTabs[0];
+  const styleOptions = (Array.isArray(source.styleOptions) ? source.styleOptions : [])
+    .map(normalizeShopByOptionRow)
+    .filter((entry): entry is ShopByOption => Boolean(entry))
+    .slice(0, 12);
+  const priceOptions = (Array.isArray(source.priceOptions) ? source.priceOptions : [])
+    .map(normalizeShopByOptionRow)
+    .filter((entry): entry is ShopByOption => Boolean(entry))
+    .slice(0, 12);
+  return {
+    title: String(source.title || SHOP_BY_BLOCKS_DEFAULTS.title).trim().slice(0, 120) || SHOP_BY_BLOCKS_DEFAULTS.title,
+    subtitle: String(source.subtitle || SHOP_BY_BLOCKS_DEFAULTS.subtitle).trim().slice(0, 240) || SHOP_BY_BLOCKS_DEFAULTS.subtitle,
+    styleOptions: styleOptions.length > 0 ? styleOptions : [...SHOP_BY_BLOCKS_DEFAULTS.styleOptions],
+    priceOptions: priceOptions.length > 0 ? priceOptions : [...SHOP_BY_BLOCKS_DEFAULTS.priceOptions],
+    enabledTabs: safeEnabledTabs,
+    defaultTab,
+  };
+};
+const normalizeFreshDropsState = (value: any): FreshDropsSettings => {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    eyebrow: String(source.eyebrow || FRESH_DROPS_DEFAULTS.eyebrow).trim().slice(0, 40) || FRESH_DROPS_DEFAULTS.eyebrow,
+    title: String(source.title || FRESH_DROPS_DEFAULTS.title).trim().slice(0, 180) || FRESH_DROPS_DEFAULTS.title,
+    subtitle: String(source.subtitle || FRESH_DROPS_DEFAULTS.subtitle).trim().slice(0, 260) || FRESH_DROPS_DEFAULTS.subtitle,
+    ctaText: String(source.ctaText || FRESH_DROPS_DEFAULTS.ctaText).trim().slice(0, 60) || FRESH_DROPS_DEFAULTS.ctaText,
+    ctaLink: String(source.ctaLink || FRESH_DROPS_DEFAULTS.ctaLink).trim().slice(0, 255) || FRESH_DROPS_DEFAULTS.ctaLink,
+    badgeValueText:
+      String(source.badgeValueText || FRESH_DROPS_DEFAULTS.badgeValueText).trim().slice(0, 20) || FRESH_DROPS_DEFAULTS.badgeValueText,
+    badgeLabelText:
+      String(source.badgeLabelText || FRESH_DROPS_DEFAULTS.badgeLabelText).trim().slice(0, 80) || FRESH_DROPS_DEFAULTS.badgeLabelText,
+    showBadge: source.showBadge !== false,
+  };
+};
+const normalizeNewsletterState = (value: any): NewsletterSettings => {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    enabled: source.enabled !== false,
+    title: String(source.title || NEWSLETTER_DEFAULTS.title).trim().slice(0, 120) || NEWSLETTER_DEFAULTS.title,
+    subtitle: String(source.subtitle || NEWSLETTER_DEFAULTS.subtitle).trim().slice(0, 260) || NEWSLETTER_DEFAULTS.subtitle,
+    emailPlaceholder:
+      String(source.emailPlaceholder || NEWSLETTER_DEFAULTS.emailPlaceholder).trim().slice(0, 120) || NEWSLETTER_DEFAULTS.emailPlaceholder,
+    submitLabel: String(source.submitLabel || NEWSLETTER_DEFAULTS.submitLabel).trim().slice(0, 60) || NEWSLETTER_DEFAULTS.submitLabel,
+    successMessage:
+      String(source.successMessage || NEWSLETTER_DEFAULTS.successMessage).trim().slice(0, 200) || NEWSLETTER_DEFAULTS.successMessage,
+    duplicateMessage:
+      String(source.duplicateMessage || NEWSLETTER_DEFAULTS.duplicateMessage).trim().slice(0, 200) || NEWSLETTER_DEFAULTS.duplicateMessage,
+  };
+};
+const formatOptionLines = (rows: ShopByOption[]) => rows.map((row) => `${row.label} | ${row.href}`).join('\n');
+const parseOptionLines = (input: string): ShopByOption[] =>
+  String(input || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const pipeIndex = line.indexOf('|');
+      if (pipeIndex === -1) return null;
+      const label = line.slice(0, pipeIndex).trim().slice(0, 50);
+      const href = line.slice(pipeIndex + 1).trim().slice(0, 255);
+      if (!label || !href) return null;
+      return { label, href };
+    })
+    .filter((entry): entry is ShopByOption => Boolean(entry))
+    .slice(0, 12);
 const normalizeHomepageExperienceState = (value: any): HomepageExperienceSettings => {
   const source = value && typeof value === 'object' ? value : {};
   const trustRows = Array.isArray(source.trustBadges) ? source.trustBadges : [];
@@ -675,6 +830,18 @@ export default function HomepageSections() {
     HOMEPAGE_EXPERIENCE_DEFAULTS
   );
   const [homepageExperienceSettingsSaving, setHomepageExperienceSettingsSaving] = useState(false);
+  const [shopByBlocksSettings, setShopByBlocksSettings] = useState<ShopByBlocksSettings>(SHOP_BY_BLOCKS_DEFAULTS);
+  const [shopByStyleOptionsInput, setShopByStyleOptionsInput] = useState<string>(
+    formatOptionLines(SHOP_BY_BLOCKS_DEFAULTS.styleOptions)
+  );
+  const [shopByPriceOptionsInput, setShopByPriceOptionsInput] = useState<string>(
+    formatOptionLines(SHOP_BY_BLOCKS_DEFAULTS.priceOptions)
+  );
+  const [shopByBlocksSettingsSaving, setShopByBlocksSettingsSaving] = useState(false);
+  const [freshDropsSettings, setFreshDropsSettings] = useState<FreshDropsSettings>(FRESH_DROPS_DEFAULTS);
+  const [freshDropsSettingsSaving, setFreshDropsSettingsSaving] = useState(false);
+  const [newsletterSettings, setNewsletterSettings] = useState<NewsletterSettings>(NEWSLETTER_DEFAULTS);
+  const [newsletterSettingsSaving, setNewsletterSettingsSaving] = useState(false);
   const [authPageImageUploadingField, setAuthPageImageUploadingField] = useState<
     'loginHeroImage' | 'registerHeroImage' | 'forgotPasswordHeroImage' | ''
   >('');
@@ -708,6 +875,11 @@ export default function HomepageSections() {
   }, []);
   useEffect(() => {
     fetchHomepageExperienceSettings();
+  }, []);
+  useEffect(() => {
+    fetchShopByBlocksSettings();
+    fetchFreshDropsSettings();
+    fetchNewsletterSettings();
   }, []);
 
   useEffect(() => {
@@ -877,6 +1049,39 @@ export default function HomepageSections() {
       console.error('Error fetching homepage experience settings:', error);
     }
   };
+  const fetchShopByBlocksSettings = async () => {
+    try {
+      const response = await api.homepageSections.getAdminShopByBlocksSettings();
+      if (response.success && response.data) {
+        const normalized = normalizeShopByBlocksState(response.data);
+        setShopByBlocksSettings(normalized);
+        setShopByStyleOptionsInput(formatOptionLines(normalized.styleOptions));
+        setShopByPriceOptionsInput(formatOptionLines(normalized.priceOptions));
+      }
+    } catch (error) {
+      console.error('Error fetching shop by block settings:', error);
+    }
+  };
+  const fetchFreshDropsSettings = async () => {
+    try {
+      const response = await api.homepageSections.getAdminFreshDropsSettings();
+      if (response.success && response.data) {
+        setFreshDropsSettings(normalizeFreshDropsState(response.data));
+      }
+    } catch (error) {
+      console.error('Error fetching fresh drops settings:', error);
+    }
+  };
+  const fetchNewsletterSettings = async () => {
+    try {
+      const response = await api.homepageSections.getAdminNewsletterSettings();
+      if (response.success && response.data) {
+        setNewsletterSettings(normalizeNewsletterState(response.data));
+      }
+    } catch (error) {
+      console.error('Error fetching newsletter settings:', error);
+    }
+  };
 
   const handleSaveHowItWorksStyleSettings = async () => {
     setHowItWorksStyleSaving(true);
@@ -993,6 +1198,73 @@ export default function HomepageSections() {
       window.alert(error?.response?.data?.message || 'Failed to save homepage experience settings.');
     } finally {
       setHomepageExperienceSettingsSaving(false);
+    }
+  };
+  const handleSaveShopByBlocksSettings = async () => {
+    setShopByBlocksSettingsSaving(true);
+    try {
+      const enabledTabs = Array.from(
+        new Set(
+          (Array.isArray(shopByBlocksSettings.enabledTabs) ? shopByBlocksSettings.enabledTabs : []).filter((entry) =>
+            SHOP_BY_TAB_OPTIONS.some((option) => option.value === entry)
+          )
+        )
+      ) as ShopByTab[];
+      const safeEnabledTabs = enabledTabs.length > 0 ? enabledTabs : ['CATEGORY'];
+      const styleOptions = parseOptionLines(shopByStyleOptionsInput);
+      const priceOptions = parseOptionLines(shopByPriceOptionsInput);
+      const payload: ShopByBlocksSettings = {
+        ...shopByBlocksSettings,
+        enabledTabs: safeEnabledTabs,
+        defaultTab: safeEnabledTabs.includes(shopByBlocksSettings.defaultTab)
+          ? shopByBlocksSettings.defaultTab
+          : safeEnabledTabs[0],
+        styleOptions: styleOptions.length > 0 ? styleOptions : [...SHOP_BY_BLOCKS_DEFAULTS.styleOptions],
+        priceOptions: priceOptions.length > 0 ? priceOptions : [...SHOP_BY_BLOCKS_DEFAULTS.priceOptions],
+      };
+      const response = await api.homepageSections.updateAdminShopByBlocksSettings(payload);
+      if (response.success && response.data) {
+        const normalized = normalizeShopByBlocksState(response.data);
+        setShopByBlocksSettings(normalized);
+        setShopByStyleOptionsInput(formatOptionLines(normalized.styleOptions));
+        setShopByPriceOptionsInput(formatOptionLines(normalized.priceOptions));
+        window.alert('Shop by blocks settings saved.');
+      }
+    } catch (error: any) {
+      console.error('Error saving shop by blocks settings:', error);
+      window.alert(error?.response?.data?.message || 'Failed to save shop by blocks settings.');
+    } finally {
+      setShopByBlocksSettingsSaving(false);
+    }
+  };
+  const handleSaveFreshDropsSettings = async () => {
+    setFreshDropsSettingsSaving(true);
+    try {
+      const response = await api.homepageSections.updateAdminFreshDropsSettings(freshDropsSettings);
+      if (response.success && response.data) {
+        setFreshDropsSettings(normalizeFreshDropsState(response.data));
+        window.alert('Fresh drops settings saved.');
+      }
+    } catch (error: any) {
+      console.error('Error saving fresh drops settings:', error);
+      window.alert(error?.response?.data?.message || 'Failed to save fresh drops settings.');
+    } finally {
+      setFreshDropsSettingsSaving(false);
+    }
+  };
+  const handleSaveNewsletterSettings = async () => {
+    setNewsletterSettingsSaving(true);
+    try {
+      const response = await api.homepageSections.updateAdminNewsletterSettings(newsletterSettings);
+      if (response.success && response.data) {
+        setNewsletterSettings(normalizeNewsletterState(response.data));
+        window.alert('Newsletter settings saved.');
+      }
+    } catch (error: any) {
+      console.error('Error saving newsletter settings:', error);
+      window.alert(error?.response?.data?.message || 'Failed to save newsletter settings.');
+    } finally {
+      setNewsletterSettingsSaving(false);
     }
   };
 
@@ -1811,6 +2083,269 @@ export default function HomepageSections() {
           <Button onClick={handleSaveHomepageExperienceSettings} disabled={homepageExperienceSettingsSaving}>
             {homepageExperienceSettingsSaving ? 'Saving...' : 'Save Homepage Experience Settings'}
           </Button>
+        </div>
+      </div>
+
+      <div className="mb-8 space-y-5 rounded-lg border border-gray-200 bg-white p-4">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Canonical Kimi Payload Controls</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Manage Shop By blocks, Fresh Drops, and Newsletter content used by the canonical homepage payload.
+          </p>
+        </div>
+
+        <div className="rounded-md border border-gray-200 p-4">
+          <h3 className="text-sm font-semibold text-gray-800">Shop By Blocks</h3>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Title</label>
+              <input
+                type="text"
+                value={shopByBlocksSettings.title}
+                onChange={(e) => setShopByBlocksSettings((prev) => ({ ...prev, title: e.target.value.slice(0, 120) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Default Tab</label>
+              <select
+                value={shopByBlocksSettings.defaultTab}
+                onChange={(e) =>
+                  setShopByBlocksSettings((prev) => ({
+                    ...prev,
+                    defaultTab: e.target.value as ShopByTab,
+                  }))
+                }
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              >
+                {SHOP_BY_TAB_OPTIONS.map((entry) => (
+                  <option key={entry.value} value={entry.value}>
+                    {entry.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Subtitle</label>
+              <input
+                type="text"
+                value={shopByBlocksSettings.subtitle}
+                onChange={(e) => setShopByBlocksSettings((prev) => ({ ...prev, subtitle: e.target.value.slice(0, 240) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+          </div>
+          <div className="mt-3">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-600">Enabled Tabs</p>
+            <div className="flex flex-wrap gap-3">
+              {SHOP_BY_TAB_OPTIONS.map((entry) => (
+                <label key={entry.value} className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={shopByBlocksSettings.enabledTabs.includes(entry.value)}
+                    onChange={(e) =>
+                      setShopByBlocksSettings((prev) => {
+                        const next = e.target.checked
+                          ? Array.from(new Set([...prev.enabledTabs, entry.value]))
+                          : prev.enabledTabs.filter((value) => value !== entry.value);
+                        return { ...prev, enabledTabs: next.length > 0 ? next : prev.enabledTabs };
+                      })
+                    }
+                    className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  {entry.label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">
+                Style Options (one per line: Label | Link)
+              </label>
+              <textarea
+                value={shopByStyleOptionsInput}
+                onChange={(e) => setShopByStyleOptionsInput(e.target.value)}
+                className="h-36 w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                placeholder="Wedding | /ready-to-wear?occasion=wedding"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">
+                Price Options (one per line: Label | Link)
+              </label>
+              <textarea
+                value={shopByPriceOptionsInput}
+                onChange={(e) => setShopByPriceOptionsInput(e.target.value)}
+                className="h-36 w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                placeholder="Under $100 | /shop?price=under-100"
+              />
+            </div>
+          </div>
+          <div className="mt-3">
+            <Button onClick={handleSaveShopByBlocksSettings} disabled={shopByBlocksSettingsSaving}>
+              {shopByBlocksSettingsSaving ? 'Saving...' : 'Save Shop By Blocks'}
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-md border border-gray-200 p-4">
+          <h3 className="text-sm font-semibold text-gray-800">Fresh Drops</h3>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Eyebrow</label>
+              <input
+                type="text"
+                value={freshDropsSettings.eyebrow}
+                onChange={(e) => setFreshDropsSettings((prev) => ({ ...prev, eyebrow: e.target.value.slice(0, 40) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">CTA Text</label>
+              <input
+                type="text"
+                value={freshDropsSettings.ctaText}
+                onChange={(e) => setFreshDropsSettings((prev) => ({ ...prev, ctaText: e.target.value.slice(0, 60) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Title</label>
+              <input
+                type="text"
+                value={freshDropsSettings.title}
+                onChange={(e) => setFreshDropsSettings((prev) => ({ ...prev, title: e.target.value.slice(0, 180) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Subtitle</label>
+              <textarea
+                value={freshDropsSettings.subtitle}
+                onChange={(e) => setFreshDropsSettings((prev) => ({ ...prev, subtitle: e.target.value.slice(0, 260) }))}
+                className="h-24 w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">CTA Link</label>
+              <input
+                type="text"
+                value={freshDropsSettings.ctaLink}
+                onChange={(e) => setFreshDropsSettings((prev) => ({ ...prev, ctaLink: e.target.value.slice(0, 255) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Badge Value</label>
+              <input
+                type="text"
+                value={freshDropsSettings.badgeValueText}
+                onChange={(e) => setFreshDropsSettings((prev) => ({ ...prev, badgeValueText: e.target.value.slice(0, 20) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Badge Label</label>
+              <input
+                type="text"
+                value={freshDropsSettings.badgeLabelText}
+                onChange={(e) => setFreshDropsSettings((prev) => ({ ...prev, badgeLabelText: e.target.value.slice(0, 80) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={freshDropsSettings.showBadge}
+                  onChange={(e) => setFreshDropsSettings((prev) => ({ ...prev, showBadge: e.target.checked }))}
+                  className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                />
+                Show promo badge
+              </label>
+            </div>
+          </div>
+          <div className="mt-3">
+            <Button onClick={handleSaveFreshDropsSettings} disabled={freshDropsSettingsSaving}>
+              {freshDropsSettingsSaving ? 'Saving...' : 'Save Fresh Drops'}
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-md border border-gray-200 p-4">
+          <h3 className="text-sm font-semibold text-gray-800">Newsletter</h3>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={newsletterSettings.enabled}
+                  onChange={(e) => setNewsletterSettings((prev) => ({ ...prev, enabled: e.target.checked }))}
+                  className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                />
+                Enable newsletter section
+              </label>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Title</label>
+              <input
+                type="text"
+                value={newsletterSettings.title}
+                onChange={(e) => setNewsletterSettings((prev) => ({ ...prev, title: e.target.value.slice(0, 120) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Submit Label</label>
+              <input
+                type="text"
+                value={newsletterSettings.submitLabel}
+                onChange={(e) => setNewsletterSettings((prev) => ({ ...prev, submitLabel: e.target.value.slice(0, 60) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Subtitle</label>
+              <textarea
+                value={newsletterSettings.subtitle}
+                onChange={(e) => setNewsletterSettings((prev) => ({ ...prev, subtitle: e.target.value.slice(0, 260) }))}
+                className="h-24 w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Email Placeholder</label>
+              <input
+                type="text"
+                value={newsletterSettings.emailPlaceholder}
+                onChange={(e) => setNewsletterSettings((prev) => ({ ...prev, emailPlaceholder: e.target.value.slice(0, 120) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Success Message</label>
+              <input
+                type="text"
+                value={newsletterSettings.successMessage}
+                onChange={(e) => setNewsletterSettings((prev) => ({ ...prev, successMessage: e.target.value.slice(0, 200) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Duplicate Message</label>
+              <input
+                type="text"
+                value={newsletterSettings.duplicateMessage}
+                onChange={(e) => setNewsletterSettings((prev) => ({ ...prev, duplicateMessage: e.target.value.slice(0, 200) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+          </div>
+          <div className="mt-3">
+            <Button onClick={handleSaveNewsletterSettings} disabled={newsletterSettingsSaving}>
+              {newsletterSettingsSaving ? 'Saving...' : 'Save Newsletter Settings'}
+            </Button>
+          </div>
         </div>
       </div>
 

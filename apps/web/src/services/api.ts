@@ -9089,6 +9089,51 @@ const homepageSectionsApi = {
       success: boolean;
       data: AuthPageSettingsPayload & { source?: 'DATABASE' | 'DEFAULT'; updatedAt?: string | null };
     }>('admin'),
+  getAdminShopByBlocksSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        title: string;
+        subtitle: string;
+        styleOptions: Array<{ label: string; href: string }>;
+        priceOptions: Array<{ label: string; href: string }>;
+        enabledTabs: Array<'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE'>;
+        defaultTab: 'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE';
+        source?: 'DATABASE' | 'DEFAULT';
+        updatedAt?: string | null;
+      };
+    }>('/homepage-sections/admin/shop-by-blocks-settings'),
+  getAdminFreshDropsSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        eyebrow: string;
+        title: string;
+        subtitle: string;
+        ctaText: string;
+        ctaLink: string;
+        badgeValueText: string;
+        badgeLabelText: string;
+        showBadge: boolean;
+        source?: 'DATABASE' | 'DEFAULT';
+        updatedAt?: string | null;
+      };
+    }>('/homepage-sections/admin/fresh-drops-settings'),
+  getAdminNewsletterSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        enabled: boolean;
+        title: string;
+        subtitle: string;
+        emailPlaceholder: string;
+        submitLabel: string;
+        successMessage: string;
+        duplicateMessage: string;
+        source?: 'DATABASE' | 'DEFAULT';
+        updatedAt?: string | null;
+      };
+    }>('/homepage-sections/admin/newsletter-settings'),
   getAdminExperienceSettings: () =>
     apiService.get<{
       success: boolean;
@@ -9359,6 +9404,69 @@ const homepageSectionsApi = {
       success: boolean;
       data: AuthPageSettingsPayload;
     }>(data),
+  updateAdminShopByBlocksSettings: (data: {
+    title?: string;
+    subtitle?: string;
+    styleOptions?: Array<{ label: string; href: string }>;
+    priceOptions?: Array<{ label: string; href: string }>;
+    enabledTabs?: Array<'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE'>;
+    defaultTab?: 'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE';
+  }) =>
+    apiService.put<{
+      success: boolean;
+      data: {
+        title: string;
+        subtitle: string;
+        styleOptions: Array<{ label: string; href: string }>;
+        priceOptions: Array<{ label: string; href: string }>;
+        enabledTabs: Array<'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE'>;
+        defaultTab: 'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE';
+      };
+    }>('/homepage-sections/admin/shop-by-blocks-settings', data),
+  updateAdminFreshDropsSettings: (data: {
+    eyebrow?: string;
+    title?: string;
+    subtitle?: string;
+    ctaText?: string;
+    ctaLink?: string;
+    badgeValueText?: string;
+    badgeLabelText?: string;
+    showBadge?: boolean;
+  }) =>
+    apiService.put<{
+      success: boolean;
+      data: {
+        eyebrow: string;
+        title: string;
+        subtitle: string;
+        ctaText: string;
+        ctaLink: string;
+        badgeValueText: string;
+        badgeLabelText: string;
+        showBadge: boolean;
+      };
+    }>('/homepage-sections/admin/fresh-drops-settings', data),
+  updateAdminNewsletterSettings: (data: {
+    enabled?: boolean;
+    title?: string;
+    subtitle?: string;
+    emailPlaceholder?: string;
+    submitLabel?: string;
+    successMessage?: string;
+    duplicateMessage?: string;
+  }) =>
+    apiService.put<{
+      success: boolean;
+      data: {
+        enabled: boolean;
+        title: string;
+        subtitle: string;
+        emailPlaceholder: string;
+        submitLabel: string;
+        successMessage: string;
+        duplicateMessage: string;
+      };
+    }>('/homepage-sections/admin/newsletter-settings', data),
 
   getAdminCountryImageGeneration: () =>
     readCountryImageGenerationWithFallback<{
