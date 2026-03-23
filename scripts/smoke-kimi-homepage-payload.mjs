@@ -14,7 +14,8 @@ const readArg = (name) => {
 const baseUrlInput = readArg('base') || process.env.API_BASE_URL || 'http://localhost:3001/api';
 const timeoutMs = Number(readArg('timeout') || process.env.API_SMOKE_TIMEOUT_MS || 12000);
 const baseUrl = String(baseUrlInput || '').trim().replace(/\/+$/, '');
-const endpoint = '/homepage-sections/kimi-homepage-payload';
+const payloadEndpoint = '/homepage-sections/kimi-homepage-payload';
+const experienceEndpoint = '/homepage-sections/experience-settings';
 
 if (!baseUrl) {
   console.error('Missing API base URL. Pass --base=https://your-api-domain/api');
@@ -64,10 +65,10 @@ const printFail = (message) => {
 };
 
 try {
-  console.log(`\nKimi payload smoke test: ${baseUrl}${endpoint}`);
+  console.log(`\nKimi payload smoke test: ${baseUrl}${payloadEndpoint}`);
   console.log(`Timeout: ${timeoutMs}ms`);
 
-  const response = await fetch(`${baseUrl}${endpoint}`, {
+  const response = await fetch(`${baseUrl}${payloadEndpoint}`, {
     method: 'GET',
     signal: controller.signal,
   });
@@ -154,10 +155,72 @@ try {
     console.log('Checksum: not present (optional, skipped verification)');
   }
 
+  const experienceResponse = await fetch(`${baseUrl}${experienceEndpoint}`, {
+    method: 'GET',
+    signal: controller.signal,
+  });
+  const experienceRawText = await experienceResponse.text();
+  let experienceParsed;
+  try {
+    experienceParsed = experienceRawText ? JSON.parse(experienceRawText) : null;
+  } catch {
+    experienceParsed = null;
+  }
+  if (experienceResponse.status !== 200) {
+    printFail(`experience settings endpoint expected HTTP 200, got ${experienceResponse.status}`);
+  }
+  if (!experienceParsed || typeof experienceParsed !== 'object' || experienceParsed.success !== true) {
+    printFail('experience settings response is invalid');
+  }
+  const experience = experienceParsed.data;
+  if (!experience || typeof experience !== 'object') {
+    printFail('experience settings data is missing');
+  }
+  const requiredExperienceKeys = [
+    'enabledModes',
+    'defaultMode',
+    'themeModes',
+    'defaultThemeMode',
+    'homepageTemplate',
+    'rolloutMode',
+    'allowPreviewQuery',
+    'previewQueryParam',
+    'trustBadges',
+    'kimiCopy',
+  ];
+  const missingExperienceKeys = requiredExperienceKeys.filter((key) => !(key in experience));
+  if (missingExperienceKeys.length > 0) {
+    printFail(`experience settings missing required keys: ${missingExperienceKeys.join(', ')}`);
+  }
+  if (!['LEGACY', 'KIMI'].includes(String(experience.homepageTemplate || ''))) {
+    printFail(`experience settings homepageTemplate is invalid: ${String(experience.homepageTemplate || '')}`);
+  }
+  if (!['LIVE', 'PREVIEW_SAFE'].includes(String(experience.rolloutMode || ''))) {
+    printFail(`experience settings rolloutMode is invalid: ${String(experience.rolloutMode || '')}`);
+  }
+  if (!Array.isArray(experience.enabledModes) || experience.enabledModes.length === 0) {
+    printFail('experience settings enabledModes is empty');
+  }
+  if (!Array.isArray(experience.themeModes) || experience.themeModes.length === 0) {
+    printFail('experience settings themeModes is empty');
+  }
+  if (typeof experience.previewQueryParam !== 'string' || !experience.previewQueryParam.trim()) {
+    printFail('experience settings previewQueryParam is missing');
+  }
+  if (!Array.isArray(experience.trustBadges)) {
+    printFail('experience settings trustBadges is invalid');
+  }
+  if (!experience.kimiCopy || typeof experience.kimiCopy !== 'object') {
+    printFail('experience settings kimiCopy is invalid');
+  }
+
   const elapsedMs = Date.now() - started;
   console.log(`Contract version: ${data.contractVersion}`);
   console.log(`Generated at: ${data.generatedAt}`);
   console.log(`Validated keys: ${requiredKeys.length}`);
+  console.log(
+    `Runtime settings: ${String(experience.homepageTemplate || 'UNKNOWN')}/${String(experience.rolloutMode || 'UNKNOWN')}`
+  );
   console.log(`Duration: ${elapsedMs}ms`);
   console.log('\nKimi payload smoke test passed.');
 } catch (error) {
