@@ -10,6 +10,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 // Public Pages
 import Home from './pages/Home';
 import HomeEntry from './pages/HomeEntry';
+import LegacyHomeRoute from './pages/LegacyHomeRoute';
 import ShopPage from './pages/Shop';
 import CountryProducts from './pages/CountryProducts';
 import ReadyToWear from './pages/ReadyToWear';
@@ -160,15 +161,24 @@ function App() {
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
-              <Route path="/home-legacy" element={<Home />} />
+              <Route path="/home-legacy" element={<LegacyHomeRoute />} />
               <Route path="/jenks" element={<Home />} />
               <Route path="/home-jenks" element={<Navigate to="/jenks" replace />} />
               <Route path="/home-kimi" element={<Navigate to="/jenks" replace />} />
               <Route path="/rtw" element={<Navigate to="/ready-to-wear" replace />} />
+              <Route path="/readytowear" element={<Navigate to="/ready-to-wear" replace />} />
               <Route path="/ftb" element={<Navigate to="/fabrics" replace />} />
+              <Route path="/fabric" element={<Navigate to="/fabrics" replace />} />
+              <Route path="/fabric-to-buy" element={<Navigate to="/fabrics" replace />} />
               <Route path="/fabrics-to-buy" element={<Navigate to="/fabrics" replace />} />
               <Route path="/ctw" element={<Navigate to="/custom" replace />} />
+              <Route path="/customtowear" element={<Navigate to="/custom" replace />} />
               <Route path="/contact-us" element={<Navigate to="/contact" replace />} />
+              <Route path="/about" element={<Navigate to="/jenks#about" replace />} />
+              <Route path="/about-us" element={<Navigate to="/jenks#about" replace />} />
+              <Route path="/designers" element={<Navigate to="/custom" replace />} />
+              <Route path="/support" element={<Navigate to="/help-center" replace />} />
+              <Route path="/faq" element={<Navigate to="/help-center" replace />} />
               <Route path="/shop" element={<ShopPage />} />
               <Route path="/country-products" element={<CountryProducts />} />
               <Route path="/ready-to-wear" element={<ReadyToWear />} />
@@ -194,6 +204,7 @@ function App() {
 
             {/* Auth Routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/auth" element={<Navigate to="/login" replace />} />
             <Route path="/signin" element={<Navigate to="/login" replace />} />
             <Route path="/sign-in" element={<Navigate to="/login" replace />} />
             <Route path="/auth/login" element={<Navigate to="/login" replace />} />
@@ -202,6 +213,8 @@ function App() {
             <Route path="/forgotpassword" element={<Navigate to="/forgot-password" replace />} />
             <Route path="/auth/forgot-password" element={<Navigate to="/forgot-password" replace />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/password-reset" element={<Navigate to="/reset-password" replace />} />
+            <Route path="/reset" element={<Navigate to="/reset-password" replace />} />
             <Route path="/auth/reset-password" element={<Navigate to="/reset-password" replace />} />
             <Route path="/register" element={
               isAuthenticated ? <Navigate to={authenticatedHomeRoute} replace /> : <Register />
