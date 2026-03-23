@@ -20,6 +20,8 @@ const HOMEPAGE_PROMO_BADGE_SETTINGS_KEY = 'HOMEPAGE_PROMO_BADGE';
 const HOMEPAGE_SHOP_BY_BLOCKS_SETTINGS_KEY = 'HOMEPAGE_SHOP_BY_BLOCKS';
 const HOMEPAGE_FRESH_DROPS_SETTINGS_KEY = 'HOMEPAGE_FRESH_DROPS';
 const HOMEPAGE_NEWSLETTER_SETTINGS_KEY = 'HOMEPAGE_NEWSLETTER';
+const HOMEPAGE_NAVIGATION_SETTINGS_KEY = 'HOMEPAGE_NAVIGATION_SETTINGS';
+const HOMEPAGE_HERO_SETTINGS_KEY = 'HOMEPAGE_HERO_SETTINGS';
 const PROMO_BADGE_DEFAULTS = {
   valueText: '50+',
   labelText: 'New Arrivals',
@@ -923,6 +925,40 @@ const newsletterSettingsUpdateSchema = z.object({
   successMessage: z.string().trim().min(1).max(200).optional(),
   duplicateMessage: z.string().trim().min(1).max(200).optional(),
 });
+const navigationMenuLinkUpdateSchema = z.object({
+  label: z.string().trim().min(1).max(40),
+  href: z.string().trim().min(1).max(260),
+  enabled: z.boolean().default(true),
+});
+const navigationSettingsUpdateSchema = z.object({
+  logoMode: z.enum(['TEXT', 'IMAGE']).optional(),
+  logoText: z.string().trim().min(1).max(80).optional(),
+  logoImageUrl: z.string().trim().max(2000).optional(),
+  logoAltText: z.string().trim().max(120).optional(),
+  logoWidth: z.number().int().min(40).max(600).optional(),
+  logoHeight: z.number().int().min(20).max(300).optional(),
+  leftMenuLinks: z.array(navigationMenuLinkUpdateSchema).max(10).optional(),
+  rightMenuLinks: z.array(navigationMenuLinkUpdateSchema).max(10).optional(),
+  hamburgerMenuLinks: z.array(navigationMenuLinkUpdateSchema).max(20).optional(),
+  showHamburger: z.boolean().optional(),
+  showSearchIcon: z.boolean().optional(),
+  showCartIcon: z.boolean().optional(),
+  showProfileIcon: z.boolean().optional(),
+  showCurrencySelector: z.boolean().optional(),
+  showExperienceModeSelector: z.boolean().optional(),
+  showThemeModeSelector: z.boolean().optional(),
+});
+const heroQuickLinkUpdateSchema = z.object({
+  label: z.string().trim().min(1).max(32),
+  href: z.string().trim().min(1).max(260),
+});
+const heroSettingsUpdateSchema = z.object({
+  rotationSeconds: z.number().int().min(3).max(20).optional(),
+  forceUppercaseCtas: z.boolean().optional(),
+  ctaTarget: z.enum(['SAME_TAB', 'NEW_TAB']).optional(),
+  showQuickLinks: z.boolean().optional(),
+  quickLinks: z.array(heroQuickLinkUpdateSchema).max(8).optional(),
+});
 const newsletterSubscribeSchema = z.object({
   email: z.string().trim().email().max(200),
   source: z.string().trim().min(1).max(80).optional(),
@@ -1064,6 +1100,40 @@ type NewsletterSettings = {
   submitLabel: string;
   successMessage: string;
   duplicateMessage: string;
+};
+type HomepageNavigationMenuLink = {
+  label: string;
+  href: string;
+  enabled: boolean;
+};
+type HomepageNavigationSettings = {
+  logoMode: 'TEXT' | 'IMAGE';
+  logoText: string;
+  logoImageUrl: string;
+  logoAltText: string;
+  logoWidth: number;
+  logoHeight: number;
+  leftMenuLinks: HomepageNavigationMenuLink[];
+  rightMenuLinks: HomepageNavigationMenuLink[];
+  hamburgerMenuLinks: HomepageNavigationMenuLink[];
+  showHamburger: boolean;
+  showSearchIcon: boolean;
+  showCartIcon: boolean;
+  showProfileIcon: boolean;
+  showCurrencySelector: boolean;
+  showExperienceModeSelector: boolean;
+  showThemeModeSelector: boolean;
+};
+type HeroQuickLink = {
+  label: string;
+  href: string;
+};
+type HomepageHeroSettings = {
+  rotationSeconds: number;
+  forceUppercaseCtas: boolean;
+  ctaTarget: 'SAME_TAB' | 'NEW_TAB';
+  showQuickLinks: boolean;
+  quickLinks: HeroQuickLink[];
 };
 type AuthPageSettings = {
   brandName: string;
@@ -1247,6 +1317,52 @@ const NEWSLETTER_SETTINGS_DEFAULTS: NewsletterSettings = {
   submitLabel: 'SUBSCRIBE',
   successMessage: 'You are subscribed. We will keep you updated.',
   duplicateMessage: 'You are already subscribed to our newsletter.',
+};
+const NAVIGATION_SETTINGS_DEFAULTS: HomepageNavigationSettings = {
+  logoMode: 'TEXT',
+  logoText: 'ZURIKARIBU',
+  logoImageUrl: '',
+  logoAltText: 'ZuriKaribu',
+  logoWidth: 180,
+  logoHeight: 48,
+  leftMenuLinks: [
+    { label: 'Home', href: '/', enabled: true },
+    { label: 'Ready To Wear', href: '/ready-to-wear', enabled: true },
+    { label: 'Fabric To Buy', href: '/fabrics', enabled: true },
+    { label: 'Custom To Wear', href: '/custom', enabled: true },
+  ],
+  rightMenuLinks: [
+    { label: 'Shop', href: '/shop', enabled: true },
+    { label: 'About Us', href: '/#about', enabled: true },
+    { label: 'Contact Us', href: '/contact', enabled: true },
+  ],
+  hamburgerMenuLinks: [
+    { label: 'Home', href: '/', enabled: true },
+    { label: 'Shop', href: '/shop', enabled: true },
+    { label: 'Ready To Wear', href: '/ready-to-wear', enabled: true },
+    { label: 'Fabric To Buy', href: '/fabrics', enabled: true },
+    { label: 'Custom To Wear', href: '/custom', enabled: true },
+    { label: 'About Us', href: '/#about', enabled: true },
+    { label: 'Contact Us', href: '/contact', enabled: true },
+  ],
+  showHamburger: true,
+  showSearchIcon: true,
+  showCartIcon: true,
+  showProfileIcon: true,
+  showCurrencySelector: true,
+  showExperienceModeSelector: true,
+  showThemeModeSelector: true,
+};
+const HERO_SETTINGS_DEFAULTS: HomepageHeroSettings = {
+  rotationSeconds: 6,
+  forceUppercaseCtas: true,
+  ctaTarget: 'SAME_TAB',
+  showQuickLinks: true,
+  quickLinks: [
+    { label: 'Ready to Wear', href: '/ready-to-wear' },
+    { label: 'Custom', href: '/custom' },
+    { label: 'Fabrics', href: '/fabrics' },
+  ],
 };
 const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettings = {
   brandName: 'ZuriKaribu',
@@ -1485,6 +1601,94 @@ const normalizeNewsletterSettings = (raw: unknown): NewsletterSettings => {
     submitLabel: (getString(row.submitLabel) || NEWSLETTER_SETTINGS_DEFAULTS.submitLabel).slice(0, 60),
     successMessage: (getString(row.successMessage) || NEWSLETTER_SETTINGS_DEFAULTS.successMessage).slice(0, 200),
     duplicateMessage: (getString(row.duplicateMessage) || NEWSLETTER_SETTINGS_DEFAULTS.duplicateMessage).slice(0, 200),
+  };
+};
+const normalizeNavigationMenuLinks = (
+  value: unknown,
+  fallback: HomepageNavigationMenuLink[]
+): HomepageNavigationMenuLink[] => {
+  const rows = Array.isArray(value) ? value : [];
+  const mapped = rows
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const row = entry as Record<string, unknown>;
+      const label = getString(row.label);
+      const href = getString(row.href);
+      if (!label || !href) return null;
+      return {
+        label: label.slice(0, 40),
+        href: normalizeHref(href, '/'),
+        enabled: getBoolean(row.enabled) ?? true,
+      } as HomepageNavigationMenuLink;
+    })
+    .filter((entry): entry is HomepageNavigationMenuLink => Boolean(entry))
+    .slice(0, 20);
+  return mapped.length > 0 ? mapped : fallback.map((entry) => ({ ...entry }));
+};
+const normalizeNavigationSettings = (raw: unknown): HomepageNavigationSettings => {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      ...NAVIGATION_SETTINGS_DEFAULTS,
+      leftMenuLinks: NAVIGATION_SETTINGS_DEFAULTS.leftMenuLinks.map((entry) => ({ ...entry })),
+      rightMenuLinks: NAVIGATION_SETTINGS_DEFAULTS.rightMenuLinks.map((entry) => ({ ...entry })),
+      hamburgerMenuLinks: NAVIGATION_SETTINGS_DEFAULTS.hamburgerMenuLinks.map((entry) => ({ ...entry })),
+    };
+  }
+  const row = raw as Record<string, unknown>;
+  const logoMode = String(row.logoMode || '').trim().toUpperCase() === 'IMAGE' ? 'IMAGE' : 'TEXT';
+  return {
+    logoMode,
+    logoText: (getString(row.logoText) || NAVIGATION_SETTINGS_DEFAULTS.logoText).slice(0, 80),
+    logoImageUrl: (getString(row.logoImageUrl) || '').slice(0, 2000),
+    logoAltText: (getString(row.logoAltText) || NAVIGATION_SETTINGS_DEFAULTS.logoAltText).slice(0, 120),
+    logoWidth: Math.max(40, Math.min(600, Math.round(getNumber(row.logoWidth) ?? NAVIGATION_SETTINGS_DEFAULTS.logoWidth))),
+    logoHeight: Math.max(20, Math.min(300, Math.round(getNumber(row.logoHeight) ?? NAVIGATION_SETTINGS_DEFAULTS.logoHeight))),
+    leftMenuLinks: normalizeNavigationMenuLinks(row.leftMenuLinks, NAVIGATION_SETTINGS_DEFAULTS.leftMenuLinks),
+    rightMenuLinks: normalizeNavigationMenuLinks(row.rightMenuLinks, NAVIGATION_SETTINGS_DEFAULTS.rightMenuLinks),
+    hamburgerMenuLinks: normalizeNavigationMenuLinks(row.hamburgerMenuLinks, NAVIGATION_SETTINGS_DEFAULTS.hamburgerMenuLinks),
+    showHamburger: getBoolean(row.showHamburger) ?? NAVIGATION_SETTINGS_DEFAULTS.showHamburger,
+    showSearchIcon: getBoolean(row.showSearchIcon) ?? NAVIGATION_SETTINGS_DEFAULTS.showSearchIcon,
+    showCartIcon: getBoolean(row.showCartIcon) ?? NAVIGATION_SETTINGS_DEFAULTS.showCartIcon,
+    showProfileIcon: getBoolean(row.showProfileIcon) ?? NAVIGATION_SETTINGS_DEFAULTS.showProfileIcon,
+    showCurrencySelector: getBoolean(row.showCurrencySelector) ?? NAVIGATION_SETTINGS_DEFAULTS.showCurrencySelector,
+    showExperienceModeSelector:
+      getBoolean(row.showExperienceModeSelector) ?? NAVIGATION_SETTINGS_DEFAULTS.showExperienceModeSelector,
+    showThemeModeSelector: getBoolean(row.showThemeModeSelector) ?? NAVIGATION_SETTINGS_DEFAULTS.showThemeModeSelector,
+  };
+};
+const normalizeHeroQuickLinks = (value: unknown, fallback: HeroQuickLink[]): HeroQuickLink[] => {
+  const rows = Array.isArray(value) ? value : [];
+  const mapped = rows
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const row = entry as Record<string, unknown>;
+      const label = getString(row.label);
+      const href = getString(row.href);
+      if (!label || !href) return null;
+      return {
+        label: label.slice(0, 32),
+        href: normalizeHref(href, '/shop'),
+      } as HeroQuickLink;
+    })
+    .filter((entry): entry is HeroQuickLink => Boolean(entry))
+    .slice(0, 8);
+  return mapped.length > 0 ? mapped : fallback.map((entry) => ({ ...entry }));
+};
+const normalizeHeroSettings = (raw: unknown): HomepageHeroSettings => {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      ...HERO_SETTINGS_DEFAULTS,
+      quickLinks: HERO_SETTINGS_DEFAULTS.quickLinks.map((entry) => ({ ...entry })),
+    };
+  }
+  const row = raw as Record<string, unknown>;
+  const ctaTarget = String(row.ctaTarget || '').trim().toUpperCase() === 'NEW_TAB' ? 'NEW_TAB' : 'SAME_TAB';
+  return {
+    rotationSeconds: Math.max(3, Math.min(20, Math.round(getNumber(row.rotationSeconds) ?? HERO_SETTINGS_DEFAULTS.rotationSeconds))),
+    forceUppercaseCtas: getBoolean(row.forceUppercaseCtas) ?? HERO_SETTINGS_DEFAULTS.forceUppercaseCtas,
+    ctaTarget,
+    showQuickLinks: getBoolean(row.showQuickLinks) ?? HERO_SETTINGS_DEFAULTS.showQuickLinks,
+    quickLinks: normalizeHeroQuickLinks(row.quickLinks, HERO_SETTINGS_DEFAULTS.quickLinks),
   };
 };
 const normalizeAuthPageSettings = (raw: unknown): AuthPageSettings => {
@@ -2352,6 +2556,126 @@ const saveNewsletterSettings = async (next: Partial<NewsletterSettings>) => {
   return merged;
 };
 
+const readNavigationSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_NAVIGATION_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: normalizeNavigationSettings({}),
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizeNavigationSettings(JSON.parse(String(row.value || '{}'))),
+      source: 'DATABASE' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  } catch {
+    return {
+      rowId: String(row.id),
+      settings: normalizeNavigationSettings({}),
+      source: 'DEFAULT' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  }
+};
+const saveNavigationSettings = async (next: Partial<HomepageNavigationSettings>) => {
+  const existing = await readNavigationSettings();
+  const merged = normalizeNavigationSettings({
+    ...existing.settings,
+    ...next,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_NAVIGATION_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+
+const readHeroSettings = async () => {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_HERO_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: normalizeHeroSettings({}),
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizeHeroSettings(JSON.parse(String(row.value || '{}'))),
+      source: 'DATABASE' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  } catch {
+    return {
+      rowId: String(row.id),
+      settings: normalizeHeroSettings({}),
+      source: 'DEFAULT' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  }
+};
+const saveHeroSettings = async (next: Partial<HomepageHeroSettings>) => {
+  const existing = await readHeroSettings();
+  const merged = normalizeHeroSettings({
+    ...existing.settings,
+    ...next,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_HERO_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+
 const getHomepageRuntimeSnapshot = (settings: HomepageExperienceSettings): HomepageRuntimeSnapshot => ({
   homepageTemplate: settings.homepageTemplate,
   rolloutMode: settings.rolloutMode,
@@ -3052,6 +3376,24 @@ router.get('/experience-settings', async (_req, res) => {
     res.json({ success: true, data: { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS } });
   }
 });
+router.get('/navigation-settings', async (_req, res) => {
+  try {
+    const { settings } = await readNavigationSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching navigation settings:', error);
+    res.json({ success: true, data: normalizeNavigationSettings({}) });
+  }
+});
+router.get('/hero-settings', async (_req, res) => {
+  try {
+    const { settings } = await readHeroSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching hero settings:', error);
+    res.json({ success: true, data: normalizeHeroSettings({}) });
+  }
+});
 router.get('/shop-by-blocks-settings', async (_req, res) => {
   try {
     const { settings } = await readShopByBlocksSettings();
@@ -3371,6 +3713,8 @@ router.get(['/jenks-homepage-payload', '/kimi-homepage-payload'], async (_req, r
       featuredDescriptionResult,
       authPageSettingsResult,
       experienceSettingsResult,
+      navigationSettingsResult,
+      heroSettingsResult,
       heroSlidesResult,
       managedBannersResult,
       promoBadgeResult,
@@ -3393,6 +3737,8 @@ router.get(['/jenks-homepage-payload', '/kimi-homepage-payload'], async (_req, r
       readFeaturedProductDescriptionSettings().then((row) => row.settings),
       readAuthPageSettings().then((row) => row.settings),
       readHomepageExperienceSettings().then((row) => row.settings),
+      readNavigationSettings().then((row) => row.settings),
+      readHeroSettings().then((row) => row.settings),
       prisma.heroSlide.findMany({
         where: { isActive: true },
         orderBy: { displayOrder: 'asc' },
@@ -3444,6 +3790,8 @@ router.get(['/jenks-homepage-payload', '/kimi-homepage-payload'], async (_req, r
       }),
       authPageSettings: safeResult(authPageSettingsResult, { ...AUTH_PAGE_SETTINGS_DEFAULTS }),
       experienceSettings: safeResult(experienceSettingsResult, { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS }),
+      navigationSettings: safeResult(navigationSettingsResult, normalizeNavigationSettings({})),
+      heroSettings: safeResult(heroSettingsResult, normalizeHeroSettings({})),
       heroSlides: safeResult(heroSlidesResult, []),
       managedBanners,
       promoBadge,
@@ -4130,6 +4478,78 @@ router.patch(
   authorizePermissions(Permissions.HOMEPAGE_MANAGE),
   applyHomepageExperienceSettingsUpdate
 );
+
+router.get('/admin/navigation-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings, source, updatedAt } = await readNavigationSettings();
+    res.json({ success: true, data: { ...settings, source, updatedAt } });
+  } catch (error) {
+    console.error('Error fetching navigation settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch navigation settings.' });
+  }
+});
+router.put('/admin/navigation-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = navigationSettingsUpdateSchema.parse(req.body || {});
+    const settings = await saveNavigationSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating navigation settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update navigation settings.' });
+  }
+});
+router.patch('/admin/navigation-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = navigationSettingsUpdateSchema.parse(req.body || {});
+    const settings = await saveNavigationSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating navigation settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update navigation settings.' });
+  }
+});
+
+router.get('/admin/hero-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings, source, updatedAt } = await readHeroSettings();
+    res.json({ success: true, data: { ...settings, source, updatedAt } });
+  } catch (error) {
+    console.error('Error fetching hero settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch hero settings.' });
+  }
+});
+router.put('/admin/hero-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = heroSettingsUpdateSchema.parse(req.body || {});
+    const settings = await saveHeroSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating hero settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update hero settings.' });
+  }
+});
+router.patch('/admin/hero-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const payload = heroSettingsUpdateSchema.parse(req.body || {});
+    const settings = await saveHeroSettings(payload);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating hero settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update hero settings.' });
+  }
+});
 
 router.get('/admin/shop-by-blocks-settings', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
   try {

@@ -513,9 +513,17 @@ const trimToWordLimit = (text: string, limit: number) => {
 
 const CTA_BUTTON_BASE_CLASS =
   'inline-flex items-center justify-center gap-2 rounded-none border px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200';
-const CTA_BUTTON_DARK_CLASS = `${CTA_BUTTON_BASE_CLASS} border-black bg-black text-white hover:bg-white hover:text-black`;
-const CTA_BUTTON_LIGHT_CLASS = `${CTA_BUTTON_BASE_CLASS} border-black bg-white text-black hover:bg-black hover:text-white`;
-const CTA_BUTTON_OVERLAY_CLASS = `${CTA_BUTTON_BASE_CLASS} border-white bg-transparent text-white hover:bg-white hover:text-black`;
+const CTA_BUTTON_DARK_CLASS = `${CTA_BUTTON_BASE_CLASS} border-black bg-black text-white hover:bg-black hover:text-white`;
+const CTA_BUTTON_LIGHT_CLASS = `${CTA_BUTTON_BASE_CLASS} border-black bg-black text-white hover:bg-black hover:text-white`;
+const CTA_BUTTON_OVERLAY_CLASS = `${CTA_BUTTON_BASE_CLASS} border-black bg-black text-white hover:bg-black hover:text-white`;
+const HERO_SETTINGS_DEFAULTS = {
+  rotationSeconds: 6,
+  forceUppercaseCtas: true,
+  ctaTarget: 'SAME_TAB' as 'SAME_TAB' | 'NEW_TAB',
+  showQuickLinks: true,
+  quickLinks: [] as Array<{ label: string; href: string }>,
+};
+const toCtaLabel = (value: unknown, fallback = 'SHOP NOW') => clampText(value, 60, fallback).toUpperCase();
 
 const productBasePath = (productType: string) => {
   if (productType === 'DESIGN') return '/custom';
@@ -685,7 +693,7 @@ function EditorialFeatureSection({
               {clampText(description, 140, 'Discover premium African fashion stories.')}
             </p>
             <Link to={safeHref(ctaLink, '/shop')} className={`${CTA_BUTTON_OVERLAY_CLASS} mt-6`}>
-              {clampText(ctaText, 24, 'Explore')}
+              {toCtaLabel(ctaText, 'Explore')}
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
@@ -700,6 +708,8 @@ export default function Home() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
   const [activeCountryRegion, setActiveCountryRegion] = useState<'ALL' | AfricanRegion>('ALL');
+  const [showAllCountries, setShowAllCountries] = useState(false);
+  const [countryShuffleSeed] = useState(() => Date.now());
   const [hoveredHowItWorksId, setHoveredHowItWorksId] = useState<number | null>(null);
   const [categoryImageById, setCategoryImageById] = useState<Record<string, string>>({});
   const [newsletterEmail, setNewsletterEmail] = useState('');
@@ -749,6 +759,13 @@ export default function Home() {
     queryKey: ['homepageJenksPayloadV1'],
     queryFn: async () => {
       const response = await api.homepageSections.getJenksHomepagePayload();
+      return response.success ? response.data : null;
+    },
+  });
+  const { data: heroSettingsData } = useQuery({
+    queryKey: ['homepageHeroSettingsV1'],
+    queryFn: async () => {
+      const response = await api.homepageSections.getHeroSettings();
       return response.success ? response.data : null;
     },
   });
@@ -827,9 +844,31 @@ export default function Home() {
       }),
     [heroSlidesDataResolved, managedBannersDataResolved]
   );
+  const heroSettings = useMemo(() => {
+    const row = heroSettingsData && typeof heroSettingsData === 'object' ? (heroSettingsData as any) : {};
+    const quickLinks = Array.isArray(row.quickLinks)
+      ? row.quickLinks
+          .map((entry: any) => ({
+            label: String(entry?.label || '').trim(),
+            href: safeHref(entry?.href, '/shop'),
+          }))
+          .filter((entry: any) => Boolean(entry.label && entry.href))
+          .slice(0, 8)
+      : [];
+    return {
+      rotationSeconds: Math.max(3, Math.min(20, Number(row.rotationSeconds || HERO_SETTINGS_DEFAULTS.rotationSeconds))),
+      forceUppercaseCtas: row.forceUppercaseCtas !== false,
+      ctaTarget: row.ctaTarget === 'NEW_TAB' ? 'NEW_TAB' : 'SAME_TAB',
+      showQuickLinks: row.showQuickLinks !== false,
+      quickLinks,
+    } as typeof HERO_SETTINGS_DEFAULTS;
+  }, [heroSettingsData]);
   const heroQuickLinks = useMemo(
-    () => mapHeroQuickLinks(experienceSettings?.kimiCopy),
-    [experienceSettings?.kimiCopy]
+    () => {
+      if (heroSettings.quickLinks.length > 0) return heroSettings.quickLinks;
+      return mapHeroQuickLinks(experienceSettings?.kimiCopy);
+    },
+    [experienceSettings?.kimiCopy, heroSettings.quickLinks]
   );
   const trustBadges = useMemo(
     () => mapTrustBadges(experienceSettings?.trustBadges, TRUST_BADGES),
@@ -899,6 +938,26 @@ export default function Home() {
       }),
     [activeCountryRegion, countries]
   );
+  const featuredCountries = useMemo(() => {
+    const rows = [...visibleCountries];
+    let seed = Number(countryShuffleSeed || Date.now());
+    const random = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed / 4294967296;
+    };
+    for (let i = rows.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(random() * (i + 1));
+      [rows[i], rows[j]] = [rows[j], rows[i]];
+    }
+    return rows.slice(0, 6);
+  }, [countryShuffleSeed, visibleCountries]);
+  const allCountriesForGrid = useMemo(() => {
+    const featuredNames = new Set(featuredCountries.map((entry) => String(entry.name || '').toLowerCase()));
+    return [
+      ...featuredCountries,
+      ...visibleCountries.filter((entry) => !featuredNames.has(String(entry.name || '').toLowerCase())),
+    ];
+  }, [featuredCountries, visibleCountries]);
   const regionCountByKey = useMemo(() => {
     const counts: Record<'ALL' | AfricanRegion, number> = {
       ALL: countries.length,
@@ -1026,6 +1085,10 @@ export default function Home() {
     () => mapDesignerSpotlightTitle(experienceSettings?.kimiCopy),
     [experienceSettings?.kimiCopy]
   );
+
+  useEffect(() => {
+    setShowAllCountries(false);
+  }, [activeCountryRegion]);
 
   useEffect(() => {
     if (categories.length === 0) return;
@@ -1171,9 +1234,9 @@ export default function Home() {
     }
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
-    }, 6000);
+    }, Math.max(3000, Number(heroSettings.rotationSeconds || 6) * 1000));
     return () => clearInterval(timer);
-  }, [heroSlides.length, useMotion]);
+  }, [heroSettings.rotationSeconds, heroSlides.length, useMotion]);
 
   useEffect(() => {
     if (!useMotion) {
@@ -1415,26 +1478,45 @@ export default function Home() {
                           'Made by Africans. Worn by the world.'
                         )}
                       </p>
-                      <div className="mb-5 flex flex-wrap items-center gap-2">
-                        {heroQuickLinks.map((quickLink) => (
-                          <Link
-                            key={`${slide.id}-${quickLink.href}`}
-                            to={safeHref(quickLink.href, '/shop')}
-                            onClick={() => handleHeroQuickLinkClick(quickLink.label, quickLink.href)}
-                            className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}
-                          >
-                            {clampText(quickLink.label, 32, 'Explore').toUpperCase()}
-                          </Link>
-                        ))}
-                      </div>
-                      <Link
-                        to={safeHref(slide.ctaLink, '/ready-to-wear')}
-                        onClick={() => handleHeroCtaClick(slide)}
-                        className={CTA_BUTTON_LIGHT_CLASS}
-                      >
-                        {clampText(slide.ctaText || 'SHOP NOW', 24, 'SHOP NOW').toUpperCase()}
-                        <ArrowRight className="w-4 h-4" />
-                      </Link>
+                      {heroSettings.showQuickLinks ? (
+                        <div className="mb-5 flex flex-wrap items-center gap-2">
+                          {heroQuickLinks.map((quickLink) => (
+                            <Link
+                              key={`${slide.id}-${quickLink.href}`}
+                              to={safeHref(quickLink.href, '/shop')}
+                              onClick={() => handleHeroQuickLinkClick(quickLink.label, quickLink.href)}
+                              className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}
+                            >
+                              {toCtaLabel(quickLink.label, 'Explore')}
+                            </Link>
+                          ))}
+                        </div>
+                      ) : null}
+                      {heroSettings.ctaTarget === 'NEW_TAB' ? (
+                        <a
+                          href={safeHref(slide.ctaLink, '/ready-to-wear')}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => handleHeroCtaClick(slide)}
+                          className={CTA_BUTTON_LIGHT_CLASS}
+                        >
+                          {heroSettings.forceUppercaseCtas
+                            ? toCtaLabel(slide.ctaText || 'SHOP NOW', 'SHOP NOW')
+                            : clampText(slide.ctaText || 'SHOP NOW', 24, 'SHOP NOW')}
+                          <ArrowRight className="w-4 h-4" />
+                        </a>
+                      ) : (
+                        <Link
+                          to={safeHref(slide.ctaLink, '/ready-to-wear')}
+                          onClick={() => handleHeroCtaClick(slide)}
+                          className={CTA_BUTTON_LIGHT_CLASS}
+                        >
+                          {heroSettings.forceUppercaseCtas
+                            ? toCtaLabel(slide.ctaText || 'SHOP NOW', 'SHOP NOW')
+                            : clampText(slide.ctaText || 'SHOP NOW', 24, 'SHOP NOW')}
+                          <ArrowRight className="w-4 h-4" />
+                        </Link>
+                      )}
                       {heroVariant === 'CLEAN_COMMERCE' ? (
                         <div className="mt-5 flex w-full max-w-xl items-center gap-2 rounded-md bg-white/95 p-2 text-black">
                           <Search className="h-4 w-4 text-gray-500" />
@@ -1574,44 +1656,72 @@ export default function Home() {
                   </div>
                 ) : null}
                 <Link to="/shop" className={`${CTA_BUTTON_OVERLAY_CLASS} mt-7`}>
-                  Explore countries
+                  {toCtaLabel('Explore countries', 'Explore countries')}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
               <div className="lg:col-span-7">
-                <div className="divide-y divide-white/10 rounded-md border border-white/10">
-                  {visibleCountries.slice(0, 12).map((country) => (
-                    <Link
-                      key={`${country.name}-${country.flagCode || 'na'}`}
-                      to={safeHref(country.href, `/country-products?country=${encodeURIComponent(country.name)}`)}
-                      className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-white/80 transition-colors hover:bg-white/5 hover:text-white"
-                    >
-                      <span className="col-span-1 flex items-center justify-center">
-                        {country.flagCode ? (
-                          <img
-                            src={countryCodeToFlagImageUrl(country.flagCode)}
-                            alt={`${country.name} flag`}
-                            className="h-5 w-7 rounded-sm object-cover shadow-sm"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <span className="text-[10px] font-semibold uppercase">{sanitizeCountryCode(country.name) || '--'}</span>
-                        )}
-                      </span>
-                      <span className="col-span-5 text-sm font-semibold">
-                        {country.name}
-                        <span className="ml-2 text-[10px] uppercase tracking-[0.14em] text-white/55">
-                          {country.region}
-                        </span>
-                      </span>
-                      <span className="col-span-6 text-right text-xs text-white/60">{country.fabrics}</span>
-                      <span className="col-span-12 text-right text-[10px] uppercase tracking-[0.14em] text-white/50">
-                        {country.productCount && country.productCount > 0
-                          ? `${country.productCount.toLocaleString()} products`
-                          : 'Explore products'}
-                      </span>
-                    </Link>
-                  ))}
+                <div className="space-y-4">
+                  <div className="flex flex-nowrap gap-3 overflow-x-auto pb-1">
+                    {featuredCountries.map((country) => (
+                      <Link
+                        key={`featured-${country.name}-${country.flagCode || 'na'}`}
+                        to={safeHref(country.href, `/country-products?country=${encodeURIComponent(country.name)}`)}
+                        className="min-w-[170px] rounded-md border border-white/15 bg-white/5 px-3 py-3 text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+                      >
+                        <div className="flex items-center gap-2">
+                          {country.flagCode ? (
+                            <img
+                              src={countryCodeToFlagImageUrl(country.flagCode)}
+                              alt={`${country.name} flag`}
+                              className="h-5 w-7 rounded-sm object-cover shadow-sm"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="text-[10px] font-semibold uppercase">{sanitizeCountryCode(country.name) || '--'}</span>
+                          )}
+                          <span className="text-xs font-semibold">{country.name}</span>
+                        </div>
+                        <p className="mt-2 text-[10px] uppercase tracking-[0.12em] text-white/55">{country.region}</p>
+                        <p className="text-[11px] text-white/70">{country.fabrics}</p>
+                      </Link>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAllCountries((prev) => !prev)}
+                    className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-white/80 hover:text-white"
+                  >
+                    {showAllCountries
+                      ? 'Show featured countries only'
+                      : `Show all ${Math.max(visibleCountries.length, 54).toLocaleString()} countries`}
+                    <ArrowRight className={`h-3.5 w-3.5 transition-transform ${showAllCountries ? 'rotate-90' : ''}`} />
+                  </button>
+                  {showAllCountries ? (
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-12">
+                      {allCountriesForGrid.map((country) => (
+                        <Link
+                          key={`all-${country.name}-${country.flagCode || 'na'}`}
+                          to={safeHref(country.href, `/country-products?country=${encodeURIComponent(country.name)}`)}
+                          className="rounded-md border border-white/12 bg-white/5 px-2 py-3 text-center text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+                        >
+                          <span className="mx-auto flex items-center justify-center">
+                            {country.flagCode ? (
+                              <img
+                                src={countryCodeToFlagImageUrl(country.flagCode)}
+                                alt={`${country.name} flag`}
+                                className="h-5 w-7 rounded-sm object-cover shadow-sm"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <span className="text-[10px] font-semibold uppercase">{sanitizeCountryCode(country.name) || '--'}</span>
+                            )}
+                          </span>
+                          <p className="mt-2 text-[11px] font-semibold leading-tight">{country.name}</p>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -1728,8 +1838,8 @@ export default function Home() {
                         {categories[0].countLabel}
                       </p>
                     ) : null}
-                    <span className="inline-flex items-center justify-center border border-white text-white rounded-none px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200 group-hover:bg-white group-hover:text-black">
-                      {categories[0].ctaText || 'SHOP NOW'}
+                    <span className="inline-flex items-center justify-center rounded-none border border-black bg-black px-6 py-2.5 text-sm font-semibold tracking-wider text-white transition-colors duration-200 group-hover:bg-black group-hover:text-white">
+                      {toCtaLabel(categories[0].ctaText, 'SHOP NOW')}
                     </span>
                   </div>
                 </Link>
@@ -1756,8 +1866,8 @@ export default function Home() {
                         {category.countLabel}
                       </p>
                     ) : null}
-                    <span className="inline-flex items-center justify-center border border-white text-white rounded-none px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200 group-hover:bg-white group-hover:text-black">
-                      {category.ctaText || 'SHOP NOW'}
+                    <span className="inline-flex items-center justify-center rounded-none border border-black bg-black px-6 py-2.5 text-sm font-semibold tracking-wider text-white transition-colors duration-200 group-hover:bg-black group-hover:text-white">
+                      {toCtaLabel(category.ctaText, 'SHOP NOW')}
                     </span>
                   </div>
                 </Link>
@@ -1787,8 +1897,8 @@ export default function Home() {
                         {category.countLabel}
                       </p>
                     ) : null}
-                    <span className="inline-flex items-center justify-center border border-white text-white rounded-none px-6 py-2.5 text-sm font-semibold tracking-wider transition-colors duration-200 group-hover:bg-white group-hover:text-black">
-                      {category.ctaText || 'SHOP NOW'}
+                    <span className="inline-flex items-center justify-center rounded-none border border-black bg-black px-6 py-2.5 text-sm font-semibold tracking-wider text-white transition-colors duration-200 group-hover:bg-black group-hover:text-white">
+                      {toCtaLabel(category.ctaText, 'SHOP NOW')}
                     </span>
                   </div>
                 </Link>
@@ -1944,7 +2054,7 @@ export default function Home() {
                 to={freshDropsConfig.ctaLink}
                 className={CTA_BUTTON_DARK_CLASS}
               >
-                {freshDropsConfig.ctaText}
+                {toCtaLabel(freshDropsConfig.ctaText, 'SHOP NOW')}
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
@@ -2052,12 +2162,12 @@ export default function Home() {
                 rel="noreferrer"
                 className={CTA_BUTTON_OVERLAY_CLASS}
               >
-                {heritage.ctaText}
+                {toCtaLabel(heritage.ctaText, 'Read Story')}
                 <ArrowRight className="w-4 h-4" />
               </a>
             ) : (
               <Link to={heritage.ctaLink} className={CTA_BUTTON_OVERLAY_CLASS}>
-                {heritage.ctaText}
+                {toCtaLabel(heritage.ctaText, 'Read Story')}
                 <ArrowRight className="w-4 h-4" />
               </Link>
             )}

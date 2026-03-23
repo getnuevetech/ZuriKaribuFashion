@@ -280,6 +280,36 @@ interface NewsletterSettings {
   successMessage: string;
   duplicateMessage: string;
 }
+interface NavigationLinkRow {
+  label: string;
+  href: string;
+  enabled: boolean;
+}
+interface HomepageNavigationSettings {
+  logoMode: 'TEXT' | 'IMAGE';
+  logoText: string;
+  logoImageUrl: string;
+  logoAltText: string;
+  logoWidth: number;
+  logoHeight: number;
+  leftMenuLinks: NavigationLinkRow[];
+  rightMenuLinks: NavigationLinkRow[];
+  hamburgerMenuLinks: NavigationLinkRow[];
+  showHamburger: boolean;
+  showSearchIcon: boolean;
+  showCartIcon: boolean;
+  showProfileIcon: boolean;
+  showCurrencySelector: boolean;
+  showExperienceModeSelector: boolean;
+  showThemeModeSelector: boolean;
+}
+interface HomepageHeroSettings {
+  rotationSeconds: number;
+  forceUppercaseCtas: boolean;
+  ctaTarget: 'SAME_TAB' | 'NEW_TAB';
+  showQuickLinks: boolean;
+  quickLinks: Array<{ label: string; href: string }>;
+}
 
 const FEATURED_DESCRIPTION_PREVIEW_TEXT =
   'Hand-finished African fashion piece crafted with premium fabric for modern style and everyday comfort.';
@@ -396,6 +426,52 @@ const NEWSLETTER_DEFAULTS: NewsletterSettings = {
   successMessage: 'You are subscribed. We will keep you updated.',
   duplicateMessage: 'You are already subscribed to our newsletter.',
 };
+const NAVIGATION_SETTINGS_DEFAULTS: HomepageNavigationSettings = {
+  logoMode: 'TEXT',
+  logoText: 'ZURIKARIBU',
+  logoImageUrl: '',
+  logoAltText: 'ZuriKaribu',
+  logoWidth: 180,
+  logoHeight: 48,
+  leftMenuLinks: [
+    { label: 'Home', href: '/', enabled: true },
+    { label: 'Ready To Wear', href: '/ready-to-wear', enabled: true },
+    { label: 'Fabric To Buy', href: '/fabrics', enabled: true },
+    { label: 'Custom To Wear', href: '/custom', enabled: true },
+  ],
+  rightMenuLinks: [
+    { label: 'Shop', href: '/shop', enabled: true },
+    { label: 'About Us', href: '/#about', enabled: true },
+    { label: 'Contact Us', href: '/contact', enabled: true },
+  ],
+  hamburgerMenuLinks: [
+    { label: 'Home', href: '/', enabled: true },
+    { label: 'Shop', href: '/shop', enabled: true },
+    { label: 'Ready To Wear', href: '/ready-to-wear', enabled: true },
+    { label: 'Fabric To Buy', href: '/fabrics', enabled: true },
+    { label: 'Custom To Wear', href: '/custom', enabled: true },
+    { label: 'About Us', href: '/#about', enabled: true },
+    { label: 'Contact Us', href: '/contact', enabled: true },
+  ],
+  showHamburger: true,
+  showSearchIcon: true,
+  showCartIcon: true,
+  showProfileIcon: true,
+  showCurrencySelector: true,
+  showExperienceModeSelector: true,
+  showThemeModeSelector: true,
+};
+const HERO_SETTINGS_DEFAULTS: HomepageHeroSettings = {
+  rotationSeconds: 6,
+  forceUppercaseCtas: true,
+  ctaTarget: 'SAME_TAB',
+  showQuickLinks: true,
+  quickLinks: [
+    { label: 'Ready to Wear', href: '/ready-to-wear' },
+    { label: 'Custom', href: '/custom' },
+    { label: 'Fabrics', href: '/fabrics' },
+  ],
+};
 const normalizeShopByOptionRow = (entry: any): ShopByOption | null => {
   if (!entry || typeof entry !== 'object') return null;
   const label = String(entry.label || '').trim().slice(0, 50);
@@ -478,6 +554,79 @@ const parseOptionLines = (input: string): ShopByOption[] =>
     })
     .filter((entry): entry is ShopByOption => Boolean(entry))
     .slice(0, 12);
+const formatNavigationLines = (rows: NavigationLinkRow[]) =>
+  rows.map((row) => `${row.enabled ? '1' : '0'} | ${row.label} | ${row.href}`).join('\n');
+const parseNavigationLines = (input: string): NavigationLinkRow[] =>
+  String(input || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const tokens = line.split('|').map((token) => token.trim());
+      if (tokens.length < 3) return null;
+      const enabled = !['0', 'false', 'off', 'no'].includes(tokens[0].toLowerCase());
+      const label = String(tokens[1] || '').slice(0, 40).trim();
+      const href = String(tokens.slice(2).join(' | ') || '').slice(0, 255).trim();
+      if (!label || !href) return null;
+      return { label, href, enabled } as NavigationLinkRow;
+    })
+    .filter((entry): entry is NavigationLinkRow => Boolean(entry))
+    .slice(0, 20);
+const normalizeNavigationState = (value: any): HomepageNavigationSettings => {
+  const source = value && typeof value === 'object' ? value : {};
+  const parseLinks = (rows: any, fallback: NavigationLinkRow[]) => {
+    const normalized = (Array.isArray(rows) ? rows : [])
+      .map((entry) => {
+        if (!entry || typeof entry !== 'object') return null;
+        const label = String((entry as any).label || '').trim().slice(0, 40);
+        const href = String((entry as any).href || '').trim().slice(0, 255);
+        if (!label || !href) return null;
+        return { label, href, enabled: (entry as any).enabled !== false } as NavigationLinkRow;
+      })
+      .filter((entry): entry is NavigationLinkRow => Boolean(entry))
+      .slice(0, 20);
+    return normalized.length > 0 ? normalized : [...fallback];
+  };
+  return {
+    logoMode: String(source.logoMode || '').toUpperCase() === 'IMAGE' ? 'IMAGE' : 'TEXT',
+    logoText: String(source.logoText || NAVIGATION_SETTINGS_DEFAULTS.logoText).trim().slice(0, 80) || NAVIGATION_SETTINGS_DEFAULTS.logoText,
+    logoImageUrl: String(source.logoImageUrl || '').trim().slice(0, 2000),
+    logoAltText:
+      String(source.logoAltText || NAVIGATION_SETTINGS_DEFAULTS.logoAltText).trim().slice(0, 120) ||
+      NAVIGATION_SETTINGS_DEFAULTS.logoAltText,
+    logoWidth: Math.max(40, Math.min(600, Number(source.logoWidth || NAVIGATION_SETTINGS_DEFAULTS.logoWidth))),
+    logoHeight: Math.max(20, Math.min(300, Number(source.logoHeight || NAVIGATION_SETTINGS_DEFAULTS.logoHeight))),
+    leftMenuLinks: parseLinks(source.leftMenuLinks, NAVIGATION_SETTINGS_DEFAULTS.leftMenuLinks),
+    rightMenuLinks: parseLinks(source.rightMenuLinks, NAVIGATION_SETTINGS_DEFAULTS.rightMenuLinks),
+    hamburgerMenuLinks: parseLinks(source.hamburgerMenuLinks, NAVIGATION_SETTINGS_DEFAULTS.hamburgerMenuLinks),
+    showHamburger: source.showHamburger !== false,
+    showSearchIcon: source.showSearchIcon !== false,
+    showCartIcon: source.showCartIcon !== false,
+    showProfileIcon: source.showProfileIcon !== false,
+    showCurrencySelector: source.showCurrencySelector !== false,
+    showExperienceModeSelector: source.showExperienceModeSelector !== false,
+    showThemeModeSelector: source.showThemeModeSelector !== false,
+  };
+};
+const normalizeHeroSettingsState = (value: any): HomepageHeroSettings => {
+  const source = value && typeof value === 'object' ? value : {};
+  const quickLinks = (Array.isArray(source.quickLinks) ? source.quickLinks : [])
+    .map((entry: any) => {
+      const label = String(entry?.label || '').trim().slice(0, 32);
+      const href = String(entry?.href || '').trim().slice(0, 255);
+      if (!label || !href) return null;
+      return { label, href };
+    })
+    .filter((entry): entry is { label: string; href: string } => Boolean(entry))
+    .slice(0, 8);
+  return {
+    rotationSeconds: Math.max(3, Math.min(20, Number(source.rotationSeconds || HERO_SETTINGS_DEFAULTS.rotationSeconds))),
+    forceUppercaseCtas: source.forceUppercaseCtas !== false,
+    ctaTarget: String(source.ctaTarget || '').toUpperCase() === 'NEW_TAB' ? 'NEW_TAB' : 'SAME_TAB',
+    showQuickLinks: source.showQuickLinks !== false,
+    quickLinks: quickLinks.length > 0 ? quickLinks : [...HERO_SETTINGS_DEFAULTS.quickLinks],
+  };
+};
 const normalizeHomepageExperienceState = (value: any): HomepageExperienceSettings => {
   const source = value && typeof value === 'object' ? value : {};
   const trustRows = Array.isArray(source.trustBadges) ? source.trustBadges : [];
@@ -845,6 +994,22 @@ export default function HomepageSections() {
   const [freshDropsSettingsSaving, setFreshDropsSettingsSaving] = useState(false);
   const [newsletterSettings, setNewsletterSettings] = useState<NewsletterSettings>(NEWSLETTER_DEFAULTS);
   const [newsletterSettingsSaving, setNewsletterSettingsSaving] = useState(false);
+  const [navigationSettings, setNavigationSettings] = useState<HomepageNavigationSettings>(NAVIGATION_SETTINGS_DEFAULTS);
+  const [navigationLeftLinksInput, setNavigationLeftLinksInput] = useState<string>(
+    formatNavigationLines(NAVIGATION_SETTINGS_DEFAULTS.leftMenuLinks)
+  );
+  const [navigationRightLinksInput, setNavigationRightLinksInput] = useState<string>(
+    formatNavigationLines(NAVIGATION_SETTINGS_DEFAULTS.rightMenuLinks)
+  );
+  const [navigationHamburgerLinksInput, setNavigationHamburgerLinksInput] = useState<string>(
+    formatNavigationLines(NAVIGATION_SETTINGS_DEFAULTS.hamburgerMenuLinks)
+  );
+  const [navigationSettingsSaving, setNavigationSettingsSaving] = useState(false);
+  const [heroSettings, setHeroSettings] = useState<HomepageHeroSettings>(HERO_SETTINGS_DEFAULTS);
+  const [heroQuickLinksInput, setHeroQuickLinksInput] = useState<string>(
+    HERO_SETTINGS_DEFAULTS.quickLinks.map((row) => `${row.label} | ${row.href}`).join('\n')
+  );
+  const [heroSettingsSaving, setHeroSettingsSaving] = useState(false);
   const [authPageImageUploadingField, setAuthPageImageUploadingField] = useState<
     'loginHeroImage' | 'registerHeroImage' | 'forgotPasswordHeroImage' | ''
   >('');
@@ -883,6 +1048,8 @@ export default function HomepageSections() {
     fetchShopByBlocksSettings();
     fetchFreshDropsSettings();
     fetchNewsletterSettings();
+    fetchNavigationSettings();
+    fetchHeroSettings();
   }, []);
 
   useEffect(() => {
@@ -1085,6 +1252,32 @@ export default function HomepageSections() {
       console.error('Error fetching newsletter settings:', error);
     }
   };
+  const fetchNavigationSettings = async () => {
+    try {
+      const response = await api.homepageSections.getAdminNavigationSettings();
+      if (response.success && response.data) {
+        const normalized = normalizeNavigationState(response.data);
+        setNavigationSettings(normalized);
+        setNavigationLeftLinksInput(formatNavigationLines(normalized.leftMenuLinks));
+        setNavigationRightLinksInput(formatNavigationLines(normalized.rightMenuLinks));
+        setNavigationHamburgerLinksInput(formatNavigationLines(normalized.hamburgerMenuLinks));
+      }
+    } catch (error) {
+      console.error('Error fetching navigation settings:', error);
+    }
+  };
+  const fetchHeroSettings = async () => {
+    try {
+      const response = await api.homepageSections.getAdminHeroSettings();
+      if (response.success && response.data) {
+        const normalized = normalizeHeroSettingsState(response.data);
+        setHeroSettings(normalized);
+        setHeroQuickLinksInput(normalized.quickLinks.map((row) => `${row.label} | ${row.href}`).join('\n'));
+      }
+    } catch (error) {
+      console.error('Error fetching hero settings:', error);
+    }
+  };
 
   const handleSaveHowItWorksStyleSettings = async () => {
     setHowItWorksStyleSaving(true);
@@ -1268,6 +1461,56 @@ export default function HomepageSections() {
       window.alert(error?.response?.data?.message || 'Failed to save newsletter settings.');
     } finally {
       setNewsletterSettingsSaving(false);
+    }
+  };
+  const handleSaveNavigationSettings = async () => {
+    setNavigationSettingsSaving(true);
+    try {
+      const payload: HomepageNavigationSettings = {
+        ...navigationSettings,
+        leftMenuLinks: parseNavigationLines(navigationLeftLinksInput),
+        rightMenuLinks: parseNavigationLines(navigationRightLinksInput),
+        hamburgerMenuLinks: parseNavigationLines(navigationHamburgerLinksInput),
+      };
+      const response = await api.homepageSections.updateAdminNavigationSettings(payload);
+      if (response.success && response.data) {
+        const normalized = normalizeNavigationState(response.data);
+        setNavigationSettings(normalized);
+        setNavigationLeftLinksInput(formatNavigationLines(normalized.leftMenuLinks));
+        setNavigationRightLinksInput(formatNavigationLines(normalized.rightMenuLinks));
+        setNavigationHamburgerLinksInput(formatNavigationLines(normalized.hamburgerMenuLinks));
+        window.alert('Navigation settings saved.');
+      }
+    } catch (error: any) {
+      console.error('Error saving navigation settings:', error);
+      window.alert(error?.response?.data?.message || 'Failed to save navigation settings.');
+    } finally {
+      setNavigationSettingsSaving(false);
+    }
+  };
+  const handleSaveHeroSettings = async () => {
+    setHeroSettingsSaving(true);
+    try {
+      const quickLinks = parseOptionLines(heroQuickLinksInput).map((row) => ({
+        label: row.label,
+        href: row.href,
+      }));
+      const payload: HomepageHeroSettings = {
+        ...heroSettings,
+        quickLinks: quickLinks.length > 0 ? quickLinks : [...HERO_SETTINGS_DEFAULTS.quickLinks],
+      };
+      const response = await api.homepageSections.updateAdminHeroSettings(payload);
+      if (response.success && response.data) {
+        const normalized = normalizeHeroSettingsState(response.data);
+        setHeroSettings(normalized);
+        setHeroQuickLinksInput(normalized.quickLinks.map((row) => `${row.label} | ${row.href}`).join('\n'));
+        window.alert('Hero banner settings saved.');
+      }
+    } catch (error: any) {
+      console.error('Error saving hero settings:', error);
+      window.alert(error?.response?.data?.message || 'Failed to save hero settings.');
+    } finally {
+      setHeroSettingsSaving(false);
     }
   };
 
@@ -2095,6 +2338,212 @@ export default function HomepageSections() {
           <p className="mt-1 text-sm text-gray-600">
             Manage Shop By blocks, Fresh Drops, and Newsletter content used by the canonical homepage payload.
           </p>
+        </div>
+
+        <div className="rounded-md border border-gray-200 p-4">
+          <h3 className="text-sm font-semibold text-gray-800">Top Navigation Controls</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            Manage hamburger links, logo mode/size, top menus, and icon visibility.
+          </p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Logo Mode</label>
+              <select
+                value={navigationSettings.logoMode}
+                onChange={(e) =>
+                  setNavigationSettings((prev) => ({
+                    ...prev,
+                    logoMode: e.target.value === 'IMAGE' ? 'IMAGE' : 'TEXT',
+                  }))
+                }
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              >
+                <option value="TEXT">Text</option>
+                <option value="IMAGE">Image</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Logo Text</label>
+              <input
+                type="text"
+                value={navigationSettings.logoText}
+                onChange={(e) => setNavigationSettings((prev) => ({ ...prev, logoText: e.target.value.slice(0, 80) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Logo Image URL</label>
+              <input
+                type="text"
+                value={navigationSettings.logoImageUrl}
+                onChange={(e) => setNavigationSettings((prev) => ({ ...prev, logoImageUrl: e.target.value.slice(0, 2000) }))}
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Logo Width (px)</label>
+              <input
+                type="number"
+                min={40}
+                max={600}
+                value={navigationSettings.logoWidth}
+                onChange={(e) =>
+                  setNavigationSettings((prev) => ({ ...prev, logoWidth: Math.max(40, Math.min(600, Number(e.target.value || 180))) }))
+                }
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Logo Height (px)</label>
+              <input
+                type="number"
+                min={20}
+                max={300}
+                value={navigationSettings.logoHeight}
+                onChange={(e) =>
+                  setNavigationSettings((prev) => ({ ...prev, logoHeight: Math.max(20, Math.min(300, Number(e.target.value || 48))) }))
+                }
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={navigationSettings.showHamburger} onChange={(e) => setNavigationSettings((prev) => ({ ...prev, showHamburger: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" />
+              Show Hamburger Menu
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={navigationSettings.showSearchIcon} onChange={(e) => setNavigationSettings((prev) => ({ ...prev, showSearchIcon: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" />
+              Show Search Icon
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={navigationSettings.showCartIcon} onChange={(e) => setNavigationSettings((prev) => ({ ...prev, showCartIcon: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" />
+              Show Cart Icon
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={navigationSettings.showProfileIcon} onChange={(e) => setNavigationSettings((prev) => ({ ...prev, showProfileIcon: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" />
+              Show Profile Icon
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={navigationSettings.showCurrencySelector} onChange={(e) => setNavigationSettings((prev) => ({ ...prev, showCurrencySelector: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" />
+              Show Currency Selector
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={navigationSettings.showExperienceModeSelector} onChange={(e) => setNavigationSettings((prev) => ({ ...prev, showExperienceModeSelector: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" />
+              Show Experience Mode Selector
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={navigationSettings.showThemeModeSelector} onChange={(e) => setNavigationSettings((prev) => ({ ...prev, showThemeModeSelector: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" />
+              Show Theme Selector
+            </label>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">
+                Left Menu Links (Enabled | Label | Link)
+              </label>
+              <textarea
+                value={navigationLeftLinksInput}
+                onChange={(e) => setNavigationLeftLinksInput(e.target.value)}
+                className="h-36 w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">
+                Right Menu Links (Enabled | Label | Link)
+              </label>
+              <textarea
+                value={navigationRightLinksInput}
+                onChange={(e) => setNavigationRightLinksInput(e.target.value)}
+                className="h-36 w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">
+                Hamburger Menu Links (Enabled | Label | Link)
+              </label>
+              <textarea
+                value={navigationHamburgerLinksInput}
+                onChange={(e) => setNavigationHamburgerLinksInput(e.target.value)}
+                className="h-36 w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+          </div>
+          <div className="mt-3">
+            <Button onClick={handleSaveNavigationSettings} disabled={navigationSettingsSaving}>
+              {navigationSettingsSaving ? 'Saving...' : 'Save Top Navigation'}
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-md border border-gray-200 p-4">
+          <h3 className="text-sm font-semibold text-gray-800">Hero Banner Controls</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            Configure hero CTA behavior, label styling, quick links, and slide rotation timing.
+          </p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">Rotation Seconds</label>
+              <input
+                type="number"
+                min={3}
+                max={20}
+                value={heroSettings.rotationSeconds}
+                onChange={(e) =>
+                  setHeroSettings((prev) => ({ ...prev, rotationSeconds: Math.max(3, Math.min(20, Number(e.target.value || 6))) }))
+                }
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">CTA Open Target</label>
+              <select
+                value={heroSettings.ctaTarget}
+                onChange={(e) =>
+                  setHeroSettings((prev) => ({ ...prev, ctaTarget: e.target.value === 'NEW_TAB' ? 'NEW_TAB' : 'SAME_TAB' }))
+                }
+                className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              >
+                <option value="SAME_TAB">Same Tab</option>
+                <option value="NEW_TAB">New Tab</option>
+              </select>
+            </div>
+            <div className="md:col-span-2 grid gap-2 md:grid-cols-2">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={heroSettings.forceUppercaseCtas}
+                  onChange={(e) => setHeroSettings((prev) => ({ ...prev, forceUppercaseCtas: e.target.checked }))}
+                  className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                />
+                Force uppercase CTA labels
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={heroSettings.showQuickLinks}
+                  onChange={(e) => setHeroSettings((prev) => ({ ...prev, showQuickLinks: e.target.checked }))}
+                  className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                />
+                Show Hero Quick Links
+              </label>
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-600">
+                Hero Quick Links (Label | Link)
+              </label>
+              <textarea
+                value={heroQuickLinksInput}
+                onChange={(e) => setHeroQuickLinksInput(e.target.value)}
+                className="h-24 w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+          </div>
+          <div className="mt-3">
+            <Button onClick={handleSaveHeroSettings} disabled={heroSettingsSaving}>
+              {heroSettingsSaving ? 'Saving...' : 'Save Hero Banner Controls'}
+            </Button>
+          </div>
         </div>
 
         <div className="rounded-md border border-gray-200 p-4">

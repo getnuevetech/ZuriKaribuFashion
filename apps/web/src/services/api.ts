@@ -8859,6 +8859,39 @@ const homepageSectionsApi = {
         };
       };
     }>('/homepage-sections/experience-settings'),
+  getNavigationSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        logoMode: 'TEXT' | 'IMAGE';
+        logoText: string;
+        logoImageUrl: string;
+        logoAltText: string;
+        logoWidth: number;
+        logoHeight: number;
+        leftMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+        rightMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+        hamburgerMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+        showHamburger: boolean;
+        showSearchIcon: boolean;
+        showCartIcon: boolean;
+        showProfileIcon: boolean;
+        showCurrencySelector: boolean;
+        showExperienceModeSelector: boolean;
+        showThemeModeSelector: boolean;
+      };
+    }>('/homepage-sections/navigation-settings'),
+  getHeroSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        rotationSeconds: number;
+        forceUppercaseCtas: boolean;
+        ctaTarget: 'SAME_TAB' | 'NEW_TAB';
+        showQuickLinks: boolean;
+        quickLinks: Array<{ label: string; href: string }>;
+      };
+    }>('/homepage-sections/hero-settings'),
   getJenksHomepagePayload: () =>
     apiService.get<{
       success: boolean;
@@ -8931,6 +8964,31 @@ const homepageSectionsApi = {
             quickPathCustomLabel: string;
             quickPathFabricsLabel: string;
           };
+        };
+        navigationSettings: {
+          logoMode: 'TEXT' | 'IMAGE';
+          logoText: string;
+          logoImageUrl: string;
+          logoAltText: string;
+          logoWidth: number;
+          logoHeight: number;
+          leftMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+          rightMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+          hamburgerMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+          showHamburger: boolean;
+          showSearchIcon: boolean;
+          showCartIcon: boolean;
+          showProfileIcon: boolean;
+          showCurrencySelector: boolean;
+          showExperienceModeSelector: boolean;
+          showThemeModeSelector: boolean;
+        };
+        heroSettings: {
+          rotationSeconds: number;
+          forceUppercaseCtas: boolean;
+          ctaTarget: 'SAME_TAB' | 'NEW_TAB';
+          showQuickLinks: boolean;
+          quickLinks: Array<{ label: string; href: string }>;
         };
         heroSlides: any[];
         managedBanners: any[];
@@ -9134,6 +9192,43 @@ const homepageSectionsApi = {
         updatedAt?: string | null;
       };
     }>('/homepage-sections/admin/newsletter-settings'),
+  getAdminNavigationSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        logoMode: 'TEXT' | 'IMAGE';
+        logoText: string;
+        logoImageUrl: string;
+        logoAltText: string;
+        logoWidth: number;
+        logoHeight: number;
+        leftMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+        rightMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+        hamburgerMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+        showHamburger: boolean;
+        showSearchIcon: boolean;
+        showCartIcon: boolean;
+        showProfileIcon: boolean;
+        showCurrencySelector: boolean;
+        showExperienceModeSelector: boolean;
+        showThemeModeSelector: boolean;
+        source?: 'DATABASE' | 'DEFAULT';
+        updatedAt?: string | null;
+      };
+    }>('/homepage-sections/admin/navigation-settings'),
+  getAdminHeroSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        rotationSeconds: number;
+        forceUppercaseCtas: boolean;
+        ctaTarget: 'SAME_TAB' | 'NEW_TAB';
+        showQuickLinks: boolean;
+        quickLinks: Array<{ label: string; href: string }>;
+        source?: 'DATABASE' | 'DEFAULT';
+        updatedAt?: string | null;
+      };
+    }>('/homepage-sections/admin/hero-settings'),
   getAdminExperienceSettings: () =>
     apiService.get<{
       success: boolean;
@@ -9467,6 +9562,62 @@ const homepageSectionsApi = {
         duplicateMessage: string;
       };
     }>('/homepage-sections/admin/newsletter-settings', data),
+  updateAdminNavigationSettings: (data: {
+    logoMode?: 'TEXT' | 'IMAGE';
+    logoText?: string;
+    logoImageUrl?: string;
+    logoAltText?: string;
+    logoWidth?: number;
+    logoHeight?: number;
+    leftMenuLinks?: Array<{ label: string; href: string; enabled?: boolean }>;
+    rightMenuLinks?: Array<{ label: string; href: string; enabled?: boolean }>;
+    hamburgerMenuLinks?: Array<{ label: string; href: string; enabled?: boolean }>;
+    showHamburger?: boolean;
+    showSearchIcon?: boolean;
+    showCartIcon?: boolean;
+    showProfileIcon?: boolean;
+    showCurrencySelector?: boolean;
+    showExperienceModeSelector?: boolean;
+    showThemeModeSelector?: boolean;
+  }) =>
+    apiService.put<{
+      success: boolean;
+      data: {
+        logoMode: 'TEXT' | 'IMAGE';
+        logoText: string;
+        logoImageUrl: string;
+        logoAltText: string;
+        logoWidth: number;
+        logoHeight: number;
+        leftMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+        rightMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+        hamburgerMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+        showHamburger: boolean;
+        showSearchIcon: boolean;
+        showCartIcon: boolean;
+        showProfileIcon: boolean;
+        showCurrencySelector: boolean;
+        showExperienceModeSelector: boolean;
+        showThemeModeSelector: boolean;
+      };
+    }>('/homepage-sections/admin/navigation-settings', data),
+  updateAdminHeroSettings: (data: {
+    rotationSeconds?: number;
+    forceUppercaseCtas?: boolean;
+    ctaTarget?: 'SAME_TAB' | 'NEW_TAB';
+    showQuickLinks?: boolean;
+    quickLinks?: Array<{ label: string; href: string }>;
+  }) =>
+    apiService.put<{
+      success: boolean;
+      data: {
+        rotationSeconds: number;
+        forceUppercaseCtas: boolean;
+        ctaTarget: 'SAME_TAB' | 'NEW_TAB';
+        showQuickLinks: boolean;
+        quickLinks: Array<{ label: string; href: string }>;
+      };
+    }>('/homepage-sections/admin/hero-settings', data),
 
   getAdminCountryImageGeneration: () =>
     readCountryImageGenerationWithFallback<{

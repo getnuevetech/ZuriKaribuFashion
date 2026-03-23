@@ -25,6 +25,46 @@ const TOP_STRIP_DEFAULTS = {
   textColor: '#ffffff',
   backgroundColor: '#000000',
 };
+type NavMenuLink = {
+  label: string;
+  href: string;
+  enabled?: boolean;
+};
+const NAVIGATION_SETTINGS_DEFAULTS = {
+  logoMode: 'TEXT' as 'TEXT' | 'IMAGE',
+  logoText: 'ZURIKARIBU',
+  logoImageUrl: '',
+  logoAltText: 'ZuriKaribu',
+  logoWidth: 180,
+  logoHeight: 48,
+  leftMenuLinks: [
+    { label: 'Home', href: '/', enabled: true },
+    { label: 'Ready To Wear', href: '/ready-to-wear', enabled: true },
+    { label: 'Fabric To Buy', href: '/fabrics', enabled: true },
+    { label: 'Custom To Wear', href: '/custom', enabled: true },
+  ] as NavMenuLink[],
+  rightMenuLinks: [
+    { label: 'Shop', href: '/shop', enabled: true },
+    { label: 'About Us', href: '/#about', enabled: true },
+    { label: 'Contact Us', href: '/contact', enabled: true },
+  ] as NavMenuLink[],
+  hamburgerMenuLinks: [
+    { label: 'Home', href: '/', enabled: true },
+    { label: 'Shop', href: '/shop', enabled: true },
+    { label: 'Ready To Wear', href: '/ready-to-wear', enabled: true },
+    { label: 'Fabric To Buy', href: '/fabrics', enabled: true },
+    { label: 'Custom To Wear', href: '/custom', enabled: true },
+    { label: 'About Us', href: '/#about', enabled: true },
+    { label: 'Contact Us', href: '/contact', enabled: true },
+  ] as NavMenuLink[],
+  showHamburger: true,
+  showSearchIcon: true,
+  showCartIcon: true,
+  showProfileIcon: true,
+  showCurrencySelector: true,
+  showExperienceModeSelector: true,
+  showThemeModeSelector: true,
+};
 
 type SearchStatus = 'idle' | 'loading' | 'success' | 'error';
 
@@ -103,6 +143,13 @@ export default function MainLayout() {
     queryKey: ['homepageExperienceSettings'],
     queryFn: async () => {
       const response = await api.homepageSections.getExperienceSettings();
+      return response.success ? response.data : null;
+    },
+  });
+  const { data: navigationSettingsData } = useQuery({
+    queryKey: ['homepageNavigationSettings'],
+    queryFn: async () => {
+      const response = await api.homepageSections.getNavigationSettings();
       return response.success ? response.data : null;
     },
   });
@@ -316,26 +363,46 @@ export default function MainLayout() {
     setUserOverrideThemeMode(value as HomepageThemeMode);
   };
 
-  const leftNavLinks = [
-    { label: 'Home', href: '/' },
-    { label: 'Ready To Wear', href: '/ready-to-wear' },
-    { label: 'Fabric To Buy', href: '/fabrics' },
-    { label: 'Custom To Wear', href: '/custom' },
-  ];
-  const rightNavLinks = [
-    { label: 'Shop', href: '/shop' },
-    { label: 'About Us', href: '/#about' },
-    { label: 'Contact Us', href: '/contact' },
-  ];
-  const hamburgerLinks = [
-    { label: 'Home', href: '/' },
-    { label: 'Shop', href: '/shop' },
-    { label: 'Ready To Wear', href: '/ready-to-wear' },
-    { label: 'Fabric To Buy', href: '/fabrics' },
-    { label: 'Custom To Wear', href: '/custom' },
-    { label: 'About Us', href: '/#about' },
-    { label: 'Contact Us', href: '/contact' },
-  ];
+  const normalizeNavigationLinks = (value: unknown, fallback: NavMenuLink[]): NavMenuLink[] => {
+    const rows = Array.isArray(value) ? value : [];
+    const mapped = rows
+      .map((entry) => {
+        if (!entry || typeof entry !== 'object') return null;
+        const row = entry as Record<string, unknown>;
+        const label = String(row.label || '').trim();
+        const href = String(row.href || '').trim();
+        if (!label || !href) return null;
+        return {
+          label: label.slice(0, 40),
+          href,
+          enabled: row.enabled !== false,
+        } as NavMenuLink;
+      })
+      .filter((entry): entry is NavMenuLink => Boolean(entry))
+      .slice(0, 20);
+    return mapped.length > 0 ? mapped : fallback.map((entry) => ({ ...entry }));
+  };
+  const navigationSettings = {
+    ...NAVIGATION_SETTINGS_DEFAULTS,
+    ...(navigationSettingsData || {}),
+  };
+  const logoMode = navigationSettings.logoMode === 'IMAGE' ? 'IMAGE' : 'TEXT';
+  const logoText = String(navigationSettings.logoText || brandName || NAVIGATION_SETTINGS_DEFAULTS.logoText).trim() || NAVIGATION_SETTINGS_DEFAULTS.logoText;
+  const logoImageUrl = resolveAssetUrl(String(navigationSettings.logoImageUrl || '').trim()) || String(navigationSettings.logoImageUrl || '').trim();
+  const logoAltText = String(navigationSettings.logoAltText || logoText || NAVIGATION_SETTINGS_DEFAULTS.logoAltText).trim();
+  const logoWidth = Math.max(40, Math.min(600, Number(navigationSettings.logoWidth || NAVIGATION_SETTINGS_DEFAULTS.logoWidth)));
+  const logoHeight = Math.max(20, Math.min(300, Number(navigationSettings.logoHeight || NAVIGATION_SETTINGS_DEFAULTS.logoHeight)));
+  const leftNavLinks = normalizeNavigationLinks(navigationSettings.leftMenuLinks, NAVIGATION_SETTINGS_DEFAULTS.leftMenuLinks).filter(
+    (entry) => entry.enabled !== false
+  );
+  const rightNavLinks = normalizeNavigationLinks(
+    navigationSettings.rightMenuLinks,
+    NAVIGATION_SETTINGS_DEFAULTS.rightMenuLinks
+  ).filter((entry) => entry.enabled !== false);
+  const hamburgerLinks = normalizeNavigationLinks(
+    navigationSettings.hamburgerMenuLinks,
+    NAVIGATION_SETTINGS_DEFAULTS.hamburgerMenuLinks
+  ).filter((entry) => entry.enabled !== false);
   const isHeroHeader = location.pathname === '/' && !isScrolled;
   const isSplitEditorialHero = isHeroHeader && experienceSettings.heroVariant === 'SPLIT_EDITORIAL';
   const menuTextClass = isSplitEditorialHero
@@ -349,7 +416,7 @@ export default function MainLayout() {
     : isHeroHeader
       ? 'hover:bg-white/15'
       : 'hover:bg-black/5';
-  const normalizedBrandName = brandName.replace(/\s+/g, '').toUpperCase();
+  const normalizedBrandName = logoText.replace(/\s+/g, '').toUpperCase();
   const showTwoToneBrand = normalizedBrandName === 'ZURIKARIBU';
   const overlayLogoTone = isHeroHeader && !isSplitEditorialHero;
   const logoPartOneClass = overlayLogoTone ? 'text-white' : concreteTheme === 'DARK' ? 'text-white' : 'text-[#1A1A1A]';
@@ -406,31 +473,33 @@ export default function MainLayout() {
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="relative flex items-center justify-between">
             <div className="flex items-center gap-4 lg:gap-8">
-              <div className="relative">
-                <button
-                  onClick={() => setIsHamburgerOpen((prev) => !prev)}
-                  className={`rounded-full p-2 transition-colors ${iconTextClass} ${hoverSurfaceClass}`}
-                  aria-label="Toggle site menu"
-                >
-                  {isHamburgerOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-                </button>
-                {isHamburgerOpen ? (
-                  <div className="absolute left-0 top-full z-50 mt-3 w-64 rounded-xl border border-gray-100 bg-white p-2 shadow-xl">
-                    <nav className="flex flex-col">
-                      {hamburgerLinks.map((link) => (
-                        <a
-                          key={link.label}
-                          href={link.href}
-                          onClick={() => setIsHamburgerOpen(false)}
-                          className="rounded-lg px-3 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50"
-                        >
-                          {link.label}
-                        </a>
-                      ))}
-                    </nav>
-                  </div>
-                ) : null}
-              </div>
+              {navigationSettings.showHamburger ? (
+                <div className="relative">
+                  <button
+                    onClick={() => setIsHamburgerOpen((prev) => !prev)}
+                    className={`rounded-full p-2 transition-colors ${iconTextClass} ${hoverSurfaceClass}`}
+                    aria-label="Toggle site menu"
+                  >
+                    {isHamburgerOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                  </button>
+                  {isHamburgerOpen ? (
+                    <div className="absolute left-0 top-full z-50 mt-3 w-64 rounded-xl border border-gray-100 bg-white p-2 shadow-xl">
+                      <nav className="flex flex-col">
+                        {hamburgerLinks.map((link) => (
+                          <a
+                            key={link.label}
+                            href={link.href}
+                            onClick={() => setIsHamburgerOpen(false)}
+                            className="rounded-lg px-3 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50"
+                          >
+                            {link.label}
+                          </a>
+                        ))}
+                      </nav>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <nav className="hidden lg:flex items-center gap-8">
                 {leftNavLinks.map((link) => (
                   <a
@@ -445,14 +514,28 @@ export default function MainLayout() {
             </div>
 
             <Link to="/" className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
-              {showTwoToneBrand ? (
-                <span className="font-['Oswald'] text-xl font-semibold tracking-[0.08em] sm:text-2xl">
+              {logoMode === 'IMAGE' && logoImageUrl ? (
+                <img
+                  src={logoImageUrl}
+                  alt={logoAltText}
+                  style={{ width: `${logoWidth}px`, height: `${logoHeight}px` }}
+                  className="max-w-none object-contain"
+                  loading="lazy"
+                />
+              ) : showTwoToneBrand ? (
+                <span
+                  className="font-['Oswald'] font-semibold tracking-[0.08em]"
+                  style={{ fontSize: `${Math.max(18, Math.min(44, logoHeight * 0.6))}px` }}
+                >
                   <span className={logoPartOneClass}>ZURI</span>
                   <span className={logoPartTwoClass}>KARIBU</span>
                 </span>
               ) : (
-                <span className={`font-['Oswald'] text-xl sm:text-2xl font-semibold tracking-wide ${menuTextClass}`}>
-                  {brandName.toUpperCase()}
+                <span
+                  className={`font-['Oswald'] font-semibold tracking-wide ${menuTextClass}`}
+                  style={{ fontSize: `${Math.max(18, Math.min(44, logoHeight * 0.6))}px` }}
+                >
+                  {logoText.toUpperCase()}
                 </span>
               )}
             </Link>
@@ -469,99 +552,120 @@ export default function MainLayout() {
                   </a>
                 ))}
               </nav>
-              <button
-                ref={searchButtonRef}
-                onClick={() => setIsSearchOpen(true)}
-                className={`rounded-full p-2 transition-colors ${iconTextClass} ${hoverSurfaceClass}`}
-                aria-label="Open search"
-              >
-                <Search className="h-5 w-5" />
-              </button>
-              <div className="hidden md:block">
-                <select
-                  className={`h-8 min-w-[88px] border-none bg-transparent text-xs ${iconTextClass}`}
-                  value={selectedCurrency}
-                  onChange={(event) => setSelectedCurrency(event.target.value)}
+              {navigationSettings.showSearchIcon ? (
+                <button
+                  ref={searchButtonRef}
+                  onClick={() => setIsSearchOpen(true)}
+                  className={`rounded-full p-2 transition-colors ${iconTextClass} ${hoverSurfaceClass}`}
+                  aria-label="Open search"
                 >
-                  {(supportedCurrencies || ['USD']).map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="hidden xl:flex items-center gap-2">
-                <select
-                  className={`h-8 min-w-[132px] rounded border border-current/20 bg-transparent px-2 text-[11px] ${iconTextClass}`}
-                  value={currentModePickerValue}
-                  onChange={(event) => handleExperienceModeChange(event.target.value)}
-                  aria-label="Homepage experience mode"
+                  <Search className="h-5 w-5" />
+                </button>
+              ) : null}
+              {navigationSettings.showCurrencySelector ? (
+                <div className="hidden md:block">
+                  <select
+                    className={`h-8 min-w-[88px] border-none bg-transparent text-xs ${iconTextClass}`}
+                    value={selectedCurrency}
+                    onChange={(event) => setSelectedCurrency(event.target.value)}
+                  >
+                    {(supportedCurrencies || ['USD']).map((code) => (
+                      <option key={code} value={code}>
+                        {code}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+              {navigationSettings.showExperienceModeSelector || navigationSettings.showThemeModeSelector ? (
+                <div className="hidden xl:flex items-center gap-2">
+                  {navigationSettings.showExperienceModeSelector ? (
+                    <select
+                      className={`h-8 min-w-[132px] rounded border border-current/20 bg-transparent px-2 text-[11px] ${iconTextClass}`}
+                      value={currentModePickerValue}
+                      onChange={(event) => handleExperienceModeChange(event.target.value)}
+                      aria-label="Homepage experience mode"
+                    >
+                      <option value="AUTO">Mode: Auto ({resolvedExperienceMode.replace('_', ' ')})</option>
+                      {enabledModes.map((mode) => (
+                        <option key={mode} value={mode}>
+                          {mode === 'LITE_COMMERCE'
+                            ? 'Lite Commerce'
+                            : mode === 'STANDARD_PREMIUM'
+                              ? 'Standard Premium'
+                              : 'Editorial Immersive'}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                  {navigationSettings.showThemeModeSelector ? (
+                    <select
+                      className={`h-8 min-w-[124px] rounded border border-current/20 bg-transparent px-2 text-[11px] ${iconTextClass}`}
+                      value={currentThemePickerValue}
+                      onChange={(event) => handleThemeModeChange(event.target.value)}
+                      aria-label="Theme mode"
+                    >
+                      <option value="AUTO">Theme: Auto ({resolvedThemeMode})</option>
+                      {enabledThemeModes.map((theme) => (
+                        <option key={theme} value={theme}>
+                          {theme}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                </div>
+              ) : null}
+              {navigationSettings.showCartIcon ? (
+                <Link
+                  to="/cart"
+                  className={`relative rounded-full p-2 transition-colors ${iconTextClass} ${hoverSurfaceClass}`}
                 >
-                  <option value="AUTO">Mode: Auto ({resolvedExperienceMode.replace('_', ' ')})</option>
-                  {enabledModes.map((mode) => (
-                    <option key={mode} value={mode}>
-                      {mode === 'LITE_COMMERCE'
-                        ? 'Lite Commerce'
-                        : mode === 'STANDARD_PREMIUM'
-                          ? 'Standard Premium'
-                          : 'Editorial Immersive'}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className={`h-8 min-w-[124px] rounded border border-current/20 bg-transparent px-2 text-[11px] ${iconTextClass}`}
-                  value={currentThemePickerValue}
-                  onChange={(event) => handleThemeModeChange(event.target.value)}
-                  aria-label="Theme mode"
-                >
-                  <option value="AUTO">Theme: Auto ({resolvedThemeMode})</option>
-                  {enabledThemeModes.map((theme) => (
-                    <option key={theme} value={theme}>
-                      {theme}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <Link
-                to="/cart"
-                className={`relative rounded-full p-2 transition-colors ${iconTextClass} ${hoverSurfaceClass}`}
-              >
-                <ShoppingBag className="w-5 h-5" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-black text-white text-[10px] rounded-full flex items-center justify-center">
-                  {cartItemCount}
-                </span>
-              </Link>
+                  <ShoppingBag className="w-5 h-5" />
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-black text-white text-[10px] rounded-full flex items-center justify-center">
+                    {cartItemCount}
+                  </span>
+                </Link>
+              ) : null}
 
               {isAuthenticated ? (
-                <div className="relative group">
-                  <button className={`rounded-full p-2 transition-colors ${iconTextClass} ${hoverSurfaceClass}`}>
-                    <User className="w-5 h-5" />
-                  </button>
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                    <div className="py-2">
-                      <Link
-                        to={profileRoute}
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        {profileLabel}
-                      </Link>
-                      {ordersRoute ? (
+                navigationSettings.showProfileIcon ? (
+                  <div className="relative group">
+                    <button className={`rounded-full p-2 transition-colors ${iconTextClass} ${hoverSurfaceClass}`}>
+                      <User className="w-5 h-5" />
+                    </button>
+                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                      <div className="py-2">
                         <Link
-                          to={ordersRoute}
+                          to={profileRoute}
                           className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
-                          {ordersLabel}
+                          {profileLabel}
                         </Link>
-                      ) : null}
-                      <button
-                        onClick={handleLogout}
-                        className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                      >
-                        Logout
-                      </button>
+                        {ordersRoute ? (
+                          <Link
+                            to={ordersRoute}
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            {ordersLabel}
+                          </Link>
+                        ) : null}
+                        <button
+                          onClick={handleLogout}
+                          className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                        >
+                          Logout
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <Link
+                    to={profileRoute}
+                    className={`hidden sm:flex items-center gap-2 text-sm font-medium transition-colors ${menuTextClass}`}
+                  >
+                    {profileLabel}
+                  </Link>
+                )
               ) : (
                 <Link
                   to="/login"
