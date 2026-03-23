@@ -214,7 +214,7 @@ export default function Fabrics() {
   }, [featuredProducts.length]);
   const rotatingGridClass = useMemo(() => {
     const columns = Math.max(1, Math.min(6, Math.round(Number(settings.rotatingColumns || DEFAULT_SETTINGS.rotatingColumns))));
-    return `grid grid-cols-1 ${dynamicMdGridByColumns[columns]} ${dynamicLgGridByColumns[columns]} gap-4`;
+    return `grid grid-cols-1 ${dynamicMdGridByColumns[columns]} ${dynamicLgGridByColumns[columns]} gap-6`;
   }, [settings.rotatingColumns]);
 
   useEffect(() => {
@@ -387,7 +387,7 @@ export default function Fabrics() {
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-gray-600">
-            Home &gt; Shop &gt; Fabrics <span className="mx-2">|</span>{' '}
+            Home &gt; Shop &gt; Fabrics To Buy <span className="mx-2">|</span>{' '}
             <span className="font-semibold text-gray-900">{pagination?.total ?? fabrics.length}</span> products
           </p>
           <p className="text-sm text-gray-600">Fabric: {filters.material || 'All'}</p>
@@ -470,7 +470,7 @@ export default function Fabrics() {
         {rotatingProducts.length > 0 ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Fabrics Picks For You</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Fabrics To Buy Picks For You</h2>
               <span className="text-xs text-gray-500">
                 {settings.rotatingColumns} column{settings.rotatingColumns > 1 ? 's' : ''} × {settings.rotatingRows} row
                 {settings.rotatingRows > 1 ? 's' : ''} (randomized on refresh)

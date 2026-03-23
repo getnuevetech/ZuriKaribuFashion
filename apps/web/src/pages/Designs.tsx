@@ -208,7 +208,7 @@ export default function Designs() {
   }, [featuredProducts.length]);
   const rotatingGridClass = useMemo(() => {
     const columns = Math.max(1, Math.min(6, Math.round(Number(settings.rotatingColumns || DEFAULT_SETTINGS.rotatingColumns))));
-    return `grid grid-cols-1 ${dynamicMdGridByColumns[columns]} ${dynamicLgGridByColumns[columns]} gap-4`;
+    return `grid grid-cols-1 ${dynamicMdGridByColumns[columns]} ${dynamicLgGridByColumns[columns]} gap-6`;
   }, [settings.rotatingColumns]);
 
   const selectedCategoryLabel = useMemo(() => {
@@ -499,7 +499,7 @@ export default function Designs() {
         {rotatingProducts.length > 0 ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Custom-To-Wear Picks For You</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Custom To Wear Picks For You</h2>
               <span className="text-xs text-gray-500">
                 {settings.rotatingColumns} column{settings.rotatingColumns > 1 ? 's' : ''} × {settings.rotatingRows} row
                 {settings.rotatingRows > 1 ? 's' : ''} (randomized on refresh)

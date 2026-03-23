@@ -459,7 +459,7 @@ export default function ReadyToWear() {
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-gray-600">
-            Home &gt; Shop &gt; Ready to Wear <span className="mx-2">|</span>{' '}
+            Home &gt; Shop &gt; Ready To Wear <span className="mx-2">|</span>{' '}
             <span className="font-semibold text-gray-900">{pagination?.total ?? products.length}</span> products
           </p>
           <p className="text-sm text-gray-600">Style: {selectedCategoryLabel}</p>
@@ -574,7 +574,7 @@ export default function ReadyToWear() {
         {rotatingProducts.length > 0 ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Ready-To-Wear Picks For You</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Ready To Wear Picks For You</h2>
               <span className="text-xs text-gray-500">
                 {settings.rotatingColumns} column{settings.rotatingColumns > 1 ? 's' : ''} × {settings.rotatingRows} row
                 {settings.rotatingRows > 1 ? 's' : ''} (randomized on refresh)
