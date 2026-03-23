@@ -1,5 +1,22 @@
 {
   "framework": "vite",
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/main",
+      "permanent": false
+    },
+    {
+      "source": "/home",
+      "destination": "/main",
+      "permanent": false
+    },
+    {
+      "source": "/home/",
+      "destination": "/main",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/main",
