@@ -51,15 +51,12 @@ const resolveHomepageTarget = (
     }
     return 'JENKS_DYNAMIC';
   }
-  // If legacy is not explicitly live, bias to static JENKS so
-  // users do not get stuck on an outdated homepage surface.
+  // Guardrail: root runtime should not silently fall back to legacy.
+  // Legacy remains available only via explicit preview override or direct route.
   if (settings.rolloutMode !== 'LIVE') {
     return 'JENKS_STATIC';
   }
-  if (settings.legacyHomepageEnabled !== true) {
-    return 'JENKS_DYNAMIC';
-  }
-  return 'LEGACY';
+  return 'JENKS_DYNAMIC';
 };
 
 export default function HomeEntry() {
