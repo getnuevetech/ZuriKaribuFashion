@@ -161,8 +161,9 @@ function App() {
             {/* Public Routes */}
             <Route element={<MainLayout />}>
               <Route path="/home-legacy" element={<Home />} />
-              <Route path="/home-jenks" element={<Home />} />
-              <Route path="/home-kimi" element={<Navigate to="/home-jenks" replace />} />
+              <Route path="/jenks" element={<Home />} />
+              <Route path="/home-jenks" element={<Navigate to="/jenks" replace />} />
+              <Route path="/home-kimi" element={<Navigate to="/jenks" replace />} />
               <Route path="/rtw" element={<Navigate to="/ready-to-wear" replace />} />
               <Route path="/ftb" element={<Navigate to="/fabrics" replace />} />
               <Route path="/fabrics-to-buy" element={<Navigate to="/fabrics" replace />} />

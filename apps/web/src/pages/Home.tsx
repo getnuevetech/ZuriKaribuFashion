@@ -725,7 +725,7 @@ export default function Home() {
   const capabilityProfile = useHomepageExperienceStore((state) => state.capability);
   const isLiteExperienceMode = resolvedExperienceMode === 'LITE_COMMERCE';
   const useMotion = !isLiteExperienceMode && !capabilityProfile?.prefersReducedMotion;
-  const strictCanonicalMode = location.pathname === '/home-jenks';
+  const strictCanonicalMode = location.pathname === '/jenks' || location.pathname === '/home-jenks';
   const heroVariant = experienceSettings.heroVariant || 'SPLIT_EDITORIAL';
   const categoryEntryVariant = experienceSettings.categoryEntryVariant || 'THREE_COLUMN_CORE';
   const spotlightVariant = experienceSettings.spotlightVariant || 'CAROUSEL';
