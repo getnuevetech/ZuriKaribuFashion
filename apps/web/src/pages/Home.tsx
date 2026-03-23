@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   ArrowRight,
   ChevronLeft,
@@ -696,6 +696,7 @@ function EditorialFeatureSection({
 }
 
 export default function Home() {
+  const location = useLocation();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
   const [activeCountryRegion, setActiveCountryRegion] = useState<'ALL' | AfricanRegion>('ALL');
@@ -714,6 +715,7 @@ export default function Home() {
   const capabilityProfile = useHomepageExperienceStore((state) => state.capability);
   const isLiteExperienceMode = resolvedExperienceMode === 'LITE_COMMERCE';
   const useMotion = !isLiteExperienceMode && !capabilityProfile?.prefersReducedMotion;
+  const strictCanonicalMode = location.pathname === '/home-kimi';
   const heroVariant = experienceSettings.heroVariant || 'SPLIT_EDITORIAL';
   const categoryEntryVariant = experienceSettings.categoryEntryVariant || 'THREE_COLUMN_CORE';
   const spotlightVariant = experienceSettings.spotlightVariant || 'CAROUSEL';
@@ -855,11 +857,11 @@ export default function Home() {
     () =>
       mapFeaturedCollections({
         featuredData: featuredDataResolved,
-        fallbackCustomToWear: kimiFeaturedDesigns,
-        fallbackReadyToWear: kimiReadyToWear,
-        fallbackFabricsToBuy: kimiFabrics,
+        fallbackCustomToWear: strictCanonicalMode ? [] : kimiFeaturedDesigns,
+        fallbackReadyToWear: strictCanonicalMode ? [] : kimiReadyToWear,
+        fallbackFabricsToBuy: strictCanonicalMode ? [] : kimiFabrics,
       }),
-    [featuredDataResolved]
+    [featuredDataResolved, strictCanonicalMode]
   );
   const featuredLoading = kimiHomepagePayloadLoading && !featuredDataResolved;
   const featuredSectionTitles = useMemo(
@@ -918,9 +920,9 @@ export default function Home() {
     () =>
       mapShopByCategories({
         categoriesData: categoriesDataResolved,
-        fallbackCategories: kimiCategories,
+        fallbackCategories: strictCanonicalMode ? [] : kimiCategories,
       }),
-    [categoriesDataResolved]
+    [categoriesDataResolved, strictCanonicalMode]
   );
   const readyCategory = categories.find((item) => /ready/i.test(String(item.title || ''))) || categories[0];
   const customCategory =
@@ -990,7 +992,13 @@ export default function Home() {
 
   const howItWorks = useMemo(
     () =>
-      (Array.isArray(howItWorksDataResolved) && howItWorksDataResolved.length > 0 ? howItWorksDataResolved : kimiHowItWorks)
+      (
+        Array.isArray(howItWorksDataResolved) && howItWorksDataResolved.length > 0
+          ? howItWorksDataResolved
+          : strictCanonicalMode
+            ? []
+            : kimiHowItWorks
+      )
         .slice(0, 6)
         .map((item: any, index: number) => ({
         id: Number(item.id ?? index + 1),
@@ -1001,7 +1009,7 @@ export default function Home() {
           iconByNormalizedName[normalizeIconKey(item.icon)] ||
           kimiHowItWorks[index % kimiHowItWorks.length].icon,
         })),
-    [howItWorksDataResolved],
+    [howItWorksDataResolved, strictCanonicalMode],
   );
   const useCustomHowItWorksColors = Boolean(howItWorksStyleDataResolved?.enabled);
   const howItWorksIconColor = asText(howItWorksStyleDataResolved?.iconColor, '#111827');
@@ -1010,9 +1018,9 @@ export default function Home() {
     () =>
       mapDesignerSpotlights({
         designerSpotlightsData: designerSpotlightsDataResolved,
-        fallbackDesigners: kimiDesigners,
+        fallbackDesigners: strictCanonicalMode ? [] : kimiDesigners,
       }),
-    [designerSpotlightsDataResolved]
+    [designerSpotlightsDataResolved, strictCanonicalMode]
   );
   const designerSpotlightTitle = useMemo(
     () => mapDesignerSpotlightTitle(experienceSettings?.kimiCopy),
@@ -1054,7 +1062,9 @@ export default function Home() {
     () =>
       (Array.isArray(testimonialsDataResolved) && testimonialsDataResolved.length > 0
         ? testimonialsDataResolved
-        : kimiTestimonials
+        : strictCanonicalMode
+          ? []
+          : kimiTestimonials
       ).map((item: any, index: number) => ({
         id: String(item.id ?? index),
         name: asText(item.name, kimiTestimonials[index % kimiTestimonials.length].name),
@@ -1062,7 +1072,7 @@ export default function Home() {
         avatar: asImage(item.avatar, kimiTestimonials[index % kimiTestimonials.length].avatar),
         quote: asText(item.quote, item.text, kimiTestimonials[index % kimiTestimonials.length].quote),
       })),
-    [testimonialsDataResolved],
+    [testimonialsDataResolved, strictCanonicalMode],
   );
 
   const heritage = useMemo(

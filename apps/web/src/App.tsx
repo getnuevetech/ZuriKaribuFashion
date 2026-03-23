@@ -155,11 +155,12 @@ function App() {
         <Router>
           <Routes>
             <Route path="/" element={<HomeEntry />} />
-            <Route path="/home-kimi" element={<KimiV14Redirect />} />
+            <Route path="/home-kimi-static" element={<KimiV14Redirect />} />
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
               <Route path="/home-legacy" element={<Home />} />
+              <Route path="/home-kimi" element={<Home />} />
               <Route path="/shop" element={<ShopPage />} />
               <Route path="/country-products" element={<CountryProducts />} />
               <Route path="/ready-to-wear" element={<ReadyToWear />} />
