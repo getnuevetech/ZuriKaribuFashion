@@ -5,9 +5,11 @@ const BASE_URL = process.env.E2E_BASE_URL || 'http://127.0.0.1:4173';
 const KNOWN_STATIC_OR_INTERNAL_PATTERNS = [
   /^\/$/,
   /^\/jenks$/,
+  /^\/jenks-dynamic$/,
   /^\/home-jenks$/,
   /^\/home-kimi$/,
   /^\/home-jenks-static$/,
+  /^\/kimi-v14-r20260320-35\/index\.html(?:\?.*)?$/,
   /^\/shop$/,
   /^\/cart$/,
   /^\/ready-to-wear(?:\/[^/?#]+)?$/,
@@ -61,7 +63,7 @@ test.describe('JENKS CTA crawl + auth route hardening', () => {
     });
 
     await page.goto(`${BASE_URL}/jenks`, { waitUntil: 'networkidle' });
-    await expect(page).toHaveURL(/\/jenks$/);
+    await expect(page).toHaveURL(/\/(jenks|kimi-v14-r20260320-35\/index\.html)(\?.*)?(#.*)?$/);
 
     const hrefs = await page.$$eval('a[href]', (anchors) =>
       anchors
@@ -73,13 +75,14 @@ test.describe('JENKS CTA crawl + auth route hardening', () => {
     const internalPaths = Array.from(
       new Set(
         hrefs
-          .filter((href) => href.startsWith('/'))
+          .filter((href) => href.startsWith('/') || href.startsWith('#/'))
           .map((href) => {
+            const normalizedHref = href.startsWith('#/') ? href.slice(1) : href;
             try {
-              const url = new URL(`http://local${href}`);
+              const url = new URL(`http://local${normalizedHref}`);
               return `${url.pathname}${url.search}`;
             } catch {
-              return href;
+              return normalizedHref;
             }
           })
       )

@@ -161,13 +161,14 @@ function App() {
         <Router>
           <Routes>
             <Route path="/" element={<HomeEntry />} />
+            <Route path="/jenks" element={<JenksV14Redirect />} />
             <Route path="/home-jenks-static" element={<JenksV14Redirect />} />
             <Route path="/home-kimi-static" element={<Navigate to="/home-jenks-static" replace />} />
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
               <Route path="/home-legacy" element={<LegacyHomeRoute />} />
-              <Route path="/jenks" element={<Home />} />
+              <Route path="/jenks-dynamic" element={<Home />} />
               <Route path="/home-jenks" element={<Navigate to="/jenks" replace />} />
               <Route path="/home-kimi" element={<Navigate to="/jenks" replace />} />
               <Route path="/rtw" element={<Navigate to="/ready-to-wear" replace />} />
