@@ -37,10 +37,16 @@
           '/contact-us': '/contact',
           '/login': '/login',
           '/signin': '/login',
+          '/sign-in': '/login',
+          '/auth/login': '/login',
           '/register': '/register',
           '/signup': '/register',
+          '/sign-up': '/register',
+          '/auth/register': '/register',
           '/forgot-password': '/forgot-password',
+          '/auth/forgot-password': '/forgot-password',
           '/reset-password': '/reset-password'
+          '/auth/reset-password': '/reset-password'
         };
         var target = routeMap[pathPart];
         if (!target) return;

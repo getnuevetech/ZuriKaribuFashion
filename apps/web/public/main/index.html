@@ -27,11 +27,16 @@
           '/contact': '/contact',
           '/contact-us': '/contact',
           '/login': '/login',
+          '/auth/login': '/login',
           '/signin': '/login',
+          '/sign-in': '/login',
           '/register': '/register',
+          '/auth/register': '/register',
           '/signup': '/register',
           '/forgot-password': '/forgot-password',
+          '/auth/forgot-password': '/forgot-password',
           '/reset-password': '/reset-password'
+          '/auth/reset-password': '/reset-password'
         };
         var target = routeMap[pathPart];
         if (!target) return;
