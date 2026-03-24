@@ -287,7 +287,7 @@ export default function Register() {
       pageTitle="Create account"
       pageSubtitle="Sign up to start shopping African fashion from designers worldwide."
     >
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {roleOptions.map((role) => {
           const Icon = role.icon;
           const isSelected = selectedRole === role.value;
@@ -296,17 +296,17 @@ export default function Register() {
               key={role.value}
               type="button"
               onClick={() => setSelectedRole(role.value)}
-              className={`rounded-lg border p-2.5 text-left transition-colors ${
+              className={`rounded-lg border p-3 text-left transition-colors ${
                 isSelected
                   ? 'border-[#e85a3d] bg-[#e85a3d]/10'
                   : 'border-[#e5e5e5] bg-white hover:bg-[#f5f5f5]'
               }`}
             >
-              <div className="flex items-start gap-2">
-                <Icon className="mt-0.5 h-4 w-4 text-[#1a1a1a]" />
+              <div className="flex items-start gap-3">
+                <Icon className="mt-0.5 h-5 w-5 text-[#1a1a1a]" />
                 <div>
-                  <p className="text-xs font-semibold text-[#1a1a1a]">{role.label}</p>
-                  <p className="mt-0.5 line-clamp-2 text-[10px] text-[#666666]">{role.description}</p>
+                  <p className="text-sm font-semibold text-[#1a1a1a]">{role.label}</p>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-[#666666]">{role.description}</p>
                 </div>
               </div>
             </button>
@@ -314,20 +314,20 @@ export default function Register() {
         })}
       </div>
 
-      {error ? <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="border border-red-200 bg-red-50 p-4 text-base text-red-700">{error}</div> : null}
       {notice ? (
-        <div className="border border-green-200 bg-green-50 p-3 text-sm text-green-700">{notice}</div>
+        <div className="border border-green-200 bg-green-50 p-4 text-base text-green-700">{notice}</div>
       ) : null}
       {referralCodeFromQuery ? (
-        <div className="border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+        <div className="border border-[#f3d1c8] bg-[#fff5f2] p-4 text-sm text-[#a54b37]">
           Referral applied: <span className="font-semibold">{referralCodeFromQuery}</span>
         </div>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label htmlFor="firstName" className="text-[#1a1a1a] font-medium text-sm">
+            <label htmlFor="firstName" className="text-[#1a1a1a] font-medium text-base">
               First name
             </label>
             <div className="relative">
@@ -338,14 +338,14 @@ export default function Register() {
                 required
                 value={formData.firstName}
                 onChange={(event) => setFormData((prev) => ({ ...prev, firstName: event.target.value }))}
-                className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+                className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none text-base"
                 placeholder="First name"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="lastName" className="text-[#1a1a1a] font-medium text-sm">
+            <label htmlFor="lastName" className="text-[#1a1a1a] font-medium text-base">
               Last name
             </label>
             <input
@@ -354,14 +354,14 @@ export default function Register() {
               required
               value={formData.lastName}
               onChange={(event) => setFormData((prev) => ({ ...prev, lastName: event.target.value }))}
-              className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none"
+              className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none text-base"
               placeholder="Last name"
             />
           </div>
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="email" className="text-[#1a1a1a] font-medium text-sm">
+          <label htmlFor="email" className="text-[#1a1a1a] font-medium text-base">
             Email address
           </label>
           <div className="relative">
@@ -372,14 +372,14 @@ export default function Register() {
               required
               value={formData.email}
               onChange={(event) => setFormData((prev) => ({ ...prev, email: event.target.value }))}
-              className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+              className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none text-base"
               placeholder="Enter your email"
             />
           </div>
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="password" className="text-[#1a1a1a] font-medium text-sm">
+          <label htmlFor="password" className="text-[#1a1a1a] font-medium text-base">
             Password
           </label>
           <div className="relative">
@@ -390,7 +390,7 @@ export default function Register() {
               required
               value={formData.password}
               onChange={(event) => setFormData((prev) => ({ ...prev, password: event.target.value }))}
-              className="pl-11 pr-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+              className="pl-11 pr-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none text-base"
               placeholder="Create a password"
             />
             <button
@@ -401,12 +401,12 @@ export default function Register() {
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
-          <p className="text-xs text-[#999999]">Must be at least 8 characters with a number and special character.</p>
+          <p className="text-sm text-[#999999]">Must be at least 8 characters with a number and special character.</p>
           <PasswordStrengthMeter password={formData.password} />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="confirmPassword" className="text-[#1a1a1a] font-medium text-sm">
+          <label htmlFor="confirmPassword" className="text-[#1a1a1a] font-medium text-base">
             Confirm password
           </label>
           <div className="relative">
@@ -417,7 +417,7 @@ export default function Register() {
               required
               value={formData.confirmPassword}
               onChange={(event) => setFormData((prev) => ({ ...prev, confirmPassword: event.target.value }))}
-              className="pl-11 pr-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+              className="pl-11 pr-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none text-base"
               placeholder="Confirm your password"
             />
             <button
@@ -432,7 +432,7 @@ export default function Register() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <label htmlFor="phone" className="text-[#1a1a1a] font-medium text-sm">
+            <label htmlFor="phone" className="text-[#1a1a1a] font-medium text-base">
               Phone
             </label>
             <div className="relative">
@@ -442,14 +442,14 @@ export default function Register() {
                 type="tel"
                 value={formData.phone}
                 onChange={(event) => setFormData((prev) => ({ ...prev, phone: event.target.value }))}
-                className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+                className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none text-base"
                 placeholder="Phone number"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="country" className="text-[#1a1a1a] font-medium text-sm">
+            <label htmlFor="country" className="text-[#1a1a1a] font-medium text-base">
               Country
             </label>
             <select
@@ -463,7 +463,7 @@ export default function Register() {
                   phone: normalizePhoneWithCountryPrefix(prev.phone, resolveCountryName(event.target.value)),
                 }))
               }
-              className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none"
+              className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none text-base"
             >
               <option value="">Select country</option>
               {countryOptions.map((country) => (
@@ -477,14 +477,14 @@ export default function Register() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <label htmlFor="city" className="text-[#1a1a1a] font-medium text-sm">
+            <label htmlFor="city" className="text-[#1a1a1a] font-medium text-base">
               City
             </label>
             <select
               id="city"
               value={formData.city}
               onChange={(event) => setFormData((prev) => ({ ...prev, city: event.target.value }))}
-              className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none"
+              className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none text-base"
               disabled={!formData.country}
             >
               <option value="">{formData.country ? 'Select city' : 'Select country first'}</option>
@@ -497,7 +497,7 @@ export default function Register() {
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="address" className="text-[#1a1a1a] font-medium text-sm">
+            <label htmlFor="address" className="text-[#1a1a1a] font-medium text-base">
               Address
             </label>
             <div className="relative">
@@ -507,7 +507,7 @@ export default function Register() {
                 type="text"
                 value={formData.address}
                 onChange={(event) => setFormData((prev) => ({ ...prev, address: event.target.value }))}
-                className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+                className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none text-base"
                 placeholder="Business/Home address"
               />
             </div>
@@ -517,7 +517,7 @@ export default function Register() {
         {(selectedRole === 'FABRIC_SELLER' || selectedRole === 'FASHION_DESIGNER') && (
           <>
             <div className="space-y-2">
-              <label htmlFor="businessName" className="text-[#1a1a1a] font-medium text-sm">
+              <label htmlFor="businessName" className="text-[#1a1a1a] font-medium text-base">
                 Business name
               </label>
               <div className="relative">
@@ -530,7 +530,7 @@ export default function Register() {
                   onChange={(event) =>
                     setFormData((prev) => ({ ...prev, businessName: event.target.value }))
                   }
-                  className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+                  className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none text-base"
                   placeholder="Business name"
                 />
               </div>
@@ -538,7 +538,7 @@ export default function Register() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <label htmlFor="businessEmail" className="text-[#1a1a1a] font-medium text-sm">
+                <label htmlFor="businessEmail" className="text-[#1a1a1a] font-medium text-base">
                   Business email
                 </label>
                 <input
@@ -548,12 +548,12 @@ export default function Register() {
                   onChange={(event) =>
                     setFormData((prev) => ({ ...prev, businessEmail: event.target.value }))
                   }
-                  className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none"
+                  className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none text-base"
                   placeholder="Business email"
                 />
               </div>
               <div className="space-y-2">
-                <label htmlFor="businessPhone" className="text-[#1a1a1a] font-medium text-sm">
+                <label htmlFor="businessPhone" className="text-[#1a1a1a] font-medium text-base">
                   Business phone
                 </label>
                 <input
@@ -563,7 +563,7 @@ export default function Register() {
                   onChange={(event) =>
                     setFormData((prev) => ({ ...prev, businessPhone: event.target.value }))
                   }
-                  className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none"
+                  className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none text-base"
                   placeholder="Business phone"
                 />
               </div>
@@ -573,21 +573,21 @@ export default function Register() {
 
         {selectedRole === 'FASHION_DESIGNER' && (
           <div className="space-y-2">
-            <label htmlFor="bio" className="text-[#1a1a1a] font-medium text-sm">
+            <label htmlFor="bio" className="text-[#1a1a1a] font-medium text-base">
               Brand bio
             </label>
             <textarea
               id="bio"
               value={formData.bio}
               onChange={(event) => setFormData((prev) => ({ ...prev, bio: event.target.value }))}
-              className="min-h-24 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 py-3 outline-none"
+              className="min-h-24 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 py-3 outline-none text-base"
               placeholder="Short description about your brand or design style"
             />
           </div>
         )}
 
         <div className="space-y-2">
-          <label htmlFor="referralCode" className="text-[#1a1a1a] font-medium text-sm">
+          <label htmlFor="referralCode" className="text-[#1a1a1a] font-medium text-base">
             Referral code
           </label>
           <div className="relative">
@@ -603,11 +603,11 @@ export default function Register() {
                   referralCode: normalizeReferralCodeInput(event.target.value),
                 }))
               }
-              className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+              className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none text-base"
               placeholder="Referral code"
             />
           </div>
-          <p className="text-xs text-[#999999]">
+          <p className="text-sm text-[#999999]">
             Referral code is required. If you do not have one, keep the default code.
           </p>
         </div>
@@ -620,7 +620,7 @@ export default function Register() {
             onChange={(event) => setFormData((prev) => ({ ...prev, agreeTerms: event.target.checked }))}
             className="mt-1 h-4 w-4 border-[#d1d1d1] rounded"
           />
-          <label htmlFor="terms" className="text-sm text-[#666666] cursor-pointer leading-relaxed">
+          <label htmlFor="terms" className="text-base text-[#666666] cursor-pointer leading-relaxed">
             I agree to the{' '}
             <Link to="/legal/terms" className="text-[#e85a3d] hover:text-[#d14a2d] font-medium">
               Terms of Service
@@ -635,7 +635,7 @@ export default function Register() {
         <Button
           type="submit"
           disabled={!formData.agreeTerms || loading}
-          className="w-full h-12 bg-[#e85a3d] hover:bg-[#d14a2d] disabled:bg-[#cccccc] text-white font-medium rounded-lg transition-colors"
+          className="w-full h-12 bg-[#e85a3d] hover:bg-[#d14a2d] disabled:bg-[#cccccc] text-white text-base font-semibold rounded-lg transition-colors"
         >
           {loading ? 'Creating account...' : 'Create Account'}
           {!loading ? <ArrowRight className="ml-2 w-4 h-4" /> : null}
@@ -649,7 +649,7 @@ export default function Register() {
               <div className="w-full border-t border-[#e5e5e5]" />
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-[#faf9f7] text-[#999999]">Or sign up with</span>
+              <span className="px-4 bg-[#faf9f7] text-sm text-[#999999]">Or sign up with</span>
             </div>
           </div>
           {googleClientId ? (
@@ -660,14 +660,14 @@ export default function Register() {
               />
             </div>
           ) : (
-            <p className="text-center text-xs text-amber-700">
+            <p className="text-center text-sm text-amber-700">
               Google sign up is unavailable. Missing <span className="font-semibold">VITE_GOOGLE_CLIENT_ID</span>.
             </p>
           )}
         </>
       ) : null}
 
-      <p className="text-center text-[#666666]">
+      <p className="text-center text-base text-[#666666]">
         Already have an account?{' '}
         <Link to="/auth/login" className="text-[#e85a3d] hover:text-[#d14a2d] font-medium transition-colors">
           Sign in

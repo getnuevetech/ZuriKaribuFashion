@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, ShoppingCart, Heart, Star, MapPin, Ruler, Loader2, Share2, ChevronLeft, ChevronRight } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { api } from '../services/api';
@@ -64,6 +64,7 @@ interface DiscoverProduct {
 export default function FabricDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
   const { addFabricItem } = useCartStore();
   const [fabric, setFabric] = useState<Fabric | null>(null);
@@ -197,10 +198,17 @@ export default function FabricDetail() {
     navigate('/cart');
   };
 
+  const navigateToLoginWithReturn = () => {
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+    navigate(`/auth/login?returnTo=${encodeURIComponent(returnTo)}`, {
+      state: { from: location },
+    });
+  };
+
   const handleToggleLike = async () => {
     if (!id) return;
     if (!user) {
-      navigate('/auth/login');
+      navigateToLoginWithReturn();
       return;
     }
     try {
@@ -218,7 +226,7 @@ export default function FabricDetail() {
   const handleSubmitReview = async () => {
     if (!id) return;
     if (!user) {
-      navigate('/auth/login');
+      navigateToLoginWithReturn();
       return;
     }
     if (!reviewComment.trim()) return;

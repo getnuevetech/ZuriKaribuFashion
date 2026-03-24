@@ -386,10 +386,13 @@ export default function ReadyToWearDetail() {
     );
   };
 
+  const buildLoginReturnUrl = () =>
+    `/auth/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}${location.hash}`)}`;
+
   const handleToggleLike = async () => {
     if (!id) return;
     if (!user) {
-      navigate('/auth/login');
+      navigate(buildLoginReturnUrl(), { state: { from: location } });
       return;
     }
     try {
@@ -407,7 +410,7 @@ export default function ReadyToWearDetail() {
   const handleSubmitReview = async () => {
     if (!id) return;
     if (!user) {
-      navigate('/auth/login');
+      navigate(buildLoginReturnUrl(), { state: { from: location } });
       return;
     }
     if (!reviewComment.trim()) return;
@@ -984,7 +987,7 @@ export default function ReadyToWearDetail() {
                     variant="outline"
                     className="rounded-none"
                     onClick={() =>
-                      navigate(`/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}${location.hash}`)}`, {
+                      navigate(`/auth/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}${location.hash}`)}`, {
                         state: { from: location },
                       })
                     }

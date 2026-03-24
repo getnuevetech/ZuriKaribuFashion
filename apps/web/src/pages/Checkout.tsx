@@ -1617,7 +1617,7 @@ export default function Checkout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <button 
             onClick={() => navigate('/cart')}
-            className="flex items-center text-gray-600 hover:text-amber-600 transition-colors"
+            className="flex items-center text-gray-600 hover:text-[#e85a3c] transition-colors"
           >
             <ChevronLeft className="w-4 h-4 mr-1" />
             Back to Cart
@@ -1633,26 +1633,26 @@ export default function Checkout() {
         <div className="mb-8 overflow-x-auto">
           <div className="mx-auto flex min-w-[520px] items-center justify-center">
             <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-              step === 'shipping' ? 'bg-amber-600 text-white' : 'bg-green-500 text-white'
+              step === 'shipping' ? 'bg-[#e85a3c] text-white' : 'bg-green-500 text-white'
             }`}>
               {step === 'shipping' ? '1' : <Check className="w-5 h-5" />}
             </div>
-            <span className={`ml-2 text-sm font-medium ${step === 'shipping' ? 'text-amber-600' : 'text-green-600'}`}>
+            <span className={`ml-2 text-sm font-medium ${step === 'shipping' ? 'text-[#e85a3c]' : 'text-green-600'}`}>
               Shipping
             </span>
             <div className="w-16 h-0.5 bg-gray-200 mx-4" />
-            <div className={`flex items-center ${step === 'payment' ? 'text-amber-600' : step === 'review' ? 'text-green-600' : 'text-gray-400'}`}>
+            <div className={`flex items-center ${step === 'payment' ? 'text-[#e85a3c]' : step === 'review' ? 'text-green-600' : 'text-gray-400'}`}>
             <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-              step === 'payment' ? 'bg-amber-600 text-white' : step === 'review' ? 'bg-green-500 text-white' : 'bg-gray-200'
+              step === 'payment' ? 'bg-[#e85a3c] text-white' : step === 'review' ? 'bg-green-500 text-white' : 'bg-gray-200'
             }`}>
               {step === 'review' ? <Check className="w-5 h-5" /> : '2'}
             </div>
               <span className="ml-2 text-sm font-medium">Payment</span>
             </div>
             <div className="w-16 h-0.5 bg-gray-200 mx-4" />
-            <div className={`flex items-center ${step === 'review' ? 'text-amber-600' : 'text-gray-400'}`}>
+            <div className={`flex items-center ${step === 'review' ? 'text-[#e85a3c]' : 'text-gray-400'}`}>
             <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-              step === 'review' ? 'bg-amber-600 text-white' : 'bg-gray-200'
+              step === 'review' ? 'bg-[#e85a3c] text-white' : 'bg-gray-200'
             }`}>
               3
             </div>
@@ -1692,7 +1692,7 @@ export default function Checkout() {
             {step === 'shipping' && (
               <form onSubmit={handleShippingSubmit} className="bg-white rounded-xl p-6 shadow-sm border">
                 <div className="flex items-center gap-3 mb-6">
-                  <MapPin className="w-5 h-5 text-amber-600" />
+                  <MapPin className="w-5 h-5 text-[#e85a3d]" />
                   <h2 className="text-lg font-semibold">Shipping Address</h2>
                 </div>
                 <p className="mb-5 text-sm text-gray-500">
@@ -1711,7 +1711,7 @@ export default function Checkout() {
                       if (!selected) return;
                       setShippingAddress((prev) => ({ ...prev, ...mapSavedAddressToShipping(selected) }));
                     }}
-                    className="w-full rounded-lg border px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-amber-500"
+                    className="w-full rounded-lg border px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-[#e85a3d]/25"
                     disabled={savedAddressesLoading || savedAddresses.length === 0}
                   >
                     <option value="">
@@ -1742,7 +1742,7 @@ export default function Checkout() {
                         setSelectedSavedAddressId('');
                         setShippingAddress(prev => ({ ...prev, fullName: e.target.value }));
                       }}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                     />
                   </div>
 
@@ -1758,7 +1758,7 @@ export default function Checkout() {
                         setSelectedSavedAddressId('');
                         setShippingAddress(prev => ({ ...prev, addressLine1: e.target.value }));
                       }}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                     />
                   </div>
 
@@ -1773,7 +1773,7 @@ export default function Checkout() {
                         setSelectedSavedAddressId('');
                         setShippingAddress(prev => ({ ...prev, addressLine2: e.target.value }));
                       }}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                     />
                   </div>
 
@@ -1796,7 +1796,7 @@ export default function Checkout() {
                           }));
                         }
                       }
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                     >
                       <option value="">Select country</option>
                       {countryOptions.map((country) => (
@@ -1824,7 +1824,7 @@ export default function Checkout() {
                           }));
                         }
                       }
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                       disabled={!shippingAddress.country}
                     >
                       <option value="">{shippingAddress.country ? 'Select state/province' : 'Select country first'}</option>
@@ -1849,7 +1849,7 @@ export default function Checkout() {
                         required
                         value={selectedShippingQuoteId}
                         onChange={(e) => setSelectedShippingQuoteId(e.target.value)}
-                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                       >
                         {shippingQuotes.map((quote) => (
                           <option key={quote.id} value={quote.id}>
@@ -1880,7 +1880,7 @@ export default function Checkout() {
                         setSelectedSavedAddressId('');
                         setShippingAddress(prev => ({ ...prev, city: e.target.value }));
                       }}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                       disabled={!shippingAddress.country || !shippingAddress.state}
                     >
                       <option value="">
@@ -1910,7 +1910,7 @@ export default function Checkout() {
                         setSelectedSavedAddressId('');
                         setShippingAddress(prev => ({ ...prev, postalCode: e.target.value }));
                       }}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                     />
                   </div>
 
@@ -1922,7 +1922,7 @@ export default function Checkout() {
                       required
                       value={selectedPaymentProvider}
                       onChange={(e) => setSelectedPaymentProvider(e.target.value)}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                     >
                       {paymentProviders.map((provider) => (
                         <option key={provider.providerKey} value={provider.providerKey}>
@@ -1947,14 +1947,14 @@ export default function Checkout() {
                           phone: normalizePhoneWithCountryPrefix(e.target.value, prev.country),
                         }));
                       }}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                     />
                   </div>
                 </div>
 
                 <Button 
                   type="submit" 
-                  className="w-full mt-6"
+                  className="w-full mt-6 bg-[#e85a3d] text-white hover:bg-[#d14a2d]"
                   disabled={loading}
                 >
                   {loading
@@ -1969,12 +1969,12 @@ export default function Checkout() {
             {step === 'payment' && (
               <form onSubmit={handlePaymentSubmit} className="bg-white rounded-xl p-6 shadow-sm border">
                 <div className="flex items-center gap-3 mb-6">
-                  <CreditCard className="w-5 h-5 text-amber-600" />
+                  <CreditCard className="w-5 h-5 text-[#e85a3d]" />
                   <h2 className="text-lg font-semibold">Payment Details</h2>
                 </div>
                 <p className="mb-4 text-sm text-gray-500">Payment method: Card ({selectedProvider?.displayName || 'Stripe'})</p>
                 {!stripe ? (
-                  <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <p className="mb-3 rounded-lg border border-[#f4b6aa] bg-[#fff3ef] px-3 py-2 text-xs text-[#9b3b28]">
                     Stripe checkout key is not initialized in this browser yet. If this persists, refresh page once or configure
                     Stripe publishable key in Admin &gt; Payments.
                   </p>
@@ -1998,7 +1998,7 @@ export default function Checkout() {
                   </Button>
                   <Button 
                     type="submit" 
-                    className="flex-1"
+                    className="flex-1 bg-[#e85a3d] text-white hover:bg-[#d14a2d]"
                     disabled={!stripe || !clientSecret || loading}
                   >
                     {loading ? 'Processing...' : `Step 3: Pay ${formatFromUsd(finalTotal)}`}
@@ -2310,7 +2310,7 @@ export default function Checkout() {
 
               <div className="flex justify-between items-center pt-4 border-t">
                 <span className="text-lg font-semibold">Total</span>
-                <span className="text-2xl font-bold text-amber-700">
+                <span className="text-2xl font-bold text-[#e85a3d]">
                   {formatFromUsd(summaryTotal)}
                 </span>
               </div>
@@ -2322,7 +2322,7 @@ export default function Checkout() {
             {/* Delivery Info */}
             <div className="bg-white rounded-xl p-6 shadow-sm border">
               <div className="flex items-center gap-3 mb-4">
-                <Truck className="w-5 h-5 text-amber-600" />
+                <Truck className="w-5 h-5 text-[#e85a3d]" />
                 <h3 className="font-semibold">Delivery Information</h3>
               </div>
               <div className="space-y-3 text-sm">

@@ -3099,7 +3099,7 @@ export default function DesignerDashboard() {
                         </>
                       )}
                       <Link
-                        to={productType === 'READY_TO_WEAR' ? `/ready-to-wear/${item.id}` : `/designs/${item.id}`}
+                        to={productType === 'READY_TO_WEAR' ? `/ready-to-wear/${item.id}` : `/custom/${item.id}`}
                         className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                         title="View"
                       >
@@ -4011,7 +4011,7 @@ export default function DesignerDashboard() {
               emptyMessage="No featured products yet. Ask admin to feature one of your products."
               actions={(item) => (
                 <Button variant="outline" size="sm" asChild>
-                  <Link to={item.productType === 'READY_TO_WEAR' ? `/ready-to-wear/${item.id}` : `/designs/${item.id}`}>
+                  <Link to={item.productType === 'READY_TO_WEAR' ? `/ready-to-wear/${item.id}` : `/custom/${item.id}`}>
                     <Eye className="w-4 h-4" />
                   </Link>
                 </Button>

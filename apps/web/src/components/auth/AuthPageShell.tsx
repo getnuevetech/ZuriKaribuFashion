@@ -59,23 +59,23 @@ export default function AuthPageShell({
 
       <div className="flex-1 flex flex-col bg-[#faf9f7]">
         <div className="lg:hidden p-6">
-          <Link to={brandHref} className="text-xl font-bold tracking-wider text-[#1a1a1a]">
+          <Link to={brandHref} className="text-2xl font-bold tracking-wider text-[#1a1a1a]">
             {String(brandName || 'ZURIKARIBU').toUpperCase()}
           </Link>
         </div>
 
         <div className="flex-1 flex flex-col justify-center px-8 sm:px-12 lg:px-16 xl:px-24 py-12">
-          <div className="max-w-md w-full mx-auto space-y-6">
+          <div className="max-w-lg w-full mx-auto space-y-8">
             {topSlot}
-            <div className="space-y-2">
-              <h1 className="text-3xl font-bold text-[#1a1a1a]">{pageTitle}</h1>
-              <p className="text-[#666666]">{pageSubtitle}</p>
+            <div className="space-y-3">
+              <h1 className="text-4xl font-bold tracking-tight text-[#1a1a1a]">{pageTitle}</h1>
+              <p className="text-base leading-relaxed text-[#666666]">{pageSubtitle}</p>
             </div>
             {children}
           </div>
         </div>
 
-        <div className="py-6 text-center text-sm text-[#999999]">{footerText}</div>
+        <div className="py-6 text-center text-base text-[#999999]">{footerText}</div>
       </div>
     </div>
   );

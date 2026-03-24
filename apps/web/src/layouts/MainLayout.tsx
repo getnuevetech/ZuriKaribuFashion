@@ -304,7 +304,7 @@ export default function MainLayout() {
             id: `ctw-${row.id}`,
             title: String(row?.name || row?.title || 'Custom to Wear'),
             subtitle: String(row?.country || row?.designer?.country || 'Custom to Wear'),
-            href: `/designs/${row.id}`,
+            href: `/custom/${row.id}`,
             image: resolveRowImage(row),
             typeLabel: 'CTW' as const,
           })),

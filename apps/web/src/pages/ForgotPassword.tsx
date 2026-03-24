@@ -54,44 +54,44 @@ export default function ForgotPassword() {
       pageTitle="Forgot password?"
       pageSubtitle="No worries. Enter your email address and we'll send you a link to reset your password."
       topSlot={(
-        <Link to="/auth/login" className="inline-flex items-center gap-2 text-sm text-[#6a6a6a] hover:text-[#1f1f1f]">
+        <Link to="/auth/login" className="inline-flex items-center gap-2 text-base text-[#6a6a6a] hover:text-[#1f1f1f]">
           <span aria-hidden="true">←</span>
           <span>Back to sign in</span>
         </Link>
       )}
     >
       {message ? (
-        <div className="border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+        <div className="border border-green-200 bg-green-50 p-4 text-base text-green-700">
           {message}
         </div>
       ) : null}
       {error ? (
-        <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="border border-red-200 bg-red-50 p-4 text-base text-red-700">
           {error}
         </div>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <label className="block text-sm font-semibold text-[#2a2a2a]">Email address</label>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <label className="block text-base font-semibold text-[#2a2a2a]">Email address</label>
         <div className="relative">
-          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
           <input
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required
             placeholder="Enter your email"
-            className="h-12 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-10 pr-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
+            className="h-12 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-11 pr-3 text-base focus:border-[#9d9d9d] focus:outline-none"
           />
         </div>
 
-        <Button type="submit" className="h-12 w-full rounded-[10px] bg-[#e85a3c] text-sm font-semibold text-white hover:bg-[#d14a2e]" disabled={loading}>
+        <Button type="submit" className="h-12 w-full rounded-[10px] bg-[#e85a3c] text-base font-semibold text-white hover:bg-[#d14a2e]" disabled={loading}>
           {loading ? 'Sending reset link...' : authPageSettings.forgotPasswordSubmitLabel}
           {!loading ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
         </Button>
       </form>
 
-      <p className="text-center text-sm text-gray-600">
+      <p className="text-center text-base text-gray-600">
         Need help?{' '}
         <Link to="/contact" className="font-medium text-[#e85a3c] hover:text-[#c9492f]">
           Contact support

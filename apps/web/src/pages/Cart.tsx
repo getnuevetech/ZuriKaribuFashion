@@ -168,7 +168,7 @@ export default function Cart() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <button 
             onClick={() => navigate('/ready-to-wear')}
-            className="flex items-center text-gray-600 hover:text-amber-600 transition-colors"
+            className="flex items-center text-gray-600 hover:text-[#e85a3d] transition-colors"
           >
             <ChevronLeft className="w-4 h-4 mr-1" />
             Continue Shopping
@@ -399,7 +399,7 @@ export default function Cart() {
                         )}
                       </div>
                       <div className="text-right">
-                        <p className="text-lg font-bold text-amber-700">
+                        <p className="text-lg font-bold text-[#e85a3d]">
                           {formatFromUsd(
                             item.kind === 'READY_TO_WEAR'
                               ? item.unitPrice * item.quantity
@@ -503,13 +503,13 @@ export default function Cart() {
 
               <div className="flex justify-between items-center pt-4 border-t">
                 <span className="text-lg font-semibold">Total</span>
-                <span className="text-2xl font-bold text-amber-700">
+                <span className="text-2xl font-bold text-[#e85a3d]">
                   {formatFromUsd(finalTotal)}
                 </span>
               </div>
 
               <Button 
-                className="w-full mt-6"
+                className="w-full mt-6 bg-[#e85a3d] text-white hover:bg-[#d14a2d]"
                 onClick={() => navigate('/checkout')}
               >
                 Step 2: Continue to Checkout
@@ -524,21 +524,21 @@ export default function Cart() {
             <div className="bg-white rounded-xl p-6 shadow-sm border">
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <Truck className="w-5 h-5 text-amber-600" />
+                  <Truck className="w-5 h-5 text-[#e85a3d]" />
                   <div>
                     <p className="font-medium text-sm">Free Shipping</p>
                     <p className="text-xs text-gray-500">On orders over {formatFromUsd(200)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Shield className="w-5 h-5 text-amber-600" />
+                  <Shield className="w-5 h-5 text-[#e85a3d]" />
                   <div>
                     <p className="font-medium text-sm">Secure Payment</p>
                     <p className="text-xs text-gray-500">256-bit SSL encryption</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <MapPin className="w-5 h-5 text-amber-600" />
+                  <MapPin className="w-5 h-5 text-[#e85a3d]" />
                   <div>
                     <p className="font-medium text-sm">Local Production</p>
                     <p className="text-xs text-gray-500">Made in your designer's country</p>
@@ -553,9 +553,9 @@ export default function Cart() {
         <div className="mx-auto flex max-w-7xl items-center gap-3">
           <div className="min-w-0">
             <p className="text-xs text-gray-500">Total</p>
-            <p className="text-lg font-bold text-amber-700">{formatFromUsd(finalTotal)}</p>
+            <p className="text-lg font-bold text-[#e85a3d]">{formatFromUsd(finalTotal)}</p>
           </div>
-          <Button className="flex-1 text-xs" onClick={() => navigate('/checkout')}>
+          <Button className="flex-1 bg-[#e85a3d] text-xs text-white hover:bg-[#d14a2d]" onClick={() => navigate('/checkout')}>
             Continue to Checkout
           </Button>
         </div>

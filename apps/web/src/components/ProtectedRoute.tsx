@@ -12,7 +12,7 @@ export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   const location = useLocation();
   const normalizedRole = normalizeRole(user?.role);
   const returnTo = `${location.pathname || '/'}${location.search || ''}${location.hash || ''}`;
-  const loginPath = `/login?returnTo=${encodeURIComponent(returnTo)}`;
+  const loginPath = `/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
 
   if (!isAuthenticated || !token) {
     return <Navigate to={loginPath} replace state={{ from: location }} />;

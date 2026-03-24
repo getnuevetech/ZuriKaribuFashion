@@ -393,10 +393,17 @@ export default function DesignDetail() {
     setShowTryOnPopup(false);
   };
 
+  const navigateToAuthWithReturn = () => {
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+    navigate(`/auth/login?returnTo=${encodeURIComponent(returnTo)}`, {
+      state: { from: location },
+    });
+  };
+
   const handleToggleLike = async () => {
     if (!id) return;
     if (!user) {
-      navigate('/auth/login');
+      navigateToAuthWithReturn();
       return;
     }
     try {
@@ -414,7 +421,7 @@ export default function DesignDetail() {
   const handleSubmitReview = async () => {
     if (!id) return;
     if (!user) {
-      navigate('/auth/login');
+      navigateToAuthWithReturn();
       return;
     }
     if (!reviewComment.trim()) return;

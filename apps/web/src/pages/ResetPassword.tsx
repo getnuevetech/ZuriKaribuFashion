@@ -72,46 +72,46 @@ export default function ResetPassword() {
       pageSubtitle="Set a strong new password for your account."
     >
       {!token ? (
-        <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="border border-red-200 bg-red-50 p-4 text-base text-red-700">
           Invalid reset link. Please request a new one from the forgot password page.
         </div>
       ) : null}
       {message ? (
-        <div className="border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+        <div className="border border-green-200 bg-green-50 p-4 text-base text-green-700">
           {message}
         </div>
       ) : null}
       {error ? (
-        <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="border border-red-200 bg-red-50 p-4 text-base text-red-700">
           {error}
         </div>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label className="mb-1 block text-sm font-semibold text-[#2f2f2f]">New password</label>
+          <label className="mb-1.5 block text-base font-semibold text-[#2f2f2f]">New password</label>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="password"
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
               required
-              className="h-12 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-10 pr-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
+              className="h-12 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-11 pr-3 text-base focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 focus:outline-none"
               placeholder="Minimum 8 characters"
             />
           </div>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-semibold text-[#2f2f2f]">Confirm password</label>
+          <label className="mb-1.5 block text-base font-semibold text-[#2f2f2f]">Confirm password</label>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               required
-              className="h-12 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-10 pr-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
+              className="h-12 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-11 pr-3 text-base focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 focus:outline-none"
               placeholder="Re-enter password"
             />
           </div>
@@ -120,7 +120,7 @@ export default function ResetPassword() {
 
         <Button
           type="submit"
-          className="w-full h-12 bg-[#e85a3d] hover:bg-[#d14a2d] text-white font-medium rounded-lg transition-colors"
+          className="w-full h-12 bg-[#e85a3d] hover:bg-[#d14a2d] text-base font-semibold text-white rounded-lg transition-colors"
           disabled={loading || !token}
         >
           {loading ? (
@@ -134,7 +134,7 @@ export default function ResetPassword() {
         </Button>
       </form>
 
-      <p className="text-center text-sm text-gray-600">
+      <p className="text-center text-base text-gray-600">
         <Link to="/auth/login" className="font-medium text-[#e85a3c] hover:text-[#c9492f]">
           Back to sign in
         </Link>

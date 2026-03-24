@@ -229,7 +229,7 @@ export default function Login() {
       pageSubtitle="Sign in to access your account and continue shopping."
     >
       {error ? (
-        <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="border border-red-200 bg-red-50 p-4 text-base text-red-700">
           {error}
         </div>
       ) : null}
@@ -241,13 +241,13 @@ export default function Login() {
               <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google login was cancelled or failed.')} />
             </div>
           ) : (
-            <p className="text-center text-xs text-amber-700">
+            <p className="text-center text-base text-[#e85a3d]">
               Google login is currently unavailable. Missing frontend environment variable:
               {' '}
               <span className="font-semibold">VITE_GOOGLE_CLIENT_ID</span>.
             </p>
           )}
-          <div className="flex items-center gap-2 text-xs text-gray-400">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
             <span className="h-px flex-1 bg-gray-200" />
             <span>or</span>
             <span className="h-px flex-1 bg-gray-200" />
@@ -256,22 +256,22 @@ export default function Login() {
       ) : null}
 
       {mfaChallenge ? (
-        <form onSubmit={handleVerifyMfa} className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+        <form onSubmit={handleVerifyMfa} className="space-y-6 rounded-2xl border border-[#f3d2c9] bg-[#fff3ef] p-6">
           <div className="flex items-start gap-3">
-            <ShieldCheck className="mt-0.5 h-5 w-5 text-amber-700" />
+            <ShieldCheck className="mt-0.5 h-5 w-5 text-[#e85a3d]" />
             <div>
-              <p className="text-sm font-semibold text-amber-900">Second-factor verification required</p>
-              <p className="text-xs text-amber-800">Use your chosen method to complete sign-in.</p>
+              <p className="text-base font-semibold text-[#7a2f1f]">Second-factor verification required</p>
+              <p className="text-sm text-[#8f4a39]">Use your chosen method to complete sign-in.</p>
             </div>
           </div>
 
           {mfaChallenge.methods.length > 1 ? (
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-700">Authentication method</label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Authentication method</label>
               <select
                 value={mfaChallenge.method}
                 onChange={(event) => handleMfaMethodChange(event.target.value as LoginMfaMethod)}
-                className="h-12 w-full rounded-xl border border-[#e5e5e5] bg-white px-4 text-sm focus:border-[#e85a3c] focus:outline-none"
+                className="h-12 w-full rounded-xl border border-[#e5e5e5] bg-white px-4 text-base focus:border-[#e85a3c] focus:outline-none"
               >
                 <option value="EMAIL_OTP">Email OTP</option>
                 <option value="TOTP_AUTHENTICATOR">Google Authenticator / Authenticator App</option>
@@ -280,13 +280,13 @@ export default function Login() {
           ) : null}
 
           {mfaChallenge.method === 'EMAIL_OTP' ? (
-            <p className="text-xs text-gray-700">{mfaChallenge.deliveryHint || 'A one-time passcode has been sent to your email.'}</p>
+            <p className="text-sm text-gray-700">{mfaChallenge.deliveryHint || 'A one-time passcode has been sent to your email.'}</p>
           ) : null}
 
           {mfaChallenge.method === 'TOTP_AUTHENTICATOR' && mfaChallenge.requiresTotpSetup ? (
-            <div className="space-y-2 rounded border border-gray-200 bg-white p-3">
-              <p className="text-xs font-semibold text-gray-800">Set up Google Authenticator</p>
-              <p className="text-xs text-gray-600">
+            <div className="space-y-2 rounded border border-gray-200 bg-white p-4">
+              <p className="text-sm font-semibold text-gray-800">Set up Google Authenticator</p>
+              <p className="text-sm text-gray-600">
                 Scan this barcode in your authenticator app. If scanning is unavailable, use the setup key.
               </p>
               {mfaSetupQrDataUrl ? (
@@ -298,12 +298,12 @@ export default function Login() {
                   />
                 </div>
               ) : null}
-              {mfaSetupQrError ? <p className="text-[11px] text-amber-700">{mfaSetupQrError}</p> : null}
+              {mfaSetupQrError ? <p className="text-xs text-[#e85a3d]">{mfaSetupQrError}</p> : null}
               <code className="block break-all rounded bg-gray-100 p-2 text-[11px] text-gray-900">
                 {mfaChallenge.setup?.secret}
               </code>
               {mfaChallenge.setup?.otpauthUrl ? (
-                <a href={mfaChallenge.setup.otpauthUrl} className="text-xs text-amber-700 underline" target="_blank" rel="noreferrer">
+                <a href={mfaChallenge.setup.otpauthUrl} className="text-sm text-[#e85a3d] underline" target="_blank" rel="noreferrer">
                   Open setup link
                 </a>
               ) : null}
@@ -311,29 +311,29 @@ export default function Login() {
           ) : null}
 
           <div className="space-y-1">
-            <label className="text-xs font-medium text-gray-700">
+            <label className="text-sm font-medium text-gray-700">
               {mfaChallenge.method === 'EMAIL_OTP' ? 'OTP code' : 'Authenticator code'}
             </label>
             <input
               required
               value={mfaCode}
               onChange={(event) => setMfaCode(event.target.value.replace(/\s+/g, ''))}
-              className="h-12 w-full rounded-xl border border-[#e5e5e5] bg-white px-4 text-sm tracking-widest focus:border-[#e85a3c] focus:outline-none"
+              className="h-12 w-full rounded-xl border border-[#e5e5e5] bg-white px-4 text-base tracking-widest focus:border-[#e85a3c] focus:outline-none"
               placeholder="Enter verification code"
             />
-            {expiresAtLabel ? <p className="text-[11px] text-gray-500">Challenge expires at {expiresAtLabel}</p> : null}
+            {expiresAtLabel ? <p className="text-xs text-gray-500">Challenge expires at {expiresAtLabel}</p> : null}
           </div>
 
-          {mfaError ? <div className="border border-red-200 bg-red-50 p-2 text-xs text-red-700">{mfaError}</div> : null}
+          {mfaError ? <div className="border border-red-200 bg-red-50 p-2 text-sm text-red-700">{mfaError}</div> : null}
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Button type="submit" className="h-12 w-full rounded-xl bg-[#e85a3c] text-sm font-semibold text-white hover:bg-[#d14a2e]" disabled={loading}>
+            <Button type="submit" className="h-12 w-full rounded-xl bg-[#e85a3c] text-base font-semibold text-white hover:bg-[#d14a2e]" disabled={loading}>
               {loading ? 'Verifying...' : 'Verify & Sign in'}
             </Button>
             <Button
               type="button"
               variant="secondary"
-              className="h-12 w-full rounded-xl border border-[#d7d7d7] bg-white text-sm font-semibold text-[#2d2d2d] hover:bg-[#f4f4f4]"
+              className="h-12 w-full rounded-xl border border-[#d7d7d7] bg-white text-base font-semibold text-[#2d2d2d] hover:bg-[#f4f4f4]"
               disabled={loading}
               onClick={() => {
                 if (mfaChallenge.method === 'EMAIL_OTP') {
@@ -357,28 +357,28 @@ export default function Login() {
           </div>
         </form>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-4">
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
                 type="email"
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="h-12 w-full rounded-xl border border-[#e6e6e6] bg-white pl-10 pr-4 text-sm focus:border-[#e85a3c] focus:outline-none"
+                className="h-12 w-full rounded-xl border border-[#e6e6e6] bg-white pl-11 pr-4 text-base focus:border-[#e85a3c] focus:outline-none"
                 placeholder="Enter your email"
               />
             </div>
 
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="h-12 w-full rounded-xl border border-[#e6e6e6] bg-white pl-10 pr-10 text-sm focus:border-[#e85a3c] focus:outline-none"
+                className="h-12 w-full rounded-xl border border-[#e6e6e6] bg-white pl-11 pr-10 text-base focus:border-[#e85a3c] focus:outline-none"
                 placeholder="Enter your password"
               />
               <button
@@ -386,21 +386,21 @@ export default function Login() {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
               >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center justify-between text-base">
             <label htmlFor="remember" className="inline-flex items-center gap-2 text-gray-600">
               <input
                 type="checkbox"
                 id="remember"
-                className="h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-500"
+                className="h-4 w-4 border-gray-300 text-[#e85a3d] focus:ring-[#e85a3d]"
               />
               Remember me
             </label>
-            <Link to="/auth/forgot-password" className="text-[#e85a3c] hover:text-[#c9492f]">
+            <Link to="/auth/forgot-password" className="text-[#e85a3c] hover:text-[#c9492f] text-base">
               Forgot password?
             </Link>
           </div>
@@ -420,12 +420,12 @@ export default function Login() {
         <div className="absolute inset-0 flex items-center">
           <div className="w-full border-t border-[#e5e5e5]" />
         </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-4 bg-[#faf9f7] text-[#999999]">Or continue with</span>
+        <div className="relative flex justify-center text-base">
+          <span className="px-4 bg-[#faf9f7] text-[#999999] font-medium">Or continue with</span>
         </div>
       </div>
 
-      <p className="text-center text-sm text-gray-600">
+      <p className="text-center text-base text-gray-600">
         Don&apos;t have an account?{' '}
         <Link to="/auth/register" className="font-medium text-[#e85a3c] hover:text-[#c9492f]">
           Create account

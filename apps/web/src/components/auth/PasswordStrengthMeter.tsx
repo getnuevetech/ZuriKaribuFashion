@@ -40,18 +40,18 @@ export default function PasswordStrengthMeter({ password, showMessage = true, cl
   const levelStyle = levelStyleMap[state.level];
 
   return (
-    <div className={`space-y-2 ${className}`}>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+    <div className={`space-y-3 ${className}`}>
+      <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-200">
         <div
           className={`h-full rounded-full transition-all duration-300 ease-out ${levelStyle.bar}`}
           style={{ width: `${widthPercent}%` }}
           aria-hidden
         />
       </div>
-      <p className={`text-xs font-medium transition-colors duration-300 ${levelStyle.text}`}>
+      <p className={`text-sm font-semibold transition-colors duration-300 ${levelStyle.text}`}>
         Password strength: {levelStyle.label}
       </p>
-      <ul className="grid gap-1 text-xs text-gray-600 sm:grid-cols-2">
+      <ul className="grid gap-1.5 text-sm text-gray-600 sm:grid-cols-2">
         {state.rules.map((rule) => (
           <li key={rule.key} className={rule.met ? 'text-emerald-700' : 'text-gray-500'}>
             {rule.met ? '✓' : '•'} {rule.label}
@@ -59,7 +59,7 @@ export default function PasswordStrengthMeter({ password, showMessage = true, cl
         ))}
       </ul>
       {showMessage && password ? (
-        <p className={`text-xs ${state.isValid ? 'text-emerald-700' : 'text-red-600'}`}>{state.message}</p>
+        <p className={`text-sm ${state.isValid ? 'text-emerald-700' : 'text-red-600'}`}>{state.message}</p>
       ) : null}
     </div>
   );

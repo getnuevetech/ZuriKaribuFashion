@@ -71,49 +71,58 @@ export default function ChangePasswordRequiredPage() {
       }
     >
       {error ? (
-        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="rounded border border-red-200 bg-red-50 p-4 text-base text-red-700">{error}</div>
       ) : null}
       {message ? (
-        <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-700">{message}</div>
+        <div className="rounded border border-green-200 bg-green-50 p-4 text-base text-green-700">{message}</div>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="password"
-          required
-          className="h-12 w-full rounded-xl border border-[#dfdfdf] bg-white px-4 text-sm focus:border-[#e85a3c] focus:outline-none"
-          placeholder="Current temporary password"
-          value={currentPassword}
-          onChange={(event) => setCurrentPassword(event.target.value)}
-        />
-        <input
-          type="password"
-          required
-          className="h-12 w-full rounded-xl border border-[#dfdfdf] bg-white px-4 text-sm focus:border-[#e85a3c] focus:outline-none"
-          placeholder="New password"
-          value={newPassword}
-          onChange={(event) => setNewPassword(event.target.value)}
-        />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-2">
+          <label className="text-base font-medium text-[#1a1a1a]">Current temporary password</label>
+          <input
+            type="password"
+            required
+            className="h-12 w-full rounded-xl border border-[#dfdfdf] bg-white px-4 text-base focus:border-[#e85a3c] focus:outline-none"
+            placeholder="Current temporary password"
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-base font-medium text-[#1a1a1a]">New password</label>
+          <input
+            type="password"
+            required
+            className="h-12 w-full rounded-xl border border-[#dfdfdf] bg-white px-4 text-base focus:border-[#e85a3c] focus:outline-none"
+            placeholder="New password"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+          />
+        </div>
         <PasswordStrengthMeter password={newPassword} />
-        <input
-          type="password"
-          required
-          className="h-12 w-full rounded-xl border border-[#dfdfdf] bg-white px-4 text-sm focus:border-[#e85a3c] focus:outline-none"
-          placeholder="Confirm new password"
-          value={confirmPassword}
-          onChange={(event) => setConfirmPassword(event.target.value)}
-        />
+        <div className="space-y-2">
+          <label className="text-base font-medium text-[#1a1a1a]">Confirm new password</label>
+          <input
+            type="password"
+            required
+            className="h-12 w-full rounded-xl border border-[#dfdfdf] bg-white px-4 text-base focus:border-[#e85a3c] focus:outline-none"
+            placeholder="Confirm new password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+          />
+        </div>
         <Button
           type="submit"
           disabled={saving}
-          className="h-12 w-full rounded-xl bg-[#e85a3c] text-sm font-semibold text-white hover:bg-[#d14a2e]"
+          className="h-12 w-full rounded-xl bg-[#e85a3c] text-base font-semibold text-white hover:bg-[#d14a2e]"
         >
           {saving ? 'Saving...' : authPageSettings.changePasswordSubmitLabel || 'Update Password'}
           {!saving ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
         </Button>
       </form>
 
-      <p className="text-center text-sm text-gray-600">
+      <p className="text-center text-base text-gray-600">
         <Link to="/auth/login" className="font-medium text-amber-700 hover:text-amber-800">
           Back to sign in
         </Link>
