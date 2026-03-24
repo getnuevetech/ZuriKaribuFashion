@@ -212,6 +212,19 @@ interface AuthPageSettings {
   showGoogleOnLogin: boolean;
   showGoogleOnRegister: boolean;
 }
+interface DashboardClockWeatherSettings {
+  showClock: boolean;
+  showDate: boolean;
+  showAmPm: boolean;
+  showGmt: boolean;
+  showSeconds: boolean;
+  showTimeZoneName: boolean;
+  showWeather: boolean;
+  weatherLocationMode: 'AUTO_USER_COUNTRY' | 'CUSTOM_LOCATION';
+  customWeatherLocation: string;
+  weatherUnit: 'C' | 'F';
+  weatherRefreshSeconds: number;
+}
 interface HomepageExperienceSettings {
   enabledModes: Array<'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE'>;
   defaultMode: 'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE';
@@ -471,6 +484,49 @@ const HERO_SETTINGS_DEFAULTS: HomepageHeroSettings = {
     { label: 'Custom', href: '/custom' },
     { label: 'Fabrics', href: '/fabrics' },
   ],
+};
+const DASHBOARD_CLOCK_WEATHER_DEFAULTS: DashboardClockWeatherSettings = {
+  showClock: true,
+  showDate: true,
+  showAmPm: true,
+  showGmt: true,
+  showSeconds: true,
+  showTimeZoneName: true,
+  showWeather: true,
+  weatherLocationMode: 'AUTO_USER_COUNTRY',
+  customWeatherLocation: '',
+  weatherUnit: 'C',
+  weatherRefreshSeconds: 600,
+};
+const normalizeDashboardClockWeatherState = (value: any): DashboardClockWeatherSettings => {
+  const source = value && typeof value === 'object' ? value : {};
+  const showClock = source.showClock !== false;
+  let showAmPm = source.showAmPm !== false;
+  let showGmt = source.showGmt !== false;
+  if (showClock && !showAmPm && !showGmt) {
+    showAmPm = true;
+    showGmt = true;
+  }
+  return {
+    showClock,
+    showDate: source.showDate !== false,
+    showAmPm,
+    showGmt,
+    showSeconds: source.showSeconds !== false,
+    showTimeZoneName: source.showTimeZoneName !== false,
+    showWeather: source.showWeather !== false,
+    weatherLocationMode:
+      String(source.weatherLocationMode || '').trim().toUpperCase() === 'CUSTOM_LOCATION'
+        ? 'CUSTOM_LOCATION'
+        : 'AUTO_USER_COUNTRY',
+    customWeatherLocation:
+      String(source.customWeatherLocation || DASHBOARD_CLOCK_WEATHER_DEFAULTS.customWeatherLocation).trim().slice(0, 120),
+    weatherUnit: String(source.weatherUnit || '').trim().toUpperCase() === 'F' ? 'F' : 'C',
+    weatherRefreshSeconds: Math.max(
+      60,
+      Math.min(3600, Number(source.weatherRefreshSeconds || DASHBOARD_CLOCK_WEATHER_DEFAULTS.weatherRefreshSeconds))
+    ),
+  };
 };
 const normalizeShopByOptionRow = (entry: any): ShopByOption | null => {
   if (!entry || typeof entry !== 'object') return null;
@@ -978,6 +1034,10 @@ export default function HomepageSections() {
     showGoogleOnRegister: true,
   });
   const [authPageSettingsSaving, setAuthPageSettingsSaving] = useState(false);
+  const [dashboardClockWeatherSettings, setDashboardClockWeatherSettings] = useState<DashboardClockWeatherSettings>(
+    DASHBOARD_CLOCK_WEATHER_DEFAULTS
+  );
+  const [dashboardClockWeatherSettingsSaving, setDashboardClockWeatherSettingsSaving] = useState(false);
   const [homepageExperienceSettings, setHomepageExperienceSettings] = useState<HomepageExperienceSettings>(
     HOMEPAGE_EXPERIENCE_DEFAULTS
   );
@@ -1040,6 +1100,9 @@ export default function HomepageSections() {
   }, []);
   useEffect(() => {
     fetchAuthPageSettings();
+  }, []);
+  useEffect(() => {
+    fetchDashboardClockWeatherSettings();
   }, []);
   useEffect(() => {
     fetchHomepageExperienceSettings();
@@ -1207,6 +1270,16 @@ export default function HomepageSections() {
       }
     } catch (error) {
       console.error('Error fetching auth page settings:', error);
+    }
+  };
+  const fetchDashboardClockWeatherSettings = async () => {
+    try {
+      const response = await api.homepageSections.getAdminDashboardClockWeatherSettings();
+      if (response.success && response.data) {
+        setDashboardClockWeatherSettings(normalizeDashboardClockWeatherState(response.data));
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard clock/weather settings:', error);
     }
   };
   const fetchHomepageExperienceSettings = async () => {
@@ -1379,6 +1452,22 @@ export default function HomepageSections() {
       window.alert(error?.response?.data?.message || 'Failed to save authentication page settings.');
     } finally {
       setAuthPageSettingsSaving(false);
+    }
+  };
+  const handleSaveDashboardClockWeatherSettings = async () => {
+    setDashboardClockWeatherSettingsSaving(true);
+    try {
+      const payload = normalizeDashboardClockWeatherState(dashboardClockWeatherSettings);
+      const response = await api.homepageSections.updateAdminDashboardClockWeatherSettings(payload);
+      if (response.success && response.data) {
+        setDashboardClockWeatherSettings(normalizeDashboardClockWeatherState(response.data));
+        window.alert('Dashboard time/date/weather settings saved.');
+      }
+    } catch (error: any) {
+      console.error('Error saving dashboard clock/weather settings:', error);
+      window.alert(error?.response?.data?.message || 'Failed to save dashboard clock/weather settings.');
+    } finally {
+      setDashboardClockWeatherSettingsSaving(false);
     }
   };
   const handleSaveHomepageExperienceSettings = async () => {
@@ -1969,6 +2058,173 @@ export default function HomepageSections() {
         <div>
           <Button onClick={handleSaveAuthPageSettings} disabled={authPageSettingsSaving}>
             {authPageSettingsSaving ? 'Saving...' : 'Save Authentication Page Settings'}
+          </Button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Dashboard Time, GMT & Weather Settings</h2>
+          <p className="text-sm text-gray-500">
+            Control how dashboard time/date appears across all dashboards, including AM/PM, GMT display, and weather.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={dashboardClockWeatherSettings.showClock}
+              onChange={(e) =>
+                setDashboardClockWeatherSettings((prev) =>
+                  normalizeDashboardClockWeatherState({ ...prev, showClock: e.target.checked })
+                )
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            Show Clock
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={dashboardClockWeatherSettings.showDate}
+              onChange={(e) =>
+                setDashboardClockWeatherSettings((prev) => ({ ...prev, showDate: e.target.checked }))
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            Show Date
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={dashboardClockWeatherSettings.showAmPm}
+              onChange={(e) =>
+                setDashboardClockWeatherSettings((prev) =>
+                  normalizeDashboardClockWeatherState({ ...prev, showAmPm: e.target.checked })
+                )
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            Show AM/PM
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={dashboardClockWeatherSettings.showGmt}
+              onChange={(e) =>
+                setDashboardClockWeatherSettings((prev) =>
+                  normalizeDashboardClockWeatherState({ ...prev, showGmt: e.target.checked })
+                )
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            Show GMT
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={dashboardClockWeatherSettings.showSeconds}
+              onChange={(e) =>
+                setDashboardClockWeatherSettings((prev) => ({ ...prev, showSeconds: e.target.checked }))
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            Show Seconds
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={dashboardClockWeatherSettings.showTimeZoneName}
+              onChange={(e) =>
+                setDashboardClockWeatherSettings((prev) => ({ ...prev, showTimeZoneName: e.target.checked }))
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            Show Timezone Label
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={dashboardClockWeatherSettings.showWeather}
+              onChange={(e) =>
+                setDashboardClockWeatherSettings((prev) => ({ ...prev, showWeather: e.target.checked }))
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            Show Weather
+          </label>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-gray-700">Weather Location Mode</label>
+            <select
+              value={dashboardClockWeatherSettings.weatherLocationMode}
+              onChange={(e) =>
+                setDashboardClockWeatherSettings((prev) =>
+                  normalizeDashboardClockWeatherState({
+                    ...prev,
+                    weatherLocationMode: e.target.value as DashboardClockWeatherSettings['weatherLocationMode'],
+                  })
+                )
+              }
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            >
+              <option value="AUTO_USER_COUNTRY">Auto by User Country</option>
+              <option value="CUSTOM_LOCATION">Custom Location</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-gray-700">Custom Weather Location</label>
+            <input
+              type="text"
+              value={dashboardClockWeatherSettings.customWeatherLocation}
+              onChange={(e) =>
+                setDashboardClockWeatherSettings((prev) => ({
+                  ...prev,
+                  customWeatherLocation: e.target.value.slice(0, 120),
+                }))
+              }
+              disabled={dashboardClockWeatherSettings.weatherLocationMode !== 'CUSTOM_LOCATION'}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none disabled:bg-gray-100 disabled:text-gray-500"
+              placeholder="Lagos, NG"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-gray-700">Temperature Unit</label>
+            <select
+              value={dashboardClockWeatherSettings.weatherUnit}
+              onChange={(e) =>
+                setDashboardClockWeatherSettings((prev) => ({
+                  ...prev,
+                  weatherUnit: e.target.value === 'F' ? 'F' : 'C',
+                }))
+              }
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            >
+              <option value="C">Celsius (°C)</option>
+              <option value="F">Fahrenheit (°F)</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-gray-700">Weather Refresh Interval (seconds)</label>
+            <input
+              type="number"
+              min={60}
+              max={3600}
+              value={dashboardClockWeatherSettings.weatherRefreshSeconds}
+              onChange={(e) =>
+                setDashboardClockWeatherSettings((prev) => ({
+                  ...prev,
+                  weatherRefreshSeconds: Math.max(60, Math.min(3600, parseInt(e.target.value, 10) || 600)),
+                }))
+              }
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            />
+          </div>
+        </div>
+        <div>
+          <Button onClick={handleSaveDashboardClockWeatherSettings} disabled={dashboardClockWeatherSettingsSaving}>
+            {dashboardClockWeatherSettingsSaving ? 'Saving...' : 'Save Dashboard Time & Weather Settings'}
           </Button>
         </div>
       </div>

@@ -16,6 +16,7 @@ const HOMEPAGE_HOW_IT_WORKS_STYLE_SETTINGS_KEY = 'HOMEPAGE_HOW_IT_WORKS_STYLE';
 const HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION_SETTINGS_KEY = 'HOMEPAGE_FEATURED_PRODUCT_DESCRIPTION';
 const HOMEPAGE_EXPERIENCE_SETTINGS_KEY = 'HOMEPAGE_EXPERIENCE_SETTINGS';
 const AUTH_PAGE_SETTINGS_KEY = 'AUTH_PAGE_SETTINGS';
+const DASHBOARD_CLOCK_WEATHER_SETTINGS_KEY = 'DASHBOARD_CLOCK_WEATHER_SETTINGS';
 const HOMEPAGE_PROMO_BADGE_SETTINGS_KEY = 'HOMEPAGE_PROMO_BADGE';
 const HOMEPAGE_SHOP_BY_BLOCKS_SETTINGS_KEY = 'HOMEPAGE_SHOP_BY_BLOCKS';
 const HOMEPAGE_FRESH_DROPS_SETTINGS_KEY = 'HOMEPAGE_FRESH_DROPS';
@@ -986,6 +987,19 @@ const authPageSettingsUpdateSchema = z.object({
   showGoogleOnLogin: z.boolean().optional(),
   showGoogleOnRegister: z.boolean().optional(),
 });
+const dashboardClockWeatherSettingsUpdateSchema = z.object({
+  showClock: z.boolean().optional(),
+  showDate: z.boolean().optional(),
+  showAmPm: z.boolean().optional(),
+  showGmt: z.boolean().optional(),
+  showSeconds: z.boolean().optional(),
+  showTimeZoneName: z.boolean().optional(),
+  showWeather: z.boolean().optional(),
+  weatherLocationMode: z.enum(['AUTO_USER_COUNTRY', 'CUSTOM_LOCATION']).optional(),
+  customWeatherLocation: z.string().trim().max(120).optional(),
+  weatherUnit: z.enum(['C', 'F']).optional(),
+  weatherRefreshSeconds: z.number().int().min(60).max(3600).optional(),
+});
 const homepageExperienceSettingsUpdateSchema = z.object({
   enabledModes: z.array(z.enum(HOMEPAGE_EXPERIENCE_MODES)).min(1).max(3).optional(),
   defaultMode: z.enum(HOMEPAGE_EXPERIENCE_MODES).optional(),
@@ -1156,6 +1170,21 @@ type AuthPageSettings = {
   googleClientIds: string;
   showGoogleOnLogin: boolean;
   showGoogleOnRegister: boolean;
+};
+type DashboardWeatherLocationMode = 'AUTO_USER_COUNTRY' | 'CUSTOM_LOCATION';
+type DashboardTemperatureUnit = 'C' | 'F';
+type DashboardClockWeatherSettings = {
+  showClock: boolean;
+  showDate: boolean;
+  showAmPm: boolean;
+  showGmt: boolean;
+  showSeconds: boolean;
+  showTimeZoneName: boolean;
+  showWeather: boolean;
+  weatherLocationMode: DashboardWeatherLocationMode;
+  customWeatherLocation: string;
+  weatherUnit: DashboardTemperatureUnit;
+  weatherRefreshSeconds: number;
 };
 type HomepageExperienceMode = (typeof HOMEPAGE_EXPERIENCE_MODES)[number];
 type HomepageThemeMode = (typeof HOMEPAGE_THEME_MODES)[number];
@@ -1389,6 +1418,19 @@ const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettings = {
   googleClientIds: '',
   showGoogleOnLogin: true,
   showGoogleOnRegister: true,
+};
+const DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS: DashboardClockWeatherSettings = {
+  showClock: true,
+  showDate: true,
+  showAmPm: true,
+  showGmt: true,
+  showSeconds: true,
+  showTimeZoneName: true,
+  showWeather: true,
+  weatherLocationMode: 'AUTO_USER_COUNTRY',
+  customWeatherLocation: '',
+  weatherUnit: 'C',
+  weatherRefreshSeconds: 600,
 };
 const HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS: HomepageExperienceSettings = {
   enabledModes: [...HOMEPAGE_EXPERIENCE_MODES],
@@ -1723,6 +1765,42 @@ const normalizeAuthPageSettings = (raw: unknown): AuthPageSettings => {
     showGoogleOnLogin: getBoolean(row.showGoogleOnLogin) ?? AUTH_PAGE_SETTINGS_DEFAULTS.showGoogleOnLogin,
     showGoogleOnRegister:
       getBoolean(row.showGoogleOnRegister) ?? AUTH_PAGE_SETTINGS_DEFAULTS.showGoogleOnRegister,
+  };
+};
+const normalizeDashboardClockWeatherSettings = (raw: unknown): DashboardClockWeatherSettings => {
+  if (!raw || typeof raw !== 'object') return { ...DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const locationModeCandidate = String(row.weatherLocationMode || '').trim().toUpperCase();
+  const weatherLocationMode: DashboardWeatherLocationMode =
+    locationModeCandidate === 'CUSTOM_LOCATION' ? 'CUSTOM_LOCATION' : 'AUTO_USER_COUNTRY';
+  const weatherUnit: DashboardTemperatureUnit =
+    String(row.weatherUnit || '').trim().toUpperCase() === 'F' ? 'F' : 'C';
+  const showClock = getBoolean(row.showClock) ?? DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showClock;
+  let showAmPm = getBoolean(row.showAmPm) ?? DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showAmPm;
+  let showGmt = getBoolean(row.showGmt) ?? DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showGmt;
+  if (showClock && !showAmPm && !showGmt) {
+    showAmPm = true;
+    showGmt = DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showGmt;
+  }
+  return {
+    showClock,
+    showDate: getBoolean(row.showDate) ?? DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showDate,
+    showAmPm,
+    showGmt,
+    showSeconds: getBoolean(row.showSeconds) ?? DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showSeconds,
+    showTimeZoneName:
+      getBoolean(row.showTimeZoneName) ?? DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showTimeZoneName,
+    showWeather: getBoolean(row.showWeather) ?? DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showWeather,
+    weatherLocationMode,
+    customWeatherLocation: (getString(row.customWeatherLocation) || '').slice(0, 120),
+    weatherUnit,
+    weatherRefreshSeconds: Math.max(
+      60,
+      Math.min(
+        3600,
+        Math.round(getNumber(row.weatherRefreshSeconds) ?? DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.weatherRefreshSeconds)
+      )
+    ),
   };
 };
 
@@ -2321,6 +2399,71 @@ const saveAuthPageSettings = async (next: Partial<AuthPageSettings>) => {
      VALUES ($1, $2, $3, NOW(), NOW())`,
     randomUUID(),
     AUTH_PAGE_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
+const readDashboardClockWeatherSettings = async () => {
+  try {
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT "id", "value", "updatedAt"
+       FROM "HomepageSectionSetting"
+       WHERE "key" = $1
+       LIMIT 1`,
+      DASHBOARD_CLOCK_WEATHER_SETTINGS_KEY
+    );
+    const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+    if (!row) {
+      return {
+        rowId: null as string | null,
+        settings: { ...DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS },
+        source: 'DEFAULT' as const,
+        updatedAt: null as Date | null,
+      };
+    }
+    let parsed = { ...DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS };
+    try {
+      parsed = normalizeDashboardClockWeatherSettings(JSON.parse(String(row.value || '{}')));
+    } catch {
+      parsed = { ...DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS };
+    }
+    return {
+      rowId: String(row.id),
+      settings: parsed,
+      source: 'DATABASE' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  } catch {
+    return {
+      rowId: null as string | null,
+      settings: { ...DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS },
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+};
+const saveDashboardClockWeatherSettings = async (next: Partial<DashboardClockWeatherSettings>) => {
+  const existing = await readDashboardClockWeatherSettings();
+  const merged = normalizeDashboardClockWeatherSettings({
+    ...existing.settings,
+    ...next,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    DASHBOARD_CLOCK_WEATHER_SETTINGS_KEY,
     payload
   );
   return merged;
@@ -3396,6 +3539,15 @@ router.get('/auth-page-settings', async (_req, res) => {
     res.json({ success: true, data: { ...AUTH_PAGE_SETTINGS_DEFAULTS } });
   }
 });
+router.get('/dashboard-clock-weather-settings', async (_req, res) => {
+  try {
+    const { settings } = await readDashboardClockWeatherSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching dashboard clock/weather settings:', error);
+    res.json({ success: true, data: { ...DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS } });
+  }
+});
 router.get('/experience-settings', async (_req, res) => {
   try {
     const { settings } = await readHomepageExperienceSettings();
@@ -3741,6 +3893,7 @@ router.get(['/jenks-homepage-payload', '/kimi-homepage-payload'], async (_req, r
       howItWorksStyleResult,
       featuredDescriptionResult,
       authPageSettingsResult,
+      dashboardClockWeatherSettingsResult,
       experienceSettingsResult,
       navigationSettingsResult,
       heroSettingsResult,
@@ -3765,6 +3918,7 @@ router.get(['/jenks-homepage-payload', '/kimi-homepage-payload'], async (_req, r
       readHowItWorksStyleSettings().then((row) => row.settings),
       readFeaturedProductDescriptionSettings().then((row) => row.settings),
       readAuthPageSettings().then((row) => row.settings),
+      readDashboardClockWeatherSettings().then((row) => row.settings),
       readHomepageExperienceSettings().then((row) => row.settings),
       readNavigationSettings().then((row) => row.settings),
       readHeroSettings().then((row) => row.settings),
@@ -3818,6 +3972,9 @@ router.get(['/jenks-homepage-payload', '/kimi-homepage-payload'], async (_req, r
         ...FEATURED_PRODUCT_DESCRIPTION_DEFAULTS,
       }),
       authPageSettings: safeResult(authPageSettingsResult, { ...AUTH_PAGE_SETTINGS_DEFAULTS }),
+      dashboardClockWeatherSettings: safeResult(dashboardClockWeatherSettingsResult, {
+        ...DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS,
+      }),
       experienceSettings: safeResult(experienceSettingsResult, { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS }),
       navigationSettings: safeResult(navigationSettingsResult, normalizeNavigationSettings({})),
       heroSettings: safeResult(heroSettingsResult, normalizeHeroSettings({})),
@@ -4393,6 +4550,63 @@ router.patch(
       }
       console.error('Error updating auth page settings:', error);
       res.status(500).json({ success: false, message: 'Failed to update auth page settings.' });
+    }
+  }
+);
+router.get(
+  '/admin/dashboard-clock-weather-settings',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (_req, res) => {
+    try {
+      const { settings, source, updatedAt } = await readDashboardClockWeatherSettings();
+      res.json({
+        success: true,
+        data: {
+          ...settings,
+          source,
+          updatedAt,
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching dashboard clock/weather settings:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch dashboard clock/weather settings.' });
+    }
+  }
+);
+router.put(
+  '/admin/dashboard-clock-weather-settings',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (req, res) => {
+    try {
+      const payload = dashboardClockWeatherSettingsUpdateSchema.parse(req.body);
+      const settings = await saveDashboardClockWeatherSettings(payload);
+      res.json({ success: true, data: settings });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      console.error('Error updating dashboard clock/weather settings:', error);
+      res.status(500).json({ success: false, message: 'Failed to update dashboard clock/weather settings.' });
+    }
+  }
+);
+router.patch(
+  '/admin/dashboard-clock-weather-settings',
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  async (req, res) => {
+    try {
+      const payload = dashboardClockWeatherSettingsUpdateSchema.parse(req.body);
+      const settings = await saveDashboardClockWeatherSettings(payload);
+      res.json({ success: true, data: settings });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      console.error('Error updating dashboard clock/weather settings:', error);
+      res.status(500).json({ success: false, message: 'Failed to update dashboard clock/weather settings.' });
     }
   }
 );

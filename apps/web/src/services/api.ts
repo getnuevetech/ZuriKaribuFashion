@@ -8626,6 +8626,19 @@ type AuthPageSettingsPayload = {
   showGoogleOnLogin: boolean;
   showGoogleOnRegister: boolean;
 };
+type DashboardClockWeatherSettingsPayload = {
+  showClock: boolean;
+  showDate: boolean;
+  showAmPm: boolean;
+  showGmt: boolean;
+  showSeconds: boolean;
+  showTimeZoneName: boolean;
+  showWeather: boolean;
+  weatherLocationMode: 'AUTO_USER_COUNTRY' | 'CUSTOM_LOCATION';
+  customWeatherLocation: string;
+  weatherUnit: 'C' | 'F';
+  weatherRefreshSeconds: number;
+};
 
 const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettingsPayload = {
   brandName: 'ZuriKaribu',
@@ -8650,6 +8663,19 @@ const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettingsPayload = {
   googleClientIds: '',
   showGoogleOnLogin: true,
   showGoogleOnRegister: true,
+};
+const DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS: DashboardClockWeatherSettingsPayload = {
+  showClock: true,
+  showDate: true,
+  showAmPm: true,
+  showGmt: true,
+  showSeconds: true,
+  showTimeZoneName: true,
+  showWeather: true,
+  weatherLocationMode: 'AUTO_USER_COUNTRY',
+  customWeatherLocation: '',
+  weatherUnit: 'C',
+  weatherRefreshSeconds: 600,
 };
 
 const normalizeAuthPageSettingsPayload = (raw: unknown): AuthPageSettingsPayload => {
@@ -8702,10 +8728,55 @@ const normalizeAuthPageSettingsPayload = (raw: unknown): AuthPageSettingsPayload
         : AUTH_PAGE_SETTINGS_DEFAULTS.showGoogleOnRegister,
   };
 };
+const normalizeDashboardClockWeatherSettingsPayload = (raw: unknown): DashboardClockWeatherSettingsPayload => {
+  if (!raw || typeof raw !== 'object') return { ...DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const asBoolean = (value: unknown, fallback: boolean) => (typeof value === 'boolean' ? value : fallback);
+  const asNumber = (value: unknown, fallback: number) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return parsed;
+  };
+  const showClock = asBoolean(row.showClock, DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showClock);
+  let showAmPm = asBoolean(row.showAmPm, DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showAmPm);
+  let showGmt = asBoolean(row.showGmt, DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showGmt);
+  if (showClock && !showAmPm && !showGmt) {
+    showAmPm = true;
+    showGmt = true;
+  }
+  return {
+    showClock,
+    showDate: asBoolean(row.showDate, DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showDate),
+    showAmPm,
+    showGmt,
+    showSeconds: asBoolean(row.showSeconds, DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showSeconds),
+    showTimeZoneName: asBoolean(row.showTimeZoneName, DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showTimeZoneName),
+    showWeather: asBoolean(row.showWeather, DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.showWeather),
+    weatherLocationMode:
+      String(row.weatherLocationMode || '').trim().toUpperCase() === 'CUSTOM_LOCATION'
+        ? 'CUSTOM_LOCATION'
+        : 'AUTO_USER_COUNTRY',
+    customWeatherLocation: String(row.customWeatherLocation ?? '').trim().slice(0, 120),
+    weatherUnit: String(row.weatherUnit || '').trim().toUpperCase() === 'F' ? 'F' : 'C',
+    weatherRefreshSeconds: Math.max(
+      60,
+      Math.min(3600, Math.round(asNumber(row.weatherRefreshSeconds, DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS.weatherRefreshSeconds)))
+    ),
+  };
+};
 
 const authPageSettingsReadPathsPublic = [
   '/homepage-sections/auth-page-settings',
   '/homepage/auth-page-settings',
+];
+const dashboardClockWeatherSettingsReadPathsPublic = [
+  '/homepage-sections/dashboard-clock-weather-settings',
+];
+const dashboardClockWeatherSettingsReadPathsAdmin = [
+  '/homepage-sections/admin/dashboard-clock-weather-settings',
+];
+const dashboardClockWeatherSettingsWritePaths = [
+  '/homepage-sections/admin/dashboard-clock-weather-settings',
 ];
 const authPageSettingsReadPathsAdmin = [
   '/homepage-sections/admin/auth-page-settings',
@@ -8769,6 +8840,53 @@ async function writeAuthPageSettingsWithFallback<T>(data: unknown) {
   }
   throw lastError ?? new Error('Auth page settings route not found.');
 }
+async function readDashboardClockWeatherSettingsWithFallback<T>(mode: 'admin' | 'public') {
+  let lastError: unknown = null;
+  const readPaths =
+    mode === 'admin'
+      ? [...dashboardClockWeatherSettingsReadPathsAdmin, ...dashboardClockWeatherSettingsReadPathsPublic]
+      : [...dashboardClockWeatherSettingsReadPathsPublic];
+  for (const path of readPaths) {
+    try {
+      const response = await apiService.get<T>(path);
+      const normalized = normalizeDashboardClockWeatherSettingsPayload((response as any)?.data);
+      return {
+        ...(response as any),
+        data: normalized,
+      } as T;
+    } catch (error) {
+      lastError = error;
+      if (isRetryableRouteError(error)) continue;
+      throw error;
+    }
+  }
+  if (mode === 'public') {
+    return {
+      success: true,
+      data: { ...DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS },
+    } as T;
+  }
+  throw lastError ?? new Error('Dashboard clock/weather settings route not found.');
+}
+async function writeDashboardClockWeatherSettingsWithFallback<T>(data: unknown) {
+  const normalized = normalizeDashboardClockWeatherSettingsPayload(data);
+  let lastError: unknown = null;
+  for (const path of dashboardClockWeatherSettingsWritePaths) {
+    try {
+      return await apiService.put<T>(path, normalized);
+    } catch (putError) {
+      lastError = putError;
+      if (!isRetryableRouteError(putError)) throw putError;
+    }
+    try {
+      return await apiService.patch<T>(path, normalized);
+    } catch (patchError) {
+      lastError = patchError;
+      if (!isRetryableRouteError(patchError)) throw patchError;
+    }
+  }
+  throw lastError ?? new Error('Dashboard clock/weather settings route not found.');
+}
 
 // Homepage Sections API (new dynamic sections)
 const homepageSectionsApi = {
@@ -8817,6 +8935,11 @@ const homepageSectionsApi = {
     readAuthPageSettingsWithFallback<{
       success: boolean;
       data: AuthPageSettingsPayload;
+    }>('public'),
+  getDashboardClockWeatherSettings: () =>
+    readDashboardClockWeatherSettingsWithFallback<{
+      success: boolean;
+      data: DashboardClockWeatherSettingsPayload;
     }>('public'),
   getExperienceSettings: () =>
     apiService.get<{
@@ -9148,6 +9271,11 @@ const homepageSectionsApi = {
     readAuthPageSettingsWithFallback<{
       success: boolean;
       data: AuthPageSettingsPayload & { source?: 'DATABASE' | 'DEFAULT'; updatedAt?: string | null };
+    }>('admin'),
+  getAdminDashboardClockWeatherSettings: () =>
+    readDashboardClockWeatherSettingsWithFallback<{
+      success: boolean;
+      data: DashboardClockWeatherSettingsPayload & { source?: 'DATABASE' | 'DEFAULT'; updatedAt?: string | null };
     }>('admin'),
   getAdminShopByBlocksSettings: () =>
     apiService.get<{
@@ -9508,6 +9636,11 @@ const homepageSectionsApi = {
     writeAuthPageSettingsWithFallback<{
       success: boolean;
       data: AuthPageSettingsPayload;
+    }>(data),
+  updateAdminDashboardClockWeatherSettings: (data: Partial<DashboardClockWeatherSettingsPayload>) =>
+    writeDashboardClockWeatherSettingsWithFallback<{
+      success: boolean;
+      data: DashboardClockWeatherSettingsPayload;
     }>(data),
   updateAdminShopByBlocksSettings: (data: {
     title?: string;

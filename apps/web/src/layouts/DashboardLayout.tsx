@@ -63,6 +63,24 @@ interface DashboardSearchEntry {
   href: string;
   keywords: string[];
 }
+interface DashboardClockWeatherSettings {
+  showClock: boolean;
+  showDate: boolean;
+  showAmPm: boolean;
+  showGmt: boolean;
+  showSeconds: boolean;
+  showTimeZoneName: boolean;
+  showWeather: boolean;
+  weatherLocationMode: 'AUTO_USER_COUNTRY' | 'CUSTOM_LOCATION';
+  customWeatherLocation: string;
+  weatherUnit: 'C' | 'F';
+  weatherRefreshSeconds: number;
+}
+interface DashboardWeatherSnapshot {
+  temperature: number;
+  weatherLabel: string;
+  locationLabel: string;
+}
 
 const LEGACY_HOMEPAGE_PATHS = ['/admin/homepage', '/admin/homepage-visibility'] as const;
 const JENKS_HOMEPAGE_PATHS = ['/admin/homepage-sections', '/admin/jenks-homepage'] as const;
@@ -196,6 +214,38 @@ const COUNTRY_TIMEZONE_MAP: Record<string, string> = {
   GB: 'Europe/London',
   FR: 'Europe/Paris',
 };
+const COUNTRY_WEATHER_QUERY_MAP: Record<string, string> = {
+  NG: 'Lagos, Nigeria',
+  GH: 'Accra, Ghana',
+  KE: 'Nairobi, Kenya',
+  ZA: 'Johannesburg, South Africa',
+  EG: 'Cairo, Egypt',
+  SN: 'Dakar, Senegal',
+  RW: 'Kigali, Rwanda',
+  TZ: 'Dar es Salaam, Tanzania',
+  UG: 'Kampala, Uganda',
+  ET: 'Addis Ababa, Ethiopia',
+  CM: 'Douala, Cameroon',
+  DZ: 'Algiers, Algeria',
+  MA: 'Casablanca, Morocco',
+  US: 'New York, United States',
+  CA: 'Toronto, Canada',
+  GB: 'London, United Kingdom',
+  FR: 'Paris, France',
+};
+const DASHBOARD_CLOCK_WEATHER_DEFAULTS: DashboardClockWeatherSettings = {
+  showClock: true,
+  showDate: true,
+  showAmPm: true,
+  showGmt: true,
+  showSeconds: true,
+  showTimeZoneName: true,
+  showWeather: true,
+  weatherLocationMode: 'AUTO_USER_COUNTRY',
+  customWeatherLocation: '',
+  weatherUnit: 'C',
+  weatherRefreshSeconds: 600,
+};
 const resolveTimezoneFromCountry = (countryRaw: string) => {
   const value = String(countryRaw || '').trim().toUpperCase();
   if (!value) return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -219,6 +269,86 @@ const resolveTimezoneFromCountry = (countryRaw: string) => {
   const match = keywordMap.find(([key]) => value.includes(key));
   return match?.[1] || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 };
+const normalizeDashboardClockWeatherSettings = (raw: unknown): DashboardClockWeatherSettings => {
+  if (!raw || typeof raw !== 'object') return { ...DASHBOARD_CLOCK_WEATHER_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const asBool = (value: unknown, fallback: boolean) => (typeof value === 'boolean' ? value : fallback);
+  const asNum = (value: unknown, fallback: number) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+  const showClock = asBool(row.showClock, DASHBOARD_CLOCK_WEATHER_DEFAULTS.showClock);
+  let showAmPm = asBool(row.showAmPm, DASHBOARD_CLOCK_WEATHER_DEFAULTS.showAmPm);
+  let showGmt = asBool(row.showGmt, DASHBOARD_CLOCK_WEATHER_DEFAULTS.showGmt);
+  if (showClock && !showAmPm && !showGmt) {
+    showAmPm = true;
+    showGmt = true;
+  }
+  return {
+    showClock,
+    showDate: asBool(row.showDate, DASHBOARD_CLOCK_WEATHER_DEFAULTS.showDate),
+    showAmPm,
+    showGmt,
+    showSeconds: asBool(row.showSeconds, DASHBOARD_CLOCK_WEATHER_DEFAULTS.showSeconds),
+    showTimeZoneName: asBool(row.showTimeZoneName, DASHBOARD_CLOCK_WEATHER_DEFAULTS.showTimeZoneName),
+    showWeather: asBool(row.showWeather, DASHBOARD_CLOCK_WEATHER_DEFAULTS.showWeather),
+    weatherLocationMode:
+      String(row.weatherLocationMode || '').trim().toUpperCase() === 'CUSTOM_LOCATION'
+        ? 'CUSTOM_LOCATION'
+        : 'AUTO_USER_COUNTRY',
+    customWeatherLocation: String(row.customWeatherLocation || '').trim().slice(0, 120),
+    weatherUnit: String(row.weatherUnit || '').trim().toUpperCase() === 'F' ? 'F' : 'C',
+    weatherRefreshSeconds: Math.max(
+      60,
+      Math.min(
+        3600,
+        Math.round(asNum(row.weatherRefreshSeconds, DASHBOARD_CLOCK_WEATHER_DEFAULTS.weatherRefreshSeconds))
+      )
+    ),
+  };
+};
+const WEATHER_CODE_LABELS: Record<number, string> = {
+  0: 'Clear sky',
+  1: 'Mainly clear',
+  2: 'Partly cloudy',
+  3: 'Overcast',
+  45: 'Fog',
+  48: 'Depositing rime fog',
+  51: 'Light drizzle',
+  53: 'Drizzle',
+  55: 'Heavy drizzle',
+  56: 'Freezing drizzle',
+  57: 'Dense freezing drizzle',
+  61: 'Slight rain',
+  63: 'Rain',
+  65: 'Heavy rain',
+  66: 'Freezing rain',
+  67: 'Heavy freezing rain',
+  71: 'Slight snow',
+  73: 'Snow',
+  75: 'Heavy snow',
+  77: 'Snow grains',
+  80: 'Rain showers',
+  81: 'Rain showers',
+  82: 'Violent rain showers',
+  85: 'Snow showers',
+  86: 'Heavy snow showers',
+  95: 'Thunderstorm',
+  96: 'Thunderstorm with hail',
+  99: 'Heavy hail thunderstorm',
+};
+const getGmtOffsetLabel = (date: Date, timeZone: string) => {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      timeZoneName: 'shortOffset',
+    }).formatToParts(date);
+    const token = parts.find((part) => part.type === 'timeZoneName')?.value || '';
+    return token || 'GMT';
+  } catch {
+    return 'GMT';
+  }
+};
 
 interface DashboardLayoutProps {
   userType: DashboardType;
@@ -240,6 +370,12 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [supportCalling, setSupportCalling] = useState(false);
   const [moduleAccessMap, setModuleAccessMap] = useState<Record<string, { allowed: boolean }> | null>(null);
   const [clockNow, setClockNow] = useState<Date>(() => new Date());
+  const [dashboardClockWeatherSettings, setDashboardClockWeatherSettings] = useState<DashboardClockWeatherSettings>(
+    DASHBOARD_CLOCK_WEATHER_DEFAULTS
+  );
+  const [weatherNow, setWeatherNow] = useState<DashboardWeatherSnapshot | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState<string>('');
   const { user, token, logout } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -340,32 +476,66 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     });
   const roleLabel = userType === 'admin' && isSuperAdmin ? 'Super Admin' : roleLabels[userType] || 'User';
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
-  const userTimeZone = useMemo(
-    () => resolveTimezoneFromCountry(String((user as any)?.country || (user as any)?.location || '')),
-    [user]
-  );
-  const dashboardTimeLabel = useMemo(
-    () =>
-      new Intl.DateTimeFormat('en-GB', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-        timeZone: userTimeZone,
-      }).format(clockNow),
-    [clockNow, userTimeZone]
-  );
-  const dashboardDateLabel = useMemo(
-    () =>
-      new Intl.DateTimeFormat('en-GB', {
-        weekday: 'short',
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        timeZone: userTimeZone,
-      }).format(clockNow),
-    [clockNow, userTimeZone]
-  );
+  const userCountryRaw = String((user as any)?.country || (user as any)?.location || '').trim();
+  const userCountryCode = useMemo(() => {
+    const compact = userCountryRaw.toUpperCase().replace(/[^A-Z]/g, '');
+    if (compact.length === 2) return compact;
+    const keywordMap: Array<[string, string]> = [
+      ['NIGERIA', 'NG'],
+      ['GHANA', 'GH'],
+      ['KENYA', 'KE'],
+      ['SOUTH AFRICA', 'ZA'],
+      ['EGYPT', 'EG'],
+      ['SENEGAL', 'SN'],
+      ['RWANDA', 'RW'],
+      ['TANZANIA', 'TZ'],
+      ['UGANDA', 'UG'],
+      ['ETHIOPIA', 'ET'],
+      ['CAMEROON', 'CM'],
+      ['ALGERIA', 'DZ'],
+      ['MOROCCO', 'MA'],
+      ['UNITED STATES', 'US'],
+      ['CANADA', 'CA'],
+      ['UNITED KINGDOM', 'GB'],
+      ['FRANCE', 'FR'],
+    ];
+    const upper = userCountryRaw.toUpperCase();
+    const match = keywordMap.find(([keyword]) => upper.includes(keyword));
+    return match?.[1] || '';
+  }, [userCountryRaw]);
+  const userTimeZone = useMemo(() => resolveTimezoneFromCountry(userCountryRaw), [userCountryRaw]);
+  const effectiveWeatherLocation = useMemo(() => {
+    if (dashboardClockWeatherSettings.weatherLocationMode === 'CUSTOM_LOCATION') {
+      const custom = dashboardClockWeatherSettings.customWeatherLocation.trim();
+      if (custom) return custom;
+    }
+    return COUNTRY_WEATHER_QUERY_MAP[userCountryCode] || userCountryRaw || 'Lagos, Nigeria';
+  }, [dashboardClockWeatherSettings.customWeatherLocation, dashboardClockWeatherSettings.weatherLocationMode, userCountryCode, userCountryRaw]);
+  const timePrimaryLabel = useMemo(() => {
+    if (!dashboardClockWeatherSettings.showClock) return '';
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: dashboardClockWeatherSettings.showSeconds ? '2-digit' : undefined,
+      hour12: dashboardClockWeatherSettings.showAmPm,
+      timeZone: userTimeZone,
+    });
+    return formatter.format(clockNow);
+  }, [clockNow, dashboardClockWeatherSettings.showAmPm, dashboardClockWeatherSettings.showClock, dashboardClockWeatherSettings.showSeconds, userTimeZone]);
+  const gmtLabel = useMemo(() => {
+    if (!dashboardClockWeatherSettings.showClock || !dashboardClockWeatherSettings.showGmt) return '';
+    return getGmtOffsetLabel(clockNow, userTimeZone);
+  }, [clockNow, dashboardClockWeatherSettings.showClock, dashboardClockWeatherSettings.showGmt, userTimeZone]);
+  const dashboardDateLabel = useMemo(() => {
+    if (!dashboardClockWeatherSettings.showDate) return '';
+    return new Intl.DateTimeFormat('en-GB', {
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: userTimeZone,
+    }).format(clockNow);
+  }, [clockNow, dashboardClockWeatherSettings.showDate, userTimeZone]);
   const legacySubmenu = [
     { label: 'Legacy Homepage Manager', href: '/admin/homepage', icon: ChevronRight },
     { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: ChevronRight },
@@ -509,6 +679,100 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       cancelled = true;
     };
   }, [token]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadClockWeatherSettings = async () => {
+      try {
+        const response = await api.homepageSections.getDashboardClockWeatherSettings();
+        if (!cancelled && response?.success && response?.data) {
+          setDashboardClockWeatherSettings(normalizeDashboardClockWeatherSettings(response.data));
+        }
+      } catch {
+        if (!cancelled) {
+          setDashboardClockWeatherSettings({ ...DASHBOARD_CLOCK_WEATHER_DEFAULTS });
+        }
+      }
+    };
+    void loadClockWeatherSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toFahrenheit = (value: number) => (value * 9) / 5 + 32;
+  const weatherLocationLabel = useMemo(
+    () => (dashboardClockWeatherSettings.weatherLocationMode === 'CUSTOM_LOCATION'
+      ? dashboardClockWeatherSettings.customWeatherLocation.trim() || effectiveWeatherLocation
+      : effectiveWeatherLocation),
+    [
+      dashboardClockWeatherSettings.customWeatherLocation,
+      dashboardClockWeatherSettings.weatherLocationMode,
+      effectiveWeatherLocation,
+    ]
+  );
+  const buildGeocodingUrl = (name: string) =>
+    `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en&format=json`;
+  const buildWeatherUrl = (latitude: number, longitude: number) =>
+    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code`;
+
+  const refreshWeather = async () => {
+    if (!dashboardClockWeatherSettings.showWeather) {
+      setWeatherNow(null);
+      setWeatherError('');
+      return;
+    }
+    setWeatherLoading(true);
+    setWeatherError('');
+    try {
+      const locationToQuery = weatherLocationLabel || 'Lagos, Nigeria';
+      const geoResponse = await fetch(buildGeocodingUrl(locationToQuery));
+      const geoPayload = await geoResponse.json().catch(() => null);
+      const geoResult = Array.isArray(geoPayload?.results) ? geoPayload.results[0] : null;
+      if (!geoResult || !Number.isFinite(Number(geoResult.latitude)) || !Number.isFinite(Number(geoResult.longitude))) {
+        throw new Error('Location not found');
+      }
+      const latitude = Number(geoResult.latitude);
+      const longitude = Number(geoResult.longitude);
+      const weatherResponse = await fetch(buildWeatherUrl(latitude, longitude));
+      const weatherPayload = await weatherResponse.json().catch(() => null);
+      const current = weatherPayload?.current;
+      if (!current || !Number.isFinite(Number(current.temperature_2m))) {
+        throw new Error('Weather unavailable');
+      }
+      const temperatureC = Number(current.temperature_2m);
+      const convertedTemperature =
+        dashboardClockWeatherSettings.weatherUnit === 'F' ? toFahrenheit(temperatureC) : temperatureC;
+      const weatherCode = Number(current.weather_code);
+      const weatherLabel = WEATHER_CODE_LABELS[weatherCode] || 'Weather update';
+      setWeatherNow({
+        temperature: Number(convertedTemperature.toFixed(1)),
+        weatherLabel,
+        locationLabel: `${String(geoResult.name || locationToQuery)}${geoResult.country ? `, ${String(geoResult.country)}` : ''}`,
+      });
+      setWeatherError('');
+    } catch {
+      setWeatherNow(null);
+      setWeatherError('Weather unavailable');
+    } finally {
+      setWeatherLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshWeather();
+    const interval = setInterval(() => {
+      void refreshWeather();
+    }, Math.max(60, dashboardClockWeatherSettings.weatherRefreshSeconds) * 1000);
+    return () => clearInterval(interval);
+  }, [
+    dashboardClockWeatherSettings.showWeather,
+    dashboardClockWeatherSettings.weatherRefreshSeconds,
+    dashboardClockWeatherSettings.weatherUnit,
+    weatherLocationLabel,
+  ]);
+
+  const dashboardTimeLabel = timePrimaryLabel;
 
   const normalizeSearchToken = (value: string) => String(value || '').trim().toLowerCase();
   const addSearchEntries = (
@@ -1434,13 +1698,32 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
         {/* Top Header */}
         <header className="relative bg-white border-b border-gray-200 px-4 py-3 lg:px-8">
           <div className="absolute right-4 top-2 text-right leading-tight lg:right-8">
-            <span className="block text-base font-bold text-red-600">{dashboardTimeLabel}</span>
-            <span className="block text-xs font-semibold text-gray-500">
-              {dashboardDateLabel} ({userTimeZone})
-            </span>
+            {dashboardClockWeatherSettings.showClock ? (
+              <span className="block text-base font-bold text-red-600">
+                {dashboardTimeLabel}
+                {dashboardClockWeatherSettings.showGmt && gmtLabel ? (
+                  <span className="ml-2 text-sm font-semibold text-red-500">{gmtLabel}</span>
+                ) : null}
+              </span>
+            ) : null}
+            {dashboardClockWeatherSettings.showDate ? (
+              <span className="block text-xs font-semibold text-gray-500">
+                {dashboardDateLabel}
+                {dashboardClockWeatherSettings.showTimeZoneName ? ` (${userTimeZone})` : ''}
+              </span>
+            ) : null}
+            {dashboardClockWeatherSettings.showWeather ? (
+              <span className="block text-xs font-semibold text-gray-500">
+                {weatherLoading
+                  ? 'Weather: updating...'
+                  : weatherNow
+                    ? `Weather: ${weatherNow.temperature}°${dashboardClockWeatherSettings.weatherUnit} · ${weatherNow.weatherLabel} · ${weatherNow.locationLabel}`
+                    : weatherError || 'Weather unavailable'}
+              </span>
+            ) : null}
           </div>
 
-          <div className="flex items-center gap-3 pr-28 sm:pr-32 lg:pr-56">
+          <div className="flex items-center gap-3 pr-36 sm:pr-44 lg:pr-[30rem]">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
