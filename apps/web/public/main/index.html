@@ -6,12 +6,6 @@
     <title>Zuri Karibu</title>
     <script>
       (function () {
-        var rawHash = String(window.location.hash || '').trim();
-        if (!rawHash || rawHash.indexOf('#/') !== 0) return;
-        var value = rawHash.slice(1);
-        var queryIndex = value.indexOf('?');
-        var pathPart = (queryIndex >= 0 ? value.slice(0, queryIndex) : value).toLowerCase();
-        var queryPart = queryIndex >= 0 ? value.slice(queryIndex) : '';
         var routeMap = {
           '/': '/home',
           '/home': '/home',
@@ -33,14 +27,27 @@
           '/register': '/register',
           '/auth/register': '/register',
           '/signup': '/register',
+          '/sign-up': '/register',
           '/forgot-password': '/forgot-password',
           '/auth/forgot-password': '/forgot-password',
-          '/reset-password': '/reset-password'
+          '/reset-password': '/reset-password',
           '/auth/reset-password': '/reset-password'
         };
-        var target = routeMap[pathPart];
-        if (!target) return;
-        window.location.replace(target + queryPart);
+
+        var redirectFromHash = function () {
+          var rawHash = String(window.location.hash || '').trim();
+          if (!rawHash || rawHash.indexOf('#/') !== 0) return;
+          var value = rawHash.slice(1);
+          var queryIndex = value.indexOf('?');
+          var pathPart = (queryIndex >= 0 ? value.slice(0, queryIndex) : value).toLowerCase();
+          var queryPart = queryIndex >= 0 ? value.slice(queryIndex) : '';
+          var target = routeMap[pathPart];
+          if (!target) return;
+          window.location.replace(target + queryPart);
+        };
+
+        window.addEventListener('hashchange', redirectFromHash);
+        redirectFromHash();
       })();
     </script>
     <script type="module" crossorigin src="/kimi-v14-r20260320-35/assets/index-D3KtpC4K.js"></script>
