@@ -221,11 +221,12 @@ export default function Register() {
   return (
     <AuthPageShell
       brandName={authPageSettings.brandName}
-      sectionLabel="Kimi v14 Authentication"
+      sectionLabel="Zuri Karibu - Auth"
       heroImage={authPageSettings.registerHeroImage}
       heroImageFallback={AUTH_PAGE_SETTINGS_DEFAULTS.registerHeroImage}
       heroAlt={`${authPageSettings.brandName} register`}
       heroCaption={authPageSettings.registerHeroCaption}
+      heroSupportingText="Sign up to start shopping African fashion from designers worldwide."
       title={authPageSettings.registerTitle}
       subtitle={authPageSettings.registerSubtitle}
     >
@@ -238,10 +239,10 @@ export default function Register() {
               key={role.value}
               type="button"
               onClick={() => setSelectedRole(role.value)}
-              className={`border p-2 text-left transition-colors ${
+              className={`rounded-lg border p-2.5 text-left transition-colors ${
                 isSelected
-                  ? 'border-black bg-amber-50'
-                  : 'border-gray-300 bg-white hover:border-gray-500'
+                  ? 'border-[#e85a3c] bg-[#fff3ef]'
+                  : 'border-[#dfdfdf] bg-white hover:border-[#9f9f9f]'
               }`}
             >
               <div className="flex items-start gap-2">
@@ -296,19 +297,41 @@ export default function Register() {
       ) : null}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="relative sm:col-span-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     type="text"
                     required
-                    value={formData.fullName}
-                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                    className="h-11 w-full border border-gray-300 pl-10 pr-3 text-sm focus:border-black focus:outline-none"
-                    placeholder="Full Name"
+                    value={formData.fullName.split(' ').slice(0, 1).join(' ')}
+                    onChange={(e) => {
+                      const first = e.target.value.trim();
+                      const currentParts = formData.fullName.trim().split(/\s+/).filter(Boolean);
+                      const last = currentParts.slice(1).join(' ');
+                      const merged = [first, last].filter(Boolean).join(' ');
+                      setFormData({ ...formData, fullName: merged });
+                    }}
+                    className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-10 pr-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
+                    placeholder="First name"
                   />
                 </div>
-
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    required
+                    value={formData.fullName.split(' ').slice(1).join(' ')}
+                    onChange={(e) => {
+                      const last = e.target.value.trim();
+                      const currentParts = formData.fullName.trim().split(/\s+/).filter(Boolean);
+                      const first = currentParts.slice(0, 1).join(' ');
+                      const merged = [first, last].filter(Boolean).join(' ');
+                      setFormData({ ...formData, fullName: merged });
+                    }}
+                    className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-10 pr-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
+                    placeholder="Last name"
+                  />
+                </div>
                 <div className="relative sm:col-span-2">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
@@ -316,7 +339,7 @@ export default function Register() {
                     required
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="h-11 w-full border border-gray-300 pl-10 pr-3 text-sm focus:border-black focus:outline-none"
+                    className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-10 pr-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
                     placeholder="Email Address"
                   />
                 </div>
@@ -328,7 +351,7 @@ export default function Register() {
                     required
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="h-11 w-full border border-gray-300 pl-10 pr-10 text-sm focus:border-black focus:outline-none"
+                    className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-10 pr-10 text-sm focus:border-[#9d9d9d] focus:outline-none"
                     placeholder="Password"
                   />
                   <button
@@ -348,7 +371,7 @@ export default function Register() {
                   required
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
+                  className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white px-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
                   placeholder="Confirm Password"
                 />
 
@@ -356,7 +379,7 @@ export default function Register() {
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
+                  className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white px-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
                   placeholder="Phone (optional)"
                 />
 
@@ -371,7 +394,7 @@ export default function Register() {
                       phone: normalizePhoneWithCountryPrefix(formData.phone, resolveCountryName(e.target.value)),
                     })
                   }
-                  className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
+                  className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white px-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
                 >
                   <option value="">Country</option>
                   {countryOptions.map((country) => (
@@ -388,7 +411,7 @@ export default function Register() {
                       required
                       value={formData.businessName}
                       onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                      className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none sm:col-span-2"
+                      className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white px-3 text-sm focus:border-[#9d9d9d] focus:outline-none sm:col-span-2"
                       placeholder="Business Name"
                     />
 
@@ -396,7 +419,7 @@ export default function Register() {
                       required
                       value={formData.city}
                       onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                      className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none sm:col-span-2"
+                      className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white px-3 text-sm focus:border-[#9d9d9d] focus:outline-none sm:col-span-2"
                       disabled={!formData.country}
                     >
                       <option value="">{formData.country ? 'Select City' : 'Select country first'}</option>
@@ -417,14 +440,14 @@ export default function Register() {
                     onChange={(e) =>
                       setFormData({ ...formData, referralCode: normalizeReferralCodeInput(e.target.value) })
                     }
-                    className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
+                    className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white px-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
                     placeholder="Referral code"
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     Referral code is required. If you do not have one, keep the default code.
                   </p>
                 </div>
-              </div>
+        </div>
 
         <label htmlFor="terms" className="inline-flex items-start gap-2 text-sm text-gray-600">
           <input
@@ -446,7 +469,7 @@ export default function Register() {
           </span>
         </label>
 
-        <Button type="submit" className="h-11 w-full text-sm" disabled={loading}>
+        <Button type="submit" className="h-11 w-full rounded-[10px] bg-[#e85a3c] text-sm font-semibold text-white hover:bg-[#d95135]" disabled={loading}>
           {loading ? 'Creating account...' : authPageSettings.registerSubmitLabel}
           {!loading ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
         </Button>

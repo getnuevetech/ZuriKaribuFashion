@@ -214,13 +214,14 @@ export default function Login() {
   return (
     <AuthPageShell
       brandName={authPageSettings.brandName}
-      sectionLabel="Kimi v14 Authentication"
+      sectionLabel=""
       heroImage={authPageSettings.loginHeroImage}
       heroImageFallback={AUTH_PAGE_SETTINGS_DEFAULTS.loginHeroImage}
       heroAlt={`${authPageSettings.brandName} login`}
-      heroCaption={authPageSettings.loginHeroCaption}
-      title={authPageSettings.loginTitle}
-      subtitle={authPageSettings.loginSubtitle}
+      heroCaption="Made by Africans. Worn by the world."
+      heroSupportingText="African fashion marketplace — ready-to-wear, custom, and fabrics from 54 countries."
+      title="Welcome back"
+      subtitle="Sign in to access your account and continue shopping."
     >
       {error ? (
         <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -250,7 +251,7 @@ export default function Login() {
       ) : null}
 
       {mfaChallenge ? (
-        <form onSubmit={handleVerifyMfa} className="space-y-4 border border-amber-200 bg-amber-50 p-4">
+        <form onSubmit={handleVerifyMfa} className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 h-5 w-5 text-amber-700" />
             <div>
@@ -265,7 +266,7 @@ export default function Login() {
               <select
                 value={mfaChallenge.method}
                 onChange={(event) => handleMfaMethodChange(event.target.value as LoginMfaMethod)}
-                className="h-10 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
+                className="h-12 w-full rounded-xl border border-[#e5e5e5] bg-white px-4 text-sm focus:border-[#e85a3c] focus:outline-none"
               >
                 <option value="EMAIL_OTP">Email OTP</option>
                 <option value="TOTP_AUTHENTICATOR">Google Authenticator / Authenticator App</option>
@@ -312,7 +313,7 @@ export default function Login() {
               required
               value={mfaCode}
               onChange={(event) => setMfaCode(event.target.value.replace(/\s+/g, ''))}
-              className="h-11 w-full border border-gray-300 px-3 text-sm tracking-widest focus:border-black focus:outline-none"
+              className="h-12 w-full rounded-xl border border-[#e5e5e5] bg-white px-4 text-sm tracking-widest focus:border-[#e85a3c] focus:outline-none"
               placeholder="Enter verification code"
             />
             {expiresAtLabel ? <p className="text-[11px] text-gray-500">Challenge expires at {expiresAtLabel}</p> : null}
@@ -321,13 +322,13 @@ export default function Login() {
           {mfaError ? <div className="border border-red-200 bg-red-50 p-2 text-xs text-red-700">{mfaError}</div> : null}
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Button type="submit" className="h-11 w-full text-sm" disabled={loading}>
+            <Button type="submit" className="h-12 w-full rounded-xl bg-[#e85a3c] text-sm font-semibold text-white hover:bg-[#d14a2e]" disabled={loading}>
               {loading ? 'Verifying...' : 'Verify & Sign in'}
             </Button>
             <Button
               type="button"
               variant="secondary"
-              className="h-11 w-full text-sm"
+              className="h-12 w-full rounded-xl border border-[#d7d7d7] bg-white text-sm font-semibold text-[#2d2d2d] hover:bg-[#f4f4f4]"
               disabled={loading}
               onClick={() => {
                 if (mfaChallenge.method === 'EMAIL_OTP') {
@@ -360,8 +361,8 @@ export default function Login() {
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="h-11 w-full border border-gray-300 pl-10 pr-3 text-sm focus:border-black focus:outline-none"
-                placeholder="Email Address"
+                className="h-12 w-full rounded-xl border border-[#e6e6e6] bg-white pl-10 pr-4 text-sm focus:border-[#e85a3c] focus:outline-none"
+                placeholder="Enter your email"
               />
             </div>
 
@@ -372,8 +373,8 @@ export default function Login() {
                 required
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="h-11 w-full border border-gray-300 pl-10 pr-10 text-sm focus:border-black focus:outline-none"
-                placeholder="Password"
+                className="h-12 w-full rounded-xl border border-[#e6e6e6] bg-white pl-10 pr-10 text-sm focus:border-[#e85a3c] focus:outline-none"
+                placeholder="Enter your password"
               />
               <button
                 type="button"
@@ -399,17 +400,23 @@ export default function Login() {
             </Link>
           </div>
 
-          <Button type="submit" className="h-11 w-full bg-[#111111] text-sm hover:bg-black" disabled={loading}>
+          <Button type="submit" className="h-12 w-full rounded-xl bg-[#e85a3c] text-sm font-semibold text-white hover:bg-[#d14a2e]" disabled={loading}>
             {loading ? 'Signing in...' : authPageSettings.loginSubmitLabel}
             {!loading ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
           </Button>
         </form>
       )}
 
+      <div className="flex items-center gap-3 pt-1 text-[#a7a7a7]">
+        <span className="h-px flex-1 bg-[#dddddd]" />
+        <span className="text-sm">Or continue with</span>
+        <span className="h-px flex-1 bg-[#dddddd]" />
+      </div>
+
       <p className="text-center text-sm text-gray-600">
         Don&apos;t have an account?{' '}
         <Link to="/auth/register" className="font-medium text-[#e85a3c] hover:text-[#c9492f]">
-          Sign up
+          Create account
         </Link>
       </p>
     </AuthPageShell>

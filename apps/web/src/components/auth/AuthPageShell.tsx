@@ -1,5 +1,4 @@
 import { type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 
 type AuthPageShellProps = {
   brandName: string;
@@ -8,26 +7,32 @@ type AuthPageShellProps = {
   heroImageFallback: string;
   heroAlt: string;
   heroCaption: string;
+  heroSupportingText?: string;
   title: string;
   subtitle: string;
+  topSlot?: ReactNode;
+  rightFooterText?: string;
   children: ReactNode;
 };
 
 export default function AuthPageShell({
   brandName,
-  sectionLabel = 'Jenks Authentication',
+  sectionLabel = '',
   heroImage,
   heroImageFallback,
   heroAlt,
   heroCaption,
+  heroSupportingText,
   title,
   subtitle,
+  topSlot,
+  rightFooterText = '© 2024 Zuri Karibu. All rights reserved.',
   children,
 }: AuthPageShellProps) {
   return (
-    <div className="min-h-screen bg-[#f4f1ea] px-4 py-6 md:px-6 md:py-10">
-      <div className="mx-auto grid max-w-[1240px] overflow-hidden rounded-[24px] border border-[#d8d2c5] bg-[#f8f5ef] shadow-[0_30px_70px_rgba(16,16,16,0.18)] md:grid-cols-[1.03fr_0.97fr]">
-        <div className="relative min-h-[360px] border-b border-[#d8d2c5] md:min-h-[760px] md:border-b-0 md:border-r md:border-[#d8d2c5]">
+    <div className="min-h-screen bg-white">
+      <div className="grid min-h-screen grid-cols-1 md:grid-cols-2">
+        <div className="relative h-[320px] md:h-auto">
           <img
             src={heroImage}
             alt={heroAlt}
@@ -38,27 +43,38 @@ export default function AuthPageShell({
               }
             }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0f1116]/80 via-[#0f1116]/35 to-[#0f1116]/15" />
-          <div className="absolute left-6 top-6">
-            <p className="text-4xl font-black tracking-tight text-[#f6f3ee] sm:text-5xl">{brandName}</p>
-            <p className="mt-2 text-[11px] uppercase tracking-[0.28em] text-[#f6f3ee]/70">{sectionLabel}</p>
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0f1116]/78 via-[#0f1116]/28 to-[#0f1116]/15" />
+          <div className="absolute left-8 top-8">
+            <p className="text-[2rem] font-extrabold tracking-wide text-white sm:text-4xl">
+              {String(brandName || 'ZURIKARIBU').toUpperCase()}
+            </p>
+            {sectionLabel ? (
+              <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-white/70">
+                {sectionLabel}
+              </p>
+            ) : null}
           </div>
-          <p className="absolute bottom-6 left-6 right-6 font-serif text-3xl italic text-[#f6f3ee] sm:text-5xl">
-            {heroCaption}
-          </p>
+          <div className="absolute bottom-8 left-8 right-8">
+            <p className="max-w-[18ch] text-4xl font-extrabold leading-[1.06] text-white sm:text-5xl">
+              {heroCaption}
+            </p>
+            {heroSupportingText ? (
+              <p className="mt-4 max-w-[38ch] text-lg leading-relaxed text-white/82">
+                {heroSupportingText}
+              </p>
+            ) : null}
+          </div>
         </div>
 
-        <div className="bg-[#f7f4ed] px-5 py-8 sm:px-10 md:px-12 md:py-12">
-          <div className="mx-auto w-full max-w-md">
-            <Link to="/main" className="inline-flex text-sm font-semibold text-[#e85a3c] hover:text-[#c94b30]">
-              Back to Home
-            </Link>
-            <div className="mt-3 border-b border-[#ddd6c8] pb-5">
-              <p className="text-4xl font-black tracking-tight text-[#1a1917]">{brandName}</p>
-              <h1 className="mt-4 text-[2.15rem] font-black leading-[1.05] tracking-tight text-[#141926]">{title}</h1>
-              <p className="mt-2 text-sm text-[#5f5a52]">{subtitle}</p>
+        <div className="flex min-h-[calc(100vh-320px)] flex-col bg-[#f7f7f7] px-6 py-8 sm:px-12 md:min-h-screen md:px-16 md:py-10">
+          <div className="mx-auto flex w-full max-w-[460px] flex-1 flex-col">
+            {topSlot ? <div className="mb-8">{topSlot}</div> : <div className="mb-2" />}
+            <div>
+              <h1 className="text-[2.9rem] font-bold leading-[1.04] tracking-tight text-[#141414]">{title}</h1>
+              <p className="mt-3 text-lg text-[#565656]">{subtitle}</p>
             </div>
-            <div className="mt-6 space-y-5">{children}</div>
+            <div className="mt-8 space-y-5">{children}</div>
+            <p className="mt-auto pt-10 text-center text-xs text-[#999999]">{rightFooterText}</p>
           </div>
         </div>
       </div>

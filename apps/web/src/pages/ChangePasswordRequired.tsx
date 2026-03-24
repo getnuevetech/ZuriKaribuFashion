@@ -8,6 +8,7 @@ import PasswordStrengthMeter from '../components/auth/PasswordStrengthMeter';
 import { evaluatePasswordSecurity } from '../utils/passwordSecurity';
 import { AUTH_PAGE_SETTINGS_DEFAULTS, useAuthPageSettings } from '../hooks/useAuthPageSettings';
 import AuthPageShell from '../components/auth/AuthPageShell';
+import { ArrowRight } from 'lucide-react';
 
 export default function ChangePasswordRequiredPage() {
   const navigate = useNavigate();
@@ -50,14 +51,15 @@ export default function ChangePasswordRequiredPage() {
   return (
     <AuthPageShell
       brandName={authPageSettings.brandName}
-      sectionLabel="Kimi v14 Authentication"
+      sectionLabel="Zuri Karibu - Auth"
       heroImage={authPageSettings.changePasswordHeroImage || authPageSettings.resetPasswordHeroImage}
       heroImageFallback={
         AUTH_PAGE_SETTINGS_DEFAULTS.changePasswordHeroImage || AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordHeroImage
       }
       heroAlt={`${authPageSettings.brandName} update temporary password`}
-      heroCaption={authPageSettings.changePasswordHeroCaption || 'Secure your account before continuing'}
-      title={authPageSettings.changePasswordTitle || 'Change Temporary Password'}
+      heroCaption={authPageSettings.changePasswordHeroCaption || 'Your style, your story.'}
+      heroSupportingText="Secure your account and continue your African fashion journey."
+      title={authPageSettings.changePasswordTitle || 'Update password'}
       subtitle={
         authPageSettings.changePasswordSubtitle ||
         'Your account was created with a temporary password. You must update it before continuing.'
@@ -74,7 +76,7 @@ export default function ChangePasswordRequiredPage() {
         <input
           type="password"
           required
-          className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
+          className="h-12 w-full rounded-xl border border-[#dfdfdf] bg-white px-4 text-sm focus:border-[#e85a3c] focus:outline-none"
           placeholder="Current temporary password"
           value={currentPassword}
           onChange={(event) => setCurrentPassword(event.target.value)}
@@ -82,7 +84,7 @@ export default function ChangePasswordRequiredPage() {
         <input
           type="password"
           required
-          className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
+          className="h-12 w-full rounded-xl border border-[#dfdfdf] bg-white px-4 text-sm focus:border-[#e85a3c] focus:outline-none"
           placeholder="New password"
           value={newPassword}
           onChange={(event) => setNewPassword(event.target.value)}
@@ -91,13 +93,18 @@ export default function ChangePasswordRequiredPage() {
         <input
           type="password"
           required
-          className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
+          className="h-12 w-full rounded-xl border border-[#dfdfdf] bg-white px-4 text-sm focus:border-[#e85a3c] focus:outline-none"
           placeholder="Confirm new password"
           value={confirmPassword}
           onChange={(event) => setConfirmPassword(event.target.value)}
         />
-        <Button type="submit" disabled={saving} className="h-11 w-full text-sm">
+        <Button
+          type="submit"
+          disabled={saving}
+          className="h-12 w-full rounded-xl bg-[#e85a3c] text-sm font-semibold text-white hover:bg-[#d14a2e]"
+        >
           {saving ? 'Saving...' : authPageSettings.changePasswordSubmitLabel || 'Update Password'}
+          {!saving ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
         </Button>
       </form>
 

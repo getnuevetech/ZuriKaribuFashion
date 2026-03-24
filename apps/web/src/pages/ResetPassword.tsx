@@ -57,13 +57,14 @@ export default function ResetPassword() {
   return (
     <AuthPageShell
       brandName={authPageSettings.brandName}
-      sectionLabel="Kimi v14 Authentication"
+      sectionLabel="Zuri Karibu - Auth"
       heroImage={authPageSettings.resetPasswordHeroImage}
       heroImageFallback={AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordHeroImage}
       heroAlt={`${authPageSettings.brandName} reset password`}
-      heroCaption={authPageSettings.resetPasswordHeroCaption}
-      title={authPageSettings.resetPasswordTitle}
-      subtitle={authPageSettings.resetPasswordSubtitle}
+      heroCaption="Your style, your story."
+      heroSupportingText="Reset your password and continue your African fashion journey."
+      title="Forgot password?"
+      subtitle="No worries. Enter your email address and we'll send you a link to reset your password."
     >
       {!token ? (
         <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -83,7 +84,7 @@ export default function ResetPassword() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">New password</label>
+          <label className="mb-1 block text-sm font-semibold text-[#2f2f2f]">New password</label>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
@@ -91,13 +92,13 @@ export default function ResetPassword() {
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
               required
-              className="h-11 w-full border border-gray-300 pl-10 pr-3 text-sm focus:border-black focus:outline-none"
+              className="h-12 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-10 pr-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
               placeholder="Minimum 8 characters"
             />
           </div>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Confirm password</label>
+          <label className="mb-1 block text-sm font-semibold text-[#2f2f2f]">Confirm password</label>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
@@ -105,14 +106,14 @@ export default function ResetPassword() {
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               required
-              className="h-11 w-full border border-gray-300 pl-10 pr-3 text-sm focus:border-black focus:outline-none"
+              className="h-12 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-10 pr-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
               placeholder="Re-enter password"
             />
           </div>
         </div>
         <PasswordStrengthMeter password={newPassword} />
 
-        <Button type="submit" className="h-11 w-full text-sm" disabled={loading || !token}>
+        <Button type="submit" className="h-12 w-full rounded-[10px] bg-[#e85a3c] text-sm font-semibold text-white hover:bg-[#d14a2e]" disabled={loading || !token}>
           {loading ? (
             'Resetting password...'
           ) : (
@@ -125,8 +126,8 @@ export default function ResetPassword() {
       </form>
 
       <p className="text-center text-sm text-gray-600">
-        <Link to="/auth/login" className="font-medium text-amber-700 hover:text-amber-800">
-          Back to sign in
+        <Link to="/auth/login" className="font-medium text-[#e85a3c] hover:text-[#c9492f]">
+          Need help? Contact support
         </Link>
       </p>
     </AuthPageShell>
