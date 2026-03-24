@@ -211,9 +211,9 @@ export default function Login() {
     : '';
 
   return (
-    <div className="min-h-screen bg-gray-100 px-4 py-8 md:py-12">
-      <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-2">
-        <div className="relative min-h-[360px] overflow-hidden border border-gray-200 bg-black shadow-sm md:min-h-[640px]">
+    <div className="min-h-screen bg-[#0e0e0f] px-4 py-8 md:py-12">
+      <div className="mx-auto grid w-full max-w-6xl gap-4 rounded-2xl border border-white/10 bg-[#141416] p-2 shadow-2xl md:grid-cols-2 md:gap-0">
+        <div className="relative min-h-[360px] overflow-hidden rounded-xl border border-white/10 bg-black md:min-h-[680px]">
           <img
             src={authPageSettings.loginHeroImage}
             alt={`${authPageSettings.brandName} login`}
@@ -225,18 +225,21 @@ export default function Login() {
               }
             }}
           />
-          <div className="absolute inset-0 bg-black/20" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/20" />
           <p className="absolute left-6 top-5 font-['Oswald'] text-3xl font-bold text-white md:text-4xl">
             {authPageSettings.brandName}
+          </p>
+          <p className="absolute bottom-20 left-6 pr-6 text-xs font-semibold uppercase tracking-[0.28em] text-white/75">
+            Jenks Authentication
           </p>
           <p className="absolute bottom-6 left-6 pr-6 font-['Oswald'] text-2xl font-medium italic text-white md:text-4xl">
             {authPageSettings.loginHeroCaption}
           </p>
         </div>
 
-        <div className="border border-gray-200 bg-white px-5 py-8 shadow-sm sm:px-8 md:py-10">
+        <div className="rounded-xl border border-white/10 bg-[#faf9f7] px-5 py-8 sm:px-8 md:py-10">
           <div className="mx-auto w-full max-w-md space-y-5">
-            <Link to="/" className="inline-flex text-sm font-medium text-amber-700 hover:text-amber-800">
+            <Link to="/" className="inline-flex text-sm font-medium text-[#e85a3c] hover:text-[#c9492f]">
               Back to Home
             </Link>
             <div className="text-center">
@@ -417,12 +420,12 @@ export default function Login() {
                     />
                     Remember me
                   </label>
-                  <Link to="/forgot-password" className="text-amber-700 hover:text-amber-800">
+                  <Link to="/forgot-password" className="text-[#e85a3c] hover:text-[#c9492f]">
                     Forgot password?
                   </Link>
                 </div>
 
-                <Button type="submit" className="h-11 w-full text-sm" disabled={loading}>
+                <Button type="submit" className="h-11 w-full bg-[#111111] text-sm hover:bg-black" disabled={loading}>
                   {loading ? 'Signing in...' : authPageSettings.loginSubmitLabel}
                   {!loading ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
                 </Button>
@@ -431,7 +434,7 @@ export default function Login() {
 
             <p className="text-center text-sm text-gray-600">
               Don&apos;t have an account?{' '}
-              <Link to="/register" className="font-medium text-amber-700 hover:text-amber-800">
+              <Link to="/register" className="font-medium text-[#e85a3c] hover:text-[#c9492f]">
                 Sign up
               </Link>
             </p>
