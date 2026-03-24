@@ -186,6 +186,10 @@ function App() {
               <Route path="/designers" element={<Navigate to="/custom" replace />} />
               <Route path="/support" element={<Navigate to="/help-center" replace />} />
               <Route path="/faq" element={<Navigate to="/help-center" replace />} />
+              <Route path="/terms" element={<NavigateWithSearch to="/help-center" />} />
+              <Route path="/privacy" element={<NavigateWithSearch to="/help-center" />} />
+              <Route path="/legal/terms" element={<NavigateWithSearch to="/help-center" />} />
+              <Route path="/legal/privacy" element={<NavigateWithSearch to="/help-center" />} />
               <Route path="/shop" element={<ShopPage />} />
               <Route path="/country-products" element={<CountryProducts />} />
               <Route path="/ready-to-wear" element={<ReadyToWear />} />
@@ -211,7 +215,7 @@ function App() {
 
             {/* Auth Routes */}
             <Route path="/login" element={<NavigateWithSearch to="/auth/login" />} />
-            <Route path="/auth" element={<Navigate to="/login" replace />} />
+            <Route path="/auth" element={<NavigateWithSearch to="/auth/login" />} />
             <Route path="/signin" element={<NavigateWithSearch to="/auth/login" />} />
             <Route path="/sign-in" element={<NavigateWithSearch to="/auth/login" />} />
             <Route path="/auth/login" element={<Login />} />

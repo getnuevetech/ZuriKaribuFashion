@@ -16,9 +16,16 @@
     <script>
       (function () {
         var routeMap = {
-          '/': '/jenks',
-          '/home': '/jenks',
-          '/jenks': '/jenks',
+          '/': '/main',
+          '/home': '/main',
+          '/main': '/main',
+          '/jenks': '/main',
+          '/legacy': '/main',
+          '/home-kimi': '/main',
+          '/home-legacy': '/main',
+          '/home-live': '/main',
+          '/home-jenks': '/main',
+          '/jenks-dynamic': '/main',
           '/shop': '/shop',
           '/ready-to-wear': '/ready-to-wear',
           '/rtw': '/ready-to-wear',
@@ -29,6 +36,14 @@
           '/ctw': '/custom',
           '/contact': '/contact',
           '/contact-us': '/contact',
+          '/help-center': '/help-center',
+          '/support': '/help-center',
+          '/faq': '/help-center',
+          '/seller-designer-support': '/seller-designer-support',
+          '/terms': '/help-center',
+          '/privacy': '/help-center',
+          '/legal/terms': '/help-center',
+          '/legal/privacy': '/help-center',
           '/login': '/auth/login',
           '/signin': '/auth/login',
           '/sign-in': '/auth/login',
@@ -49,8 +64,7 @@
           try {
             normalized = decodeURIComponent(normalized);
           } catch (_error) {}
-          normalized = normalized.replace(/^\/#\/?/, '/');
-          normalized = normalized.replace(/^#\/?/, '/');
+          normalized = normalized.replace(/^[\/#]+/, '/');
           if (normalized.indexOf('/') !== 0) normalized = '/' + normalized;
           normalized = normalized.replace(/\/{2,}/g, '/');
           var queryIndex = normalized.indexOf('?');
@@ -70,12 +84,29 @@
           var pathPart = (queryIndex >= 0 ? value.slice(0, queryIndex) : value).toLowerCase();
           var queryPart = queryIndex >= 0 ? value.slice(queryIndex) : '';
           var normalized = pathPart.replace(/[^a-z0-9/_-]/g, '');
-          if (
-            normalized.indexOf('signin') !== -1 ||
-            normalized.indexOf('sign-in') !== -1 ||
-            normalized.indexOf('auth/login') !== -1
-          ) {
+          if (normalized.indexOf('signin') !== -1 || normalized.indexOf('sign-in') !== -1 || normalized.indexOf('auth/login') !== -1) {
             window.location.replace('/auth/login' + queryPart);
+            return;
+          }
+          if (
+            normalized.indexOf('register') !== -1 ||
+            normalized.indexOf('signup') !== -1 ||
+            normalized.indexOf('sign-up') !== -1 ||
+            normalized.indexOf('auth/register') !== -1
+          ) {
+            window.location.replace('/auth/register' + queryPart);
+            return;
+          }
+          if (normalized.indexOf('forgot') !== -1 || normalized.indexOf('auth/forgot-password') !== -1) {
+            window.location.replace('/auth/forgot-password' + queryPart);
+            return;
+          }
+          if (
+            normalized.indexOf('reset-password') !== -1 ||
+            normalized.indexOf('password-reset') !== -1 ||
+            normalized.indexOf('auth/reset-password') !== -1
+          ) {
+            window.location.replace('/auth/reset-password' + queryPart);
             return;
           }
           var target = routeMap[pathPart];

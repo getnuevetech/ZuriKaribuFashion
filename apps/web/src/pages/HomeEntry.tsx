@@ -6,7 +6,6 @@ import {
   type HomepageExperienceSettings,
 } from '../design/homepageExperience';
 
-const LEGACY_HOME_PATH = '/home-legacy';
 const JENKS_HOME_PATH = '/home';
 const JENKS_STATIC_HOME_PATH = '/home';
 
@@ -28,7 +27,7 @@ const normalizePreviewChoice = (
 const resolveHomepageTarget = (
   settings: HomepageExperienceSettings
 ): 'JENKS_DYNAMIC' | 'JENKS_STATIC' | 'LEGACY' => {
-  if (typeof window === 'undefined') return 'LEGACY';
+  if (typeof window === 'undefined') return 'JENKS_STATIC';
   const previewParamCandidate = String(settings.previewQueryParam || '').trim();
   const previewParam = /^[A-Za-z0-9_-]{2,40}$/.test(previewParamCandidate)
     ? previewParamCandidate
@@ -36,8 +35,8 @@ const resolveHomepageTarget = (
   const search = new URLSearchParams(window.location.search);
   if (settings.allowPreviewQuery) {
     const previewChoice = normalizePreviewChoice(search.get(previewParam));
-    if (previewChoice === 'LEGACY' && settings.legacyHomepageEnabled !== true) {
-      return 'JENKS_STATIC';
+    if (previewChoice === 'LEGACY') {
+      return settings.legacyHomepageEnabled === true ? 'LEGACY' : 'JENKS_STATIC';
     }
     if (previewChoice) return previewChoice;
   }
@@ -49,8 +48,8 @@ const resolveHomepageTarget = (
     }
     return 'JENKS_DYNAMIC';
   }
-  // Guardrail: root runtime should not silently fall back to legacy.
-  // Legacy remains available only via explicit preview override or direct route.
+  // Guardrail: root runtime should never silently fall back to legacy.
+  // Legacy remains available only via explicit preview override when enabled.
   if (settings.rolloutMode !== 'LIVE') {
     return 'JENKS_STATIC';
   }
@@ -72,7 +71,8 @@ export default function HomeEntry() {
         window.location.replace(destination);
         return;
       }
-      const destination = `${LEGACY_HOME_PATH}${window.location.search || ''}${window.location.hash || ''}`;
+      // Even when legacy preview is requested and enabled, keep URL canonical.
+      const destination = `${JENKS_HOME_PATH}${window.location.search || ''}${window.location.hash || ''}`;
       window.location.replace(destination);
     };
 

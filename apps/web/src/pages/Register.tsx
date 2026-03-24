@@ -459,11 +459,11 @@ export default function Register() {
                 />
                 <span>
                   I agree to the{' '}
-                  <Link to="/terms" className="text-amber-700 hover:text-amber-800">
+                  <Link to="/legal/terms" className="text-amber-700 hover:text-amber-800">
                     Terms of Service
                   </Link>{' '}
                   and{' '}
-                  <Link to="/privacy" className="text-amber-700 hover:text-amber-800">
+                  <Link to="/legal/privacy" className="text-amber-700 hover:text-amber-800">
                     Privacy Policy
                   </Link>
                 </span>
@@ -477,7 +477,7 @@ export default function Register() {
 
             <p className="text-center text-sm text-gray-600">
               Already have an account?{' '}
-              <Link to="/login" className="font-medium text-amber-700 hover:text-amber-800">
+              <Link to="/auth/login" className="font-medium text-amber-700 hover:text-amber-800">
                 Sign in
               </Link>
             </p>

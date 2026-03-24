@@ -62,8 +62,9 @@ test.describe('JENKS CTA crawl + auth route hardening', () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/jenks`, { waitUntil: 'networkidle' });
-    await expect(page).toHaveURL(/\/(jenks|kimi-v14-r20260320-35\/index\.html)(\?.*)?(#.*)?$/);
+    // Static Jenks page can keep long-lived asset activity; domcontentloaded is a safer readiness gate.
+    await page.goto(`${BASE_URL}/jenks`, { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/(main\/?|jenks|kimi-v14-r20260320-35\/index\.html)(\?.*)?(#.*)?$/);
 
     const hrefs = await page.$$eval('a[href]', (anchors) =>
       anchors

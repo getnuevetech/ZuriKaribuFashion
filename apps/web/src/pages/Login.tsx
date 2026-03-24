@@ -71,7 +71,7 @@ export default function Login() {
     const targetRoute = resolvePostLoginRoute(nextUser);
     navigate(targetRoute, { replace: true });
     window.setTimeout(() => {
-      if (window.location.pathname === '/login') {
+      if (window.location.pathname === '/login' || window.location.pathname === '/auth/login') {
         window.location.assign(targetRoute);
       }
     }, 0);
