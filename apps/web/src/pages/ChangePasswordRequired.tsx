@@ -7,6 +7,7 @@ import { getHomeRouteForUser } from '../auth/rbac';
 import PasswordStrengthMeter from '../components/auth/PasswordStrengthMeter';
 import { evaluatePasswordSecurity } from '../utils/passwordSecurity';
 import { AUTH_PAGE_SETTINGS_DEFAULTS, useAuthPageSettings } from '../hooks/useAuthPageSettings';
+import AuthPageShell from '../components/auth/AuthPageShell';
 
 export default function ChangePasswordRequiredPage() {
   const navigate = useNavigate();
@@ -47,82 +48,64 @@ export default function ChangePasswordRequiredPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 px-4 py-8 md:py-12">
-      <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-2">
-        <div className="relative min-h-[360px] overflow-hidden border border-gray-200 bg-black shadow-sm md:min-h-[640px]">
-          <img
-            src={authPageSettings.resetPasswordHeroImage}
-            alt={`${authPageSettings.brandName} update temporary password`}
-            className="h-full w-full object-cover"
-            onError={(event) => {
-              const fallback = AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordHeroImage;
-              if (event.currentTarget.src !== fallback) {
-                event.currentTarget.src = fallback;
-              }
-            }}
-          />
-          <div className="absolute inset-0 bg-black/20" />
-          <p className="absolute left-6 top-5 text-3xl font-bold text-white md:text-4xl">
-            {authPageSettings.brandName}
-          </p>
-          <p className="absolute bottom-6 left-6 pr-6 text-2xl font-medium italic text-white md:text-4xl">
-            Secure your account before continuing
-          </p>
-        </div>
+    <AuthPageShell
+      brandName={authPageSettings.brandName}
+      sectionLabel="Kimi v14 Authentication"
+      heroImage={authPageSettings.changePasswordHeroImage || authPageSettings.resetPasswordHeroImage}
+      heroImageFallback={
+        AUTH_PAGE_SETTINGS_DEFAULTS.changePasswordHeroImage || AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordHeroImage
+      }
+      heroAlt={`${authPageSettings.brandName} update temporary password`}
+      heroCaption={authPageSettings.changePasswordHeroCaption || 'Secure your account before continuing'}
+      title={authPageSettings.changePasswordTitle || 'Change Temporary Password'}
+      subtitle={
+        authPageSettings.changePasswordSubtitle ||
+        'Your account was created with a temporary password. You must update it before continuing.'
+      }
+    >
+      {error ? (
+        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+      ) : null}
+      {message ? (
+        <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-700">{message}</div>
+      ) : null}
 
-        <div className="border border-gray-200 bg-white px-5 py-8 shadow-sm sm:px-8 md:py-10">
-          <div className="mx-auto w-full max-w-md space-y-5">
-            <Link to="/" className="inline-flex text-sm font-medium text-amber-700 hover:text-amber-800">
-              Back to Home
-            </Link>
-            <div className="text-center">
-              <p className="text-4xl font-bold text-black">{authPageSettings.brandName}</p>
-              <h1 className="mt-6 text-4xl font-bold text-gray-900">Change Temporary Password</h1>
-              <p className="mt-2 text-sm text-gray-600">
-                Your account was created with a temporary password. You must update it before continuing.
-              </p>
-            </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <input
+          type="password"
+          required
+          className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
+          placeholder="Current temporary password"
+          value={currentPassword}
+          onChange={(event) => setCurrentPassword(event.target.value)}
+        />
+        <input
+          type="password"
+          required
+          className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
+          placeholder="New password"
+          value={newPassword}
+          onChange={(event) => setNewPassword(event.target.value)}
+        />
+        <PasswordStrengthMeter password={newPassword} />
+        <input
+          type="password"
+          required
+          className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
+          placeholder="Confirm new password"
+          value={confirmPassword}
+          onChange={(event) => setConfirmPassword(event.target.value)}
+        />
+        <Button type="submit" disabled={saving} className="h-11 w-full text-sm">
+          {saving ? 'Saving...' : authPageSettings.changePasswordSubmitLabel || 'Update Password'}
+        </Button>
+      </form>
 
-            {error ? (
-              <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
-            ) : null}
-            {message ? (
-              <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-700">{message}</div>
-            ) : null}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <input
-                type="password"
-                required
-                className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
-                placeholder="Current temporary password"
-                value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-              />
-              <input
-                type="password"
-                required
-                className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
-                placeholder="New password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-              />
-              <PasswordStrengthMeter password={newPassword} />
-              <input
-                type="password"
-                required
-                className="h-11 w-full border border-gray-300 px-3 text-sm focus:border-black focus:outline-none"
-                placeholder="Confirm new password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-              />
-              <Button type="submit" disabled={saving} className="h-11 w-full text-sm">
-                {saving ? 'Saving...' : 'Update Password'}
-              </Button>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
+      <p className="text-center text-sm text-gray-600">
+        <Link to="/auth/login" className="font-medium text-amber-700 hover:text-amber-800">
+          Back to sign in
+        </Link>
+      </p>
+    </AuthPageShell>
   );
 }

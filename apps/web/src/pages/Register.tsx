@@ -17,6 +17,7 @@ import { normalizePhoneWithCountryPrefix } from '../utils/phone';
 import { AUTH_PAGE_SETTINGS_DEFAULTS, useAuthPageSettings } from '../hooks/useAuthPageSettings';
 import PasswordStrengthMeter from '../components/auth/PasswordStrengthMeter';
 import { evaluatePasswordSecurity } from '../utils/passwordSecurity';
+import AuthPageShell from '../components/auth/AuthPageShell';
 
 type UserRole = 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER';
 const DEFAULT_REFERRAL_CODE = 'PLATFORM-DEFAULT';
@@ -218,107 +219,83 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 px-4 py-8 md:py-12">
-      <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-2">
-        <div className="relative min-h-[360px] overflow-hidden border border-gray-200 bg-black shadow-sm md:min-h-[760px]">
-          <img
-            src={authPageSettings.registerHeroImage}
-            alt={`${authPageSettings.brandName} register`}
-            className="h-full w-full object-cover"
-            onError={(event) => {
-              const fallback = AUTH_PAGE_SETTINGS_DEFAULTS.registerHeroImage;
-              if (event.currentTarget.src !== fallback) {
-                event.currentTarget.src = fallback;
-              }
-            }}
-          />
-          <div className="absolute inset-0 bg-black/20" />
-          <p className="absolute left-6 top-5 text-3xl font-bold text-white md:text-4xl">
-            {authPageSettings.brandName}
-          </p>
-          <p className="absolute bottom-6 left-6 pr-6 text-2xl font-medium italic text-white md:text-4xl">
-            {authPageSettings.registerHeroCaption}
-          </p>
-        </div>
-
-        <div className="border border-gray-200 bg-white px-5 py-8 shadow-sm sm:px-8 md:py-10">
-          <div className="mx-auto w-full max-w-md space-y-5">
-            <Link to="/" className="inline-flex text-sm font-medium text-amber-700 hover:text-amber-800">
-              Back to Home
-            </Link>
-            <div className="text-center">
-              <p className="text-4xl font-bold text-black">{authPageSettings.brandName}</p>
-              <h2 className="mt-6 text-4xl font-bold text-gray-900">{authPageSettings.registerTitle}</h2>
-              <p className="mt-2 text-sm text-gray-600">{authPageSettings.registerSubtitle}</p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {roleOptions.map((role) => {
-                const Icon = role.icon;
-                const isSelected = selectedRole === role.value;
-                return (
-                  <button
-                    key={role.value}
-                    type="button"
-                    onClick={() => setSelectedRole(role.value)}
-                    className={`border p-2 text-left transition-colors ${
-                      isSelected
-                        ? 'border-black bg-amber-50'
-                        : 'border-gray-300 bg-white hover:border-gray-500'
-                    }`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <Icon className="mt-0.5 h-4 w-4 text-gray-700" />
-                      <div>
-                        <p className="text-xs font-semibold text-gray-900">{role.label}</p>
-                        <p className="mt-0.5 line-clamp-2 text-[10px] text-gray-500">{role.description}</p>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {error ? (
-              <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                {error}
-              </div>
-            ) : null}
-
-            {notice ? (
-              <div className="border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-                {notice}
-              </div>
-            ) : null}
-            {referralCodeFromQuery ? (
-              <div className="border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                Referral applied: <span className="font-semibold">{referralCodeFromQuery}</span>
-              </div>
-            ) : null}
-
-            {authPageSettings.showGoogleOnRegister ? (
-              <>
-                <p className="text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Social Signup</p>
-                {googleClientId ? (
-                  <div className="flex justify-center">
-                    <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google sign up was cancelled or failed.')} />
-                  </div>
-                ) : (
-                  <p className="text-center text-xs text-amber-700">
-                    Google sign up is currently unavailable. Missing frontend environment variable:
-                    {' '}
-                    <span className="font-semibold">VITE_GOOGLE_CLIENT_ID</span>.
-                  </p>
-                )}
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <span className="h-px flex-1 bg-gray-200" />
-                  <span>or</span>
-                  <span className="h-px flex-1 bg-gray-200" />
+    <AuthPageShell
+      brandName={authPageSettings.brandName}
+      sectionLabel="Kimi v14 Authentication"
+      heroImage={authPageSettings.registerHeroImage}
+      heroImageFallback={AUTH_PAGE_SETTINGS_DEFAULTS.registerHeroImage}
+      heroAlt={`${authPageSettings.brandName} register`}
+      heroCaption={authPageSettings.registerHeroCaption}
+      title={authPageSettings.registerTitle}
+      subtitle={authPageSettings.registerSubtitle}
+    >
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {roleOptions.map((role) => {
+          const Icon = role.icon;
+          const isSelected = selectedRole === role.value;
+          return (
+            <button
+              key={role.value}
+              type="button"
+              onClick={() => setSelectedRole(role.value)}
+              className={`border p-2 text-left transition-colors ${
+                isSelected
+                  ? 'border-black bg-amber-50'
+                  : 'border-gray-300 bg-white hover:border-gray-500'
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                <Icon className="mt-0.5 h-4 w-4 text-gray-700" />
+                <div>
+                  <p className="text-xs font-semibold text-gray-900">{role.label}</p>
+                  <p className="mt-0.5 line-clamp-2 text-[10px] text-gray-500">{role.description}</p>
                 </div>
-              </>
-            ) : null}
+              </div>
+            </button>
+          );
+        })}
+      </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+      {error ? (
+        <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
+
+      {notice ? (
+        <div className="border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+          {notice}
+        </div>
+      ) : null}
+      {referralCodeFromQuery ? (
+        <div className="border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          Referral applied: <span className="font-semibold">{referralCodeFromQuery}</span>
+        </div>
+      ) : null}
+
+      {authPageSettings.showGoogleOnRegister ? (
+        <>
+          <p className="text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Social Signup</p>
+          {googleClientId ? (
+            <div className="flex justify-center">
+              <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google sign up was cancelled or failed.')} />
+            </div>
+          ) : (
+            <p className="text-center text-xs text-amber-700">
+              Google sign up is currently unavailable. Missing frontend environment variable:
+              {' '}
+              <span className="font-semibold">VITE_GOOGLE_CLIENT_ID</span>.
+            </p>
+          )}
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <span className="h-px flex-1 bg-gray-200" />
+            <span>or</span>
+            <span className="h-px flex-1 bg-gray-200" />
+          </div>
+        </>
+      ) : null}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="relative sm:col-span-2">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -449,41 +426,38 @@ export default function Register() {
                 </div>
               </div>
 
-              <label htmlFor="terms" className="inline-flex items-start gap-2 text-sm text-gray-600">
-                <input
-                  type="checkbox"
-                  id="terms"
-                  checked={formData.agreeTerms}
-                  onChange={(e) => setFormData({ ...formData, agreeTerms: e.target.checked })}
-                  className="mt-0.5 h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-500"
-                />
-                <span>
-                  I agree to the{' '}
-                  <Link to="/legal/terms" className="text-amber-700 hover:text-amber-800">
-                    Terms of Service
-                  </Link>{' '}
-                  and{' '}
-                  <Link to="/legal/privacy" className="text-amber-700 hover:text-amber-800">
-                    Privacy Policy
-                  </Link>
-                </span>
-              </label>
+        <label htmlFor="terms" className="inline-flex items-start gap-2 text-sm text-gray-600">
+          <input
+            type="checkbox"
+            id="terms"
+            checked={formData.agreeTerms}
+            onChange={(e) => setFormData({ ...formData, agreeTerms: e.target.checked })}
+            className="mt-0.5 h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-500"
+          />
+          <span>
+            I agree to the{' '}
+            <Link to="/legal/terms" className="text-amber-700 hover:text-amber-800">
+              Terms of Service
+            </Link>{' '}
+            and{' '}
+            <Link to="/legal/privacy" className="text-amber-700 hover:text-amber-800">
+              Privacy Policy
+            </Link>
+          </span>
+        </label>
 
-              <Button type="submit" className="h-11 w-full text-sm" disabled={loading}>
-                {loading ? 'Creating account...' : authPageSettings.registerSubmitLabel}
-                {!loading ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
-              </Button>
-            </form>
+        <Button type="submit" className="h-11 w-full text-sm" disabled={loading}>
+          {loading ? 'Creating account...' : authPageSettings.registerSubmitLabel}
+          {!loading ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
+        </Button>
+      </form>
 
-            <p className="text-center text-sm text-gray-600">
-              Already have an account?{' '}
-              <Link to="/auth/login" className="font-medium text-amber-700 hover:text-amber-800">
-                Sign in
-              </Link>
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+      <p className="text-center text-sm text-gray-600">
+        Already have an account?{' '}
+        <Link to="/auth/login" className="font-medium text-amber-700 hover:text-amber-800">
+          Sign in
+        </Link>
+      </p>
+    </AuthPageShell>
   );
 }
