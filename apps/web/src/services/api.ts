@@ -8969,7 +8969,7 @@ const homepageSectionsApi = {
           icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
           enabled: boolean;
         }>;
-        kimiCopy: {
+        jenksCopy: {
           heroEyebrow: string;
           shopByEyebrow: string;
           shopByTitle: string;
@@ -9077,7 +9077,7 @@ const homepageSectionsApi = {
             icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
             enabled: boolean;
           }>;
-          kimiCopy: {
+          jenksCopy: {
             heroEyebrow: string;
             shopByEyebrow: string;
             shopByTitle: string;
@@ -9386,7 +9386,7 @@ const homepageSectionsApi = {
           icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
           enabled: boolean;
         }>;
-        kimiCopy: {
+        jenksCopy: {
           heroEyebrow: string;
           shopByEyebrow: string;
           shopByTitle: string;
@@ -9568,7 +9568,7 @@ const homepageSectionsApi = {
       icon?: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
       enabled?: boolean;
     }>;
-    kimiCopy?: {
+    jenksCopy?: {
       heroEyebrow?: string;
       shopByEyebrow?: string;
       shopByTitle?: string;
@@ -9608,7 +9608,7 @@ const homepageSectionsApi = {
           icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
           enabled: boolean;
         }>;
-        kimiCopy: {
+        jenksCopy: {
           heroEyebrow: string;
           shopByEyebrow: string;
           shopByTitle: string;

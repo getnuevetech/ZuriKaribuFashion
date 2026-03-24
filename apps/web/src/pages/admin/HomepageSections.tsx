@@ -248,7 +248,7 @@ interface HomepageExperienceSettings {
     icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
     enabled: boolean;
   }>;
-  kimiCopy: {
+  jenksCopy: {
     heroEyebrow: string;
     shopByEyebrow: string;
     shopByTitle: string;
@@ -385,7 +385,7 @@ const HOMEPAGE_EXPERIENCE_DEFAULTS: HomepageExperienceSettings = {
     { icon: 'REFRESH_CW', title: 'Easy Returns', subtitle: 'Simple returns on eligible orders', enabled: true },
     { icon: 'HEADPHONES', title: '24/7 Support', subtitle: 'Chat and ticket support anytime', enabled: true },
   ],
-  kimiCopy: {
+  jenksCopy: {
     heroEyebrow: 'Editorial premium',
     shopByEyebrow: 'Discover',
     shopByTitle: 'Shop by',
@@ -707,7 +707,8 @@ const normalizeHomepageExperienceState = (value: any): HomepageExperienceSetting
     })
     .filter((entry): entry is HomepageExperienceSettings['trustBadges'][number] => Boolean(entry))
     .slice(0, 6);
-  const copyInput = source.kimiCopy && typeof source.kimiCopy === 'object' ? source.kimiCopy : {};
+  const copySource = source.jenksCopy && typeof source.jenksCopy === 'object' ? source.jenksCopy : (source as Record<string, unknown>)['jenksCopyLegacy'] && typeof (source as Record<string, unknown>)['jenksCopyLegacy'] === 'object' ? (source as Record<string, unknown>)['jenksCopyLegacy'] : {};
+  const copyInput = copySource as Record<string, unknown>;
   return {
     enabledModes:
       Array.isArray(source.enabledModes) && source.enabledModes.length > 0
@@ -738,37 +739,37 @@ const normalizeHomepageExperienceState = (value: any): HomepageExperienceSetting
         ? String(source.previewQueryParam).trim()
         : HOMEPAGE_EXPERIENCE_DEFAULTS.previewQueryParam,
     trustBadges: trustBadges.length > 0 ? trustBadges : HOMEPAGE_EXPERIENCE_DEFAULTS.trustBadges,
-    kimiCopy: {
+    jenksCopy: {
       heroEyebrow:
-        String(copyInput.heroEyebrow || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.heroEyebrow).trim() ||
-        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.heroEyebrow,
+        String(copyInput.heroEyebrow || HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.heroEyebrow).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.heroEyebrow,
       shopByEyebrow:
-        String(copyInput.shopByEyebrow || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.shopByEyebrow).trim() ||
-        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.shopByEyebrow,
+        String(copyInput.shopByEyebrow || HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.shopByEyebrow).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.shopByEyebrow,
       shopByTitle:
-        String(copyInput.shopByTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.shopByTitle).trim() ||
-        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.shopByTitle,
+        String(copyInput.shopByTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.shopByTitle).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.shopByTitle,
       featuredRtwTitle:
-        String(copyInput.featuredRtwTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.featuredRtwTitle).trim() ||
-        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.featuredRtwTitle,
+        String(copyInput.featuredRtwTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.featuredRtwTitle).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.featuredRtwTitle,
       featuredFabricsTitle:
-        String(copyInput.featuredFabricsTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.featuredFabricsTitle).trim() ||
-        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.featuredFabricsTitle,
+        String(copyInput.featuredFabricsTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.featuredFabricsTitle).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.featuredFabricsTitle,
       featuredDesignsTitle:
-        String(copyInput.featuredDesignsTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.featuredDesignsTitle).trim() ||
-        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.featuredDesignsTitle,
+        String(copyInput.featuredDesignsTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.featuredDesignsTitle).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.featuredDesignsTitle,
       designerSpotlightTitle:
-        String(copyInput.designerSpotlightTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.designerSpotlightTitle).trim() ||
-        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.designerSpotlightTitle,
+        String(copyInput.designerSpotlightTitle || HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.designerSpotlightTitle).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.designerSpotlightTitle,
       quickPathRtwLabel:
-        String(copyInput.quickPathRtwLabel || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.quickPathRtwLabel).trim() ||
-        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.quickPathRtwLabel,
+        String(copyInput.quickPathRtwLabel || HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.quickPathRtwLabel).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.quickPathRtwLabel,
       quickPathCustomLabel:
-        String(copyInput.quickPathCustomLabel || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.quickPathCustomLabel).trim() ||
-        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.quickPathCustomLabel,
+        String(copyInput.quickPathCustomLabel || HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.quickPathCustomLabel).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.quickPathCustomLabel,
       quickPathFabricsLabel:
-        String(copyInput.quickPathFabricsLabel || HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.quickPathFabricsLabel).trim() ||
-        HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy.quickPathFabricsLabel,
+        String(copyInput.quickPathFabricsLabel || HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.quickPathFabricsLabel).trim() ||
+        HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy.quickPathFabricsLabel,
     },
   };
 };
@@ -2564,12 +2565,12 @@ export default function HomepageSections() {
                 <label className="text-xs font-medium uppercase tracking-wide text-gray-600">{label}</label>
                 <input
                   type="text"
-                  value={(homepageExperienceSettings.kimiCopy as any)[key]}
+                  value={(homepageExperienceSettings.jenksCopy as any)[key]}
                   onChange={(e) =>
                     setHomepageExperienceSettings((prev) => ({
                       ...prev,
-                      kimiCopy: {
-                        ...prev.kimiCopy,
+                      jenksCopy: {
+                        ...prev.jenksCopy,
                         [key]: e.target.value,
                       },
                     }))

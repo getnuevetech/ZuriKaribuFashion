@@ -108,7 +108,7 @@ const normalizeImageUrl = (value: unknown) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
   if (/^https?:\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
-  if (raw.startsWith('/kimi/')) return `${PUBLIC_BASE}${raw.slice(1)}`;
+  if (raw.startsWith('/')) return `${PUBLIC_BASE}${raw.slice(1)}`;
   return resolveAssetUrl(raw) || raw;
 };
 
@@ -137,7 +137,7 @@ export const mapDesignerSpotlights = (args: SpotlightMapperArgs): DesignerSpotli
         country,
         flagCode,
         quote: clampText(row?.quote, 180, fallback?.quote || 'African fashion stories through craftsmanship.'),
-        image: normalizeImageUrl(row?.image) || normalizeImageUrl(fallback?.image) || '/kimi/designer_spotlight.jpg',
+        image: normalizeImageUrl(row?.image) || normalizeImageUrl(fallback?.image) || '/designer_spotlight.jpg',
         linkMode: asText(row?.linkMode, 'DEFAULT_STORE').toUpperCase(),
         externalUrl: asText(row?.externalUrl, ''),
         blog: row?.blog || null,
@@ -153,7 +153,7 @@ export const mapDesignerSpotlights = (args: SpotlightMapperArgs): DesignerSpotli
     country: clampText(row.country, 80, 'Africa'),
     flagCode: resolveCountryCode(row.country, row.flag),
     quote: clampText(row.quote, 180, 'African fashion stories through craftsmanship.'),
-    image: normalizeImageUrl(row.image) || '/kimi/designer_spotlight.jpg',
+    image: normalizeImageUrl(row.image) || '/designer_spotlight.jpg',
     linkMode: 'DEFAULT_STORE',
     externalUrl: '',
     blog: null,

@@ -72,7 +72,7 @@ const normalizeImageUrl = (value: unknown) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
   if (/^https?:\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
-  if (raw.startsWith('/kimi/')) return `${PUBLIC_BASE}${raw.slice(1)}`;
+  if (raw.startsWith('/')) return `${PUBLIC_BASE}${raw.slice(1)}`;
   return resolveAssetUrl(raw) || raw;
 };
 
@@ -229,7 +229,7 @@ export const mapShopByCategories = (args: ShopByCategoryMapperArgs): ShopByCateg
       id: String(row?.id ?? fallback?.id ?? index),
       title: clampText(row?.title, 40, asText(fallback?.title, 'Category')),
       description: clampText(row?.description, 120, asText(fallback?.description, 'Explore African fashion products.')),
-      image: images[0] || normalizeImageUrl(fallback?.image) || '/kimi/product1.jpg',
+      image: images[0] || normalizeImageUrl(fallback?.image) || '/product1.jpg',
       images,
       link: safeHref(row?.ctaLink, row?.link, fallback?.link, '/shop'),
       ctaText: 'SHOP NOW',

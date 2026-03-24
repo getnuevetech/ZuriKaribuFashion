@@ -1031,7 +1031,7 @@ const homepageExperienceSettingsUpdateSchema = z.object({
     .min(1)
     .max(6)
     .optional(),
-  kimiCopy: z
+  jenksCopy: z
     .object({
       heroEyebrow: z.string().trim().min(1).max(40).optional(),
       shopByEyebrow: z.string().trim().min(1).max(40).optional(),
@@ -1201,7 +1201,7 @@ type HomepageTrustBadge = {
   icon: HomepageTrustBadgeIcon;
   enabled: boolean;
 };
-type HomepageKimiCopy = {
+type HomepageJenksCopy = {
   heroEyebrow: string;
   shopByEyebrow: string;
   shopByTitle: string;
@@ -1233,11 +1233,11 @@ type HomepageExperienceSettings = {
   legacyHomepageEnabled: boolean;
   requireReasonForRuntimeActions: boolean;
   trustBadges: HomepageTrustBadge[];
-  kimiCopy: HomepageKimiCopy;
+  jenksCopy: HomepageJenksCopy;
 };
-type HomepageExperienceSettingsPatch = Omit<Partial<HomepageExperienceSettings>, 'trustBadges' | 'kimiCopy'> & {
+type HomepageExperienceSettingsPatch = Omit<Partial<HomepageExperienceSettings>, 'trustBadges' | 'jenksCopy'> & {
   trustBadges?: Array<Partial<HomepageTrustBadge>>;
-  kimiCopy?: Partial<HomepageKimiCopy>;
+  jenksCopy?: Partial<HomepageJenksCopy>;
 };
 type HomepageRuntimeSnapshot = Pick<
   HomepageExperienceSettings,
@@ -1457,7 +1457,7 @@ const HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS: HomepageExperienceSettings = {
     { icon: 'REFRESH_CW', title: 'Easy Returns', subtitle: 'Simple returns on eligible orders', enabled: true },
     { icon: 'HEADPHONES', title: '24/7 Support', subtitle: 'Chat and ticket support anytime', enabled: true },
   ],
-  kimiCopy: {
+  jenksCopy: {
     heroEyebrow: 'Editorial premium',
     shopByEyebrow: 'Discover',
     shopByTitle: 'Shop by',
@@ -1913,9 +1913,15 @@ const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSe
     .slice(0, 6);
   const fallbackTrustBadges = HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.trustBadges.map((item) => ({ ...item }));
 
-  const copyInput = row.kimiCopy && typeof row.kimiCopy === 'object' ? (row.kimiCopy as Record<string, unknown>) : {};
-  const defaultCopy = HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.kimiCopy;
-  const kimiCopy: HomepageKimiCopy = {
+  const copySource =
+    row.jenksCopy && typeof row.jenksCopy === 'object'
+      ? (row.jenksCopy as Record<string, unknown>)
+      : (row as Record<string, unknown>)['jenksCopyLegacy'] && typeof (row as Record<string, unknown>)['jenksCopyLegacy'] === 'object'
+        ? ((row as Record<string, unknown>)['jenksCopyLegacy'] as Record<string, unknown>)
+        : {};
+  const copyInput = copySource;
+  const defaultCopy = HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.jenksCopy;
+  const jenksCopy: HomepageJenksCopy = {
     heroEyebrow: (getString(copyInput.heroEyebrow) || defaultCopy.heroEyebrow).slice(0, 40),
     shopByEyebrow: (getString(copyInput.shopByEyebrow) || defaultCopy.shopByEyebrow).slice(0, 40),
     shopByTitle: (getString(copyInput.shopByTitle) || defaultCopy.shopByTitle).slice(0, 60),
@@ -1952,7 +1958,7 @@ const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSe
       getBoolean(row.requireReasonForRuntimeActions) ??
       HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.requireReasonForRuntimeActions,
     trustBadges: trustBadges.length > 0 ? trustBadges : fallbackTrustBadges,
-    kimiCopy,
+    jenksCopy,
   };
 };
 
@@ -3148,7 +3154,7 @@ const buildHomepageRuntimeHealth = async (nextSettings: HomepageExperienceSettin
   }
 
   if (nextSettings.homepageTemplate === 'JENKS') {
-    const requiredCopyFields: Array<keyof HomepageKimiCopy> = [
+    const requiredCopyFields: Array<keyof HomepageJenksCopy> = [
       'heroEyebrow',
       'shopByEyebrow',
       'shopByTitle',
@@ -3160,7 +3166,7 @@ const buildHomepageRuntimeHealth = async (nextSettings: HomepageExperienceSettin
       'quickPathCustomLabel',
       'quickPathFabricsLabel',
     ];
-    const missingCopyFields = requiredCopyFields.filter((key) => !String(nextSettings.kimiCopy?.[key] || '').trim());
+    const missingCopyFields = requiredCopyFields.filter((key) => !String(nextSettings.jenksCopy?.[key] || '').trim());
     checks.push({
       key: 'jenksCopy',
       label: 'Jenks copy completeness',
@@ -3653,7 +3659,7 @@ router.post('/newsletter-subscribe', async (req, res) => {
   }
 });
 
-router.get(['/jenks-homepage-payload', '/kimi-homepage-payload'], async (_req, res) => {
+router.get(['/jenks-homepage-payload'], async (_req, res) => {
   const safeResult = <T,>(result: PromiseSettledResult<T>, fallback: T): T =>
     result.status === 'fulfilled' ? result.value : fallback;
 
@@ -4644,6 +4650,16 @@ const resolveRuntimeActor = (req: any) => {
 const applyHomepageExperienceSettingsUpdate = async (req: any, res: any) => {
   try {
     const payload = homepageExperienceSettingsUpdateSchema.parse(req.body);
+    const legacyCopyPayload = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>)['jenksCopyLegacy'] : undefined;
+    const normalizedPayload = payload.jenksCopy || legacyCopyPayload
+      ? {
+          ...payload,
+          jenksCopy: {
+            ...(legacyCopyPayload && typeof legacyCopyPayload === 'object' ? (legacyCopyPayload as Record<string, unknown>) : {}),
+            ...(payload.jenksCopy || {}),
+          },
+        }
+      : payload;
     const reason =
       typeof req.body?.changeReason === 'string' ? String(req.body.changeReason).trim().slice(0, 280) : '';
 
@@ -4651,7 +4667,7 @@ const applyHomepageExperienceSettingsUpdate = async (req: any, res: any) => {
     const currentRuntime = getHomepageRuntimeSnapshot(existing.settings);
     const nextMergedSettings = normalizeHomepageExperienceSettings({
       ...existing.settings,
-      ...payload,
+      ...normalizedPayload,
     });
     const nextRuntime = getHomepageRuntimeSnapshot(nextMergedSettings);
     const runtimeChanged = !areHomepageRuntimeSnapshotsEqual(currentRuntime, nextRuntime);
@@ -4931,10 +4947,20 @@ router.post(
   async (req, res) => {
     try {
       const payload = homepageExperienceSettingsUpdateSchema.parse(req.body || {});
+      const legacyCopyPayload = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>)['jenksCopyLegacy'] : undefined;
+      const normalizedPayload = payload.jenksCopy || legacyCopyPayload
+        ? {
+            ...payload,
+            jenksCopy: {
+              ...(legacyCopyPayload && typeof legacyCopyPayload === 'object' ? (legacyCopyPayload as Record<string, unknown>) : {}),
+              ...(payload.jenksCopy || {}),
+            },
+          }
+        : payload;
       const { settings: currentSettings } = await readHomepageExperienceSettings();
       const nextSettings = normalizeHomepageExperienceSettings({
         ...currentSettings,
-        ...payload,
+        ...normalizedPayload,
       });
       const runtimeHealth = await buildHomepageRuntimeHealth(nextSettings);
       res.json({

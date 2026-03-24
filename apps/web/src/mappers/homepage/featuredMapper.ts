@@ -81,7 +81,7 @@ const normalizeImageUrl = (value: unknown) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
   if (/^https?:\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
-  if (raw.startsWith('/kimi/')) return `${PUBLIC_BASE}${raw.slice(1)}`;
+  if (raw.startsWith('/')) return `${PUBLIC_BASE}${raw.slice(1)}`;
   return resolveAssetUrl(raw) || raw;
 };
 
@@ -121,7 +121,7 @@ const mapFeaturedEntry = (row: any, fallback: FeaturedProductDTO, fallbackProduc
     name: clampText(row?.name, 80, fallback.name),
     description: clampText(row?.description ?? row?.summary, 240, fallback.description || ''),
     price: toNumber(row?.price ?? row?.sellingPrice ?? row?.basePrice, fallback.price || 0),
-    image: imageFromList || normalizeImageUrl(row?.image) || normalizeImageUrl(fallback.image) || '/kimi/product1.jpg',
+    image: imageFromList || normalizeImageUrl(row?.image) || normalizeImageUrl(fallback.image) || '/product1.jpg',
     designer: clampText(
       row?.designer ?? row?.designerName ?? row?.sellerName ?? row?.vendorName ?? row?.designer?.businessName,
       80,
@@ -147,7 +147,7 @@ const mapSectionRows = (
       id: `fallback-${fallbackProductType}-${index + 1}`,
       name: 'Featured Product',
       price: 0,
-      image: '/kimi/product1.jpg',
+      image: '/product1.jpg',
       designer: 'African Designer',
       country: 'Africa',
       productType: fallbackProductType,

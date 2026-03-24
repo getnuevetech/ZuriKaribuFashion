@@ -79,7 +79,7 @@ type SearchResultItem = {
 
 const normalizeSearchImage = (value: unknown) => {
   const raw = String(value || '').trim();
-  if (!raw) return '/kimi/product1.jpg';
+  if (!raw) return '/product1.jpg';
   if (/^https?:\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
   return resolveAssetUrl(raw) || raw;
 };

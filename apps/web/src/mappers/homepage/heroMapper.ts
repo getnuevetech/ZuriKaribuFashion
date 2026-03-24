@@ -56,7 +56,7 @@ const normalizeImageUrl = (value: unknown) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
   if (/^https?:\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
-  if (raw.startsWith('/kimi/')) return `${PUBLIC_BASE}${raw.slice(1)}`;
+  if (raw.startsWith('/')) return `${PUBLIC_BASE}${raw.slice(1)}`;
   return resolveAssetUrl(raw) || raw;
 };
 
@@ -74,7 +74,7 @@ export const mapHeroSlides = (args: HeroMapperArgs): HeroSlideDTO[] => {
     return [
       {
         id: 'fallback-hero-1',
-        image: '/kimi/hero_model.jpg',
+        image: '/hero_model.jpg',
         title: 'ZURI KARIBU',
         subtitle: 'Made by Africans. Worn by the world.',
         badge: 'GLOBAL AFRICAN FASHION',

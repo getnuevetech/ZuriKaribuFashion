@@ -47,7 +47,7 @@ export interface HomepageTrustBadge {
   enabled: boolean;
 }
 
-export interface HomepageKimiCopy {
+export interface HomepageJenksCopy {
   heroEyebrow: string;
   shopByEyebrow: string;
   shopByTitle: string;
@@ -79,7 +79,7 @@ export interface HomepageExperienceSettings {
   previewQueryParam: string;
   legacyHomepageEnabled: boolean;
   trustBadges: HomepageTrustBadge[];
-  kimiCopy: HomepageKimiCopy;
+  jenksCopy: HomepageJenksCopy;
 }
 
 export type HomepageCapabilityTier = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -117,7 +117,7 @@ export const HOMEPAGE_EXPERIENCE_DEFAULTS: HomepageExperienceSettings = {
     { icon: 'REFRESH_CW', title: 'Easy Returns', subtitle: 'Simple returns on eligible orders', enabled: true },
     { icon: 'HEADPHONES', title: '24/7 Support', subtitle: 'Chat and ticket support anytime', enabled: true },
   ],
-  kimiCopy: {
+  jenksCopy: {
     heroEyebrow: 'Editorial premium',
     shopByEyebrow: 'Discover',
     shopByTitle: 'Shop by',
@@ -233,9 +233,14 @@ export const normalizeHomepageExperienceSettings = (
     })
     .filter((entry): entry is HomepageTrustBadge => Boolean(entry))
     .slice(0, 6);
-  const copyInput = row.kimiCopy && typeof row.kimiCopy === 'object' ? (row.kimiCopy as Record<string, unknown>) : {};
-  const copyDefaults = HOMEPAGE_EXPERIENCE_DEFAULTS.kimiCopy;
-  const kimiCopy: HomepageKimiCopy = {
+  const rawCopySource = row.jenksCopy && typeof row.jenksCopy === 'object'
+    ? row.jenksCopy
+    : (row as Record<string, unknown>)['jenksCopyLegacy'] && typeof (row as Record<string, unknown>)['jenksCopyLegacy'] === 'object'
+      ? (row as Record<string, unknown>)['jenksCopyLegacy']
+      : {};
+  const copyInput = rawCopySource as Record<string, unknown>;
+  const copyDefaults = HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy;
+  const jenksCopy: HomepageJenksCopy = {
     heroEyebrow: String(copyInput.heroEyebrow || copyDefaults.heroEyebrow).trim().slice(0, 40) || copyDefaults.heroEyebrow,
     shopByEyebrow: String(copyInput.shopByEyebrow || copyDefaults.shopByEyebrow).trim().slice(0, 40) || copyDefaults.shopByEyebrow,
     shopByTitle: String(copyInput.shopByTitle || copyDefaults.shopByTitle).trim().slice(0, 60) || copyDefaults.shopByTitle,
@@ -279,7 +284,7 @@ export const normalizeHomepageExperienceSettings = (
     previewQueryParam,
     legacyHomepageEnabled,
     trustBadges: trustBadges.length > 0 ? trustBadges : [...HOMEPAGE_EXPERIENCE_DEFAULTS.trustBadges],
-    kimiCopy,
+    jenksCopy,
   };
 };
 

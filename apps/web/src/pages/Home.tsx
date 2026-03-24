@@ -237,10 +237,10 @@ const resolveCountryCode = (country?: string | null, explicitFlag?: string | nul
   );
 };
 
-const kimiHeroSlides: HeroSlide[] = [
+const jenksHeroSlides: HeroSlide[] = [
   {
     id: '1',
-    image: '/kimi/hero_model.jpg',
+    image: '/hero_model.jpg',
     badge: 'NEW COLLECTION',
     title: 'The Elegance of Africa',
     subtitle: 'Discover authentic fashion crafted by African designers',
@@ -249,7 +249,7 @@ const kimiHeroSlides: HeroSlide[] = [
   },
   {
     id: '2',
-    image: '/kimi/rw_full.jpg',
+    image: '/rw_full.jpg',
     badge: 'FRESH DROPS',
     title: 'Timeless Heritage',
     subtitle: 'Wear the story of African craftsmanship',
@@ -258,7 +258,7 @@ const kimiHeroSlides: HeroSlide[] = [
   },
   {
     id: '3',
-    image: '/kimi/custom_full.jpg',
+    image: '/custom_full.jpg',
     badge: 'TRENDING NOW',
     title: 'Modern African Luxury',
     subtitle: 'Contemporary designs rooted in tradition',
@@ -267,37 +267,37 @@ const kimiHeroSlides: HeroSlide[] = [
   },
 ];
 
-const kimiCountries: CountryCard[] = [
+const jenksCountries: CountryCard[] = [
   { name: 'Angola', flag: '🇦🇴', fabrics: 'Kanari, Masai' },
   { name: 'Algeria', flag: '🇩🇿', fabrics: 'Camru, Kokomo' },
   { name: 'Nigeria', flag: '🇳🇬', fabrics: 'Adire, Ankara, Aso-Oke' },
 ];
 
-const kimiCategories = [
+const jenksCategories = [
   {
     id: '1',
     title: 'Ready To Wear',
     description: 'Made by African, Worn by the World',
-    image: '/kimi/rw_full.jpg',
+    image: '/rw_full.jpg',
     link: '/ready-to-wear',
   },
   {
     id: '2',
     title: 'Fabrics To Buy',
     description: 'African fabrics across all edges of Africa',
-    image: '/kimi/fabrics_full.jpg',
+    image: '/fabrics_full.jpg',
     link: '/fabrics',
   },
   {
     id: '3',
     title: 'Custom To Wear',
     description: 'Every stitch sewn by an African Designer',
-    image: '/kimi/custom_full.jpg',
+    image: '/custom_full.jpg',
     link: '/custom',
   },
 ];
 
-const kimiHowItWorks = [
+const jenksHowItWorks = [
   { id: 1, title: 'Discover Your Style', subtitle: 'Explore curated African designs and fabrics.', icon: Search },
   { id: 2, title: 'Preview Virtually', subtitle: 'Visualize your outfit before checkout.', icon: Eye },
   { id: 3, title: 'Select Your Fabric', subtitle: 'Choose textures and colors that match your look.', icon: Sparkles },
@@ -388,33 +388,33 @@ const TRUST_ICON_BY_NAME = {
   SHOPPING_BAG: ShoppingBag,
 } as const;
 
-const kimiFeaturedDesigns: LegacyFeaturedProduct[] = [
-  { id: '1', name: 'Exclusive Gorgeous', price: 1428.57, image: '/kimi/product1.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
-  { id: '2', name: 'My Skkentele', price: 714.29, image: '/kimi/product2.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
-  { id: '3', name: 'Ankara Gbasibe', price: 857.14, image: '/kimi/product3.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
+const jenksFeaturedDesigns: LegacyFeaturedProduct[] = [
+  { id: '1', name: 'Exclusive Gorgeous', price: 1428.57, image: '/product1.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
+  { id: '2', name: 'My Skkentele', price: 714.29, image: '/product2.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
+  { id: '3', name: 'Ankara Gbasibe', price: 857.14, image: '/product3.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'DESIGN' },
 ];
 
-const kimiReadyToWear: LegacyFeaturedProduct[] = [
-  { id: 'r1', name: 'Bridal Traditional', price: 2285.71, image: '/kimi/product4.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
-  { id: 'r2', name: 'Afigan', price: 1642.86, image: '/kimi/product5.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
-  { id: 'r3', name: 'Kakaki Africa', price: 1507.14, image: '/kimi/product6.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
+const jenksReadyToWear: LegacyFeaturedProduct[] = [
+  { id: 'r1', name: 'Bridal Traditional', price: 2285.71, image: '/product4.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
+  { id: 'r2', name: 'Afigan', price: 1642.86, image: '/product5.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
+  { id: 'r3', name: 'Kakaki Africa', price: 1507.14, image: '/product6.jpg', designer: 'Asante Designs', country: 'Ghana', productType: 'READY_TO_WEAR' },
 ];
 
-const kimiFabrics: LegacyFeaturedProduct[] = [
-  { id: 'f1', name: 'Ankara Mummy', price: 2142.86, image: '/kimi/fabrics_full.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
-  { id: 'f2', name: 'Dancing Queen Adire', price: 785.71, image: '/kimi/featured_rw_left.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
-  { id: 'f3', name: 'Ankara Party', price: 928.57, image: '/kimi/featured_rw_right.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
-  { id: 'f4', name: 'Awon Da', price: 1428.57, image: '/kimi/featured_custom_left.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
+const jenksFabrics: LegacyFeaturedProduct[] = [
+  { id: 'f1', name: 'Ankara Mummy', price: 2142.86, image: '/fabrics_full.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
+  { id: 'f2', name: 'Dancing Queen Adire', price: 785.71, image: '/featured_rw_left.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
+  { id: 'f3', name: 'Ankara Party', price: 928.57, image: '/featured_rw_right.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
+  { id: 'f4', name: 'Awon Da', price: 1428.57, image: '/featured_custom_left.jpg', designer: 'Diallo Fabrics', country: 'Nigeria', productType: 'FABRIC' },
 ];
 
-const kimiDesigners = [
+const jenksDesigners = [
   {
     id: '1',
     name: 'Asante Designs',
     country: 'Ghana',
     flag: '🇬🇭',
     quote: 'When we sew, it is from the heart. Every stitch tells a story.',
-    image: '/kimi/designer_spotlight.jpg',
+    image: '/designer_spotlight.jpg',
   },
   {
     id: '2',
@@ -422,7 +422,7 @@ const kimiDesigners = [
     country: 'Nigeria',
     flag: '🇳🇬',
     quote: 'Bringing the vibrant spirit of Africa to the world through fashion.',
-    image: '/kimi/featured_custom_right.jpg',
+    image: '/featured_custom_right.jpg',
   },
   {
     id: '3',
@@ -430,30 +430,30 @@ const kimiDesigners = [
     country: 'Ghana',
     flag: '🇬🇭',
     quote: 'Kente to the world. Preserving tradition while embracing modernity.',
-    image: '/kimi/featured_rw_left.jpg',
+    image: '/featured_rw_left.jpg',
   },
 ];
 
-const kimiTestimonials = [
+const jenksTestimonials = [
   {
     id: '1',
     name: 'Amara Johnson',
     location: 'New York, USA',
-    avatar: '/kimi/product1.jpg',
+    avatar: '/product1.jpg',
     quote: 'The quality exceeded my expectations. My dress fits perfectly and the fabric is gorgeous.',
   },
   {
     id: '2',
     name: 'Kwame Asante',
     location: 'London, UK',
-    avatar: '/kimi/product2.jpg',
+    avatar: '/product2.jpg',
     quote: 'Amazing experience from start to finish. The custom tailoring service is a game changer!',
   },
   {
     id: '3',
     name: 'Fatima Mohammed',
     location: 'Dubai, UAE',
-    avatar: '/kimi/product3.jpg',
+    avatar: '/product3.jpg',
     quote: 'Supporting African designers while getting beautiful clothes—this platform is a gem.',
   },
 ];
@@ -490,7 +490,7 @@ const normalizeImageUrl = (value: unknown) => {
   if (/^https?:\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) {
     return raw;
   }
-  if (raw.startsWith('/kimi/')) {
+  if (raw.startsWith('/')) {
     return `${PUBLIC_BASE}${raw.slice(1)}`;
   }
   return resolveAssetUrl(raw) || raw;
@@ -755,7 +755,7 @@ export default function Home() {
     [tokenSet]
   );
 
-  const { data: kimiHomepagePayloadData, isLoading: kimiHomepagePayloadLoading } = useQuery({
+  const { data: jenksHomepagePayloadData, isLoading: jenksHomepagePayloadLoading } = useQuery({
     queryKey: ['homepageJenksPayloadV1'],
     queryFn: async () => {
       const response = await api.homepageSections.getJenksHomepagePayload();
@@ -770,23 +770,23 @@ export default function Home() {
     },
   });
 
-  const heroSlidesDataResolved = (kimiHomepagePayloadData as any)?.heroSlides;
-  const featuredDataResolved = (kimiHomepagePayloadData as any)?.featuredCollections ?? null;
-  const managedBannersDataResolved = (kimiHomepagePayloadData as any)?.managedBanners;
-  const promoBadgeDataResolved = (kimiHomepagePayloadData as any)?.promoBadge;
-  const countriesDataResolved = (kimiHomepagePayloadData as any)?.countries;
-  const categoriesDataResolved = (kimiHomepagePayloadData as any)?.categories;
-  const howItWorksDataResolved = (kimiHomepagePayloadData as any)?.howItWorks;
-  const howItWorksStyleDataResolved = (kimiHomepagePayloadData as any)?.howItWorksStyle;
-  const designerSpotlightsDataResolved = (kimiHomepagePayloadData as any)?.designerSpotlights;
-  const heritageDataResolved = (kimiHomepagePayloadData as any)?.heritage;
-  const testimonialsDataResolved = (kimiHomepagePayloadData as any)?.testimonials;
-  const statsStripDataResolved = (kimiHomepagePayloadData as any)?.statsStrip;
-  const featuredDescriptionSettingsDataResolved = (kimiHomepagePayloadData as any)?.featuredProductDescription;
-  const visibilityDataResolved = (kimiHomepagePayloadData as any)?.visibility;
-  const shopByBlocksDataResolved = (kimiHomepagePayloadData as any)?.shopByBlocks;
-  const freshDropsDataResolved = (kimiHomepagePayloadData as any)?.freshDrops;
-  const newsletterDataResolved = (kimiHomepagePayloadData as any)?.newsletter;
+  const heroSlidesDataResolved = (jenksHomepagePayloadData as any)?.heroSlides;
+  const featuredDataResolved = (jenksHomepagePayloadData as any)?.featuredCollections ?? null;
+  const managedBannersDataResolved = (jenksHomepagePayloadData as any)?.managedBanners;
+  const promoBadgeDataResolved = (jenksHomepagePayloadData as any)?.promoBadge;
+  const countriesDataResolved = (jenksHomepagePayloadData as any)?.countries;
+  const categoriesDataResolved = (jenksHomepagePayloadData as any)?.categories;
+  const howItWorksDataResolved = (jenksHomepagePayloadData as any)?.howItWorks;
+  const howItWorksStyleDataResolved = (jenksHomepagePayloadData as any)?.howItWorksStyle;
+  const designerSpotlightsDataResolved = (jenksHomepagePayloadData as any)?.designerSpotlights;
+  const heritageDataResolved = (jenksHomepagePayloadData as any)?.heritage;
+  const testimonialsDataResolved = (jenksHomepagePayloadData as any)?.testimonials;
+  const statsStripDataResolved = (jenksHomepagePayloadData as any)?.statsStrip;
+  const featuredDescriptionSettingsDataResolved = (jenksHomepagePayloadData as any)?.featuredProductDescription;
+  const visibilityDataResolved = (jenksHomepagePayloadData as any)?.visibility;
+  const shopByBlocksDataResolved = (jenksHomepagePayloadData as any)?.shopByBlocks;
+  const freshDropsDataResolved = (jenksHomepagePayloadData as any)?.freshDrops;
+  const newsletterDataResolved = (jenksHomepagePayloadData as any)?.newsletter;
 
   const sectionVisibility = useMemo<HomepageVisibility>(() => {
     if (!visibilityDataResolved) {
@@ -840,7 +840,7 @@ export default function Home() {
       mapHeroSlides({
         heroSlidesData: heroSlidesDataResolved,
         managedBannersData: managedBannersDataResolved,
-        fallbackSlides: kimiHeroSlides,
+        fallbackSlides: jenksHeroSlides,
       }),
     [heroSlidesDataResolved, managedBannersDataResolved]
   );
@@ -896,13 +896,13 @@ export default function Home() {
     () =>
       mapFeaturedCollections({
         featuredData: featuredDataResolved,
-        fallbackCustomToWear: strictCanonicalMode ? [] : kimiFeaturedDesigns,
-        fallbackReadyToWear: strictCanonicalMode ? [] : kimiReadyToWear,
-        fallbackFabricsToBuy: strictCanonicalMode ? [] : kimiFabrics,
+        fallbackCustomToWear: strictCanonicalMode ? [] : jenksFeaturedDesigns,
+        fallbackReadyToWear: strictCanonicalMode ? [] : jenksReadyToWear,
+        fallbackFabricsToBuy: strictCanonicalMode ? [] : jenksFabrics,
       }),
     [featuredDataResolved, strictCanonicalMode]
   );
-  const featuredLoading = kimiHomepagePayloadLoading && !featuredDataResolved;
+  const featuredLoading = jenksHomepagePayloadLoading && !featuredDataResolved;
   const featuredSectionTitles = useMemo(
     () => mapFeaturedSectionTitles(experienceSettings?.jenksCopy),
     [experienceSettings?.jenksCopy]
@@ -979,7 +979,7 @@ export default function Home() {
     () =>
       mapShopByCategories({
         categoriesData: categoriesDataResolved,
-        fallbackCategories: strictCanonicalMode ? [] : kimiCategories,
+        fallbackCategories: strictCanonicalMode ? [] : jenksCategories,
       }),
     [categoriesDataResolved, strictCanonicalMode]
   );
@@ -1007,7 +1007,7 @@ export default function Home() {
       image: asImage(
         managedBannersBySection.get('BANNER_2')?.displayImage,
         managedBannersBySection.get('BANNER_2')?.images?.[0],
-        '/kimi/rw_full.jpg'
+        '/rw_full.jpg'
       ),
     }),
     [readyCategory, managedBannersBySection]
@@ -1025,7 +1025,7 @@ export default function Home() {
       image: asImage(
         managedBannersBySection.get('BANNER_1')?.displayImage,
         managedBannersBySection.get('BANNER_1')?.images?.[0],
-        '/kimi/fabrics_full.jpg'
+        '/fabrics_full.jpg'
       ),
     }),
     [fabricsCategory, managedBannersBySection]
@@ -1043,7 +1043,7 @@ export default function Home() {
       image: asImage(
         managedBannersBySection.get('PROMO')?.displayImage,
         managedBannersBySection.get('PROMO')?.images?.[0],
-        '/kimi/custom_full.jpg'
+        '/custom_full.jpg'
       ),
     }),
     [customCategory, managedBannersBySection]
@@ -1056,17 +1056,17 @@ export default function Home() {
           ? howItWorksDataResolved
           : strictCanonicalMode
             ? []
-            : kimiHowItWorks
+            : jenksHowItWorks
       )
         .slice(0, 6)
         .map((item: any, index: number) => ({
         id: Number(item.id ?? index + 1),
-        title: asText(item.title, kimiHowItWorks[index % kimiHowItWorks.length].title),
-        subtitle: asText(item.subtitle, item.description, kimiHowItWorks[index % kimiHowItWorks.length].subtitle),
+        title: asText(item.title, jenksHowItWorks[index % jenksHowItWorks.length].title),
+        subtitle: asText(item.subtitle, item.description, jenksHowItWorks[index % jenksHowItWorks.length].subtitle),
         icon:
           iconByName[asText(item.icon, '')] ||
           iconByNormalizedName[normalizeIconKey(item.icon)] ||
-          kimiHowItWorks[index % kimiHowItWorks.length].icon,
+          jenksHowItWorks[index % jenksHowItWorks.length].icon,
         })),
     [howItWorksDataResolved, strictCanonicalMode],
   );
@@ -1077,7 +1077,7 @@ export default function Home() {
     () =>
       mapDesignerSpotlights({
         designerSpotlightsData: designerSpotlightsDataResolved,
-        fallbackDesigners: strictCanonicalMode ? [] : kimiDesigners,
+        fallbackDesigners: strictCanonicalMode ? [] : jenksDesigners,
       }),
     [designerSpotlightsDataResolved, strictCanonicalMode]
   );
@@ -1127,13 +1127,13 @@ export default function Home() {
         ? testimonialsDataResolved
         : strictCanonicalMode
           ? []
-          : kimiTestimonials
+          : jenksTestimonials
       ).map((item: any, index: number) => ({
         id: String(item.id ?? index),
-        name: asText(item.name, kimiTestimonials[index % kimiTestimonials.length].name),
-        location: asText(item.location, kimiTestimonials[index % kimiTestimonials.length].location),
-        avatar: asImage(item.avatar, kimiTestimonials[index % kimiTestimonials.length].avatar),
-        quote: asText(item.quote, item.text, kimiTestimonials[index % kimiTestimonials.length].quote),
+        name: asText(item.name, jenksTestimonials[index % jenksTestimonials.length].name),
+        location: asText(item.location, jenksTestimonials[index % jenksTestimonials.length].location),
+        avatar: asImage(item.avatar, jenksTestimonials[index % jenksTestimonials.length].avatar),
+        quote: asText(item.quote, item.text, jenksTestimonials[index % jenksTestimonials.length].quote),
       })),
     [testimonialsDataResolved, strictCanonicalMode],
   );
@@ -1146,7 +1146,7 @@ export default function Home() {
         heritageDataResolved?.description,
         "Every pattern carries meaning. From Kente's bold geometry to Ankara's vibrant motifs, African textiles tell stories of identity, celebration, and legacy passed through generations.",
       ),
-      image: asImage(heritageDataResolved?.image, '/kimi/heritage_story.jpg'),
+      image: asImage(heritageDataResolved?.image, '/heritage_story.jpg'),
       ctaText: asText(heritageDataResolved?.ctaText, 'READ OUR STORY'),
       ctaLink: safeHref(heritageDataResolved?.ctaLink, '/about'),
     }),
@@ -1964,7 +1964,7 @@ export default function Home() {
                 src={asImage(
                   managedBannersBySection.get('BANNER_1')?.displayImage,
                   managedBannersBySection.get('BANNER_1')?.images?.[0],
-                  '/kimi/featured_custom_right.jpg'
+                  '/featured_custom_right.jpg'
                 )}
                 alt={asText(managedBannersBySection.get('BANNER_1')?.title, 'Homepage Banner')}
                 className="h-[340px] w-full object-cover"
@@ -2005,7 +2005,7 @@ export default function Home() {
                 src={asImage(
                   managedBannersBySection.get('BANNER_2')?.displayImage,
                   managedBannersBySection.get('BANNER_2')?.images?.[0],
-                  '/kimi/featured_rw_right.jpg'
+                  '/featured_rw_right.jpg'
                 )}
                 alt={asText(managedBannersBySection.get('BANNER_2')?.title, 'Homepage Banner')}
                 className="h-[340px] w-full object-cover"
@@ -2066,7 +2066,7 @@ export default function Home() {
                     managedBannersBySection.get('PROMO')?.images?.[0],
                     managedBannersBySection.get('HERO')?.displayImage,
                     managedBannersBySection.get('HERO')?.images?.[0],
-                    '/kimi/rw_full.jpg'
+                    '/rw_full.jpg'
                   )}
                   alt="Fresh Drops"
                   className="w-full aspect-[3/4] object-cover rounded-xl"
