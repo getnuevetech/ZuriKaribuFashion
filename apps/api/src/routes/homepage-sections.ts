@@ -23,6 +23,8 @@ const HOMEPAGE_FRESH_DROPS_SETTINGS_KEY = 'HOMEPAGE_FRESH_DROPS';
 const HOMEPAGE_NEWSLETTER_SETTINGS_KEY = 'HOMEPAGE_NEWSLETTER';
 const HOMEPAGE_NAVIGATION_SETTINGS_KEY = 'HOMEPAGE_NAVIGATION_SETTINGS';
 const HOMEPAGE_HERO_SETTINGS_KEY = 'HOMEPAGE_HERO_SETTINGS';
+const JENKS_HOMEPAGE_CONFIG_SETTINGS_KEY = 'JENKS_HOMEPAGE_CONFIG_SETTINGS';
+const JENKS_HOMEPAGE_CONFIG_CONTRACT_VERSION = 'JENKS_HOMEPAGE_CONFIG_V1';
 const PROMO_BADGE_DEFAULTS = {
   valueText: '50+',
   labelText: 'New Arrivals',
@@ -1046,6 +1048,31 @@ const homepageExperienceSettingsUpdateSchema = z.object({
     })
     .optional(),
 });
+const jenksHomepageCtaUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  title: z.string().trim().min(1).max(160).optional(),
+  subtitle: z.string().trim().min(1).max(420).optional(),
+  primaryCtaText: z.string().trim().min(1).max(60).optional(),
+  primaryCtaLink: z.string().trim().min(1).max(260).optional(),
+  secondaryCtaText: z.string().trim().min(1).max(60).optional(),
+  secondaryCtaLink: z.string().trim().min(1).max(260).optional(),
+  backgroundImage: z.string().trim().max(2000).optional(),
+});
+const jenksHomepageConfigUpdateSchema = z.object({
+  sections: z
+    .object({
+      visibility: z.record(z.boolean()).optional(),
+    })
+    .optional(),
+  topStrip: topStripUpdateSchema.partial().optional(),
+  experience: homepageExperienceSettingsUpdateSchema.optional(),
+  navigation: navigationSettingsUpdateSchema.optional(),
+  hero: heroSettingsUpdateSchema.optional(),
+  shopByBlocks: shopByBlocksUpdateSchema.optional(),
+  freshDrops: freshDropsSettingsUpdateSchema.optional(),
+  newsletter: newsletterSettingsUpdateSchema.optional(),
+  cta: jenksHomepageCtaUpdateSchema.optional(),
+});
 
 type TopStripSettings = {
   messages: string[];
@@ -1274,6 +1301,30 @@ type HomepageRuntimeAuditFilters = {
   to?: Date;
 };
 
+type JenksHomepageCtaSettings = {
+  enabled: boolean;
+  title: string;
+  subtitle: string;
+  primaryCtaText: string;
+  primaryCtaLink: string;
+  secondaryCtaText: string;
+  secondaryCtaLink: string;
+  backgroundImage: string;
+};
+
+type JenksHomepageConfig = {
+  contractVersion: string;
+  sections: { visibility: HomepageSectionVisibility };
+  topStrip: TopStripSettings;
+  experience: HomepageExperienceSettings;
+  navigation: HomepageNavigationSettings;
+  hero: HomepageHeroSettings;
+  shopByBlocks: ShopByBlocksSettings;
+  freshDrops: FreshDropsSettings;
+  newsletter: NewsletterSettings;
+  cta: JenksHomepageCtaSettings;
+};
+
 const runtimeRollbackSchema = z.object({
   auditId: z.string().trim().min(1).max(128).optional(),
   reason: z.string().trim().max(280).optional(),
@@ -1470,6 +1521,30 @@ const HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS: HomepageExperienceSettings = {
     quickPathFabricsLabel: 'Fabrics',
   },
 };
+const JENKS_HOMEPAGE_CTA_DEFAULTS: JenksHomepageCtaSettings = {
+  enabled: true,
+  title: 'Ready to Wear African Fashion?',
+  subtitle: 'Join our community of fashion lovers and discover unique pieces from talented African designers.',
+  primaryCtaText: 'SHOP NOW',
+  primaryCtaLink: '/ready-to-wear',
+  secondaryCtaText: 'CREATE ACCOUNT',
+  secondaryCtaLink: '/auth/register',
+  backgroundImage: '',
+};
+
+const buildJenksHomepageConfigDefaults = (): JenksHomepageConfig => ({
+  contractVersion: JENKS_HOMEPAGE_CONFIG_CONTRACT_VERSION,
+  sections: { visibility: { ...HOMEPAGE_SECTION_VISIBILITY_DEFAULTS } },
+  topStrip: { ...TOP_STRIP_DEFAULTS },
+  experience: { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS },
+  navigation: normalizeNavigationSettings({}),
+  hero: normalizeHeroSettings({}),
+  shopByBlocks: normalizeShopByBlocksSettings({}),
+  freshDrops: { ...FRESH_DROPS_SETTINGS_DEFAULTS },
+  newsletter: { ...NEWSLETTER_SETTINGS_DEFAULTS },
+  cta: { ...JENKS_HOMEPAGE_CTA_DEFAULTS },
+});
+
 const LEGACY_COPY_FIELD_KEY = ['ki', 'miCopy'].join('');
 
 const normalizeHexColor = (value: unknown, fallback: string) => {
@@ -1961,6 +2036,71 @@ const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSe
       HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.requireReasonForRuntimeActions,
     trustBadges: trustBadges.length > 0 ? trustBadges : fallbackTrustBadges,
     jenksCopy,
+  };
+};
+
+const normalizeJenksHomepageCtaSettings = (
+  raw: unknown,
+  fallback: JenksHomepageCtaSettings = JENKS_HOMEPAGE_CTA_DEFAULTS
+): JenksHomepageCtaSettings => {
+  if (!raw || typeof raw !== 'object') return { ...fallback };
+  const row = raw as Record<string, unknown>;
+  return {
+    enabled: getBoolean(row.enabled) ?? fallback.enabled,
+    title: (getString(row.title) || fallback.title).slice(0, 160),
+    subtitle: (getString(row.subtitle) || fallback.subtitle).slice(0, 420),
+    primaryCtaText: (getString(row.primaryCtaText) || fallback.primaryCtaText).slice(0, 60),
+    primaryCtaLink: normalizeHref(row.primaryCtaLink, fallback.primaryCtaLink),
+    secondaryCtaText: (getString(row.secondaryCtaText) || fallback.secondaryCtaText).slice(0, 60),
+    secondaryCtaLink: normalizeHref(row.secondaryCtaLink, fallback.secondaryCtaLink),
+    backgroundImage: (getString(row.backgroundImage) || fallback.backgroundImage).slice(0, 2000),
+  };
+};
+
+const normalizeJenksHomepageConfig = (
+  raw: unknown,
+  fallback: JenksHomepageConfig = buildJenksHomepageConfigDefaults()
+): JenksHomepageConfig => {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      ...fallback,
+      sections: { visibility: { ...fallback.sections.visibility } },
+      topStrip: { ...fallback.topStrip },
+      experience: { ...fallback.experience },
+      navigation: { ...fallback.navigation },
+      hero: { ...fallback.hero },
+      shopByBlocks: { ...fallback.shopByBlocks },
+      freshDrops: { ...fallback.freshDrops },
+      newsletter: { ...fallback.newsletter },
+      cta: { ...fallback.cta },
+    };
+  }
+  const row = raw as Record<string, unknown>;
+  const sections = row.sections && typeof row.sections === 'object' ? (row.sections as Record<string, unknown>) : {};
+  const topStripInput = row.topStrip && typeof row.topStrip === 'object' ? (row.topStrip as Record<string, unknown>) : {};
+  const experienceInput = row.experience && typeof row.experience === 'object' ? (row.experience as Record<string, unknown>) : {};
+  const navigationInput = row.navigation && typeof row.navigation === 'object' ? (row.navigation as Record<string, unknown>) : {};
+  const heroInput = row.hero && typeof row.hero === 'object' ? (row.hero as Record<string, unknown>) : {};
+  const shopByBlocksInput = row.shopByBlocks && typeof row.shopByBlocks === 'object' ? (row.shopByBlocks as Record<string, unknown>) : {};
+  const freshDropsInput = row.freshDrops && typeof row.freshDrops === 'object' ? (row.freshDrops as Record<string, unknown>) : {};
+  const newsletterInput = row.newsletter && typeof row.newsletter === 'object' ? (row.newsletter as Record<string, unknown>) : {};
+  return {
+    contractVersion: JENKS_HOMEPAGE_CONFIG_CONTRACT_VERSION,
+    sections: {
+      visibility: normalizeHomepageSectionVisibility(
+        sections.visibility && typeof sections.visibility === 'object'
+          ? { ...fallback.sections.visibility, ...(sections.visibility as Record<string, unknown>) }
+          : fallback.sections.visibility
+      ),
+    },
+    topStrip: normalizeTopStripSettings({ ...fallback.topStrip, ...topStripInput }),
+    experience: normalizeHomepageExperienceSettings({ ...fallback.experience, ...experienceInput }),
+    navigation: normalizeNavigationSettings({ ...fallback.navigation, ...navigationInput }),
+    hero: normalizeHeroSettings({ ...fallback.hero, ...heroInput }),
+    shopByBlocks: normalizeShopByBlocksSettings({ ...fallback.shopByBlocks, ...shopByBlocksInput }),
+    freshDrops: normalizeFreshDropsSettings({ ...fallback.freshDrops, ...freshDropsInput }),
+    newsletter: normalizeNewsletterSettings({ ...fallback.newsletter, ...newsletterInput }),
+    cta: normalizeJenksHomepageCtaSettings(row.cta, fallback.cta),
   };
 };
 
@@ -2835,6 +2975,136 @@ const saveHeroSettings = async (next: Partial<HomepageHeroSettings>) => {
   return merged;
 };
 
+const buildJenksHomepageConfigBaseline = async (): Promise<JenksHomepageConfig> => {
+  const [
+    visibilityRow,
+    topStripRow,
+    experienceRow,
+    navigationRow,
+    heroRow,
+    shopByBlocksRow,
+    freshDropsRow,
+    newsletterRow,
+  ] = await Promise.all([
+    readHomepageSectionVisibility(),
+    readTopStripSettings(),
+    readHomepageExperienceSettings(),
+    readNavigationSettings(),
+    readHeroSettings(),
+    readShopByBlocksSettings(),
+    readFreshDropsSettings(),
+    readNewsletterSettings(),
+  ]);
+
+  return normalizeJenksHomepageConfig({
+    contractVersion: JENKS_HOMEPAGE_CONFIG_CONTRACT_VERSION,
+    sections: { visibility: visibilityRow.visibility },
+    topStrip: topStripRow.settings,
+    experience: experienceRow.settings,
+    navigation: navigationRow.settings,
+    hero: heroRow.settings,
+    shopByBlocks: shopByBlocksRow.settings,
+    freshDrops: freshDropsRow.settings,
+    newsletter: newsletterRow.settings,
+    cta: JENKS_HOMEPAGE_CTA_DEFAULTS,
+  });
+};
+
+const readJenksHomepageConfig = async () => {
+  const baseline = await buildJenksHomepageConfigBaseline();
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value", "updatedAt"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    JENKS_HOMEPAGE_CONFIG_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return {
+      rowId: null as string | null,
+      settings: baseline,
+      source: 'DEFAULT' as const,
+      updatedAt: null as Date | null,
+    };
+  }
+  try {
+    const parsed = JSON.parse(String(row.value || '{}'));
+    return {
+      rowId: String(row.id),
+      settings: normalizeJenksHomepageConfig(parsed, baseline),
+      source: 'DATABASE' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  } catch {
+    return {
+      rowId: String(row.id),
+      settings: baseline,
+      source: 'DEFAULT' as const,
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+    };
+  }
+};
+
+const saveJenksHomepageConfig = async (next: Partial<JenksHomepageConfig>) => {
+  const existing = await readJenksHomepageConfig();
+  const merged = normalizeJenksHomepageConfig(
+    {
+      ...existing.settings,
+      ...next,
+      sections: {
+        ...existing.settings.sections,
+        ...(next.sections || {}),
+        visibility: {
+          ...existing.settings.sections.visibility,
+          ...((next.sections && next.sections.visibility) || {}),
+        },
+      },
+      topStrip: { ...existing.settings.topStrip, ...(next.topStrip || {}) },
+      experience: { ...existing.settings.experience, ...(next.experience || {}) },
+      navigation: { ...existing.settings.navigation, ...(next.navigation || {}) },
+      hero: { ...existing.settings.hero, ...(next.hero || {}) },
+      shopByBlocks: { ...existing.settings.shopByBlocks, ...(next.shopByBlocks || {}) },
+      freshDrops: { ...existing.settings.freshDrops, ...(next.freshDrops || {}) },
+      newsletter: { ...existing.settings.newsletter, ...(next.newsletter || {}) },
+      cta: { ...existing.settings.cta, ...(next.cta || {}) },
+    },
+    existing.settings
+  );
+
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+  } else {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, NOW(), NOW())`,
+      randomUUID(),
+      JENKS_HOMEPAGE_CONFIG_SETTINGS_KEY,
+      payload
+    );
+  }
+
+  await Promise.all([
+    saveHomepageSectionVisibility(merged.sections.visibility),
+    saveTopStripSettings(merged.topStrip),
+    saveHomepageExperienceSettings(merged.experience),
+    saveNavigationSettings(merged.navigation),
+    saveHeroSettings(merged.hero),
+    saveShopByBlocksSettings(merged.shopByBlocks),
+    saveFreshDropsSettings(merged.freshDrops),
+    saveNewsletterSettings(merged.newsletter),
+  ]);
+
+  return merged;
+};
+
 const getHomepageRuntimeSnapshot = (settings: HomepageExperienceSettings): HomepageRuntimeSnapshot => ({
   homepageTemplate: settings.homepageTemplate,
   rolloutMode: settings.rolloutMode,
@@ -3661,6 +3931,16 @@ router.post('/newsletter-subscribe', async (req, res) => {
   }
 });
 
+router.get(['/jenks-config', '/config'], async (_req, res) => {
+  try {
+    const { settings } = await readJenksHomepageConfig();
+    return res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching Jenks homepage config:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch Jenks homepage config.' });
+  }
+});
+
 router.get(['/jenks-homepage-payload'], async (_req, res) => {
   const safeResult = <T,>(result: PromiseSettledResult<T>, fallback: T): T =>
     result.status === 'fulfilled' ? result.value : fallback;
@@ -3919,6 +4199,7 @@ router.get(['/jenks-homepage-payload'], async (_req, res) => {
       shopByBlocksResult,
       freshDropsResult,
       newsletterResult,
+      jenksConfigResult,
     ] = await Promise.allSettled([
       readHomepageSectionVisibility().then((row) => row.visibility),
       readTopStripSettings().then((row) => row.settings),
@@ -3962,6 +4243,7 @@ router.get(['/jenks-homepage-payload'], async (_req, res) => {
       readShopByBlocksSettings().then((row) => row.settings),
       readFreshDropsSettings().then((row) => row.settings),
       readNewsletterSettings().then((row) => row.settings),
+      readJenksHomepageConfig().then((row) => row.settings),
     ]);
 
     const managedBanners = safeResult(managedBannersResult, []);
@@ -4025,6 +4307,7 @@ router.get(['/jenks-homepage-payload'], async (_req, res) => {
         ...safeResult(newsletterResult, { ...NEWSLETTER_SETTINGS_DEFAULTS }),
         subscribeEndpoint: '/api/homepage-sections/newsletter-subscribe',
       },
+      cta: safeResult(jenksConfigResult, buildJenksHomepageConfigDefaults()).cta,
     };
     const contractVersion = 'JENKS_HOMEPAGE_PAYLOAD_V1';
     const payloadChecksum = createHash('sha256')
@@ -4922,6 +5205,51 @@ router.patch('/admin/newsletter-settings', authenticate, authorizePermissions(Pe
     res.status(500).json({ success: false, message: 'Failed to update newsletter settings.' });
   }
 });
+
+router.get(['/admin/jenks-config', '/admin/config'], authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
+  try {
+    const { settings, source, updatedAt } = await readJenksHomepageConfig();
+    return res.json({
+      success: true,
+      data: {
+        ...settings,
+        source,
+        updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching admin Jenks homepage config:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch Jenks homepage config.' });
+  }
+});
+
+const applyJenksHomepageConfigUpdate = async (req: any, res: any) => {
+  try {
+    const payload = jenksHomepageConfigUpdateSchema.parse(req.body || {});
+    const settings = await saveJenksHomepageConfig(payload as Partial<JenksHomepageConfig>);
+    return res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating Jenks homepage config:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update Jenks homepage config.' });
+  }
+};
+
+router.put(
+  ['/admin/jenks-config', '/admin/config'],
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  applyJenksHomepageConfigUpdate
+);
+
+router.patch(
+  ['/admin/jenks-config', '/admin/config'],
+  authenticate,
+  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
+  applyJenksHomepageConfigUpdate
+);
 
 router.get(
   '/admin/runtime-health',

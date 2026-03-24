@@ -118,17 +118,10 @@ export default function MainLayout() {
       return response.success ? response.data : null;
     },
   });
-  const { data: visibilityContent } = useQuery({
-    queryKey: ['homepageVisibilityForLayout'],
+  const { data: jenksHomepageConfigForLayout } = useQuery({
+    queryKey: ['jenksHomepageConfigForLayoutV1'],
     queryFn: async () => {
-      const response = await api.homepageSections.getVisibility();
-      return response.success ? response.data : null;
-    },
-  });
-  const { data: topStripContent } = useQuery({
-    queryKey: ['homepageTopStrip'],
-    queryFn: async () => {
-      const response = await api.homepageSections.getTopStrip();
+      const response = await api.homepageSections.getJenksHomepageConfig();
       return response.success ? response.data : null;
     },
   });
@@ -139,20 +132,8 @@ export default function MainLayout() {
       return response.success ? response.data : null;
     },
   });
-  const { data: homepageExperienceSettings } = useQuery({
-    queryKey: ['homepageExperienceSettings'],
-    queryFn: async () => {
-      const response = await api.homepageSections.getExperienceSettings();
-      return response.success ? response.data : null;
-    },
-  });
-  const { data: navigationSettingsData } = useQuery({
-    queryKey: ['homepageNavigationSettings'],
-    queryFn: async () => {
-      const response = await api.homepageSections.getNavigationSettings();
-      return response.success ? response.data : null;
-    },
-  });
+  const homepageExperienceSettings = jenksHomepageConfigForLayout?.experience || null;
+  const navigationSettingsData = jenksHomepageConfigForLayout?.navigation || null;
   const experienceSettings = useHomepageExperienceStore((state) => state.settings);
   const resolvedExperienceMode = useHomepageExperienceStore((state) => state.resolvedMode);
   const userOverrideMode = useHomepageExperienceStore((state) => state.userOverrideMode);
@@ -173,25 +154,25 @@ export default function MainLayout() {
   const showFloatingCheckout = isProductRetailPath && cartItemCount > 0;
   const profileLabel = userRole === 'CUSTOMER' ? 'My Profile' : 'Dashboard';
   const ordersLabel = 'My Orders';
-  const topStripVisible = Boolean(visibilityContent?.topStrip ?? true);
+  const topStripVisible = Boolean(jenksHomepageConfigForLayout?.sections?.visibility?.topStrip ?? true);
   const topStripMessages =
-    Array.isArray(topStripContent?.messages) && topStripContent.messages.length > 0
-      ? topStripContent.messages
+    Array.isArray(jenksHomepageConfigForLayout?.topStrip?.messages) && jenksHomepageConfigForLayout.topStrip.messages.length > 0
+      ? jenksHomepageConfigForLayout.topStrip.messages
       : TOP_STRIP_DEFAULTS.messages;
-  const topStripSeparator = String(topStripContent?.separator || TOP_STRIP_DEFAULTS.separator);
+  const topStripSeparator = String(jenksHomepageConfigForLayout?.topStrip?.separator || TOP_STRIP_DEFAULTS.separator);
   const topStripRepeatCount = Math.max(
     2,
-    Math.min(12, Number(topStripContent?.repeatCount || TOP_STRIP_DEFAULTS.repeatCount))
+    Math.min(12, Number(jenksHomepageConfigForLayout?.topStrip?.repeatCount || TOP_STRIP_DEFAULTS.repeatCount))
   );
   const topStripAnimationSeconds = Math.max(
     8,
-    Math.min(120, Number(topStripContent?.animationSeconds || TOP_STRIP_DEFAULTS.animationSeconds))
+    Math.min(120, Number(jenksHomepageConfigForLayout?.topStrip?.animationSeconds || TOP_STRIP_DEFAULTS.animationSeconds))
   );
-  const topStripFontSize = Math.max(10, Math.min(40, Number(topStripContent?.fontSize || TOP_STRIP_DEFAULTS.fontSize)));
-  const topStripIsBold = Boolean(topStripContent?.isBold ?? TOP_STRIP_DEFAULTS.isBold);
-  const topStripPauseOnHover = Boolean(topStripContent?.pauseOnHover ?? TOP_STRIP_DEFAULTS.pauseOnHover);
-  const topStripTextColor = String(topStripContent?.textColor || TOP_STRIP_DEFAULTS.textColor);
-  const topStripBackgroundColor = String(topStripContent?.backgroundColor || TOP_STRIP_DEFAULTS.backgroundColor);
+  const topStripFontSize = Math.max(10, Math.min(40, Number(jenksHomepageConfigForLayout?.topStrip?.fontSize || TOP_STRIP_DEFAULTS.fontSize)));
+  const topStripIsBold = Boolean(jenksHomepageConfigForLayout?.topStrip?.isBold ?? TOP_STRIP_DEFAULTS.isBold);
+  const topStripPauseOnHover = Boolean(jenksHomepageConfigForLayout?.topStrip?.pauseOnHover ?? TOP_STRIP_DEFAULTS.pauseOnHover);
+  const topStripTextColor = String(jenksHomepageConfigForLayout?.topStrip?.textColor || TOP_STRIP_DEFAULTS.textColor);
+  const topStripBackgroundColor = String(jenksHomepageConfigForLayout?.topStrip?.backgroundColor || TOP_STRIP_DEFAULTS.backgroundColor);
   const trimmedSearchQuery = searchQuery.trim();
 
   useEffect(() => {

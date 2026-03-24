@@ -250,6 +250,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/banners', bannerRoutes);
 app.use('/api/homepage', homepageRoutes);
 app.use('/api/homepage-sections', homepageSectionsRoutes);
+app.use('/api/jenks-homepage', homepageSectionsRoutes);
 app.use('/api/blogs', blogRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/payment', paymentRoutes);

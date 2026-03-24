@@ -90,6 +90,7 @@ import AdminAuthenticatorSettings from './pages/admin/AuthenticatorSettings';
 import AdminHelpCenterContent from './pages/admin/HelpCenterContent';
 import AdminModuleRuntimeSettings from './pages/admin/ModuleRuntimeSettings';
 import AdminHomepageRuntimeSwitchboard from './pages/admin/HomepageRuntimeSwitchboard';
+import AdminJenksHomepageManage from './pages/admin/JenksHomepageManage';
 import { JenksV14Redirect } from './pages/JenksV14Redirect';
 
 // Seller Pages
@@ -639,7 +640,7 @@ function App() {
                   path="/admin/jenks-homepage"
                   element={
                     <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
-                      <AdminHomepageSections />
+                      <AdminJenksHomepageManage />
                     </AdminPermissionGuard>
                   }
                 />

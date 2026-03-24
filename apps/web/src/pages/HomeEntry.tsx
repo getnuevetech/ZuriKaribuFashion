@@ -84,8 +84,8 @@ export default function HomeEntry() {
 
     const bootstrap = async () => {
       try {
-        const response = await api.homepageSections.getExperienceSettings();
-        const normalizedSettings = normalizeHomepageExperienceSettings(response?.data);
+        const response = await api.homepageSections.getJenksHomepageConfig();
+        const normalizedSettings = normalizeHomepageExperienceSettings(response?.data?.experience);
         const target = resolveHomepageTarget(normalizedSettings);
         redirectTo(target);
       } catch (error) {

@@ -9016,6 +9016,127 @@ const homepageSectionsApi = {
         quickLinks: Array<{ label: string; href: string }>;
       };
     }>('/homepage-sections/hero-settings'),
+  getJenksHomepageConfig: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        contractVersion: string;
+        sections: {
+          visibility: Record<string, boolean>;
+        };
+        topStrip: {
+          messages: string[];
+          separator: string;
+          repeatCount: number;
+          animationSeconds: number;
+          fontSize: number;
+          isBold: boolean;
+          pauseOnHover: boolean;
+          textColor: string;
+          backgroundColor: string;
+        };
+        experience: {
+          enabledModes: Array<'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE'>;
+          defaultMode: 'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE';
+          allowUserModeOverride: boolean;
+          adaptiveByDevice: boolean;
+          adaptiveByConnection: boolean;
+          respectReducedMotion: boolean;
+          themeModes: Array<'SYSTEM' | 'LIGHT' | 'DARK'>;
+          defaultThemeMode: 'SYSTEM' | 'LIGHT' | 'DARK';
+          tokenSet: 'GLOBAL_PREMIUM_DARK' | 'GLOBAL_PREMIUM_LIGHT' | 'AFRO_EDITORIAL';
+          heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
+          categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
+          spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+          homepageTemplate: 'LEGACY' | 'JENKS';
+          rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
+          allowPreviewQuery: boolean;
+          previewQueryParam: string;
+          legacyHomepageEnabled: boolean;
+          requireReasonForRuntimeActions: boolean;
+          trustBadges: Array<{
+            title: string;
+            subtitle: string;
+            icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
+            enabled: boolean;
+          }>;
+          jenksCopy: {
+            heroEyebrow: string;
+            shopByEyebrow: string;
+            shopByTitle: string;
+            featuredRtwTitle: string;
+            featuredFabricsTitle: string;
+            featuredDesignsTitle: string;
+            designerSpotlightTitle: string;
+            quickPathRtwLabel: string;
+            quickPathCustomLabel: string;
+            quickPathFabricsLabel: string;
+          };
+        };
+        navigation: {
+          logoMode: 'TEXT' | 'IMAGE';
+          logoText: string;
+          logoImageUrl: string;
+          logoAltText: string;
+          logoWidth: number;
+          logoHeight: number;
+          leftMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+          rightMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+          hamburgerMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+          showHamburger: boolean;
+          showSearchIcon: boolean;
+          showCartIcon: boolean;
+          showProfileIcon: boolean;
+          showCurrencySelector: boolean;
+          showExperienceModeSelector: boolean;
+          showThemeModeSelector: boolean;
+        };
+        hero: {
+          rotationSeconds: number;
+          forceUppercaseCtas: boolean;
+          ctaTarget: 'SAME_TAB' | 'NEW_TAB';
+          showQuickLinks: boolean;
+          quickLinks: Array<{ label: string; href: string }>;
+        };
+        shopByBlocks: {
+          title: string;
+          subtitle: string;
+          styleOptions: Array<{ label: string; href: string }>;
+          priceOptions: Array<{ label: string; href: string }>;
+          enabledTabs: Array<'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE'>;
+          defaultTab: 'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE';
+        };
+        freshDrops: {
+          eyebrow: string;
+          title: string;
+          subtitle: string;
+          ctaText: string;
+          ctaLink: string;
+          badgeValueText: string;
+          badgeLabelText: string;
+          showBadge: boolean;
+        };
+        newsletter: {
+          enabled: boolean;
+          title: string;
+          subtitle: string;
+          emailPlaceholder: string;
+          submitLabel: string;
+          successMessage: string;
+          duplicateMessage: string;
+        };
+        cta: {
+          enabled: boolean;
+          title: string;
+          subtitle: string;
+          primaryCtaText: string;
+          primaryCtaLink: string;
+          secondaryCtaText: string;
+          secondaryCtaLink: string;
+          backgroundImage: string;
+        };
+      };
+    }>('/jenks-homepage/config'),
   getJenksHomepagePayload: () =>
     apiService.get<{
       success: boolean;
@@ -9761,6 +9882,361 @@ const homepageSectionsApi = {
         quickLinks: Array<{ label: string; href: string }>;
       };
     }>('/homepage-sections/admin/hero-settings', data),
+  getAdminJenksHomepageConfig: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        source?: 'DATABASE' | 'DEFAULT';
+        updatedAt?: string | null;
+        contractVersion: string;
+        sections: {
+          visibility: Record<string, boolean>;
+        };
+        topStrip: {
+          messages: string[];
+          separator: string;
+          repeatCount: number;
+          animationSeconds: number;
+          fontSize: number;
+          isBold: boolean;
+          pauseOnHover: boolean;
+          textColor: string;
+          backgroundColor: string;
+        };
+        experience: {
+          enabledModes: Array<'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE'>;
+          defaultMode: 'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE';
+          allowUserModeOverride: boolean;
+          adaptiveByDevice: boolean;
+          adaptiveByConnection: boolean;
+          respectReducedMotion: boolean;
+          themeModes: Array<'SYSTEM' | 'LIGHT' | 'DARK'>;
+          defaultThemeMode: 'SYSTEM' | 'LIGHT' | 'DARK';
+          tokenSet: 'GLOBAL_PREMIUM_DARK' | 'GLOBAL_PREMIUM_LIGHT' | 'AFRO_EDITORIAL';
+          heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
+          categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
+          spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+          homepageTemplate: 'LEGACY' | 'JENKS';
+          rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
+          allowPreviewQuery: boolean;
+          previewQueryParam: string;
+          legacyHomepageEnabled: boolean;
+          requireReasonForRuntimeActions: boolean;
+          trustBadges: Array<{
+            title: string;
+            subtitle: string;
+            icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
+            enabled: boolean;
+          }>;
+          jenksCopy: {
+            heroEyebrow: string;
+            shopByEyebrow: string;
+            shopByTitle: string;
+            featuredRtwTitle: string;
+            featuredFabricsTitle: string;
+            featuredDesignsTitle: string;
+            designerSpotlightTitle: string;
+            quickPathRtwLabel: string;
+            quickPathCustomLabel: string;
+            quickPathFabricsLabel: string;
+          };
+        };
+        navigation: {
+          logoMode: 'TEXT' | 'IMAGE';
+          logoText: string;
+          logoImageUrl: string;
+          logoAltText: string;
+          logoWidth: number;
+          logoHeight: number;
+          leftMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+          rightMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+          hamburgerMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+          showHamburger: boolean;
+          showSearchIcon: boolean;
+          showCartIcon: boolean;
+          showProfileIcon: boolean;
+          showCurrencySelector: boolean;
+          showExperienceModeSelector: boolean;
+          showThemeModeSelector: boolean;
+        };
+        hero: {
+          rotationSeconds: number;
+          forceUppercaseCtas: boolean;
+          ctaTarget: 'SAME_TAB' | 'NEW_TAB';
+          showQuickLinks: boolean;
+          quickLinks: Array<{ label: string; href: string }>;
+        };
+        shopByBlocks: {
+          title: string;
+          subtitle: string;
+          styleOptions: Array<{ label: string; href: string }>;
+          priceOptions: Array<{ label: string; href: string }>;
+          enabledTabs: Array<'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE'>;
+          defaultTab: 'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE';
+        };
+        freshDrops: {
+          eyebrow: string;
+          title: string;
+          subtitle: string;
+          ctaText: string;
+          ctaLink: string;
+          badgeValueText: string;
+          badgeLabelText: string;
+          showBadge: boolean;
+        };
+        newsletter: {
+          enabled: boolean;
+          title: string;
+          subtitle: string;
+          emailPlaceholder: string;
+          submitLabel: string;
+          successMessage: string;
+          duplicateMessage: string;
+        };
+        cta: {
+          enabled: boolean;
+          title: string;
+          subtitle: string;
+          primaryCtaText: string;
+          primaryCtaLink: string;
+          secondaryCtaText: string;
+          secondaryCtaLink: string;
+          backgroundImage: string;
+        };
+      };
+    }>('/jenks-homepage/admin/config'),
+  updateAdminJenksHomepageConfig: (data: {
+    sections?: { visibility?: Record<string, boolean> };
+    topStrip?: {
+      messages?: string[];
+      separator?: string;
+      repeatCount?: number;
+      animationSeconds?: number;
+      fontSize?: number;
+      isBold?: boolean;
+      pauseOnHover?: boolean;
+      textColor?: string;
+      backgroundColor?: string;
+    };
+    experience?: {
+      enabledModes?: Array<'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE'>;
+      defaultMode?: 'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE';
+      allowUserModeOverride?: boolean;
+      adaptiveByDevice?: boolean;
+      adaptiveByConnection?: boolean;
+      respectReducedMotion?: boolean;
+      themeModes?: Array<'SYSTEM' | 'LIGHT' | 'DARK'>;
+      defaultThemeMode?: 'SYSTEM' | 'LIGHT' | 'DARK';
+      tokenSet?: 'GLOBAL_PREMIUM_DARK' | 'GLOBAL_PREMIUM_LIGHT' | 'AFRO_EDITORIAL';
+      heroVariant?: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
+      categoryEntryVariant?: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
+      spotlightVariant?: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+      homepageTemplate?: 'LEGACY' | 'JENKS';
+      rolloutMode?: 'LIVE' | 'PREVIEW_SAFE';
+      allowPreviewQuery?: boolean;
+      previewQueryParam?: string;
+      legacyHomepageEnabled?: boolean;
+      requireReasonForRuntimeActions?: boolean;
+      trustBadges?: Array<{
+        title: string;
+        subtitle: string;
+        icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
+        enabled: boolean;
+      }>;
+      jenksCopy?: {
+        heroEyebrow?: string;
+        shopByEyebrow?: string;
+        shopByTitle?: string;
+        featuredRtwTitle?: string;
+        featuredFabricsTitle?: string;
+        featuredDesignsTitle?: string;
+        designerSpotlightTitle?: string;
+        quickPathRtwLabel?: string;
+        quickPathCustomLabel?: string;
+        quickPathFabricsLabel?: string;
+      };
+    };
+    navigation?: {
+      logoMode?: 'TEXT' | 'IMAGE';
+      logoText?: string;
+      logoImageUrl?: string;
+      logoAltText?: string;
+      logoWidth?: number;
+      logoHeight?: number;
+      leftMenuLinks?: Array<{ label: string; href: string; enabled: boolean }>;
+      rightMenuLinks?: Array<{ label: string; href: string; enabled: boolean }>;
+      hamburgerMenuLinks?: Array<{ label: string; href: string; enabled: boolean }>;
+      showHamburger?: boolean;
+      showSearchIcon?: boolean;
+      showCartIcon?: boolean;
+      showProfileIcon?: boolean;
+      showCurrencySelector?: boolean;
+      showExperienceModeSelector?: boolean;
+      showThemeModeSelector?: boolean;
+    };
+    hero?: {
+      rotationSeconds?: number;
+      forceUppercaseCtas?: boolean;
+      ctaTarget?: 'SAME_TAB' | 'NEW_TAB';
+      showQuickLinks?: boolean;
+      quickLinks?: Array<{ label: string; href: string }>;
+    };
+    shopByBlocks?: {
+      title?: string;
+      subtitle?: string;
+      styleOptions?: Array<{ label: string; href: string }>;
+      priceOptions?: Array<{ label: string; href: string }>;
+      enabledTabs?: Array<'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE'>;
+      defaultTab?: 'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE';
+    };
+    freshDrops?: {
+      eyebrow?: string;
+      title?: string;
+      subtitle?: string;
+      ctaText?: string;
+      ctaLink?: string;
+      badgeValueText?: string;
+      badgeLabelText?: string;
+      showBadge?: boolean;
+    };
+    newsletter?: {
+      enabled?: boolean;
+      title?: string;
+      subtitle?: string;
+      emailPlaceholder?: string;
+      submitLabel?: string;
+      successMessage?: string;
+      duplicateMessage?: string;
+    };
+    cta?: {
+      enabled?: boolean;
+      title?: string;
+      subtitle?: string;
+      primaryCtaText?: string;
+      primaryCtaLink?: string;
+      secondaryCtaText?: string;
+      secondaryCtaLink?: string;
+      backgroundImage?: string;
+    };
+  }) =>
+    apiService.put<{
+      success: boolean;
+      data: {
+        contractVersion: string;
+        sections: { visibility: Record<string, boolean> };
+        topStrip: {
+          messages: string[];
+          separator: string;
+          repeatCount: number;
+          animationSeconds: number;
+          fontSize: number;
+          isBold: boolean;
+          pauseOnHover: boolean;
+          textColor: string;
+          backgroundColor: string;
+        };
+        experience: {
+          enabledModes: Array<'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE'>;
+          defaultMode: 'LITE_COMMERCE' | 'STANDARD_PREMIUM' | 'EDITORIAL_IMMERSIVE';
+          allowUserModeOverride: boolean;
+          adaptiveByDevice: boolean;
+          adaptiveByConnection: boolean;
+          respectReducedMotion: boolean;
+          themeModes: Array<'SYSTEM' | 'LIGHT' | 'DARK'>;
+          defaultThemeMode: 'SYSTEM' | 'LIGHT' | 'DARK';
+          tokenSet: 'GLOBAL_PREMIUM_DARK' | 'GLOBAL_PREMIUM_LIGHT' | 'AFRO_EDITORIAL';
+          heroVariant: 'SPLIT_EDITORIAL' | 'CLEAN_COMMERCE' | 'VIDEO_STORY';
+          categoryEntryVariant: 'THREE_COLUMN_CORE' | 'MEGA_GRID';
+          spotlightVariant: 'CAROUSEL' | 'SINGLE_FEATURE' | 'MOSAIC';
+          homepageTemplate: 'LEGACY' | 'JENKS';
+          rolloutMode: 'LIVE' | 'PREVIEW_SAFE';
+          allowPreviewQuery: boolean;
+          previewQueryParam: string;
+          legacyHomepageEnabled: boolean;
+          requireReasonForRuntimeActions: boolean;
+          trustBadges: Array<{
+            title: string;
+            subtitle: string;
+            icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
+            enabled: boolean;
+          }>;
+          jenksCopy: {
+            heroEyebrow: string;
+            shopByEyebrow: string;
+            shopByTitle: string;
+            featuredRtwTitle: string;
+            featuredFabricsTitle: string;
+            featuredDesignsTitle: string;
+            designerSpotlightTitle: string;
+            quickPathRtwLabel: string;
+            quickPathCustomLabel: string;
+            quickPathFabricsLabel: string;
+          };
+        };
+        navigation: {
+          logoMode: 'TEXT' | 'IMAGE';
+          logoText: string;
+          logoImageUrl: string;
+          logoAltText: string;
+          logoWidth: number;
+          logoHeight: number;
+          leftMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+          rightMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+          hamburgerMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+          showHamburger: boolean;
+          showSearchIcon: boolean;
+          showCartIcon: boolean;
+          showProfileIcon: boolean;
+          showCurrencySelector: boolean;
+          showExperienceModeSelector: boolean;
+          showThemeModeSelector: boolean;
+        };
+        hero: {
+          rotationSeconds: number;
+          forceUppercaseCtas: boolean;
+          ctaTarget: 'SAME_TAB' | 'NEW_TAB';
+          showQuickLinks: boolean;
+          quickLinks: Array<{ label: string; href: string }>;
+        };
+        shopByBlocks: {
+          title: string;
+          subtitle: string;
+          styleOptions: Array<{ label: string; href: string }>;
+          priceOptions: Array<{ label: string; href: string }>;
+          enabledTabs: Array<'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE'>;
+          defaultTab: 'CATEGORY' | 'COUNTRY' | 'OCCASION_STYLE' | 'PRICE';
+        };
+        freshDrops: {
+          eyebrow: string;
+          title: string;
+          subtitle: string;
+          ctaText: string;
+          ctaLink: string;
+          badgeValueText: string;
+          badgeLabelText: string;
+          showBadge: boolean;
+        };
+        newsletter: {
+          enabled: boolean;
+          title: string;
+          subtitle: string;
+          emailPlaceholder: string;
+          submitLabel: string;
+          successMessage: string;
+          duplicateMessage: string;
+        };
+        cta: {
+          enabled: boolean;
+          title: string;
+          subtitle: string;
+          primaryCtaText: string;
+          primaryCtaLink: string;
+          secondaryCtaText: string;
+          secondaryCtaLink: string;
+          backgroundImage: string;
+        };
+      };
+    }>('/jenks-homepage/admin/config', data),
 
   getAdminCountryImageGeneration: () =>
     readCountryImageGenerationWithFallback<{

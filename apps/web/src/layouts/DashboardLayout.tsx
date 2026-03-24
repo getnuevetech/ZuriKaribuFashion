@@ -83,7 +83,7 @@ interface DashboardWeatherSnapshot {
 }
 
 const LEGACY_HOMEPAGE_PATHS = ['/admin/homepage', '/admin/homepage-visibility'] as const;
-const JENKS_HOMEPAGE_PATHS = ['/admin/homepage-sections', '/admin/jenks-homepage'] as const;
+const JENKS_HOMEPAGE_PATHS = ['/admin/jenks-homepage', '/admin/homepage-sections'] as const;
 
 const navItems: Record<DashboardType, NavItem[]> = {
   admin: [
@@ -116,7 +116,8 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'VoIP Management', href: '/admin/voip', icon: PhoneCall },
     { label: 'Banners', href: '/admin/banners', icon: ImageIcon },
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
-    { label: 'Jenks Homepage Manager', href: '/admin/homepage-sections', icon: LayoutGrid },
+    { label: 'Jenks Homepage Manager', href: '/admin/jenks-homepage', icon: LayoutGrid },
+    { label: 'Legacy Jenks Sections Manager', href: '/admin/homepage-sections', icon: LayoutGrid },
     { label: 'Homepage Runtime Switchboard', href: '/admin/homepage-runtime', icon: LayoutGrid },
     { label: 'Category Pages', href: '/admin/category-pages', icon: LayoutGrid },
     { label: 'Blogs', href: '/admin/blogs', icon: FileText },
@@ -397,6 +398,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       (href === '/admin/homepage' ||
         href === '/admin/homepage-visibility' ||
         href === '/admin/homepage-sections' ||
+        href === '/admin/jenks-homepage' ||
         href === '/admin/homepage-runtime') &&
       !isSuperAdmin
     ) {
@@ -452,6 +454,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/homepage': ['homepage:manage'],
       '/admin/homepage-visibility': ['homepage:manage'],
       '/admin/homepage-sections': ['homepage:manage'],
+      '/admin/jenks-homepage': ['homepage:manage'],
       '/admin/homepage-runtime': ['homepage:manage'],
       '/admin/category-pages': ['homepage:manage'],
       '/admin/blogs': ['homepage:manage'],
@@ -541,7 +544,8 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: ChevronRight },
   ];
   const jenksSubmenu = [
-    { label: 'Jenks Homepage Manager', href: '/admin/homepage-sections', icon: ChevronRight },
+    { label: 'Jenks Homepage Manager', href: '/admin/jenks-homepage', icon: ChevronRight },
+    { label: 'Legacy Jenks Sections Manager', href: '/admin/homepage-sections', icon: ChevronRight },
   ];
   const orderManagementSubmenu = [
     { label: 'Order List', href: '/admin/orders?tab=list', icon: ChevronRight },
@@ -1099,7 +1103,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                 );
               }
 
-              if (userType === 'admin' && item.href === '/admin/homepage-sections' && isSuperAdmin) {
+              if (userType === 'admin' && item.href === '/admin/jenks-homepage' && isSuperAdmin) {
                 const jenksMenuActive = JENKS_HOMEPAGE_PATHS.includes(location.pathname as (typeof JENKS_HOMEPAGE_PATHS)[number]);
                 const visibleJenksSubmenu = jenksSubmenu.filter((subItem) => canAccessAdminNav(subItem.href));
                 if (visibleJenksSubmenu.length === 0) {

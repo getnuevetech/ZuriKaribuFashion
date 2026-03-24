@@ -11,8 +11,8 @@ export default function LegacyHomeRoute() {
     let cancelled = false;
     const resolve = async () => {
       try {
-        const response = await api.homepageSections.getExperienceSettings();
-        const settings = normalizeHomepageExperienceSettings(response?.data);
+        const response = await api.homepageSections.getJenksHomepageConfig();
+        const settings = normalizeHomepageExperienceSettings(response?.data?.experience);
         if (!cancelled) {
           setLegacyEnabled(settings.legacyHomepageEnabled === true);
         }

@@ -103,6 +103,16 @@ type StatsStripSettings = {
   suffixColor?: string;
   labelColor?: string;
 };
+type JenksHomepageCtaSettings = {
+  enabled?: boolean;
+  title?: string;
+  subtitle?: string;
+  primaryCtaText?: string;
+  primaryCtaLink?: string;
+  secondaryCtaText?: string;
+  secondaryCtaLink?: string;
+  backgroundImage?: string;
+};
 
 type HomepageVisibility = Record<
   | 'hero'
@@ -762,10 +772,10 @@ export default function Home() {
       return response.success ? response.data : null;
     },
   });
-  const { data: heroSettingsData } = useQuery({
-    queryKey: ['homepageHeroSettingsV1'],
+  const { data: jenksHomepageConfigData } = useQuery({
+    queryKey: ['jenksHomepageConfigV1'],
     queryFn: async () => {
-      const response = await api.homepageSections.getHeroSettings();
+      const response = await api.homepageSections.getJenksHomepageConfig();
       return response.success ? response.data : null;
     },
   });
@@ -783,10 +793,16 @@ export default function Home() {
   const testimonialsDataResolved = (jenksHomepagePayloadData as any)?.testimonials;
   const statsStripDataResolved = (jenksHomepagePayloadData as any)?.statsStrip;
   const featuredDescriptionSettingsDataResolved = (jenksHomepagePayloadData as any)?.featuredProductDescription;
-  const visibilityDataResolved = (jenksHomepagePayloadData as any)?.visibility;
-  const shopByBlocksDataResolved = (jenksHomepagePayloadData as any)?.shopByBlocks;
-  const freshDropsDataResolved = (jenksHomepagePayloadData as any)?.freshDrops;
-  const newsletterDataResolved = (jenksHomepagePayloadData as any)?.newsletter;
+  const visibilityDataResolved =
+    (jenksHomepageConfigData as any)?.sections?.visibility ?? (jenksHomepagePayloadData as any)?.visibility;
+  const shopByBlocksDataResolved =
+    (jenksHomepageConfigData as any)?.shopByBlocks ?? (jenksHomepagePayloadData as any)?.shopByBlocks;
+  const freshDropsDataResolved =
+    (jenksHomepageConfigData as any)?.freshDrops ?? (jenksHomepagePayloadData as any)?.freshDrops;
+  const newsletterDataResolved =
+    (jenksHomepageConfigData as any)?.newsletter ?? (jenksHomepagePayloadData as any)?.newsletter;
+  const homepageCtaDataResolved = ((jenksHomepageConfigData as any)?.cta ??
+    (jenksHomepagePayloadData as any)?.cta) as JenksHomepageCtaSettings | undefined;
 
   const sectionVisibility = useMemo<HomepageVisibility>(() => {
     if (!visibilityDataResolved) {
@@ -845,7 +861,10 @@ export default function Home() {
     [heroSlidesDataResolved, managedBannersDataResolved]
   );
   const heroSettings = useMemo(() => {
-    const row = heroSettingsData && typeof heroSettingsData === 'object' ? (heroSettingsData as any) : {};
+    const row =
+      jenksHomepageConfigData && typeof jenksHomepageConfigData === 'object'
+        ? ((jenksHomepageConfigData as any)?.hero ?? {})
+        : {};
     const quickLinks = Array.isArray(row.quickLinks)
       ? row.quickLinks
           .map((entry: any) => ({
@@ -862,7 +881,7 @@ export default function Home() {
       showQuickLinks: row.showQuickLinks !== false,
       quickLinks,
     } as typeof HERO_SETTINGS_DEFAULTS;
-  }, [heroSettingsData]);
+  }, [jenksHomepageConfigData]);
   const heroQuickLinks = useMemo(
     () => {
       if (heroSettings.quickLinks.length > 0) return heroSettings.quickLinks;
@@ -2232,20 +2251,44 @@ export default function Home() {
       </section>
       ) : null}
 
-      {sectionVisibility.cta ? (
-      <section className="py-10 lg:py-16 bg-gray-50">
+      {sectionVisibility.cta && (homepageCtaDataResolved?.enabled !== false) ? (
+      <section
+        className="py-10 lg:py-16 bg-gray-50"
+        style={
+          asText(homepageCtaDataResolved?.backgroundImage)
+            ? {
+                backgroundImage: `linear-gradient(rgba(255,255,255,0.86), rgba(255,255,255,0.9)), url(${asImage(
+                  homepageCtaDataResolved?.backgroundImage
+                )})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }
+            : undefined
+        }
+      >
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="max-w-3xl mx-auto text-center">
-            <h2 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl font-bold mb-6">Ready to Wear African Fashion?</h2>
+            <h2 className="font-['Oswald'] text-4xl sm:text-5xl lg:text-6xl font-bold mb-6">
+              {asText(homepageCtaDataResolved?.title, 'Ready to Wear African Fashion?')}
+            </h2>
             <p className="text-gray-600 text-lg mb-10">
-              Join our community of fashion lovers and discover unique pieces from talented African designers.
+              {asText(
+                homepageCtaDataResolved?.subtitle,
+                'Join our community of fashion lovers and discover unique pieces from talented African designers.'
+              )}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/ready-to-wear" className={CTA_BUTTON_DARK_CLASS}>
-                SHOP NOW
+              <Link
+                to={safeHref(homepageCtaDataResolved?.primaryCtaLink, '/ready-to-wear')}
+                className={CTA_BUTTON_DARK_CLASS}
+              >
+                {toCtaLabel(homepageCtaDataResolved?.primaryCtaText, 'SHOP NOW')}
               </Link>
-              <Link to="/register" className={CTA_BUTTON_LIGHT_CLASS}>
-                CREATE ACCOUNT
+              <Link
+                to={safeHref(homepageCtaDataResolved?.secondaryCtaLink, '/auth/register')}
+                className={CTA_BUTTON_LIGHT_CLASS}
+              >
+                {toCtaLabel(homepageCtaDataResolved?.secondaryCtaText, 'CREATE ACCOUNT')}
               </Link>
             </div>
           </div>
