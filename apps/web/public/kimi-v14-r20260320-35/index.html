@@ -29,63 +29,82 @@
           '/ctw': '/custom',
           '/contact': '/contact',
           '/contact-us': '/contact',
-          '/login': '/login',
-          '/signin': '/login',
-          '/sign-in': '/login',
-          '/auth/login': '/login',
-          '/register': '/register',
-          '/signup': '/register',
-          '/sign-up': '/register',
-          '/auth/register': '/register',
-          '/forgot-password': '/forgot-password',
-          '/auth/forgot-password': '/forgot-password',
-          '/reset-password': '/reset-password',
-          '/auth/reset-password': '/reset-password'
+          '/login': '/auth/login',
+          '/signin': '/auth/login',
+          '/sign-in': '/auth/login',
+          '/auth/login': '/auth/login',
+          '/register': '/auth/register',
+          '/signup': '/auth/register',
+          '/sign-up': '/auth/register',
+          '/auth/register': '/auth/register',
+          '/forgot-password': '/auth/forgot-password',
+          '/auth/forgot-password': '/auth/forgot-password',
+          '/reset-password': '/auth/reset-password',
+          '/auth/reset-password': '/auth/reset-password'
         };
         var normalizeHashPath = function (value) {
           var normalized = String(value || '').trim();
-          // Some links emit malformed patterns like "#/#signin" or "#/#/signin".
-          if (normalized.indexOf('/#/') === 0) {
-            normalized = normalized.slice(2);
-          }
-          if (normalized.indexOf('#/') === 0) {
-            normalized = normalized.slice(1);
-          }
-          if (normalized.indexOf('/') !== 0) {
-            normalized = '/' + normalized;
-          }
-          // Collapse repeated leading slashes after cleanup.
-          normalized = normalized.replace(/^\/+/, '/');
-          if (normalized === '/signin' || normalized === '/sign-in' || normalized === '/auth/login') {
-            return '/login';
-          }
-          if (normalized === '/signup' || normalized === '/sign-up' || normalized === '/auth/register') {
-            return '/register';
-          }
-          if (normalized === '/auth/forgot-password') {
-            return '/forgot-password';
-          }
-          if (normalized === '/auth/reset-password') {
-            return '/reset-password';
-          }
-          return normalized;
+          if (!normalized) return '';
+          if (normalized.indexOf('#') === 0) normalized = normalized.slice(1);
+          try {
+            normalized = decodeURIComponent(normalized);
+          } catch (_error) {}
+          normalized = normalized.replace(/^\/#\/?/, '/');
+          normalized = normalized.replace(/^#\/?/, '/');
+          if (normalized.indexOf('/') !== 0) normalized = '/' + normalized;
+          normalized = normalized.replace(/\/{2,}/g, '/');
+          var queryIndex = normalized.indexOf('?');
+          var pathPart = queryIndex >= 0 ? normalized.slice(0, queryIndex) : normalized;
+          var queryPart = queryIndex >= 0 ? normalized.slice(queryIndex) : '';
+          pathPart = pathPart.replace(/\/+$/, '');
+          if (!pathPart) pathPart = '/';
+          return pathPart + queryPart;
         };
 
         var redirectFromHash = function () {
           var rawHash = String(window.location.hash || '').trim();
           if (!rawHash) return;
-          var value = rawHash.slice(1);
+          var value = normalizeHashPath(rawHash);
           if (!value) return;
-          value = normalizeHashPath(value);
           var queryIndex = value.indexOf('?');
           var pathPart = (queryIndex >= 0 ? value.slice(0, queryIndex) : value).toLowerCase();
           var queryPart = queryIndex >= 0 ? value.slice(queryIndex) : '';
+          var normalized = pathPart.replace(/[^a-z0-9/_-]/g, '');
+          if (
+            normalized.indexOf('signin') !== -1 ||
+            normalized.indexOf('sign-in') !== -1 ||
+            normalized.indexOf('auth/login') !== -1
+          ) {
+            window.location.replace('/auth/login' + queryPart);
+            return;
+          }
           var target = routeMap[pathPart];
           if (!target) return;
           window.location.replace(target + queryPart);
         };
-        redirectFromHash();
+        document.addEventListener(
+          'click',
+          function (event) {
+            var node = event.target;
+            while (node && node.tagName !== 'A') node = node.parentElement;
+            if (!node) return;
+            var href = String(node.getAttribute('href') || '').trim().toLowerCase();
+            if (
+              href === '#/#signin' ||
+              href === '#/signin' ||
+              href === '#signin' ||
+              href === '#/#sign-in' ||
+              href === '#/sign-in' ||
+              href === '#sign-in'
+            ) {
+              event.preventDefault();
+              window.location.replace('/auth/login');
+            }
+          },
+          true
+        );
         window.addEventListener('hashchange', redirectFromHash);
+        redirectFromHash();
       })();
     </script>
     <script type="module" crossorigin src="/kimi-v14-r20260320-35/assets/index-D3KtpC4K.js"></script>
