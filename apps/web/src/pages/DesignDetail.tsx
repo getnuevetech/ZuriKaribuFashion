@@ -363,7 +363,7 @@ export default function DesignDetail() {
 
   const handleContinueToLoginForMeasurementSync = () => {
     const returnTo = `${location.pathname}${location.search}${location.hash}`;
-    navigate(`/login?returnTo=${encodeURIComponent(returnTo)}`, {
+    navigate(`/auth/login?returnTo=${encodeURIComponent(returnTo)}`, {
       state: { from: location },
     });
   };
@@ -396,7 +396,7 @@ export default function DesignDetail() {
   const handleToggleLike = async () => {
     if (!id) return;
     if (!user) {
-      navigate('/login');
+      navigate('/auth/login');
       return;
     }
     try {
@@ -414,7 +414,7 @@ export default function DesignDetail() {
   const handleSubmitReview = async () => {
     if (!id) return;
     if (!user) {
-      navigate('/login');
+      navigate('/auth/login');
       return;
     }
     if (!reviewComment.trim()) return;

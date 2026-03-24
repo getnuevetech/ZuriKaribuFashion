@@ -200,7 +200,7 @@ export default function FabricDetail() {
   const handleToggleLike = async () => {
     if (!id) return;
     if (!user) {
-      navigate('/login');
+      navigate('/auth/login');
       return;
     }
     try {
@@ -218,7 +218,7 @@ export default function FabricDetail() {
   const handleSubmitReview = async () => {
     if (!id) return;
     if (!user) {
-      navigate('/login');
+      navigate('/auth/login');
       return;
     }
     if (!reviewComment.trim()) return;

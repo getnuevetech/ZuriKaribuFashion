@@ -389,7 +389,7 @@ export default function ReadyToWearDetail() {
   const handleToggleLike = async () => {
     if (!id) return;
     if (!user) {
-      navigate('/login');
+      navigate('/auth/login');
       return;
     }
     try {
@@ -407,7 +407,7 @@ export default function ReadyToWearDetail() {
   const handleSubmitReview = async () => {
     if (!id) return;
     if (!user) {
-      navigate('/login');
+      navigate('/auth/login');
       return;
     }
     if (!reviewComment.trim()) return;

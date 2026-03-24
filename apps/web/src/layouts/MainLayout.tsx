@@ -668,7 +668,7 @@ export default function MainLayout() {
                 )
               ) : (
                 <Link
-                  to="/login"
+                  to="/auth/login"
                   className={`hidden sm:flex items-center gap-2 text-sm font-medium transition-colors ${menuTextClass}`}
                 >
                   Sign In

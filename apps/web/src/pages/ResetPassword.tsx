@@ -39,7 +39,7 @@ export default function ResetPassword() {
     try {
       const response = await api.auth.resetPassword(token, newPassword);
       setMessage(response?.message || 'Password reset successful.');
-      window.setTimeout(() => navigate('/login', { replace: true }), 1200);
+      window.setTimeout(() => navigate('/auth/login', { replace: true }), 1200);
     } catch (requestError: any) {
       setError(
         String(

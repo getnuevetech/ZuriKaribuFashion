@@ -57,6 +57,16 @@
       "permanent": false
     },
     {
+      "source": "/shop",
+      "destination": "/main",
+      "permanent": false
+    },
+    {
+      "source": "/shop/",
+      "destination": "/main",
+      "permanent": false
+    },
+    {
       "source": "/login",
       "destination": "/auth/login",
       "permanent": false

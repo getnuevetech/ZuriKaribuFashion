@@ -26,7 +26,7 @@
           '/home-live': '/main',
           '/home-jenks': '/main',
           '/jenks-dynamic': '/main',
-          '/shop': '/shop',
+          '/shop': '/main#shop',
           '/ready-to-wear': '/ready-to-wear',
           '/rtw': '/ready-to-wear',
           '/fabrics': '/fabrics',
@@ -130,6 +130,15 @@
             ) {
               event.preventDefault();
               window.location.replace('/auth/login');
+              return;
+            }
+            if (
+              href === '#/#shop' ||
+              href === '#/shop' ||
+              href === '#shop'
+            ) {
+              event.preventDefault();
+              window.location.replace('/main#shop');
             }
           },
           true

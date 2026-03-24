@@ -10,7 +10,6 @@ import DashboardLayout from './layouts/DashboardLayout';
 // Public Pages
 import Home from './pages/Home';
 import HomeEntry from './pages/HomeEntry';
-import ShopPage from './pages/Shop';
 import CountryProducts from './pages/CountryProducts';
 import ReadyToWear from './pages/ReadyToWear';
 import ReadyToWearDetail from './pages/ReadyToWearDetail';
@@ -190,7 +189,8 @@ function App() {
               <Route path="/privacy" element={<NavigateWithSearch to="/help-center" />} />
               <Route path="/legal/terms" element={<NavigateWithSearch to="/help-center" />} />
               <Route path="/legal/privacy" element={<NavigateWithSearch to="/help-center" />} />
-              <Route path="/shop" element={<ShopPage />} />
+              <Route path="/shop" element={<NavigateWithSearch to="/main" />} />
+              <Route path="/shop/*" element={<NavigateWithSearch to="/main" />} />
               <Route path="/country-products" element={<CountryProducts />} />
               <Route path="/ready-to-wear" element={<ReadyToWear />} />
               <Route path="/ready-to-wear/:id" element={<ReadyToWearDetail />} />

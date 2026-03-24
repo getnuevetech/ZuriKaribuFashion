@@ -173,7 +173,7 @@ export default function Register() {
           navigate(getHomeRouteForUser(response.data.user));
         } else {
           setNotice('Account created successfully. Your account is pending admin approval before login.');
-          navigate('/login');
+          navigate('/auth/login');
         }
       }
     } catch (err: any) {
