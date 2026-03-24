@@ -35,6 +35,66 @@
       "source": "/home-jenks",
       "destination": "/main",
       "permanent": false
+    },
+    {
+      "source": "/login",
+      "destination": "/auth/login",
+      "permanent": false
+    },
+    {
+      "source": "/signin",
+      "destination": "/auth/login",
+      "permanent": false
+    },
+    {
+      "source": "/sign-in",
+      "destination": "/auth/login",
+      "permanent": false
+    },
+    {
+      "source": "/register",
+      "destination": "/auth/register",
+      "permanent": false
+    },
+    {
+      "source": "/signup",
+      "destination": "/auth/register",
+      "permanent": false
+    },
+    {
+      "source": "/sign-up",
+      "destination": "/auth/register",
+      "permanent": false
+    },
+    {
+      "source": "/forgot-password",
+      "destination": "/auth/forgot-password",
+      "permanent": false
+    },
+    {
+      "source": "/forgot",
+      "destination": "/auth/forgot-password",
+      "permanent": false
+    },
+    {
+      "source": "/forgotpassword",
+      "destination": "/auth/forgot-password",
+      "permanent": false
+    },
+    {
+      "source": "/reset-password",
+      "destination": "/auth/reset-password",
+      "permanent": false
+    },
+    {
+      "source": "/password-reset",
+      "destination": "/auth/reset-password",
+      "permanent": false
+    },
+    {
+      "source": "/reset",
+      "destination": "/auth/reset-password",
+      "permanent": false
     }
   ],
   "rewrites": [
