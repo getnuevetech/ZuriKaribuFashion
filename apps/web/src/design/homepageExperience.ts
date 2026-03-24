@@ -235,8 +235,9 @@ export const normalizeHomepageExperienceSettings = (
     .slice(0, 6);
   const rawCopySource = row.jenksCopy && typeof row.jenksCopy === 'object'
     ? row.jenksCopy
-    : (row as Record<string, unknown>)['jenksCopyLegacy'] && typeof (row as Record<string, unknown>)['jenksCopyLegacy'] === 'object'
-      ? (row as Record<string, unknown>)['jenksCopyLegacy']
+    : (row as Record<string, unknown>)['kimiCopy'] &&
+        typeof (row as Record<string, unknown>)['kimiCopy'] === 'object'
+      ? (row as Record<string, unknown>)['kimiCopy']
       : {};
   const copyInput = rawCopySource as Record<string, unknown>;
   const copyDefaults = HOMEPAGE_EXPERIENCE_DEFAULTS.jenksCopy;

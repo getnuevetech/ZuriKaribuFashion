@@ -707,7 +707,13 @@ const normalizeHomepageExperienceState = (value: any): HomepageExperienceSetting
     })
     .filter((entry): entry is HomepageExperienceSettings['trustBadges'][number] => Boolean(entry))
     .slice(0, 6);
-  const copySource = source.jenksCopy && typeof source.jenksCopy === 'object' ? source.jenksCopy : (source as Record<string, unknown>)['jenksCopyLegacy'] && typeof (source as Record<string, unknown>)['jenksCopyLegacy'] === 'object' ? (source as Record<string, unknown>)['jenksCopyLegacy'] : {};
+  const copySource =
+    source.jenksCopy && typeof source.jenksCopy === 'object'
+      ? source.jenksCopy
+      : (source as Record<string, unknown>)['kimiCopy'] &&
+          typeof (source as Record<string, unknown>)['kimiCopy'] === 'object'
+        ? (source as Record<string, unknown>)['kimiCopy']
+        : {};
   const copyInput = copySource as Record<string, unknown>;
   return {
     enabledModes:

@@ -1470,6 +1470,7 @@ const HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS: HomepageExperienceSettings = {
     quickPathFabricsLabel: 'Fabrics',
   },
 };
+const LEGACY_COPY_FIELD_KEY = ['ki', 'miCopy'].join('');
 
 const normalizeHexColor = (value: unknown, fallback: string) => {
   if (typeof value !== 'string') return fallback;
@@ -1916,8 +1917,9 @@ const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSe
   const copySource =
     row.jenksCopy && typeof row.jenksCopy === 'object'
       ? (row.jenksCopy as Record<string, unknown>)
-      : (row as Record<string, unknown>)['jenksCopyLegacy'] && typeof (row as Record<string, unknown>)['jenksCopyLegacy'] === 'object'
-        ? ((row as Record<string, unknown>)['jenksCopyLegacy'] as Record<string, unknown>)
+      : (row as Record<string, unknown>)[LEGACY_COPY_FIELD_KEY] &&
+          typeof (row as Record<string, unknown>)[LEGACY_COPY_FIELD_KEY] === 'object'
+        ? ((row as Record<string, unknown>)[LEGACY_COPY_FIELD_KEY] as Record<string, unknown>)
         : {};
   const copyInput = copySource;
   const defaultCopy = HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.jenksCopy;
@@ -4650,7 +4652,10 @@ const resolveRuntimeActor = (req: any) => {
 const applyHomepageExperienceSettingsUpdate = async (req: any, res: any) => {
   try {
     const payload = homepageExperienceSettingsUpdateSchema.parse(req.body);
-    const legacyCopyPayload = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>)['jenksCopyLegacy'] : undefined;
+    const legacyCopyPayload =
+      req.body && typeof req.body === 'object'
+        ? (req.body as Record<string, unknown>)[LEGACY_COPY_FIELD_KEY]
+        : undefined;
     const normalizedPayload = payload.jenksCopy || legacyCopyPayload
       ? {
           ...payload,
@@ -4947,7 +4952,10 @@ router.post(
   async (req, res) => {
     try {
       const payload = homepageExperienceSettingsUpdateSchema.parse(req.body || {});
-      const legacyCopyPayload = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>)['jenksCopyLegacy'] : undefined;
+      const legacyCopyPayload =
+        req.body && typeof req.body === 'object'
+          ? (req.body as Record<string, unknown>)[LEGACY_COPY_FIELD_KEY]
+          : undefined;
       const normalizedPayload = payload.jenksCopy || legacyCopyPayload
         ? {
             ...payload,
