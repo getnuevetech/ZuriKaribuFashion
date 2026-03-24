@@ -57,6 +57,12 @@ const resolveHomepageTarget = (
 };
 
 export default function HomeEntry() {
+  if (typeof window !== 'undefined') {
+    // Never show a resolver prompt to public users; route immediately.
+    window.location.replace(buildJenksStaticUrl());
+    return null;
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -95,17 +101,5 @@ export default function HomeEntry() {
     };
   }, []);
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f8f6f1] px-4 text-center">
-      <div>
-        <p className="text-sm text-black/70">Resolving homepage runtime…</p>
-        <a href={JENKS_HOME_PATH} className="mt-3 inline-block text-sm font-semibold underline">
-          Continue to homepage
-        </a>
-        <a href={JENKS_STATIC_HOME_PATH} className="mt-2 block text-xs text-black/60 underline">
-          Open static Jenks v14 fallback
-        </a>
-      </div>
-    </div>
-  );
+  return null;
 }
