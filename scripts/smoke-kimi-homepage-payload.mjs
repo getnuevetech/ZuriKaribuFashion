@@ -35,6 +35,7 @@ const requiredKeys = [
   'howItWorksStyle',
   'featuredProductDescription',
   'authPageSettings',
+  'dashboardClockWeatherSettings',
   'experienceSettings',
   'heroSlides',
   'managedBanners',
@@ -117,29 +118,11 @@ try {
     printFail(`featuredCollections missing required arrays: ${missingFeaturedSections.join(', ')}`);
   }
 
-  const payloadForChecksum = {
-    visibility: data.visibility,
-    topStrip: data.topStrip,
-    statsStrip: data.statsStrip,
-    howItWorksStyle: data.howItWorksStyle,
-    featuredProductDescription: data.featuredProductDescription,
-    authPageSettings: data.authPageSettings,
-    experienceSettings: data.experienceSettings,
-    heroSlides: data.heroSlides,
-    managedBanners: data.managedBanners,
-    promoBadge: data.promoBadge,
-    countries: data.countries,
-    categories: data.categories,
-    howItWorks: data.howItWorks,
-    designerSpotlights: data.designerSpotlights,
-    featuredCollections: data.featuredCollections,
-    heritage: data.heritage,
-    testimonials: data.testimonials,
-    footer: data.footer,
-    shopByBlocks: data.shopByBlocks,
-    freshDrops: data.freshDrops,
-    newsletter: data.newsletter,
-  };
+  // Keep checksum verification resilient as payload contracts evolve.
+  // Backend computes checksum from all payload keys except metadata keys.
+  const payloadForChecksum = Object.fromEntries(
+    Object.entries(data).filter(([key]) => !['contractVersion', 'generatedAt', 'payloadChecksum'].includes(key))
+  );
 
   const recomputedChecksum = createHash('sha256')
     .update(JSON.stringify({ contractVersion: data.contractVersion, payload: payloadForChecksum }))

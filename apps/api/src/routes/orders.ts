@@ -2950,20 +2950,38 @@ router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), a
         select: {
           id: true,
           shippingAddress: true,
+          designOrder: {
+            select: { designId: true },
+          },
+          fabricOrder: {
+            select: { fabricId: true },
+          },
         },
         orderBy: { createdAt: 'asc' },
       });
-      const existingPrimaryOrder = existingOrders[0] || null;
-      mergeIntoOrderId = existingPrimaryOrder?.id || null;
-      const existingItemCount = existingPrimaryOrder
-        ? readOrderCategoryBundleCount(existingPrimaryOrder.shippingAddress, 'CUSTOM_DESIGN', 1)
-        : 0;
+      const existingItemCount = existingOrders.reduce(
+        (sum, row) => sum + readOrderCategoryBundleCount(row.shippingAddress, 'CUSTOM_DESIGN', 1),
+        0
+      );
       if (existingItemCount >= maxCustomToWearItemsPerCheckout) {
         return res.status(400).json({
           success: false,
           message: `A maximum of ${maxCustomToWearItemsPerCheckout} Custom To Wear product(s) is allowed in one checkout.`,
         });
       }
+      const requestedDesignId = String(data.designId || '').trim();
+      const requestedFabricId = String(data.fabricId || '').trim();
+      const mergeCandidate = existingOrders.find((row) => {
+        const existingDesignId = String(row.designOrder?.designId || '').trim();
+        if (!existingDesignId || existingDesignId !== requestedDesignId) return false;
+        const existingFabricId = String(row.fabricOrder?.fabricId || '').trim();
+        if (wantsDesignerToChooseFabric) {
+          return !existingFabricId;
+        }
+        if (!requestedFabricId) return false;
+        return existingFabricId === requestedFabricId;
+      });
+      mergeIntoOrderId = mergeCandidate?.id || null;
     }
     const selectedYards = Number(data.yards || 0);
     if (hasCustomerSelectedFabric && (!data.fabricId || selectedYards < 1)) {
@@ -3864,7 +3882,10 @@ router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), asy
         (sum, order) => sum + Math.max(0, Number(order.fabricOrder?.yards || 0)),
         0
       );
-      mergeIntoOrderId = existingOrders[0]?.id || null;
+      const requestedFabricId = String(data.fabricId || '').trim();
+      mergeIntoOrderId =
+        existingOrders.find((order) => String(order.fabricOrder?.fabricId || '').trim() === requestedFabricId)?.id ||
+        null;
       if (alreadyOrderedYards + Number(data.yards || 0) > maxFabricYardsPerOrder) {
         return res.status(400).json({
           success: false,
