@@ -15,6 +15,26 @@
       "source": "/home/",
       "destination": "/main",
       "permanent": false
+    },
+    {
+      "source": "/home-legacy",
+      "destination": "/main",
+      "permanent": false
+    },
+    {
+      "source": "/home-live",
+      "destination": "/main",
+      "permanent": false
+    },
+    {
+      "source": "/jenks-dynamic",
+      "destination": "/main",
+      "permanent": false
+    },
+    {
+      "source": "/home-jenks",
+      "destination": "/main",
+      "permanent": false
     }
   ],
   "rewrites": [
