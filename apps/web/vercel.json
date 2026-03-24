@@ -3,57 +3,47 @@
   "redirects": [
     {
       "source": "/",
-      "destination": "/main",
-      "permanent": false
-    },
-    {
-      "source": "/home",
-      "destination": "/main",
-      "permanent": false
-    },
-    {
-      "source": "/home/",
-      "destination": "/main",
+      "destination": "/home",
       "permanent": false
     },
     {
       "source": "/home-legacy",
-      "destination": "/main",
+      "destination": "/home",
       "permanent": false
     },
     {
       "source": "/legacy",
-      "destination": "/main",
+      "destination": "/home",
       "permanent": false
     },
     {
       "source": "/home-kimi",
-      "destination": "/main",
+      "destination": "/home",
       "permanent": false
     },
     {
       "source": "/home-live",
-      "destination": "/main",
+      "destination": "/home",
       "permanent": false
     },
     {
       "source": "/jenks-dynamic",
-      "destination": "/main",
+      "destination": "/home",
       "permanent": false
     },
     {
       "source": "/home-jenks",
-      "destination": "/main",
+      "destination": "/home",
       "permanent": false
     },
     {
       "source": "/jenks",
-      "destination": "/main",
+      "destination": "/home",
       "permanent": false
     },
     {
       "source": "/jenks/",
-      "destination": "/main",
+      "destination": "/home",
       "permanent": false
     },
     {
