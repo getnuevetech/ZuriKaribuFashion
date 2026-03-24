@@ -40,14 +40,19 @@ export default function ForgotPassword() {
   return (
     <AuthPageShell
       brandName={authPageSettings.brandName}
-      sectionLabel="Zuri Karibu - Auth"
       heroImage={authPageSettings.forgotPasswordHeroImage}
       heroImageFallback={AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordHeroImage}
       heroAlt={`${authPageSettings.brandName} forgot password`}
-      heroCaption="Your style, your story."
-      heroSupportingText="Reset your password and continue your African fashion journey."
-      title="Forgot password?"
-      subtitle="No worries. Enter your email address and we'll send you a link to reset your password."
+      heroTitle={
+        <>
+          Your style,
+          <br />
+          your story.
+        </>
+      }
+      heroSubtitle="Reset your password and continue your African fashion journey."
+      pageTitle="Forgot password?"
+      pageSubtitle="No worries. Enter your email address and we'll send you a link to reset your password."
       topSlot={(
         <Link to="/auth/login" className="inline-flex items-center gap-2 text-sm text-[#6a6a6a] hover:text-[#1f1f1f]">
           <span aria-hidden="true">←</span>

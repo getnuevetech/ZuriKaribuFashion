@@ -1,6 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentType, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Store, Scissors } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  Mail,
+  Lock,
+  User,
+  ArrowRight,
+  Store,
+  Scissors,
+  Phone,
+  Building2,
+  MapPin,
+  Info,
+} from 'lucide-react';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
@@ -20,7 +33,9 @@ import { evaluatePasswordSecurity } from '../utils/passwordSecurity';
 import AuthPageShell from '../components/auth/AuthPageShell';
 
 type UserRole = 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER';
+
 const DEFAULT_REFERRAL_CODE = 'PLATFORM-DEFAULT';
+
 const normalizeReferralCodeInput = (value: string) =>
   String(value || '')
     .toUpperCase()
@@ -31,7 +46,7 @@ interface RoleOption {
   value: UserRole;
   label: string;
   description: string;
-  icon: React.ElementType;
+  icon: ComponentType<{ className?: string }>;
 }
 
 const roleOptions: RoleOption[] = [
@@ -60,27 +75,36 @@ export default function Register() {
   const [searchParams] = useSearchParams();
   const { login } = useAuthStore();
   const { settings: authPageSettings } = useAuthPageSettings();
+
   const referralCodeFromQuery = normalizeReferralCodeInput(String(searchParams.get('ref') || '').trim());
   const [selectedRole, setSelectedRole] = useState<UserRole>('CUSTOMER');
   const [formData, setFormData] = useState({
-    fullName: '',
+    firstName: '',
+    lastName: '',
     email: '',
     password: '',
     confirmPassword: '',
     phone: '',
     country: '',
     city: '',
+    address: '',
     businessName: '',
+    businessEmail: '',
+    businessPhone: '',
+    bio: '',
     referralCode: referralCodeFromQuery || DEFAULT_REFERRAL_CODE,
     agreeTerms: false,
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+
   const googleClientId = String(
     import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || ''
   ).trim();
+
   const allCountryOptions = getCountryOptions();
   const africanCountryOptions = getAfricanCountryOptions();
   const countryOptions =
@@ -89,6 +113,7 @@ export default function Register() {
       : allCountryOptions;
   const selectedCountryCode = resolveCountryCode(formData.country);
   const cityOptions = getCityOptionsByCountryCode(selectedCountryCode);
+
   useEffect(() => {
     if (!referralCodeFromQuery) return;
     setFormData((prev) => ({ ...prev, referralCode: referralCodeFromQuery }));
@@ -100,7 +125,9 @@ export default function Register() {
       try {
         const response = await api.referrals.getPublicProgramSettings();
         if (!response.success || cancelled) return;
-        const defaultCode = normalizeReferralCodeInput(String(response.data?.defaultReferralCode || DEFAULT_REFERRAL_CODE));
+        const defaultCode = normalizeReferralCodeInput(
+          String(response.data?.defaultReferralCode || DEFAULT_REFERRAL_CODE)
+        );
         if (!defaultCode) return;
         setFormData((prev) => {
           if (referralCodeFromQuery) return prev;
@@ -128,10 +155,19 @@ export default function Register() {
     setFormData((prev) => ({ ...prev, country: '', city: '' }));
   }, [selectedRole, selectedCountryCode, africanCountryOptions]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
     setError('');
     setNotice('');
+
+    const firstName = formData.firstName.trim();
+    const lastName = formData.lastName.trim();
+
+    if (firstName.length < 2 || lastName.length < 2) {
+      setError('First name and last name must each be at least 2 characters.');
+      return;
+    }
+
     const passwordSecurity = evaluatePasswordSecurity(formData.password);
     if (!passwordSecurity.isValid) {
       setError(passwordSecurity.message);
@@ -139,46 +175,56 @@ export default function Register() {
     }
 
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+      setError('Passwords do not match.');
       return;
     }
 
     if (!formData.agreeTerms) {
-      setError('Please agree to the terms and conditions');
+      setError('Please agree to the terms and conditions.');
+      return;
+    }
+
+    const isVendor = selectedRole === 'FABRIC_SELLER' || selectedRole === 'FASHION_DESIGNER';
+    if (isVendor && (!formData.businessName.trim() || !formData.country.trim() || !formData.city.trim())) {
+      setError('Business name, country, and city are required for sellers and designers.');
       return;
     }
 
     setLoading(true);
-
     try {
-      const [firstName = '', ...lastNameParts] = formData.fullName.trim().split(/\s+/);
-      const lastName = lastNameParts.join(' ') || firstName;
       const normalizedPhone = normalizePhoneWithCountryPrefix(formData.phone, formData.country);
-
-      const response = await api.auth.register({
-        email: formData.email,
+      const payload = {
+        email: formData.email.trim(),
         password: formData.password,
-        phone: normalizedPhone || formData.phone,
-        country: formData.country,
-        city: formData.city,
-        businessName: formData.businessName,
         firstName,
         lastName,
+        fullName: `${firstName} ${lastName}`.trim(),
         role: selectedRole,
+        phone: normalizedPhone || formData.phone.trim(),
+        country: formData.country.trim() || undefined,
+        city: formData.city.trim() || undefined,
+        address: formData.address.trim() || undefined,
+        businessName: formData.businessName.trim() || undefined,
+        businessEmail: formData.businessEmail.trim() || undefined,
+        businessPhone: formData.businessPhone.trim() || undefined,
+        bio: selectedRole === 'FASHION_DESIGNER' ? formData.bio.trim() || undefined : undefined,
         referralCode: normalizeReferralCodeInput(formData.referralCode),
-      });
+      };
 
+      const response = await api.auth.register(payload);
       if (response.success) {
         if (response.data.user?.status === 'ACTIVE' && response.data.token) {
           login(response.data.user, response.data.token);
-          navigate(getHomeRouteForUser(response.data.user));
+          navigate(getHomeRouteForUser(response.data.user), { replace: true });
         } else {
-          setNotice('Account created successfully. Your account is pending admin approval before login.');
-          navigate('/auth/login');
+          setNotice(
+            'Account created successfully. Your account is pending admin approval before login.'
+          );
+          navigate('/auth/login', { replace: true });
         }
       }
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed');
+    } catch (submitError: any) {
+      setError(submitError?.response?.data?.message || 'Registration failed.');
     } finally {
       setLoading(false);
     }
@@ -190,6 +236,7 @@ export default function Register() {
       setError('Google authentication did not return a valid credential.');
       return;
     }
+
     setError('');
     setLoading(true);
     try {
@@ -199,19 +246,24 @@ export default function Register() {
         const targetRoute = getHomeRouteForUser(response.data.user);
         navigate(targetRoute, { replace: true });
         window.setTimeout(() => {
-          if (window.location.pathname === '/register') {
+          if (
+            window.location.pathname === '/register' ||
+            window.location.pathname === '/auth/register'
+          ) {
             window.location.assign(targetRoute);
           }
         }, 0);
       } else {
         setError('Google sign up failed. Please try again.');
       }
-    } catch (err: any) {
-      const message = String(err?.response?.data?.message || '').trim();
+    } catch (googleError: any) {
+      const message = String(googleError?.response?.data?.message || '').trim();
       if (message.toLowerCase().includes('route not found')) {
-        setError('Google sign up is not available on the current backend deployment yet. Please redeploy the API service.');
+        setError(
+          'Google sign up is not available on the current backend deployment yet. Please redeploy the API service.'
+        );
       } else {
-        setError(message || 'Google sign up failed');
+        setError(message || 'Google sign up failed.');
       }
     } finally {
       setLoading(false);
@@ -221,14 +273,19 @@ export default function Register() {
   return (
     <AuthPageShell
       brandName={authPageSettings.brandName}
-      sectionLabel="Zuri Karibu - Auth"
       heroImage={authPageSettings.registerHeroImage}
       heroImageFallback={AUTH_PAGE_SETTINGS_DEFAULTS.registerHeroImage}
       heroAlt={`${authPageSettings.brandName} register`}
-      heroCaption={authPageSettings.registerHeroCaption}
-      heroSupportingText="Sign up to start shopping African fashion from designers worldwide."
-      title={authPageSettings.registerTitle}
-      subtitle={authPageSettings.registerSubtitle}
+      heroTitle={
+        <>
+          Join the
+          <br />
+          movement.
+        </>
+      }
+      heroSubtitle="Discover authentic African fashion from talented designers across 54 countries."
+      pageTitle="Create account"
+      pageSubtitle="Sign up to start shopping African fashion from designers worldwide."
     >
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {roleOptions.map((role) => {
@@ -241,15 +298,15 @@ export default function Register() {
               onClick={() => setSelectedRole(role.value)}
               className={`rounded-lg border p-2.5 text-left transition-colors ${
                 isSelected
-                  ? 'border-[#e85a3c] bg-[#fff3ef]'
-                  : 'border-[#dfdfdf] bg-white hover:border-[#9f9f9f]'
+                  ? 'border-[#e85a3d] bg-[#e85a3d]/10'
+                  : 'border-[#e5e5e5] bg-white hover:bg-[#f5f5f5]'
               }`}
             >
               <div className="flex items-start gap-2">
-                <Icon className="mt-0.5 h-4 w-4 text-gray-700" />
+                <Icon className="mt-0.5 h-4 w-4 text-[#1a1a1a]" />
                 <div>
-                  <p className="text-xs font-semibold text-gray-900">{role.label}</p>
-                  <p className="mt-0.5 line-clamp-2 text-[10px] text-gray-500">{role.description}</p>
+                  <p className="text-xs font-semibold text-[#1a1a1a]">{role.label}</p>
+                  <p className="mt-0.5 line-clamp-2 text-[10px] text-[#666666]">{role.description}</p>
                 </div>
               </div>
             </button>
@@ -257,16 +314,9 @@ export default function Register() {
         })}
       </div>
 
-      {error ? (
-        <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
-
+      {error ? <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
       {notice ? (
-        <div className="border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-          {notice}
-        </div>
+        <div className="border border-green-200 bg-green-50 p-3 text-sm text-green-700">{notice}</div>
       ) : null}
       {referralCodeFromQuery ? (
         <div className="border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
@@ -274,210 +324,352 @@ export default function Register() {
         </div>
       ) : null}
 
-      {authPageSettings.showGoogleOnRegister ? (
-        <>
-          <p className="text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Social Signup</p>
-          {googleClientId ? (
-            <div className="flex justify-center">
-              <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google sign up was cancelled or failed.')} />
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label htmlFor="firstName" className="text-[#1a1a1a] font-medium text-sm">
+              First name
+            </label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#999999]" />
+              <input
+                id="firstName"
+                type="text"
+                required
+                value={formData.firstName}
+                onChange={(event) => setFormData((prev) => ({ ...prev, firstName: event.target.value }))}
+                className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+                placeholder="First name"
+              />
             </div>
-          ) : (
-            <p className="text-center text-xs text-amber-700">
-              Google sign up is currently unavailable. Missing frontend environment variable:
-              {' '}
-              <span className="font-semibold">VITE_GOOGLE_CLIENT_ID</span>.
-            </p>
-          )}
-          <div className="flex items-center gap-2 text-xs text-gray-400">
-            <span className="h-px flex-1 bg-gray-200" />
-            <span>or</span>
-            <span className="h-px flex-1 bg-gray-200" />
           </div>
-        </>
-      ) : null}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    required
-                    value={formData.fullName.split(' ').slice(0, 1).join(' ')}
-                    onChange={(e) => {
-                      const first = e.target.value.trim();
-                      const currentParts = formData.fullName.trim().split(/\s+/).filter(Boolean);
-                      const last = currentParts.slice(1).join(' ');
-                      const merged = [first, last].filter(Boolean).join(' ');
-                      setFormData({ ...formData, fullName: merged });
-                    }}
-                    className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-10 pr-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
-                    placeholder="First name"
-                  />
-                </div>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    required
-                    value={formData.fullName.split(' ').slice(1).join(' ')}
-                    onChange={(e) => {
-                      const last = e.target.value.trim();
-                      const currentParts = formData.fullName.trim().split(/\s+/).filter(Boolean);
-                      const first = currentParts.slice(0, 1).join(' ');
-                      const merged = [first, last].filter(Boolean).join(' ');
-                      setFormData({ ...formData, fullName: merged });
-                    }}
-                    className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-10 pr-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
-                    placeholder="Last name"
-                  />
-                </div>
-                <div className="relative sm:col-span-2">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-10 pr-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
-                    placeholder="Email Address"
-                  />
-                </div>
-
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white pl-10 pr-10 text-sm focus:border-[#9d9d9d] focus:outline-none"
-                    placeholder="Password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-                <div className="sm:col-span-2">
-                  <PasswordStrengthMeter password={formData.password} />
-                </div>
-
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white px-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
-                  placeholder="Confirm Password"
-                />
-
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white px-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
-                  placeholder="Phone (optional)"
-                />
-
-                <select
-                  required
-                  value={selectedCountryCode}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      country: resolveCountryName(e.target.value),
-                      city: '',
-                      phone: normalizePhoneWithCountryPrefix(formData.phone, resolveCountryName(e.target.value)),
-                    })
-                  }
-                  className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white px-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
-                >
-                  <option value="">Country</option>
-                  {countryOptions.map((country) => (
-                    <option key={country.code} value={country.code}>
-                      {country.name}
-                    </option>
-                  ))}
-                </select>
-
-                {(selectedRole === 'FABRIC_SELLER' || selectedRole === 'FASHION_DESIGNER') ? (
-                  <>
-                    <input
-                      type="text"
-                      required
-                      value={formData.businessName}
-                      onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                      className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white px-3 text-sm focus:border-[#9d9d9d] focus:outline-none sm:col-span-2"
-                      placeholder="Business Name"
-                    />
-
-                    <select
-                      required
-                      value={formData.city}
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                      className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white px-3 text-sm focus:border-[#9d9d9d] focus:outline-none sm:col-span-2"
-                      disabled={!formData.country}
-                    >
-                      <option value="">{formData.country ? 'Select City' : 'Select country first'}</option>
-                      {cityOptions.map((city) => (
-                        <option key={city} value={city}>
-                          {city}
-                        </option>
-                      ))}
-                    </select>
-                  </>
-                ) : null}
-
-                <div className="sm:col-span-2">
-                  <input
-                    type="text"
-                    required
-                    value={formData.referralCode}
-                    onChange={(e) =>
-                      setFormData({ ...formData, referralCode: normalizeReferralCodeInput(e.target.value) })
-                    }
-                    className="h-11 w-full rounded-[10px] border border-[#dfdfdf] bg-white px-3 text-sm focus:border-[#9d9d9d] focus:outline-none"
-                    placeholder="Referral code"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Referral code is required. If you do not have one, keep the default code.
-                  </p>
-                </div>
+          <div className="space-y-2">
+            <label htmlFor="lastName" className="text-[#1a1a1a] font-medium text-sm">
+              Last name
+            </label>
+            <input
+              id="lastName"
+              type="text"
+              required
+              value={formData.lastName}
+              onChange={(event) => setFormData((prev) => ({ ...prev, lastName: event.target.value }))}
+              className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none"
+              placeholder="Last name"
+            />
+          </div>
         </div>
 
-        <label htmlFor="terms" className="inline-flex items-start gap-2 text-sm text-gray-600">
+        <div className="space-y-2">
+          <label htmlFor="email" className="text-[#1a1a1a] font-medium text-sm">
+            Email address
+          </label>
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#999999]" />
+            <input
+              id="email"
+              type="email"
+              required
+              value={formData.email}
+              onChange={(event) => setFormData((prev) => ({ ...prev, email: event.target.value }))}
+              className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+              placeholder="Enter your email"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="password" className="text-[#1a1a1a] font-medium text-sm">
+            Password
+          </label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#999999]" />
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              required
+              value={formData.password}
+              onChange={(event) => setFormData((prev) => ({ ...prev, password: event.target.value }))}
+              className="pl-11 pr-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+              placeholder="Create a password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#999999] hover:text-[#666666] transition-colors"
+            >
+              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
+          </div>
+          <p className="text-xs text-[#999999]">Must be at least 8 characters with a number and special character.</p>
+          <PasswordStrengthMeter password={formData.password} />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="confirmPassword" className="text-[#1a1a1a] font-medium text-sm">
+            Confirm password
+          </label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#999999]" />
+            <input
+              id="confirmPassword"
+              type={showConfirmPassword ? 'text' : 'password'}
+              required
+              value={formData.confirmPassword}
+              onChange={(event) => setFormData((prev) => ({ ...prev, confirmPassword: event.target.value }))}
+              className="pl-11 pr-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+              placeholder="Confirm your password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword((value) => !value)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#999999] hover:text-[#666666] transition-colors"
+            >
+              {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <label htmlFor="phone" className="text-[#1a1a1a] font-medium text-sm">
+              Phone
+            </label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#999999]" />
+              <input
+                id="phone"
+                type="tel"
+                value={formData.phone}
+                onChange={(event) => setFormData((prev) => ({ ...prev, phone: event.target.value }))}
+                className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+                placeholder="Phone number"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="country" className="text-[#1a1a1a] font-medium text-sm">
+              Country
+            </label>
+            <select
+              id="country"
+              value={selectedCountryCode}
+              onChange={(event) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  country: resolveCountryName(event.target.value),
+                  city: '',
+                  phone: normalizePhoneWithCountryPrefix(prev.phone, resolveCountryName(event.target.value)),
+                }))
+              }
+              className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none"
+            >
+              <option value="">Select country</option>
+              {countryOptions.map((country) => (
+                <option key={country.code} value={country.code}>
+                  {country.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <label htmlFor="city" className="text-[#1a1a1a] font-medium text-sm">
+              City
+            </label>
+            <select
+              id="city"
+              value={formData.city}
+              onChange={(event) => setFormData((prev) => ({ ...prev, city: event.target.value }))}
+              className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none"
+              disabled={!formData.country}
+            >
+              <option value="">{formData.country ? 'Select city' : 'Select country first'}</option>
+              {cityOptions.map((city) => (
+                <option key={city} value={city}>
+                  {city}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="address" className="text-[#1a1a1a] font-medium text-sm">
+              Address
+            </label>
+            <div className="relative">
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#999999]" />
+              <input
+                id="address"
+                type="text"
+                value={formData.address}
+                onChange={(event) => setFormData((prev) => ({ ...prev, address: event.target.value }))}
+                className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+                placeholder="Business/Home address"
+              />
+            </div>
+          </div>
+        </div>
+
+        {(selectedRole === 'FABRIC_SELLER' || selectedRole === 'FASHION_DESIGNER') && (
+          <>
+            <div className="space-y-2">
+              <label htmlFor="businessName" className="text-[#1a1a1a] font-medium text-sm">
+                Business name
+              </label>
+              <div className="relative">
+                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#999999]" />
+                <input
+                  id="businessName"
+                  type="text"
+                  required
+                  value={formData.businessName}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, businessName: event.target.value }))
+                  }
+                  className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+                  placeholder="Business name"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label htmlFor="businessEmail" className="text-[#1a1a1a] font-medium text-sm">
+                  Business email
+                </label>
+                <input
+                  id="businessEmail"
+                  type="email"
+                  value={formData.businessEmail}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, businessEmail: event.target.value }))
+                  }
+                  className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none"
+                  placeholder="Business email"
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="businessPhone" className="text-[#1a1a1a] font-medium text-sm">
+                  Business phone
+                </label>
+                <input
+                  id="businessPhone"
+                  type="tel"
+                  value={formData.businessPhone}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, businessPhone: event.target.value }))
+                  }
+                  className="h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 outline-none"
+                  placeholder="Business phone"
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {selectedRole === 'FASHION_DESIGNER' && (
+          <div className="space-y-2">
+            <label htmlFor="bio" className="text-[#1a1a1a] font-medium text-sm">
+              Brand bio
+            </label>
+            <textarea
+              id="bio"
+              value={formData.bio}
+              onChange={(event) => setFormData((prev) => ({ ...prev, bio: event.target.value }))}
+              className="min-h-24 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg px-3 py-3 outline-none"
+              placeholder="Short description about your brand or design style"
+            />
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <label htmlFor="referralCode" className="text-[#1a1a1a] font-medium text-sm">
+            Referral code
+          </label>
+          <div className="relative">
+            <Info className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#999999]" />
+            <input
+              id="referralCode"
+              type="text"
+              required
+              value={formData.referralCode}
+              onChange={(event) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  referralCode: normalizeReferralCodeInput(event.target.value),
+                }))
+              }
+              className="pl-11 h-12 w-full bg-white border border-[#e5e5e5] focus:border-[#e85a3d] focus:ring-2 focus:ring-[#e85a3d]/20 rounded-lg outline-none"
+              placeholder="Referral code"
+            />
+          </div>
+          <p className="text-xs text-[#999999]">
+            Referral code is required. If you do not have one, keep the default code.
+          </p>
+        </div>
+
+        <div className="flex items-start space-x-3">
           <input
-            type="checkbox"
             id="terms"
+            type="checkbox"
             checked={formData.agreeTerms}
-            onChange={(e) => setFormData({ ...formData, agreeTerms: e.target.checked })}
-            className="mt-0.5 h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-500"
+            onChange={(event) => setFormData((prev) => ({ ...prev, agreeTerms: event.target.checked }))}
+            className="mt-1 h-4 w-4 border-[#d1d1d1] rounded"
           />
-          <span>
+          <label htmlFor="terms" className="text-sm text-[#666666] cursor-pointer leading-relaxed">
             I agree to the{' '}
-            <Link to="/legal/terms" className="text-amber-700 hover:text-amber-800">
+            <Link to="/legal/terms" className="text-[#e85a3d] hover:text-[#d14a2d] font-medium">
               Terms of Service
             </Link>{' '}
             and{' '}
-            <Link to="/legal/privacy" className="text-amber-700 hover:text-amber-800">
+            <Link to="/legal/privacy" className="text-[#e85a3d] hover:text-[#d14a2d] font-medium">
               Privacy Policy
             </Link>
-          </span>
-        </label>
+          </label>
+        </div>
 
-        <Button type="submit" className="h-11 w-full rounded-[10px] bg-[#e85a3c] text-sm font-semibold text-white hover:bg-[#d95135]" disabled={loading}>
-          {loading ? 'Creating account...' : authPageSettings.registerSubmitLabel}
-          {!loading ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
+        <Button
+          type="submit"
+          disabled={!formData.agreeTerms || loading}
+          className="w-full h-12 bg-[#e85a3d] hover:bg-[#d14a2d] disabled:bg-[#cccccc] text-white font-medium rounded-lg transition-colors"
+        >
+          {loading ? 'Creating account...' : 'Create Account'}
+          {!loading ? <ArrowRight className="ml-2 w-4 h-4" /> : null}
         </Button>
       </form>
 
-      <p className="text-center text-sm text-gray-600">
+      {authPageSettings.showGoogleOnRegister ? (
+        <>
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-[#e5e5e5]" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-[#faf9f7] text-[#999999]">Or sign up with</span>
+            </div>
+          </div>
+          {googleClientId ? (
+            <div className="flex justify-center">
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={() => setError('Google sign up was cancelled or failed.')}
+              />
+            </div>
+          ) : (
+            <p className="text-center text-xs text-amber-700">
+              Google sign up is unavailable. Missing <span className="font-semibold">VITE_GOOGLE_CLIENT_ID</span>.
+            </p>
+          )}
+        </>
+      ) : null}
+
+      <p className="text-center text-[#666666]">
         Already have an account?{' '}
-        <Link to="/auth/login" className="font-medium text-amber-700 hover:text-amber-800">
+        <Link to="/auth/login" className="text-[#e85a3d] hover:text-[#d14a2d] font-medium transition-colors">
           Sign in
         </Link>
       </p>

@@ -51,16 +51,21 @@ export default function ChangePasswordRequiredPage() {
   return (
     <AuthPageShell
       brandName={authPageSettings.brandName}
-      sectionLabel="Zuri Karibu - Auth"
       heroImage={authPageSettings.changePasswordHeroImage || authPageSettings.resetPasswordHeroImage}
       heroImageFallback={
         AUTH_PAGE_SETTINGS_DEFAULTS.changePasswordHeroImage || AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordHeroImage
       }
       heroAlt={`${authPageSettings.brandName} update temporary password`}
-      heroCaption={authPageSettings.changePasswordHeroCaption || 'Your style, your story.'}
-      heroSupportingText="Secure your account and continue your African fashion journey."
-      title={authPageSettings.changePasswordTitle || 'Update password'}
-      subtitle={
+      heroTitle={
+        <>
+          Your style,
+          <br />
+          your story.
+        </>
+      }
+      heroSubtitle="Secure your account and continue your African fashion journey."
+      pageTitle={authPageSettings.changePasswordTitle || 'Update password'}
+      pageSubtitle={
         authPageSettings.changePasswordSubtitle ||
         'Your account was created with a temporary password. You must update it before continuing.'
       }

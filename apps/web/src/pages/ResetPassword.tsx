@@ -57,14 +57,19 @@ export default function ResetPassword() {
   return (
     <AuthPageShell
       brandName={authPageSettings.brandName}
-      sectionLabel="Zuri Karibu - Auth"
       heroImage={authPageSettings.resetPasswordHeroImage}
       heroImageFallback={AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordHeroImage}
       heroAlt={`${authPageSettings.brandName} reset password`}
-      heroCaption="Your style, your story."
-      heroSupportingText="Reset your password and continue your African fashion journey."
-      title="Forgot password?"
-      subtitle="No worries. Enter your email address and we'll send you a link to reset your password."
+      heroTitle={
+        <>
+          Your style,
+          <br />
+          your story.
+        </>
+      }
+      heroSubtitle="Reset your password and continue your African fashion journey."
+      pageTitle="Reset password"
+      pageSubtitle="Set a strong new password for your account."
     >
       {!token ? (
         <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -113,7 +118,11 @@ export default function ResetPassword() {
         </div>
         <PasswordStrengthMeter password={newPassword} />
 
-        <Button type="submit" className="h-12 w-full rounded-[10px] bg-[#e85a3c] text-sm font-semibold text-white hover:bg-[#d14a2e]" disabled={loading || !token}>
+        <Button
+          type="submit"
+          className="w-full h-12 bg-[#e85a3d] hover:bg-[#d14a2d] text-white font-medium rounded-lg transition-colors"
+          disabled={loading || !token}
+        >
           {loading ? (
             'Resetting password...'
           ) : (
@@ -127,7 +136,7 @@ export default function ResetPassword() {
 
       <p className="text-center text-sm text-gray-600">
         <Link to="/auth/login" className="font-medium text-[#e85a3c] hover:text-[#c9492f]">
-          Need help? Contact support
+          Back to sign in
         </Link>
       </p>
     </AuthPageShell>

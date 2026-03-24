@@ -214,14 +214,19 @@ export default function Login() {
   return (
     <AuthPageShell
       brandName={authPageSettings.brandName}
-      sectionLabel=""
       heroImage={authPageSettings.loginHeroImage}
       heroImageFallback={AUTH_PAGE_SETTINGS_DEFAULTS.loginHeroImage}
       heroAlt={`${authPageSettings.brandName} login`}
-      heroCaption="Made by Africans. Worn by the world."
-      heroSupportingText="African fashion marketplace — ready-to-wear, custom, and fabrics from 54 countries."
-      title="Welcome back"
-      subtitle="Sign in to access your account and continue shopping."
+      heroTitle={
+        <>
+          Made by Africans.
+          <br />
+          Worn by the world.
+        </>
+      }
+      heroSubtitle="African fashion marketplace — ready-to-wear, custom, and fabrics from 54 countries."
+      pageTitle="Welcome back"
+      pageSubtitle="Sign in to access your account and continue shopping."
     >
       {error ? (
         <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -400,17 +405,24 @@ export default function Login() {
             </Link>
           </div>
 
-          <Button type="submit" className="h-12 w-full rounded-xl bg-[#e85a3c] text-sm font-semibold text-white hover:bg-[#d14a2e]" disabled={loading}>
+          <Button
+            type="submit"
+            className="w-full h-12 bg-[#e85a3d] hover:bg-[#d14a2d] text-white font-medium rounded-lg transition-colors"
+            disabled={loading}
+          >
             {loading ? 'Signing in...' : authPageSettings.loginSubmitLabel}
             {!loading ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
           </Button>
         </form>
       )}
 
-      <div className="flex items-center gap-3 pt-1 text-[#a7a7a7]">
-        <span className="h-px flex-1 bg-[#dddddd]" />
-        <span className="text-sm">Or continue with</span>
-        <span className="h-px flex-1 bg-[#dddddd]" />
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-[#e5e5e5]" />
+        </div>
+        <div className="relative flex justify-center text-sm">
+          <span className="px-4 bg-[#faf9f7] text-[#999999]">Or continue with</span>
+        </div>
       </div>
 
       <p className="text-center text-sm text-gray-600">

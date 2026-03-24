@@ -1,82 +1,81 @@
 import { type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 
 type AuthPageShellProps = {
   brandName: string;
-  sectionLabel?: string;
   heroImage: string;
   heroImageFallback: string;
   heroAlt: string;
-  heroCaption: string;
-  heroSupportingText?: string;
-  title: string;
-  subtitle: string;
+  heroTitle: ReactNode;
+  heroSubtitle?: ReactNode;
+  pageTitle: string;
+  pageSubtitle: string;
   topSlot?: ReactNode;
-  rightFooterText?: string;
+  brandHref?: string;
+  footerText?: string;
   children: ReactNode;
 };
 
 export default function AuthPageShell({
   brandName,
-  sectionLabel = '',
   heroImage,
   heroImageFallback,
   heroAlt,
-  heroCaption,
-  heroSupportingText,
-  title,
-  subtitle,
+  heroTitle,
+  heroSubtitle,
+  pageTitle,
+  pageSubtitle,
   topSlot,
-  rightFooterText = '© 2024 Zuri Karibu. All rights reserved.',
+  brandHref = '/',
+  footerText = '© 2024 Zuri Karibu. All rights reserved.',
   children,
 }: AuthPageShellProps) {
   return (
-    <div className="min-h-screen bg-white">
-      <div className="grid min-h-screen grid-cols-1 md:grid-cols-2">
-        <div className="relative h-[320px] md:h-auto">
-          <img
-            src={heroImage}
-            alt={heroAlt}
-            className="h-full w-full object-cover"
-            onError={(event) => {
-              if (event.currentTarget.src !== heroImageFallback) {
-                event.currentTarget.src = heroImageFallback;
-              }
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0f1116]/78 via-[#0f1116]/28 to-[#0f1116]/15" />
-          <div className="absolute left-8 top-8">
-            <p className="text-[2rem] font-extrabold tracking-wide text-white sm:text-4xl">
+    <div className="min-h-screen flex">
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#1a1a2e]/80 via-[#16213e]/60 to-transparent z-10" />
+        <img
+          src={heroImage}
+          alt={heroAlt}
+          className="absolute inset-0 w-full h-full object-cover"
+          onError={(event) => {
+            if (event.currentTarget.src !== heroImageFallback) {
+              event.currentTarget.src = heroImageFallback;
+            }
+          }}
+        />
+        <div className="relative z-20 flex flex-col justify-between p-12 text-white w-full">
+          <div>
+            <Link to={brandHref} className="text-2xl font-bold tracking-wider">
               {String(brandName || 'ZURIKARIBU').toUpperCase()}
-            </p>
-            {sectionLabel ? (
-              <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-white/70">
-                {sectionLabel}
-              </p>
-            ) : null}
+            </Link>
           </div>
-          <div className="absolute bottom-8 left-8 right-8">
-            <p className="max-w-[18ch] text-4xl font-extrabold leading-[1.06] text-white sm:text-5xl">
-              {heroCaption}
-            </p>
-            {heroSupportingText ? (
-              <p className="mt-4 max-w-[38ch] text-lg leading-relaxed text-white/82">
-                {heroSupportingText}
-              </p>
-            ) : null}
+          <div className="space-y-4">
+            <h2 className="text-4xl font-bold leading-tight">{heroTitle}</h2>
+            {heroSubtitle ? <p className="text-white/80 max-w-md">{heroSubtitle}</p> : null}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 flex flex-col bg-[#faf9f7]">
+        <div className="lg:hidden p-6">
+          <Link to={brandHref} className="text-xl font-bold tracking-wider text-[#1a1a1a]">
+            {String(brandName || 'ZURIKARIBU').toUpperCase()}
+          </Link>
+        </div>
+
+        <div className="flex-1 flex flex-col justify-center px-8 sm:px-12 lg:px-16 xl:px-24 py-12">
+          <div className="max-w-md w-full mx-auto space-y-6">
+            {topSlot}
+            <div className="space-y-2">
+              <h1 className="text-3xl font-bold text-[#1a1a1a]">{pageTitle}</h1>
+              <p className="text-[#666666]">{pageSubtitle}</p>
+            </div>
+            {children}
           </div>
         </div>
 
-        <div className="flex min-h-[calc(100vh-320px)] flex-col bg-[#f7f7f7] px-6 py-8 sm:px-12 md:min-h-screen md:px-16 md:py-10">
-          <div className="mx-auto flex w-full max-w-[460px] flex-1 flex-col">
-            {topSlot ? <div className="mb-8">{topSlot}</div> : <div className="mb-2" />}
-            <div>
-              <h1 className="text-[2.9rem] font-bold leading-[1.04] tracking-tight text-[#141414]">{title}</h1>
-              <p className="mt-3 text-lg text-[#565656]">{subtitle}</p>
-            </div>
-            <div className="mt-8 space-y-5">{children}</div>
-            <p className="mt-auto pt-10 text-center text-xs text-[#999999]">{rightFooterText}</p>
-          </div>
-        </div>
+        <div className="py-6 text-center text-sm text-[#999999]">{footerText}</div>
       </div>
     </div>
   );
