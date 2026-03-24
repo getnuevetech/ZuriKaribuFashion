@@ -20,35 +20,46 @@
           '/ctw': '/custom',
           '/contact': '/contact',
           '/contact-us': '/contact',
-          '/login': '/login',
-          '/auth/login': '/login',
-          '/signin': '/login',
-          '/sign-in': '/login',
-          '/register': '/register',
-          '/auth/register': '/register',
-          '/signup': '/register',
-          '/sign-up': '/register',
-          '/forgot-password': '/forgot-password',
-          '/auth/forgot-password': '/forgot-password',
-          '/reset-password': '/reset-password',
-          '/auth/reset-password': '/reset-password'
+          '/login': '/auth/login',
+          '/auth/login': '/auth/login',
+          '/signin': '/auth/login',
+          '/sign-in': '/auth/login',
+          '/register': '/auth/register',
+          '/auth/register': '/auth/register',
+          '/signup': '/auth/register',
+          '/sign-up': '/auth/register',
+          '/forgot-password': '/auth/forgot-password',
+          '/auth/forgot-password': '/auth/forgot-password',
+          '/reset-password': '/auth/reset-password',
+          '/auth/reset-password': '/auth/reset-password'
         };
 
         var normalizeHashPath = function (hashValue) {
           var value = String(hashValue || '').trim();
           if (!value) return '';
           if (value.indexOf('#') === 0) value = value.slice(1);
+          try {
+            value = decodeURIComponent(value);
+          } catch (_error) {}
           // Normalize malformed static hashes like "#/#signin" or "#/#/signin".
           value = value.replace(/^\/#\/?/, '/');
           value = value.replace(/^#\/?/, '/');
           if (value.indexOf('/') !== 0) value = '/' + value;
+          value = value.replace(/\/{2,}/g, '/');
+          var queryIndex = value.indexOf('?');
+          var pathPart = queryIndex >= 0 ? value.slice(0, queryIndex) : value;
+          var queryPart = queryIndex >= 0 ? value.slice(queryIndex) : '';
+          pathPart = pathPart.replace(/\/+$/, '');
+          if (!pathPart) pathPart = '/';
+          value = pathPart + queryPart;
           return value;
         };
 
         var redirectFromHash = function () {
           var rawHash = String(window.location.hash || '').trim();
-          if (!rawHash || rawHash.indexOf('#/') !== 0) return;
+          if (!rawHash) return;
           var value = normalizeHashPath(rawHash);
+          if (!value) return;
           var queryIndex = value.indexOf('?');
           var pathPart = (queryIndex >= 0 ? value.slice(0, queryIndex) : value).toLowerCase();
           var queryPart = queryIndex >= 0 ? value.slice(queryIndex) : '';
@@ -57,6 +68,27 @@
           window.location.replace(target + queryPart);
         };
 
+        document.addEventListener(
+          'click',
+          function (event) {
+            var node = event.target;
+            while (node && node.tagName !== 'A') node = node.parentElement;
+            if (!node) return;
+            var href = String(node.getAttribute('href') || '').trim().toLowerCase();
+            if (
+              href === '#/#signin' ||
+              href === '#/signin' ||
+              href === '#signin' ||
+              href === '#/#sign-in' ||
+              href === '#/sign-in' ||
+              href === '#sign-in'
+            ) {
+              event.preventDefault();
+              window.location.replace('/auth/login');
+            }
+          },
+          true
+        );
         window.addEventListener('hashchange', redirectFromHash);
         redirectFromHash();
       })();

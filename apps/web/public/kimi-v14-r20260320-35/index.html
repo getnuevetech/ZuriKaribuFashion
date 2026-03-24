@@ -56,6 +56,18 @@
           }
           // Collapse repeated leading slashes after cleanup.
           normalized = normalized.replace(/^\/+/, '/');
+          if (normalized === '/signin' || normalized === '/sign-in' || normalized === '/auth/login') {
+            return '/login';
+          }
+          if (normalized === '/signup' || normalized === '/sign-up' || normalized === '/auth/register') {
+            return '/register';
+          }
+          if (normalized === '/auth/forgot-password') {
+            return '/forgot-password';
+          }
+          if (normalized === '/auth/reset-password') {
+            return '/reset-password';
+          }
           return normalized;
         };
 
