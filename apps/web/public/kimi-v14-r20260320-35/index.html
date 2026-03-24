@@ -42,10 +42,29 @@
           '/reset-password': '/reset-password',
           '/auth/reset-password': '/reset-password'
         };
+        var normalizeHashPath = function (value) {
+          var normalized = String(value || '').trim();
+          // Some links emit malformed patterns like "#/#signin" or "#/#/signin".
+          if (normalized.indexOf('/#/') === 0) {
+            normalized = normalized.slice(2);
+          }
+          if (normalized.indexOf('#/') === 0) {
+            normalized = normalized.slice(1);
+          }
+          if (normalized.indexOf('/') !== 0) {
+            normalized = '/' + normalized;
+          }
+          // Collapse repeated leading slashes after cleanup.
+          normalized = normalized.replace(/^\/+/, '/');
+          return normalized;
+        };
+
         var redirectFromHash = function () {
           var rawHash = String(window.location.hash || '').trim();
-          if (!rawHash || rawHash.indexOf('#/') !== 0) return;
+          if (!rawHash) return;
           var value = rawHash.slice(1);
+          if (!value) return;
+          value = normalizeHashPath(value);
           var queryIndex = value.indexOf('?');
           var pathPart = (queryIndex >= 0 ? value.slice(0, queryIndex) : value).toLowerCase();
           var queryPart = queryIndex >= 0 ? value.slice(queryIndex) : '';

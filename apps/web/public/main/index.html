@@ -34,10 +34,21 @@
           '/auth/reset-password': '/reset-password'
         };
 
+        var normalizeHashPath = function (hashValue) {
+          var value = String(hashValue || '').trim();
+          if (!value) return '';
+          if (value.indexOf('#') === 0) value = value.slice(1);
+          // Normalize malformed static hashes like "#/#signin" or "#/#/signin".
+          value = value.replace(/^\/#\/?/, '/');
+          value = value.replace(/^#\/?/, '/');
+          if (value.indexOf('/') !== 0) value = '/' + value;
+          return value;
+        };
+
         var redirectFromHash = function () {
           var rawHash = String(window.location.hash || '').trim();
           if (!rawHash || rawHash.indexOf('#/') !== 0) return;
-          var value = rawHash.slice(1);
+          var value = normalizeHashPath(rawHash);
           var queryIndex = value.indexOf('?');
           var pathPart = (queryIndex >= 0 ? value.slice(0, queryIndex) : value).toLowerCase();
           var queryPart = queryIndex >= 0 ? value.slice(queryIndex) : '';
