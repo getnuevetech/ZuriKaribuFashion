@@ -9,6 +9,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 
 // Public Pages
 import Home from './pages/Home';
+import HomeEntry from './pages/HomeEntry';
 import CountryProducts from './pages/CountryProducts';
 import ReadyToWear from './pages/ReadyToWear';
 import ReadyToWearDetail from './pages/ReadyToWearDetail';
@@ -158,16 +159,16 @@ function App() {
       <Elements stripe={stripePromise}>
         <Router>
           <Routes>
-            <Route path="/" element={<NavigateWithSearch to="/home" />} />
+            <Route path="/" element={<HomeEntry />} />
             <Route path="/main" element={<JenksV14Redirect />} />
             <Route path="/main/" element={<JenksV14Redirect />} />
-            <Route path="/jenks" element={<NavigateWithSearch to="/home" />} />
+            <Route path="/jenks" element={<JenksV14Redirect />} />
             <Route path="/home-jenks-static" element={<JenksV14Redirect />} />
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
               <Route path="/home-legacy" element={<NavigateWithSearch to="/home" />} />
-              <Route path="/home" element={<Home />} />
+              <Route path="/home" element={<JenksV14Redirect />} />
               <Route path="/home-live" element={<NavigateWithSearch to="/home" />} />
               <Route path="/jenks-dynamic" element={<NavigateWithSearch to="/home" />} />
               <Route path="/home-jenks" element={<NavigateWithSearch to="/home" />} />
