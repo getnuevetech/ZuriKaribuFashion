@@ -35,6 +35,7 @@
   }
 
   var ENDPOINTS = buildEndpointCandidates();
+  var DEBUG_FORCED_VISIBLE = false;
   var DEBUG_ENABLED = (function () {
     try {
       var search = typeof window !== "undefined" ? String(window.location.search || "") : "";
@@ -83,7 +84,7 @@
   };
 
   function getDebugOverlay() {
-    if (!DEBUG_ENABLED || typeof document === "undefined") return null;
+    if ((!DEBUG_ENABLED && !DEBUG_FORCED_VISIBLE) || typeof document === "undefined") return null;
     var existing = document.getElementById("jenks-bridge-debug-overlay");
     if (existing) return existing;
     var overlay = document.createElement("div");
@@ -452,6 +453,7 @@
       if (index >= ENDPOINTS.length) {
         DEBUG_STATE.fetchStatus = "failed";
         if (!DEBUG_STATE.lastError) DEBUG_STATE.lastError = "all endpoint attempts failed";
+        DEBUG_FORCED_VISIBLE = true;
         renderDebugOverlay();
         return Promise.resolve(null);
       }
@@ -469,6 +471,7 @@
           });
           if (!response.ok) {
             DEBUG_STATE.lastError = "HTTP " + String(response.status) + " from " + endpoint;
+            DEBUG_FORCED_VISIBLE = true;
             renderDebugOverlay();
             return tryAt(index + 1);
           }
@@ -478,6 +481,7 @@
             var normalized = normalizeConfig(payload);
             if (!normalized) {
               DEBUG_STATE.lastError = "empty/invalid payload from " + endpoint;
+              DEBUG_FORCED_VISIBLE = true;
               renderDebugOverlay();
               return tryAt(index + 1);
             }
@@ -492,6 +496,7 @@
             status: "network_error"
           });
           DEBUG_STATE.lastError = "network error at " + endpoint + ": " + String((error && error.message) || error || "unknown");
+          DEBUG_FORCED_VISIBLE = true;
           renderDebugOverlay();
           return tryAt(index + 1);
         });
