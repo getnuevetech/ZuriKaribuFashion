@@ -29,6 +29,15 @@
         tryAddBase(window.location.origin + "/api");
       }
     } catch (_error2) {}
+    // Optional explicit public API override (can be injected in HTML if needed).
+    try {
+      if (typeof window !== "undefined" && window.__AF_API_BASE__) {
+        tryAddBase(window.__AF_API_BASE__);
+      }
+    } catch (_error3) {}
+    // Safety fallbacks for known hosted API origins.
+    tryAddBase("https://african-fashion-new.up.railway.app/api");
+    tryAddBase("https://african-fashion-api.onrender.com/api");
     // Final fallback for relative same-origin APIs
     tryAddBase("/api");
     return candidates;
@@ -46,13 +55,13 @@
     try {
       var stored = typeof window !== "undefined" ? window.localStorage.getItem("af_debug_frontpage_bridge") : "";
       if (String(stored || "").trim() === "1") return true;
-    } catch (_error2) {}
+    } catch (_error4) {}
     try {
       if (typeof window !== "undefined") {
         var host = String((window.location && window.location.hostname) || "").toLowerCase();
         if (host === "localhost" || host === "127.0.0.1") return true;
       }
-    } catch (_error3) {}
+    } catch (_error5) {}
     return false;
   })();
   var DEBUG_STATE = {
@@ -477,6 +486,12 @@
           }
           DEBUG_STATE.selectedEndpoint = endpoint;
           DEBUG_STATE.selectedStatusCode = String(response.status);
+          var contentType = String(response.headers.get("content-type") || "").toLowerCase();
+          if (contentType.indexOf("application/json") === -1) {
+            DEBUG_STATE.lastError = "non-json response from " + endpoint + " (" + contentType + ")";
+            renderDebugOverlay();
+            return tryAt(index + 1);
+          }
           return response.json().then(function (payload) {
             var normalized = normalizeConfig(payload);
             if (!normalized) {
