@@ -960,7 +960,7 @@ const heroBannerUpdateSchema = z.object({
   id: z.string().trim().min(1).max(120).optional(),
   enabled: z.boolean().optional(),
   displayOrder: z.number().int().min(0).max(100).optional(),
-  image: z.string().trim().min(1).max(2000).optional(),
+  image: z.string().trim().max(2000).optional(),
   eyebrow: z.string().trim().max(80).optional(),
   badge: z.string().trim().max(80).optional(),
   title: z.string().trim().min(1).max(140).optional(),

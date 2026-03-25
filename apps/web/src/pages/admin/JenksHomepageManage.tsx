@@ -442,6 +442,10 @@ const toNumber = (value: string, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const isValidHexColor = (value: string) => /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(String(value || '').trim());
+
+const normalizeColorOrDefault = (value: string, fallback: string) => (isValidHexColor(value) ? value.trim() : fallback);
+
 export default function AdminJenksHomepageManage() {
   const [config, setConfig] = useState<JenksHomepageConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
@@ -580,10 +584,50 @@ export default function AdminJenksHomepageManage() {
     setError('');
     setSuccess('');
     try {
+      const normalizedExperience = {
+        ...config.experience,
+        trustBadges: (config.experience.trustBadges || []).map((badge) => {
+          const nextBadge: TrustBadge = {
+            ...badge,
+            title: String(badge.title || '').slice(0, 48),
+            subtitle: String(badge.subtitle || '').slice(0, 90),
+            enabled: badge.enabled !== false,
+          };
+          if (!nextBadge.titleColor || !isValidHexColor(nextBadge.titleColor)) delete nextBadge.titleColor;
+          if (!nextBadge.subtitleColor || !isValidHexColor(nextBadge.subtitleColor)) delete nextBadge.subtitleColor;
+          if (!nextBadge.iconColor || !isValidHexColor(nextBadge.iconColor)) delete nextBadge.iconColor;
+          if (!nextBadge.cardBackgroundColor || !isValidHexColor(nextBadge.cardBackgroundColor)) delete nextBadge.cardBackgroundColor;
+          if (!nextBadge.cardBorderColor || !isValidHexColor(nextBadge.cardBorderColor)) delete nextBadge.cardBorderColor;
+          return nextBadge;
+        }),
+        trustBadgeStyle: {
+          ...config.experience.trustBadgeStyle,
+          titleColor: normalizeColorOrDefault(
+            config.experience.trustBadgeStyle.titleColor,
+            DEFAULT_CONFIG.experience.trustBadgeStyle.titleColor
+          ),
+          subtitleColor: normalizeColorOrDefault(
+            config.experience.trustBadgeStyle.subtitleColor,
+            DEFAULT_CONFIG.experience.trustBadgeStyle.subtitleColor
+          ),
+          iconColor: normalizeColorOrDefault(
+            config.experience.trustBadgeStyle.iconColor,
+            DEFAULT_CONFIG.experience.trustBadgeStyle.iconColor
+          ),
+          cardBackgroundColor: normalizeColorOrDefault(
+            config.experience.trustBadgeStyle.cardBackgroundColor,
+            DEFAULT_CONFIG.experience.trustBadgeStyle.cardBackgroundColor
+          ),
+          cardBorderColor: normalizeColorOrDefault(
+            config.experience.trustBadgeStyle.cardBorderColor,
+            DEFAULT_CONFIG.experience.trustBadgeStyle.cardBorderColor
+          ),
+        },
+      };
       const payload = {
         sections: { visibility: config.sections.visibility },
         topStrip: config.topStrip,
-        experience: config.experience,
+        experience: normalizedExperience,
         navigation: config.navigation,
         hero: config.hero,
         shopByBlocks: config.shopByBlocks,
@@ -597,7 +641,15 @@ export default function AdminJenksHomepageManage() {
       setSuccess('Jenks homepage config saved successfully.');
       await fetchConfig();
     } catch (saveError: any) {
-      setError(saveError?.response?.data?.message || saveError?.message || 'Failed to save config.');
+      const issues = saveError?.response?.data?.issues;
+      if (Array.isArray(issues) && issues.length > 0) {
+        const first = issues[0];
+        const path = Array.isArray(first?.path) ? first.path.join('.') : '';
+        const message = String(first?.message || 'Validation failed');
+        setError(path ? `Validation failed at "${path}": ${message}` : `Validation failed: ${message}`);
+      } else {
+        setError(saveError?.response?.data?.message || saveError?.message || 'Failed to save config.');
+      }
     } finally {
       setSaving(false);
     }
