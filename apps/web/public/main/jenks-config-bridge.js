@@ -1,10 +1,40 @@
 /* eslint-disable no-console */
 (function () {
-  var ENDPOINTS = [
-    "/api/jenks-homepage/config",
-    "/api/homepage-sections/jenks-config",
-    "/api/homepage-sections/config"
-  ];
+  function buildEndpointCandidates() {
+    var candidates = [];
+    var triedBases = {};
+    var triedUrls = {};
+    var suffixes = [
+      "/jenks-homepage/config",
+      "/homepage-sections/jenks-config",
+      "/homepage-sections/config"
+    ];
+    var tryAddBase = function (baseCandidate) {
+      var base = String(baseCandidate || "").trim().replace(/\/+$/, "");
+      if (!base || triedBases[base]) return;
+      triedBases[base] = true;
+      for (var i = 0; i < suffixes.length; i += 1) {
+        var full = base + suffixes[i];
+        if (triedUrls[full]) continue;
+        triedUrls[full] = true;
+        candidates.push(full);
+      }
+    };
+    try {
+      var storedBase = typeof window !== "undefined" ? window.localStorage.getItem("af_api_base") : "";
+      if (storedBase) tryAddBase(storedBase);
+    } catch (_error) {}
+    try {
+      if (typeof window !== "undefined" && window.location && window.location.origin) {
+        tryAddBase(window.location.origin + "/api");
+      }
+    } catch (_error2) {}
+    // Final fallback for relative same-origin APIs
+    tryAddBase("/api");
+    return candidates;
+  }
+
+  var ENDPOINTS = buildEndpointCandidates();
 
   var SELECTORS = {
     navigation: 'header[code-path^="src/sections/Navigation.tsx:68:7"]',
@@ -312,15 +342,24 @@
 
   function applyConfig(config) {
     if (!config) return false;
-    applyNavigation(config);
-    applySectionVisibility(config);
-    applyHeroBanners(config);
-    applyTrustBadges(config);
-    applyCopy(config);
-    applyShopBy(config);
-    applyFreshDrops(config);
-    applyCta(config);
-    applyNewsletter(config);
+    var runners = [
+      applyNavigation,
+      applySectionVisibility,
+      applyHeroBanners,
+      applyTrustBadges,
+      applyCopy,
+      applyShopBy,
+      applyFreshDrops,
+      applyCta,
+      applyNewsletter
+    ];
+    for (var i = 0; i < runners.length; i += 1) {
+      try {
+        runners[i](config);
+      } catch (_error) {
+        // Keep applying remaining sections even when one mapper fails.
+      }
+    }
     return true;
   }
 

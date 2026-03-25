@@ -6,6 +6,16 @@ const defaultApiUrl = import.meta.env.DEV
   ? 'http://localhost:3001/api'
   : `${window.location.origin}/api`;
 const API_URL = import.meta.env.VITE_API_URL || defaultApiUrl;
+if (typeof window !== 'undefined') {
+  try {
+    const normalizedApiBase = String(API_URL || '').trim();
+    if (normalizedApiBase) {
+      window.localStorage.setItem('af_api_base', normalizedApiBase);
+    }
+  } catch {
+    // Non-blocking: bridge can still rely on same-origin /api fallback.
+  }
+}
 const resolveApiAssetUrl = (value: unknown): string => {
   const raw = String(value || '').trim();
   if (!raw) return '';
