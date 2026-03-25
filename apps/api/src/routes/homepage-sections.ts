@@ -931,6 +931,7 @@ const newsletterSettingsUpdateSchema = z.object({
 const navigationMenuLinkUpdateSchema = z.object({
   label: z.string().trim().min(1).max(40),
   href: z.string().trim().min(1).max(260),
+  routeKey: z.string().trim().max(120).optional(),
   enabled: z.boolean().default(true),
 });
 const navigationSettingsUpdateSchema = z.object({
@@ -955,12 +956,45 @@ const heroQuickLinkUpdateSchema = z.object({
   label: z.string().trim().min(1).max(32),
   href: z.string().trim().min(1).max(260),
 });
+const heroBannerUpdateSchema = z.object({
+  id: z.string().trim().min(1).max(120).optional(),
+  enabled: z.boolean().optional(),
+  displayOrder: z.number().int().min(0).max(100).optional(),
+  image: z.string().trim().min(1).max(2000).optional(),
+  eyebrow: z.string().trim().max(80).optional(),
+  badge: z.string().trim().max(80).optional(),
+  title: z.string().trim().min(1).max(140).optional(),
+  text: z.string().trim().max(220).optional(),
+  subtitle: z.string().trim().max(220).optional(),
+  description: z.string().trim().max(360).optional(),
+  primaryCtaText: z.string().trim().max(80).optional(),
+  primaryCtaLink: z.string().trim().max(260).optional(),
+  secondaryCtaText: z.string().trim().max(80).optional(),
+  secondaryCtaLink: z.string().trim().max(260).optional(),
+});
 const heroSettingsUpdateSchema = z.object({
   rotationSeconds: z.number().int().min(3).max(20).optional(),
   forceUppercaseCtas: z.boolean().optional(),
   ctaTarget: z.enum(['SAME_TAB', 'NEW_TAB']).optional(),
   showQuickLinks: z.boolean().optional(),
   quickLinks: z.array(heroQuickLinkUpdateSchema).max(8).optional(),
+  banners: z.array(heroBannerUpdateSchema).max(10).optional(),
+});
+const trustBadgeStyleUpdateSchema = z.object({
+  sectionTitle: z.string().trim().max(80).optional(),
+  sectionSubtitle: z.string().trim().max(180).optional(),
+  layoutColumns: z.number().int().min(1).max(6).optional(),
+  arrangement: z.enum(['GRID', 'ROW']).optional(),
+  titleColor: z.string().trim().max(32).optional(),
+  subtitleColor: z.string().trim().max(32).optional(),
+  iconColor: z.string().trim().max(32).optional(),
+  cardBackgroundColor: z.string().trim().max(32).optional(),
+  cardBorderColor: z.string().trim().max(32).optional(),
+  titleFontSize: z.number().int().min(8).max(64).optional(),
+  subtitleFontSize: z.number().int().min(8).max(64).optional(),
+  iconSize: z.number().int().min(8).max(120).optional(),
+  maxTitleWords: z.number().int().min(1).max(20).optional(),
+  maxSubtitleWords: z.number().int().min(1).max(40).optional(),
 });
 const newsletterSubscribeSchema = z.object({
   email: z.string().trim().email().max(200),
@@ -1027,12 +1061,23 @@ const homepageExperienceSettingsUpdateSchema = z.object({
         title: z.string().trim().min(1).max(48),
         subtitle: z.string().trim().min(1).max(90),
         icon: z.enum(HOMEPAGE_TRUST_BADGE_ICONS).optional(),
+        titleColor: z.string().trim().max(32).optional(),
+        subtitleColor: z.string().trim().max(32).optional(),
+        iconColor: z.string().trim().max(32).optional(),
+        cardBackgroundColor: z.string().trim().max(32).optional(),
+        cardBorderColor: z.string().trim().max(32).optional(),
+        titleFontSize: z.number().int().min(8).max(64).optional(),
+        subtitleFontSize: z.number().int().min(8).max(64).optional(),
+        iconSize: z.number().int().min(8).max(120).optional(),
+        maxTitleWords: z.number().int().min(1).max(20).optional(),
+        maxSubtitleWords: z.number().int().min(1).max(40).optional(),
         enabled: z.boolean().optional(),
       })
     )
     .min(1)
     .max(6)
     .optional(),
+  trustBadgeStyle: trustBadgeStyleUpdateSchema.optional(),
   jenksCopy: z
     .object({
       heroEyebrow: z.string().trim().min(1).max(40).optional(),
@@ -1146,6 +1191,7 @@ type NewsletterSettings = {
 type HomepageNavigationMenuLink = {
   label: string;
   href: string;
+  routeKey?: string;
   enabled: boolean;
 };
 type HomepageNavigationSettings = {
@@ -1170,12 +1216,32 @@ type HeroQuickLink = {
   label: string;
   href: string;
 };
+type HomepageHeroBanner = {
+  id: string;
+  enabled: boolean;
+  displayOrder: number;
+  image: string;
+  eyebrow: string;
+  badge: string;
+  title: string;
+  text: string;
+  subtitle: string;
+  description: string;
+  primaryCtaText: string;
+  primaryCtaLink: string;
+  secondaryCtaText: string;
+  secondaryCtaLink: string;
+};
 type HomepageHeroSettings = {
   rotationSeconds: number;
   forceUppercaseCtas: boolean;
   ctaTarget: 'SAME_TAB' | 'NEW_TAB';
   showQuickLinks: boolean;
   quickLinks: HeroQuickLink[];
+  banners: HomepageHeroBanner[];
+};
+type HomepageHeroSettingsPatch = Omit<Partial<HomepageHeroSettings>, 'banners'> & {
+  banners?: Array<Partial<HomepageHeroBanner>>;
 };
 type AuthPageSettings = {
   brandName: string;
@@ -1226,7 +1292,33 @@ type HomepageTrustBadge = {
   title: string;
   subtitle: string;
   icon: HomepageTrustBadgeIcon;
+  titleColor?: string;
+  subtitleColor?: string;
+  iconColor?: string;
+  cardBackgroundColor?: string;
+  cardBorderColor?: string;
+  titleFontSize?: number;
+  subtitleFontSize?: number;
+  iconSize?: number;
+  maxTitleWords?: number;
+  maxSubtitleWords?: number;
   enabled: boolean;
+};
+type HomepageTrustBadgeStyle = {
+  sectionTitle: string;
+  sectionSubtitle: string;
+  layoutColumns: number;
+  arrangement: 'GRID' | 'ROW';
+  titleColor: string;
+  subtitleColor: string;
+  iconColor: string;
+  cardBackgroundColor: string;
+  cardBorderColor: string;
+  titleFontSize: number;
+  subtitleFontSize: number;
+  iconSize: number;
+  maxTitleWords: number;
+  maxSubtitleWords: number;
 };
 type HomepageJenksCopy = {
   heroEyebrow: string;
@@ -1260,10 +1352,12 @@ type HomepageExperienceSettings = {
   legacyHomepageEnabled: boolean;
   requireReasonForRuntimeActions: boolean;
   trustBadges: HomepageTrustBadge[];
+  trustBadgeStyle: HomepageTrustBadgeStyle;
   jenksCopy: HomepageJenksCopy;
 };
-type HomepageExperienceSettingsPatch = Omit<Partial<HomepageExperienceSettings>, 'trustBadges' | 'jenksCopy'> & {
+type HomepageExperienceSettingsPatch = Omit<Partial<HomepageExperienceSettings>, 'trustBadges' | 'jenksCopy' | 'trustBadgeStyle'> & {
   trustBadges?: Array<Partial<HomepageTrustBadge>>;
+  trustBadgeStyle?: Partial<HomepageTrustBadgeStyle>;
   jenksCopy?: Partial<HomepageJenksCopy>;
 };
 type HomepageRuntimeSnapshot = Pick<
@@ -1408,24 +1502,24 @@ const NAVIGATION_SETTINGS_DEFAULTS: HomepageNavigationSettings = {
   logoWidth: 180,
   logoHeight: 48,
   leftMenuLinks: [
-    { label: 'Home', href: '/', enabled: true },
-    { label: 'Ready To Wear', href: '/ready-to-wear', enabled: true },
-    { label: 'Fabric To Buy', href: '/fabrics', enabled: true },
-    { label: 'Custom To Wear', href: '/custom', enabled: true },
+    { label: 'Home', href: '/', routeKey: 'HOME', enabled: true },
+    { label: 'Ready To Wear', href: '/ready-to-wear', routeKey: 'READY_TO_WEAR', enabled: true },
+    { label: 'Fabric To Buy', href: '/fabrics', routeKey: 'FABRICS', enabled: true },
+    { label: 'Custom To Wear', href: '/custom', routeKey: 'CUSTOM_TO_WEAR', enabled: true },
   ],
   rightMenuLinks: [
-    { label: 'Shop', href: '/shop', enabled: true },
-    { label: 'About Us', href: '/#about', enabled: true },
-    { label: 'Contact Us', href: '/contact', enabled: true },
+    { label: 'Shop', href: '/shop', routeKey: 'SHOP', enabled: true },
+    { label: 'About Us', href: '/#about', routeKey: 'ABOUT', enabled: true },
+    { label: 'Contact Us', href: '/contact', routeKey: 'CONTACT', enabled: true },
   ],
   hamburgerMenuLinks: [
-    { label: 'Home', href: '/', enabled: true },
-    { label: 'Shop', href: '/shop', enabled: true },
-    { label: 'Ready To Wear', href: '/ready-to-wear', enabled: true },
-    { label: 'Fabric To Buy', href: '/fabrics', enabled: true },
-    { label: 'Custom To Wear', href: '/custom', enabled: true },
-    { label: 'About Us', href: '/#about', enabled: true },
-    { label: 'Contact Us', href: '/contact', enabled: true },
+    { label: 'Home', href: '/', routeKey: 'HOME', enabled: true },
+    { label: 'Shop', href: '/shop', routeKey: 'SHOP', enabled: true },
+    { label: 'Ready To Wear', href: '/ready-to-wear', routeKey: 'READY_TO_WEAR', enabled: true },
+    { label: 'Fabric To Buy', href: '/fabrics', routeKey: 'FABRICS', enabled: true },
+    { label: 'Custom To Wear', href: '/custom', routeKey: 'CUSTOM_TO_WEAR', enabled: true },
+    { label: 'About Us', href: '/#about', routeKey: 'ABOUT', enabled: true },
+    { label: 'Contact Us', href: '/contact', routeKey: 'CONTACT', enabled: true },
   ],
   showHamburger: true,
   showSearchIcon: true,
@@ -1435,6 +1529,25 @@ const NAVIGATION_SETTINGS_DEFAULTS: HomepageNavigationSettings = {
   showExperienceModeSelector: true,
   showThemeModeSelector: true,
 };
+const HERO_BANNERS_DEFAULTS: HomepageHeroBanner[] = [
+  {
+    id: 'hero-banner-1',
+    enabled: true,
+    displayOrder: 0,
+    image: '',
+    eyebrow: 'Editorial premium',
+    badge: 'New season',
+    title: 'Wear the story of Africa',
+    text: 'Curated fashion from top designers and textile houses.',
+    subtitle: 'Ready-to-wear, fabrics, and custom looks in one destination.',
+    description:
+      'Discover modern African style with trusted sellers, quality curation, and flexible shopping paths.',
+    primaryCtaText: 'SHOP NOW',
+    primaryCtaLink: '/shop',
+    secondaryCtaText: 'EXPLORE DESIGNERS',
+    secondaryCtaLink: '/designers',
+  },
+];
 const HERO_SETTINGS_DEFAULTS: HomepageHeroSettings = {
   rotationSeconds: 6,
   forceUppercaseCtas: true,
@@ -1445,6 +1558,7 @@ const HERO_SETTINGS_DEFAULTS: HomepageHeroSettings = {
     { label: 'Custom', href: '/custom' },
     { label: 'Fabrics', href: '/fabrics' },
   ],
+  banners: HERO_BANNERS_DEFAULTS.map((item) => ({ ...item })),
 };
 const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettings = {
   brandName: 'ZuriKaribu',
@@ -1508,6 +1622,22 @@ const HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS: HomepageExperienceSettings = {
     { icon: 'REFRESH_CW', title: 'Easy Returns', subtitle: 'Simple returns on eligible orders', enabled: true },
     { icon: 'HEADPHONES', title: '24/7 Support', subtitle: 'Chat and ticket support anytime', enabled: true },
   ],
+  trustBadgeStyle: {
+    sectionTitle: 'Why shoppers trust us',
+    sectionSubtitle: 'Reliability, service, and quality built into every order.',
+    layoutColumns: 4,
+    arrangement: 'GRID',
+    titleColor: '#0f172a',
+    subtitleColor: '#475569',
+    iconColor: '#0f172a',
+    cardBackgroundColor: '#ffffff',
+    cardBorderColor: '#e2e8f0',
+    titleFontSize: 18,
+    subtitleFontSize: 14,
+    iconSize: 20,
+    maxTitleWords: 4,
+    maxSubtitleWords: 10,
+  },
   jenksCopy: {
     heroEyebrow: 'Editorial premium',
     shopByEyebrow: 'Discover',
@@ -1644,6 +1774,13 @@ const normalizeHref = (value: unknown, fallback: string) => {
   if (!raw.startsWith('/')) return fallback;
   return raw;
 };
+const normalizeRouteKey = (value: unknown): string | undefined => {
+  const raw = getString(value);
+  if (!raw) return undefined;
+  const normalized = raw.trim().slice(0, 120);
+  if (!/^[A-Za-z0-9_:/-]+$/.test(normalized)) return undefined;
+  return normalized;
+};
 const normalizeShopByOption = (value: unknown): ShopByOption | null => {
   if (!value || typeof value !== 'object') return null;
   const row = value as Record<string, unknown>;
@@ -1739,6 +1876,7 @@ const normalizeNavigationMenuLinks = (
       return {
         label: label.slice(0, 40),
         href: normalizeHref(href, '/'),
+        routeKey: normalizeRouteKey(row.routeKey),
         enabled: getBoolean(row.enabled) ?? true,
       } as HomepageNavigationMenuLink;
     })
@@ -1795,21 +1933,65 @@ const normalizeHeroQuickLinks = (value: unknown, fallback: HeroQuickLink[]): Her
     .slice(0, 8);
   return mapped.length > 0 ? mapped : fallback.map((entry) => ({ ...entry }));
 };
+const normalizeHeroBanner = (
+  value: unknown,
+  fallback: HomepageHeroBanner,
+  index: number
+): HomepageHeroBanner | null => {
+  if (!value || typeof value !== 'object') return { ...fallback };
+  const row = value as Record<string, unknown>;
+  const title = (getString(row.title) || fallback.title).slice(0, 140);
+  const description = (getString(row.description) || fallback.description).slice(0, 360);
+  const text = (getString(row.text) || fallback.text).slice(0, 220);
+  const subtitle = (getString(row.subtitle) || fallback.subtitle).slice(0, 220);
+  const image = (getString(row.image) || fallback.image).slice(0, 2000);
+  if (!title && !description && !text && !subtitle && !image) return null;
+  return {
+    id: (getString(row.id) || fallback.id || `hero-banner-${index + 1}`).slice(0, 120),
+    enabled: getBoolean(row.enabled) ?? fallback.enabled,
+    displayOrder: Math.max(0, Math.min(100, Math.round(getNumber(row.displayOrder) ?? fallback.displayOrder))),
+    image,
+    eyebrow: (getString(row.eyebrow) || fallback.eyebrow).slice(0, 80),
+    badge: (getString(row.badge) || fallback.badge).slice(0, 80),
+    title,
+    text,
+    subtitle,
+    description,
+    primaryCtaText: (getString(row.primaryCtaText) || fallback.primaryCtaText).slice(0, 80),
+    primaryCtaLink: normalizeHref(row.primaryCtaLink, fallback.primaryCtaLink),
+    secondaryCtaText: (getString(row.secondaryCtaText) || fallback.secondaryCtaText).slice(0, 80),
+    secondaryCtaLink: normalizeHref(row.secondaryCtaLink, fallback.secondaryCtaLink),
+  };
+};
 const normalizeHeroSettings = (raw: unknown): HomepageHeroSettings => {
   if (!raw || typeof raw !== 'object') {
     return {
       ...HERO_SETTINGS_DEFAULTS,
       quickLinks: HERO_SETTINGS_DEFAULTS.quickLinks.map((entry) => ({ ...entry })),
+      banners: HERO_SETTINGS_DEFAULTS.banners.map((entry) => ({ ...entry })),
     };
   }
   const row = raw as Record<string, unknown>;
   const ctaTarget = String(row.ctaTarget || '').trim().toUpperCase() === 'NEW_TAB' ? 'NEW_TAB' : 'SAME_TAB';
+  const bannerRows = Array.isArray(row.banners) ? row.banners : [];
+  const banners = bannerRows
+    .map((entry, index) =>
+      normalizeHeroBanner(
+        entry,
+        HERO_SETTINGS_DEFAULTS.banners[index] || HERO_SETTINGS_DEFAULTS.banners[0] || HERO_BANNERS_DEFAULTS[0],
+        index
+      )
+    )
+    .filter((entry): entry is HomepageHeroBanner => Boolean(entry))
+    .sort((a, b) => a.displayOrder - b.displayOrder)
+    .slice(0, 10);
   return {
     rotationSeconds: Math.max(3, Math.min(20, Math.round(getNumber(row.rotationSeconds) ?? HERO_SETTINGS_DEFAULTS.rotationSeconds))),
     forceUppercaseCtas: getBoolean(row.forceUppercaseCtas) ?? HERO_SETTINGS_DEFAULTS.forceUppercaseCtas,
     ctaTarget,
     showQuickLinks: getBoolean(row.showQuickLinks) ?? HERO_SETTINGS_DEFAULTS.showQuickLinks,
     quickLinks: normalizeHeroQuickLinks(row.quickLinks, HERO_SETTINGS_DEFAULTS.quickLinks),
+    banners: banners.length > 0 ? banners : HERO_SETTINGS_DEFAULTS.banners.map((entry) => ({ ...entry })),
   };
 };
 const normalizeAuthPageSettings = (raw: unknown): AuthPageSettings => {
@@ -1895,6 +2077,30 @@ const normalizeEnumList = <T extends string>(
   }
   return normalized.length > 0 ? normalized : [...fallback];
 };
+const normalizeTrustBadgeStyle = (
+  raw: unknown,
+  fallback: HomepageTrustBadgeStyle = HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.trustBadgeStyle
+): HomepageTrustBadgeStyle => {
+  if (!raw || typeof raw !== 'object') return { ...fallback };
+  const row = raw as Record<string, unknown>;
+  const arrangement = String(row.arrangement || '').trim().toUpperCase() === 'ROW' ? 'ROW' : 'GRID';
+  return {
+    sectionTitle: (getString(row.sectionTitle) || fallback.sectionTitle).slice(0, 80),
+    sectionSubtitle: (getString(row.sectionSubtitle) || fallback.sectionSubtitle).slice(0, 180),
+    layoutColumns: Math.max(1, Math.min(6, Math.round(getNumber(row.layoutColumns) ?? fallback.layoutColumns))),
+    arrangement,
+    titleColor: normalizeHexColor(row.titleColor, fallback.titleColor),
+    subtitleColor: normalizeHexColor(row.subtitleColor, fallback.subtitleColor),
+    iconColor: normalizeHexColor(row.iconColor, fallback.iconColor),
+    cardBackgroundColor: normalizeHexColor(row.cardBackgroundColor, fallback.cardBackgroundColor),
+    cardBorderColor: normalizeHexColor(row.cardBorderColor, fallback.cardBorderColor),
+    titleFontSize: Math.max(8, Math.min(64, Math.round(getNumber(row.titleFontSize) ?? fallback.titleFontSize))),
+    subtitleFontSize: Math.max(8, Math.min(64, Math.round(getNumber(row.subtitleFontSize) ?? fallback.subtitleFontSize))),
+    iconSize: Math.max(8, Math.min(120, Math.round(getNumber(row.iconSize) ?? fallback.iconSize))),
+    maxTitleWords: Math.max(1, Math.min(20, Math.round(getNumber(row.maxTitleWords) ?? fallback.maxTitleWords))),
+    maxSubtitleWords: Math.max(1, Math.min(40, Math.round(getNumber(row.maxSubtitleWords) ?? fallback.maxSubtitleWords))),
+  };
+};
 
 const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSettings => {
   if (!raw || typeof raw !== 'object') return { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS };
@@ -1965,6 +2171,7 @@ const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSe
     !legacyHomepageEnabled && homepageTemplateRaw === 'LEGACY' ? 'JENKS' : homepageTemplateRaw;
 
   const trustBadgeRows = Array.isArray(row.trustBadges) ? row.trustBadges : [];
+  const trustBadgeStyle = normalizeTrustBadgeStyle(row.trustBadgeStyle, HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.trustBadgeStyle);
   const trustBadges = trustBadgeRows
     .map((entry) => {
       if (!entry || typeof entry !== 'object') return null;
@@ -1982,6 +2189,32 @@ const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSe
         icon,
         title,
         subtitle,
+        titleColor: getString(item.titleColor) ? normalizeHexColor(item.titleColor, trustBadgeStyle.titleColor) : undefined,
+        subtitleColor: getString(item.subtitleColor)
+          ? normalizeHexColor(item.subtitleColor, trustBadgeStyle.subtitleColor)
+          : undefined,
+        iconColor: getString(item.iconColor) ? normalizeHexColor(item.iconColor, trustBadgeStyle.iconColor) : undefined,
+        cardBackgroundColor: getString(item.cardBackgroundColor)
+          ? normalizeHexColor(item.cardBackgroundColor, trustBadgeStyle.cardBackgroundColor)
+          : undefined,
+        cardBorderColor: getString(item.cardBorderColor)
+          ? normalizeHexColor(item.cardBorderColor, trustBadgeStyle.cardBorderColor)
+          : undefined,
+        titleFontSize: Number.isFinite(getNumber(item.titleFontSize))
+          ? Math.max(8, Math.min(64, Math.round(getNumber(item.titleFontSize) as number)))
+          : undefined,
+        subtitleFontSize: Number.isFinite(getNumber(item.subtitleFontSize))
+          ? Math.max(8, Math.min(64, Math.round(getNumber(item.subtitleFontSize) as number)))
+          : undefined,
+        iconSize: Number.isFinite(getNumber(item.iconSize))
+          ? Math.max(8, Math.min(120, Math.round(getNumber(item.iconSize) as number)))
+          : undefined,
+        maxTitleWords: Number.isFinite(getNumber(item.maxTitleWords))
+          ? Math.max(1, Math.min(20, Math.round(getNumber(item.maxTitleWords) as number)))
+          : undefined,
+        maxSubtitleWords: Number.isFinite(getNumber(item.maxSubtitleWords))
+          ? Math.max(1, Math.min(40, Math.round(getNumber(item.maxSubtitleWords) as number)))
+          : undefined,
         enabled: getBoolean(item.enabled) ?? true,
       } as HomepageTrustBadge;
     })
@@ -2035,6 +2268,7 @@ const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSe
       getBoolean(row.requireReasonForRuntimeActions) ??
       HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.requireReasonForRuntimeActions,
     trustBadges: trustBadges.length > 0 ? trustBadges : fallbackTrustBadges,
+    trustBadgeStyle,
     jenksCopy,
   };
 };
@@ -2948,7 +3182,7 @@ const readHeroSettings = async () => {
     };
   }
 };
-const saveHeroSettings = async (next: Partial<HomepageHeroSettings>) => {
+const saveHeroSettings = async (next: HomepageHeroSettingsPatch) => {
   const existing = await readHeroSettings();
   const merged = normalizeHeroSettings({
     ...existing.settings,

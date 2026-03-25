@@ -9058,8 +9058,34 @@ const homepageSectionsApi = {
             title: string;
             subtitle: string;
             icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
+            titleColor?: string;
+            subtitleColor?: string;
+            iconColor?: string;
+            cardBackgroundColor?: string;
+            cardBorderColor?: string;
+            titleFontSize?: number;
+            subtitleFontSize?: number;
+            iconSize?: number;
+            maxTitleWords?: number;
+            maxSubtitleWords?: number;
             enabled: boolean;
           }>;
+          trustBadgeStyle: {
+            sectionTitle: string;
+            sectionSubtitle: string;
+            layoutColumns: number;
+            arrangement: 'GRID' | 'ROW';
+            titleColor: string;
+            subtitleColor: string;
+            iconColor: string;
+            cardBackgroundColor: string;
+            cardBorderColor: string;
+            titleFontSize: number;
+            subtitleFontSize: number;
+            iconSize: number;
+            maxTitleWords: number;
+            maxSubtitleWords: number;
+          };
           jenksCopy: {
             heroEyebrow: string;
             shopByEyebrow: string;
@@ -9080,9 +9106,9 @@ const homepageSectionsApi = {
           logoAltText: string;
           logoWidth: number;
           logoHeight: number;
-          leftMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
-          rightMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
-          hamburgerMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+          leftMenuLinks: Array<{ label: string; href: string; routeKey?: string; enabled: boolean }>;
+          rightMenuLinks: Array<{ label: string; href: string; routeKey?: string; enabled: boolean }>;
+          hamburgerMenuLinks: Array<{ label: string; href: string; routeKey?: string; enabled: boolean }>;
           showHamburger: boolean;
           showSearchIcon: boolean;
           showCartIcon: boolean;
@@ -9097,6 +9123,22 @@ const homepageSectionsApi = {
           ctaTarget: 'SAME_TAB' | 'NEW_TAB';
           showQuickLinks: boolean;
           quickLinks: Array<{ label: string; href: string }>;
+          banners: Array<{
+            id: string;
+            enabled: boolean;
+            displayOrder: number;
+            image: string;
+            eyebrow: string;
+            badge: string;
+            title: string;
+            text: string;
+            subtitle: string;
+            description: string;
+            primaryCtaText: string;
+            primaryCtaLink: string;
+            secondaryCtaText: string;
+            secondaryCtaLink: string;
+          }>;
         };
         shopByBlocks: {
           title: string;
@@ -9833,9 +9875,9 @@ const homepageSectionsApi = {
     logoAltText?: string;
     logoWidth?: number;
     logoHeight?: number;
-    leftMenuLinks?: Array<{ label: string; href: string; enabled?: boolean }>;
-    rightMenuLinks?: Array<{ label: string; href: string; enabled?: boolean }>;
-    hamburgerMenuLinks?: Array<{ label: string; href: string; enabled?: boolean }>;
+    leftMenuLinks?: Array<{ label: string; href: string; routeKey?: string; enabled?: boolean }>;
+    rightMenuLinks?: Array<{ label: string; href: string; routeKey?: string; enabled?: boolean }>;
+    hamburgerMenuLinks?: Array<{ label: string; href: string; routeKey?: string; enabled?: boolean }>;
     showHamburger?: boolean;
     showSearchIcon?: boolean;
     showCartIcon?: boolean;
@@ -9853,9 +9895,9 @@ const homepageSectionsApi = {
         logoAltText: string;
         logoWidth: number;
         logoHeight: number;
-        leftMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
-        rightMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
-        hamburgerMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+        leftMenuLinks: Array<{ label: string; href: string; routeKey?: string; enabled: boolean }>;
+        rightMenuLinks: Array<{ label: string; href: string; routeKey?: string; enabled: boolean }>;
+        hamburgerMenuLinks: Array<{ label: string; href: string; routeKey?: string; enabled: boolean }>;
         showHamburger: boolean;
         showSearchIcon: boolean;
         showCartIcon: boolean;
@@ -9871,6 +9913,22 @@ const homepageSectionsApi = {
     ctaTarget?: 'SAME_TAB' | 'NEW_TAB';
     showQuickLinks?: boolean;
     quickLinks?: Array<{ label: string; href: string }>;
+    banners?: Array<{
+      id?: string;
+      enabled?: boolean;
+      displayOrder?: number;
+      image?: string;
+      eyebrow?: string;
+      badge?: string;
+      title?: string;
+      text?: string;
+      subtitle?: string;
+      description?: string;
+      primaryCtaText?: string;
+      primaryCtaLink?: string;
+      secondaryCtaText?: string;
+      secondaryCtaLink?: string;
+    }>;
   }) =>
     apiService.put<{
       success: boolean;
@@ -9880,6 +9938,22 @@ const homepageSectionsApi = {
         ctaTarget: 'SAME_TAB' | 'NEW_TAB';
         showQuickLinks: boolean;
         quickLinks: Array<{ label: string; href: string }>;
+        banners: Array<{
+          id: string;
+          enabled: boolean;
+          displayOrder: number;
+          image: string;
+          eyebrow: string;
+          badge: string;
+          title: string;
+          text: string;
+          subtitle: string;
+          description: string;
+          primaryCtaText: string;
+          primaryCtaLink: string;
+          secondaryCtaText: string;
+          secondaryCtaLink: string;
+        }>;
       };
     }>('/homepage-sections/admin/hero-settings', data),
   getAdminJenksHomepageConfig: () =>
@@ -10041,8 +10115,34 @@ const homepageSectionsApi = {
         title: string;
         subtitle: string;
         icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
+        titleColor?: string;
+        subtitleColor?: string;
+        iconColor?: string;
+        cardBackgroundColor?: string;
+        cardBorderColor?: string;
+        titleFontSize?: number;
+        subtitleFontSize?: number;
+        iconSize?: number;
+        maxTitleWords?: number;
+        maxSubtitleWords?: number;
         enabled: boolean;
       }>;
+      trustBadgeStyle?: {
+        sectionTitle?: string;
+        sectionSubtitle?: string;
+        layoutColumns?: number;
+        arrangement?: 'GRID' | 'ROW';
+        titleColor?: string;
+        subtitleColor?: string;
+        iconColor?: string;
+        cardBackgroundColor?: string;
+        cardBorderColor?: string;
+        titleFontSize?: number;
+        subtitleFontSize?: number;
+        iconSize?: number;
+        maxTitleWords?: number;
+        maxSubtitleWords?: number;
+      };
       jenksCopy?: {
         heroEyebrow?: string;
         shopByEyebrow?: string;
@@ -10063,9 +10163,9 @@ const homepageSectionsApi = {
       logoAltText?: string;
       logoWidth?: number;
       logoHeight?: number;
-      leftMenuLinks?: Array<{ label: string; href: string; enabled: boolean }>;
-      rightMenuLinks?: Array<{ label: string; href: string; enabled: boolean }>;
-      hamburgerMenuLinks?: Array<{ label: string; href: string; enabled: boolean }>;
+      leftMenuLinks?: Array<{ label: string; href: string; routeKey?: string; enabled: boolean }>;
+      rightMenuLinks?: Array<{ label: string; href: string; routeKey?: string; enabled: boolean }>;
+      hamburgerMenuLinks?: Array<{ label: string; href: string; routeKey?: string; enabled: boolean }>;
       showHamburger?: boolean;
       showSearchIcon?: boolean;
       showCartIcon?: boolean;
@@ -10080,6 +10180,22 @@ const homepageSectionsApi = {
       ctaTarget?: 'SAME_TAB' | 'NEW_TAB';
       showQuickLinks?: boolean;
       quickLinks?: Array<{ label: string; href: string }>;
+      banners?: Array<{
+        id?: string;
+        enabled?: boolean;
+        displayOrder?: number;
+        image?: string;
+        eyebrow?: string;
+        badge?: string;
+        title?: string;
+        text?: string;
+        subtitle?: string;
+        description?: string;
+        primaryCtaText?: string;
+        primaryCtaLink?: string;
+        secondaryCtaText?: string;
+        secondaryCtaLink?: string;
+      }>;
     };
     shopByBlocks?: {
       title?: string;
@@ -10158,8 +10274,34 @@ const homepageSectionsApi = {
             title: string;
             subtitle: string;
             icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
+            titleColor?: string;
+            subtitleColor?: string;
+            iconColor?: string;
+            cardBackgroundColor?: string;
+            cardBorderColor?: string;
+            titleFontSize?: number;
+            subtitleFontSize?: number;
+            iconSize?: number;
+            maxTitleWords?: number;
+            maxSubtitleWords?: number;
             enabled: boolean;
           }>;
+          trustBadgeStyle: {
+            sectionTitle: string;
+            sectionSubtitle: string;
+            layoutColumns: number;
+            arrangement: 'GRID' | 'ROW';
+            titleColor: string;
+            subtitleColor: string;
+            iconColor: string;
+            cardBackgroundColor: string;
+            cardBorderColor: string;
+            titleFontSize: number;
+            subtitleFontSize: number;
+            iconSize: number;
+            maxTitleWords: number;
+            maxSubtitleWords: number;
+          };
           jenksCopy: {
             heroEyebrow: string;
             shopByEyebrow: string;
@@ -10180,9 +10322,9 @@ const homepageSectionsApi = {
           logoAltText: string;
           logoWidth: number;
           logoHeight: number;
-          leftMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
-          rightMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
-          hamburgerMenuLinks: Array<{ label: string; href: string; enabled: boolean }>;
+          leftMenuLinks: Array<{ label: string; href: string; routeKey?: string; enabled: boolean }>;
+          rightMenuLinks: Array<{ label: string; href: string; routeKey?: string; enabled: boolean }>;
+          hamburgerMenuLinks: Array<{ label: string; href: string; routeKey?: string; enabled: boolean }>;
           showHamburger: boolean;
           showSearchIcon: boolean;
           showCartIcon: boolean;
@@ -10197,6 +10339,22 @@ const homepageSectionsApi = {
           ctaTarget: 'SAME_TAB' | 'NEW_TAB';
           showQuickLinks: boolean;
           quickLinks: Array<{ label: string; href: string }>;
+          banners: Array<{
+            id: string;
+            enabled: boolean;
+            displayOrder: number;
+            image: string;
+            eyebrow: string;
+            badge: string;
+            title: string;
+            text: string;
+            subtitle: string;
+            description: string;
+            primaryCtaText: string;
+            primaryCtaLink: string;
+            secondaryCtaText: string;
+            secondaryCtaLink: string;
+          }>;
         };
         shopByBlocks: {
           title: string;

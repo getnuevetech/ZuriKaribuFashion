@@ -116,8 +116,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'VoIP Management', href: '/admin/voip', icon: PhoneCall },
     { label: 'Banners', href: '/admin/banners', icon: ImageIcon },
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
-    { label: 'Jenks Homepage Manager', href: '/admin/jenks-homepage', icon: LayoutGrid },
-    { label: 'Legacy Jenks Sections Manager', href: '/admin/homepage-sections', icon: LayoutGrid },
+    { label: 'Jenks FrontPage Manage', href: '/admin/jenks-homepage', icon: LayoutGrid },
     { label: 'Homepage Runtime Switchboard', href: '/admin/homepage-runtime', icon: LayoutGrid },
     { label: 'Category Pages', href: '/admin/category-pages', icon: LayoutGrid },
     { label: 'Blogs', href: '/admin/blogs', icon: FileText },
@@ -544,8 +543,8 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: ChevronRight },
   ];
   const jenksSubmenu = [
-    { label: 'Jenks Homepage Manager', href: '/admin/jenks-homepage', icon: ChevronRight },
-    { label: 'Legacy Jenks Sections Manager', href: '/admin/homepage-sections', icon: ChevronRight },
+    { label: 'FrontPage', href: '/admin/jenks-homepage', icon: ChevronRight },
+    { label: 'Legacy Sections', href: '/admin/homepage-sections', icon: ChevronRight },
   ];
   const orderManagementSubmenu = [
     { label: 'Order List', href: '/admin/orders?tab=list', icon: ChevronRight },
@@ -872,7 +871,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
               href: item.href,
               keywords: ['jenks', 'homepage', 'trust badges', 'copy controls', 'experience'],
             })),
-          { prefix: 'Jenks Homepage Manager' }
+          { prefix: 'Jenks FrontPage Manage' }
         );
       }
       addSearchEntries(
@@ -1123,7 +1122,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                       <Icon className="w-5 h-5 flex-shrink-0" />
                       {isSidebarOpen ? (
                         <>
-                          <span className="text-sm font-medium">Jenks Homepage Manager</span>
+                          <span className="text-sm font-medium">Jenks FrontPage Manage</span>
                           <span className="ml-auto">
                             {isJenksMenuOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                           </span>

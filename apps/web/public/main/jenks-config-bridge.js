@@ -7,11 +7,12 @@
   ];
 
   var SELECTORS = {
+    navigation: 'header[code-path^="src/sections/Navigation.tsx:68:7"]',
     hero: 'section[code-path^="src/sections/HeroSection.tsx:191:5"]',
     shopBy: 'section[code-path^="src/sections/ShopByBlocks.tsx:136:5"]',
     trustBadgesA: 'section[code-path^="src/sections/TrustBadges.tsx:83:7"]',
     trustBadgesB: 'section[code-path^="src/sections/TrustBadges.tsx:130:5"]',
-    countries: 'section[code-path^="src/sections/ShopByCountry.tsx:92:5"]',
+    countries: 'section[code-path^="src/sections/ShopByCountry.tsx:80:5"]',
     featuredRtw: 'section[code-path^="src/sections/ReadyToWear.tsx:109:5"]',
     featuredFabrics: 'section[code-path^="src/sections/FabricsToBuy.tsx:109:5"]',
     featuredCustom: 'section[code-path^="src/sections/CustomToWear.tsx:109:5"]',
@@ -82,6 +83,20 @@
     }
   }
 
+  function applyStyle(node, prop, value) {
+    if (!node) return;
+    if (value === null || value === undefined || value === "") return;
+    node.style[prop] = String(value);
+  }
+
+  function withWordLimit(text, maxWords) {
+    var source = asText(text);
+    var words = source.split(/\s+/).filter(Boolean);
+    var limit = Number(maxWords);
+    if (!Number.isFinite(limit) || limit <= 0 || words.length <= limit) return source;
+    return words.slice(0, limit).join(" ");
+  }
+
   function normalizeConfig(payload) {
     if (!payload || typeof payload !== "object") return null;
     if (payload.success && payload.data && typeof payload.data === "object") return payload.data;
@@ -139,6 +154,120 @@
     }
   }
 
+  function applyNavigation(config) {
+    var navigation = (config && config.navigation) || {};
+    var navRoot = document.querySelector(SELECTORS.navigation);
+    if (!navRoot) return;
+    var logoText = asText(navigation.logoText);
+    if (logoText) {
+      var logoNodes = navRoot.querySelectorAll('[code-path="src/sections/Navigation.tsx:84:13"]');
+      for (var i = 0; i < logoNodes.length; i += 1) logoNodes[i].textContent = logoText;
+    }
+    var hamburgerLinks = Array.isArray(navigation.hamburgerMenuLinks) ? navigation.hamburgerMenuLinks : [];
+    if (hamburgerLinks.length > 0) {
+      var linkNodes = navRoot.querySelectorAll('a[code-path="src/sections/Navigation.tsx:117:13"]');
+      var labelNodes = navRoot.querySelectorAll('span[code-path="src/sections/Navigation.tsx:124:15"]');
+      var count = Math.min(hamburgerLinks.length, linkNodes.length, labelNodes.length);
+      for (var j = 0; j < count; j += 1) {
+        var item = hamburgerLinks[j] || {};
+        if (item.enabled === false) continue;
+        var href = asHref(item.href);
+        if (href) linkNodes[j].setAttribute("href", href);
+        if (asText(item.label)) labelNodes[j].textContent = asText(item.label);
+      }
+    }
+  }
+
+  function applyHeroBanners(config) {
+    var hero = (config && config.hero) || {};
+    var banners = Array.isArray(hero.banners) ? hero.banners : [];
+    if (banners.length === 0) return;
+    var first = banners.filter(function (item) { return item && item.enabled !== false; })[0];
+    if (!first) return;
+    setText('[code-path="src/sections/HeroSection.tsx:220:11"]', pick(first.title));
+    setText('[code-path="src/sections/HeroSection.tsx:231:11"]', pick(first.text, first.eyebrow));
+    setText('[code-path="src/sections/HeroSection.tsx:239:11"]', pick(first.subtitle, first.description));
+    setText('[code-path="src/sections/HeroSection.tsx:269:15"]', first.primaryCtaText);
+    setHref('[code-path="src/sections/HeroSection.tsx:263:13"]', first.primaryCtaLink);
+    var secondary = document.querySelector('[code-path="src/sections/HeroSection.tsx:275:11"]');
+    if (secondary && asText(first.secondaryCtaText)) {
+      secondary.textContent = asText(first.secondaryCtaText);
+      if (asHref(first.secondaryCtaLink)) secondary.setAttribute("href", asHref(first.secondaryCtaLink));
+    }
+    if (asText(first.image)) {
+      var imageNode = document.querySelector('[code-path="src/sections/HeroSection.tsx:200:9"] img');
+      if (imageNode) imageNode.setAttribute("src", asText(first.image));
+    }
+  }
+
+  function applyTrustBadges(config) {
+    var experience = (config && config.experience) || {};
+    var style = experience.trustBadgeStyle || {};
+    var badges = Array.isArray(experience.trustBadges) ? experience.trustBadges : [];
+    var active = badges.filter(function (item) { return item && item.enabled !== false; });
+    var containers = [
+      document.querySelector(SELECTORS.trustBadgesA),
+      document.querySelector(SELECTORS.trustBadgesB)
+    ];
+    for (var i = 0; i < containers.length; i += 1) {
+      var container = containers[i];
+      if (!container) continue;
+      var titleNode = container.querySelector('[code-path="src/sections/TrustBadges.tsx:89:17"], [code-path="src/sections/TrustBadges.tsx:102:11"]');
+      var subtitleNode = container.querySelector('[code-path="src/sections/TrustBadges.tsx:119:17"], [code-path="src/sections/TrustBadges.tsx:104:13"]');
+      if (titleNode && asText(style.sectionTitle)) titleNode.textContent = asText(style.sectionTitle);
+      if (subtitleNode && asText(style.sectionSubtitle)) subtitleNode.textContent = asText(style.sectionSubtitle);
+
+      var cardNodes = container.querySelectorAll('[code-path="src/sections/TrustBadges.tsx:92:15"], [code-path="src/sections/TrustBadges.tsx:136:17"]');
+      var iconWrapNodes = container.querySelectorAll('[code-path="src/sections/TrustBadges.tsx:97:17"], [code-path="src/sections/TrustBadges.tsx:138:19"]');
+      var badgeTitleNodes = container.querySelectorAll('[code-path="src/sections/TrustBadges.tsx:98:17"], [code-path="src/sections/TrustBadges.tsx:140:17"]');
+      var badgeSubtitleNodes = container.querySelectorAll('[code-path="src/sections/TrustBadges.tsx:99:17"], [code-path="src/sections/TrustBadges.tsx:119:17"]');
+
+      var cols = Number(style.layoutColumns);
+      if (Number.isFinite(cols) && cols > 0 && cardNodes.length > 0) {
+        var gridParent = cardNodes[0].parentElement;
+        if (gridParent) {
+          if (String(style.arrangement || "").toUpperCase() === "ROW") {
+            gridParent.style.display = "flex";
+            gridParent.style.flexWrap = "wrap";
+            gridParent.style.justifyContent = "space-between";
+          } else {
+            gridParent.style.display = "grid";
+            gridParent.style.gridTemplateColumns = "repeat(" + cols + ", minmax(0, 1fr))";
+          }
+        }
+      }
+
+      for (var j = 0; j < cardNodes.length; j += 1) {
+        var item = active[j] || active[active.length - 1] || null;
+        if (!item) continue;
+        if (item.enabled === false) continue;
+        if (badgeTitleNodes[j]) {
+          var title = withWordLimit(item.title, item.maxTitleWords || style.maxTitleWords);
+          if (title) badgeTitleNodes[j].textContent = title;
+          applyStyle(badgeTitleNodes[j], "color", item.titleColor || style.titleColor);
+          applyStyle(badgeTitleNodes[j], "fontSize", (item.titleFontSize || style.titleFontSize || 0) + "px");
+        }
+        if (badgeSubtitleNodes[j]) {
+          var subtitle = withWordLimit(item.subtitle, item.maxSubtitleWords || style.maxSubtitleWords);
+          if (subtitle) badgeSubtitleNodes[j].textContent = subtitle;
+          applyStyle(badgeSubtitleNodes[j], "color", item.subtitleColor || style.subtitleColor);
+          applyStyle(badgeSubtitleNodes[j], "fontSize", (item.subtitleFontSize || style.subtitleFontSize || 0) + "px");
+        }
+        applyStyle(cardNodes[j], "backgroundColor", item.cardBackgroundColor || style.cardBackgroundColor);
+        applyStyle(cardNodes[j], "borderColor", item.cardBorderColor || style.cardBorderColor);
+        if (iconWrapNodes[j]) {
+          applyStyle(iconWrapNodes[j], "color", item.iconColor || style.iconColor);
+          var svgNode = iconWrapNodes[j].querySelector("svg");
+          if (svgNode && (item.iconSize || style.iconSize)) {
+            var size = String(item.iconSize || style.iconSize) + "px";
+            svgNode.style.width = size;
+            svgNode.style.height = size;
+          }
+        }
+      }
+    }
+  }
+
   function applyShopBy(config) {
     var blocks = config.shopByBlocks || {};
     setText('[code-path="src/sections/ShopByBlocks.tsx:148:11"]', blocks.subtitle);
@@ -183,7 +312,10 @@
 
   function applyConfig(config) {
     if (!config) return false;
+    applyNavigation(config);
     applySectionVisibility(config);
+    applyHeroBanners(config);
+    applyTrustBadges(config);
     applyCopy(config);
     applyShopBy(config);
     applyFreshDrops(config);

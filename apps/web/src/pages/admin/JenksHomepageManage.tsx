@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
-import { Loader2, Upload } from 'lucide-react';
+import { Loader2, Plus, Trash2, Upload } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { api } from '../../services/api';
 
@@ -10,10 +10,68 @@ type OptionLink = {
   href: string;
 };
 
+type RouteOption = {
+  key: string;
+  label: string;
+  href: string;
+};
+
 type NavLink = {
   label: string;
   href: string;
+  routeKey?: string;
   enabled: boolean;
+};
+
+type HeroBanner = {
+  id: string;
+  enabled: boolean;
+  displayOrder: number;
+  image: string;
+  eyebrow: string;
+  badge: string;
+  title: string;
+  text: string;
+  subtitle: string;
+  description: string;
+  primaryCtaText: string;
+  primaryCtaLink: string;
+  secondaryCtaText: string;
+  secondaryCtaLink: string;
+};
+
+type TrustBadge = {
+  title: string;
+  subtitle: string;
+  icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
+  titleColor?: string;
+  subtitleColor?: string;
+  iconColor?: string;
+  cardBackgroundColor?: string;
+  cardBorderColor?: string;
+  titleFontSize?: number;
+  subtitleFontSize?: number;
+  iconSize?: number;
+  maxTitleWords?: number;
+  maxSubtitleWords?: number;
+  enabled: boolean;
+};
+
+type TrustBadgeStyle = {
+  sectionTitle: string;
+  sectionSubtitle: string;
+  layoutColumns: number;
+  arrangement: 'GRID' | 'ROW';
+  titleColor: string;
+  subtitleColor: string;
+  iconColor: string;
+  cardBackgroundColor: string;
+  cardBorderColor: string;
+  titleFontSize: number;
+  subtitleFontSize: number;
+  iconSize: number;
+  maxTitleWords: number;
+  maxSubtitleWords: number;
 };
 
 type JenksHomepageConfig = {
@@ -51,12 +109,8 @@ type JenksHomepageConfig = {
     previewQueryParam: string;
     legacyHomepageEnabled: boolean;
     requireReasonForRuntimeActions: boolean;
-    trustBadges: Array<{
-      title: string;
-      subtitle: string;
-      icon: 'SHIELD_CHECK' | 'TRUCK' | 'REFRESH_CW' | 'HEADPHONES' | 'GLOBE' | 'SHOPPING_BAG';
-      enabled: boolean;
-    }>;
+    trustBadges: TrustBadge[];
+    trustBadgeStyle: TrustBadgeStyle;
     jenksCopy: {
       heroEyebrow: string;
       shopByEyebrow: string;
@@ -94,6 +148,7 @@ type JenksHomepageConfig = {
     ctaTarget: 'SAME_TAB' | 'NEW_TAB';
     showQuickLinks: boolean;
     quickLinks: OptionLink[];
+    banners: HeroBanner[];
   };
   shopByBlocks: {
     title: string;
@@ -136,6 +191,26 @@ type JenksHomepageConfig = {
   updatedAt?: string | null;
 };
 
+const TRUST_BADGE_ICONS = ['SHIELD_CHECK', 'TRUCK', 'REFRESH_CW', 'HEADPHONES', 'GLOBE', 'SHOPPING_BAG'] as const;
+
+const ROUTE_OPTIONS: RouteOption[] = [
+  { key: 'HOME', label: 'Home', href: '/' },
+  { key: 'MAIN_STATIC', label: 'Static Main', href: '/main' },
+  { key: 'SHOP', label: 'Shop', href: '/shop' },
+  { key: 'READY_TO_WEAR', label: 'Ready To Wear', href: '/ready-to-wear' },
+  { key: 'FABRICS', label: 'Fabrics', href: '/fabrics' },
+  { key: 'CUSTOM_TO_WEAR', label: 'Custom To Wear', href: '/custom' },
+  { key: 'CONTACT', label: 'Contact', href: '/contact' },
+  { key: 'ABOUT', label: 'About (Home anchor)', href: '/home#about' },
+  { key: 'HELP_CENTER', label: 'Help Center', href: '/help-center' },
+  { key: 'AUTH_LOGIN', label: 'Login', href: '/auth/login' },
+  { key: 'AUTH_REGISTER', label: 'Register', href: '/auth/register' },
+  { key: 'DASHBOARD', label: 'Customer Dashboard', href: '/dashboard' },
+  { key: 'ORDERS', label: 'Orders', href: '/orders' },
+  { key: 'CART', label: 'Cart', href: '/cart' },
+  { key: 'CHECKOUT', label: 'Checkout', href: '/checkout' },
+];
+
 const VISIBILITY_FIELDS: Array<{ key: string; label: string }> = [
   { key: 'topStrip', label: 'Top Strip' },
   { key: 'hero', label: 'Hero' },
@@ -152,6 +227,23 @@ const VISIBILITY_FIELDS: Array<{ key: string; label: string }> = [
   { key: 'testimonials', label: 'Testimonials' },
   { key: 'cta', label: 'CTA + Newsletter' },
 ];
+
+const newHeroBanner = (index: number): HeroBanner => ({
+  id: `hero-banner-${Date.now()}-${index}`,
+  enabled: true,
+  displayOrder: index,
+  image: '',
+  eyebrow: 'Editorial premium',
+  badge: '',
+  title: 'New Hero Banner',
+  text: '',
+  subtitle: '',
+  description: '',
+  primaryCtaText: 'SHOP NOW',
+  primaryCtaLink: '/shop',
+  secondaryCtaText: '',
+  secondaryCtaLink: '/custom',
+});
 
 const DEFAULT_CONFIG: JenksHomepageConfig = {
   contractVersion: 'JENKS_HOMEPAGE_CONFIG_V1',
@@ -191,7 +283,28 @@ const DEFAULT_CONFIG: JenksHomepageConfig = {
     previewQueryParam: 'zkHomePreview',
     legacyHomepageEnabled: false,
     requireReasonForRuntimeActions: false,
-    trustBadges: [],
+    trustBadges: [
+      { icon: 'SHIELD_CHECK', title: 'Authentic Guarantee', subtitle: 'Verified sellers and designers', enabled: true },
+      { icon: 'TRUCK', title: 'Global Shipping', subtitle: 'Reliable delivery worldwide', enabled: true },
+      { icon: 'REFRESH_CW', title: 'Easy Returns', subtitle: 'Simple returns on eligible orders', enabled: true },
+      { icon: 'HEADPHONES', title: '24/7 Support', subtitle: 'Chat and ticket support anytime', enabled: true },
+    ],
+    trustBadgeStyle: {
+      sectionTitle: 'Why shoppers trust us',
+      sectionSubtitle: 'Reliability, service, and quality built into every order.',
+      layoutColumns: 4,
+      arrangement: 'GRID',
+      titleColor: '#0f172a',
+      subtitleColor: '#475569',
+      iconColor: '#0f172a',
+      cardBackgroundColor: '#ffffff',
+      cardBorderColor: '#e2e8f0',
+      titleFontSize: 18,
+      subtitleFontSize: 14,
+      iconSize: 20,
+      maxTitleWords: 4,
+      maxSubtitleWords: 10,
+    },
     jenksCopy: {
       heroEyebrow: 'Editorial premium',
       shopByEyebrow: 'Discover',
@@ -212,9 +325,26 @@ const DEFAULT_CONFIG: JenksHomepageConfig = {
     logoAltText: 'ZuriKaribu',
     logoWidth: 180,
     logoHeight: 48,
-    leftMenuLinks: [],
-    rightMenuLinks: [],
-    hamburgerMenuLinks: [],
+    leftMenuLinks: [
+      { label: 'Home', href: '/', routeKey: 'HOME', enabled: true },
+      { label: 'Ready To Wear', href: '/ready-to-wear', routeKey: 'READY_TO_WEAR', enabled: true },
+      { label: 'Fabric To Buy', href: '/fabrics', routeKey: 'FABRICS', enabled: true },
+      { label: 'Custom To Wear', href: '/custom', routeKey: 'CUSTOM_TO_WEAR', enabled: true },
+    ],
+    rightMenuLinks: [
+      { label: 'Shop', href: '/shop', routeKey: 'SHOP', enabled: true },
+      { label: 'About Us', href: '/home#about', routeKey: 'ABOUT', enabled: true },
+      { label: 'Contact Us', href: '/contact', routeKey: 'CONTACT', enabled: true },
+    ],
+    hamburgerMenuLinks: [
+      { label: 'Home', href: '/', routeKey: 'HOME', enabled: true },
+      { label: 'Shop', href: '/shop', routeKey: 'SHOP', enabled: true },
+      { label: 'Ready To Wear', href: '/ready-to-wear', routeKey: 'READY_TO_WEAR', enabled: true },
+      { label: 'Fabric To Buy', href: '/fabrics', routeKey: 'FABRICS', enabled: true },
+      { label: 'Custom To Wear', href: '/custom', routeKey: 'CUSTOM_TO_WEAR', enabled: true },
+      { label: 'About Us', href: '/home#about', routeKey: 'ABOUT', enabled: true },
+      { label: 'Contact Us', href: '/contact', routeKey: 'CONTACT', enabled: true },
+    ],
     showHamburger: true,
     showSearchIcon: true,
     showCartIcon: true,
@@ -228,7 +358,12 @@ const DEFAULT_CONFIG: JenksHomepageConfig = {
     forceUppercaseCtas: true,
     ctaTarget: 'SAME_TAB',
     showQuickLinks: true,
-    quickLinks: [],
+    quickLinks: [
+      { label: 'Ready to Wear', href: '/ready-to-wear' },
+      { label: 'Custom', href: '/custom' },
+      { label: 'Fabrics', href: '/fabrics' },
+    ],
+    banners: [newHeroBanner(0)],
   },
   shopByBlocks: {
     title: 'Shop by Category',
@@ -290,16 +425,17 @@ const parseNavLinks = (value: string): NavLink[] =>
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const [labelRaw, hrefRaw, enabledRaw] = line.split('|').map((part) => part.trim());
+      const [labelRaw, hrefRaw, routeKeyRaw, enabledRaw] = line.split('|').map((part) => part.trim());
       if (!labelRaw || !hrefRaw) return null;
       const enabledToken = String(enabledRaw || 'true').toLowerCase();
       const enabled = !['false', '0', 'off', 'no'].includes(enabledToken);
-      return { label: labelRaw, href: hrefRaw, enabled };
+      return { label: labelRaw, href: hrefRaw, routeKey: routeKeyRaw || undefined, enabled };
     })
     .filter((row): row is NavLink => Boolean(row))
     .slice(0, 20);
 
-const formatNavLinks = (rows: NavLink[]) => rows.map((row) => `${row.label} | ${row.href} | ${row.enabled}`).join('\n');
+const formatNavLinks = (rows: NavLink[]) =>
+  rows.map((row) => `${row.label} | ${row.href} | ${row.routeKey || ''} | ${row.enabled}`).join('\n');
 
 const toNumber = (value: string, fallback: number) => {
   const parsed = Number(value);
@@ -310,11 +446,14 @@ export default function AdminJenksHomepageManage() {
   const [config, setConfig] = useState<JenksHomepageConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState<'logo' | 'cta' | null>(null);
+  const [uploading, setUploading] = useState<'logo' | 'cta' | 'hero' | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [selectedHamburgerRouteKey, setSelectedHamburgerRouteKey] = useState<string>(ROUTE_OPTIONS[0]?.key || 'HOME');
+  const [selectedHeroBannerIndexForUpload, setSelectedHeroBannerIndexForUpload] = useState<number | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
   const ctaBgInputRef = useRef<HTMLInputElement | null>(null);
+  const heroBannerInputRef = useRef<HTMLInputElement | null>(null);
 
   const updatedAtLabel = useMemo(() => {
     if (!config.updatedAt) return 'Never';
@@ -328,9 +467,7 @@ export default function AdminJenksHomepageManage() {
     setError('');
     try {
       const response = await api.homepageSections.getAdminJenksHomepageConfig();
-      if (!response.success || !response.data) {
-        throw new Error('Failed to load Jenks homepage config.');
-      }
+      if (!response.success || !response.data) throw new Error('Failed to load Jenks homepage config.');
       setConfig((prev) => ({ ...prev, ...response.data }));
     } catch (loadError: any) {
       setError(loadError?.response?.data?.message || loadError?.message || 'Failed to load Jenks homepage config.');
@@ -362,11 +499,7 @@ export default function AdminJenksHomepageManage() {
       if (!url) throw new Error('Upload failed');
       setConfig((prev) => ({
         ...prev,
-        navigation: {
-          ...prev.navigation,
-          logoImageUrl: url,
-          logoMode: 'IMAGE',
-        },
+        navigation: { ...prev.navigation, logoImageUrl: url, logoMode: 'IMAGE' },
       }));
       setSuccess('Logo image uploaded.');
     } catch (uploadError: any) {
@@ -386,13 +519,7 @@ export default function AdminJenksHomepageManage() {
     try {
       const url = await uploadImage(file);
       if (!url) throw new Error('Upload failed');
-      setConfig((prev) => ({
-        ...prev,
-        cta: {
-          ...prev.cta,
-          backgroundImage: url,
-        },
-      }));
+      setConfig((prev) => ({ ...prev, cta: { ...prev.cta, backgroundImage: url } }));
       setSuccess('CTA background image uploaded.');
     } catch (uploadError: any) {
       setError(uploadError?.message || 'Failed to upload CTA background image.');
@@ -400,6 +527,52 @@ export default function AdminJenksHomepageManage() {
       setUploading(null);
       event.target.value = '';
     }
+  };
+
+  const openHeroBannerImageUpload = (index: number) => {
+    setSelectedHeroBannerIndexForUpload(index);
+    heroBannerInputRef.current?.click();
+  };
+
+  const handleHeroBannerUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || selectedHeroBannerIndexForUpload === null) return;
+    setUploading('hero');
+    setError('');
+    setSuccess('');
+    try {
+      const url = await uploadImage(file);
+      if (!url) throw new Error('Upload failed');
+      setConfig((prev) => ({
+        ...prev,
+        hero: {
+          ...prev.hero,
+          banners: prev.hero.banners.map((item, index) =>
+            index === selectedHeroBannerIndexForUpload ? { ...item, image: url } : item
+          ),
+        },
+      }));
+      setSuccess('Hero banner image uploaded.');
+    } catch (uploadError: any) {
+      setError(uploadError?.message || 'Failed to upload hero banner image.');
+    } finally {
+      setUploading(null);
+      setSelectedHeroBannerIndexForUpload(null);
+      event.target.value = '';
+    }
+  };
+
+  const addHamburgerMenuItem = () => {
+    const route = ROUTE_OPTIONS.find((item) => item.key === selectedHamburgerRouteKey);
+    if (!route) return;
+    setConfig((prev) => ({
+      ...prev,
+      navigation: {
+        ...prev.navigation,
+        hamburgerMenuLinks: [...prev.navigation.hamburgerMenuLinks, { label: route.label, href: route.href, routeKey: route.key, enabled: true }]
+          .slice(0, 20),
+      },
+    }));
   };
 
   const saveConfig = async () => {
@@ -419,9 +592,7 @@ export default function AdminJenksHomepageManage() {
         cta: config.cta,
       };
       const response = await api.homepageSections.updateAdminJenksHomepageConfig(payload);
-      if (!response.success) {
-        throw new Error('Failed to save config');
-      }
+      if (!response.success) throw new Error('Failed to save config');
       setConfig((prev) => ({ ...prev, ...(response.data || {}) }));
       setSuccess('Jenks homepage config saved successfully.');
       await fetchConfig();
@@ -462,6 +633,627 @@ export default function AdminJenksHomepageManage() {
       {success ? (
         <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>
       ) : null}
+
+      <section className="rounded-lg border bg-white p-5 space-y-4">
+        <h2 className="text-lg font-semibold">Navigation/Head</h2>
+        <p className="text-xs text-gray-600">
+          Manage logo settings and hamburger links. Add links by selecting a system page from dropdown.
+        </p>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label className="text-sm">
+            Logo Mode
+            <select
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.navigation.logoMode}
+              onChange={(event) =>
+                setConfig((prev) => ({ ...prev, navigation: { ...prev.navigation, logoMode: event.target.value as 'TEXT' | 'IMAGE' } }))
+              }
+            >
+              <option value="TEXT">TEXT</option>
+              <option value="IMAGE">IMAGE</option>
+            </select>
+          </label>
+          <label className="text-sm">
+            Logo Text
+            <input
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.navigation.logoText}
+              onChange={(event) => setConfig((prev) => ({ ...prev, navigation: { ...prev.navigation, logoText: event.target.value } }))}
+            />
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="button" variant="outline" onClick={() => logoInputRef.current?.click()} isLoading={uploading === 'logo'}>
+            <Upload className="mr-2 h-4 w-4" />
+            Upload Logo Image
+          </Button>
+          <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+          <span className="text-xs text-gray-600 break-all">{config.navigation.logoImageUrl || 'No logo image uploaded'}</span>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+          <h3 className="text-sm font-semibold">Hamburger Menu Manager</h3>
+          <div className="flex flex-col gap-3 md:flex-row md:items-end">
+            <label className="text-sm flex-1">
+              System Page
+              <select
+                className="mt-1 w-full rounded border px-3 py-2"
+                value={selectedHamburgerRouteKey}
+                onChange={(event) => setSelectedHamburgerRouteKey(event.target.value)}
+              >
+                {ROUTE_OPTIONS.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label} ({option.href})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button type="button" onClick={addHamburgerMenuItem}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Menu Item
+            </Button>
+          </div>
+          <div className="space-y-3">
+            {config.navigation.hamburgerMenuLinks.map((link, index) => (
+              <div key={`${link.label}-${index}`} className="grid grid-cols-1 gap-3 rounded border p-3 md:grid-cols-12">
+                <label className="text-xs md:col-span-3">
+                  Label
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={link.label}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        navigation: {
+                          ...prev.navigation,
+                          hamburgerMenuLinks: prev.navigation.hamburgerMenuLinks.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, label: event.target.value } : item
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs md:col-span-4">
+                  Link
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={link.href}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        navigation: {
+                          ...prev.navigation,
+                          hamburgerMenuLinks: prev.navigation.hamburgerMenuLinks.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, href: event.target.value } : item
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs md:col-span-3">
+                  Route Key
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={link.routeKey || ''}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        navigation: {
+                          ...prev.navigation,
+                          hamburgerMenuLinks: prev.navigation.hamburgerMenuLinks.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, routeKey: event.target.value || undefined } : item
+                          ),
+                        },
+                      }))
+                    }
+                  >
+                    <option value="">(none)</option>
+                    {ROUTE_OPTIONS.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.key}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex items-center gap-3 md:col-span-2">
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={link.enabled}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          navigation: {
+                            ...prev.navigation,
+                            hamburgerMenuLinks: prev.navigation.hamburgerMenuLinks.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, enabled: event.target.checked } : item
+                            ),
+                          },
+                        }))
+                      }
+                      className="h-4 w-4"
+                    />
+                    Enabled
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        navigation: {
+                          ...prev.navigation,
+                          hamburgerMenuLinks: prev.navigation.hamburgerMenuLinks.filter((_, itemIndex) => itemIndex !== index),
+                        },
+                      }))
+                    }
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border bg-white p-5 space-y-4">
+        <h2 className="text-lg font-semibold">Hero Section</h2>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <label className="text-sm">
+            Rotation Seconds
+            <input
+              type="number"
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.hero.rotationSeconds}
+              onChange={(event) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  hero: { ...prev.hero, rotationSeconds: Math.max(3, Math.min(20, toNumber(event.target.value, 6))) },
+                }))
+              }
+            />
+          </label>
+          <label className="text-sm">
+            CTA Target
+            <select
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.hero.ctaTarget}
+              onChange={(event) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  hero: { ...prev.hero, ctaTarget: event.target.value as 'SAME_TAB' | 'NEW_TAB' },
+                }))
+              }
+            >
+              <option value="SAME_TAB">SAME_TAB</option>
+              <option value="NEW_TAB">NEW_TAB</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm pt-7">
+            <input
+              type="checkbox"
+              checked={config.hero.forceUppercaseCtas}
+              onChange={(event) =>
+                setConfig((prev) => ({ ...prev, hero: { ...prev.hero, forceUppercaseCtas: event.target.checked } }))
+              }
+              className="h-4 w-4"
+            />
+            Force uppercase CTAs
+          </label>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Hero Banners</h3>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                setConfig((prev) => ({
+                  ...prev,
+                  hero: { ...prev.hero, banners: [...prev.hero.banners, newHeroBanner(prev.hero.banners.length)].slice(0, 10) },
+                }))
+              }
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Banner
+            </Button>
+          </div>
+
+          {config.hero.banners.map((banner, index) => (
+            <div key={banner.id || `banner-${index}`} className="rounded border p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold">Banner {index + 1}</h4>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={banner.enabled}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          hero: {
+                            ...prev.hero,
+                            banners: prev.hero.banners.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, enabled: event.target.checked } : item
+                            ),
+                          },
+                        }))
+                      }
+                      className="h-4 w-4"
+                    />
+                    Enabled
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        hero: { ...prev.hero, banners: prev.hero.banners.filter((_, itemIndex) => itemIndex !== index) },
+                      }))
+                    }
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="text-xs">
+                  Title
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={banner.title}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        hero: {
+                          ...prev.hero,
+                          banners: prev.hero.banners.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, title: event.target.value } : item
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs">
+                  Display Order
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={banner.displayOrder}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        hero: {
+                          ...prev.hero,
+                          banners: prev.hero.banners.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, displayOrder: Math.max(0, Math.min(100, toNumber(event.target.value, index))) } : item
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs md:col-span-2">
+                  Text
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={banner.text}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        hero: {
+                          ...prev.hero,
+                          banners: prev.hero.banners.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, text: event.target.value } : item
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs md:col-span-2">
+                  Description
+                  <textarea
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    rows={2}
+                    value={banner.description}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        hero: {
+                          ...prev.hero,
+                          banners: prev.hero.banners.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, description: event.target.value } : item
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs">
+                  Primary CTA Text
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={banner.primaryCtaText}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        hero: {
+                          ...prev.hero,
+                          banners: prev.hero.banners.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, primaryCtaText: event.target.value } : item
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs">
+                  Primary CTA Link
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={banner.primaryCtaLink}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        hero: {
+                          ...prev.hero,
+                          banners: prev.hero.banners.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, primaryCtaLink: event.target.value } : item
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs">
+                  Secondary CTA Text
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={banner.secondaryCtaText}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        hero: {
+                          ...prev.hero,
+                          banners: prev.hero.banners.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, secondaryCtaText: event.target.value } : item
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs">
+                  Secondary CTA Link
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={banner.secondaryCtaLink}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        hero: {
+                          ...prev.hero,
+                          banners: prev.hero.banners.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, secondaryCtaLink: event.target.value } : item
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="button" variant="outline" onClick={() => openHeroBannerImageUpload(index)} isLoading={uploading === 'hero'}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload Banner Image
+                </Button>
+                <span className="text-xs text-gray-600 break-all">{banner.image || 'No banner image uploaded'}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <input ref={heroBannerInputRef} type="file" accept="image/*" onChange={handleHeroBannerUpload} className="hidden" />
+      </section>
+
+      <section className="rounded-lg border bg-white p-5 space-y-4">
+        <h2 className="text-lg font-semibold">Trust Badge</h2>
+        <p className="text-xs text-gray-600">Control arrangement, colors, sizes, and word limits.</p>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <label className="text-sm">
+            Arrangement
+            <select
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.experience.trustBadgeStyle.arrangement}
+              onChange={(event) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  experience: {
+                    ...prev.experience,
+                    trustBadgeStyle: { ...prev.experience.trustBadgeStyle, arrangement: event.target.value as 'GRID' | 'ROW' },
+                  },
+                }))
+              }
+            >
+              <option value="GRID">GRID</option>
+              <option value="ROW">ROW</option>
+            </select>
+          </label>
+          <label className="text-sm">
+            Layout Columns
+            <input
+              type="number"
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.experience.trustBadgeStyle.layoutColumns}
+              onChange={(event) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  experience: {
+                    ...prev.experience,
+                    trustBadgeStyle: {
+                      ...prev.experience.trustBadgeStyle,
+                      layoutColumns: Math.max(1, Math.min(6, toNumber(event.target.value, 4))),
+                    },
+                  },
+                }))
+              }
+            />
+          </label>
+          <label className="text-sm">
+            Icon Size
+            <input
+              type="number"
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.experience.trustBadgeStyle.iconSize}
+              onChange={(event) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  experience: {
+                    ...prev.experience,
+                    trustBadgeStyle: { ...prev.experience.trustBadgeStyle, iconSize: Math.max(8, Math.min(120, toNumber(event.target.value, 20))) },
+                  },
+                }))
+              }
+            />
+          </label>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <label className="text-sm">
+            Title Color
+            <input
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.experience.trustBadgeStyle.titleColor}
+              onChange={(event) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  experience: { ...prev.experience, trustBadgeStyle: { ...prev.experience.trustBadgeStyle, titleColor: event.target.value } },
+                }))
+              }
+            />
+          </label>
+          <label className="text-sm">
+            Subtitle Color
+            <input
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.experience.trustBadgeStyle.subtitleColor}
+              onChange={(event) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  experience: { ...prev.experience, trustBadgeStyle: { ...prev.experience.trustBadgeStyle, subtitleColor: event.target.value } },
+                }))
+              }
+            />
+          </label>
+          <label className="text-sm">
+            Card Background
+            <input
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.experience.trustBadgeStyle.cardBackgroundColor}
+              onChange={(event) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  experience: {
+                    ...prev.experience,
+                    trustBadgeStyle: { ...prev.experience.trustBadgeStyle, cardBackgroundColor: event.target.value },
+                  },
+                }))
+              }
+            />
+          </label>
+          <label className="text-sm">
+            Card Border
+            <input
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.experience.trustBadgeStyle.cardBorderColor}
+              onChange={(event) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  experience: {
+                    ...prev.experience,
+                    trustBadgeStyle: { ...prev.experience.trustBadgeStyle, cardBorderColor: event.target.value },
+                  },
+                }))
+              }
+            />
+          </label>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <label className="text-sm">
+            Title Font Size
+            <input
+              type="number"
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.experience.trustBadgeStyle.titleFontSize}
+              onChange={(event) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  experience: {
+                    ...prev.experience,
+                    trustBadgeStyle: { ...prev.experience.trustBadgeStyle, titleFontSize: Math.max(8, Math.min(64, toNumber(event.target.value, 18))) },
+                  },
+                }))
+              }
+            />
+          </label>
+          <label className="text-sm">
+            Subtitle Font Size
+            <input
+              type="number"
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.experience.trustBadgeStyle.subtitleFontSize}
+              onChange={(event) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  experience: {
+                    ...prev.experience,
+                    trustBadgeStyle: { ...prev.experience.trustBadgeStyle, subtitleFontSize: Math.max(8, Math.min(64, toNumber(event.target.value, 14))) },
+                  },
+                }))
+              }
+            />
+          </label>
+          <label className="text-sm">
+            Max Title Words
+            <input
+              type="number"
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.experience.trustBadgeStyle.maxTitleWords}
+              onChange={(event) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  experience: {
+                    ...prev.experience,
+                    trustBadgeStyle: { ...prev.experience.trustBadgeStyle, maxTitleWords: Math.max(1, Math.min(20, toNumber(event.target.value, 4))) },
+                  },
+                }))
+              }
+            />
+          </label>
+          <label className="text-sm">
+            Max Subtitle Words
+            <input
+              type="number"
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.experience.trustBadgeStyle.maxSubtitleWords}
+              onChange={(event) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  experience: {
+                    ...prev.experience,
+                    trustBadgeStyle: { ...prev.experience.trustBadgeStyle, maxSubtitleWords: Math.max(1, Math.min(40, toNumber(event.target.value, 10))) },
+                  },
+                }))
+              }
+            />
+          </label>
+        </div>
+      </section>
 
       <section className="rounded-lg border bg-white p-5 space-y-4">
         <h2 className="text-lg font-semibold">Section Visibility</h2>
@@ -508,542 +1300,11 @@ export default function AdminJenksHomepageManage() {
             }))
           }
         />
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <label className="text-sm">
-            Separator
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.topStrip.separator}
-              onChange={(event) =>
-                setConfig((prev) => ({ ...prev, topStrip: { ...prev.topStrip, separator: event.target.value } }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Repeat Count
-            <input
-              type="number"
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.topStrip.repeatCount}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  topStrip: { ...prev.topStrip, repeatCount: Math.max(2, Math.min(12, toNumber(event.target.value, 4))) },
-                }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Animation Seconds
-            <input
-              type="number"
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.topStrip.animationSeconds}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  topStrip: {
-                    ...prev.topStrip,
-                    animationSeconds: Math.max(8, Math.min(120, toNumber(event.target.value, 20))),
-                  },
-                }))
-              }
-            />
-          </label>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <label className="text-sm">
-            Text Color
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.topStrip.textColor}
-              onChange={(event) =>
-                setConfig((prev) => ({ ...prev, topStrip: { ...prev.topStrip, textColor: event.target.value } }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Background Color
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.topStrip.backgroundColor}
-              onChange={(event) =>
-                setConfig((prev) => ({ ...prev, topStrip: { ...prev.topStrip, backgroundColor: event.target.value } }))
-              }
-            />
-          </label>
-          <label className="flex items-center gap-2 text-sm pt-7">
-            <input
-              type="checkbox"
-              checked={config.topStrip.isBold}
-              onChange={(event) =>
-                setConfig((prev) => ({ ...prev, topStrip: { ...prev.topStrip, isBold: event.target.checked } }))
-              }
-              className="h-4 w-4"
-            />
-            Bold text
-          </label>
-          <label className="flex items-center gap-2 text-sm pt-7">
-            <input
-              type="checkbox"
-              checked={config.topStrip.pauseOnHover}
-              onChange={(event) =>
-                setConfig((prev) => ({ ...prev, topStrip: { ...prev.topStrip, pauseOnHover: event.target.checked } }))
-              }
-              className="h-4 w-4"
-            />
-            Pause on hover
-          </label>
-        </div>
-        </div>
-      </section>
-
-      <section className="rounded-lg border bg-white p-5 space-y-4">
-        <h2 className="text-lg font-semibold">Experience + Copy</h2>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <label className="text-sm">
-            Default Mode
-            <select
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.experience.defaultMode}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  experience: { ...prev.experience, defaultMode: event.target.value as JenksHomepageConfig['experience']['defaultMode'] },
-                }))
-              }
-            >
-              <option value="LITE_COMMERCE">LITE_COMMERCE</option>
-              <option value="STANDARD_PREMIUM">STANDARD_PREMIUM</option>
-              <option value="EDITORIAL_IMMERSIVE">EDITORIAL_IMMERSIVE</option>
-            </select>
-          </label>
-          <label className="text-sm">
-            Hero Variant
-            <select
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.experience.heroVariant}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  experience: { ...prev.experience, heroVariant: event.target.value as JenksHomepageConfig['experience']['heroVariant'] },
-                }))
-              }
-            >
-              <option value="SPLIT_EDITORIAL">SPLIT_EDITORIAL</option>
-              <option value="CLEAN_COMMERCE">CLEAN_COMMERCE</option>
-              <option value="VIDEO_STORY">VIDEO_STORY</option>
-            </select>
-          </label>
-          <label className="text-sm">
-            Category Variant
-            <select
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.experience.categoryEntryVariant}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  experience: {
-                    ...prev.experience,
-                    categoryEntryVariant: event.target.value as JenksHomepageConfig['experience']['categoryEntryVariant'],
-                  },
-                }))
-              }
-            >
-              <option value="THREE_COLUMN_CORE">THREE_COLUMN_CORE</option>
-              <option value="MEGA_GRID">MEGA_GRID</option>
-            </select>
-          </label>
-          <label className="text-sm">
-            Spotlight Variant
-            <select
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.experience.spotlightVariant}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  experience: {
-                    ...prev.experience,
-                    spotlightVariant: event.target.value as JenksHomepageConfig['experience']['spotlightVariant'],
-                  },
-                }))
-              }
-            >
-              <option value="CAROUSEL">CAROUSEL</option>
-              <option value="SINGLE_FEATURE">SINGLE_FEATURE</option>
-              <option value="MOSAIC">MOSAIC</option>
-            </select>
-          </label>
-        </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <label className="text-sm">
-            Hero Eyebrow
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.experience.jenksCopy.heroEyebrow}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  experience: { ...prev.experience, jenksCopy: { ...prev.experience.jenksCopy, heroEyebrow: event.target.value } },
-                }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Shop By Title
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.experience.jenksCopy.shopByTitle}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  experience: { ...prev.experience, jenksCopy: { ...prev.experience.jenksCopy, shopByTitle: event.target.value } },
-                }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Featured RTW Title
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.experience.jenksCopy.featuredRtwTitle}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  experience: {
-                    ...prev.experience,
-                    jenksCopy: { ...prev.experience.jenksCopy, featuredRtwTitle: event.target.value },
-                  },
-                }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Featured Fabrics Title
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.experience.jenksCopy.featuredFabricsTitle}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  experience: {
-                    ...prev.experience,
-                    jenksCopy: { ...prev.experience.jenksCopy, featuredFabricsTitle: event.target.value },
-                  },
-                }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Featured Designs Title
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.experience.jenksCopy.featuredDesignsTitle}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  experience: {
-                    ...prev.experience,
-                    jenksCopy: { ...prev.experience.jenksCopy, featuredDesignsTitle: event.target.value },
-                  },
-                }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Designer Spotlight Title
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.experience.jenksCopy.designerSpotlightTitle}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  experience: {
-                    ...prev.experience,
-                    jenksCopy: { ...prev.experience.jenksCopy, designerSpotlightTitle: event.target.value },
-                  },
-                }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Quick Path RTW Label
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.experience.jenksCopy.quickPathRtwLabel}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  experience: {
-                    ...prev.experience,
-                    jenksCopy: { ...prev.experience.jenksCopy, quickPathRtwLabel: event.target.value },
-                  },
-                }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Quick Path Custom Label
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.experience.jenksCopy.quickPathCustomLabel}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  experience: {
-                    ...prev.experience,
-                    jenksCopy: { ...prev.experience.jenksCopy, quickPathCustomLabel: event.target.value },
-                  },
-                }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Quick Path Fabrics Label
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.experience.jenksCopy.quickPathFabricsLabel}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  experience: {
-                    ...prev.experience,
-                    jenksCopy: { ...prev.experience.jenksCopy, quickPathFabricsLabel: event.target.value },
-                  },
-                }))
-              }
-            />
-          </label>
-        </div>
-
-        <label className="block text-sm font-medium">Trust Badges (one per line: TITLE | SUBTITLE | ICON | true/false)</label>
-        <textarea
-          className="w-full rounded border px-3 py-2 text-sm"
-          rows={5}
-          value={config.experience.trustBadges
-            .map((badge) => `${badge.title} | ${badge.subtitle} | ${badge.icon} | ${badge.enabled}`)
-            .join('\n')}
-          onChange={(event) => {
-            const nextBadges = event.target.value
-              .split('\n')
-              .map((line) => line.trim())
-              .filter(Boolean)
-              .map((line) => {
-                const [title, subtitle, iconRaw, enabledRaw] = line.split('|').map((part) => part.trim());
-                const icon = String(iconRaw || '').toUpperCase() as
-                  | 'SHIELD_CHECK'
-                  | 'TRUCK'
-                  | 'REFRESH_CW'
-                  | 'HEADPHONES'
-                  | 'GLOBE'
-                  | 'SHOPPING_BAG';
-                const allowedIcons = ['SHIELD_CHECK', 'TRUCK', 'REFRESH_CW', 'HEADPHONES', 'GLOBE', 'SHOPPING_BAG'];
-                return {
-                  title: title || 'Trust Badge',
-                  subtitle: subtitle || 'Reliable experience.',
-                  icon: allowedIcons.includes(icon) ? icon : 'SHIELD_CHECK',
-                  enabled: !['false', '0', 'off', 'no'].includes(String(enabledRaw || 'true').toLowerCase()),
-                };
-              })
-              .slice(0, 6);
-            setConfig((prev) => ({
-              ...prev,
-              experience: {
-                ...prev.experience,
-                trustBadges: nextBadges.length > 0 ? nextBadges : prev.experience.trustBadges,
-              },
-            }));
-          }}
-        />
-      </section>
-
-      <section className="rounded-lg border bg-white p-5 space-y-4">
-        <h2 className="text-lg font-semibold">Navigation + Hero</h2>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <label className="text-sm">
-            Logo Mode
-            <select
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.navigation.logoMode}
-              onChange={(event) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  navigation: { ...prev.navigation, logoMode: event.target.value as 'TEXT' | 'IMAGE' },
-                }))
-              }
-            >
-              <option value="TEXT">TEXT</option>
-              <option value="IMAGE">IMAGE</option>
-            </select>
-          </label>
-          <label className="text-sm">
-            Logo Text
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.navigation.logoText}
-              onChange={(event) =>
-                setConfig((prev) => ({ ...prev, navigation: { ...prev.navigation, logoText: event.target.value } }))
-              }
-            />
-          </label>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => logoInputRef.current?.click()}
-            isLoading={uploading === 'logo'}
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            Upload Logo Image
-          </Button>
-          <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
-          <span className="text-xs text-gray-600 break-all">{config.navigation.logoImageUrl || 'No logo image uploaded'}</span>
-        </div>
-
-        <label className="block text-sm font-medium">Hero Quick Links (one per line: label | /href)</label>
-        <textarea
-          className="w-full rounded border px-3 py-2 text-sm"
-          rows={3}
-          value={formatOptions(config.hero.quickLinks)}
-          onChange={(event) =>
-            setConfig((prev) => ({ ...prev, hero: { ...prev.hero, quickLinks: parseOptions(event.target.value) } }))
-          }
-        />
-      </section>
-
-      <section className="rounded-lg border bg-white p-5 space-y-4">
-        <h2 className="text-lg font-semibold">Shop By / Fresh Drops / Newsletter</h2>
-        <label className="text-sm">
-          Shop By Title
-          <input
-            className="mt-1 w-full rounded border px-3 py-2"
-            value={config.shopByBlocks.title}
-            onChange={(event) =>
-              setConfig((prev) => ({ ...prev, shopByBlocks: { ...prev.shopByBlocks, title: event.target.value } }))
-            }
-          />
-        </label>
-        <label className="block text-sm font-medium">Style Options (label | /href)</label>
-        <textarea
-          className="w-full rounded border px-3 py-2 text-sm"
-          rows={3}
-          value={formatOptions(config.shopByBlocks.styleOptions)}
-          onChange={(event) =>
-            setConfig((prev) => ({ ...prev, shopByBlocks: { ...prev.shopByBlocks, styleOptions: parseOptions(event.target.value) } }))
-          }
-        />
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <label className="text-sm">
-            Fresh Drops Title
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.freshDrops.title}
-              onChange={(event) =>
-                setConfig((prev) => ({ ...prev, freshDrops: { ...prev.freshDrops, title: event.target.value } }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Newsletter Title
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.newsletter.title}
-              onChange={(event) =>
-                setConfig((prev) => ({ ...prev, newsletter: { ...prev.newsletter, title: event.target.value } }))
-              }
-            />
-          </label>
-        </div>
-      </section>
-
-      <section className="rounded-lg border bg-white p-5 space-y-4">
-        <h2 className="text-lg font-semibold">Homepage CTA Block</h2>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={config.cta.enabled}
-            onChange={(event) => setConfig((prev) => ({ ...prev, cta: { ...prev.cta, enabled: event.target.checked } }))}
-            className="h-4 w-4"
-          />
-          Enable CTA
-        </label>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <label className="text-sm">
-            CTA Title
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.cta.title}
-              onChange={(event) => setConfig((prev) => ({ ...prev, cta: { ...prev.cta, title: event.target.value } }))}
-            />
-          </label>
-          <label className="text-sm">
-            CTA Subtitle
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.cta.subtitle}
-              onChange={(event) => setConfig((prev) => ({ ...prev, cta: { ...prev.cta, subtitle: event.target.value } }))}
-            />
-          </label>
-          <label className="text-sm">
-            Primary CTA Text
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.cta.primaryCtaText}
-              onChange={(event) =>
-                setConfig((prev) => ({ ...prev, cta: { ...prev.cta, primaryCtaText: event.target.value } }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Primary CTA Link
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.cta.primaryCtaLink}
-              onChange={(event) =>
-                setConfig((prev) => ({ ...prev, cta: { ...prev.cta, primaryCtaLink: event.target.value } }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Secondary CTA Text
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.cta.secondaryCtaText}
-              onChange={(event) =>
-                setConfig((prev) => ({ ...prev, cta: { ...prev.cta, secondaryCtaText: event.target.value } }))
-              }
-            />
-          </label>
-          <label className="text-sm">
-            Secondary CTA Link
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={config.cta.secondaryCtaLink}
-              onChange={(event) =>
-                setConfig((prev) => ({ ...prev, cta: { ...prev.cta, secondaryCtaLink: event.target.value } }))
-              }
-            />
-          </label>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => ctaBgInputRef.current?.click()}
-            isLoading={uploading === 'cta'}
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            Upload CTA Background
-          </Button>
-          <input ref={ctaBgInputRef} type="file" accept="image/*" onChange={handleCtaBackgroundUpload} className="hidden" />
-          <span className="text-xs text-gray-600 break-all">{config.cta.backgroundImage || 'No CTA background image uploaded'}</span>
-        </div>
       </section>
 
       <section className="rounded-lg border bg-white p-5 space-y-4">
         <h2 className="text-lg font-semibold">Advanced Nav Links</h2>
-        <p className="text-xs text-gray-600">Format: label | /href | true/false</p>
+        <p className="text-xs text-gray-600">Format: label | /href | routeKey | true/false</p>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <label className="text-sm">
             Left Menu Links
@@ -1089,7 +1350,45 @@ export default function AdminJenksHomepageManage() {
           </label>
         </div>
       </section>
+
+      <section className="rounded-lg border bg-white p-5 space-y-4">
+        <h2 className="text-lg font-semibold">Homepage CTA Block</h2>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={config.cta.enabled}
+            onChange={(event) => setConfig((prev) => ({ ...prev, cta: { ...prev.cta, enabled: event.target.checked } }))}
+            className="h-4 w-4"
+          />
+          Enable CTA
+        </label>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label className="text-sm">
+            CTA Title
+            <input
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.cta.title}
+              onChange={(event) => setConfig((prev) => ({ ...prev, cta: { ...prev.cta, title: event.target.value } }))}
+            />
+          </label>
+          <label className="text-sm">
+            CTA Subtitle
+            <input
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={config.cta.subtitle}
+              onChange={(event) => setConfig((prev) => ({ ...prev, cta: { ...prev.cta, subtitle: event.target.value } }))}
+            />
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="button" variant="outline" onClick={() => ctaBgInputRef.current?.click()} isLoading={uploading === 'cta'}>
+            <Upload className="mr-2 h-4 w-4" />
+            Upload CTA Background
+          </Button>
+          <input ref={ctaBgInputRef} type="file" accept="image/*" onChange={handleCtaBackgroundUpload} className="hidden" />
+          <span className="text-xs text-gray-600 break-all">{config.cta.backgroundImage || 'No CTA background image uploaded'}</span>
+        </div>
+      </section>
     </div>
   );
 }
-
