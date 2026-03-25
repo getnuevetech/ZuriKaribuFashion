@@ -35,6 +35,33 @@
   }
 
   var ENDPOINTS = buildEndpointCandidates();
+  var DEBUG_ENABLED = (function () {
+    try {
+      var search = typeof window !== "undefined" ? String(window.location.search || "") : "";
+      var params = new URLSearchParams(search);
+      var queryFlag = params.get("zkBridgeDebug");
+      if (queryFlag === "1" || queryFlag === "true") return true;
+    } catch (_error) {}
+    try {
+      var stored = typeof window !== "undefined" ? window.localStorage.getItem("af_debug_frontpage_bridge") : "";
+      if (String(stored || "").trim() === "1") return true;
+    } catch (_error2) {}
+    try {
+      if (typeof window !== "undefined") {
+        var host = String((window.location && window.location.hostname) || "").toLowerCase();
+        if (host === "localhost" || host === "127.0.0.1") return true;
+      }
+    } catch (_error3) {}
+    return false;
+  })();
+  var DEBUG_STATE = {
+    fetchStatus: "idle",
+    selectedEndpoint: "",
+    selectedStatusCode: "",
+    lastError: "",
+    applyRuns: 0,
+    attempts: []
+  };
 
   var SELECTORS = {
     navigation: 'header[code-path^="src/sections/Navigation.tsx:68:7"]',
@@ -54,6 +81,56 @@
     heritage: 'section[code-path^="src/sections/HeritageStory.tsx:113:5"]',
     contact: 'section[code-path^="src/sections/ContactFooter.tsx:73:5"]'
   };
+
+  function getDebugOverlay() {
+    if (!DEBUG_ENABLED || typeof document === "undefined") return null;
+    var existing = document.getElementById("jenks-bridge-debug-overlay");
+    if (existing) return existing;
+    var overlay = document.createElement("div");
+    overlay.id = "jenks-bridge-debug-overlay";
+    overlay.setAttribute("aria-live", "polite");
+    overlay.style.position = "fixed";
+    overlay.style.right = "12px";
+    overlay.style.bottom = "12px";
+    overlay.style.zIndex = "2147483646";
+    overlay.style.maxWidth = "460px";
+    overlay.style.maxHeight = "40vh";
+    overlay.style.overflow = "auto";
+    overlay.style.padding = "10px 12px";
+    overlay.style.borderRadius = "8px";
+    overlay.style.border = "1px solid rgba(255,255,255,0.25)";
+    overlay.style.background = "rgba(17,24,39,0.92)";
+    overlay.style.color = "#f8fafc";
+    overlay.style.font = "12px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+    overlay.style.boxShadow = "0 8px 24px rgba(0,0,0,0.35)";
+    document.body.appendChild(overlay);
+    return overlay;
+  }
+
+  function renderDebugOverlay() {
+    var overlay = getDebugOverlay();
+    if (!overlay) return;
+    var lines = [];
+    lines.push("Jenks Bridge Debug");
+    lines.push("fetch: " + DEBUG_STATE.fetchStatus);
+    lines.push("selected: " + (DEBUG_STATE.selectedEndpoint || "-"));
+    lines.push("status: " + (DEBUG_STATE.selectedStatusCode || "-"));
+    lines.push("apply runs: " + String(DEBUG_STATE.applyRuns || 0));
+    if (DEBUG_STATE.lastError) {
+      lines.push("error: " + DEBUG_STATE.lastError);
+    }
+    lines.push("--- attempts ---");
+    if (!Array.isArray(DEBUG_STATE.attempts) || DEBUG_STATE.attempts.length === 0) {
+      lines.push("(none)");
+    } else {
+      for (var i = 0; i < DEBUG_STATE.attempts.length; i += 1) {
+        var attempt = DEBUG_STATE.attempts[i] || {};
+        var status = attempt.statusCode ? String(attempt.statusCode) : attempt.status || "error";
+        lines.push((i + 1) + ". " + (attempt.url || "-") + " [" + status + "]");
+      }
+    }
+    overlay.textContent = lines.join("\n");
+  }
 
   function asText(value) {
     if (typeof value !== "string") return "";
@@ -356,33 +433,74 @@
     for (var i = 0; i < runners.length; i += 1) {
       try {
         runners[i](config);
-      } catch (_error) {
+      } catch (error) {
         // Keep applying remaining sections even when one mapper fails.
+        DEBUG_STATE.lastError = "apply mapper failed: " + String((error && error.message) || error || "unknown");
       }
     }
+    DEBUG_STATE.applyRuns += 1;
+    renderDebugOverlay();
     return true;
   }
 
   function loadConfig() {
-    var chain = Promise.reject(new Error("no endpoint"));
-    ENDPOINTS.forEach(function (endpoint) {
-      chain = chain.catch(function () {
-        return fetch(endpoint, {
-          method: "GET",
-          credentials: "same-origin",
-          headers: { "Cache-Control": "no-cache" }
-        }).then(function (response) {
-          if (!response.ok) throw new Error("request failed");
-          return response.json();
+    DEBUG_STATE.fetchStatus = "loading";
+    DEBUG_STATE.lastError = "";
+    DEBUG_STATE.attempts = [];
+    renderDebugOverlay();
+    var tryAt = function (index) {
+      if (index >= ENDPOINTS.length) {
+        DEBUG_STATE.fetchStatus = "failed";
+        if (!DEBUG_STATE.lastError) DEBUG_STATE.lastError = "all endpoint attempts failed";
+        renderDebugOverlay();
+        return Promise.resolve(null);
+      }
+      var endpoint = ENDPOINTS[index];
+      return fetch(endpoint, {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { "Cache-Control": "no-cache" }
+      })
+        .then(function (response) {
+          DEBUG_STATE.attempts.push({
+            url: endpoint,
+            status: response.ok ? "ok" : "http_error",
+            statusCode: response.status
+          });
+          if (!response.ok) {
+            DEBUG_STATE.lastError = "HTTP " + String(response.status) + " from " + endpoint;
+            renderDebugOverlay();
+            return tryAt(index + 1);
+          }
+          DEBUG_STATE.selectedEndpoint = endpoint;
+          DEBUG_STATE.selectedStatusCode = String(response.status);
+          return response.json().then(function (payload) {
+            var normalized = normalizeConfig(payload);
+            if (!normalized) {
+              DEBUG_STATE.lastError = "empty/invalid payload from " + endpoint;
+              renderDebugOverlay();
+              return tryAt(index + 1);
+            }
+            DEBUG_STATE.fetchStatus = "ok";
+            renderDebugOverlay();
+            return normalized;
+          });
+        })
+        .catch(function (error) {
+          DEBUG_STATE.attempts.push({
+            url: endpoint,
+            status: "network_error"
+          });
+          DEBUG_STATE.lastError = "network error at " + endpoint + ": " + String((error && error.message) || error || "unknown");
+          renderDebugOverlay();
+          return tryAt(index + 1);
         });
-      });
-    });
-    return chain.then(normalizeConfig).catch(function () {
-      return null;
-    });
+    };
+    return tryAt(0);
   }
 
   function start() {
+    renderDebugOverlay();
     loadConfig().then(function (config) {
       if (!config) return;
       var tries = 0;
