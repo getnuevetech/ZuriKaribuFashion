@@ -201,6 +201,42 @@ const FEATURED_CTW = [
   },
 ];
 
+const RTW_FTB_CTW_SECTIONS = [
+  {
+    id: 'rtw',
+    sectionName: 'READY TO WEAR',
+    title: 'FEATURED READY TO WEAR',
+    description: 'Curated fits built for real life - tailored enough to feel special, versatile enough to wear anywhere.',
+    cta: 'SHOP READY TO WEAR',
+    href: '/ready-to-wear',
+    image: `${ASSET_BASE}/rw_full.jpg`,
+    textOnLeft: false,
+    panelBg: 'bg-[#111]',
+  },
+  {
+    id: 'ftb',
+    sectionName: 'FABRICS TO BUY',
+    title: 'FEATURED FABRICS TO BUY',
+    description: 'Handpicked textiles from trusted makers across Africa, ready for your next design and story.',
+    cta: 'SHOP FABRICS TO BUY',
+    href: '/fabrics',
+    image: `${ASSET_BASE}/fabrics_full.jpg`,
+    textOnLeft: true,
+    panelBg: 'bg-[#171717]',
+  },
+  {
+    id: 'ctw',
+    sectionName: 'CUSTOM TO WEAR',
+    title: 'FEATURED CUSTOM TO WEAR',
+    description: 'Work directly with designers for made-to-measure pieces shaped around your fit and vision.',
+    cta: 'SHOP CUSTOM TO WEAR',
+    href: '/custom',
+    image: `${ASSET_BASE}/custom_full.jpg`,
+    textOnLeft: false,
+    panelBg: 'bg-[#111]',
+  },
+] as const;
+
 const FRESH_DROPS = [
   {
     id: 'drop-1',
@@ -421,7 +457,7 @@ export default function JenksFrontpageV2() {
                     <card.Icon className="h-5 w-5 text-white/90" />
                     <p className="mt-3 font-['Oswald'] text-4xl font-semibold uppercase leading-none">{card.title}</p>
                     <p className="mt-2 text-sm text-white/80">{card.subtitle}</p>
-                    <p className="mt-2 text-[22px] font-medium text-white/75">{card.meta}</p>
+                    <p className="mt-2 text-sm font-medium text-white/75">{card.meta}</p>
                   </div>
                 </Link>
               ))}
@@ -435,7 +471,7 @@ export default function JenksFrontpageV2() {
                   <Link
                     key={country.name}
                     to={`/country-products?country=${encodeURIComponent(country.name)}`}
-                    className="group flex flex-col items-center rounded border border-white/10 bg-white/[0.04] px-3 py-4 text-center hover:border-white/25"
+                    className="group flex flex-col items-center rounded border border-white/12 bg-white/[0.03] px-3 py-4 text-center text-white/75 transition-colors hover:border-[#e66045] hover:text-[#e66045]"
                   >
                     <img
                       src={`https://flagcdn.com/w80/${country.flag}.png`}
@@ -443,10 +479,10 @@ export default function JenksFrontpageV2() {
                       className="h-9 w-9 rounded-full border border-white/15 object-cover"
                       loading="lazy"
                     />
-                    <p className="mt-3 text-base font-semibold text-white">
+                    <p className="mt-3 text-base font-semibold">
                       {country.name} - {country.count}
                     </p>
-                    <p className="text-xs text-white/55">{country.textiles}</p>
+                    <p className="text-xs text-white/58 group-hover:text-[#e66045]/85">{country.textiles}</p>
                   </Link>
                 ))}
               </div>
@@ -528,7 +564,7 @@ export default function JenksFrontpageV2() {
                   className={`border px-4 py-2 text-sm font-medium transition-colors ${
                     isActive
                       ? 'border-[#e66045] bg-transparent text-[#e66045]'
-                      : 'border-white/18 bg-white/[0.04] text-white hover:border-[#e66045] hover:text-[#e66045]'
+                      : 'border-white/14 bg-white/[0.02] text-white/75 hover:border-[#e66045] hover:text-[#e66045]'
                   }`}
                 >
                   {option.label}
@@ -543,15 +579,17 @@ export default function JenksFrontpageV2() {
               <Link
                 key={country.name}
                 to={`/country-products?country=${encodeURIComponent(country.name)}`}
-                className="group flex flex-col items-center rounded border border-white/18 bg-white/[0.03] px-2 py-3 text-center transition-colors hover:border-[#e66045]"
+                className="group flex flex-col items-center px-2 py-2 text-center text-white/75 transition-colors hover:text-[#e66045]"
               >
-                <img
-                  src={`https://flagcdn.com/w80/${country.flag}.png`}
-                  alt={`${country.name} flag`}
-                  className="h-11 w-11 rounded-full border border-white/18 object-cover"
-                  loading="lazy"
-                />
-                <p className="mt-2 text-sm font-medium text-white transition-colors group-hover:text-[#e66045]">{country.name}</p>
+                <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/14 bg-white/[0.02] transition-colors group-hover:border-[#e66045]">
+                  <img
+                    src={`https://flagcdn.com/w80/${country.flag}.png`}
+                    alt={`${country.name} flag`}
+                    className="h-10 w-10 rounded-full border border-white/12 object-cover"
+                    loading="lazy"
+                  />
+                </span>
+                <p className="mt-2 text-sm font-medium">{country.name}</p>
               </Link>
             ))}
           </div>
@@ -570,24 +608,41 @@ export default function JenksFrontpageV2() {
 
       {/* RTW / FTB / CTW HERO-HEIGHT SPLIT */}
       <section className="space-y-0">
-        <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-12`}>
-          <img src={`${ASSET_BASE}/rw_full.jpg`} alt="editorial ready" className="h-full w-full object-cover md:col-span-8" data-kimi-anim="zoom-in" />
-          <div className="flex items-center bg-[#111] px-8 py-12 text-white md:col-span-4" data-kimi-anim="sidebar-right">
-            <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] lg:text-6xl">STANDARDIZED AFRICAN MADE TO WEAR</h3>
+        {RTW_FTB_CTW_SECTIONS.map((section) => (
+          <div key={section.id} className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-12`}>
+            {section.textOnLeft ? (
+              <>
+                <div className={`flex items-center px-8 py-12 text-white md:col-span-4 ${section.panelBg}`} data-kimi-anim="sidebar-left">
+                  <div className="max-w-[480px]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/68">{section.sectionName}</p>
+                    <h3 className="mt-4 font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] lg:text-6xl">{section.title}</h3>
+                    <p className="mt-5 text-base leading-relaxed text-white/70">{section.description}</p>
+                    <Link to={section.href} className="mt-8 inline-flex items-center gap-2 text-[30px] font-medium uppercase tracking-[0.04em] text-white/90 hover:text-white">
+                      {section.cta}
+                      <ArrowRight className="h-5 w-5" />
+                    </Link>
+                  </div>
+                </div>
+                <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover md:col-span-8" data-kimi-anim="zoom-in" />
+              </>
+            ) : (
+              <>
+                <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover md:col-span-8" data-kimi-anim="zoom-in" />
+                <div className={`flex items-center px-8 py-12 text-white md:col-span-4 ${section.panelBg}`} data-kimi-anim="sidebar-right">
+                  <div className="max-w-[480px]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/68">{section.sectionName}</p>
+                    <h3 className="mt-4 font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] lg:text-6xl">{section.title}</h3>
+                    <p className="mt-5 text-base leading-relaxed text-white/70">{section.description}</p>
+                    <Link to={section.href} className="mt-8 inline-flex items-center gap-2 text-[30px] font-medium uppercase tracking-[0.04em] text-white/90 hover:text-white">
+                      {section.cta}
+                      <ArrowRight className="h-5 w-5" />
+                    </Link>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-        </div>
-        <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-12`}>
-          <div className="flex items-center bg-[#1a1a1a] px-8 py-12 text-white md:col-span-4" data-kimi-anim="sidebar-left">
-            <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] lg:text-6xl">AFRICAN FABRICS ALL ACROSS ALL EDGES OF AFRICA</h3>
-          </div>
-          <img src={`${ASSET_BASE}/fabrics_full.jpg`} alt="editorial fabric" className="h-full w-full object-cover md:col-span-8" data-kimi-anim="zoom-in" />
-        </div>
-        <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-12`}>
-          <img src={`${ASSET_BASE}/custom_full.jpg`} alt="editorial custom" className="h-full w-full object-cover md:col-span-8" data-kimi-anim="zoom-in" />
-          <div className="flex items-center bg-[#111] px-8 py-12 text-white md:col-span-4" data-kimi-anim="sidebar-right">
-            <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] lg:text-6xl">EVERY STITCH SEWN BY AN AFRICAN DESIGNER</h3>
-          </div>
-        </div>
+        ))}
       </section>
 
       {/* HOW IT WORKS */}
@@ -612,10 +667,10 @@ export default function JenksFrontpageV2() {
             <Link key={card.id} to={card.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
               <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-              <div className="absolute right-6 top-6 max-w-[46%] text-right text-white">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70">Ready To Wear</p>
-                <p className="mt-2 font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">Featured Ready To Wear</p>
-                <p className="mt-2 text-xs text-white/75">{card.subtitle}</p>
+              <p className="absolute left-6 top-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">Ready To Wear</p>
+              <div className="absolute bottom-6 right-6 max-w-[58%] text-right text-white">
+                <p className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">Featured Ready To Wear</p>
+                <p className="mt-2 text-sm text-white/78">{card.subtitle}</p>
               </div>
             </Link>
           ))}
@@ -625,10 +680,10 @@ export default function JenksFrontpageV2() {
             <Link key={card.id} to={card.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
               <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-              <div className="absolute right-6 top-6 max-w-[46%] text-right text-white">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70">Custom To Wear</p>
-                <p className="mt-2 font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">Featured Custom To Wear</p>
-                <p className="mt-2 text-xs text-white/75">{card.subtitle}</p>
+              <p className="absolute left-6 top-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">Custom To Wear</p>
+              <div className="absolute bottom-6 right-6 max-w-[58%] text-right text-white">
+                <p className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">Featured Custom To Wear</p>
+                <p className="mt-2 text-sm text-white/78">{card.subtitle}</p>
               </div>
             </Link>
           ))}
@@ -667,9 +722,12 @@ export default function JenksFrontpageV2() {
             className="mt-8 flex gap-4 overflow-x-auto pb-1 scrollbar-hide"
           >
             {FRESH_DROPS.map((drop) => (
-              <article key={drop.id} className="min-w-[260px] flex-1 overflow-hidden border border-black/10 bg-white md:min-w-[calc((100%-48px)/4)]">
+              <article
+                key={drop.id}
+                className="group min-w-[260px] flex-1 overflow-hidden border border-black/10 bg-white transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_18px_46px_rgba(0,0,0,0.2)] md:min-w-[calc((100%-48px)/4)]"
+              >
                 <div className="relative">
-                  <img src={drop.image} alt={drop.name} className="h-[52vh] w-full object-cover" />
+                  <img src={drop.image} alt={drop.name} className="h-[52vh] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
                   <span className="absolute left-4 top-4 bg-[#e66045] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white">
                     NEW
                   </span>
