@@ -172,6 +172,17 @@
     return true;
   }
 
+  function setTextAll(selector, value) {
+    var text = asText(value);
+    if (!text) return false;
+    var nodes = document.querySelectorAll(selector);
+    if (!nodes || nodes.length === 0) return false;
+    for (var i = 0; i < nodes.length; i += 1) {
+      nodes[i].textContent = text;
+    }
+    return true;
+  }
+
   function setAttr(selector, attr, value) {
     var node = document.querySelector(selector);
     var text = asText(value);
@@ -185,6 +196,17 @@
     var nextHref = asHref(href);
     if (!node || !nextHref) return false;
     node.setAttribute("href", nextHref);
+    return true;
+  }
+
+  function setHrefAll(selector, href) {
+    var nextHref = asHref(href);
+    if (!nextHref) return false;
+    var nodes = document.querySelectorAll(selector);
+    if (!nodes || nodes.length === 0) return false;
+    for (var i = 0; i < nodes.length; i += 1) {
+      nodes[i].setAttribute("href", nextHref);
+    }
     return true;
   }
 
@@ -258,7 +280,7 @@
 
     // Banner-level hero text must take precedence over fallback copy tokens.
     if (!activeBanner || (!asText(activeBanner.text) && !asText(activeBanner.eyebrow))) {
-      setText('[code-path="src/sections/HeroSection.tsx:231:11"]', copy.heroEyebrow);
+      setTextAll('[code-path="src/sections/HeroSection.tsx:231:11"]', copy.heroEyebrow);
     }
     setText('[code-path="src/sections/ShopByBlocks.tsx:144:11"]', copy.shopByEyebrow);
     setText(
@@ -287,14 +309,10 @@
   function applyNavigation(config) {
     var navigation = (config && config.navigation) || {};
     var navRoot = document.querySelector(SELECTORS.navigation);
+    if (!navRoot) navRoot = document.querySelector("header");
     if (!navRoot) return;
     var logoText = asText(navigation.logoText);
     if (logoText) {
-      var primaryLogoNode = navRoot.querySelector('[code-path="src/sections/Navigation.tsx:97:17"]');
-      var accentLogoNode = navRoot.querySelector('[code-path="src/sections/Navigation.tsx:98:17"]');
-      var compactLogoNode = navRoot.querySelector(
-        '[code-path="src/sections/Navigation.tsx:96:15"], [code-path="src/sections/Navigation.tsx:84:13"]'
-      );
       var words = logoText.split(/\s+/).filter(Boolean);
       var primary = "";
       var accent = "";
@@ -307,10 +325,17 @@
       } else {
         primary = logoText;
       }
-      if (primaryLogoNode) primaryLogoNode.textContent = primary || logoText;
-      if (accentLogoNode) accentLogoNode.textContent = accent;
-      if (compactLogoNode && (!primaryLogoNode || !accentLogoNode)) {
-        compactLogoNode.textContent = logoText;
+      var splitUpdated = false;
+      splitUpdated =
+        setTextAll('[code-path="src/sections/Navigation.tsx:97:17"]', primary || logoText) || splitUpdated;
+      if (accent) {
+        splitUpdated = setTextAll('[code-path="src/sections/Navigation.tsx:98:17"]', accent) || splitUpdated;
+      }
+      if (!splitUpdated) {
+        setTextAll(
+          '[code-path="src/sections/Navigation.tsx:96:15"], [code-path="src/sections/Navigation.tsx:84:13"]',
+          logoText
+        );
       }
     }
     var hamburgerLinks = Array.isArray(navigation.hamburgerMenuLinks) ? navigation.hamburgerMenuLinks : [];
@@ -345,27 +370,29 @@
       var titlePrimary = titleWords.length > 0 ? titleWords[0] : title;
       var titleAccent = titleWords.length > 1 ? titleWords.slice(1).join(" ") : "";
       // Keep the two-span hero title structure when possible.
-      if (!setText('[code-path="src/sections/HeroSection.tsx:225:15"]', titlePrimary)) {
-        setText('[code-path="src/sections/HeroSection.tsx:220:11"]', title);
+      if (!setTextAll('[code-path="src/sections/HeroSection.tsx:225:15"]', titlePrimary)) {
+        setTextAll('[code-path="src/sections/HeroSection.tsx:220:11"]', title);
       } else {
-        var accentSet = setText('[code-path="src/sections/HeroSection.tsx:226:15"]', titleAccent);
+        var accentSet = setTextAll('[code-path="src/sections/HeroSection.tsx:226:15"]', titleAccent);
         if (!accentSet && titleAccent) {
-          setText('[code-path="src/sections/HeroSection.tsx:220:11"]', title);
+          setTextAll('[code-path="src/sections/HeroSection.tsx:220:11"]', title);
         }
       }
     }
-    setText('[code-path="src/sections/HeroSection.tsx:231:11"]', pick(first.text, first.eyebrow));
-    setText('[code-path="src/sections/HeroSection.tsx:239:11"]', pick(first.subtitle, first.description));
-    setText('[code-path="src/sections/HeroSection.tsx:269:15"]', first.primaryCtaText);
-    setHref('[code-path="src/sections/HeroSection.tsx:263:13"]', first.primaryCtaLink);
+    setTextAll('[code-path="src/sections/HeroSection.tsx:231:11"]', pick(first.text, first.eyebrow));
+    setTextAll('[code-path="src/sections/HeroSection.tsx:239:11"]', pick(first.subtitle, first.description));
+    setTextAll('[code-path="src/sections/HeroSection.tsx:269:15"]', first.primaryCtaText);
+    setHrefAll('[code-path="src/sections/HeroSection.tsx:263:13"]', first.primaryCtaLink);
     var secondary = document.querySelector('[code-path="src/sections/HeroSection.tsx:275:11"]');
     if (secondary && asText(first.secondaryCtaText)) {
       secondary.textContent = asText(first.secondaryCtaText);
       if (asHref(first.secondaryCtaLink)) secondary.setAttribute("href", asHref(first.secondaryCtaLink));
     }
     if (asText(first.image)) {
-      var imageNode = document.querySelector('[code-path="src/sections/HeroSection.tsx:200:9"]');
-      if (imageNode) imageNode.setAttribute("src", asText(first.image));
+      var imageNodes = document.querySelectorAll('[code-path="src/sections/HeroSection.tsx:200:9"]');
+      for (var i = 0; i < imageNodes.length; i += 1) {
+        imageNodes[i].setAttribute("src", asText(first.image));
+      }
     }
   }
 
@@ -602,15 +629,20 @@
     renderDebugOverlay();
     loadConfig().then(function (config) {
       if (!config) return;
-      var tries = 0;
-      var maxTries = 60;
-      var timer = setInterval(function () {
-        tries += 1;
-        applyConfig(config);
-        if (tries >= maxTries) {
-          clearInterval(timer);
+      applyConfig(config);
+      try {
+        if (typeof window !== "undefined" && window.__jenksBridgeApplyTimer) {
+          clearInterval(window.__jenksBridgeApplyTimer);
         }
-      }, 250);
+      } catch (_timerError) {}
+      var timer = setInterval(function () {
+        applyConfig(config);
+      }, 1000);
+      try {
+        if (typeof window !== "undefined") {
+          window.__jenksBridgeApplyTimer = timer;
+        }
+      } catch (_timerStoreError) {}
     });
   }
 
