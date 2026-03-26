@@ -1,5 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Headphones, Menu, RefreshCw, Search, ShieldCheck, ShoppingBag, Sun, Truck } from 'lucide-react';
+import {
+  ArrowRight,
+  Briefcase,
+  CalendarDays,
+  Globe,
+  Headphones,
+  Heart,
+  Menu,
+  Palette,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+  Sun,
+  Tag,
+  Truck,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 type HeroSlide = {
@@ -12,6 +29,8 @@ type HeroSlide = {
   cta: string;
   href: string;
 };
+
+type ShopByTab = 'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE';
 
 const ASSET_BASE = 'https://african-fashion-zurikaribu.vercel.app';
 
@@ -59,8 +78,62 @@ const trust = [
   { label: '24/7 SUPPORT', sub: 'Chat and ticket support', Icon: Headphones },
 ];
 
+const SHOP_BY_CATEGORY = [
+  {
+    id: 'cat-ready',
+    title: 'READY TO WEAR',
+    subtitle: 'Everyday edits in premium African style',
+    meta: '48 products',
+    href: '/ready-to-wear',
+    image: `${ASSET_BASE}/featured_rw_left.jpg`,
+    Icon: ShoppingBag,
+  },
+  {
+    id: 'cat-custom',
+    title: 'CUSTOM TO WEAR',
+    subtitle: 'Bespoke pieces tailored for your story',
+    meta: '24 products',
+    href: '/custom',
+    image: `${ASSET_BASE}/featured_custom_right.jpg`,
+    Icon: Sparkles,
+  },
+  {
+    id: 'cat-fabrics',
+    title: 'FABRICS TO BUY',
+    subtitle: 'Signature textiles from across the continent',
+    meta: '64 products',
+    href: '/fabrics',
+    image: `${ASSET_BASE}/fabrics_full.jpg`,
+    Icon: Palette,
+  },
+];
+
+const SHOP_BY_COUNTRY = [
+  { name: 'Nigeria', count: 156, textiles: 'Ankara • Adire', flag: 'ng' },
+  { name: 'Ghana', count: 89, textiles: 'Kente • Batik', flag: 'gh' },
+  { name: 'Kenya', count: 67, textiles: 'Kanga • Kikoy', flag: 'ke' },
+  { name: 'South Africa', count: 54, textiles: 'Shweshwe • Xhosa', flag: 'za' },
+  { name: 'Egypt', count: 44, textiles: 'Linen • Cotton', flag: 'eg' },
+  { name: 'Senegal', count: 38, textiles: 'Bazin • Wax', flag: 'sn' },
+];
+
+const SHOP_BY_STYLE = [
+  { name: 'Wedding', sub: 'Bridal & celebration wear', Icon: Heart },
+  { name: 'Formal Events', sub: 'Business & evening attire', Icon: Briefcase },
+  { name: 'Everyday', sub: 'Comfortable daily wear', Icon: ShoppingBag },
+  { name: 'Cultural', sub: 'Traditional ceremonies', Icon: Sparkles },
+];
+
+const SHOP_BY_PRICE = [
+  { range: '$0 - $100', sub: 'Affordable finds' },
+  { range: '$100 - $300', sub: 'Mid-range quality' },
+  { range: '$300 - $500', sub: 'Premium pieces' },
+  { range: '$500+', sub: 'Luxury & bespoke' },
+];
+
 export default function JenksFrontpageV2() {
   const [index, setIndex] = useState(0);
+  const [shopByTab, setShopByTab] = useState<ShopByTab>('CATEGORY');
   const active = useMemo(() => HERO[index] || HERO[0], [index]);
 
   useEffect(() => {
@@ -156,41 +229,128 @@ export default function JenksFrontpageV2() {
       </section>
 
       {/* SHOP BY */}
-      <section className="bg-white py-10">
+      <section className="bg-[#07090d] py-14 lg:py-16">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <h2 className="text-center font-['Oswald'] text-4xl font-bold uppercase">SHOP BY</h2>
-          <div className="mx-auto mt-2 h-px w-24 bg-black/15" />
-          <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-            <Link to="/ready-to-wear" className="group relative overflow-hidden border border-black/10">
-              <img src={`${ASSET_BASE}/featured_rw_left.jpg`} alt="ready to wear" className="h-[62vh] w-full object-cover transition-transform duration-700 group-hover:scale-105" />
-            </Link>
-            <Link to="/custom" className="group relative overflow-hidden border border-black/10">
-              <img src={`${ASSET_BASE}/featured_custom_right.jpg`} alt="custom" className="h-[62vh] w-full object-cover transition-transform duration-700 group-hover:scale-105" />
-            </Link>
-            <Link to="/fabrics" className="group relative overflow-hidden border border-black/10">
-              <img src={`${ASSET_BASE}/fabrics_full.jpg`} alt="fabrics" className="h-[62vh] w-full object-cover transition-transform duration-700 group-hover:scale-105" />
-            </Link>
-          </div>
-        </div>
-      </section>
+          <div className="mx-auto max-w-[1180px]">
+            <p className="text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">Discover</p>
+            <h2 className="mt-2 text-center font-['Oswald'] text-6xl font-bold uppercase leading-none text-white">SHOP BY</h2>
+            <p className="mt-3 text-center text-base text-white/60">Browse by category, country, style, or budget.</p>
 
-      {/* SHOP BY COUNTRY */}
-      <section className="bg-[#f9f8f4] py-10">
-        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <div className="flex items-end justify-between">
-            <h2 className="font-['Oswald'] text-3xl font-bold uppercase">SHOP BY COUNTRY</h2>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">54 COUNTRIES</p>
-          </div>
-          <div className="mt-6 space-y-2 border border-black/10 bg-white p-4">
-            {COUNTRIES.map((row, rowIndex) => (
-              <div key={rowIndex} className="grid grid-cols-6 gap-2 md:grid-cols-12">
-                {row.map((code) => (
-                  <div key={code} className="border border-black/10 px-2 py-2 text-center text-[10px] font-semibold uppercase">
-                    {code}
-                  </div>
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+              {[
+                { key: 'CATEGORY', label: 'Category', Icon: ShoppingBag },
+                { key: 'COUNTRY', label: 'Country', Icon: Globe },
+                { key: 'STYLE', label: 'Occasion / Style', Icon: CalendarDays },
+                { key: 'PRICE', label: 'Price', Icon: Tag },
+              ].map((tab) => {
+                const isActive = shopByTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setShopByTab(tab.key as ShopByTab)}
+                    className={`inline-flex items-center gap-2 border px-5 py-3 text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'border-white bg-white text-[#111]'
+                        : 'border-white/15 bg-white/[0.06] text-white/85 hover:border-white/35'
+                    }`}
+                  >
+                    <tab.Icon className="h-4 w-4" />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {shopByTab === 'CATEGORY' ? (
+              <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
+                {SHOP_BY_CATEGORY.map((card) => (
+                  <Link key={card.id} to={card.href} className="group relative overflow-hidden border border-white/10">
+                    <img
+                      src={card.image}
+                      alt={card.title}
+                      className="h-[58vh] w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                    <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
+                      <div className="flex items-center gap-2">
+                        <card.Icon className="h-4 w-4 text-white/90" />
+                        <p className="font-['Oswald'] text-4xl font-semibold uppercase leading-none">{card.title}</p>
+                      </div>
+                      <p className="mt-2 text-sm text-white/80">{card.subtitle}</p>
+                      <p className="mt-1 text-xs text-white/70">{card.meta}</p>
+                    </div>
+                  </Link>
                 ))}
               </div>
-            ))}
+            ) : null}
+
+            {shopByTab === 'COUNTRY' ? (
+              <div className="mt-10">
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+                  {SHOP_BY_COUNTRY.map((country) => (
+                    <Link
+                      key={country.name}
+                      to={`/country-products?country=${encodeURIComponent(country.name)}`}
+                      className="group flex flex-col items-center rounded border border-white/10 bg-white/[0.04] px-3 py-4 text-center hover:border-white/25"
+                    >
+                      <img
+                        src={`https://flagcdn.com/w80/${country.flag}.png`}
+                        alt={`${country.name} flag`}
+                        className="h-9 w-9 rounded-full border border-white/15 object-cover"
+                        loading="lazy"
+                      />
+                      <p className="mt-3 text-base font-semibold text-white">
+                        {country.name} - {country.count}
+                      </p>
+                      <p className="text-xs text-white/55">{country.textiles}</p>
+                    </Link>
+                  ))}
+                </div>
+                <div className="mt-8 text-center">
+                  <Link to="/country-products" className="inline-flex items-center gap-2 text-2xl font-semibold text-white/85 hover:text-white">
+                    View all 54 countries
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+
+            {shopByTab === 'STYLE' ? (
+              <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {SHOP_BY_STYLE.map((styleItem) => (
+                  <Link
+                    key={styleItem.name}
+                    to="/shop"
+                    className="rounded border border-white/10 bg-white/[0.06] px-5 py-9 text-center transition-colors hover:border-white/25"
+                  >
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-black/40 text-[#e66045]">
+                      <styleItem.Icon className="h-5 w-5" />
+                    </div>
+                    <p className="mt-4 text-2xl font-semibold text-white">{styleItem.name}</p>
+                    <p className="mt-1 text-sm text-white/50">{styleItem.sub}</p>
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+
+            {shopByTab === 'PRICE' ? (
+              <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {SHOP_BY_PRICE.map((priceItem) => (
+                  <Link
+                    key={priceItem.range}
+                    to="/shop"
+                    className="rounded border border-white/10 bg-white/[0.06] px-5 py-7 transition-colors hover:border-white/25"
+                  >
+                    <div className="flex items-center gap-2 text-[#e66045]">
+                      <Tag className="h-4 w-4" />
+                    </div>
+                    <p className="mt-3 text-3xl font-semibold text-white">{priceItem.range}</p>
+                    <p className="mt-1 text-sm text-white/55">{priceItem.sub}</p>
+                  </Link>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
