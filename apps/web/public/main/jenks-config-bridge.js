@@ -245,8 +245,20 @@
 
   function applyCopy(config) {
     var copy = (config.experience && config.experience.jenksCopy) || {};
+    var hero = (config && config.hero) || {};
+    var banners = Array.isArray(hero.banners) ? hero.banners : [];
+    var activeBanner = null;
+    for (var b = 0; b < banners.length; b += 1) {
+      if (banners[b] && banners[b].enabled !== false) {
+        activeBanner = banners[b];
+        break;
+      }
+    }
 
-    setText('[code-path="src/sections/HeroSection.tsx:231:11"]', copy.heroEyebrow);
+    // Banner-level hero text must take precedence over fallback copy tokens.
+    if (!activeBanner || (!asText(activeBanner.text) && !asText(activeBanner.eyebrow))) {
+      setText('[code-path="src/sections/HeroSection.tsx:231:11"]', copy.heroEyebrow);
+    }
     setText('[code-path="src/sections/ShopByBlocks.tsx:144:11"]', copy.shopByEyebrow);
     setText(
       '[code-path="src/sections/ShopByBlocks.tsx:145:11"]',
@@ -277,11 +289,28 @@
     if (!navRoot) return;
     var logoText = asText(navigation.logoText);
     if (logoText) {
-      // Visible brand text node in current production bundle is at 96:15.
-      var logoNodes = navRoot.querySelectorAll(
+      var primaryLogoNode = navRoot.querySelector('[code-path="src/sections/Navigation.tsx:97:17"]');
+      var accentLogoNode = navRoot.querySelector('[code-path="src/sections/Navigation.tsx:98:17"]');
+      var compactLogoNode = navRoot.querySelector(
         '[code-path="src/sections/Navigation.tsx:96:15"], [code-path="src/sections/Navigation.tsx:84:13"]'
       );
-      for (var i = 0; i < logoNodes.length; i += 1) logoNodes[i].textContent = logoText;
+      var words = logoText.split(/\s+/).filter(Boolean);
+      var primary = "";
+      var accent = "";
+      if (words.length >= 2) {
+        primary = words[0];
+        accent = words.slice(1).join(" ");
+      } else if (logoText.length > 4) {
+        primary = logoText.slice(0, 4);
+        accent = logoText.slice(4);
+      } else {
+        primary = logoText;
+      }
+      if (primaryLogoNode) primaryLogoNode.textContent = primary || logoText;
+      if (accentLogoNode) accentLogoNode.textContent = accent;
+      if (compactLogoNode && (!primaryLogoNode || !accentLogoNode)) {
+        compactLogoNode.textContent = logoText;
+      }
     }
     var hamburgerLinks = Array.isArray(navigation.hamburgerMenuLinks) ? navigation.hamburgerMenuLinks : [];
     if (hamburgerLinks.length > 0) {
@@ -309,7 +338,21 @@
     if (banners.length === 0) return;
     var first = banners.filter(function (item) { return item && item.enabled !== false; })[0];
     if (!first) return;
-    setText('[code-path="src/sections/HeroSection.tsx:220:11"]', pick(first.title));
+    var title = pick(first.title);
+    if (title) {
+      var titleWords = title.split(/\s+/).filter(Boolean);
+      var titlePrimary = titleWords.length > 0 ? titleWords[0] : title;
+      var titleAccent = titleWords.length > 1 ? titleWords.slice(1).join(" ") : "";
+      // Keep the two-span hero title structure when possible.
+      if (!setText('[code-path="src/sections/HeroSection.tsx:225:15"]', titlePrimary)) {
+        setText('[code-path="src/sections/HeroSection.tsx:220:11"]', title);
+      } else {
+        var accentSet = setText('[code-path="src/sections/HeroSection.tsx:226:15"]', titleAccent);
+        if (!accentSet && titleAccent) {
+          setText('[code-path="src/sections/HeroSection.tsx:220:11"]', title);
+        }
+      }
+    }
     setText('[code-path="src/sections/HeroSection.tsx:231:11"]', pick(first.text, first.eyebrow));
     setText('[code-path="src/sections/HeroSection.tsx:239:11"]', pick(first.subtitle, first.description));
     setText('[code-path="src/sections/HeroSection.tsx:269:15"]', first.primaryCtaText);
@@ -320,7 +363,7 @@
       if (asHref(first.secondaryCtaLink)) secondary.setAttribute("href", asHref(first.secondaryCtaLink));
     }
     if (asText(first.image)) {
-      var imageNode = document.querySelector('[code-path="src/sections/HeroSection.tsx:200:9"] img');
+      var imageNode = document.querySelector('[code-path="src/sections/HeroSection.tsx:200:9"]');
       if (imageNode) imageNode.setAttribute("src", asText(first.image));
     }
   }
