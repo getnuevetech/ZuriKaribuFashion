@@ -72,6 +72,7 @@
     applyRuns: 0,
     attempts: []
   };
+  var REQUEST_TIMEOUT_MS = 5000;
 
   var SELECTORS = {
     navigation: 'header[code-path^="src/sections/Navigation.tsx:68:7"]',
@@ -518,17 +519,37 @@
         return Promise.resolve(null);
       }
       var endpoint = ENDPOINTS[index];
-      return fetch(endpoint, {
+      var attempt = {
+        url: endpoint,
+        status: "pending"
+      };
+      DEBUG_STATE.attempts.push(attempt);
+      renderDebugOverlay();
+      var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+      var timeoutId = null;
+      if (controller) {
+        timeoutId = setTimeout(function () {
+          try {
+            controller.abort();
+          } catch (_abortError) {}
+        }, REQUEST_TIMEOUT_MS);
+      }
+      var requestOptions = {
         method: "GET",
         credentials: "same-origin",
         headers: { "Cache-Control": "no-cache" }
+      };
+      if (controller) requestOptions.signal = controller.signal;
+      return fetch(endpoint, {
+        method: requestOptions.method,
+        credentials: requestOptions.credentials,
+        headers: requestOptions.headers,
+        signal: requestOptions.signal
       })
         .then(function (response) {
-          DEBUG_STATE.attempts.push({
-            url: endpoint,
-            status: response.ok ? "ok" : "http_error",
-            statusCode: response.status
-          });
+          if (timeoutId) clearTimeout(timeoutId);
+          attempt.status = response.ok ? "ok" : "http_error";
+          attempt.statusCode = response.status;
           if (!response.ok) {
             DEBUG_STATE.lastError = "HTTP " + String(response.status) + " from " + endpoint;
             DEBUG_FORCED_VISIBLE = true;
@@ -558,11 +579,17 @@
           });
         })
         .catch(function (error) {
-          DEBUG_STATE.attempts.push({
-            url: endpoint,
-            status: "network_error"
-          });
-          DEBUG_STATE.lastError = "network error at " + endpoint + ": " + String((error && error.message) || error || "unknown");
+          if (timeoutId) clearTimeout(timeoutId);
+          var isAbort =
+            !!(error && error.name === "AbortError") ||
+            /aborted|AbortError/i.test(String((error && error.message) || ""));
+          attempt.status = isAbort ? "timeout" : "network_error";
+          attempt.statusCode = isAbort ? "timeout" : "";
+          DEBUG_STATE.lastError =
+            (isAbort ? "timeout after " + REQUEST_TIMEOUT_MS + "ms at " : "network error at ") +
+            endpoint +
+            ": " +
+            String((error && error.message) || error || "unknown");
           DEBUG_FORCED_VISIBLE = true;
           renderDebugOverlay();
           return tryAt(index + 1);
