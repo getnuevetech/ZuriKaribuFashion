@@ -165,7 +165,9 @@ function App() {
             <Route path="/main/" element={<JenksV14Redirect />} />
             <Route path="/jenks" element={<JenksV14Redirect />} />
             <Route path="/home-jenks-static" element={<JenksV14Redirect />} />
-            <Route path="/jenks-v2-preview" element={<JenksFrontpageV2 />} />
+            <Route path="/home-v2-preview" element={<JenksFrontpageV2 />} />
+            <Route path="/home-v2-preview/" element={<JenksFrontpageV2 />} />
+            <Route path="/jenks-v2-preview" element={<NavigateWithSearch to="/home-v2-preview" />} />
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
