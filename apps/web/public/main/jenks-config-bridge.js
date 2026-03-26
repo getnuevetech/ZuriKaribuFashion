@@ -368,7 +368,8 @@
     if (title) {
       var titleWords = title.split(/\s+/).filter(Boolean);
       var titlePrimary = titleWords.length > 0 ? titleWords[0] : title;
-      var titleAccent = titleWords.length > 1 ? titleWords.slice(1).join(" ") : "";
+      // Preserve visible spacing between split title spans (e.g. "WEAR THE STORY...").
+      var titleAccent = titleWords.length > 1 ? " " + titleWords.slice(1).join(" ") : "";
       // Keep the two-span hero title structure when possible.
       if (!setTextAll('[code-path="src/sections/HeroSection.tsx:225:15"]', titlePrimary)) {
         setTextAll('[code-path="src/sections/HeroSection.tsx:220:11"]', title);
