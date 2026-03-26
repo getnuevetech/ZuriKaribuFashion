@@ -414,13 +414,14 @@ export default function JenksFrontpageV2() {
                     className="h-[82vh] w-full object-cover transition-transform duration-700 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                  <div className="absolute right-4 top-4 text-white/85">
+                    <ArrowRight className="h-6 w-6" />
+                  </div>
                   <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
-                    <div className="flex items-center gap-2">
-                      <card.Icon className="h-4 w-4 text-white/90" />
-                      <p className="font-['Oswald'] text-4xl font-semibold uppercase leading-none">{card.title}</p>
-                    </div>
+                    <card.Icon className="h-5 w-5 text-white/90" />
+                    <p className="mt-3 font-['Oswald'] text-4xl font-semibold uppercase leading-none">{card.title}</p>
                     <p className="mt-2 text-sm text-white/80">{card.subtitle}</p>
-                    <p className="mt-1 text-xs text-white/70">{card.meta}</p>
+                    <p className="mt-2 text-[22px] font-medium text-white/75">{card.meta}</p>
                   </div>
                 </Link>
               ))}
