@@ -34,6 +34,7 @@ type HeroSlide = {
 };
 
 type ShopByTab = 'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE';
+type CountryRegion = 'ALL' | 'NORTH' | 'WEST' | 'CENTRAL' | 'EAST' | 'SOUTHERN';
 
 const ASSET_BASE = 'https://african-fashion-zurikaribu.vercel.app';
 const HERO_HEIGHT_CLASS = 'min-h-[106vh]';
@@ -130,6 +131,42 @@ const SHOP_BY_PRICE = [
   { range: '$500+', sub: 'Luxury & bespoke' },
 ];
 
+const COUNTRY_REGION_OPTIONS: Array<{ key: CountryRegion; label: string }> = [
+  { key: 'ALL', label: 'All Regions' },
+  { key: 'NORTH', label: 'North' },
+  { key: 'WEST', label: 'West' },
+  { key: 'CENTRAL', label: 'Central' },
+  { key: 'EAST', label: 'East' },
+  { key: 'SOUTHERN', label: 'Southern' },
+];
+
+const COUNTRY_SHOWCASE: Array<{ name: string; flag: string; region: Exclude<CountryRegion, 'ALL'> }> = [
+  { name: 'Egypt', flag: 'eg', region: 'NORTH' },
+  { name: 'Morocco', flag: 'ma', region: 'NORTH' },
+  { name: 'Burkina Faso', flag: 'bf', region: 'WEST' },
+  { name: 'Ghana', flag: 'gh', region: 'WEST' },
+  { name: 'Mali', flag: 'ml', region: 'WEST' },
+  { name: 'Nigeria', flag: 'ng', region: 'WEST' },
+  { name: 'Senegal', flag: 'sn', region: 'WEST' },
+  { name: 'Cameroon', flag: 'cm', region: 'CENTRAL' },
+  { name: 'Congo', flag: 'cg', region: 'CENTRAL' },
+  { name: 'Ethiopia', flag: 'et', region: 'EAST' },
+  { name: 'Kenya', flag: 'ke', region: 'EAST' },
+  { name: 'Madagascar', flag: 'mg', region: 'EAST' },
+  { name: 'Mauritius', flag: 'mu', region: 'EAST' },
+  { name: 'Rwanda', flag: 'rw', region: 'EAST' },
+  { name: 'Seychelles', flag: 'sc', region: 'EAST' },
+  { name: 'Tanzania', flag: 'tz', region: 'EAST' },
+  { name: 'Uganda', flag: 'ug', region: 'EAST' },
+  { name: 'Botswana', flag: 'bw', region: 'SOUTHERN' },
+  { name: 'Eswatini', flag: 'sz', region: 'SOUTHERN' },
+  { name: 'Lesotho', flag: 'ls', region: 'SOUTHERN' },
+  { name: 'Namibia', flag: 'na', region: 'SOUTHERN' },
+  { name: 'South Africa', flag: 'za', region: 'SOUTHERN' },
+  { name: 'Zambia', flag: 'zm', region: 'SOUTHERN' },
+  { name: 'Zimbabwe', flag: 'zw', region: 'SOUTHERN' },
+];
+
 const FEATURED_RTW = [
   {
     id: 'fr1',
@@ -198,8 +235,26 @@ const FRESH_DROPS = [
 export default function JenksFrontpageV2() {
   const [index, setIndex] = useState(0);
   const [shopByTab, setShopByTab] = useState<ShopByTab>('CATEGORY');
+  const [countryRegion, setCountryRegion] = useState<CountryRegion>('ALL');
   const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
   const active = useMemo(() => HERO[index] || HERO[0], [index]);
+  const filteredCountryShowcase = useMemo(
+    () => COUNTRY_SHOWCASE.filter((country) => countryRegion === 'ALL' || country.region === countryRegion),
+    [countryRegion]
+  );
+  const countryRegionCounts = useMemo(() => {
+    return COUNTRY_REGION_OPTIONS.reduce<Record<CountryRegion, number>>(
+      (acc, option) => {
+        if (option.key === 'ALL') {
+          acc.ALL = COUNTRY_SHOWCASE.length;
+          return acc;
+        }
+        acc[option.key] = COUNTRY_SHOWCASE.filter((country) => country.region === option.key).length;
+        return acc;
+      },
+      { ALL: COUNTRY_SHOWCASE.length, NORTH: 0, WEST: 0, CENTRAL: 0, EAST: 0, SOUTHERN: 0 }
+    );
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setIndex((p) => (p + 1) % HERO.length), 7000);
@@ -438,6 +493,77 @@ export default function JenksFrontpageV2() {
               ))}
             </div>
           ) : null}
+        </div>
+      </section>
+
+      {/* SHOP BY COUNTRY (DEDICATED) */}
+      <section className="bg-[#06080b] py-12 lg:py-14" data-kimi-anim="fade-up">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">Discover</p>
+              <h2 className="mt-2 font-['Oswald'] text-6xl font-bold uppercase leading-none text-white">SHOP BY COUNTRY</h2>
+              <p className="mt-3 max-w-2xl text-base text-white/62">
+                Explore traditional textiles and contemporary designs from across the African continent.
+              </p>
+            </div>
+            <Link
+              to="/country-products"
+              className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-white/80 hover:text-white lg:mt-10"
+            >
+              View All 54 Countries
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+
+          <div className="mt-6 flex flex-wrap items-center gap-2">
+            {COUNTRY_REGION_OPTIONS.map((option) => {
+              const isActive = countryRegion === option.key;
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setCountryRegion(option.key)}
+                  className={`border px-4 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'border-white bg-white text-[#111]'
+                      : 'border-white/12 bg-white/[0.04] text-white/82 hover:border-white/28'
+                  }`}
+                >
+                  {option.label}
+                  {option.key === 'ALL' ? '' : ` (${countryRegionCounts[option.key]})`}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12">
+            {filteredCountryShowcase.map((country) => (
+              <Link
+                key={country.name}
+                to={`/country-products?country=${encodeURIComponent(country.name)}`}
+                className="group flex flex-col items-center rounded border border-white/8 bg-white/[0.03] px-2 py-3 text-center transition-colors hover:border-white/24"
+              >
+                <img
+                  src={`https://flagcdn.com/w80/${country.flag}.png`}
+                  alt={`${country.name} flag`}
+                  className="h-11 w-11 rounded-full border border-white/18 object-cover"
+                  loading="lazy"
+                />
+                <p className="mt-2 text-sm font-medium text-white/88">{country.name}</p>
+              </Link>
+            ))}
+          </div>
+
+          <div className="mt-8 text-center">
+            <Link
+              to="/country-products"
+              className="inline-flex items-center gap-2 border border-white/14 bg-white/[0.05] px-6 py-3 text-lg text-white/86 hover:border-white/35 hover:text-white"
+            >
+              Show All 54 Countries
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
         </div>
       </section>
 
