@@ -99,6 +99,39 @@ body[data-zk-scope='public'][data-zk-theme='light'] {
   }
 }
 
+/* Kimi-aligned typography utilities for V2 preview */
+@layer utilities {
+  .kimi-eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+
+  .kimi-title {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    line-height: 0.92;
+  }
+
+  .kimi-body {
+    font-size: 18px;
+    line-height: 1.35;
+    font-weight: 300;
+  }
+
+  .kimi-label {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

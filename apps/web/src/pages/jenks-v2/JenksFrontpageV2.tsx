@@ -33,6 +33,7 @@ type HeroSlide = {
 type ShopByTab = 'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE';
 
 const ASSET_BASE = 'https://african-fashion-zurikaribu.vercel.app';
+const HERO_HEIGHT_CLASS = 'min-h-[106vh]';
 
 const HERO: HeroSlide[] = [
   {
@@ -55,11 +56,6 @@ const HERO: HeroSlide[] = [
     cta: 'SHOP NOW',
     href: '/ready-to-wear',
   },
-];
-
-const COUNTRIES = [
-  ['DZ', 'AO', 'BJ', 'BW', 'BF', 'CM', 'CI', 'EG', 'ET', 'GH', 'KE', 'MA'],
-  ['MZ', 'NA', 'NG', 'RW', 'SN', 'ZA', 'TZ', 'TN', 'UG', 'ZM', 'ZW', 'SD'],
 ];
 
 const HOW_IT_WORKS = [
@@ -131,6 +127,64 @@ const SHOP_BY_PRICE = [
   { range: '$500+', sub: 'Luxury & bespoke' },
 ];
 
+const FEATURED_RTW = [
+  {
+    id: 'fr1',
+    image: `${ASSET_BASE}/product4.jpg`,
+    title: 'Bridal Traditional',
+    subtitle: 'Made to standard sizes for all',
+    href: '/ready-to-wear',
+  },
+  {
+    id: 'fr2',
+    image: `${ASSET_BASE}/featured_rw_right.jpg`,
+    title: 'Afigan',
+    subtitle: 'Premium ready-to-wear edits',
+    href: '/ready-to-wear',
+  },
+];
+
+const FEATURED_CTW = [
+  {
+    id: 'fc1',
+    image: `${ASSET_BASE}/product1.jpg`,
+    title: 'Exclusive Gorgeous',
+    subtitle: 'Custom craftsmanship for your story',
+    href: '/custom',
+  },
+  {
+    id: 'fc2',
+    image: `${ASSET_BASE}/featured_custom_left.jpg`,
+    title: 'Signature Couture',
+    subtitle: 'Tailored by African designers',
+    href: '/custom',
+  },
+];
+
+const FRESH_DROPS = [
+  {
+    id: 'drop-1',
+    image: `${ASSET_BASE}/featured_custom_left.jpg`,
+    name: 'Awon Da',
+    brand: 'Diallo Fabrics',
+    price: '$230.00',
+  },
+  {
+    id: 'drop-2',
+    image: `${ASSET_BASE}/featured_rw_right.jpg`,
+    name: 'Kakaki Kentus',
+    brand: 'Diallo Fabrics',
+    price: '$115.00',
+  },
+  {
+    id: 'drop-3',
+    image: `${ASSET_BASE}/fabrics_full.jpg`,
+    name: 'Ankara Agege',
+    brand: 'Diallo Fabrics',
+    price: '$0.13/yd',
+  },
+];
+
 export default function JenksFrontpageV2() {
   const [index, setIndex] = useState(0);
   const [shopByTab, setShopByTab] = useState<ShopByTab>('CATEGORY');
@@ -142,7 +196,7 @@ export default function JenksFrontpageV2() {
   }, []);
 
   return (
-    <div className="bg-[#f5f3ee] text-[#111]">
+    <div className="kimi-site bg-[#f5f3ee] text-[#111]">
       {/* TOP STRIP + TOP NAVIGATION */}
       <div className="sticky top-0 z-50">
         <div className="h-8 bg-black text-[10px] font-semibold uppercase tracking-[0.18em] text-white/85">
@@ -187,7 +241,7 @@ export default function JenksFrontpageV2() {
       </div>
 
       {/* HERO */}
-      <section className="grid min-h-[106vh] grid-cols-1 lg:grid-cols-12">
+      <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 lg:grid-cols-12`}>
         <div className="relative lg:col-span-7">
           {HERO.map((slide, i) => (
             <img
@@ -231,148 +285,146 @@ export default function JenksFrontpageV2() {
       {/* SHOP BY */}
       <section className="bg-[#07090d] py-14 lg:py-16">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <div className="mx-auto max-w-[1180px]">
-            <p className="text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">Discover</p>
-            <h2 className="mt-2 text-center font-['Oswald'] text-6xl font-bold uppercase leading-none text-white">SHOP BY</h2>
-            <p className="mt-3 text-center text-base text-white/60">Browse by category, country, style, or budget.</p>
+          <p className="text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">Discover</p>
+          <h2 className="mt-2 text-center font-['Oswald'] text-6xl font-bold uppercase leading-none text-white">SHOP BY</h2>
+          <p className="mt-3 text-center text-base text-white/60">Browse by category, country, style, or budget.</p>
 
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
-              {[
-                { key: 'CATEGORY', label: 'Category', Icon: ShoppingBag },
-                { key: 'COUNTRY', label: 'Country', Icon: Globe },
-                { key: 'STYLE', label: 'Occasion / Style', Icon: CalendarDays },
-                { key: 'PRICE', label: 'Price', Icon: Tag },
-              ].map((tab) => {
-                const isActive = shopByTab === tab.key;
-                return (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => setShopByTab(tab.key as ShopByTab)}
-                    className={`inline-flex items-center gap-2 border px-5 py-3 text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'border-white bg-white text-[#111]'
-                        : 'border-white/15 bg-white/[0.06] text-white/85 hover:border-white/35'
-                    }`}
-                  >
-                    <tab.Icon className="h-4 w-4" />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {shopByTab === 'CATEGORY' ? (
-              <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
-                {SHOP_BY_CATEGORY.map((card) => (
-                  <Link key={card.id} to={card.href} className="group relative overflow-hidden border border-white/10">
-                    <img
-                      src={card.image}
-                      alt={card.title}
-                      className="h-[58vh] w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                    <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
-                      <div className="flex items-center gap-2">
-                        <card.Icon className="h-4 w-4 text-white/90" />
-                        <p className="font-['Oswald'] text-4xl font-semibold uppercase leading-none">{card.title}</p>
-                      </div>
-                      <p className="mt-2 text-sm text-white/80">{card.subtitle}</p>
-                      <p className="mt-1 text-xs text-white/70">{card.meta}</p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : null}
-
-            {shopByTab === 'COUNTRY' ? (
-              <div className="mt-10">
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-                  {SHOP_BY_COUNTRY.map((country) => (
-                    <Link
-                      key={country.name}
-                      to={`/country-products?country=${encodeURIComponent(country.name)}`}
-                      className="group flex flex-col items-center rounded border border-white/10 bg-white/[0.04] px-3 py-4 text-center hover:border-white/25"
-                    >
-                      <img
-                        src={`https://flagcdn.com/w80/${country.flag}.png`}
-                        alt={`${country.name} flag`}
-                        className="h-9 w-9 rounded-full border border-white/15 object-cover"
-                        loading="lazy"
-                      />
-                      <p className="mt-3 text-base font-semibold text-white">
-                        {country.name} - {country.count}
-                      </p>
-                      <p className="text-xs text-white/55">{country.textiles}</p>
-                    </Link>
-                  ))}
-                </div>
-                <div className="mt-8 text-center">
-                  <Link to="/country-products" className="inline-flex items-center gap-2 text-2xl font-semibold text-white/85 hover:text-white">
-                    View all 54 countries
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </div>
-              </div>
-            ) : null}
-
-            {shopByTab === 'STYLE' ? (
-              <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {SHOP_BY_STYLE.map((styleItem) => (
-                  <Link
-                    key={styleItem.name}
-                    to="/shop"
-                    className="rounded border border-white/10 bg-white/[0.06] px-5 py-9 text-center transition-colors hover:border-white/25"
-                  >
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-black/40 text-[#e66045]">
-                      <styleItem.Icon className="h-5 w-5" />
-                    </div>
-                    <p className="mt-4 text-2xl font-semibold text-white">{styleItem.name}</p>
-                    <p className="mt-1 text-sm text-white/50">{styleItem.sub}</p>
-                  </Link>
-                ))}
-              </div>
-            ) : null}
-
-            {shopByTab === 'PRICE' ? (
-              <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {SHOP_BY_PRICE.map((priceItem) => (
-                  <Link
-                    key={priceItem.range}
-                    to="/shop"
-                    className="rounded border border-white/10 bg-white/[0.06] px-5 py-7 transition-colors hover:border-white/25"
-                  >
-                    <div className="flex items-center gap-2 text-[#e66045]">
-                      <Tag className="h-4 w-4" />
-                    </div>
-                    <p className="mt-3 text-3xl font-semibold text-white">{priceItem.range}</p>
-                    <p className="mt-1 text-sm text-white/55">{priceItem.sub}</p>
-                  </Link>
-                ))}
-              </div>
-            ) : null}
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+            {[
+              { key: 'CATEGORY', label: 'Category', Icon: ShoppingBag },
+              { key: 'COUNTRY', label: 'Country', Icon: Globe },
+              { key: 'STYLE', label: 'Occasion / Style', Icon: CalendarDays },
+              { key: 'PRICE', label: 'Price', Icon: Tag },
+            ].map((tab) => {
+              const isActive = shopByTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setShopByTab(tab.key as ShopByTab)}
+                  className={`inline-flex items-center gap-2 border px-5 py-3 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'border-white bg-white text-[#111]'
+                      : 'border-white/15 bg-white/[0.06] text-white/85 hover:border-white/35'
+                  }`}
+                >
+                  <tab.Icon className="h-4 w-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
+
+          {shopByTab === 'CATEGORY' ? (
+            <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
+              {SHOP_BY_CATEGORY.map((card) => (
+                <Link key={card.id} to={card.href} className="group relative overflow-hidden border border-white/10">
+                  <img
+                    src={card.image}
+                    alt={card.title}
+                    className="h-[82vh] w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
+                    <div className="flex items-center gap-2">
+                      <card.Icon className="h-4 w-4 text-white/90" />
+                      <p className="font-['Oswald'] text-4xl font-semibold uppercase leading-none">{card.title}</p>
+                    </div>
+                    <p className="mt-2 text-sm text-white/80">{card.subtitle}</p>
+                    <p className="mt-1 text-xs text-white/70">{card.meta}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : null}
+
+          {shopByTab === 'COUNTRY' ? (
+            <div className="mt-10">
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+                {SHOP_BY_COUNTRY.map((country) => (
+                  <Link
+                    key={country.name}
+                    to={`/country-products?country=${encodeURIComponent(country.name)}`}
+                    className="group flex flex-col items-center rounded border border-white/10 bg-white/[0.04] px-3 py-4 text-center hover:border-white/25"
+                  >
+                    <img
+                      src={`https://flagcdn.com/w80/${country.flag}.png`}
+                      alt={`${country.name} flag`}
+                      className="h-9 w-9 rounded-full border border-white/15 object-cover"
+                      loading="lazy"
+                    />
+                    <p className="mt-3 text-base font-semibold text-white">
+                      {country.name} - {country.count}
+                    </p>
+                    <p className="text-xs text-white/55">{country.textiles}</p>
+                  </Link>
+                ))}
+              </div>
+              <div className="mt-8 text-center">
+                <Link to="/country-products" className="inline-flex items-center gap-2 text-2xl font-semibold text-white/85 hover:text-white">
+                  View all 54 countries
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          ) : null}
+
+          {shopByTab === 'STYLE' ? (
+            <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {SHOP_BY_STYLE.map((styleItem) => (
+                <Link
+                  key={styleItem.name}
+                  to="/shop"
+                  className="rounded border border-white/10 bg-white/[0.06] px-5 py-9 text-center transition-colors hover:border-white/25"
+                >
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-black/40 text-[#e66045]">
+                    <styleItem.Icon className="h-5 w-5" />
+                  </div>
+                  <p className="mt-4 text-2xl font-semibold text-white">{styleItem.name}</p>
+                  <p className="mt-1 text-sm text-white/50">{styleItem.sub}</p>
+                </Link>
+              ))}
+            </div>
+          ) : null}
+
+          {shopByTab === 'PRICE' ? (
+            <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {SHOP_BY_PRICE.map((priceItem) => (
+                <Link
+                  key={priceItem.range}
+                  to="/shop"
+                  className="rounded border border-white/10 bg-white/[0.06] px-5 py-7 transition-colors hover:border-white/25"
+                >
+                  <div className="flex items-center gap-2 text-[#e66045]">
+                    <Tag className="h-4 w-4" />
+                  </div>
+                  <p className="mt-3 text-3xl font-semibold text-white">{priceItem.range}</p>
+                  <p className="mt-1 text-sm text-white/55">{priceItem.sub}</p>
+                </Link>
+              ))}
+            </div>
+          ) : null}
         </div>
       </section>
 
-      {/* EDITORIAL STACK */}
+      {/* RTW / FTB / CTW HERO-HEIGHT SPLIT */}
       <section className="space-y-0">
-        <div className="grid min-h-[78vh] grid-cols-1 md:grid-cols-2">
-          <img src={`${ASSET_BASE}/rw_full.jpg`} alt="editorial ready" className="h-full w-full object-cover" />
-          <div className="flex items-center bg-[#111] px-8 py-12 text-white">
-            <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.95]">STANDARDIZED AFRICAN MADE TO WEAR</h3>
+        <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-12`}>
+          <img src={`${ASSET_BASE}/rw_full.jpg`} alt="editorial ready" className="h-full w-full object-cover md:col-span-9" />
+          <div className="flex items-center bg-[#111] px-8 py-12 text-white md:col-span-3">
+            <h3 className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">STANDARDIZED AFRICAN MADE TO WEAR</h3>
           </div>
         </div>
-        <div className="grid min-h-[78vh] grid-cols-1 md:grid-cols-2">
-          <div className="flex items-center bg-[#1a1a1a] px-8 py-12 text-white">
-            <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.95]">AFRICAN FABRICS ALL ACROSS ALL EDGES OF AFRICA</h3>
+        <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-12`}>
+          <div className="flex items-center bg-[#1a1a1a] px-8 py-12 text-white md:col-span-3">
+            <h3 className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">AFRICAN FABRICS ALL ACROSS ALL EDGES OF AFRICA</h3>
           </div>
-          <img src={`${ASSET_BASE}/fabrics_full.jpg`} alt="editorial fabric" className="h-full w-full object-cover" />
+          <img src={`${ASSET_BASE}/fabrics_full.jpg`} alt="editorial fabric" className="h-full w-full object-cover md:col-span-9" />
         </div>
-        <div className="grid min-h-[78vh] grid-cols-1 md:grid-cols-2">
-          <img src={`${ASSET_BASE}/custom_full.jpg`} alt="editorial custom" className="h-full w-full object-cover" />
-          <div className="flex items-center bg-[#111] px-8 py-12 text-white">
-            <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.95]">EVERY STITCH SEWN BY AN AFRICAN DESIGNER</h3>
+        <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-12`}>
+          <img src={`${ASSET_BASE}/custom_full.jpg`} alt="editorial custom" className="h-full w-full object-cover md:col-span-9" />
+          <div className="flex items-center bg-[#111] px-8 py-12 text-white md:col-span-3">
+            <h3 className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">EVERY STITCH SEWN BY AN AFRICAN DESIGNER</h3>
           </div>
         </div>
       </section>
@@ -392,52 +444,105 @@ export default function JenksFrontpageV2() {
         </div>
       </section>
 
-      {/* FEATURED MOSAIC */}
-      <section className="bg-[#f8f6f1] py-10">
+      {/* FEATURED RTW (2 columns full images) */}
+      <section className="bg-[#f8f6f1] py-12">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            {[`${ASSET_BASE}/product4.jpg`, `${ASSET_BASE}/featured_custom_left.jpg`, `${ASSET_BASE}/product1.jpg`, `${ASSET_BASE}/featured_rw_right.jpg`].map((src, i) => (
-              <div key={src} className={`${i % 3 === 0 ? 'md:col-span-2' : ''} overflow-hidden border border-black/10`}>
-                <img src={src} alt="feature" className="h-[46vh] w-full object-cover transition-transform duration-700 hover:scale-105" />
-              </div>
+          <h2 className="font-['Oswald'] text-4xl font-bold uppercase">FEATURED READY TO WEAR</h2>
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+            {FEATURED_RTW.map((card) => (
+              <Link key={card.id} to={card.href} className="group relative overflow-hidden border border-black/10">
+                <img src={card.image} alt={card.title} className="h-[86vh] w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+                  <p className="font-['Oswald'] text-4xl font-semibold uppercase">{card.title}</p>
+                  <p className="mt-2 text-sm text-white/80">{card.subtitle}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURED CTW (2 columns full images) */}
+      <section className="bg-white py-12">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <h2 className="font-['Oswald'] text-4xl font-bold uppercase">FEATURED CUSTOM TO WEAR</h2>
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+            {FEATURED_CTW.map((card) => (
+              <Link key={card.id} to={card.href} className="group relative overflow-hidden border border-black/10">
+                <img src={card.image} alt={card.title} className="h-[86vh] w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+                  <p className="font-['Oswald'] text-4xl font-semibold uppercase">{card.title}</p>
+                  <p className="mt-2 text-sm text-white/80">{card.subtitle}</p>
+                </div>
+              </Link>
             ))}
           </div>
         </div>
       </section>
 
       {/* FRESH DROPS */}
-      <section className="bg-white py-12">
+      <section className="bg-[#f5f5f3] py-12">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <h2 className="font-['Oswald'] text-3xl font-bold uppercase">FRESH DROPS</h2>
-          <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-            {[`${ASSET_BASE}/product1.jpg`, `${ASSET_BASE}/product2.jpg`, `${ASSET_BASE}/product3.jpg`, `${ASSET_BASE}/product6.jpg`].map((src) => (
-              <div key={src} className="overflow-hidden border border-black/10">
-                <img src={src} alt="drop" className="h-[38vh] w-full object-cover transition-transform duration-700 hover:scale-105" />
-              </div>
+          <h2 className="font-['Oswald'] text-6xl font-bold uppercase leading-none">FRESH DROPS</h2>
+          <p className="mt-3 text-2xl text-black/65">New arrivals from the most talented designers across the continent.</p>
+          <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-3">
+            {FRESH_DROPS.map((drop) => (
+              <article key={drop.id} className="overflow-hidden border border-black/10 bg-white">
+                <div className="relative">
+                  <img src={drop.image} alt={drop.name} className="h-[68vh] w-full object-cover" />
+                  <span className="absolute left-4 top-4 bg-[#e66045] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white">
+                    NEW
+                  </span>
+                </div>
+                <div className="p-4">
+                  <p className="text-4xl font-semibold">{drop.name}</p>
+                  <p className="mt-1 text-2xl text-black/60">{drop.brand}</p>
+                  <p className="mt-2 text-3xl font-semibold text-[#e66045]">{drop.price}</p>
+                </div>
+              </article>
             ))}
           </div>
         </div>
       </section>
 
       {/* SPOTLIGHT */}
-      <section className="grid min-h-[76vh] grid-cols-1 md:grid-cols-2 bg-[#101010]">
-        <img src={`${ASSET_BASE}/designer_spotlight.jpg`} alt="designer spotlight" className="h-full w-full object-cover" />
-        <div className="flex items-center px-8 py-12 text-white">
+      <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 bg-[#101010] md:grid-cols-12`}>
+        <img src={`${ASSET_BASE}/designer_spotlight.jpg`} alt="designer spotlight" className="h-full w-full object-cover md:col-span-9" />
+        <div className="flex items-center px-8 py-12 text-white md:col-span-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/65">Designer spotlight</p>
             <h2 className="mt-2 font-['Oswald'] text-5xl font-bold uppercase leading-[0.95]">MEET DESIGNERS ACROSS AFRICA</h2>
+            <p className="mt-3 text-sm text-white/70">Craft stories from Lagos to Dakar, stitched with heritage and modern precision.</p>
           </div>
         </div>
       </section>
 
       {/* ROOTED IN CULTURE */}
-      <section className="relative min-h-[74vh]">
+      <section className={`relative ${HERO_HEIGHT_CLASS}`}>
         <img src={`${ASSET_BASE}/heritage_story.jpg`} alt="heritage" className="absolute inset-0 h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-black/45" />
-        <div className="relative flex h-full items-end px-8 py-10 text-white">
-          <div>
-            <h2 className="font-['Oswald'] text-5xl font-bold uppercase">ROOTED IN CULTURE</h2>
-            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.2em] text-white/80">120+ • 50k+ • 1M+</p>
+        <div className="absolute inset-0 bg-black/42" />
+        <div className="relative flex h-full flex-col justify-between px-8 py-10 text-white">
+          <div className="self-end text-right">
+            <h2 className="font-['Oswald'] text-6xl font-bold uppercase leading-[0.92]">ROOTED IN CULTURE.</h2>
+            <p className="mt-4 max-w-xl text-base text-white/80">
+              The world is yet to experience Africa&apos;s fashion. We&apos;re building the bridge connecting heritage craft to modern wardrobes everywhere.
+            </p>
+          </div>
+          <div className="flex items-end gap-10">
+            <div>
+              <p className="font-['Oswald'] text-7xl font-bold leading-none">120+</p>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/75">Countries</p>
+            </div>
+            <div>
+              <p className="font-['Oswald'] text-7xl font-bold leading-none">50K+</p>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/75">Designers</p>
+            </div>
+            <div>
+              <p className="font-['Oswald'] text-7xl font-bold leading-none">1M+</p>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/75">Fabrics</p>
+            </div>
           </div>
         </div>
       </section>
