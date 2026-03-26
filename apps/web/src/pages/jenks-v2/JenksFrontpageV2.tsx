@@ -471,7 +471,7 @@ export default function JenksFrontpageV2() {
                   <Link
                     key={country.name}
                     to={`/country-products?country=${encodeURIComponent(country.name)}`}
-                    className="group flex flex-col items-center rounded border border-white/12 bg-white/[0.03] px-3 py-4 text-center text-white/75 transition-colors hover:border-[#e66045] hover:text-[#e66045]"
+                    className="group flex flex-col items-center rounded border border-white/8 bg-white/[0.025] px-3 py-4 text-center text-white/75 transition-colors hover:border-[#e66045] hover:text-[#e66045]"
                   >
                     <img
                       src={`https://flagcdn.com/w80/${country.flag}.png`}
@@ -564,7 +564,7 @@ export default function JenksFrontpageV2() {
                   className={`border px-4 py-2 text-sm font-medium transition-colors ${
                     isActive
                       ? 'border-[#e66045] bg-transparent text-[#e66045]'
-                      : 'border-white/14 bg-white/[0.02] text-white/75 hover:border-[#e66045] hover:text-[#e66045]'
+                      : 'border-white/10 bg-white/[0.02] text-white/75 hover:border-[#e66045] hover:text-[#e66045]'
                   }`}
                 >
                   {option.label}
@@ -581,11 +581,11 @@ export default function JenksFrontpageV2() {
                 to={`/country-products?country=${encodeURIComponent(country.name)}`}
                 className="group flex flex-col items-center px-2 py-2 text-center text-white/75 transition-colors hover:text-[#e66045]"
               >
-                <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/14 bg-white/[0.02] transition-colors group-hover:border-[#e66045]">
+                <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/[0.02] transition-colors group-hover:border-[#e66045]">
                   <img
                     src={`https://flagcdn.com/w80/${country.flag}.png`}
                     alt={`${country.name} flag`}
-                    className="h-10 w-10 rounded-full border border-white/12 object-cover"
+                    className="h-10 w-10 rounded-full border border-white/8 object-cover"
                     loading="lazy"
                   />
                 </span>
