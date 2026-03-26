@@ -698,7 +698,7 @@ export default function JenksFrontpageV2() {
       {/* HOW IT WORKS */}
       <section className="bg-white py-12" data-kimi-anim="fade-up">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <h2 className="kimi-title-lg">HOW IT WORKS</h2>
+          <h2 className="font-['Oswald'] text-3xl font-bold uppercase">HOW IT WORKS</h2>
           <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
             {HOW_IT_WORKS.map(({ title, sub, Icon }) => (
               <article key={title} className="flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-6 text-center">
@@ -748,8 +748,8 @@ export default function JenksFrontpageV2() {
         <div className="w-full px-3 sm:px-4 lg:px-8 xl:px-10">
           <div className="flex items-end justify-between">
             <div>
-              <h2 className="kimi-title-xl">FRESH DROPS</h2>
-              <p className="mt-3 kimi-body text-black/65">New arrivals from the most talented designers across the continent.</p>
+              <h2 className="font-['Oswald'] text-6xl font-bold uppercase leading-none">FRESH DROPS</h2>
+              <p className="mt-3 text-base text-black/65">New arrivals from the most talented designers across the continent.</p>
             </div>
             <div className="hidden items-center gap-2 md:flex">
               <button
@@ -803,9 +803,9 @@ export default function JenksFrontpageV2() {
             <img src={spot.image} alt={spot.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
             <div className="absolute bottom-8 left-8 right-8 text-white">
-              <p className="kimi-eyebrow text-white/72">Designer spotlight</p>
-              <h3 className="mt-3 kimi-title-md">{spot.title}</h3>
-              <p className="mt-3 kimi-body-sm text-white/78">{spot.description}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">Designer spotlight</p>
+              <h3 className="mt-3 font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">{spot.title}</h3>
+              <p className="mt-3 text-sm text-white/78">{spot.description}</p>
               <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white">
                 {spot.cta}
                 <ArrowRight className="h-4 w-4" />
@@ -821,8 +821,8 @@ export default function JenksFrontpageV2() {
         <div className="absolute inset-0 bg-black/42" />
         <div className="relative flex h-full flex-col justify-between px-8 py-10 text-white">
           <div className="self-end text-right">
-            <h2 className="kimi-title-xl">ROOTED IN CULTURE.</h2>
-            <p className="mt-4 max-w-xl kimi-body text-white/80">
+            <h2 className="font-['Oswald'] text-6xl font-bold uppercase leading-[0.92]">ROOTED IN CULTURE.</h2>
+            <p className="mt-4 max-w-xl text-base text-white/80">
               The world is yet to experience Africa&apos;s fashion. We&apos;re building the bridge connecting heritage craft to modern wardrobes everywhere.
             </p>
           </div>
@@ -846,7 +846,7 @@ export default function JenksFrontpageV2() {
       {/* TRUST + NEWSLETTER */}
       <section className="bg-white py-16 lg:py-20" data-kimi-anim="fade-up">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <h2 className="text-center kimi-title-lg">SHOP WITH CONFIDENCE</h2>
+          <h2 className="text-center font-['Oswald'] text-4xl font-bold uppercase leading-none">SHOP WITH CONFIDENCE</h2>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             {trust.map((item) => (
               <article key={item.label} className="mt-8 flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-8 text-center">
@@ -866,8 +866,8 @@ export default function JenksFrontpageV2() {
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
             <div>
-              <h3 className="kimi-title-lg">JOIN THE MOVEMENT.</h3>
-              <p className="mt-2 kimi-body-sm text-black/60">Subscribe for new arrivals and stories from the continent.</p>
+              <h3 className="font-['Oswald'] text-4xl font-bold uppercase">JOIN THE MOVEMENT.</h3>
+              <p className="mt-2 text-sm text-black/60">Subscribe for new arrivals and stories from the continent.</p>
             </div>
             <form className="flex gap-2">
               <input className="h-10 border border-black/20 px-3 text-sm outline-none" placeholder="Enter email" />
