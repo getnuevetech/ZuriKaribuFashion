@@ -5,202 +5,120 @@ import { Link } from 'react-router-dom';
 type HeroSlide = {
   id: string;
   image: string;
-  titlePrimary: string;
-  titleAccent: string;
-  body: string;
-  sub: string;
-  ctaText: string;
-  ctaHref: string;
-  quickLinks: Array<{ label: string; href: string }>;
-};
-
-type ProductCard = {
-  id: string;
-  name: string;
-  price: string;
-  country: string;
-  image: string;
+  titleA: string;
+  titleB: string;
+  lineA: string;
+  lineB: string;
+  cta: string;
   href: string;
 };
 
 const ASSET_BASE = 'https://african-fashion-zurikaribu.vercel.app';
 
-const HERO_SLIDES: HeroSlide[] = [
+const HERO: HeroSlide[] = [
   {
-    id: 'hero-1',
+    id: '1',
     image: `${ASSET_BASE}/hero_model.jpg`,
-    titlePrimary: 'WEAR',
-    titleAccent: 'THE STORY OF AFRICA',
-    body: 'Curated fashion from top designers and textile houses.',
-    sub: 'Ready-to-wear, fabrics, and custom looks in one destination.',
-    ctaText: 'SHOP NOW',
-    ctaHref: '/ready-to-wear',
-    quickLinks: [
-      { label: 'READY TO WEAR', href: '/ready-to-wear' },
-      { label: 'CUSTOM', href: '/custom' },
-      { label: 'FABRICS', href: '/fabrics' },
-    ],
+    titleA: 'WEAR',
+    titleB: 'THE STORY OF AFRICA',
+    lineA: 'Curated fashion from top designers and textile houses.',
+    lineB: 'Ready-to-wear, fabrics, and custom looks in one destination.',
+    cta: 'SHOP NOW',
+    href: '/ready-to-wear',
   },
   {
-    id: 'hero-2',
+    id: '2',
     image: `${ASSET_BASE}/rw_full.jpg`,
-    titlePrimary: 'DISCOVER',
-    titleAccent: 'AFRICAN COUTURE',
-    body: 'Modern silhouettes rooted in culture and craftsmanship.',
-    sub: 'Handpicked pieces from trusted sellers and designers.',
-    ctaText: 'SHOP NOW',
-    ctaHref: '/ready-to-wear',
-    quickLinks: [
-      { label: 'READY TO WEAR', href: '/ready-to-wear' },
-      { label: 'CUSTOM', href: '/custom' },
-      { label: 'FABRICS', href: '/fabrics' },
-    ],
-  },
-  {
-    id: 'hero-3',
-    image: `${ASSET_BASE}/custom_full.jpg`,
-    titlePrimary: 'MADE',
-    titleAccent: 'FOR YOUR FIT',
-    body: 'Custom-to-wear looks created by expert African tailors.',
-    sub: 'From consultation to delivery with premium quality control.',
-    ctaText: 'START CUSTOM',
-    ctaHref: '/custom',
-    quickLinks: [
-      { label: 'READY TO WEAR', href: '/ready-to-wear' },
-      { label: 'CUSTOM', href: '/custom' },
-      { label: 'FABRICS', href: '/fabrics' },
-    ],
+    titleA: 'DISCOVER',
+    titleB: 'AFRICAN ELEGANCE',
+    lineA: 'Signature pieces and modern tailoring from trusted labels.',
+    lineB: 'Designed on the continent. Styled for the world.',
+    cta: 'SHOP NOW',
+    href: '/ready-to-wear',
   },
 ];
 
-const TRUST_BADGES = [
-  { id: 'authentic', title: 'Authentic Guarantee', subtitle: 'Verified sellers and designers.', Icon: ShieldCheck },
-  { id: 'shipping', title: 'Global Shipping', subtitle: 'Reliable delivery worldwide.', Icon: Truck },
-  { id: 'returns', title: 'Easy Returns', subtitle: 'Simple returns on eligible orders.', Icon: RefreshCw },
-  { id: 'support', title: '24/7 Support', subtitle: 'Chat and ticket support anytime.', Icon: Headphones },
+const COUNTRIES = [
+  ['DZ', 'AO', 'BJ', 'BW', 'BF', 'CM', 'CI', 'EG', 'ET', 'GH', 'KE', 'MA'],
+  ['MZ', 'NA', 'NG', 'RW', 'SN', 'ZA', 'TZ', 'TN', 'UG', 'ZM', 'ZW', 'SD'],
 ];
 
-const FEATURED_RTW: ProductCard[] = [
-  { id: 'rtw-1', name: 'Bridal Traditional', price: '$2,285', country: 'Ghana', image: `${ASSET_BASE}/product4.jpg`, href: '/ready-to-wear' },
-  { id: 'rtw-2', name: 'Afigan Set', price: '$1,642', country: 'Ghana', image: `${ASSET_BASE}/product5.jpg`, href: '/ready-to-wear' },
-  { id: 'rtw-3', name: 'Kakaki Africa', price: '$1,507', country: 'Ghana', image: `${ASSET_BASE}/product6.jpg`, href: '/ready-to-wear' },
-  { id: 'rtw-4', name: 'Signature Ankara', price: '$1,280', country: 'Nigeria', image: `${ASSET_BASE}/rw_full.jpg`, href: '/ready-to-wear' },
+const HOW_IT_WORKS = [
+  ['DISCOVER', 'Browse categories and curated looks'],
+  ['PICK FABRIC', 'Choose textile quality and color'],
+  ['SUBMIT FIT', 'Send measurements for tailoring'],
+  ['PAY SECURELY', 'Checkout with protected payments'],
+  ['CRAFTED', 'Makers begin production'],
+  ['DELIVERED', 'Shipped globally to your location'],
 ];
 
-const FEATURED_FABRICS: ProductCard[] = [
-  { id: 'fab-1', name: 'Ankara Mummy', price: '$2,142', country: 'Nigeria', image: `${ASSET_BASE}/fabrics_full.jpg`, href: '/fabrics' },
-  { id: 'fab-2', name: 'Dancing Queen Adire', price: '$785', country: 'Nigeria', image: `${ASSET_BASE}/featured_rw_left.jpg`, href: '/fabrics' },
-  { id: 'fab-3', name: 'Ankara Party', price: '$928', country: 'Nigeria', image: `${ASSET_BASE}/featured_rw_right.jpg`, href: '/fabrics' },
-  { id: 'fab-4', name: 'Awon Da', price: '$1,428', country: 'Nigeria', image: `${ASSET_BASE}/featured_custom_left.jpg`, href: '/fabrics' },
+const trust = [
+  { label: 'AUTHENTIC GUARANTEE', sub: 'Verified sellers and designers', Icon: ShieldCheck },
+  { label: 'GLOBAL SHIPPING', sub: 'Reliable delivery worldwide', Icon: Truck },
+  { label: 'EASY RETURNS', sub: 'Simple returns on eligible orders', Icon: RefreshCw },
+  { label: '24/7 SUPPORT', sub: 'Chat and ticket support', Icon: Headphones },
 ];
-
-const FEATURED_CUSTOM: ProductCard[] = [
-  { id: 'ctw-1', name: 'Exclusive Gorgeous', price: '$1,428', country: 'Ghana', image: `${ASSET_BASE}/product1.jpg`, href: '/custom' },
-  { id: 'ctw-2', name: 'My Skkentele', price: '$714', country: 'Ghana', image: `${ASSET_BASE}/product2.jpg`, href: '/custom' },
-  { id: 'ctw-3', name: 'Ankara Gbasibe', price: '$857', country: 'Ghana', image: `${ASSET_BASE}/product3.jpg`, href: '/custom' },
-  { id: 'ctw-4', name: 'Custom Heritage', price: '$1,020', country: 'Kenya', image: `${ASSET_BASE}/custom_full.jpg`, href: '/custom' },
-];
-
-function ProductRow({ title, products }: { title: string; products: ProductCard[] }) {
-  return (
-    <section className="bg-white py-10 lg:py-14">
-      <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-        <div className="mb-6 flex items-center justify-between">
-          <h3 className="font-['Oswald'] text-3xl font-bold uppercase tracking-[0.01em]">{title}</h3>
-          <Link to="/shop" className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-black/70 hover:text-black">
-            View all <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {products.map((product) => (
-            <Link key={product.id} to={product.href} className="group block">
-              <div className="relative aspect-[3/4] overflow-hidden border border-black/10 bg-[#f8f6f1]">
-                <img src={product.image} alt={product.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
-              </div>
-              <p className="mt-2 text-sm font-semibold">{product.name}</p>
-              <p className="text-xs text-black/60">{product.country}</p>
-              <p className="text-sm font-semibold">{product.price}</p>
-            </Link>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 export default function JenksFrontpageV2() {
-  const [slideIndex, setSlideIndex] = useState(0);
-  const active = useMemo(() => HERO_SLIDES[slideIndex] || HERO_SLIDES[0], [slideIndex]);
+  const [index, setIndex] = useState(0);
+  const active = useMemo(() => HERO[index] || HERO[0], [index]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setSlideIndex((prev) => (prev + 1) % HERO_SLIDES.length);
-    }, 6500);
+    const timer = window.setInterval(() => setIndex((p) => (p + 1) % HERO.length), 7000);
     return () => window.clearInterval(timer);
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#f8f6f1] text-[#111111]">
-      <section className="relative grid min-h-[88vh] grid-cols-1 lg:grid-cols-12">
-        <div className="relative overflow-hidden lg:col-span-7">
-          {HERO_SLIDES.map((slide, idx) => (
+    <div className="bg-[#f5f3ee] text-[#111]">
+      {/* HERO */}
+      <section className="grid min-h-[96vh] grid-cols-1 lg:grid-cols-12">
+        <div className="relative lg:col-span-7">
+          {HERO.map((slide, i) => (
             <img
               key={slide.id}
               src={slide.image}
-              alt={slide.titlePrimary}
-              className={`absolute inset-0 h-full w-full object-cover transition-all duration-[1200ms] ${
-                idx === slideIndex ? 'scale-100 opacity-100' : 'scale-105 opacity-0'
+              alt={slide.titleA}
+              className={`absolute inset-0 h-full w-full object-cover transition-all duration-1000 ${
+                i === index ? 'scale-100 opacity-100' : 'scale-105 opacity-0'
               }`}
             />
           ))}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-black/5 to-transparent lg:hidden" />
         </div>
-        <div className="relative flex items-center bg-[#f8f6f1] px-6 py-10 lg:col-span-5 lg:px-12">
-          <div className="w-full max-w-[560px] animate-fade-in">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-black/45">Editorial premium</p>
-            <h1 className="mt-3 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.9] text-black sm:text-[64px]">
-              <span>{active.titlePrimary}</span>
-              <span className="ml-[0.22em] text-[#e85a3c]">{active.titleAccent}</span>
+        <div className="relative flex items-center bg-[#f5f3ee] px-6 py-10 lg:col-span-5 lg:px-12">
+          <div className="max-w-[560px] animate-fade-in">
+            <h1 className="font-['Oswald'] text-[58px] font-bold uppercase leading-[0.9] sm:text-[72px]">
+              <span>{active.titleA}</span>
+              <span className="ml-[0.16em] text-[#e66045]">{active.titleB}</span>
             </h1>
-            <p className="mt-5 max-w-[46ch] text-[36px] text-black/80">{active.body}</p>
-            <p className="mt-3 text-sm text-black/55">{active.sub}</p>
-            <div className="mt-6">
-              <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-black/45">Shop by category</p>
-              <div className="flex flex-wrap gap-2">
-                {active.quickLinks.map((link) => (
-                  <Link
-                    key={link.label}
-                    to={link.href}
-                    className="inline-flex items-center border border-black/10 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-black/80 transition-colors hover:border-black/30 hover:text-black"
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-            <div className="mt-5 flex items-center gap-3">
-              <Link
-                to={active.ctaHref}
-                className="inline-flex items-center gap-2 border border-black bg-[#e85a3c] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-90"
-              >
-                {active.ctaText}
-                <ArrowRight className="h-4 w-4" />
+            <p className="mt-6 text-[40px] font-light leading-[1.08] text-black/84">{active.lineA}</p>
+            <p className="mt-4 text-sm text-black/55">{active.lineB}</p>
+            <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.22em] text-black/45">Shop by category</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link to="/ready-to-wear" className="border border-black/15 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em]">
+                READY TO WEAR
               </Link>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/40">Explore designers</p>
+              <Link to="/custom" className="border border-black/15 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em]">
+                CUSTOM
+              </Link>
+              <Link to="/fabrics" className="border border-black/15 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em]">
+                FABRICS
+              </Link>
             </div>
+            <Link to={active.href} className="mt-6 inline-flex items-center gap-2 border border-black bg-[#e66045] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white">
+              {active.cta}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
-          <div className="absolute bottom-8 right-8 hidden items-center gap-2 lg:flex">
+          <div className="absolute bottom-8 right-8 hidden gap-2 lg:flex">
             <button
-              onClick={() => setSlideIndex((prev) => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length)}
-              className="inline-flex h-9 w-9 items-center justify-center border border-black/20 text-black/70 hover:border-black/40 hover:text-black"
-              aria-label="Previous hero"
+              onClick={() => setIndex((p) => (p - 1 + HERO.length) % HERO.length)}
+              className="inline-flex h-9 w-9 items-center justify-center border border-black/20"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
-              onClick={() => setSlideIndex((prev) => (prev + 1) % HERO_SLIDES.length)}
-              className="inline-flex h-9 w-9 items-center justify-center border border-black/20 text-black/70 hover:border-black/40 hover:text-black"
-              aria-label="Next hero"
+              onClick={() => setIndex((p) => (p + 1) % HERO.length)}
+              className="inline-flex h-9 w-9 items-center justify-center border border-black/20"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -208,75 +126,156 @@ export default function JenksFrontpageV2() {
         </div>
       </section>
 
-      <section className="border-y border-black/10 bg-white py-6">
+      {/* SHOP BY */}
+      <section className="bg-white py-10">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {TRUST_BADGES.map((badge) => (
-              <div key={badge.id} className="rounded border border-black/10 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <badge.Icon className="h-4 w-4 text-[#111111]" />
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em]">{badge.title}</p>
-                </div>
-                <p className="mt-1 text-xs text-black/55">{badge.subtitle}</p>
+          <h2 className="text-center font-['Oswald'] text-4xl font-bold uppercase">SHOP BY</h2>
+          <div className="mx-auto mt-2 h-px w-24 bg-black/15" />
+          <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+            <Link to="/ready-to-wear" className="group relative overflow-hidden border border-black/10">
+              <img src={`${ASSET_BASE}/featured_rw_left.jpg`} alt="ready to wear" className="h-[62vh] w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+            </Link>
+            <Link to="/custom" className="group relative overflow-hidden border border-black/10">
+              <img src={`${ASSET_BASE}/featured_custom_right.jpg`} alt="custom" className="h-[62vh] w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+            </Link>
+            <Link to="/fabrics" className="group relative overflow-hidden border border-black/10">
+              <img src={`${ASSET_BASE}/fabrics_full.jpg`} alt="fabrics" className="h-[62vh] w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* SHOP BY COUNTRY */}
+      <section className="bg-[#f9f8f4] py-10">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="flex items-end justify-between">
+            <h2 className="font-['Oswald'] text-3xl font-bold uppercase">SHOP BY COUNTRY</h2>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">54 COUNTRIES</p>
+          </div>
+          <div className="mt-6 space-y-2 border border-black/10 bg-white p-4">
+            {COUNTRIES.map((row, rowIndex) => (
+              <div key={rowIndex} className="grid grid-cols-6 gap-2 md:grid-cols-12">
+                {row.map((code) => (
+                  <div key={code} className="border border-black/10 px-2 py-2 text-center text-[10px] font-semibold uppercase">
+                    {code}
+                  </div>
+                ))}
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="bg-[#f6f3ee] py-10 lg:py-14">
-        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-            <Link to="/ready-to-wear" className="group relative block overflow-hidden border border-black/10">
-              <img src={`${ASSET_BASE}/rw_full.jpg`} alt="Ready to wear" className="h-[340px] w-full object-cover transition-transform duration-700 group-hover:scale-105" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
-              <div className="absolute bottom-0 left-0 p-5 text-white">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-white/65">Ready to Wear</p>
-                <p className="mt-2 font-['Oswald'] text-3xl uppercase">Made to standard sizes</p>
-              </div>
-            </Link>
-            <Link to="/fabrics" className="group relative block overflow-hidden border border-black/10">
-              <img src={`${ASSET_BASE}/fabrics_full.jpg`} alt="Fabrics" className="h-[340px] w-full object-cover transition-transform duration-700 group-hover:scale-105" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
-              <div className="absolute bottom-0 left-0 p-5 text-white">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-white/65">Fabrics to Buy</p>
-                <p className="mt-2 font-['Oswald'] text-3xl uppercase">Authentic textiles</p>
-              </div>
-            </Link>
-            <Link to="/custom" className="group relative block overflow-hidden border border-black/10">
-              <img src={`${ASSET_BASE}/custom_full.jpg`} alt="Custom to wear" className="h-[340px] w-full object-cover transition-transform duration-700 group-hover:scale-105" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
-              <div className="absolute bottom-0 left-0 p-5 text-white">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-white/65">Custom to Wear</p>
-                <p className="mt-2 font-['Oswald'] text-3xl uppercase">Every stitch by designers</p>
-              </div>
-            </Link>
+      {/* EDITORIAL STACK */}
+      <section className="space-y-0">
+        <div className="grid min-h-[78vh] grid-cols-1 md:grid-cols-2">
+          <img src={`${ASSET_BASE}/rw_full.jpg`} alt="editorial ready" className="h-full w-full object-cover" />
+          <div className="flex items-center bg-[#111] px-8 py-12 text-white">
+            <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.95]">STANDARDIZED AFRICAN MADE TO WEAR</h3>
+          </div>
+        </div>
+        <div className="grid min-h-[78vh] grid-cols-1 md:grid-cols-2">
+          <div className="flex items-center bg-[#1a1a1a] px-8 py-12 text-white">
+            <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.95]">AFRICAN FABRICS ALL ACROSS ALL EDGES OF AFRICA</h3>
+          </div>
+          <img src={`${ASSET_BASE}/fabrics_full.jpg`} alt="editorial fabric" className="h-full w-full object-cover" />
+        </div>
+        <div className="grid min-h-[78vh] grid-cols-1 md:grid-cols-2">
+          <img src={`${ASSET_BASE}/custom_full.jpg`} alt="editorial custom" className="h-full w-full object-cover" />
+          <div className="flex items-center bg-[#111] px-8 py-12 text-white">
+            <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.95]">EVERY STITCH SEWN BY AN AFRICAN DESIGNER</h3>
           </div>
         </div>
       </section>
 
-      <ProductRow title="Featured Ready to Wear" products={FEATURED_RTW} />
-      <ProductRow title="Featured Fabrics" products={FEATURED_FABRICS} />
-      <ProductRow title="Featured Custom Designs" products={FEATURED_CUSTOM} />
-
-      <section className="bg-[#0b0b0c] py-16">
+      {/* HOW IT WORKS */}
+      <section className="bg-white py-12">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:items-center">
+          <h2 className="font-['Oswald'] text-3xl font-bold uppercase">HOW IT WORKS</h2>
+          <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
+            {HOW_IT_WORKS.map(([title, sub]) => (
+              <article key={title} className="border border-black/10 bg-[#faf9f5] p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em]">{title}</p>
+                <p className="mt-1 text-xs text-black/55">{sub}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURED MOSAIC */}
+      <section className="bg-[#f8f6f1] py-10">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {[`${ASSET_BASE}/product4.jpg`, `${ASSET_BASE}/featured_custom_left.jpg`, `${ASSET_BASE}/product1.jpg`, `${ASSET_BASE}/featured_rw_right.jpg`].map((src, i) => (
+              <div key={src} className={`${i % 3 === 0 ? 'md:col-span-2' : ''} overflow-hidden border border-black/10`}>
+                <img src={src} alt="feature" className="h-[46vh] w-full object-cover transition-transform duration-700 hover:scale-105" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FRESH DROPS */}
+      <section className="bg-white py-12">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <h2 className="font-['Oswald'] text-3xl font-bold uppercase">FRESH DROPS</h2>
+          <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+            {[`${ASSET_BASE}/product1.jpg`, `${ASSET_BASE}/product2.jpg`, `${ASSET_BASE}/product3.jpg`, `${ASSET_BASE}/product6.jpg`].map((src) => (
+              <div key={src} className="overflow-hidden border border-black/10">
+                <img src={src} alt="drop" className="h-[38vh] w-full object-cover transition-transform duration-700 hover:scale-105" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* SPOTLIGHT */}
+      <section className="grid min-h-[76vh] grid-cols-1 md:grid-cols-2 bg-[#101010]">
+        <img src={`${ASSET_BASE}/designer_spotlight.jpg`} alt="designer spotlight" className="h-full w-full object-cover" />
+        <div className="flex items-center px-8 py-12 text-white">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/65">Designer spotlight</p>
+            <h2 className="mt-2 font-['Oswald'] text-5xl font-bold uppercase leading-[0.95]">MEET DESIGNERS ACROSS AFRICA</h2>
+          </div>
+        </div>
+      </section>
+
+      {/* ROOTED IN CULTURE */}
+      <section className="relative min-h-[74vh]">
+        <img src={`${ASSET_BASE}/heritage_story.jpg`} alt="heritage" className="absolute inset-0 h-full w-full object-cover" />
+        <div className="absolute inset-0 bg-black/45" />
+        <div className="relative flex h-full items-end px-8 py-10 text-white">
+          <div>
+            <h2 className="font-['Oswald'] text-5xl font-bold uppercase">ROOTED IN CULTURE</h2>
+            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.2em] text-white/80">120+ • 50k+ • 1M+</p>
+          </div>
+        </div>
+      </section>
+
+      {/* TRUST + NEWSLETTER */}
+      <section className="bg-white py-10">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            {trust.map((item) => (
+              <article key={item.label} className="border border-black/10 bg-[#faf9f5] p-4">
+                <div className="flex items-center gap-2">
+                  <item.Icon className="h-4 w-4" />
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em]">{item.label}</p>
+                </div>
+                <p className="mt-1 text-xs text-black/55">{item.sub}</p>
+              </article>
+            ))}
+          </div>
+          <div className="mt-10 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/55">Designer spotlight</p>
-              <h2 className="mt-2 font-['Oswald'] text-5xl font-bold uppercase leading-[0.95] text-white">Asante Designs</h2>
-              <p className="mt-4 max-w-[56ch] text-sm leading-relaxed text-white/75">
-                When we sew, it is from the heart. Every stitch tells a story rooted in craft, heritage, and modern African elegance.
-              </p>
-              <Link to="/custom" className="mt-6 inline-flex items-center gap-2 border border-white bg-white px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-black">
-                Meet designers
-                <ArrowRight className="h-4 w-4" />
-              </Link>
+              <h3 className="font-['Oswald'] text-4xl font-bold uppercase">JOIN THE MOVEMENT.</h3>
+              <p className="mt-2 text-sm text-black/60">Subscribe for new arrivals and stories from the continent.</p>
             </div>
-            <div className="relative overflow-hidden border border-white/20">
-              <img src={`${ASSET_BASE}/designer_spotlight.jpg`} alt="Designer spotlight" className="h-[420px] w-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-            </div>
+            <form className="flex gap-2">
+              <input className="h-10 border border-black/20 px-3 text-sm outline-none" placeholder="Enter email" />
+              <button className="h-10 bg-[#e66045] px-4 text-xs font-semibold uppercase tracking-[0.12em] text-white">Subscribe</button>
+            </form>
           </div>
         </div>
       </section>
