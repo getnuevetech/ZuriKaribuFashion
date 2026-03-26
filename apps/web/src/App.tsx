@@ -92,6 +92,7 @@ import AdminModuleRuntimeSettings from './pages/admin/ModuleRuntimeSettings';
 import AdminHomepageRuntimeSwitchboard from './pages/admin/HomepageRuntimeSwitchboard';
 import AdminJenksHomepageManage from './pages/admin/JenksHomepageManage';
 import { JenksV14Redirect } from './pages/JenksV14Redirect';
+import JenksFrontpageV2 from './pages/jenks-v2/JenksFrontpageV2';
 
 // Seller Pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -164,6 +165,7 @@ function App() {
             <Route path="/main/" element={<JenksV14Redirect />} />
             <Route path="/jenks" element={<JenksV14Redirect />} />
             <Route path="/home-jenks-static" element={<JenksV14Redirect />} />
+            <Route path="/jenks-v2-preview" element={<JenksFrontpageV2 />} />
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
