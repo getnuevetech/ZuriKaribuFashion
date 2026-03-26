@@ -210,6 +210,16 @@
     return true;
   }
 
+  function setStyleAll(selector, prop, value) {
+    if (value === null || value === undefined || value === "") return false;
+    var nodes = document.querySelectorAll(selector);
+    if (!nodes || nodes.length === 0) return false;
+    for (var i = 0; i < nodes.length; i += 1) {
+      nodes[i].style[prop] = String(value);
+    }
+    return true;
+  }
+
   function setVisible(selector, isVisible) {
     var node = document.querySelector(selector);
     if (!node) return false;
@@ -368,8 +378,7 @@
     if (title) {
       var titleWords = title.split(/\s+/).filter(Boolean);
       var titlePrimary = titleWords.length > 0 ? titleWords[0] : title;
-      // Preserve visible spacing between split title spans (e.g. "WEAR THE STORY...").
-      var titleAccent = titleWords.length > 1 ? " " + titleWords.slice(1).join(" ") : "";
+      var titleAccent = titleWords.length > 1 ? titleWords.slice(1).join(" ") : "";
       // Keep the two-span hero title structure when possible.
       if (!setTextAll('[code-path="src/sections/HeroSection.tsx:225:15"]', titlePrimary)) {
         setTextAll('[code-path="src/sections/HeroSection.tsx:220:11"]', title);
@@ -378,6 +387,12 @@
         if (!accentSet && titleAccent) {
           setTextAll('[code-path="src/sections/HeroSection.tsx:220:11"]', title);
         }
+      }
+      // Add visual separation between split title spans; avoids "WEARTHE..." concatenation.
+      if (titleAccent) {
+        setStyleAll('[code-path="src/sections/HeroSection.tsx:224:13"]', "gap", "0.22em");
+      } else {
+        setStyleAll('[code-path="src/sections/HeroSection.tsx:224:13"]', "gap", "0");
       }
     }
     setTextAll('[code-path="src/sections/HeroSection.tsx:231:11"]', pick(first.text, first.eyebrow));
@@ -602,6 +617,7 @@
               return tryAt(index + 1);
             }
             DEBUG_STATE.fetchStatus = "ok";
+            DEBUG_STATE.lastError = "";
             renderDebugOverlay();
             return normalized;
           });
