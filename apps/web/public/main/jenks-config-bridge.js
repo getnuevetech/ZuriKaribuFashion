@@ -277,13 +277,21 @@
     if (!navRoot) return;
     var logoText = asText(navigation.logoText);
     if (logoText) {
-      var logoNodes = navRoot.querySelectorAll('[code-path="src/sections/Navigation.tsx:84:13"]');
+      // Visible brand text node in current production bundle is at 96:15.
+      var logoNodes = navRoot.querySelectorAll(
+        '[code-path="src/sections/Navigation.tsx:96:15"], [code-path="src/sections/Navigation.tsx:84:13"]'
+      );
       for (var i = 0; i < logoNodes.length; i += 1) logoNodes[i].textContent = logoText;
     }
     var hamburgerLinks = Array.isArray(navigation.hamburgerMenuLinks) ? navigation.hamburgerMenuLinks : [];
     if (hamburgerLinks.length > 0) {
-      var linkNodes = navRoot.querySelectorAll('a[code-path="src/sections/Navigation.tsx:117:13"]');
-      var labelNodes = navRoot.querySelectorAll('span[code-path="src/sections/Navigation.tsx:124:15"]');
+      // Visible desktop nav links (About/Contact etc.) and mobile drawer links.
+      var linkNodes = navRoot.querySelectorAll(
+        'a[code-path="src/sections/Navigation.tsx:107:17"], a[code-path="src/sections/Navigation.tsx:173:17"], a[code-path="src/sections/Navigation.tsx:117:13"]'
+      );
+      var labelNodes = navRoot.querySelectorAll(
+        '[code-path="src/sections/Navigation.tsx:107:17"], [code-path="src/sections/Navigation.tsx:173:17"], span[code-path="src/sections/Navigation.tsx:124:15"]'
+      );
       var count = Math.min(hamburgerLinks.length, linkNodes.length, labelNodes.length);
       for (var j = 0; j < count; j += 1) {
         var item = hamburgerLinks[j] || {};
