@@ -1,0 +1,42 @@
+.kimi-site {
+  font-family: 'Inter Tight', sans-serif;
+  color: #111111;
+}
+
+.kimi-site h1,
+.kimi-site h2,
+.kimi-site h3,
+.kimi-site h4,
+.kimi-site h5,
+.kimi-site h6 {
+  font-family: 'Oswald', sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.kimi-site .kimi-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.kimi-site .kimi-meta {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.kimi-site .kimi-price {
+  color: #e66045;
+  font-weight: 600;
+}
+
+.kimi-site .kimi-card-title {
+  font-size: 36px;
+  line-height: 1.04;
+  font-family: 'Oswald', sans-serif;
+  text-transform: uppercase;
+}
+
+.kimi-site .kimi-soft {
+  color: rgba(17, 17, 17, 0.62);
+}

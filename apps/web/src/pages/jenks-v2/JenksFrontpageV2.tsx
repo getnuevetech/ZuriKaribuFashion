@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   Briefcase,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Globe,
   Headphones,
   Heart,
@@ -18,6 +20,7 @@ import {
   Truck,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import '../../styles/jenks-v2.css';
 
 type HeroSlide = {
   id: string;
@@ -183,11 +186,19 @@ const FRESH_DROPS = [
     brand: 'Diallo Fabrics',
     price: '$0.13/yd',
   },
+  {
+    id: 'drop-4',
+    image: `${ASSET_BASE}/product6.jpg`,
+    name: 'Bazin Royale',
+    brand: 'Diallo Fabrics',
+    price: '$145.00',
+  },
 ];
 
 export default function JenksFrontpageV2() {
   const [index, setIndex] = useState(0);
   const [shopByTab, setShopByTab] = useState<ShopByTab>('CATEGORY');
+  const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
   const active = useMemo(() => HERO[index] || HERO[0], [index]);
 
   useEffect(() => {
@@ -205,7 +216,7 @@ export default function JenksFrontpageV2() {
           </div>
         </div>
         <header className="h-14 border-b border-black/10 bg-[#f5f3ee]/95 backdrop-blur">
-          <div className="mx-auto flex h-full w-full max-w-[1700px] items-center justify-between px-4 sm:px-6 lg:px-12">
+          <div className="relative mx-auto flex h-full w-full max-w-[1700px] items-center justify-between px-4 sm:px-6 lg:px-12">
             <div className="flex items-center gap-3 text-black/75">
               <button className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5" aria-label="Open menu">
                 <Menu className="h-4 w-4" />
@@ -214,15 +225,17 @@ export default function JenksFrontpageV2() {
                 <Search className="h-4 w-4" />
               </button>
             </div>
-            <p className="font-['Oswald'] text-[34px] font-semibold uppercase leading-none tracking-[0.08em]">
+
+            <p className="absolute left-1/2 -translate-x-1/2 font-['Oswald'] text-[27px] font-semibold uppercase leading-none tracking-[0.08em]">
               <span>ZURI</span>
               <span className="text-[#e66045]">KARIBU</span>
             </p>
-            <div className="hidden items-center gap-6 text-xs font-semibold uppercase tracking-[0.12em] text-black/75 md:flex">
-              <Link to="/about" className="hover:text-black">About Us</Link>
-              <Link to="/contact" className="hover:text-black">Contact Us</Link>
-            </div>
+
             <div className="flex items-center gap-3 text-black/75">
+              <div className="hidden items-center gap-6 text-xs font-semibold uppercase tracking-[0.12em] text-black/75 md:flex">
+                <Link to="/about" className="hover:text-black">About Us</Link>
+                <Link to="/contact" className="hover:text-black">Contact Us</Link>
+              </div>
               <button className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/20" aria-label="Theme">
                 <Sun className="h-4 w-4 text-[#e66045]" />
               </button>
@@ -410,21 +423,21 @@ export default function JenksFrontpageV2() {
       {/* RTW / FTB / CTW HERO-HEIGHT SPLIT */}
       <section className="space-y-0">
         <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-12`}>
-          <img src={`${ASSET_BASE}/rw_full.jpg`} alt="editorial ready" className="h-full w-full object-cover md:col-span-9" />
-          <div className="flex items-center bg-[#111] px-8 py-12 text-white md:col-span-3">
-            <h3 className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">STANDARDIZED AFRICAN MADE TO WEAR</h3>
+          <img src={`${ASSET_BASE}/rw_full.jpg`} alt="editorial ready" className="h-full w-full object-cover md:col-span-8" />
+          <div className="flex items-center bg-[#111] px-8 py-12 text-white md:col-span-4">
+            <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] lg:text-6xl">STANDARDIZED AFRICAN MADE TO WEAR</h3>
           </div>
         </div>
         <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-12`}>
-          <div className="flex items-center bg-[#1a1a1a] px-8 py-12 text-white md:col-span-3">
-            <h3 className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">AFRICAN FABRICS ALL ACROSS ALL EDGES OF AFRICA</h3>
+          <div className="flex items-center bg-[#1a1a1a] px-8 py-12 text-white md:col-span-4">
+            <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] lg:text-6xl">AFRICAN FABRICS ALL ACROSS ALL EDGES OF AFRICA</h3>
           </div>
-          <img src={`${ASSET_BASE}/fabrics_full.jpg`} alt="editorial fabric" className="h-full w-full object-cover md:col-span-9" />
+          <img src={`${ASSET_BASE}/fabrics_full.jpg`} alt="editorial fabric" className="h-full w-full object-cover md:col-span-8" />
         </div>
         <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-12`}>
-          <img src={`${ASSET_BASE}/custom_full.jpg`} alt="editorial custom" className="h-full w-full object-cover md:col-span-9" />
-          <div className="flex items-center bg-[#111] px-8 py-12 text-white md:col-span-3">
-            <h3 className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">EVERY STITCH SEWN BY AN AFRICAN DESIGNER</h3>
+          <img src={`${ASSET_BASE}/custom_full.jpg`} alt="editorial custom" className="h-full w-full object-cover md:col-span-8" />
+          <div className="flex items-center bg-[#111] px-8 py-12 text-white md:col-span-4">
+            <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] lg:text-6xl">EVERY STITCH SEWN BY AN AFRICAN DESIGNER</h3>
           </div>
         </div>
       </section>
@@ -444,62 +457,79 @@ export default function JenksFrontpageV2() {
         </div>
       </section>
 
-      {/* FEATURED RTW (2 columns full images) */}
-      <section className="bg-[#f8f6f1] py-12">
-        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <h2 className="font-['Oswald'] text-4xl font-bold uppercase">FEATURED READY TO WEAR</h2>
-          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-            {FEATURED_RTW.map((card) => (
-              <Link key={card.id} to={card.href} className="group relative overflow-hidden border border-black/10">
-                <img src={card.image} alt={card.title} className="h-[86vh] w-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                  <p className="font-['Oswald'] text-4xl font-semibold uppercase">{card.title}</p>
-                  <p className="mt-2 text-sm text-white/80">{card.subtitle}</p>
-                </div>
-              </Link>
-            ))}
-          </div>
+      {/* FEATURED RTW + CTW (full-width, no gaps) */}
+      <section className="space-y-0">
+        <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 md:grid-cols-2`}>
+          {FEATURED_RTW.map((card) => (
+            <Link key={card.id} to={card.href} className="group relative overflow-hidden">
+              <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+              <div className="absolute right-6 top-6 max-w-[46%] text-right text-white">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70">Ready To Wear</p>
+                <p className="mt-2 font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">Featured Ready To Wear</p>
+                <p className="mt-2 text-xs text-white/75">{card.subtitle}</p>
+              </div>
+            </Link>
+          ))}
         </div>
-      </section>
-
-      {/* FEATURED CTW (2 columns full images) */}
-      <section className="bg-white py-12">
-        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <h2 className="font-['Oswald'] text-4xl font-bold uppercase">FEATURED CUSTOM TO WEAR</h2>
-          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-            {FEATURED_CTW.map((card) => (
-              <Link key={card.id} to={card.href} className="group relative overflow-hidden border border-black/10">
-                <img src={card.image} alt={card.title} className="h-[86vh] w-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                  <p className="font-['Oswald'] text-4xl font-semibold uppercase">{card.title}</p>
-                  <p className="mt-2 text-sm text-white/80">{card.subtitle}</p>
-                </div>
-              </Link>
-            ))}
-          </div>
+        <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 md:grid-cols-2`}>
+          {FEATURED_CTW.map((card) => (
+            <Link key={card.id} to={card.href} className="group relative overflow-hidden">
+              <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+              <div className="absolute right-6 top-6 max-w-[46%] text-right text-white">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70">Custom To Wear</p>
+                <p className="mt-2 font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">Featured Custom To Wear</p>
+                <p className="mt-2 text-xs text-white/75">{card.subtitle}</p>
+              </div>
+            </Link>
+          ))}
         </div>
       </section>
 
       {/* FRESH DROPS */}
       <section className="bg-[#f5f5f3] py-12">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <h2 className="font-['Oswald'] text-6xl font-bold uppercase leading-none">FRESH DROPS</h2>
-          <p className="mt-3 text-2xl text-black/65">New arrivals from the most talented designers across the continent.</p>
-          <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-3">
+          <div className="flex items-end justify-between">
+            <div>
+              <h2 className="font-['Oswald'] text-6xl font-bold uppercase leading-none">FRESH DROPS</h2>
+              <p className="mt-3 text-base text-black/65">New arrivals from the most talented designers across the continent.</p>
+            </div>
+            <div className="hidden items-center gap-2 md:flex">
+              <button
+                type="button"
+                onClick={() => freshDropsStripRef.current?.scrollBy({ left: -340, behavior: 'smooth' })}
+                className="inline-flex h-10 w-10 items-center justify-center border border-black/20 text-black/70 hover:border-black/50 hover:text-black"
+                aria-label="Scroll fresh drops left"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => freshDropsStripRef.current?.scrollBy({ left: 340, behavior: 'smooth' })}
+                className="inline-flex h-10 w-10 items-center justify-center border border-black/20 text-black/70 hover:border-black/50 hover:text-black"
+                aria-label="Scroll fresh drops right"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <div
+            ref={freshDropsStripRef}
+            className="mt-8 flex gap-4 overflow-x-auto pb-1 scrollbar-hide"
+          >
             {FRESH_DROPS.map((drop) => (
-              <article key={drop.id} className="overflow-hidden border border-black/10 bg-white">
+              <article key={drop.id} className="min-w-[260px] flex-1 overflow-hidden border border-black/10 bg-white md:min-w-[calc((100%-48px)/4)]">
                 <div className="relative">
-                  <img src={drop.image} alt={drop.name} className="h-[68vh] w-full object-cover" />
+                  <img src={drop.image} alt={drop.name} className="h-[52vh] w-full object-cover" />
                   <span className="absolute left-4 top-4 bg-[#e66045] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white">
                     NEW
                   </span>
                 </div>
                 <div className="p-4">
-                  <p className="text-4xl font-semibold">{drop.name}</p>
-                  <p className="mt-1 text-2xl text-black/60">{drop.brand}</p>
-                  <p className="mt-2 text-3xl font-semibold text-[#e66045]">{drop.price}</p>
+                  <p className="text-xl font-semibold">{drop.name}</p>
+                  <p className="mt-1 text-sm text-black/60">{drop.brand}</p>
+                  <p className="mt-2 text-2xl font-semibold text-[#e66045]">{drop.price}</p>
                 </div>
               </article>
             ))}
@@ -509,8 +539,8 @@ export default function JenksFrontpageV2() {
 
       {/* SPOTLIGHT */}
       <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 bg-[#101010] md:grid-cols-12`}>
-        <img src={`${ASSET_BASE}/designer_spotlight.jpg`} alt="designer spotlight" className="h-full w-full object-cover md:col-span-9" />
-        <div className="flex items-center px-8 py-12 text-white md:col-span-3">
+        <img src={`${ASSET_BASE}/designer_spotlight.jpg`} alt="designer spotlight" className="h-full w-full object-cover md:col-span-8" />
+        <div className="flex items-center px-8 py-12 text-white md:col-span-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/65">Designer spotlight</p>
             <h2 className="mt-2 font-['Oswald'] text-5xl font-bold uppercase leading-[0.95]">MEET DESIGNERS ACROSS AFRICA</h2>
@@ -530,7 +560,7 @@ export default function JenksFrontpageV2() {
               The world is yet to experience Africa&apos;s fashion. We&apos;re building the bridge connecting heritage craft to modern wardrobes everywhere.
             </p>
           </div>
-          <div className="flex items-end gap-10">
+          <div className="flex items-end gap-10 self-start">
             <div>
               <p className="font-['Oswald'] text-7xl font-bold leading-none">120+</p>
               <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/75">Countries</p>
