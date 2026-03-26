@@ -5,11 +5,16 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Facebook,
   Globe,
   Headphones,
   Heart,
+  Instagram,
+  Mail,
+  MapPin,
   Menu,
   Palette,
+  Phone,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -18,6 +23,8 @@ import {
   Sun,
   Tag,
   Truck,
+  Twitter,
+  Youtube,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import '../../styles/jenks-v2.css';
@@ -63,12 +70,12 @@ const HERO: HeroSlide[] = [
 ];
 
 const HOW_IT_WORKS = [
-  ['DISCOVER', 'Browse categories and curated looks'],
-  ['PICK FABRIC', 'Choose textile quality and color'],
-  ['SUBMIT FIT', 'Send measurements for tailoring'],
-  ['PAY SECURELY', 'Checkout with protected payments'],
-  ['CRAFTED', 'Makers begin production'],
-  ['DELIVERED', 'Shipped globally to your location'],
+  { title: 'DISCOVER', sub: 'Browse categories and curated looks', Icon: Search },
+  { title: 'PICK FABRIC', sub: 'Choose textile quality and color', Icon: Palette },
+  { title: 'SUBMIT FIT', sub: 'Send measurements for tailoring', Icon: Sparkles },
+  { title: 'PAY SECURELY', sub: 'Checkout with protected payments', Icon: ShieldCheck },
+  { title: 'CRAFTED', sub: 'Makers begin production', Icon: RefreshCw },
+  { title: 'DELIVERED', sub: 'Shipped globally to your location', Icon: Truck },
 ];
 
 const trust = [
@@ -267,6 +274,33 @@ const FRESH_DROPS = [
     price: '$145.00',
   },
 ];
+
+const DESIGNER_SPOTLIGHT = [
+  {
+    id: 'spot-1',
+    image: `${ASSET_BASE}/designer_spotlight.jpg`,
+    title: 'LAGOS TAILORING HOUSE',
+    description: 'Sharp silhouettes, modern cuts, and rooted craftsmanship from Nigeria.',
+    cta: 'VIEW DESIGNER',
+    href: '/designers',
+  },
+  {
+    id: 'spot-2',
+    image: `${ASSET_BASE}/featured_custom_right.jpg`,
+    title: 'DAKAR COUTURE STUDIO',
+    description: 'Elegant made-to-measure looks inspired by Senegalese heritage details.',
+    cta: 'SHOP COLLECTION',
+    href: '/custom',
+  },
+  {
+    id: 'spot-3',
+    image: `${ASSET_BASE}/featured_rw_left.jpg`,
+    title: 'ACCRA READY EDIT',
+    description: 'Ready pieces styled for events, work, and everyday confidence.',
+    cta: 'EXPLORE RTW',
+    href: '/ready-to-wear',
+  },
+] as const;
 
 export default function JenksFrontpageV2() {
   const [index, setIndex] = useState(0);
@@ -508,7 +542,7 @@ export default function JenksFrontpageV2() {
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-black/40 text-[#e66045]">
                     <styleItem.Icon className="h-5 w-5" />
                   </div>
-                  <p className="mt-4 text-2xl font-semibold text-white">{styleItem.name}</p>
+                  <p className="mt-4 text-[15px] font-semibold uppercase tracking-[0.06em] text-white">{styleItem.name}</p>
                   <p className="mt-1 text-sm text-white/50">{styleItem.sub}</p>
                 </Link>
               ))}
@@ -521,12 +555,12 @@ export default function JenksFrontpageV2() {
                 <Link
                   key={priceItem.range}
                   to="/shop"
-                  className="rounded border border-white/10 bg-white/[0.06] px-5 py-7 transition-colors hover:border-white/25"
+                  className="rounded border border-white/10 bg-white/[0.06] px-5 py-7 text-center transition-colors hover:border-white/25"
                 >
-                  <div className="flex items-center gap-2 text-[#e66045]">
+                  <div className="flex items-center justify-center gap-2 text-[#e66045]">
                     <Tag className="h-4 w-4" />
                   </div>
-                  <p className="mt-3 text-3xl font-semibold text-white">{priceItem.range}</p>
+                  <p className="mt-3 text-2xl font-semibold text-white">{priceItem.range}</p>
                   <p className="mt-1 text-sm text-white/55">{priceItem.sub}</p>
                 </Link>
               ))}
@@ -664,11 +698,14 @@ export default function JenksFrontpageV2() {
       {/* HOW IT WORKS */}
       <section className="bg-white py-12" data-kimi-anim="fade-up">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <h2 className="font-['Oswald'] text-3xl font-bold uppercase">HOW IT WORKS</h2>
+          <h2 className="kimi-title-lg">HOW IT WORKS</h2>
           <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-            {HOW_IT_WORKS.map(([title, sub]) => (
-              <article key={title} className="border border-black/10 bg-[#faf9f5] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em]">{title}</p>
+            {HOW_IT_WORKS.map(({ title, sub, Icon }) => (
+              <article key={title} className="flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-6 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-black/15 bg-white">
+                  <Icon className="h-5 w-5 text-[#e66045]" />
+                </div>
+                <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em]">{title}</p>
                 <p className="mt-1 text-xs text-black/55">{sub}</p>
               </article>
             ))}
@@ -708,11 +745,11 @@ export default function JenksFrontpageV2() {
 
       {/* FRESH DROPS */}
       <section className="bg-[#f5f5f3] py-12" data-kimi-anim="fade-up">
-        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+        <div className="w-full px-3 sm:px-4 lg:px-8 xl:px-10">
           <div className="flex items-end justify-between">
             <div>
-              <h2 className="font-['Oswald'] text-6xl font-bold uppercase leading-none">FRESH DROPS</h2>
-              <p className="mt-3 text-base text-black/65">New arrivals from the most talented designers across the continent.</p>
+              <h2 className="kimi-title-xl">FRESH DROPS</h2>
+              <p className="mt-3 kimi-body text-black/65">New arrivals from the most talented designers across the continent.</p>
             </div>
             <div className="hidden items-center gap-2 md:flex">
               <button
@@ -740,10 +777,10 @@ export default function JenksFrontpageV2() {
             {FRESH_DROPS.map((drop) => (
               <article
                 key={drop.id}
-                className="group min-w-[260px] flex-1 overflow-hidden border border-black/10 bg-white transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_18px_46px_rgba(0,0,0,0.2)] md:min-w-[calc((100%-48px)/4)]"
+                className="group min-w-[312px] flex-1 overflow-hidden border border-black/10 bg-white transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_18px_46px_rgba(0,0,0,0.2)] md:min-w-[calc((100%-24px)/4)]"
               >
                 <div className="relative">
-                  <img src={drop.image} alt={drop.name} className="h-[52vh] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+                  <img src={drop.image} alt={drop.name} className="h-[63vh] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
                   <span className="absolute left-4 top-4 bg-[#e66045] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white">
                     NEW
                   </span>
@@ -751,7 +788,7 @@ export default function JenksFrontpageV2() {
                 <div className="p-4">
                   <p className="text-xl font-semibold">{drop.name}</p>
                   <p className="mt-1 text-sm text-black/60">{drop.brand}</p>
-                  <p className="mt-2 text-2xl font-semibold text-[#e66045]">{drop.price}</p>
+                  <p className="mt-2 text-xl font-semibold text-[#e66045]">{drop.price}</p>
                 </div>
               </article>
             ))}
@@ -760,15 +797,22 @@ export default function JenksFrontpageV2() {
       </section>
 
       {/* SPOTLIGHT */}
-      <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 bg-[#101010] md:grid-cols-12`}>
-        <img src={`${ASSET_BASE}/designer_spotlight.jpg`} alt="designer spotlight" className="h-full w-full object-cover md:col-span-8" data-kimi-anim="zoom-in" />
-        <div className="flex items-center px-8 py-12 text-white md:col-span-4" data-kimi-anim="sidebar-right">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/65">Designer spotlight</p>
-            <h2 className="mt-2 font-['Oswald'] text-5xl font-bold uppercase leading-[0.95]">MEET DESIGNERS ACROSS AFRICA</h2>
-            <p className="mt-3 text-sm text-white/70">Craft stories from Lagos to Dakar, stitched with heritage and modern precision.</p>
-          </div>
-        </div>
+      <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 bg-[#101010] md:grid-cols-3`}>
+        {DESIGNER_SPOTLIGHT.map((spot) => (
+          <Link key={spot.id} to={spot.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
+            <img src={spot.image} alt={spot.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+            <div className="absolute bottom-8 left-8 right-8 text-white">
+              <p className="kimi-eyebrow text-white/72">Designer spotlight</p>
+              <h3 className="mt-3 kimi-title-md">{spot.title}</h3>
+              <p className="mt-3 kimi-body-sm text-white/78">{spot.description}</p>
+              <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white">
+                {spot.cta}
+                <ArrowRight className="h-4 w-4" />
+              </span>
+            </div>
+          </Link>
+        ))}
       </section>
 
       {/* ROOTED IN CULTURE */}
@@ -777,12 +821,12 @@ export default function JenksFrontpageV2() {
         <div className="absolute inset-0 bg-black/42" />
         <div className="relative flex h-full flex-col justify-between px-8 py-10 text-white">
           <div className="self-end text-right">
-            <h2 className="font-['Oswald'] text-6xl font-bold uppercase leading-[0.92]">ROOTED IN CULTURE.</h2>
-            <p className="mt-4 max-w-xl text-base text-white/80">
+            <h2 className="kimi-title-xl">ROOTED IN CULTURE.</h2>
+            <p className="mt-4 max-w-xl kimi-body text-white/80">
               The world is yet to experience Africa&apos;s fashion. We&apos;re building the bridge connecting heritage craft to modern wardrobes everywhere.
             </p>
           </div>
-          <div className="flex items-end gap-10 self-start">
+          <div className="absolute bottom-[20%] left-8 flex items-end gap-10">
             <div>
               <p className="font-['Oswald'] text-7xl font-bold leading-none">120+</p>
               <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/75">Countries</p>
@@ -800,23 +844,30 @@ export default function JenksFrontpageV2() {
       </section>
 
       {/* TRUST + NEWSLETTER */}
-      <section className="bg-white py-10" data-kimi-anim="fade-up">
+      <section className="bg-white py-16 lg:py-20" data-kimi-anim="fade-up">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <h2 className="text-center kimi-title-lg">SHOP WITH CONFIDENCE</h2>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             {trust.map((item) => (
-              <article key={item.label} className="border border-black/10 bg-[#faf9f5] p-4">
-                <div className="flex items-center gap-2">
-                  <item.Icon className="h-4 w-4" />
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em]">{item.label}</p>
+              <article key={item.label} className="mt-8 flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-8 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full border border-black/15 bg-white">
+                  <item.Icon className="h-5 w-5 text-[#e66045]" />
                 </div>
-                <p className="mt-1 text-xs text-black/55">{item.sub}</p>
+                <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em]">{item.label}</p>
+                <p className="mt-2 text-xs text-black/55">{item.sub}</p>
               </article>
             ))}
           </div>
-          <div className="mt-10 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+        </div>
+      </section>
+
+      {/* NEWSLETTER */}
+      <section className="bg-white pb-16" data-kimi-anim="fade-up">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
             <div>
-              <h3 className="font-['Oswald'] text-4xl font-bold uppercase">JOIN THE MOVEMENT.</h3>
-              <p className="mt-2 text-sm text-black/60">Subscribe for new arrivals and stories from the continent.</p>
+              <h3 className="kimi-title-lg">JOIN THE MOVEMENT.</h3>
+              <p className="mt-2 kimi-body-sm text-black/60">Subscribe for new arrivals and stories from the continent.</p>
             </div>
             <form className="flex gap-2">
               <input className="h-10 border border-black/20 px-3 text-sm outline-none" placeholder="Enter email" />
@@ -825,6 +876,55 @@ export default function JenksFrontpageV2() {
           </div>
         </div>
       </section>
+
+      {/* FOOTER */}
+      <footer className="bg-[#0a0a0a] py-12 text-white">
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
+            <div>
+              <p className="font-['Oswald'] text-3xl uppercase tracking-[0.08em]">
+                ZURI<span className="text-[#e66045]">KARIBU</span>
+              </p>
+              <p className="mt-3 text-sm text-white/65">
+                Made by Africans. Worn by the world.
+              </p>
+              <div className="mt-5 flex items-center gap-3 text-white/75">
+                <Instagram className="h-4 w-4" />
+                <Facebook className="h-4 w-4" />
+                <Twitter className="h-4 w-4" />
+                <Youtube className="h-4 w-4" />
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">Shop</p>
+              <div className="mt-3 space-y-2 text-sm text-white/75">
+                <Link to="/ready-to-wear" className="block hover:text-white">Ready To Wear</Link>
+                <Link to="/custom" className="block hover:text-white">Custom To Wear</Link>
+                <Link to="/fabrics" className="block hover:text-white">Fabrics</Link>
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">Company</p>
+              <div className="mt-3 space-y-2 text-sm text-white/75">
+                <Link to="/about" className="block hover:text-white">About Us</Link>
+                <Link to="/contact" className="block hover:text-white">Contact</Link>
+                <Link to="/auth/login" className="block hover:text-white">Sign In</Link>
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">Contact</p>
+              <div className="mt-3 space-y-2 text-sm text-white/75">
+                <p className="inline-flex items-center gap-2"><Mail className="h-4 w-4" /> support@zurikaribu.com</p>
+                <p className="inline-flex items-center gap-2"><Phone className="h-4 w-4" /> +234 000 000 0000</p>
+                <p className="inline-flex items-center gap-2"><MapPin className="h-4 w-4" /> Lagos, Nigeria</p>
+              </div>
+            </div>
+          </div>
+          <div className="mt-10 border-t border-white/10 pt-5 text-xs text-white/50">
+            © {new Date().getFullYear()} ZuriKaribu. All rights reserved.
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
