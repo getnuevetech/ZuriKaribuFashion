@@ -206,6 +206,27 @@ export default function JenksFrontpageV2() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-kimi-anim]'));
+    if (nodes.length === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add('is-in');
+          observer.unobserve(entry.target);
+        });
+      },
+      { threshold: 0.18, rootMargin: '0px 0px -8% 0px' }
+    );
+    nodes.forEach((node, idx) => {
+      node.style.transitionDelay = `${Math.min(idx % 6, 5) * 60}ms`;
+      observer.observe(node);
+    });
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="kimi-site bg-[#f5f3ee] text-[#111]">
       {/* TOP STRIP + TOP NAVIGATION */}
@@ -268,7 +289,7 @@ export default function JenksFrontpageV2() {
           ))}
         </div>
         <div className="relative flex items-center bg-[#f5f3ee] px-6 py-10 lg:col-span-5 lg:px-12">
-          <div className="max-w-[560px] animate-fade-in">
+          <div className="max-w-[560px] animate-fade-in" data-kimi-anim="fade-up">
             <h1 className="font-['Oswald'] text-[58px] font-bold uppercase leading-[0.9] sm:text-[72px]">
               <span>{active.titleA}</span>
               <span className="ml-[0.16em] text-[#e66045]">{active.titleB}</span>
@@ -296,7 +317,7 @@ export default function JenksFrontpageV2() {
       </section>
 
       {/* SHOP BY */}
-      <section className="bg-[#07090d] py-14 lg:py-16">
+      <section className="bg-[#07090d] py-14 lg:py-16" data-kimi-anim="fade-up">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <p className="text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">Discover</p>
           <h2 className="mt-2 text-center font-['Oswald'] text-6xl font-bold uppercase leading-none text-white">SHOP BY</h2>
@@ -423,27 +444,27 @@ export default function JenksFrontpageV2() {
       {/* RTW / FTB / CTW HERO-HEIGHT SPLIT */}
       <section className="space-y-0">
         <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-12`}>
-          <img src={`${ASSET_BASE}/rw_full.jpg`} alt="editorial ready" className="h-full w-full object-cover md:col-span-8" />
-          <div className="flex items-center bg-[#111] px-8 py-12 text-white md:col-span-4">
+          <img src={`${ASSET_BASE}/rw_full.jpg`} alt="editorial ready" className="h-full w-full object-cover md:col-span-8" data-kimi-anim="zoom-in" />
+          <div className="flex items-center bg-[#111] px-8 py-12 text-white md:col-span-4" data-kimi-anim="sidebar-right">
             <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] lg:text-6xl">STANDARDIZED AFRICAN MADE TO WEAR</h3>
           </div>
         </div>
         <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-12`}>
-          <div className="flex items-center bg-[#1a1a1a] px-8 py-12 text-white md:col-span-4">
+          <div className="flex items-center bg-[#1a1a1a] px-8 py-12 text-white md:col-span-4" data-kimi-anim="sidebar-left">
             <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] lg:text-6xl">AFRICAN FABRICS ALL ACROSS ALL EDGES OF AFRICA</h3>
           </div>
-          <img src={`${ASSET_BASE}/fabrics_full.jpg`} alt="editorial fabric" className="h-full w-full object-cover md:col-span-8" />
+          <img src={`${ASSET_BASE}/fabrics_full.jpg`} alt="editorial fabric" className="h-full w-full object-cover md:col-span-8" data-kimi-anim="zoom-in" />
         </div>
         <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-12`}>
-          <img src={`${ASSET_BASE}/custom_full.jpg`} alt="editorial custom" className="h-full w-full object-cover md:col-span-8" />
-          <div className="flex items-center bg-[#111] px-8 py-12 text-white md:col-span-4">
+          <img src={`${ASSET_BASE}/custom_full.jpg`} alt="editorial custom" className="h-full w-full object-cover md:col-span-8" data-kimi-anim="zoom-in" />
+          <div className="flex items-center bg-[#111] px-8 py-12 text-white md:col-span-4" data-kimi-anim="sidebar-right">
             <h3 className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] lg:text-6xl">EVERY STITCH SEWN BY AN AFRICAN DESIGNER</h3>
           </div>
         </div>
       </section>
 
       {/* HOW IT WORKS */}
-      <section className="bg-white py-12">
+      <section className="bg-white py-12" data-kimi-anim="fade-up">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <h2 className="font-['Oswald'] text-3xl font-bold uppercase">HOW IT WORKS</h2>
           <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -461,7 +482,7 @@ export default function JenksFrontpageV2() {
       <section className="space-y-0">
         <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 md:grid-cols-2`}>
           {FEATURED_RTW.map((card) => (
-            <Link key={card.id} to={card.href} className="group relative overflow-hidden">
+            <Link key={card.id} to={card.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
               <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
               <div className="absolute right-6 top-6 max-w-[46%] text-right text-white">
@@ -474,7 +495,7 @@ export default function JenksFrontpageV2() {
         </div>
         <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 md:grid-cols-2`}>
           {FEATURED_CTW.map((card) => (
-            <Link key={card.id} to={card.href} className="group relative overflow-hidden">
+            <Link key={card.id} to={card.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
               <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
               <div className="absolute right-6 top-6 max-w-[46%] text-right text-white">
@@ -488,7 +509,7 @@ export default function JenksFrontpageV2() {
       </section>
 
       {/* FRESH DROPS */}
-      <section className="bg-[#f5f5f3] py-12">
+      <section className="bg-[#f5f5f3] py-12" data-kimi-anim="fade-up">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="flex items-end justify-between">
             <div>
@@ -539,8 +560,8 @@ export default function JenksFrontpageV2() {
 
       {/* SPOTLIGHT */}
       <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 bg-[#101010] md:grid-cols-12`}>
-        <img src={`${ASSET_BASE}/designer_spotlight.jpg`} alt="designer spotlight" className="h-full w-full object-cover md:col-span-8" />
-        <div className="flex items-center px-8 py-12 text-white md:col-span-4">
+        <img src={`${ASSET_BASE}/designer_spotlight.jpg`} alt="designer spotlight" className="h-full w-full object-cover md:col-span-8" data-kimi-anim="zoom-in" />
+        <div className="flex items-center px-8 py-12 text-white md:col-span-4" data-kimi-anim="sidebar-right">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/65">Designer spotlight</p>
             <h2 className="mt-2 font-['Oswald'] text-5xl font-bold uppercase leading-[0.95]">MEET DESIGNERS ACROSS AFRICA</h2>
@@ -550,7 +571,7 @@ export default function JenksFrontpageV2() {
       </section>
 
       {/* ROOTED IN CULTURE */}
-      <section className={`relative ${HERO_HEIGHT_CLASS}`}>
+      <section className={`relative ${HERO_HEIGHT_CLASS}`} data-kimi-anim="fade-up">
         <img src={`${ASSET_BASE}/heritage_story.jpg`} alt="heritage" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-black/42" />
         <div className="relative flex h-full flex-col justify-between px-8 py-10 text-white">
@@ -578,7 +599,7 @@ export default function JenksFrontpageV2() {
       </section>
 
       {/* TRUST + NEWSLETTER */}
-      <section className="bg-white py-10">
+      <section className="bg-white py-10" data-kimi-anim="fade-up">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             {trust.map((item) => (
