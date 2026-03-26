@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, ChevronLeft, ChevronRight, Headphones, RefreshCw, ShieldCheck, Truck } from 'lucide-react';
+import { ArrowRight, Headphones, Menu, RefreshCw, Search, ShieldCheck, ShoppingBag, Sun, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 type HeroSlide = {
@@ -70,8 +70,51 @@ export default function JenksFrontpageV2() {
 
   return (
     <div className="bg-[#f5f3ee] text-[#111]">
+      {/* TOP STRIP + TOP NAVIGATION */}
+      <div className="sticky top-0 z-50">
+        <div className="h-8 bg-black text-[10px] font-semibold uppercase tracking-[0.18em] text-white/85">
+          <div className="mx-auto flex h-full w-full max-w-[1700px] items-center justify-center px-4">
+            Made by Africans. Worn by the world.
+          </div>
+        </div>
+        <header className="h-14 border-b border-black/10 bg-[#f5f3ee]/95 backdrop-blur">
+          <div className="mx-auto flex h-full w-full max-w-[1700px] items-center justify-between px-4 sm:px-6 lg:px-12">
+            <div className="flex items-center gap-3 text-black/75">
+              <button className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5" aria-label="Open menu">
+                <Menu className="h-4 w-4" />
+              </button>
+              <button className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5" aria-label="Search">
+                <Search className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="font-['Oswald'] text-[34px] font-semibold uppercase leading-none tracking-[0.08em]">
+              <span>ZURI</span>
+              <span className="text-[#e66045]">KARIBU</span>
+            </p>
+            <div className="hidden items-center gap-6 text-xs font-semibold uppercase tracking-[0.12em] text-black/75 md:flex">
+              <Link to="/about" className="hover:text-black">About Us</Link>
+              <Link to="/contact" className="hover:text-black">Contact Us</Link>
+            </div>
+            <div className="flex items-center gap-3 text-black/75">
+              <button className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/20" aria-label="Theme">
+                <Sun className="h-4 w-4 text-[#e66045]" />
+              </button>
+              <button className="relative inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5" aria-label="Cart">
+                <ShoppingBag className="h-4 w-4" />
+                <span className="absolute right-0 top-0 h-3.5 min-w-3.5 rounded-full bg-[#e66045] px-1 text-[9px] font-semibold leading-[14px] text-white">
+                  0
+                </span>
+              </button>
+              <Link to="/auth/login" className="hidden text-xs font-semibold uppercase tracking-[0.12em] hover:text-black sm:inline">
+                Sign In
+              </Link>
+            </div>
+          </div>
+        </header>
+      </div>
+
       {/* HERO */}
-      <section className="grid min-h-[96vh] grid-cols-1 lg:grid-cols-12">
+      <section className="grid min-h-[106vh] grid-cols-1 lg:grid-cols-12">
         <div className="relative lg:col-span-7">
           {HERO.map((slide, i) => (
             <img
@@ -90,7 +133,7 @@ export default function JenksFrontpageV2() {
               <span>{active.titleA}</span>
               <span className="ml-[0.16em] text-[#e66045]">{active.titleB}</span>
             </h1>
-            <p className="mt-6 text-[40px] font-light leading-[1.08] text-black/84">{active.lineA}</p>
+            <p className="mt-6 text-[16px] font-light leading-[1.35] text-black/84 sm:text-[18px]">{active.lineA}</p>
             <p className="mt-4 text-sm text-black/55">{active.lineB}</p>
             <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.22em] text-black/45">Shop by category</p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -104,24 +147,10 @@ export default function JenksFrontpageV2() {
                 FABRICS
               </Link>
             </div>
-            <Link to={active.href} className="mt-6 inline-flex items-center gap-2 border border-black bg-[#e66045] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white">
+            <Link to={active.href} className="mt-6 inline-flex items-center gap-2 bg-[#e66045] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white">
               {active.cta}
               <ArrowRight className="h-4 w-4" />
             </Link>
-          </div>
-          <div className="absolute bottom-8 right-8 hidden gap-2 lg:flex">
-            <button
-              onClick={() => setIndex((p) => (p - 1 + HERO.length) % HERO.length)}
-              className="inline-flex h-9 w-9 items-center justify-center border border-black/20"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setIndex((p) => (p + 1) % HERO.length)}
-              className="inline-flex h-9 w-9 items-center justify-center border border-black/20"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
           </div>
         </div>
       </section>
