@@ -509,7 +509,7 @@ export default function JenksFrontpageV2() {
             </div>
             <Link
               to="/country-products"
-              className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-white/80 hover:text-white lg:mt-10"
+              className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-white lg:mt-10"
             >
               View All 54 Countries
               <ArrowRight className="h-4 w-4" />
@@ -526,8 +526,8 @@ export default function JenksFrontpageV2() {
                   onClick={() => setCountryRegion(option.key)}
                   className={`border px-4 py-2 text-sm font-medium transition-colors ${
                     isActive
-                      ? 'border-white bg-white text-[#111]'
-                      : 'border-white/12 bg-white/[0.04] text-white/82 hover:border-white/28'
+                      ? 'border-[#e66045] bg-transparent text-[#e66045]'
+                      : 'border-white/18 bg-white/[0.04] text-white hover:border-[#e66045] hover:text-[#e66045]'
                   }`}
                 >
                   {option.label}
@@ -542,7 +542,7 @@ export default function JenksFrontpageV2() {
               <Link
                 key={country.name}
                 to={`/country-products?country=${encodeURIComponent(country.name)}`}
-                className="group flex flex-col items-center rounded border border-white/8 bg-white/[0.03] px-2 py-3 text-center transition-colors hover:border-white/24"
+                className="group flex flex-col items-center rounded border border-white/18 bg-white/[0.03] px-2 py-3 text-center transition-colors hover:border-[#e66045]"
               >
                 <img
                   src={`https://flagcdn.com/w80/${country.flag}.png`}
@@ -550,7 +550,7 @@ export default function JenksFrontpageV2() {
                   className="h-11 w-11 rounded-full border border-white/18 object-cover"
                   loading="lazy"
                 />
-                <p className="mt-2 text-sm font-medium text-white/88">{country.name}</p>
+                <p className="mt-2 text-sm font-medium text-white transition-colors group-hover:text-[#e66045]">{country.name}</p>
               </Link>
             ))}
           </div>
@@ -558,7 +558,7 @@ export default function JenksFrontpageV2() {
           <div className="mt-8 text-center">
             <Link
               to="/country-products"
-              className="inline-flex items-center gap-2 border border-white/14 bg-white/[0.05] px-6 py-3 text-lg text-white/86 hover:border-white/35 hover:text-white"
+              className="inline-flex items-center gap-2 border border-white/18 bg-white/[0.05] px-6 py-3 text-lg text-white transition-colors hover:border-[#e66045] hover:text-[#e66045]"
             >
               Show All 54 Countries
               <ArrowRight className="h-4 w-4" />
