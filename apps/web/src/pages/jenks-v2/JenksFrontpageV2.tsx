@@ -466,23 +466,25 @@ export default function JenksFrontpageV2() {
 
           {shopByTab === 'COUNTRY' ? (
             <div className="mt-10">
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-3 lg:grid-cols-6">
                 {SHOP_BY_COUNTRY.map((country) => (
                   <Link
                     key={country.name}
                     to={`/country-products?country=${encodeURIComponent(country.name)}`}
-                    className="group flex flex-col items-center rounded border border-white/8 bg-white/[0.025] px-3 py-4 text-center text-white/75 transition-colors hover:border-[#e66045] hover:text-[#e66045]"
+                    className="group flex flex-col items-center text-center text-white/78 transition-colors hover:text-[#e66045]"
                   >
-                    <img
-                      src={`https://flagcdn.com/w80/${country.flag}.png`}
-                      alt={`${country.name} flag`}
-                      className="h-9 w-9 rounded-full border border-white/15 object-cover"
-                      loading="lazy"
-                    />
-                    <p className="mt-3 text-base font-semibold">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/12 bg-white/[0.02] transition-colors group-hover:border-[#e66045]">
+                      <img
+                        src={`https://flagcdn.com/w80/${country.flag}.png`}
+                        alt={`${country.name} flag`}
+                        className="h-10 w-10 rounded-full border border-white/10 object-cover"
+                        loading="lazy"
+                      />
+                    </span>
+                    <p className="mt-3 text-base font-semibold text-white/92">
                       {country.name} - {country.count}
                     </p>
-                    <p className="text-xs text-white/58 group-hover:text-[#e66045]/85">{country.textiles}</p>
+                    <p className="mt-1 text-xs text-white/54 group-hover:text-[#e66045]/85">{country.textiles}</p>
                   </Link>
                 ))}
               </div>
@@ -563,7 +565,7 @@ export default function JenksFrontpageV2() {
                   onClick={() => setCountryRegion(option.key)}
                   className={`border px-4 py-2 text-sm font-medium transition-colors ${
                     isActive
-                      ? 'border-[#e66045] bg-transparent text-[#e66045]'
+                      ? 'border-white bg-white text-[#111]'
                       : 'border-white/10 bg-white/[0.02] text-white/75 hover:border-[#e66045] hover:text-[#e66045]'
                   }`}
                 >
@@ -609,34 +611,48 @@ export default function JenksFrontpageV2() {
       {/* RTW / FTB / CTW HERO-HEIGHT SPLIT */}
       <section className="space-y-0">
         {RTW_FTB_CTW_SECTIONS.map((section) => (
-          <div key={section.id} className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-12`}>
+          <div key={section.id} className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-2`}>
             {section.textOnLeft ? (
               <>
-                <div className={`flex items-center px-8 py-12 text-white md:col-span-4 ${section.panelBg}`} data-kimi-anim="sidebar-left">
-                  <div className="max-w-[480px]">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/68">{section.sectionName}</p>
-                    <h3 className="mt-4 font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] lg:text-6xl">{section.title}</h3>
-                    <p className="mt-5 text-base leading-relaxed text-white/70">{section.description}</p>
-                    <Link to={section.href} className="mt-8 inline-flex items-center gap-2 text-[30px] font-medium uppercase tracking-[0.04em] text-white/90 hover:text-white">
-                      {section.cta}
-                      <ArrowRight className="h-5 w-5" />
-                    </Link>
+                <div className={`relative overflow-hidden px-8 py-12 text-white md:col-span-1 ${section.panelBg}`} data-kimi-anim="sidebar-left">
+                  <div
+                    className="pointer-events-none absolute inset-0 scale-105 bg-cover bg-center blur-2xl"
+                    style={{ backgroundImage: `url(${section.image})`, opacity: 0.18 }}
+                  />
+                  <div className="pointer-events-none absolute inset-0 bg-black/70" />
+                  <div className="relative flex h-full items-center">
+                    <div className="max-w-[560px]">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
+                      <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
+                      <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
+                      <Link to={section.href} className="mt-9 inline-flex items-center gap-3 text-base font-medium uppercase tracking-[0.04em] text-white/92 hover:text-white sm:text-lg">
+                        {section.cta}
+                        <ArrowRight className="h-5 w-5" />
+                      </Link>
+                    </div>
                   </div>
                 </div>
-                <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover md:col-span-8" data-kimi-anim="zoom-in" />
+                <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover md:col-span-1" data-kimi-anim="zoom-in" />
               </>
             ) : (
               <>
-                <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover md:col-span-8" data-kimi-anim="zoom-in" />
-                <div className={`flex items-center px-8 py-12 text-white md:col-span-4 ${section.panelBg}`} data-kimi-anim="sidebar-right">
-                  <div className="max-w-[480px]">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/68">{section.sectionName}</p>
-                    <h3 className="mt-4 font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] lg:text-6xl">{section.title}</h3>
-                    <p className="mt-5 text-base leading-relaxed text-white/70">{section.description}</p>
-                    <Link to={section.href} className="mt-8 inline-flex items-center gap-2 text-[30px] font-medium uppercase tracking-[0.04em] text-white/90 hover:text-white">
-                      {section.cta}
-                      <ArrowRight className="h-5 w-5" />
-                    </Link>
+                <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover md:col-span-1" data-kimi-anim="zoom-in" />
+                <div className={`relative overflow-hidden px-8 py-12 text-white md:col-span-1 ${section.panelBg}`} data-kimi-anim="sidebar-right">
+                  <div
+                    className="pointer-events-none absolute inset-0 scale-105 bg-cover bg-center blur-2xl"
+                    style={{ backgroundImage: `url(${section.image})`, opacity: 0.18 }}
+                  />
+                  <div className="pointer-events-none absolute inset-0 bg-black/70" />
+                  <div className="relative flex h-full items-center">
+                    <div className="max-w-[560px]">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
+                      <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
+                      <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
+                      <Link to={section.href} className="mt-9 inline-flex items-center gap-3 text-base font-medium uppercase tracking-[0.04em] text-white/92 hover:text-white sm:text-lg">
+                        {section.cta}
+                        <ArrowRight className="h-5 w-5" />
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </>
