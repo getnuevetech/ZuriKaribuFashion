@@ -489,6 +489,7 @@
           var contentType = String(response.headers.get("content-type") || "").toLowerCase();
           if (contentType.indexOf("application/json") === -1) {
             DEBUG_STATE.lastError = "non-json response from " + endpoint + " (" + contentType + ")";
+            DEBUG_FORCED_VISIBLE = true;
             renderDebugOverlay();
             return tryAt(index + 1);
           }
