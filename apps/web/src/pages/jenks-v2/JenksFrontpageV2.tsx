@@ -835,21 +835,6 @@ export default function JenksFrontpageV2() {
       .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0));
     return rows.length > 0 ? rows : [];
   }, [categoryManageCfg.sections]);
-  const quickCategoryLinks = useMemo(() => {
-    const mapped = categorySections
-      .map((entry) => ({
-        label: asString(entry.title, asString(entry.tag, 'Category')).toUpperCase(),
-        href: normalizeHref(entry.ctaLink, DEFAULT_HREF_BY_KEY[asString(entry.key, '').toUpperCase()] || '/ready-to-wear'),
-        ctaStyle: entry.ctaStyle,
-      }))
-      .slice(0, 3);
-    if (mapped.length > 0) return mapped;
-    return [
-      { label: 'READY TO WEAR', href: '/ready-to-wear', ctaStyle: DEFAULT_SOLID_CTA_STYLE },
-      { label: 'CUSTOM', href: '/custom', ctaStyle: DEFAULT_SOLID_CTA_STYLE },
-      { label: 'FABRICS', href: '/fabrics', ctaStyle: DEFAULT_SOLID_CTA_STYLE },
-    ];
-  }, [categorySections]);
 
   const enabledShopByTabs = useMemo(() => {
     const allowed: ShopByTab[] = ['CATEGORY', 'COUNTRY', 'STYLE', 'PRICE'];
@@ -1387,19 +1372,6 @@ export default function JenksFrontpageV2() {
             </h1>
             <p className="mt-6 text-[16px] font-light leading-[1.35] text-black/84 sm:text-[18px]">{active.lineA}</p>
             <p className="mt-4 text-sm text-black/55">{active.lineB}</p>
-            <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.22em] text-black/45">Shop by category</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {quickCategoryLinks.map((link) => (
-                <Link
-                  key={`${link.label}-${link.href}`}
-                  to={toSafeInternalHref(link.href)}
-                  style={buildCTAStyle(link.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                  className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em]"
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </div>
             <div className="mt-6 flex flex-wrap items-center gap-2">
               {active.primaryCtaEnabled ? (
                 <Link
@@ -1414,6 +1386,7 @@ export default function JenksFrontpageV2() {
                   className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
                 >
                   {active.primaryCtaText}
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               ) : null}
               {active.secondaryCtaEnabled ? (
@@ -1429,6 +1402,7 @@ export default function JenksFrontpageV2() {
                   className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
                 >
                   {active.secondaryCtaText}
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               ) : null}
               {active.tertiaryCtaEnabled ? (
@@ -1444,6 +1418,7 @@ export default function JenksFrontpageV2() {
                   className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
                 >
                   {active.tertiaryCtaText}
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               ) : null}
             </div>
