@@ -45,6 +45,10 @@ type HeroSlide = {
   secondaryCtaHref: string;
   secondaryCtaStyle?: CTAStyle;
   secondaryCtaEnabled: boolean;
+  tertiaryCtaText: string;
+  tertiaryCtaHref: string;
+  tertiaryCtaStyle?: CTAStyle;
+  tertiaryCtaEnabled: boolean;
 };
 type FeaturedTile = {
   id: string;
@@ -315,6 +319,9 @@ const HERO: HeroSlide[] = [
     secondaryCtaText: 'EXPLORE DESIGNERS',
     secondaryCtaHref: '/custom',
     secondaryCtaEnabled: true,
+    tertiaryCtaText: 'SHOP FABRICS',
+    tertiaryCtaHref: '/fabrics',
+    tertiaryCtaEnabled: true,
   },
   {
     id: '2',
@@ -329,6 +336,9 @@ const HERO: HeroSlide[] = [
     secondaryCtaText: 'EXPLORE DESIGNERS',
     secondaryCtaHref: '/custom',
     secondaryCtaEnabled: true,
+    tertiaryCtaText: 'SHOP FABRICS',
+    tertiaryCtaHref: '/fabrics',
+    tertiaryCtaEnabled: true,
   },
 ];
 
@@ -730,6 +740,13 @@ export default function JenksFrontpageV2() {
         secondaryCtaHref: normalizeHref(row.secondaryCtaLink, HERO[indexKey % HERO.length]?.secondaryCtaHref || '/custom'),
         secondaryCtaStyle: row.secondaryCtaStyle,
         secondaryCtaEnabled: asBoolean(row.secondaryCtaEnabled, true),
+        tertiaryCtaText: asString(
+          row.tertiaryCtaText,
+          HERO[indexKey % HERO.length]?.tertiaryCtaText || 'SHOP FABRICS'
+        ),
+        tertiaryCtaHref: normalizeHref(row.tertiaryCtaLink, HERO[indexKey % HERO.length]?.tertiaryCtaHref || '/fabrics'),
+        tertiaryCtaStyle: row.tertiaryCtaStyle,
+        tertiaryCtaEnabled: asBoolean(row.tertiaryCtaEnabled, true),
       } as HeroSlide;
     });
     return mapped.length > 0 ? mapped : HERO;
@@ -1307,6 +1324,15 @@ export default function JenksFrontpageV2() {
                   className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
                 >
                   {active.secondaryCtaText}
+                </Link>
+              ) : null}
+              {active.tertiaryCtaEnabled ? (
+                <Link
+                  to={toSafeInternalHref(active.tertiaryCtaHref)}
+                  style={buildCTAStyle(active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                  className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
+                >
+                  {active.tertiaryCtaText}
                 </Link>
               ) : null}
             </div>

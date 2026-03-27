@@ -63,6 +63,10 @@ type HeroBanner = {
   secondaryCtaText: string;
   secondaryCtaLink: string;
   secondaryCtaStyle: CtaStyle;
+  tertiaryCtaEnabled: boolean;
+  tertiaryCtaText: string;
+  tertiaryCtaLink: string;
+  tertiaryCtaStyle: CtaStyle;
 };
 
 type TopNavigationsSettings = {
@@ -546,6 +550,16 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
             borderWidth: 1,
             fontSize: 12,
           }),
+          tertiaryCtaEnabled: true,
+          tertiaryCtaText: 'SHOP FABRICS',
+          tertiaryCtaLink: '/fabrics',
+          tertiaryCtaStyle: defaultCtaStyle({
+            backgroundColor: 'transparent',
+            textColor: '#111111',
+            borderColor: '#111111',
+            borderWidth: 1,
+            fontSize: 12,
+          }),
         },
       ],
     },
@@ -907,6 +921,10 @@ const normalizeHeroBanner = (raw: unknown, fallback: HeroBanner, index: number):
     secondaryCtaText: (getString(row.secondaryCtaText) || fallback.secondaryCtaText).slice(0, 80),
     secondaryCtaLink: normalizeHref(row.secondaryCtaLink, fallback.secondaryCtaLink),
     secondaryCtaStyle: normalizeCtaStyle(row.secondaryCtaStyle, fallback.secondaryCtaStyle),
+    tertiaryCtaEnabled: getBoolean(row.tertiaryCtaEnabled) ?? fallback.tertiaryCtaEnabled,
+    tertiaryCtaText: (getString(row.tertiaryCtaText) || fallback.tertiaryCtaText).slice(0, 80),
+    tertiaryCtaLink: normalizeHref(row.tertiaryCtaLink, fallback.tertiaryCtaLink),
+    tertiaryCtaStyle: normalizeCtaStyle(row.tertiaryCtaStyle, fallback.tertiaryCtaStyle),
   };
 };
 

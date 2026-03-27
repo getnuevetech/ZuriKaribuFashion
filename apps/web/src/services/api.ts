@@ -10728,6 +10728,18 @@ const jenksV2FrontpageManagerApi = {
               fontSize: number;
               fontWeight: number;
             };
+            tertiaryCtaText: string;
+            tertiaryCtaLink: string;
+            tertiaryCtaEnabled: boolean;
+            tertiaryCtaStyle: {
+              backgroundColor: string;
+              textColor: string;
+              borderColor: string;
+              borderWidth: number;
+              fontFamily: string;
+              fontSize: number;
+              fontWeight: number;
+            };
           }>;
         };
         shopBy: {

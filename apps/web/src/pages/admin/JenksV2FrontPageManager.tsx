@@ -45,6 +45,10 @@ type HeroBanner = {
   secondaryCtaLink: string;
   secondaryCtaEnabled: boolean;
   secondaryCtaStyle: CTAStyle;
+  tertiaryCtaText: string;
+  tertiaryCtaLink: string;
+  tertiaryCtaEnabled: boolean;
+  tertiaryCtaStyle: CTAStyle;
 };
 
 type TopNavigations = {
@@ -501,6 +505,16 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         secondaryCtaText: 'EXPLORE DESIGNERS',
         secondaryCtaLink: '/custom',
         secondaryCtaStyle: createCtaStyle({
+          backgroundColor: 'transparent',
+          textColor: '#111111',
+          borderColor: '#111111',
+          borderWidth: 1,
+          fontSize: 12,
+        }),
+        tertiaryCtaEnabled: true,
+        tertiaryCtaText: 'SHOP FABRICS',
+        tertiaryCtaLink: '/fabrics',
+        tertiaryCtaStyle: createCtaStyle({
           backgroundColor: 'transparent',
           textColor: '#111111',
           borderColor: '#111111',
@@ -1004,6 +1018,8 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
               primaryCtaStyle: normalizeCtaStyle((banner as HeroBanner)?.primaryCtaStyle, fallbackHero.primaryCtaStyle),
               secondaryCtaEnabled: toBoolean((banner as HeroBanner)?.secondaryCtaEnabled, fallbackHero.secondaryCtaEnabled),
               secondaryCtaStyle: normalizeCtaStyle((banner as HeroBanner)?.secondaryCtaStyle, fallbackHero.secondaryCtaStyle),
+              tertiaryCtaEnabled: toBoolean((banner as HeroBanner)?.tertiaryCtaEnabled, fallbackHero.tertiaryCtaEnabled),
+              tertiaryCtaStyle: normalizeCtaStyle((banner as HeroBanner)?.tertiaryCtaStyle, fallbackHero.tertiaryCtaStyle),
             };
           })
         : DEFAULT_CONFIG.topNavigations.heroBanners,
@@ -1890,6 +1906,16 @@ export default function JenksV2FrontPageManager() {
                             borderWidth: 1,
                             fontSize: 12,
                           }),
+                          tertiaryCtaEnabled: true,
+                          tertiaryCtaText: 'SHOP FABRICS',
+                          tertiaryCtaLink: '/fabrics',
+                          tertiaryCtaStyle: createCtaStyle({
+                            backgroundColor: 'transparent',
+                            textColor: '#111111',
+                            borderColor: '#111111',
+                            borderWidth: 1,
+                            fontSize: 12,
+                          }),
                         },
                       ],
                     },
@@ -2175,6 +2201,60 @@ export default function JenksV2FrontPageManager() {
                     />
                     Secondary CTA Enabled
                   </label>
+                  <label className="text-xs">
+                    Tertiary CTA Text
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={banner.tertiaryCtaText}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, tertiaryCtaText: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs">
+                    Tertiary CTA Link
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={banner.tertiaryCtaLink}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, tertiaryCtaLink: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs flex items-center gap-2 pt-5">
+                    <input
+                      type="checkbox"
+                      checked={banner.tertiaryCtaEnabled}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, tertiaryCtaEnabled: event.target.checked } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                    Tertiary CTA Enabled
+                  </label>
                 {renderCtaStyleEditor(
                   'Primary CTA Style',
                   banner.primaryCtaStyle,
@@ -2185,6 +2265,21 @@ export default function JenksV2FrontPageManager() {
                         ...prev.topNavigations,
                         heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
                           entryIndex === index ? { ...entry, primaryCtaStyle: nextStyle } : entry
+                        ),
+                      },
+                    })),
+                  'md:col-span-2'
+                )}
+                {renderCtaStyleEditor(
+                  'Tertiary CTA Style',
+                  banner.tertiaryCtaStyle,
+                  (nextStyle) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, tertiaryCtaStyle: nextStyle } : entry
                         ),
                       },
                     })),
