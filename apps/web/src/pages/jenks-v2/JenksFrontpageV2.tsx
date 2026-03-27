@@ -1260,7 +1260,7 @@ export default function JenksFrontpageV2() {
                   key={`${link.label}-${link.href}`}
                   to={toSafeInternalHref(link.href)}
                   style={buildCTAStyle(link.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                  className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                  className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em]"
                 >
                   {link.label}
                 </Link>
