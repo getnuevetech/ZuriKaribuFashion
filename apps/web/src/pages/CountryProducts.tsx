@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { api } from '../services/api';
 import { useCurrencyStore } from '../store/currencyStore';
 import { resolveCountryCode } from '../data/locationOptions';
+import '../styles/jenks-v2.css';
 
 type ReadyRow = {
   id: string;
@@ -32,9 +33,34 @@ type FabricRow = {
   seller?: { businessName?: string; country?: string };
 };
 
+type CountryCategory = 'ALL' | 'RTW' | 'CTW' | 'FTB';
+
+const normalizeCountryCategory = (value: string): CountryCategory => {
+  const token = String(value || '')
+    .trim()
+    .toUpperCase();
+  if (!token) return 'ALL';
+  if (token === 'RTW' || token === 'READY_TO_WEAR' || token === 'READY-TO-WEAR') return 'RTW';
+  if (token === 'CTW' || token === 'CUSTOM' || token === 'CUSTOM_TO_WEAR' || token === 'CUSTOM-TO-WEAR') return 'CTW';
+  if (token === 'FTB' || token === 'FABRICS' || token === 'FABRIC' || token === 'FABRICS_TO_BUY' || token === 'FABRICS-TO-BUY') {
+    return 'FTB';
+  }
+  return 'ALL';
+};
+
+const CATEGORY_LABELS: Record<CountryCategory, string> = {
+  ALL: 'All Categories',
+  RTW: 'Ready To Wear',
+  CTW: 'Custom To Wear',
+  FTB: 'Fabrics To Buy',
+};
+
+const CATEGORY_OPTIONS: CountryCategory[] = ['ALL', 'RTW', 'CTW', 'FTB'];
+
 export default function CountryProducts() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const country = String(searchParams.get('country') || '').trim();
+  const category = useMemo(() => normalizeCountryCategory(String(searchParams.get('category') || '')), [searchParams]);
   const flagCode = resolveCountryCode(country);
   const { formatFromUsd } = useCurrencyStore();
   const [loading, setLoading] = useState(true);
@@ -54,15 +80,18 @@ export default function CountryProducts() {
       setLoading(true);
       setError(null);
       try {
+        const shouldLoadReady = category === 'ALL' || category === 'RTW';
+        const shouldLoadDesigns = category === 'ALL' || category === 'CTW';
+        const shouldLoadFabrics = category === 'ALL' || category === 'FTB';
         const [readyResponse, designResponse, fabricResponse] = await Promise.all([
-          api.products.getReadyToWear({ country, page: 1, limit: 30 }),
-          api.products.getDesigns({ country, page: 1, limit: 30 }),
-          api.products.getFabrics({ country, page: 1, limit: 30 }),
+          shouldLoadReady ? api.products.getReadyToWear({ country, page: 1, limit: 30 }) : Promise.resolve(null),
+          shouldLoadDesigns ? api.products.getDesigns({ country, page: 1, limit: 30 }) : Promise.resolve(null),
+          shouldLoadFabrics ? api.products.getFabrics({ country, page: 1, limit: 30 }) : Promise.resolve(null),
         ]);
         if (!mounted) return;
-        setReadyRows(Array.isArray(readyResponse?.data?.products) ? readyResponse.data.products : []);
-        setDesignRows(Array.isArray(designResponse?.data?.designs) ? designResponse.data.designs : []);
-        setFabricRows(Array.isArray(fabricResponse?.data?.fabrics) ? fabricResponse.data.fabrics : []);
+        setReadyRows(shouldLoadReady && Array.isArray(readyResponse?.data?.products) ? readyResponse.data.products : []);
+        setDesignRows(shouldLoadDesigns && Array.isArray(designResponse?.data?.designs) ? designResponse.data.designs : []);
+        setFabricRows(shouldLoadFabrics && Array.isArray(fabricResponse?.data?.fabrics) ? fabricResponse.data.fabrics : []);
       } catch {
         if (!mounted) return;
         setError('Unable to load products for this country.');
@@ -74,7 +103,7 @@ export default function CountryProducts() {
     return () => {
       mounted = false;
     };
-  }, [country]);
+  }, [country, category]);
 
   const total = readyRows.length + designRows.length + fabricRows.length;
   const emptyState = useMemo(() => !loading && !error && total === 0, [loading, error, total]);
@@ -95,7 +124,35 @@ export default function CountryProducts() {
             ) : null}
             <h1 className="text-3xl font-semibold text-gray-900">{country || 'Country products'}</h1>
           </div>
-          <p className="mt-1 text-sm text-gray-600">Explore Ready To Wear, Custom To Wear, and Fabrics from this country.</p>
+          <p className="mt-1 text-sm text-gray-600">
+            Curated {CATEGORY_LABELS[category]} from {country || 'this country'}.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {CATEGORY_OPTIONS.map((entry) => {
+              const active = category === entry;
+              return (
+                <button
+                  key={`country-category-filter-${entry}`}
+                  type="button"
+                  onClick={() => {
+                    const params = new URLSearchParams(searchParams);
+                    params.set('country', country);
+                    if (entry === 'ALL') {
+                      params.delete('category');
+                    } else {
+                      params.set('category', entry);
+                    }
+                    setSearchParams(params);
+                  }}
+                  className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.06em] ${
+                    active ? 'bg-black text-white' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {CATEGORY_LABELS[entry]}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
 
@@ -116,6 +173,7 @@ export default function CountryProducts() {
 
         {!loading && !error ? (
           <>
+            {(category === 'ALL' || category === 'RTW') ? (
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-gray-900">Ready To Wear ({readyRows.length})</h2>
@@ -148,7 +206,9 @@ export default function CountryProducts() {
                 })}
               </div>
             </section>
+            ) : null}
 
+            {(category === 'ALL' || category === 'CTW') ? (
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-gray-900">Custom To Wear ({designRows.length})</h2>
@@ -177,7 +237,9 @@ export default function CountryProducts() {
                 ))}
               </div>
             </section>
+            ) : null}
 
+            {(category === 'ALL' || category === 'FTB') ? (
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-gray-900">Fabrics To Buy ({fabricRows.length})</h2>
@@ -206,6 +268,7 @@ export default function CountryProducts() {
                 ))}
               </div>
             </section>
+            ) : null}
           </>
         ) : null}
       </div>

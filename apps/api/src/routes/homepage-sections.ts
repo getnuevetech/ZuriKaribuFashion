@@ -1006,18 +1006,28 @@ const authPageSettingsUpdateSchema = z.object({
   loginHeroImage: z.string().trim().max(2000).optional(),
   registerHeroImage: z.string().trim().max(2000).optional(),
   forgotPasswordHeroImage: z.string().trim().max(2000).optional(),
+  resetPasswordHeroImage: z.string().trim().max(2000).optional(),
+  changePasswordHeroImage: z.string().trim().max(2000).optional(),
   loginHeroCaption: z.string().trim().max(200).optional(),
   registerHeroCaption: z.string().trim().max(200).optional(),
   forgotPasswordHeroCaption: z.string().trim().max(200).optional(),
+  resetPasswordHeroCaption: z.string().trim().max(200).optional(),
+  changePasswordHeroCaption: z.string().trim().max(200).optional(),
   loginTitle: z.string().trim().max(120).optional(),
   loginSubtitle: z.string().trim().max(240).optional(),
   registerTitle: z.string().trim().max(120).optional(),
   registerSubtitle: z.string().trim().max(240).optional(),
   forgotPasswordTitle: z.string().trim().max(120).optional(),
   forgotPasswordSubtitle: z.string().trim().max(240).optional(),
+  resetPasswordTitle: z.string().trim().max(120).optional(),
+  resetPasswordSubtitle: z.string().trim().max(240).optional(),
+  changePasswordTitle: z.string().trim().max(120).optional(),
+  changePasswordSubtitle: z.string().trim().max(240).optional(),
   loginSubmitLabel: z.string().trim().max(60).optional(),
   registerSubmitLabel: z.string().trim().max(60).optional(),
   forgotPasswordSubmitLabel: z.string().trim().max(80).optional(),
+  resetPasswordSubmitLabel: z.string().trim().max(80).optional(),
+  changePasswordSubmitLabel: z.string().trim().max(80).optional(),
   googleClientIds: z.string().trim().max(2000).optional(),
   googleClientId: z.string().trim().max(300).optional(),
   showGoogleOnLogin: z.boolean().optional(),
@@ -1248,18 +1258,28 @@ type AuthPageSettings = {
   loginHeroImage: string;
   registerHeroImage: string;
   forgotPasswordHeroImage: string;
+  resetPasswordHeroImage: string;
+  changePasswordHeroImage: string;
   loginHeroCaption: string;
   registerHeroCaption: string;
   forgotPasswordHeroCaption: string;
+  resetPasswordHeroCaption: string;
+  changePasswordHeroCaption: string;
   loginTitle: string;
   loginSubtitle: string;
   registerTitle: string;
   registerSubtitle: string;
   forgotPasswordTitle: string;
   forgotPasswordSubtitle: string;
+  resetPasswordTitle: string;
+  resetPasswordSubtitle: string;
+  changePasswordTitle: string;
+  changePasswordSubtitle: string;
   loginSubmitLabel: string;
   registerSubmitLabel: string;
   forgotPasswordSubmitLabel: string;
+  resetPasswordSubmitLabel: string;
+  changePasswordSubmitLabel: string;
   googleClientIds: string;
   showGoogleOnLogin: boolean;
   showGoogleOnRegister: boolean;
@@ -1568,18 +1588,30 @@ const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettings = {
     'https://images.unsplash.com/photo-1485230895905-ec40ba36b9bc?auto=format&fit=crop&w=1200&q=80',
   forgotPasswordHeroImage:
     'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+  resetPasswordHeroImage:
+    'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+  changePasswordHeroImage:
+    'https://images.unsplash.com/photo-1485230895905-ec40ba36b9bc?auto=format&fit=crop&w=1200&q=80',
   loginHeroCaption: 'Wear the Story of Africa',
   registerHeroCaption: 'Wear the Story of Africa',
   forgotPasswordHeroCaption: 'Secure your African fashion account',
+  resetPasswordHeroCaption: 'Set a stronger password to secure your account',
+  changePasswordHeroCaption: 'Update your temporary password to continue',
   loginTitle: 'Welcome Back',
   loginSubtitle: 'Sign in to continue your African fashion journey',
   registerTitle: 'Create Account',
   registerSubtitle: 'Join African fashion marketplace',
   forgotPasswordTitle: 'Forgot Password',
   forgotPasswordSubtitle: 'Enter your email to receive a secure reset link.',
+  resetPasswordTitle: 'Reset Password',
+  resetPasswordSubtitle: 'Set a new password for your account.',
+  changePasswordTitle: 'Change Temporary Password',
+  changePasswordSubtitle: 'Set a secure password before continuing.',
   loginSubmitLabel: 'Sign In',
   registerSubmitLabel: 'Create Account',
   forgotPasswordSubmitLabel: 'Send Reset Link',
+  resetPasswordSubmitLabel: 'Reset Password',
+  changePasswordSubmitLabel: 'Update Password',
   googleClientIds: '',
   showGoogleOnLogin: true,
   showGoogleOnRegister: true,
@@ -2003,10 +2035,18 @@ const normalizeAuthPageSettings = (raw: unknown): AuthPageSettings => {
     registerHeroImage: getString(row.registerHeroImage) || AUTH_PAGE_SETTINGS_DEFAULTS.registerHeroImage,
     forgotPasswordHeroImage:
       getString(row.forgotPasswordHeroImage) || AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordHeroImage,
+    resetPasswordHeroImage:
+      getString(row.resetPasswordHeroImage) || AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordHeroImage,
+    changePasswordHeroImage:
+      getString(row.changePasswordHeroImage) || AUTH_PAGE_SETTINGS_DEFAULTS.changePasswordHeroImage,
     loginHeroCaption: getString(row.loginHeroCaption) || AUTH_PAGE_SETTINGS_DEFAULTS.loginHeroCaption,
     registerHeroCaption: getString(row.registerHeroCaption) || AUTH_PAGE_SETTINGS_DEFAULTS.registerHeroCaption,
     forgotPasswordHeroCaption:
       getString(row.forgotPasswordHeroCaption) || AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordHeroCaption,
+    resetPasswordHeroCaption:
+      getString(row.resetPasswordHeroCaption) || AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordHeroCaption,
+    changePasswordHeroCaption:
+      getString(row.changePasswordHeroCaption) || AUTH_PAGE_SETTINGS_DEFAULTS.changePasswordHeroCaption,
     loginTitle: getString(row.loginTitle) || AUTH_PAGE_SETTINGS_DEFAULTS.loginTitle,
     loginSubtitle: getString(row.loginSubtitle) || AUTH_PAGE_SETTINGS_DEFAULTS.loginSubtitle,
     registerTitle: getString(row.registerTitle) || AUTH_PAGE_SETTINGS_DEFAULTS.registerTitle,
@@ -2014,10 +2054,20 @@ const normalizeAuthPageSettings = (raw: unknown): AuthPageSettings => {
     forgotPasswordTitle: getString(row.forgotPasswordTitle) || AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordTitle,
     forgotPasswordSubtitle:
       getString(row.forgotPasswordSubtitle) || AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordSubtitle,
+    resetPasswordTitle: getString(row.resetPasswordTitle) || AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordTitle,
+    resetPasswordSubtitle:
+      getString(row.resetPasswordSubtitle) || AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordSubtitle,
+    changePasswordTitle: getString(row.changePasswordTitle) || AUTH_PAGE_SETTINGS_DEFAULTS.changePasswordTitle,
+    changePasswordSubtitle:
+      getString(row.changePasswordSubtitle) || AUTH_PAGE_SETTINGS_DEFAULTS.changePasswordSubtitle,
     loginSubmitLabel: getString(row.loginSubmitLabel) || AUTH_PAGE_SETTINGS_DEFAULTS.loginSubmitLabel,
     registerSubmitLabel: getString(row.registerSubmitLabel) || AUTH_PAGE_SETTINGS_DEFAULTS.registerSubmitLabel,
     forgotPasswordSubmitLabel:
       getString(row.forgotPasswordSubmitLabel) || AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordSubmitLabel,
+    resetPasswordSubmitLabel:
+      getString(row.resetPasswordSubmitLabel) || AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordSubmitLabel,
+    changePasswordSubmitLabel:
+      getString(row.changePasswordSubmitLabel) || AUTH_PAGE_SETTINGS_DEFAULTS.changePasswordSubmitLabel,
     googleClientIds:
       getString(row.googleClientIds) || getString(row.googleClientId) || AUTH_PAGE_SETTINGS_DEFAULTS.googleClientIds,
     showGoogleOnLogin: getBoolean(row.showGoogleOnLogin) ?? AUTH_PAGE_SETTINGS_DEFAULTS.showGoogleOnLogin,

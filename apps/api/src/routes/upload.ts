@@ -30,9 +30,10 @@ const uploadRegion = String(process.env.AWS_UPLOADS_REGION || process.env.AWS_RE
 const uploadBaseUrl = String(process.env.AWS_UPLOADS_BASE_URL || '').trim().replace(/\/+$/, '');
 const uploadPrefixRaw = String(process.env.AWS_UPLOADS_PREFIX || 'uploads').trim();
 const uploadPrefix = uploadPrefixRaw ? uploadPrefixRaw.replace(/^\/+/, '').replace(/\/+$/, '') : 'uploads';
-const useS3Uploads =
-  ['1', 'true', 'yes', 'on'].includes(String(process.env.AWS_UPLOADS_ENABLED || '').trim().toLowerCase()) &&
-  Boolean(uploadBucket);
+const uploadsEnabledEnv = String(process.env.AWS_UPLOADS_ENABLED || '').trim().toLowerCase();
+const uploadsExplicitlyDisabled = ['0', 'false', 'no', 'off', 'disabled'].includes(uploadsEnabledEnv);
+// Prefer S3 automatically when a bucket is configured, unless explicitly disabled.
+const useS3Uploads = Boolean(uploadBucket) && !uploadsExplicitlyDisabled;
 
 const s3Client = useS3Uploads
   ? new S3Client({

@@ -196,18 +196,28 @@ interface AuthPageSettings {
   loginHeroImage: string;
   registerHeroImage: string;
   forgotPasswordHeroImage: string;
+  resetPasswordHeroImage: string;
+  changePasswordHeroImage: string;
   loginHeroCaption: string;
   registerHeroCaption: string;
   forgotPasswordHeroCaption: string;
+  resetPasswordHeroCaption: string;
+  changePasswordHeroCaption: string;
   loginTitle: string;
   loginSubtitle: string;
   registerTitle: string;
   registerSubtitle: string;
   forgotPasswordTitle: string;
   forgotPasswordSubtitle: string;
+  resetPasswordTitle: string;
+  resetPasswordSubtitle: string;
+  changePasswordTitle: string;
+  changePasswordSubtitle: string;
   loginSubmitLabel: string;
   registerSubmitLabel: string;
   forgotPasswordSubmitLabel: string;
+  resetPasswordSubmitLabel: string;
+  changePasswordSubmitLabel: string;
   googleClientIds: string;
   showGoogleOnLogin: boolean;
   showGoogleOnRegister: boolean;
@@ -1024,18 +1034,28 @@ export default function HomepageSections() {
     loginHeroImage: '',
     registerHeroImage: '',
     forgotPasswordHeroImage: '',
+    resetPasswordHeroImage: '',
+    changePasswordHeroImage: '',
     loginHeroCaption: 'Wear the Story of Africa',
     registerHeroCaption: 'Wear the Story of Africa',
     forgotPasswordHeroCaption: 'Secure your African fashion account',
+    resetPasswordHeroCaption: 'Set a stronger password to secure your account',
+    changePasswordHeroCaption: 'Update your temporary password to continue',
     loginTitle: 'Welcome Back',
     loginSubtitle: 'Sign in to continue your African fashion journey',
     registerTitle: 'Create Account',
     registerSubtitle: 'Join African fashion marketplace',
     forgotPasswordTitle: 'Forgot Password',
     forgotPasswordSubtitle: 'Enter your email to receive a secure reset link.',
+    resetPasswordTitle: 'Reset Password',
+    resetPasswordSubtitle: 'Set a new password for your account.',
+    changePasswordTitle: 'Change Temporary Password',
+    changePasswordSubtitle: 'Set a secure password before continuing.',
     loginSubmitLabel: 'Sign In',
     registerSubmitLabel: 'Create Account',
     forgotPasswordSubmitLabel: 'Send Reset Link',
+    resetPasswordSubmitLabel: 'Reset Password',
+    changePasswordSubmitLabel: 'Update Password',
     googleClientIds: '',
     showGoogleOnLogin: true,
     showGoogleOnRegister: true,
@@ -1078,7 +1098,12 @@ export default function HomepageSections() {
   );
   const [heroSettingsSaving, setHeroSettingsSaving] = useState(false);
   const [authPageImageUploadingField, setAuthPageImageUploadingField] = useState<
-    'loginHeroImage' | 'registerHeroImage' | 'forgotPasswordHeroImage' | ''
+    | 'loginHeroImage'
+    | 'registerHeroImage'
+    | 'forgotPasswordHeroImage'
+    | 'resetPasswordHeroImage'
+    | 'changePasswordHeroImage'
+    | ''
   >('');
   const [howItWorksStyle, setHowItWorksStyle] = useState<HowItWorksStyleSettings>({
     enabled: false,
@@ -1423,7 +1448,12 @@ export default function HomepageSections() {
   };
   const handleAuthPageImageUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
-    field: 'loginHeroImage' | 'registerHeroImage' | 'forgotPasswordHeroImage'
+    field:
+      | 'loginHeroImage'
+      | 'registerHeroImage'
+      | 'forgotPasswordHeroImage'
+      | 'resetPasswordHeroImage'
+      | 'changePasswordHeroImage'
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1910,11 +1940,13 @@ export default function HomepageSections() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
           {([
             { field: 'loginHeroImage', label: 'Login Hero Image' },
             { field: 'registerHeroImage', label: 'Register Hero Image' },
             { field: 'forgotPasswordHeroImage', label: 'Forgot Password Hero Image' },
+            { field: 'resetPasswordHeroImage', label: 'Reset Password Hero Image' },
+            { field: 'changePasswordHeroImage', label: 'Change Password Hero Image' },
           ] as const).map((entry) => (
             <div key={entry.field} className="space-y-2 rounded border border-gray-200 p-3">
               <p className="text-sm font-medium text-gray-800">{entry.label}</p>
@@ -1932,6 +1964,10 @@ export default function HomepageSections() {
                           'https://images.unsplash.com/photo-1485230895905-ec40ba36b9bc?auto=format&fit=crop&w=1200&q=80',
                         forgotPasswordHeroImage:
                           'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+                        resetPasswordHeroImage:
+                          'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+                        changePasswordHeroImage:
+                          'https://images.unsplash.com/photo-1485230895905-ec40ba36b9bc?auto=format&fit=crop&w=1200&q=80',
                       };
                       const fallback = fallbackByField[entry.field];
                       if (event.currentTarget.src !== fallback) {
@@ -1964,7 +2000,7 @@ export default function HomepageSections() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
           <div className="space-y-2">
             <p className="text-sm font-semibold text-gray-900">Login Page</p>
             <input
@@ -2056,6 +2092,68 @@ export default function HomepageSections() {
               type="text"
               value={authPageSettings.forgotPasswordSubmitLabel}
               onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, forgotPasswordSubmitLabel: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Submit Button Label"
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-gray-900">Reset Password Page</p>
+            <input
+              type="text"
+              value={authPageSettings.resetPasswordTitle}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, resetPasswordTitle: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Title"
+            />
+            <textarea
+              value={authPageSettings.resetPasswordSubtitle}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, resetPasswordSubtitle: e.target.value }))}
+              rows={2}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Subtitle"
+            />
+            <input
+              type="text"
+              value={authPageSettings.resetPasswordHeroCaption}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, resetPasswordHeroCaption: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Hero Caption"
+            />
+            <input
+              type="text"
+              value={authPageSettings.resetPasswordSubmitLabel}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, resetPasswordSubmitLabel: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Submit Button Label"
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-gray-900">Change Password Required Page</p>
+            <input
+              type="text"
+              value={authPageSettings.changePasswordTitle}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, changePasswordTitle: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Title"
+            />
+            <textarea
+              value={authPageSettings.changePasswordSubtitle}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, changePasswordSubtitle: e.target.value }))}
+              rows={2}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Subtitle"
+            />
+            <input
+              type="text"
+              value={authPageSettings.changePasswordHeroCaption}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, changePasswordHeroCaption: e.target.value }))}
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="Hero Caption"
+            />
+            <input
+              type="text"
+              value={authPageSettings.changePasswordSubmitLabel}
+              onChange={(e) => setAuthPageSettings((prev) => ({ ...prev, changePasswordSubmitLabel: e.target.value }))}
               className="w-full border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
               placeholder="Submit Button Label"
             />

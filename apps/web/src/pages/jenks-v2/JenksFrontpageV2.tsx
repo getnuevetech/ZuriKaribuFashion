@@ -27,12 +27,13 @@ import {
   Youtube,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { api } from '../../services/api';
+import { api, resolveAssetUrl } from '../../services/api';
 import '../../styles/jenks-v2.css';
 
 type HeroSlide = {
   id: string;
   image: string;
+  fallbackImage: string;
   titleA: string;
   titleB: string;
   lineA: string;
@@ -192,6 +193,18 @@ const DEFAULT_INLINE_CTA_STYLE: CTAStyle = {
   fontWeight: 600,
 };
 
+const buildCountryProductsHref = (
+  countryName: string,
+  category: 'RTW' | 'CTW' | 'FTB' | 'ALL' = 'ALL'
+) => {
+  const params = new URLSearchParams();
+  params.set('country', countryName);
+  if (category !== 'ALL') {
+    params.set('category', category);
+  }
+  return `/country-products?${params.toString()}`;
+};
+
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
@@ -222,6 +235,32 @@ const normalizeHref = (value: unknown, fallback: string, routeKey?: unknown) => 
   const routeToken = String(routeKey || '').trim().toUpperCase();
   if (routeToken && DEFAULT_HREF_BY_KEY[routeToken]) return toSafeInternalHref(DEFAULT_HREF_BY_KEY[routeToken]);
   return toSafeInternalHref(fallback);
+};
+
+const normalizeCountryCategoryToken = (value: unknown): 'RTW' | 'CTW' | 'FTB' | 'ALL' => {
+  const token = asString(value, '').trim().toUpperCase();
+  if (!token) return 'ALL';
+  if (token === 'RTW' || token === 'READY_TO_WEAR' || token === 'READY-TO-WEAR') return 'RTW';
+  if (token === 'CTW' || token === 'CUSTOM' || token === 'CUSTOM_TO_WEAR' || token === 'CUSTOM-TO-WEAR') return 'CTW';
+  if (token === 'FTB' || token === 'FABRIC' || token === 'FABRICS' || token === 'FABRICS_TO_BUY' || token === 'FABRICS-TO-BUY') return 'FTB';
+  return 'ALL';
+};
+
+const categoryTokenFromSectionKey = (key: unknown): 'RTW' | 'CTW' | 'FTB' | 'ALL' => {
+  const token = String(key || '')
+    .trim()
+    .toUpperCase();
+  if (token === 'RTW') return 'RTW';
+  if (token === 'CTW') return 'CTW';
+  if (token === 'FTB') return 'FTB';
+  return 'ALL';
+};
+
+const resolveManagerImage = (value: unknown, fallback: string) => {
+  const raw = asString(value, '');
+  if (!raw) return fallback;
+  const resolved = resolveAssetUrl(raw);
+  return asString(resolved, fallback);
 };
 
 const iconFromKey = (iconKey: unknown, fallback: IconComponent) => {
@@ -309,6 +348,7 @@ const HERO: HeroSlide[] = [
   {
     id: '1',
     image: `${ASSET_BASE}/hero_model.jpg`,
+    fallbackImage: `${ASSET_BASE}/hero_model.jpg`,
     titleA: 'WEAR',
     titleB: 'THE STORY OF AFRICA',
     lineA: 'Curated fashion from top designers and textile houses.',
@@ -326,6 +366,7 @@ const HERO: HeroSlide[] = [
   {
     id: '2',
     image: `${ASSET_BASE}/rw_full.jpg`,
+    fallbackImage: `${ASSET_BASE}/rw_full.jpg`,
     titleA: 'DISCOVER',
     titleB: 'AFRICAN ELEGANCE',
     lineA: 'Signature pieces and modern tailoring from trusted labels.',
@@ -539,6 +580,7 @@ const FEATURED_FTB = [
 const RTW_FTB_CTW_SECTIONS = [
   {
     id: 'rtw',
+    key: 'RTW',
     sectionName: 'READY TO WEAR',
     title: 'FEATURED READY TO WEAR',
     description: 'Curated fits built for real life - tailored enough to feel special, versatile enough to wear anywhere.',
@@ -550,6 +592,7 @@ const RTW_FTB_CTW_SECTIONS = [
   },
   {
     id: 'ftb',
+    key: 'FTB',
     sectionName: 'FABRICS TO BUY',
     title: 'FEATURED FABRICS TO BUY',
     description: 'Handpicked textiles from trusted makers across Africa, ready for your next design and story.',
@@ -561,6 +604,7 @@ const RTW_FTB_CTW_SECTIONS = [
   },
   {
     id: 'ctw',
+    key: 'CTW',
     sectionName: 'CUSTOM TO WEAR',
     title: 'FEATURED CUSTOM TO WEAR',
     description: 'Work directly with designers for made-to-measure pieces shaped around your fit and vision.',
@@ -672,6 +716,7 @@ export default function JenksFrontpageV2() {
     return new Set<TemplateKey>(TEMPLATE_KEYS.filter((key) => map.get(key) !== false));
   }, [sectionVisibilityCfg.sections]);
   const isSectionVisible = (templateKey: TemplateKey) => visibleTemplateKeys.has(templateKey);
+  const showHeroSection = isSectionVisible('TOP_NAVIGATIONS') || heroSlides.length > 0;
 
   const logoCfg = useMemo(() => asRecord(topNavigationsCfg.logo), [topNavigationsCfg.logo]);
   const logoTextRaw = asString(logoCfg.text, 'ZURIKARIBU');
@@ -717,11 +762,13 @@ export default function JenksFrontpageV2() {
       .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0));
     if (rows.length === 0) return HERO;
     const mapped = rows.map((row, indexKey) => {
+      const fallbackImage = HERO[indexKey % HERO.length]?.image || `${ASSET_BASE}/hero_model.jpg`;
       const title = asString(row.title, 'Wear the Story of Africa');
       const split = splitHeroTitle(title.toUpperCase());
       return {
         id: asString(row.id, `hero-${indexKey + 1}`),
-        image: asString(row.image, HERO[indexKey % HERO.length]?.image || `${ASSET_BASE}/hero_model.jpg`),
+        image: resolveManagerImage(row.image, fallbackImage),
+        fallbackImage,
         titleA: split.titleA || HERO[indexKey % HERO.length]?.titleA || 'WEAR',
         titleB: split.titleB || HERO[indexKey % HERO.length]?.titleB || 'THE STORY OF AFRICA',
         lineA: asString(row.text, HERO[indexKey % HERO.length]?.lineA || ''),
@@ -876,6 +923,7 @@ export default function JenksFrontpageV2() {
       const matchingCategory = shopByCategoryCards.find((row) => row.title.includes(key) || row.id.toUpperCase().includes(key));
       return {
         id: asString(entry.id, `cat-${idx + 1}`),
+        key,
         sectionName: asString(entry.tag, asString(entry.title, key || 'CATEGORY')).toUpperCase(),
         title: asString(entry.title, key || 'Category').toUpperCase(),
         description: asString(entry.description, ''),
@@ -926,6 +974,18 @@ export default function JenksFrontpageV2() {
       FTB: grouped.FTB.length > 0 ? grouped.FTB : defaults.FTB.map((row) => ({ ...row, tag: FEATURED_LABEL_BY_KEY.FTB, cta: FEATURED_CTA_BY_KEY.FTB })),
     };
   }, [featuredCfg.cards]);
+
+  const sectionHrefForCountry = (sectionKey: unknown) => {
+    const categoryToken = categoryTokenFromSectionKey(sectionKey);
+    if (categoryToken === 'ALL') return '/ready-to-wear';
+    return buildCountryProductsHref('Nigeria', categoryToken);
+  };
+
+  const featuredHrefForCountry = (key: 'RTW' | 'CTW' | 'FTB') => {
+    const categoryToken = categoryTokenFromSectionKey(key);
+    if (categoryToken === 'ALL') return '/ready-to-wear';
+    return buildCountryProductsHref('Nigeria', categoryToken);
+  };
 
   const freshDropsCards = useMemo(() => {
     const rows = Math.max(1, Math.round(asNumber(freshDropsCfg.rows, 2)));
@@ -1272,7 +1332,7 @@ export default function JenksFrontpageV2() {
       ) : null}
 
       {/* HERO */}
-      {isSectionVisible('TOP_NAVIGATIONS') ? (
+      {showHeroSection ? (
       <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 lg:grid-cols-12`}>
         <div className="relative lg:col-span-7">
           {heroSlides.map((slide, i) => (
@@ -1280,6 +1340,11 @@ export default function JenksFrontpageV2() {
               key={slide.id}
               src={slide.image}
               alt={slide.titleA}
+              onError={(event) => {
+                if (event.currentTarget.src !== slide.fallbackImage) {
+                  event.currentTarget.src = slide.fallbackImage;
+                }
+              }}
               className={`absolute inset-0 h-full w-full object-cover transition-all duration-1000 ${
                 i === index ? 'scale-100 opacity-100' : 'scale-105 opacity-0'
               }`}
@@ -1400,7 +1465,7 @@ export default function JenksFrontpageV2() {
                   {visibleShopByCountries.map((country) => (
                     <Link
                       key={country.name}
-                      to={`/country-products?country=${encodeURIComponent(country.name)}`}
+                      to={buildCountryProductsHref(country.name, 'ALL')}
                       className="group flex flex-col items-center text-center text-white/78 transition-colors hover:text-[#e66045]"
                     >
                       <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/12 bg-white/[0.02] transition-colors group-hover:border-[#e66045]">
@@ -1483,7 +1548,7 @@ export default function JenksFrontpageV2() {
               </p>
             </div>
             <Link
-              to={toSafeInternalHref('/country-products')}
+              to={buildCountryProductsHref('Nigeria', 'ALL')}
               className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-white lg:mt-10"
             >
               View All 54 Countries
@@ -1516,7 +1581,7 @@ export default function JenksFrontpageV2() {
             {visibleDedicatedCountries.map((country) => (
               <Link
                 key={country.name}
-                to={`/country-products?country=${encodeURIComponent(country.name)}`}
+                to={buildCountryProductsHref(country.name, 'ALL')}
                 className="group flex flex-col items-center px-1 py-2 text-center text-white/75 transition-colors hover:text-[#e66045]"
               >
                 <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/[0.02] transition-colors group-hover:border-[#e66045]">
@@ -1570,7 +1635,7 @@ export default function JenksFrontpageV2() {
                       <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
                       <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
                     <Link
-                      to={toSafeInternalHref(section.href)}
+                      to={sectionHrefForCountry(section.key)}
                       style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
                       className="mt-9 inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
                     >
@@ -1596,7 +1661,7 @@ export default function JenksFrontpageV2() {
                       <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
                       <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
                     <Link
-                      to={toSafeInternalHref(section.href)}
+                      to={sectionHrefForCountry(section.key)}
                       style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
                       className="mt-9 inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
                     >
@@ -1638,7 +1703,7 @@ export default function JenksFrontpageV2() {
           {(['RTW', 'CTW', 'FTB'] as const).map((key) => (
             <div key={key} className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 md:grid-cols-2`}>
               {featuredCardsByKey[key].map((card) => (
-                <Link key={card.id} to={toSafeInternalHref(card.href)} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
+                <Link key={card.id} to={featuredHrefForCountry(key)} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
                   <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
                   <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-white/72">{card.tag}</p>

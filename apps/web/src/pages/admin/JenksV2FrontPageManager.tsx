@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Loader2, Plus, Trash2, Upload } from 'lucide-react';
 import Button from '../../components/ui/Button';
-import { api } from '../../services/api';
+import { api, resolveAssetUrl } from '../../services/api';
 
 type ThemeMode = 'SYSTEM' | 'LIGHT' | 'DARK';
 type CountMode = 'STATIC' | 'DATABASE';
@@ -1127,6 +1127,7 @@ export default function JenksV2FrontPageManager() {
     }
     return String(response.data.url);
   };
+  const resolvePreviewUrl = (value: unknown) => resolveAssetUrl(value);
 
   const triggerUpload = (target: string) => {
     setUploadingTarget(target);
@@ -2334,6 +2335,22 @@ export default function JenksV2FrontPageManager() {
                     Upload Banner Image
                   </Button>
                   <span className="text-xs text-gray-600 break-all">{banner.image || 'No hero image uploaded'}</span>
+                </div>
+                <div className="rounded-md border bg-white p-2">
+                  {banner.image ? (
+                    <img
+                      src={resolvePreviewUrl(banner.image)}
+                      alt={`Hero banner preview ${index + 1}`}
+                      className="h-28 w-full rounded object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-28 items-center justify-center rounded border border-dashed text-xs text-gray-500">
+                      No hero image uploaded
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

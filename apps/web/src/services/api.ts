@@ -36,14 +36,16 @@ const resolveApiAssetUrl = (value: unknown): string => {
     }
     return '';
   };
+  const isLegacyApiUploadsPath = (pathValue: string) => pathValue.startsWith('/api/uploads/');
   if (/^https?:\/\//i.test(raw)) {
     try {
       const parsed = new URL(raw);
+      // Keep absolute URLs intact (S3/CDN), only rewrite legacy /api/uploads/* paths.
+      if (!isLegacyApiUploadsPath(parsed.pathname)) return raw;
       const uploadPath = normalizeUploadPath(parsed.pathname);
       if (!uploadPath) return raw;
       const preferredOrigin = resolveApiOrigin() || parsed.origin;
-      const normalized = new URL(uploadPath, preferredOrigin);
-      return normalized.toString();
+      return new URL(uploadPath, preferredOrigin).toString();
     } catch {
       return raw;
     }
@@ -8620,18 +8622,28 @@ type AuthPageSettingsPayload = {
   loginHeroImage: string;
   registerHeroImage: string;
   forgotPasswordHeroImage: string;
+  resetPasswordHeroImage: string;
+  changePasswordHeroImage: string;
   loginHeroCaption: string;
   registerHeroCaption: string;
   forgotPasswordHeroCaption: string;
+  resetPasswordHeroCaption: string;
+  changePasswordHeroCaption: string;
   loginTitle: string;
   loginSubtitle: string;
   registerTitle: string;
   registerSubtitle: string;
   forgotPasswordTitle: string;
   forgotPasswordSubtitle: string;
+  resetPasswordTitle: string;
+  resetPasswordSubtitle: string;
+  changePasswordTitle: string;
+  changePasswordSubtitle: string;
   loginSubmitLabel: string;
   registerSubmitLabel: string;
   forgotPasswordSubmitLabel: string;
+  resetPasswordSubmitLabel: string;
+  changePasswordSubmitLabel: string;
   googleClientIds: string;
   showGoogleOnLogin: boolean;
   showGoogleOnRegister: boolean;
@@ -8658,18 +8670,30 @@ const AUTH_PAGE_SETTINGS_DEFAULTS: AuthPageSettingsPayload = {
     'https://images.unsplash.com/photo-1485230895905-ec40ba36b9bc?auto=format&fit=crop&w=1200&q=80',
   forgotPasswordHeroImage:
     'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+  resetPasswordHeroImage:
+    'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+  changePasswordHeroImage:
+    'https://images.unsplash.com/photo-1485230895905-ec40ba36b9bc?auto=format&fit=crop&w=1200&q=80',
   loginHeroCaption: 'Wear the Story of Africa',
   registerHeroCaption: 'Wear the Story of Africa',
   forgotPasswordHeroCaption: 'Secure your African fashion account',
+  resetPasswordHeroCaption: 'Set a stronger password to secure your account',
+  changePasswordHeroCaption: 'Update your temporary password to continue',
   loginTitle: 'Welcome Back',
   loginSubtitle: 'Sign in to continue your African fashion journey',
   registerTitle: 'Create Account',
   registerSubtitle: 'Join African fashion marketplace',
   forgotPasswordTitle: 'Forgot Password',
   forgotPasswordSubtitle: 'Enter your email to receive a secure reset link.',
+  resetPasswordTitle: 'Reset Password',
+  resetPasswordSubtitle: 'Set a new password for your account.',
+  changePasswordTitle: 'Change Temporary Password',
+  changePasswordSubtitle: 'Set a secure password before continuing.',
   loginSubmitLabel: 'Sign In',
   registerSubmitLabel: 'Create Account',
   forgotPasswordSubmitLabel: 'Send Reset Link',
+  resetPasswordSubmitLabel: 'Reset Password',
+  changePasswordSubmitLabel: 'Update Password',
   googleClientIds: '',
   showGoogleOnLogin: true,
   showGoogleOnRegister: true,
@@ -8702,12 +8726,24 @@ const normalizeAuthPageSettingsPayload = (raw: unknown): AuthPageSettingsPayload
     loginHeroImage: readImage('loginHeroImage', AUTH_PAGE_SETTINGS_DEFAULTS.loginHeroImage),
     registerHeroImage: readImage('registerHeroImage', AUTH_PAGE_SETTINGS_DEFAULTS.registerHeroImage),
     forgotPasswordHeroImage: readImage('forgotPasswordHeroImage', AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordHeroImage),
+    resetPasswordHeroImage: readImage('resetPasswordHeroImage', AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordHeroImage),
+    changePasswordHeroImage: readImage('changePasswordHeroImage', AUTH_PAGE_SETTINGS_DEFAULTS.changePasswordHeroImage),
     loginHeroCaption: readText('loginHeroCaption', 200, AUTH_PAGE_SETTINGS_DEFAULTS.loginHeroCaption),
     registerHeroCaption: readText('registerHeroCaption', 200, AUTH_PAGE_SETTINGS_DEFAULTS.registerHeroCaption),
     forgotPasswordHeroCaption: readText(
       'forgotPasswordHeroCaption',
       200,
       AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordHeroCaption
+    ),
+    resetPasswordHeroCaption: readText(
+      'resetPasswordHeroCaption',
+      200,
+      AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordHeroCaption
+    ),
+    changePasswordHeroCaption: readText(
+      'changePasswordHeroCaption',
+      200,
+      AUTH_PAGE_SETTINGS_DEFAULTS.changePasswordHeroCaption
     ),
     loginTitle: readText('loginTitle', 120, AUTH_PAGE_SETTINGS_DEFAULTS.loginTitle),
     loginSubtitle: readText('loginSubtitle', 240, AUTH_PAGE_SETTINGS_DEFAULTS.loginSubtitle),
@@ -8719,12 +8755,34 @@ const normalizeAuthPageSettingsPayload = (raw: unknown): AuthPageSettingsPayload
       240,
       AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordSubtitle
     ),
+    resetPasswordTitle: readText('resetPasswordTitle', 120, AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordTitle),
+    resetPasswordSubtitle: readText(
+      'resetPasswordSubtitle',
+      240,
+      AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordSubtitle
+    ),
+    changePasswordTitle: readText('changePasswordTitle', 120, AUTH_PAGE_SETTINGS_DEFAULTS.changePasswordTitle),
+    changePasswordSubtitle: readText(
+      'changePasswordSubtitle',
+      240,
+      AUTH_PAGE_SETTINGS_DEFAULTS.changePasswordSubtitle
+    ),
     loginSubmitLabel: readText('loginSubmitLabel', 60, AUTH_PAGE_SETTINGS_DEFAULTS.loginSubmitLabel),
     registerSubmitLabel: readText('registerSubmitLabel', 60, AUTH_PAGE_SETTINGS_DEFAULTS.registerSubmitLabel),
     forgotPasswordSubmitLabel: readText(
       'forgotPasswordSubmitLabel',
       80,
       AUTH_PAGE_SETTINGS_DEFAULTS.forgotPasswordSubmitLabel
+    ),
+    resetPasswordSubmitLabel: readText(
+      'resetPasswordSubmitLabel',
+      80,
+      AUTH_PAGE_SETTINGS_DEFAULTS.resetPasswordSubmitLabel
+    ),
+    changePasswordSubmitLabel: readText(
+      'changePasswordSubmitLabel',
+      80,
+      AUTH_PAGE_SETTINGS_DEFAULTS.changePasswordSubmitLabel
     ),
     googleClientIds:
       readText('googleClientIds', 2000, '') || readText('googleClientId', 300, AUTH_PAGE_SETTINGS_DEFAULTS.googleClientIds),
