@@ -10770,6 +10770,8 @@ const jenksV2FrontpageManagerApi = {
               textColor: string;
               borderColor: string;
               borderWidth: number;
+              hoverTextColor: string;
+              hoverBorderColor: string;
               fontFamily: string;
               fontSize: number;
               fontWeight: number;
@@ -10782,6 +10784,8 @@ const jenksV2FrontpageManagerApi = {
               textColor: string;
               borderColor: string;
               borderWidth: number;
+              hoverTextColor: string;
+              hoverBorderColor: string;
               fontFamily: string;
               fontSize: number;
               fontWeight: number;
@@ -10794,6 +10798,8 @@ const jenksV2FrontpageManagerApi = {
               textColor: string;
               borderColor: string;
               borderWidth: number;
+              hoverTextColor: string;
+              hoverBorderColor: string;
               fontFamily: string;
               fontSize: number;
               fontWeight: number;
@@ -10859,6 +10865,8 @@ const jenksV2FrontpageManagerApi = {
               textColor: string;
               borderColor: string;
               borderWidth: number;
+              hoverTextColor: string;
+              hoverBorderColor: string;
               fontFamily: string;
               fontSize: number;
               fontWeight: number;
@@ -10894,6 +10902,8 @@ const jenksV2FrontpageManagerApi = {
               textColor: string;
               borderColor: string;
               borderWidth: number;
+              hoverTextColor: string;
+              hoverBorderColor: string;
               fontFamily: string;
               fontSize: number;
               fontWeight: number;
@@ -10929,6 +10939,8 @@ const jenksV2FrontpageManagerApi = {
               textColor: string;
               borderColor: string;
               borderWidth: number;
+              hoverTextColor: string;
+              hoverBorderColor: string;
               fontFamily: string;
               fontSize: number;
               fontWeight: number;

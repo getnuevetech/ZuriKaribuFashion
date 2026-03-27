@@ -39,6 +39,8 @@ type CtaStyle = {
   textColor: string;
   borderColor: string;
   borderWidth: number;
+  hoverTextColor: string;
+  hoverBorderColor: string;
   fontFamily: string;
   fontSize: number;
   fontWeight: number;
@@ -406,6 +408,8 @@ const defaultCtaStyle = (overrides: Partial<CtaStyle> = {}): CtaStyle => ({
   textColor: '#ffffff',
   borderColor: '#e66045',
   borderWidth: 0,
+  hoverTextColor: '#ffffff',
+  hoverBorderColor: '#e66045',
   fontFamily: 'Montserrat, Inter, sans-serif',
   fontSize: 12,
   fontWeight: 600,
@@ -419,6 +423,8 @@ const normalizeCtaStyle = (raw: unknown, fallback: CtaStyle): CtaStyle => {
     textColor: (getString(row.textColor) || fallback.textColor).slice(0, 40),
     borderColor: (getString(row.borderColor) || fallback.borderColor).slice(0, 40),
     borderWidth: clamp(Math.round(getNumber(row.borderWidth) ?? fallback.borderWidth), 0, 12),
+    hoverTextColor: (getString(row.hoverTextColor) || fallback.hoverTextColor).slice(0, 40),
+    hoverBorderColor: (getString(row.hoverBorderColor) || fallback.hoverBorderColor).slice(0, 40),
     fontFamily: (getString(row.fontFamily) || fallback.fontFamily).slice(0, 120),
     fontSize: clamp(Math.round(getNumber(row.fontSize) ?? fallback.fontSize), 8, 72),
     fontWeight: clamp(Math.round(getNumber(row.fontWeight) ?? fallback.fontWeight), 100, 900),

@@ -200,6 +200,8 @@ type CTAStyle = {
   backgroundColor: string;
   borderColor: string;
   borderWidth: number;
+  hoverTextColor: string;
+  hoverBorderColor: string;
   fontFamily: string;
   fontSize: number;
   fontWeight: number;
@@ -345,6 +347,8 @@ const DEFAULT_CTA_STYLE: CTAStyle = {
   backgroundColor: '#e66045',
   borderColor: '#e66045',
   borderWidth: 0,
+  hoverTextColor: '#ffffff',
+  hoverBorderColor: '#e66045',
   fontFamily: 'Montserrat, Inter, sans-serif',
   fontSize: 12,
   fontWeight: 600,
@@ -368,6 +372,8 @@ const normalizeCtaStyle = (value: unknown, fallback: CTAStyle = DEFAULT_CTA_STYL
     backgroundColor: String((row as any).backgroundColor || (row as any).bgColor || fallback.backgroundColor || '#e66045'),
     borderColor: String(row.borderColor || fallback.borderColor || '#e66045'),
     borderWidth: clampNumber(row.borderWidth, 0, 12, fallback.borderWidth),
+    hoverTextColor: String(row.hoverTextColor || fallback.hoverTextColor || '#ffffff'),
+    hoverBorderColor: String(row.hoverBorderColor || fallback.hoverBorderColor || '#e66045'),
     fontFamily: String(row.fontFamily || fallback.fontFamily || 'Montserrat, Inter, sans-serif'),
     fontSize: clampNumber(row.fontSize, 8, 72, fallback.fontSize),
     fontWeight: clampNumber(row.fontWeight, 100, 900, fallback.fontWeight),
@@ -414,6 +420,22 @@ const renderCtaStyleEditor = (
           className="mt-1 w-full rounded border px-2 py-1.5"
           value={style.borderWidth}
           onChange={(event) => onChange({ ...style, borderWidth: clamp(toNumber(event.target.value, style.borderWidth), 0, 12) })}
+        />
+      </label>
+      <label className="text-[11px]">
+        Hover Text Color
+        <input
+          className="mt-1 w-full rounded border px-2 py-1.5"
+          value={style.hoverTextColor}
+          onChange={(event) => onChange({ ...style, hoverTextColor: event.target.value })}
+        />
+      </label>
+      <label className="text-[11px]">
+        Hover Border Color
+        <input
+          className="mt-1 w-full rounded border px-2 py-1.5"
+          value={style.hoverBorderColor}
+          onChange={(event) => onChange({ ...style, hoverBorderColor: event.target.value })}
         />
       </label>
       <label className="text-[11px]">

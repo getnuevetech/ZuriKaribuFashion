@@ -66,6 +66,8 @@ type CTAStyle = {
   textColor: string;
   borderColor: string;
   borderWidth: number;
+  hoverTextColor: string;
+  hoverBorderColor: string;
   fontFamily: string;
   fontSize: number;
   fontWeight: number;
@@ -178,6 +180,8 @@ const DEFAULT_SOLID_CTA_STYLE: CTAStyle = {
   textColor: '#ffffff',
   borderColor: '#e66045',
   borderWidth: 0,
+  hoverTextColor: '#ffffff',
+  hoverBorderColor: '#e66045',
   fontFamily: 'Montserrat, Inter, sans-serif',
   fontSize: 12,
   fontWeight: 600,
@@ -188,6 +192,8 @@ const DEFAULT_INLINE_CTA_STYLE: CTAStyle = {
   textColor: '#ffffff',
   borderColor: 'transparent',
   borderWidth: 0,
+  hoverTextColor: '#ffffff',
+  hoverBorderColor: '#ffffff',
   fontFamily: 'Montserrat, Inter, sans-serif',
   fontSize: 16,
   fontWeight: 600,
@@ -333,6 +339,28 @@ const buildCTAStyle = (raw: unknown, fallback: CTAStyle): CSSProperties => {
     fontSize: `${Math.max(8, Math.min(72, Math.round(asNumber(row.fontSize, fallback.fontSize))))}px`,
     fontWeight: Math.max(100, Math.min(900, Math.round(asNumber(row.fontWeight, fallback.fontWeight)))),
   };
+};
+
+const resolveCTAHoverStyle = (raw: unknown, fallback: CTAStyle) => {
+  const row = asRecord(raw);
+  return {
+    hoverTextColor: asString(row.hoverTextColor, fallback.hoverTextColor),
+    hoverBorderColor: asString(row.hoverBorderColor, fallback.hoverBorderColor),
+  };
+};
+
+const applyHeroCtaHoverState = (
+  element: HTMLAnchorElement,
+  raw: unknown,
+  fallback: CTAStyle,
+  isHovering: boolean
+) => {
+  const row = asRecord(raw);
+  const baseTextColor = asString(row.textColor, fallback.textColor);
+  const baseBorderColor = asString(row.borderColor, fallback.borderColor);
+  const hover = resolveCTAHoverStyle(raw, fallback);
+  element.style.color = isHovering ? hover.hoverTextColor : baseTextColor;
+  element.style.borderColor = isHovering ? hover.hoverBorderColor : baseBorderColor;
 };
 
 const socialIconFromLabel = (label: string): IconComponent => {
@@ -1377,6 +1405,12 @@ export default function JenksFrontpageV2() {
                 <Link
                   to={toSafeInternalHref(active.primaryCtaHref)}
                   style={buildCTAStyle(active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                  onMouseEnter={(event) =>
+                    applyHeroCtaHoverState(event.currentTarget, active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
+                  }
+                  onMouseLeave={(event) =>
+                    applyHeroCtaHoverState(event.currentTarget, active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
+                  }
                   className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
                 >
                   {active.primaryCtaText}
@@ -1386,6 +1420,12 @@ export default function JenksFrontpageV2() {
                 <Link
                   to={toSafeInternalHref(active.secondaryCtaHref)}
                   style={buildCTAStyle(active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                  onMouseEnter={(event) =>
+                    applyHeroCtaHoverState(event.currentTarget, active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
+                  }
+                  onMouseLeave={(event) =>
+                    applyHeroCtaHoverState(event.currentTarget, active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
+                  }
                   className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
                 >
                   {active.secondaryCtaText}
@@ -1395,6 +1435,12 @@ export default function JenksFrontpageV2() {
                 <Link
                   to={toSafeInternalHref(active.tertiaryCtaHref)}
                   style={buildCTAStyle(active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                  onMouseEnter={(event) =>
+                    applyHeroCtaHoverState(event.currentTarget, active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
+                  }
+                  onMouseLeave={(event) =>
+                    applyHeroCtaHoverState(event.currentTarget, active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
+                  }
                   className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
                 >
                   {active.tertiaryCtaText}
