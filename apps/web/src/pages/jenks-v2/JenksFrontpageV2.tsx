@@ -1191,9 +1191,8 @@ export default function JenksFrontpageV2() {
                 </Link>
               ))}
             </div>
-            <Link to={active.href} className="mt-6 inline-flex items-center gap-2 bg-[#e66045] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white">
+            <Link to={active.href} className="mt-6 inline-flex items-center bg-[#e66045] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white">
               {active.cta}
-              <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </div>
