@@ -115,32 +115,75 @@ const SHOP_BY_CATEGORY = [
   },
 ];
 
-const SHOP_BY_COUNTRY = [
-  { name: 'Nigeria', count: 156, textiles: 'Ankara • Adire', flag: 'ng' },
-  { name: 'Ghana', count: 89, textiles: 'Kente • Batik', flag: 'gh' },
-  { name: 'Kenya', count: 67, textiles: 'Kanga • Kikoy', flag: 'ke' },
-  { name: 'South Africa', count: 54, textiles: 'Shweshwe • Xhosa', flag: 'za' },
-  { name: 'Egypt', count: 44, textiles: 'Linen • Cotton', flag: 'eg' },
-  { name: 'Senegal', count: 38, textiles: 'Bazin • Wax', flag: 'sn' },
-  { name: 'Morocco', count: 72, textiles: 'Caftan • Brocade', flag: 'ma' },
-  { name: 'Cameroon', count: 49, textiles: 'Toghu • Wax', flag: 'cm' },
-  { name: 'Ethiopia', count: 57, textiles: 'Shemma • Cotton', flag: 'et' },
-  { name: 'Tanzania', count: 41, textiles: 'Kitenge • Kanga', flag: 'tz' },
-  { name: 'Rwanda', count: 35, textiles: 'Imigongo • Weave', flag: 'rw' },
-  { name: 'Uganda', count: 33, textiles: 'Barkcloth • Cotton', flag: 'ug' },
-  { name: 'Mali', count: 46, textiles: 'Bogolan • Indigo', flag: 'ml' },
-  { name: 'Burkina Faso', count: 37, textiles: 'Faso Dan Fani', flag: 'bf' },
-  { name: 'Congo', count: 31, textiles: 'Raffia • Prints', flag: 'cg' },
-  { name: 'Madagascar', count: 29, textiles: 'Lamba • Silk', flag: 'mg' },
-  { name: 'Namibia', count: 27, textiles: 'Ovaherero • Prints', flag: 'na' },
-  { name: 'Zambia', count: 26, textiles: 'Chitenge • Cotton', flag: 'zm' },
-  { name: 'Zimbabwe', count: 24, textiles: 'Batik • Cotton', flag: 'zw' },
-  { name: 'Mauritius', count: 21, textiles: 'Creole Lace • Cotton', flag: 'mu' },
-  { name: 'Botswana', count: 23, textiles: 'Leteisi • Prints', flag: 'bw' },
-  { name: 'Lesotho', count: 20, textiles: 'Basotho Blanket', flag: 'ls' },
-  { name: 'Eswatini', count: 19, textiles: 'Swazi Prints', flag: 'sz' },
-  { name: 'Seychelles', count: 17, textiles: 'Island Cotton', flag: 'sc' },
+const AFRICAN_COUNTRIES_54: Array<{
+  name: string;
+  flag: string;
+  region: Exclude<CountryRegion, 'ALL'>;
+  count: number;
+  textiles: string;
+}> = [
+  { name: 'Algeria', flag: 'dz', region: 'NORTH', count: 62, textiles: 'Burnous • Silk' },
+  { name: 'Angola', flag: 'ao', region: 'SOUTHERN', count: 34, textiles: 'Sambo • Cotton' },
+  { name: 'Benin', flag: 'bj', region: 'WEST', count: 28, textiles: 'Aso-Oke • Batik' },
+  { name: 'Botswana', flag: 'bw', region: 'SOUTHERN', count: 23, textiles: 'Leteisi • Prints' },
+  { name: 'Burkina Faso', flag: 'bf', region: 'WEST', count: 37, textiles: 'Faso Dan Fani' },
+  { name: 'Burundi', flag: 'bi', region: 'EAST', count: 21, textiles: 'Barkcloth • Cotton' },
+  { name: 'Cabo Verde', flag: 'cv', region: 'WEST', count: 19, textiles: 'Creole Lace • Cotton' },
+  { name: 'Cameroon', flag: 'cm', region: 'CENTRAL', count: 49, textiles: 'Toghu • Wax' },
+  { name: 'Central African Republic', flag: 'cf', region: 'CENTRAL', count: 18, textiles: 'Raffia • Cotton' },
+  { name: 'Chad', flag: 'td', region: 'CENTRAL', count: 20, textiles: 'Saharan Weave • Cotton' },
+  { name: 'Comoros', flag: 'km', region: 'EAST', count: 16, textiles: 'Island Weave • Silk' },
+  { name: 'Congo', flag: 'cg', region: 'CENTRAL', count: 31, textiles: 'Raffia • Prints' },
+  { name: 'DR Congo', flag: 'cd', region: 'CENTRAL', count: 33, textiles: 'Kuba Cloth • Raffia' },
+  { name: 'Djibouti', flag: 'dj', region: 'EAST', count: 15, textiles: 'Nomad Weave • Cotton' },
+  { name: 'Egypt', flag: 'eg', region: 'NORTH', count: 44, textiles: 'Linen • Cotton' },
+  { name: 'Equatorial Guinea', flag: 'gq', region: 'CENTRAL', count: 17, textiles: 'Barkcloth • Prints' },
+  { name: 'Eritrea', flag: 'er', region: 'EAST', count: 18, textiles: 'Habesha Weave • Cotton' },
+  { name: 'Eswatini', flag: 'sz', region: 'SOUTHERN', count: 19, textiles: 'Swazi Prints' },
+  { name: 'Ethiopia', flag: 'et', region: 'EAST', count: 57, textiles: 'Shemma • Cotton' },
+  { name: 'Gabon', flag: 'ga', region: 'CENTRAL', count: 22, textiles: 'Barkcloth • Indigo' },
+  { name: 'Gambia', flag: 'gm', region: 'WEST', count: 20, textiles: 'Batik • Cotton' },
+  { name: 'Ghana', flag: 'gh', region: 'WEST', count: 89, textiles: 'Kente • Batik' },
+  { name: 'Guinea', flag: 'gn', region: 'WEST', count: 24, textiles: 'Bogolan • Indigo' },
+  { name: 'Guinea-Bissau', flag: 'gw', region: 'WEST', count: 18, textiles: 'Wax • Cotton' },
+  { name: "Cote d'Ivoire", flag: 'ci', region: 'WEST', count: 26, textiles: 'Baule Weave • Batik' },
+  { name: 'Kenya', flag: 'ke', region: 'EAST', count: 67, textiles: 'Kanga • Kikoy' },
+  { name: 'Lesotho', flag: 'ls', region: 'SOUTHERN', count: 20, textiles: 'Basotho Blanket' },
+  { name: 'Liberia', flag: 'lr', region: 'WEST', count: 19, textiles: 'Country Cloth • Cotton' },
+  { name: 'Libya', flag: 'ly', region: 'NORTH', count: 22, textiles: 'Silk Weave • Linen' },
+  { name: 'Madagascar', flag: 'mg', region: 'EAST', count: 29, textiles: 'Lamba • Silk' },
+  { name: 'Malawi', flag: 'mw', region: 'SOUTHERN', count: 21, textiles: 'Chitenje • Cotton' },
+  { name: 'Mali', flag: 'ml', region: 'WEST', count: 46, textiles: 'Bogolan • Indigo' },
+  { name: 'Mauritania', flag: 'mr', region: 'NORTH', count: 17, textiles: 'Melfa • Cotton' },
+  { name: 'Mauritius', flag: 'mu', region: 'EAST', count: 21, textiles: 'Creole Lace • Cotton' },
+  { name: 'Morocco', flag: 'ma', region: 'NORTH', count: 72, textiles: 'Caftan • Brocade' },
+  { name: 'Mozambique', flag: 'mz', region: 'SOUTHERN', count: 25, textiles: 'Capulana • Cotton' },
+  { name: 'Namibia', flag: 'na', region: 'SOUTHERN', count: 27, textiles: 'Ovaherero • Prints' },
+  { name: 'Niger', flag: 'ne', region: 'WEST', count: 20, textiles: 'Indigo Weave • Cotton' },
+  { name: 'Nigeria', flag: 'ng', region: 'WEST', count: 156, textiles: 'Ankara • Adire' },
+  { name: 'Rwanda', flag: 'rw', region: 'EAST', count: 35, textiles: 'Imigongo • Weave' },
+  { name: 'Sao Tome and Principe', flag: 'st', region: 'CENTRAL', count: 14, textiles: 'Island Cotton • Prints' },
+  { name: 'Senegal', flag: 'sn', region: 'WEST', count: 38, textiles: 'Bazin • Wax' },
+  { name: 'Seychelles', flag: 'sc', region: 'EAST', count: 17, textiles: 'Island Cotton' },
+  { name: 'Sierra Leone', flag: 'sl', region: 'WEST', count: 18, textiles: 'Country Cloth • Batik' },
+  { name: 'Somalia', flag: 'so', region: 'EAST', count: 16, textiles: 'Dirac • Cotton' },
+  { name: 'South Africa', flag: 'za', region: 'SOUTHERN', count: 54, textiles: 'Shweshwe • Xhosa' },
+  { name: 'South Sudan', flag: 'ss', region: 'EAST', count: 15, textiles: 'Nile Weave • Cotton' },
+  { name: 'Sudan', flag: 'sd', region: 'NORTH', count: 23, textiles: 'Toob • Cotton' },
+  { name: 'Tanzania', flag: 'tz', region: 'EAST', count: 41, textiles: 'Kitenge • Kanga' },
+  { name: 'Togo', flag: 'tg', region: 'WEST', count: 22, textiles: 'Kente • Batik' },
+  { name: 'Tunisia', flag: 'tn', region: 'NORTH', count: 24, textiles: 'Silk • Linen' },
+  { name: 'Uganda', flag: 'ug', region: 'EAST', count: 33, textiles: 'Barkcloth • Cotton' },
+  { name: 'Zambia', flag: 'zm', region: 'SOUTHERN', count: 26, textiles: 'Chitenge • Cotton' },
+  { name: 'Zimbabwe', flag: 'zw', region: 'SOUTHERN', count: 24, textiles: 'Batik • Cotton' },
 ];
+
+const SHOP_BY_COUNTRY = AFRICAN_COUNTRIES_54.map((country) => ({
+  name: country.name,
+  count: country.count,
+  textiles: country.textiles,
+  flag: country.flag,
+}));
 
 const SHOP_BY_STYLE = [
   { name: 'Wedding', sub: 'Bridal & celebration wear', Icon: Heart },
@@ -165,32 +208,9 @@ const COUNTRY_REGION_OPTIONS: Array<{ key: CountryRegion; label: string }> = [
   { key: 'SOUTHERN', label: 'Southern' },
 ];
 
-const COUNTRY_SHOWCASE: Array<{ name: string; flag: string; region: Exclude<CountryRegion, 'ALL'> }> = [
-  { name: 'Egypt', flag: 'eg', region: 'NORTH' },
-  { name: 'Morocco', flag: 'ma', region: 'NORTH' },
-  { name: 'Burkina Faso', flag: 'bf', region: 'WEST' },
-  { name: 'Ghana', flag: 'gh', region: 'WEST' },
-  { name: 'Mali', flag: 'ml', region: 'WEST' },
-  { name: 'Nigeria', flag: 'ng', region: 'WEST' },
-  { name: 'Senegal', flag: 'sn', region: 'WEST' },
-  { name: 'Cameroon', flag: 'cm', region: 'CENTRAL' },
-  { name: 'Congo', flag: 'cg', region: 'CENTRAL' },
-  { name: 'Ethiopia', flag: 'et', region: 'EAST' },
-  { name: 'Kenya', flag: 'ke', region: 'EAST' },
-  { name: 'Madagascar', flag: 'mg', region: 'EAST' },
-  { name: 'Mauritius', flag: 'mu', region: 'EAST' },
-  { name: 'Rwanda', flag: 'rw', region: 'EAST' },
-  { name: 'Seychelles', flag: 'sc', region: 'EAST' },
-  { name: 'Tanzania', flag: 'tz', region: 'EAST' },
-  { name: 'Uganda', flag: 'ug', region: 'EAST' },
-  { name: 'Botswana', flag: 'bw', region: 'SOUTHERN' },
-  { name: 'Eswatini', flag: 'sz', region: 'SOUTHERN' },
-  { name: 'Lesotho', flag: 'ls', region: 'SOUTHERN' },
-  { name: 'Namibia', flag: 'na', region: 'SOUTHERN' },
-  { name: 'South Africa', flag: 'za', region: 'SOUTHERN' },
-  { name: 'Zambia', flag: 'zm', region: 'SOUTHERN' },
-  { name: 'Zimbabwe', flag: 'zw', region: 'SOUTHERN' },
-];
+const COUNTRY_SHOWCASE: Array<{ name: string; flag: string; region: Exclude<CountryRegion, 'ALL'> }> = AFRICAN_COUNTRIES_54.map(
+  ({ name, flag, region }) => ({ name, flag, region })
+);
 
 const FEATURED_RTW = [
   {
