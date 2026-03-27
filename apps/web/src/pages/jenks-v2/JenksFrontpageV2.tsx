@@ -122,6 +122,24 @@ const SHOP_BY_COUNTRY = [
   { name: 'South Africa', count: 54, textiles: 'Shweshwe • Xhosa', flag: 'za' },
   { name: 'Egypt', count: 44, textiles: 'Linen • Cotton', flag: 'eg' },
   { name: 'Senegal', count: 38, textiles: 'Bazin • Wax', flag: 'sn' },
+  { name: 'Morocco', count: 72, textiles: 'Caftan • Brocade', flag: 'ma' },
+  { name: 'Cameroon', count: 49, textiles: 'Toghu • Wax', flag: 'cm' },
+  { name: 'Ethiopia', count: 57, textiles: 'Shemma • Cotton', flag: 'et' },
+  { name: 'Tanzania', count: 41, textiles: 'Kitenge • Kanga', flag: 'tz' },
+  { name: 'Rwanda', count: 35, textiles: 'Imigongo • Weave', flag: 'rw' },
+  { name: 'Uganda', count: 33, textiles: 'Barkcloth • Cotton', flag: 'ug' },
+  { name: 'Mali', count: 46, textiles: 'Bogolan • Indigo', flag: 'ml' },
+  { name: 'Burkina Faso', count: 37, textiles: 'Faso Dan Fani', flag: 'bf' },
+  { name: 'Congo', count: 31, textiles: 'Raffia • Prints', flag: 'cg' },
+  { name: 'Madagascar', count: 29, textiles: 'Lamba • Silk', flag: 'mg' },
+  { name: 'Namibia', count: 27, textiles: 'Ovaherero • Prints', flag: 'na' },
+  { name: 'Zambia', count: 26, textiles: 'Chitenge • Cotton', flag: 'zm' },
+  { name: 'Zimbabwe', count: 24, textiles: 'Batik • Cotton', flag: 'zw' },
+  { name: 'Mauritius', count: 21, textiles: 'Creole Lace • Cotton', flag: 'mu' },
+  { name: 'Botswana', count: 23, textiles: 'Leteisi • Prints', flag: 'bw' },
+  { name: 'Lesotho', count: 20, textiles: 'Basotho Blanket', flag: 'ls' },
+  { name: 'Eswatini', count: 19, textiles: 'Swazi Prints', flag: 'sz' },
+  { name: 'Seychelles', count: 17, textiles: 'Island Cotton', flag: 'sc' },
 ];
 
 const SHOP_BY_STYLE = [
@@ -205,6 +223,23 @@ const FEATURED_CTW = [
     title: 'Signature Couture',
     subtitle: 'Tailored by African designers',
     href: '/custom',
+  },
+];
+
+const FEATURED_FTB = [
+  {
+    id: 'ff1',
+    image: `${ASSET_BASE}/fabrics_full.jpg`,
+    title: 'Signature Textile Vault',
+    subtitle: 'Premium fabrics sourced from artisan houses across Africa.',
+    href: '/fabrics',
+  },
+  {
+    id: 'ff2',
+    image: `${ASSET_BASE}/product6.jpg`,
+    title: 'Occasion Fabric Edit',
+    subtitle: 'Handpicked weaves and prints for ceremony and statement looks.',
+    href: '/fabrics',
   },
 ];
 
@@ -306,6 +341,8 @@ export default function JenksFrontpageV2() {
   const [index, setIndex] = useState(0);
   const [shopByTab, setShopByTab] = useState<ShopByTab>('CATEGORY');
   const [countryRegion, setCountryRegion] = useState<CountryRegion>('ALL');
+  const [shopByCountryExpanded, setShopByCountryExpanded] = useState(false);
+  const [dedicatedCountryExpanded, setDedicatedCountryExpanded] = useState(false);
   const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
   const active = useMemo(() => HERO[index] || HERO[0], [index]);
   const filteredCountryShowcase = useMemo(
@@ -325,6 +362,14 @@ export default function JenksFrontpageV2() {
       { ALL: COUNTRY_SHOWCASE.length, NORTH: 0, WEST: 0, CENTRAL: 0, EAST: 0, SOUTHERN: 0 }
     );
   }, []);
+  const visibleShopByCountries = useMemo(
+    () => (shopByCountryExpanded ? SHOP_BY_COUNTRY : SHOP_BY_COUNTRY.slice(0, 12)),
+    [shopByCountryExpanded]
+  );
+  const visibleDedicatedCountries = useMemo(
+    () => (dedicatedCountryExpanded ? filteredCountryShowcase : filteredCountryShowcase.slice(0, 12)),
+    [dedicatedCountryExpanded, filteredCountryShowcase]
+  );
 
   useEffect(() => {
     const timer = window.setInterval(() => setIndex((p) => (p + 1) % HERO.length), 7000);
@@ -484,7 +529,7 @@ export default function JenksFrontpageV2() {
                     className="h-[82vh] w-full object-cover transition-transform duration-700 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                  <div className="absolute right-4 top-4 text-white/85">
+                  <div className="absolute right-4 top-4 text-white/50 transition-colors group-hover:text-white">
                     <ArrowRight className="h-6 w-6" />
                   </div>
                   <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
@@ -500,12 +545,20 @@ export default function JenksFrontpageV2() {
 
           {shopByTab === 'COUNTRY' ? (
             <div className="mt-10">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-3 lg:grid-cols-6">
-                {SHOP_BY_COUNTRY.map((country) => (
+              <div
+                className={
+                  shopByCountryExpanded
+                    ? 'grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-3 lg:grid-cols-6'
+                    : 'flex gap-6 overflow-x-auto pb-1'
+                }
+              >
+                {visibleShopByCountries.map((country) => (
                   <Link
                     key={country.name}
                     to={`/country-products?country=${encodeURIComponent(country.name)}`}
-                    className="group flex flex-col items-center text-center text-white/78 transition-colors hover:text-[#e66045]"
+                    className={`group flex flex-col items-center text-center text-white/78 transition-colors hover:text-[#e66045] ${
+                      shopByCountryExpanded ? '' : 'min-w-[120px] shrink-0'
+                    }`}
                   >
                     <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/12 bg-white/[0.02] transition-colors group-hover:border-[#e66045]">
                       <img
@@ -523,10 +576,14 @@ export default function JenksFrontpageV2() {
                 ))}
               </div>
               <div className="mt-8 text-center">
-                <Link to="/country-products" className="inline-flex items-center gap-2 text-2xl font-semibold text-white/85 hover:text-white">
+                <button
+                  type="button"
+                  onClick={() => setShopByCountryExpanded((prev) => !prev)}
+                  className="inline-flex items-center gap-2 text-base font-medium text-white/85 hover:text-white"
+                >
                   View all 54 countries
                   <ArrowRight className="h-4 w-4" />
-                </Link>
+                </button>
               </div>
             </div>
           ) : null}
@@ -610,12 +667,20 @@ export default function JenksFrontpageV2() {
             })}
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12">
-            {filteredCountryShowcase.map((country) => (
+          <div
+            className={
+              dedicatedCountryExpanded
+                ? 'mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12'
+                : 'mt-6 flex gap-4 overflow-x-auto pb-1'
+            }
+          >
+            {visibleDedicatedCountries.map((country) => (
               <Link
                 key={country.name}
                 to={`/country-products?country=${encodeURIComponent(country.name)}`}
-                className="group flex flex-col items-center px-2 py-2 text-center text-white/75 transition-colors hover:text-[#e66045]"
+                className={`group flex flex-col items-center px-2 py-2 text-center text-white/75 transition-colors hover:text-[#e66045] ${
+                  dedicatedCountryExpanded ? '' : 'min-w-[112px] shrink-0'
+                }`}
               >
                 <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/[0.02] transition-colors group-hover:border-[#e66045]">
                   <img
@@ -631,13 +696,14 @@ export default function JenksFrontpageV2() {
           </div>
 
           <div className="mt-8 text-center">
-            <Link
-              to="/country-products"
-              className="inline-flex items-center gap-2 border border-white/18 bg-white/[0.05] px-6 py-3 text-lg text-white transition-colors hover:border-[#e66045] hover:text-[#e66045]"
+            <button
+              type="button"
+              onClick={() => setDedicatedCountryExpanded((prev) => !prev)}
+              className="inline-flex items-center gap-2 border border-white/18 bg-white/[0.05] px-6 py-3 text-sm text-white transition-colors hover:border-[#e66045] hover:text-[#e66045]"
             >
               Show All 54 Countries
               <ArrowRight className="h-4 w-4" />
-            </Link>
+            </button>
           </div>
         </div>
       </section>
@@ -645,10 +711,15 @@ export default function JenksFrontpageV2() {
       {/* RTW / FTB / CTW HERO-HEIGHT SPLIT */}
       <section className="space-y-0">
         {RTW_FTB_CTW_SECTIONS.map((section) => (
-          <div key={section.id} className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 md:grid-cols-2`}>
+          <div
+            key={section.id}
+            className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 ${
+              section.textOnLeft ? 'md:grid-cols-[32%_68%]' : 'md:grid-cols-[68%_32%]'
+            }`}
+          >
             {section.textOnLeft ? (
               <>
-                <div className={`relative overflow-hidden px-8 py-12 text-white md:col-span-1 ${section.panelBg}`} data-kimi-anim="sidebar-left">
+                <div className={`relative overflow-hidden px-8 py-12 text-white ${section.panelBg}`} data-kimi-anim="sidebar-left">
                   <div
                     className="pointer-events-none absolute inset-0 scale-105 bg-cover bg-center blur-2xl"
                     style={{ backgroundImage: `url(${section.image})`, opacity: 0.18 }}
@@ -666,12 +737,12 @@ export default function JenksFrontpageV2() {
                     </div>
                   </div>
                 </div>
-                <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover md:col-span-1" data-kimi-anim="zoom-in" />
+                <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover" data-kimi-anim="zoom-in" />
               </>
             ) : (
               <>
-                <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover md:col-span-1" data-kimi-anim="zoom-in" />
-                <div className={`relative overflow-hidden px-8 py-12 text-white md:col-span-1 ${section.panelBg}`} data-kimi-anim="sidebar-right">
+                <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover" data-kimi-anim="zoom-in" />
+                <div className={`relative overflow-hidden px-8 py-12 text-white ${section.panelBg}`} data-kimi-anim="sidebar-right">
                   <div
                     className="pointer-events-none absolute inset-0 scale-105 bg-cover bg-center blur-2xl"
                     style={{ backgroundImage: `url(${section.image})`, opacity: 0.18 }}
@@ -720,8 +791,8 @@ export default function JenksFrontpageV2() {
             <Link key={card.id} to={card.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
               <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-              <p className="absolute left-6 top-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">Ready To Wear</p>
-              <div className="absolute bottom-6 right-6 max-w-[58%] text-right text-white">
+              <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-white/72">Ready To Wear</p>
+              <div className="absolute bottom-[10%] right-6 max-w-[58%] text-right text-white">
                 <p className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">Featured Ready To Wear</p>
                 <p className="mt-2 text-sm text-white/78">{card.subtitle}</p>
               </div>
@@ -733,9 +804,22 @@ export default function JenksFrontpageV2() {
             <Link key={card.id} to={card.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
               <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-              <p className="absolute left-6 top-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">Custom To Wear</p>
-              <div className="absolute bottom-6 right-6 max-w-[58%] text-right text-white">
+              <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-white/72">Custom To Wear</p>
+              <div className="absolute bottom-[10%] right-6 max-w-[58%] text-right text-white">
                 <p className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">Featured Custom To Wear</p>
+                <p className="mt-2 text-sm text-white/78">{card.subtitle}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+        <div className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 md:grid-cols-2`}>
+          {FEATURED_FTB.map((card) => (
+            <Link key={card.id} to={card.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
+              <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+              <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-white/72">Fabrics To Buy</p>
+              <div className="absolute bottom-[10%] right-6 max-w-[58%] text-right text-white">
+                <p className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">Featured Fabrics To Buy</p>
                 <p className="mt-2 text-sm text-white/78">{card.subtitle}</p>
               </div>
             </Link>
