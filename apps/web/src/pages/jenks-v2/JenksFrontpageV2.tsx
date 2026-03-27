@@ -357,6 +357,8 @@ const DESIGNER_SPOTLIGHT = [
   },
 ] as const;
 
+const ALL_COUNTRIES_COUNT = 54;
+
 export default function JenksFrontpageV2() {
   const [index, setIndex] = useState(0);
   const [shopByTab, setShopByTab] = useState<ShopByTab>('CATEGORY');
@@ -382,13 +384,15 @@ export default function JenksFrontpageV2() {
       { ALL: COUNTRY_SHOWCASE.length, NORTH: 0, WEST: 0, CENTRAL: 0, EAST: 0, SOUTHERN: 0 }
     );
   }, []);
-  const visibleShopByCountries = useMemo(
-    () => (shopByCountryExpanded ? SHOP_BY_COUNTRY : SHOP_BY_COUNTRY.slice(0, 12)),
-    [shopByCountryExpanded]
-  );
+  const fullShopByCountries = useMemo(() => SHOP_BY_COUNTRY.slice(0, ALL_COUNTRIES_COUNT), []);
+  const fullDedicatedCountries = useMemo(() => COUNTRY_SHOWCASE.slice(0, ALL_COUNTRIES_COUNT), []);
+  const visibleShopByCountries = useMemo(() => {
+    if (shopByCountryExpanded) return fullShopByCountries;
+    return fullShopByCountries.slice(0, 12);
+  }, [fullShopByCountries, shopByCountryExpanded]);
   const visibleDedicatedCountries = useMemo(
-    () => (dedicatedCountryExpanded ? filteredCountryShowcase : filteredCountryShowcase.slice(0, 12)),
-    [dedicatedCountryExpanded, filteredCountryShowcase]
+    () => (dedicatedCountryExpanded ? fullDedicatedCountries : filteredCountryShowcase.slice(0, 12)),
+    [dedicatedCountryExpanded, filteredCountryShowcase, fullDedicatedCountries]
   );
 
   useEffect(() => {
@@ -593,7 +597,7 @@ export default function JenksFrontpageV2() {
                   onClick={() => setShopByCountryExpanded((prev) => !prev)}
                   className="inline-flex items-center gap-2 text-xs font-normal text-white/85 hover:text-white"
                 >
-                  {shopByCountryExpanded ? 'Show less countries' : 'View all 54 countries'}
+                  {shopByCountryExpanded ? 'Show less countries' : `View all ${ALL_COUNTRIES_COUNT} countries`}
                   <ArrowRight className="h-3 w-3" />
                 </button>
               </div>
@@ -705,7 +709,7 @@ export default function JenksFrontpageV2() {
               onClick={() => setDedicatedCountryExpanded((prev) => !prev)}
               className="inline-flex items-center gap-2 border border-white/18 bg-white/[0.05] px-6 py-3 text-[11px] text-white transition-colors hover:border-[#e66045] hover:text-[#e66045]"
             >
-              {dedicatedCountryExpanded ? 'Show less countries' : 'Show All 54 Countries'}
+              {dedicatedCountryExpanded ? 'Show less countries' : `Show All ${ALL_COUNTRIES_COUNT} Countries`}
               <ArrowRight className="h-3 w-3" />
             </button>
           </div>
