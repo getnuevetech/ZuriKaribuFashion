@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Loader2, Plus, Trash2, Upload } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { api } from '../../services/api';
@@ -627,6 +628,30 @@ const TAB_META: Array<{ key: TabKey; label: string }> = [
   { key: 'newsletterFooter', label: 'Newsletter & Footer' },
   { key: 'sectionVisibility', label: 'Section Visibility' },
 ];
+const SUBMENU_TO_TAB: Record<string, TabKey> = {
+  'top-navigations': 'topNavigations',
+  'shop-by': 'shopBy',
+  'category-manage': 'categoryManage',
+  'text-icon-cards': 'textIconCards',
+  featured: 'featured',
+  'fresh-drops': 'freshDrops',
+  'designer-spotlight': 'designerSpotlight',
+  heritage: 'heritage',
+  'newsletter-footer': 'newsletterFooter',
+  'section-visibility': 'sectionVisibility',
+};
+const TAB_TO_SUBMENU: Record<TabKey, string> = {
+  topNavigations: 'top-navigations',
+  shopBy: 'shop-by',
+  categoryManage: 'category-manage',
+  textIconCards: 'text-icon-cards',
+  featured: 'featured',
+  freshDrops: 'fresh-drops',
+  designerSpotlight: 'designer-spotlight',
+  heritage: 'heritage',
+  newsletterFooter: 'newsletter-footer',
+  sectionVisibility: 'section-visibility',
+};
 
 const toApiPayload = (config: JenksV2FrontpageConfig) => ({
   topNavigations: config.topNavigations,
@@ -651,6 +676,8 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
 };
 
 export default function JenksV2FrontPageManager() {
+  const navigate = useNavigate();
+  const { submenu } = useParams<{ submenu?: string }>();
   const [config, setConfig] = useState<JenksV2FrontpageConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -698,6 +725,16 @@ export default function JenksV2FrontPageManager() {
   useEffect(() => {
     void fetchConfig();
   }, []);
+
+  useEffect(() => {
+    const nextTab = submenu ? SUBMENU_TO_TAB[submenu] : undefined;
+    if (nextTab && nextTab !== activeTab) {
+      setActiveTab(nextTab);
+    }
+    if (!submenu && activeTab !== 'topNavigations') {
+      setActiveTab('topNavigations');
+    }
+  }, [submenu, activeTab]);
 
   const uploadImage = async (file: File) => {
     const formData = new FormData();
@@ -961,7 +998,10 @@ export default function JenksV2FrontPageManager() {
             <button
               key={tab.key}
               type="button"
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => {
+                setActiveTab(tab.key);
+                navigate(`/admin/jenks-v2-frontpage-manager/${TAB_TO_SUBMENU[tab.key]}`);
+              }}
               className={`rounded border px-3 py-2 text-xs font-medium ${
                 activeTab === tab.key
                   ? 'border-black bg-black text-white'
