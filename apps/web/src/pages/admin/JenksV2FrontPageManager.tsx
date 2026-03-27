@@ -39,8 +39,10 @@ type HeroBanner = {
   descriptionFontSize: number;
   primaryCtaText: string;
   primaryCtaLink: string;
+  primaryCtaStyle: CTAStyle;
   secondaryCtaText: string;
   secondaryCtaLink: string;
+  secondaryCtaStyle: CTAStyle;
 };
 
 type TopNavigations = {
@@ -133,6 +135,7 @@ type CategorySection = {
   description: string;
   ctaText: string;
   ctaLink: string;
+  ctaStyle: CTAStyle;
   enabled: boolean;
   displayOrder: number;
 };
@@ -156,6 +159,7 @@ type FeaturedCard = {
   description: string;
   ctaText: string;
   ctaLink: string;
+  ctaStyle: CTAStyle;
   enabled: boolean;
   displayOrder: number;
 };
@@ -180,8 +184,19 @@ type DesignerSpotlightCard = {
   description: string;
   ctaText: string;
   ctaLink: string;
+  ctaStyle: CTAStyle;
   enabled: boolean;
   displayOrder: number;
+};
+
+type CTAStyle = {
+  textColor: string;
+  backgroundColor: string;
+  borderColor: string;
+  borderWidth: number;
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
 };
 
 type DesignerSpotlight = {
@@ -294,7 +309,7 @@ const TEMPLATES: Array<{ key: TemplateKey; label: string }> = [
 
 const ROUTE_OPTIONS = [
   { key: 'HOME', label: 'Home', href: '/' },
-  { key: 'SHOP', label: 'Shop', href: '/shop' },
+  { key: 'SHOP', label: 'Shop', href: '/ready-to-wear' },
   { key: 'READY_TO_WEAR', label: 'Ready To Wear', href: '/ready-to-wear' },
   { key: 'FABRICS', label: 'Fabric To Buy', href: '/fabrics' },
   { key: 'CUSTOM_TO_WEAR', label: 'Custom To Wear', href: '/custom' },
@@ -318,6 +333,112 @@ const defaultLink = (label: string, href: string, routeKey?: string): MenuLink =
   enabled: true,
 });
 
+const DEFAULT_CTA_STYLE: CTAStyle = {
+  textColor: '#ffffff',
+  backgroundColor: '#e66045',
+  borderColor: '#e66045',
+  borderWidth: 0,
+  fontFamily: 'Montserrat, Inter, sans-serif',
+  fontSize: 12,
+  fontWeight: 600,
+};
+
+const createCtaStyle = (overrides: Partial<CTAStyle> = {}): CTAStyle => ({
+  ...DEFAULT_CTA_STYLE,
+  ...overrides,
+});
+
+const normalizeCtaStyle = (value: unknown, fallback: CTAStyle = DEFAULT_CTA_STYLE): CTAStyle => {
+  if (!value || typeof value !== 'object') return { ...fallback };
+  const row = value as Partial<CTAStyle>;
+  const clampNumber = (num: unknown, min: number, max: number, fallbackValue: number) => {
+    const parsed = typeof num === 'number' && Number.isFinite(num) ? num : Number(num);
+    if (!Number.isFinite(parsed)) return fallbackValue;
+    return clamp(Math.round(parsed), min, max);
+  };
+  return {
+    textColor: String(row.textColor || fallback.textColor || '#ffffff'),
+    backgroundColor: String((row as any).backgroundColor || (row as any).bgColor || fallback.backgroundColor || '#e66045'),
+    borderColor: String(row.borderColor || fallback.borderColor || '#e66045'),
+    borderWidth: clampNumber(row.borderWidth, 0, 12, fallback.borderWidth),
+    fontFamily: String(row.fontFamily || fallback.fontFamily || 'Montserrat, Inter, sans-serif'),
+    fontSize: clampNumber(row.fontSize, 8, 72, fallback.fontSize),
+    fontWeight: clampNumber(row.fontWeight, 100, 900, fallback.fontWeight),
+  };
+};
+
+const renderCtaStyleEditor = (
+  label: string,
+  style: CTAStyle,
+  onChange: (next: CTAStyle) => void,
+  className = 'md:col-span-4'
+) => (
+  <div className={`rounded border border-gray-200 bg-gray-50 p-3 ${className}`}>
+    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-700">{label}</p>
+    <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+      <label className="text-[11px]">
+        Background
+        <input
+          className="mt-1 w-full rounded border px-2 py-1.5"
+          value={style.backgroundColor}
+          onChange={(event) => onChange({ ...style, backgroundColor: event.target.value })}
+        />
+      </label>
+      <label className="text-[11px]">
+        Text Color
+        <input
+          className="mt-1 w-full rounded border px-2 py-1.5"
+          value={style.textColor}
+          onChange={(event) => onChange({ ...style, textColor: event.target.value })}
+        />
+      </label>
+      <label className="text-[11px]">
+        Border Color
+        <input
+          className="mt-1 w-full rounded border px-2 py-1.5"
+          value={style.borderColor}
+          onChange={(event) => onChange({ ...style, borderColor: event.target.value })}
+        />
+      </label>
+      <label className="text-[11px]">
+        Border Width (px)
+        <input
+          type="number"
+          className="mt-1 w-full rounded border px-2 py-1.5"
+          value={style.borderWidth}
+          onChange={(event) => onChange({ ...style, borderWidth: clamp(toNumber(event.target.value, style.borderWidth), 0, 12) })}
+        />
+      </label>
+      <label className="text-[11px]">
+        Font Family
+        <input
+          className="mt-1 w-full rounded border px-2 py-1.5"
+          value={style.fontFamily}
+          onChange={(event) => onChange({ ...style, fontFamily: event.target.value })}
+        />
+      </label>
+      <label className="text-[11px]">
+        Font Size (px)
+        <input
+          type="number"
+          className="mt-1 w-full rounded border px-2 py-1.5"
+          value={style.fontSize}
+          onChange={(event) => onChange({ ...style, fontSize: clamp(toNumber(event.target.value, style.fontSize), 8, 72) })}
+        />
+      </label>
+      <label className="text-[11px]">
+        Font Weight
+        <input
+          type="number"
+          className="mt-1 w-full rounded border px-2 py-1.5"
+          value={style.fontWeight}
+          onChange={(event) => onChange({ ...style, fontWeight: clamp(toNumber(event.target.value, style.fontWeight), 100, 900) })}
+        />
+      </label>
+    </div>
+  </div>
+);
+
 const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
   contractVersion: 'JENKS_V2_FRONTPAGE_MANAGER_V1',
   topNavigations: {
@@ -335,7 +456,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       width: 180,
       height: 50,
     },
-    additionalTopMenu: [defaultLink('Shop', '/shop', 'SHOP')],
+    additionalTopMenu: [defaultLink('Shop', '/ready-to-wear', 'SHOP')],
     signInMenu: {
       enabled: true,
       label: 'Sign In',
@@ -364,9 +485,23 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Control title, text, tags, font size, CTA labels and links for each hero banner.',
         descriptionFontSize: 16,
         primaryCtaText: 'SHOP NOW',
-        primaryCtaLink: '/shop',
+        primaryCtaLink: '/ready-to-wear',
+        primaryCtaStyle: createCtaStyle({
+          backgroundColor: '#e66045',
+          textColor: '#ffffff',
+          borderColor: '#e66045',
+          borderWidth: 0,
+          fontSize: 12,
+        }),
         secondaryCtaText: 'EXPLORE DESIGNERS',
         secondaryCtaLink: '/custom',
+        secondaryCtaStyle: createCtaStyle({
+          backgroundColor: 'transparent',
+          textColor: '#111111',
+          borderColor: '#111111',
+          borderWidth: 1,
+          fontSize: 12,
+        }),
       },
     ],
   },
@@ -417,7 +552,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Under $100',
         priceLabel: 'Budget Friendly',
         description: 'Affordable picks for every wardrobe',
-        href: '/shop?price=under-100',
+        href: '/ready-to-wear?price=under-100',
         enabled: true,
         displayOrder: 1,
       },
@@ -433,6 +568,13 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Manage title, tag, description and CTA for RTW block.',
         ctaText: 'Shop RTW',
         ctaLink: '/ready-to-wear',
+        ctaStyle: createCtaStyle({
+          backgroundColor: 'transparent',
+          textColor: '#ffffff',
+          borderColor: 'transparent',
+          borderWidth: 0,
+          fontSize: 18,
+        }),
         enabled: true,
         displayOrder: 1,
       },
@@ -444,6 +586,13 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Manage title, tag, description and CTA for CTW block.',
         ctaText: 'Explore CTW',
         ctaLink: '/custom',
+        ctaStyle: createCtaStyle({
+          backgroundColor: 'transparent',
+          textColor: '#ffffff',
+          borderColor: 'transparent',
+          borderWidth: 0,
+          fontSize: 18,
+        }),
         enabled: true,
         displayOrder: 2,
       },
@@ -455,6 +604,13 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Manage title, tag, description and CTA for FTB block.',
         ctaText: 'Shop FTB',
         ctaLink: '/fabrics',
+        ctaStyle: createCtaStyle({
+          backgroundColor: 'transparent',
+          textColor: '#ffffff',
+          borderColor: 'transparent',
+          borderWidth: 0,
+          fontSize: 18,
+        }),
         enabled: true,
         displayOrder: 3,
       },
@@ -485,6 +641,13 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Spotlight featured RTW products.',
         ctaText: 'Shop RTW',
         ctaLink: '/ready-to-wear',
+        ctaStyle: createCtaStyle({
+          backgroundColor: 'transparent',
+          textColor: '#ffffff',
+          borderColor: 'transparent',
+          borderWidth: 0,
+          fontSize: 14,
+        }),
         enabled: true,
         displayOrder: 1,
       },
@@ -497,6 +660,13 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Spotlight featured CTW products.',
         ctaText: 'Explore CTW',
         ctaLink: '/custom',
+        ctaStyle: createCtaStyle({
+          backgroundColor: 'transparent',
+          textColor: '#ffffff',
+          borderColor: 'transparent',
+          borderWidth: 0,
+          fontSize: 14,
+        }),
         enabled: true,
         displayOrder: 2,
       },
@@ -509,6 +679,13 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Spotlight featured fabric products.',
         ctaText: 'Shop FTB',
         ctaLink: '/fabrics',
+        ctaStyle: createCtaStyle({
+          backgroundColor: 'transparent',
+          textColor: '#ffffff',
+          borderColor: 'transparent',
+          borderWidth: 0,
+          fontSize: 14,
+        }),
         enabled: true,
         displayOrder: 3,
       },
@@ -537,6 +714,13 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Highlight featured designers with CTA.',
         ctaText: 'View Designer',
         ctaLink: '/custom',
+        ctaStyle: createCtaStyle({
+          backgroundColor: 'transparent',
+          textColor: '#ffffff',
+          borderColor: 'transparent',
+          borderWidth: 0,
+          fontSize: 14,
+        }),
         enabled: true,
         displayOrder: 1,
       },
@@ -666,12 +850,187 @@ const toApiPayload = (config: JenksV2FrontpageConfig) => ({
   sectionVisibility: config.sectionVisibility,
 });
 
+const mapLegacyManagerHref = (href: string) => {
+  const normalized = href.trim();
+  if (
+    normalized === '/main' ||
+    normalized === '/main/' ||
+    normalized.startsWith('/main?') ||
+    normalized.startsWith('/main#') ||
+    normalized === '/shop' ||
+    normalized === '/shop/' ||
+    normalized.startsWith('/shop?') ||
+    normalized.startsWith('/shop#')
+  ) {
+    if (normalized.startsWith('/shop?') || normalized.startsWith('/shop#')) {
+      return `/ready-to-wear${normalized.slice('/shop'.length)}`;
+    }
+    return '/ready-to-wear';
+  }
+  return normalized;
+};
+
+const normalizeManagerHref = (value: unknown, fallback: string) => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return mapLegacyManagerHref(fallback);
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (!raw.startsWith('/')) return mapLegacyManagerHref(fallback);
+  return mapLegacyManagerHref(raw);
+};
+
+const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageConfig => {
+  const next = { ...input };
+  next.topNavigations = {
+    ...next.topNavigations,
+    hamburgerMenu: next.topNavigations.hamburgerMenu.map((item) => ({
+      ...item,
+      href: normalizeManagerHref(item.href, '/'),
+    })),
+    additionalTopMenu: next.topNavigations.additionalTopMenu.map((item) => ({
+      ...item,
+      href: normalizeManagerHref(item.href, '/'),
+    })),
+    signInMenu: {
+      ...next.topNavigations.signInMenu,
+      href: normalizeManagerHref(next.topNavigations.signInMenu.href, '/auth/login'),
+    },
+    heroBanners: next.topNavigations.heroBanners.map((banner) => ({
+      ...banner,
+      primaryCtaLink: normalizeManagerHref(banner.primaryCtaLink, '/ready-to-wear'),
+      secondaryCtaLink: normalizeManagerHref(banner.secondaryCtaLink, '/custom'),
+    })),
+  };
+  next.shopBy = {
+    ...next.shopBy,
+    categories: next.shopBy.categories.map((item) => ({
+      ...item,
+      image: item.image,
+    })),
+    styleCards: next.shopBy.styleCards.map((item) => ({
+      ...item,
+      href: normalizeManagerHref(item.href, '/ready-to-wear'),
+    })),
+    priceCards: next.shopBy.priceCards.map((item) => ({
+      ...item,
+      href: normalizeManagerHref(item.href, '/ready-to-wear'),
+    })),
+  };
+  next.categoryManage = {
+    ...next.categoryManage,
+    sections: next.categoryManage.sections.map((item) => ({
+      ...item,
+      ctaLink: normalizeManagerHref(item.ctaLink, '/ready-to-wear'),
+    })),
+  };
+  next.featured = {
+    ...next.featured,
+    cards: next.featured.cards.map((item) => ({
+      ...item,
+      ctaLink: normalizeManagerHref(item.ctaLink, '/ready-to-wear'),
+    })),
+  };
+  next.designerSpotlight = {
+    ...next.designerSpotlight,
+    cards: next.designerSpotlight.cards.map((item) => ({
+      ...item,
+      ctaLink: normalizeManagerHref(item.ctaLink, '/custom'),
+    })),
+  };
+  next.newsletterFooter = {
+    ...next.newsletterFooter,
+    footer: {
+      ...next.newsletterFooter.footer,
+      policyLinks: next.newsletterFooter.footer.policyLinks.map((link) => ({
+        ...link,
+        href: normalizeManagerHref(link.href, '/help-center'),
+      })),
+      socialLinks: next.newsletterFooter.footer.socialLinks.map((link) => ({
+        ...link,
+        href: /^https?:\/\//i.test(String(link.href || '').trim())
+          ? String(link.href || '').trim()
+          : normalizeManagerHref(link.href, '/contact'),
+      })),
+      linkGroups: next.newsletterFooter.footer.linkGroups.map((group) => ({
+        ...group,
+        links: group.links.map((link) => ({
+          ...link,
+          href: normalizeManagerHref(link.href, '/ready-to-wear'),
+        })),
+      })),
+    },
+  };
+  return next;
+};
+
 const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
   if (!input || typeof input !== 'object') return DEFAULT_CONFIG;
-  const data = input as Record<string, unknown>;
+  const data = input as Partial<JenksV2FrontpageConfig>;
+  const topNavigations = {
+    ...DEFAULT_CONFIG.topNavigations,
+    ...(data.topNavigations || {}),
+  };
+  const categoryManage = {
+    ...DEFAULT_CONFIG.categoryManage,
+    ...(data.categoryManage || {}),
+  };
+  const featured = {
+    ...DEFAULT_CONFIG.featured,
+    ...(data.featured || {}),
+  };
+  const designerSpotlight = {
+    ...DEFAULT_CONFIG.designerSpotlight,
+    ...(data.designerSpotlight || {}),
+  };
+  const fallbackHero = DEFAULT_CONFIG.topNavigations.heroBanners[0];
+  const fallbackCategory = DEFAULT_CONFIG.categoryManage.sections[0];
+  const fallbackFeatured = DEFAULT_CONFIG.featured.cards[0];
+  const fallbackSpotlight = DEFAULT_CONFIG.designerSpotlight.cards[0];
   return {
     ...DEFAULT_CONFIG,
-    ...(data as Partial<JenksV2FrontpageConfig>),
+    ...data,
+    topNavigations: {
+      ...topNavigations,
+      heroBanners: Array.isArray(topNavigations.heroBanners)
+        ? topNavigations.heroBanners.map((banner, index) => {
+            const next = { ...fallbackHero, ...banner };
+            return {
+              ...next,
+              primaryCtaStyle: normalizeCtaStyle((banner as HeroBanner)?.primaryCtaStyle, fallbackHero.primaryCtaStyle),
+              secondaryCtaStyle: normalizeCtaStyle((banner as HeroBanner)?.secondaryCtaStyle, fallbackHero.secondaryCtaStyle),
+            };
+          })
+        : DEFAULT_CONFIG.topNavigations.heroBanners,
+    },
+    categoryManage: {
+      ...categoryManage,
+      sections: Array.isArray(categoryManage.sections)
+        ? categoryManage.sections.map((section) => ({
+            ...fallbackCategory,
+            ...section,
+            ctaStyle: normalizeCtaStyle((section as CategorySection)?.ctaStyle, fallbackCategory.ctaStyle),
+          }))
+        : DEFAULT_CONFIG.categoryManage.sections,
+    },
+    featured: {
+      ...featured,
+      cards: Array.isArray(featured.cards)
+        ? featured.cards.map((card) => ({
+            ...fallbackFeatured,
+            ...card,
+            ctaStyle: normalizeCtaStyle((card as FeaturedCard)?.ctaStyle, fallbackFeatured.ctaStyle),
+          }))
+        : DEFAULT_CONFIG.featured.cards,
+    },
+    designerSpotlight: {
+      ...designerSpotlight,
+      cards: Array.isArray(designerSpotlight.cards)
+        ? designerSpotlight.cards.map((card) => ({
+            ...fallbackSpotlight,
+            ...card,
+            ctaStyle: normalizeCtaStyle((card as DesignerSpotlightCard)?.ctaStyle, fallbackSpotlight.ctaStyle),
+          }))
+        : DEFAULT_CONFIG.designerSpotlight.cards,
+    },
   };
 };
 
@@ -714,7 +1073,7 @@ export default function JenksV2FrontPageManager() {
     try {
       const response = await api.jenksV2Frontpage.getConfig();
       if (!response.success || !response.data) throw new Error('Failed to load Jenks-V2 frontpage manager config.');
-      setConfig(asApiConfig(response.data));
+      setConfig(sanitizeConfigHrefs(asApiConfig(response.data)));
     } catch (loadError: any) {
       setError(loadError?.response?.data?.message || loadError?.message || 'Failed to load Jenks-V2 frontpage manager config.');
     } finally {
@@ -901,9 +1260,10 @@ export default function JenksV2FrontPageManager() {
     setError('');
     setSuccess('');
     try {
-      const response = await api.jenksV2Frontpage.updateConfig(toApiPayload(config));
+      const sanitized = sanitizeConfigHrefs(config);
+      const response = await api.jenksV2Frontpage.updateConfig(toApiPayload(sanitized));
       if (!response.success) throw new Error('Failed to save Jenks-V2 frontpage manager config.');
-      setConfig(asApiConfig(response.data));
+      setConfig(sanitizeConfigHrefs(asApiConfig(response.data)));
       setSuccess('Jenks-V2 frontpage manager config saved.');
     } catch (saveError: any) {
       const issues = saveError?.response?.data?.issues;
@@ -943,7 +1303,7 @@ export default function JenksV2FrontPageManager() {
       }
       const response = await api.jenksV2Frontpage.duplicateSection(payload);
       if (!response.success) throw new Error('Failed to duplicate section template.');
-      setConfig(asApiConfig(response.data));
+      setConfig(sanitizeConfigHrefs(asApiConfig(response.data)));
       setTemplateName('');
       setTemplateOrder('');
       setSuccess(response.message || 'Section template duplicated successfully.');
@@ -1504,9 +1864,23 @@ export default function JenksV2FrontPageManager() {
                           description: '',
                           descriptionFontSize: 16,
                           primaryCtaText: 'SHOP NOW',
-                          primaryCtaLink: '/shop',
+                          primaryCtaLink: '/ready-to-wear',
+                          primaryCtaStyle: createCtaStyle({
+                            backgroundColor: '#e66045',
+                            textColor: '#ffffff',
+                            borderColor: '#e66045',
+                            borderWidth: 0,
+                            fontSize: 12,
+                          }),
                           secondaryCtaText: 'EXPLORE',
                           secondaryCtaLink: '/custom',
+                          secondaryCtaStyle: createCtaStyle({
+                            backgroundColor: 'transparent',
+                            textColor: '#111111',
+                            borderColor: '#111111',
+                            borderWidth: 1,
+                            fontSize: 12,
+                          }),
                         },
                       ],
                     },
@@ -1756,6 +2130,36 @@ export default function JenksV2FrontPageManager() {
                       }
                     />
                   </label>
+                {renderCtaStyleEditor(
+                  'Primary CTA Style',
+                  banner.primaryCtaStyle,
+                  (nextStyle) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, primaryCtaStyle: nextStyle } : entry
+                        ),
+                      },
+                    })),
+                  'md:col-span-2'
+                )}
+                {renderCtaStyleEditor(
+                  'Secondary CTA Style',
+                  banner.secondaryCtaStyle,
+                  (nextStyle) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, secondaryCtaStyle: nextStyle } : entry
+                        ),
+                      },
+                    })),
+                  'md:col-span-2'
+                )}
                   <label className="text-xs">
                     Display Order
                     <input
@@ -2510,7 +2914,14 @@ export default function JenksV2FrontPageManager() {
                         tag: '',
                         description: '',
                         ctaText: '',
-                        ctaLink: '/shop',
+                        ctaLink: '/ready-to-wear',
+                        ctaStyle: createCtaStyle({
+                          backgroundColor: 'transparent',
+                          textColor: '#ffffff',
+                          borderColor: 'transparent',
+                          borderWidth: 0,
+                          fontSize: 18,
+                        }),
                         enabled: true,
                         displayOrder: prev.categoryManage.sections.length + 1,
                       },
@@ -2524,7 +2935,7 @@ export default function JenksV2FrontPageManager() {
             </Button>
           </div>
           {config.categoryManage.sections.map((section, index) => (
-            <div key={section.id} className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-12">
+            <div key={section.id} className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-16">
               <input
                 className="md:col-span-1 rounded border px-2 py-1 text-xs"
                 value={section.key}
@@ -2615,6 +3026,20 @@ export default function JenksV2FrontPageManager() {
                   }))
                 }
               />
+              {renderCtaStyleEditor(
+                'Section CTA Style',
+                section.ctaStyle,
+                (nextStyle) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    categoryManage: {
+                      sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                        entryIndex === index ? { ...entry, ctaStyle: nextStyle } : entry
+                      ),
+                    },
+                  })),
+                'md:col-span-4'
+              )}
               <div className="md:col-span-1 flex items-center justify-end gap-1">
                 <input
                   type="checkbox"
@@ -2823,7 +3248,14 @@ export default function JenksV2FrontPageManager() {
                         title: 'New Featured Section',
                         description: '',
                         ctaText: 'View',
-                        ctaLink: '/shop',
+                        ctaLink: '/ready-to-wear',
+                        ctaStyle: createCtaStyle({
+                          backgroundColor: 'transparent',
+                          textColor: '#ffffff',
+                          borderColor: 'transparent',
+                          borderWidth: 0,
+                          fontSize: 14,
+                        }),
                         enabled: true,
                         displayOrder: prev.featured.cards.length + 1,
                       },
@@ -2929,6 +3361,20 @@ export default function JenksV2FrontPageManager() {
                     }))
                   }
                 />
+                {renderCtaStyleEditor(
+                  'Card CTA Style',
+                  card.ctaStyle,
+                  (nextStyle) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      featured: {
+                        cards: prev.featured.cards.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, ctaStyle: nextStyle } : entry
+                        ),
+                      },
+                    })),
+                  'md:col-span-3'
+                )}
                 <div className="md:col-span-1 flex items-center justify-end gap-1">
                   <Button
                     type="button"
@@ -3160,6 +3606,13 @@ export default function JenksV2FrontPageManager() {
                         description: '',
                         ctaText: 'View Designer',
                         ctaLink: '/custom',
+                        ctaStyle: createCtaStyle({
+                          backgroundColor: 'transparent',
+                          textColor: '#ffffff',
+                          borderColor: 'transparent',
+                          borderWidth: 0,
+                          fontSize: 14,
+                        }),
                         enabled: true,
                         displayOrder: prev.designerSpotlight.cards.length + 1,
                       },
@@ -3292,6 +3745,21 @@ export default function JenksV2FrontPageManager() {
                     }))
                   }
                 />
+                {renderCtaStyleEditor(
+                  'Card CTA Style',
+                  card.ctaStyle,
+                  (nextStyle) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      designerSpotlight: {
+                        ...prev.designerSpotlight,
+                        cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, ctaStyle: nextStyle } : entry
+                        ),
+                      },
+                    })),
+                  'md:col-span-3'
+                )}
                 <div className="md:col-span-1 flex items-center justify-end gap-1">
                   <Button
                     type="button"

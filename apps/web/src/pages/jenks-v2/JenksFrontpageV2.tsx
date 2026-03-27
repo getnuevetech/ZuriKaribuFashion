@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ComponentType } from 'react';
 import {
   ArrowRight,
   Briefcase,
@@ -39,6 +39,7 @@ type HeroSlide = {
   lineB: string;
   cta: string;
   href: string;
+  ctaStyle?: CTAStyle;
 };
 type FeaturedTile = {
   id: string;
@@ -48,6 +49,16 @@ type FeaturedTile = {
   href: string;
   tag: string;
   cta: string;
+  ctaStyle?: CTAStyle;
+};
+type CTAStyle = {
+  backgroundColor: string;
+  textColor: string;
+  borderColor: string;
+  borderWidth: number;
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
 };
 
 type ShopByTab = 'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE';
@@ -108,7 +119,7 @@ const DEFAULT_HREF_BY_KEY: Record<string, string> = {
   CTW: '/custom',
   FTB: '/fabrics',
   HOME: '/',
-  SHOP: '/shop',
+  SHOP: '/ready-to-wear',
   READY_TO_WEAR: '/ready-to-wear',
   CUSTOM_TO_WEAR: '/custom',
   FABRICS: '/fabrics',
@@ -152,6 +163,26 @@ const CATEGORY_TEXT_LEFT_BY_KEY: Record<string, boolean> = {
   CTW: false,
 };
 
+const DEFAULT_SOLID_CTA_STYLE: CTAStyle = {
+  backgroundColor: '#e66045',
+  textColor: '#ffffff',
+  borderColor: '#e66045',
+  borderWidth: 0,
+  fontFamily: 'Montserrat, Inter, sans-serif',
+  fontSize: 12,
+  fontWeight: 600,
+};
+
+const DEFAULT_INLINE_CTA_STYLE: CTAStyle = {
+  backgroundColor: 'transparent',
+  textColor: '#ffffff',
+  borderColor: 'transparent',
+  borderWidth: 0,
+  fontFamily: 'Montserrat, Inter, sans-serif',
+  fontSize: 16,
+  fontWeight: 600,
+};
+
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
@@ -178,10 +209,10 @@ const asNumber = (value: unknown, fallback: number) => {
 const normalizeHref = (value: unknown, fallback: string, routeKey?: unknown) => {
   const href = asString(value, '');
   if (/^https?:\/\//i.test(href)) return href;
-  if (href.startsWith('/')) return href;
+  if (href.startsWith('/')) return toSafeInternalHref(href);
   const routeToken = String(routeKey || '').trim().toUpperCase();
-  if (routeToken && DEFAULT_HREF_BY_KEY[routeToken]) return DEFAULT_HREF_BY_KEY[routeToken];
-  return fallback;
+  if (routeToken && DEFAULT_HREF_BY_KEY[routeToken]) return toSafeInternalHref(DEFAULT_HREF_BY_KEY[routeToken]);
+  return toSafeInternalHref(fallback);
 };
 
 const iconFromKey = (iconKey: unknown, fallback: IconComponent) => {
@@ -217,6 +248,44 @@ const toSocialIcon = (value: unknown): IconComponent => {
 };
 
 const isExternalHref = (href: string) => /^https?:\/\//i.test(href);
+
+const sanitizeLegacyInternalHref = (href: string) => {
+  const trimmed = href.trim();
+  if (!trimmed) return '/ready-to-wear';
+  if (
+    trimmed === '/main' ||
+    trimmed === '/main/' ||
+    trimmed.startsWith('/main?') ||
+    trimmed.startsWith('/main#') ||
+    trimmed === '/shop' ||
+    trimmed === '/shop/' ||
+    trimmed.startsWith('/shop?') ||
+    trimmed.startsWith('/shop#')
+  ) {
+    if (trimmed.startsWith('/shop?') || trimmed.startsWith('/shop#')) {
+      return `/ready-to-wear${trimmed.slice('/shop'.length)}`;
+    }
+    return '/ready-to-wear';
+  }
+  return trimmed;
+};
+
+const toSafeInternalHref = (href: string) =>
+  isExternalHref(href) ? href : sanitizeLegacyInternalHref(href);
+
+const buildCTAStyle = (raw: unknown, fallback: CTAStyle): CSSProperties => {
+  const row = asRecord(raw);
+  return {
+    backgroundColor: asString(row.backgroundColor, fallback.backgroundColor),
+    color: asString(row.textColor, fallback.textColor),
+    borderColor: asString(row.borderColor, fallback.borderColor),
+    borderWidth: `${Math.max(0, Math.min(12, Math.round(asNumber(row.borderWidth, fallback.borderWidth))))}px`,
+    borderStyle: 'solid',
+    fontFamily: asString(row.fontFamily, fallback.fontFamily),
+    fontSize: `${Math.max(8, Math.min(72, Math.round(asNumber(row.fontSize, fallback.fontSize))))}px`,
+    fontWeight: Math.max(100, Math.min(900, Math.round(asNumber(row.fontWeight, fallback.fontWeight)))),
+  };
+};
 
 const socialIconFromLabel = (label: string): IconComponent => {
   const token = label.toLowerCase();
@@ -635,7 +704,8 @@ export default function JenksFrontpageV2() {
         lineA: asString(row.text, HERO[indexKey % HERO.length]?.lineA || ''),
         lineB: asString(row.description, HERO[indexKey % HERO.length]?.lineB || ''),
         cta: asString(row.primaryCtaText, HERO[indexKey % HERO.length]?.cta || 'SHOP NOW'),
-        href: normalizeHref(row.primaryCtaLink, HERO[indexKey % HERO.length]?.href || '/shop'),
+        href: normalizeHref(row.primaryCtaLink, HERO[indexKey % HERO.length]?.href || '/ready-to-wear'),
+        ctaStyle: row.primaryCtaStyle,
       } as HeroSlide;
     });
     return mapped.length > 0 ? mapped : HERO;
@@ -653,14 +723,15 @@ export default function JenksFrontpageV2() {
     const mapped = categorySections
       .map((entry) => ({
         label: asString(entry.title, asString(entry.tag, 'Category')).toUpperCase(),
-        href: normalizeHref(entry.ctaLink, DEFAULT_HREF_BY_KEY[asString(entry.key, '').toUpperCase()] || '/shop'),
+        href: normalizeHref(entry.ctaLink, DEFAULT_HREF_BY_KEY[asString(entry.key, '').toUpperCase()] || '/ready-to-wear'),
+        ctaStyle: entry.ctaStyle,
       }))
       .slice(0, 3);
     if (mapped.length > 0) return mapped;
     return [
-      { label: 'READY TO WEAR', href: '/ready-to-wear' },
-      { label: 'CUSTOM', href: '/custom' },
-      { label: 'FABRICS', href: '/fabrics' },
+      { label: 'READY TO WEAR', href: '/ready-to-wear', ctaStyle: DEFAULT_SOLID_CTA_STYLE },
+      { label: 'CUSTOM', href: '/custom', ctaStyle: DEFAULT_SOLID_CTA_STYLE },
+      { label: 'FABRICS', href: '/fabrics', ctaStyle: DEFAULT_SOLID_CTA_STYLE },
     ];
   }, [categorySections]);
 
@@ -693,7 +764,7 @@ export default function JenksFrontpageV2() {
         title: asString(row.title, key || `Category ${idx + 1}`).toUpperCase(),
         subtitle: asString(row.description, ''),
         meta: `${Math.max(0, Math.round(asNumber(row.staticProductCount, 0)))} products`,
-        href: normalizeHref(row.href, DEFAULT_HREF_BY_KEY[key] || '/shop', key),
+        href: normalizeHref(row.href, DEFAULT_HREF_BY_KEY[key] || '/ready-to-wear', key),
         image: asString(row.image, CATEGORY_IMAGE_BY_KEY[key] || `${ASSET_BASE}/featured_rw_left.jpg`),
         Icon: iconFromKey(row.icon, ShoppingBag),
       };
@@ -710,7 +781,7 @@ export default function JenksFrontpageV2() {
     return rows.map((row) => ({
       name: asString(row.title, 'Style'),
       sub: asString(row.description, ''),
-      href: normalizeHref(row.href, '/shop'),
+      href: normalizeHref(row.href, '/ready-to-wear'),
       Icon: iconFromKey(row.icon, CalendarDays),
     }));
   }, [shopByCfg.styleCards]);
@@ -724,7 +795,7 @@ export default function JenksFrontpageV2() {
     return rows.map((row) => ({
       range: asString(row.priceLabel, asString(row.title, '$0 - $100')),
       sub: asString(row.description, ''),
-      href: normalizeHref(row.href, '/shop'),
+      href: normalizeHref(row.href, '/ready-to-wear'),
     }));
   }, [shopByCfg.priceCards]);
 
@@ -768,7 +839,8 @@ export default function JenksFrontpageV2() {
         title: asString(entry.title, key || 'Category').toUpperCase(),
         description: asString(entry.description, ''),
         cta: asString(entry.ctaText, FEATURED_CTA_BY_KEY[key] || 'SHOP NOW').toUpperCase(),
-        href: normalizeHref(entry.ctaLink, FEATURED_HREF_BY_KEY[key] || '/shop', key),
+        href: normalizeHref(entry.ctaLink, FEATURED_HREF_BY_KEY[key] || '/ready-to-wear', key),
+        ctaStyle: entry.ctaStyle,
         image: matchingCategory?.image || CATEGORY_IMAGE_BY_KEY[key] || `${ASSET_BASE}/rw_full.jpg`,
         textOnLeft: CATEGORY_TEXT_LEFT_BY_KEY[key] ?? (idx % 2 === 1),
         panelBg: CATEGORY_PANEL_BG_BY_KEY[key] || 'bg-[#111]',
@@ -788,7 +860,7 @@ export default function JenksFrontpageV2() {
       .filter((entry) => asBoolean(entry.enabled, true))
       .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0));
     if (rows.length === 0) return defaults;
-    const grouped: Record<'RTW' | 'CTW' | 'FTB', Array<{ id: string; image: string; title: string; subtitle: string; href: string; tag: string; cta: string }>> = {
+    const grouped: Record<'RTW' | 'CTW' | 'FTB', FeaturedTile[]> = {
       RTW: [],
       CTW: [],
       FTB: [],
@@ -801,9 +873,10 @@ export default function JenksFrontpageV2() {
         image: asString(row.image, defaults[key][0]?.image || `${ASSET_BASE}/product4.jpg`),
         title: asString(row.title, defaults[key][0]?.title || ''),
         subtitle: asString(row.description, defaults[key][0]?.subtitle || ''),
-        href: normalizeHref(row.ctaLink, FEATURED_HREF_BY_KEY[key] || '/shop', key),
+        href: normalizeHref(row.ctaLink, FEATURED_HREF_BY_KEY[key] || '/ready-to-wear', key),
         tag: asString(row.tag, FEATURED_LABEL_BY_KEY[key] || ''),
         cta: asString(row.ctaText, FEATURED_CTA_BY_KEY[key] || 'SHOP NOW').toUpperCase(),
+        ctaStyle: row.ctaStyle,
       });
     });
     return {
@@ -835,6 +908,7 @@ export default function JenksFrontpageV2() {
         cta: asString(entry.ctaText, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.cta || 'VIEW DESIGNER').toUpperCase(),
         href: normalizeHref(entry.ctaLink, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.href || '/custom'),
         tag: asString(entry.tag, 'Designer Spotlight'),
+        ctaStyle: entry.ctaStyle,
       }));
     const source = entries.length > 0 ? entries : DESIGNER_SPOTLIGHT.map((row) => ({ ...row, tag: 'Designer Spotlight' }));
     return source.slice(0, maxItems);
@@ -1126,7 +1200,7 @@ export default function JenksFrontpageV2() {
                         { label: 'Contact Us', href: '/contact' },
                       ]
                   ).map((link) => (
-                    <Link key={`${link.label}-${link.href}`} to={link.href} className="hover:text-black">
+                    <Link key={`${link.label}-${link.href}`} to={toSafeInternalHref(link.href)} className="hover:text-black">
                       {link.label}
                     </Link>
                   ))}
@@ -1144,7 +1218,7 @@ export default function JenksFrontpageV2() {
                 </button>
                 {asBoolean(signInCfg.enabled, true) ? (
                   <Link
-                    to={normalizeHref(signInCfg.href, '/auth/login', signInCfg.routeKey)}
+                    to={toSafeInternalHref(normalizeHref(signInCfg.href, '/auth/login', signInCfg.routeKey))}
                     className="hidden text-xs font-semibold uppercase tracking-[0.12em] hover:text-black sm:inline"
                   >
                     {asString(signInCfg.label, 'Sign In')}
@@ -1184,14 +1258,19 @@ export default function JenksFrontpageV2() {
               {quickCategoryLinks.map((link) => (
                 <Link
                   key={`${link.label}-${link.href}`}
-                  to={link.href}
-                  className="border border-black/15 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em]"
+                  to={toSafeInternalHref(link.href)}
+                  style={buildCTAStyle(link.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                  className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
                 >
                   {link.label}
                 </Link>
               ))}
             </div>
-            <Link to={active.href} className="mt-6 inline-flex items-center bg-[#e66045] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white">
+            <Link
+              to={toSafeInternalHref(active.href)}
+              style={buildCTAStyle(active.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
+              className="mt-6 inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
+            >
               {active.cta}
             </Link>
           </div>
@@ -1231,7 +1310,7 @@ export default function JenksFrontpageV2() {
             {shopByTab === 'CATEGORY' ? (
               <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
                 {shopByCategoryCards.map((card) => (
-                  <Link key={card.id} to={card.href} className="group relative overflow-hidden border border-white/10">
+                  <Link key={card.id} to={toSafeInternalHref(card.href)} className="group relative overflow-hidden border border-white/10">
                     <img
                       src={card.image}
                       alt={card.title}
@@ -1294,7 +1373,7 @@ export default function JenksFrontpageV2() {
                 {shopByStyleCards.map((styleItem) => (
                   <Link
                     key={styleItem.name}
-                    to={styleItem.href}
+                    to={toSafeInternalHref(styleItem.href)}
                     className="rounded border border-white/10 bg-white/[0.06] px-5 py-9 text-center transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:shadow-[0_16px_34px_rgba(0,0,0,0.35)]"
                   >
                     <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-black/40 text-[#e66045]">
@@ -1312,7 +1391,7 @@ export default function JenksFrontpageV2() {
                 {shopByPriceCards.map((priceItem) => (
                   <Link
                     key={priceItem.range}
-                    to={priceItem.href}
+                    to={toSafeInternalHref(priceItem.href)}
                     className="rounded border border-white/10 bg-white/[0.06] px-5 py-7 text-center transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:shadow-[0_16px_34px_rgba(0,0,0,0.35)]"
                   >
                     <div className="flex items-center justify-center gap-2 text-[#e66045]">
@@ -1341,7 +1420,7 @@ export default function JenksFrontpageV2() {
               </p>
             </div>
             <Link
-              to="/country-products"
+              to={toSafeInternalHref('/country-products')}
               className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-white lg:mt-10"
             >
               View All 54 Countries
@@ -1427,10 +1506,13 @@ export default function JenksFrontpageV2() {
                       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
                       <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
                       <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
-                    <Link to={section.href} className="jeni-underline-cta mt-9 inline-flex items-center gap-3 text-base font-medium uppercase tracking-[0.04em] text-white/92 hover:text-white sm:text-lg">
+                    <Link
+                      to={toSafeInternalHref(section.href)}
+                      style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                      className="mt-9 inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                    >
                         {section.cta}
-                        <ArrowRight className="h-5 w-5" />
-                      </Link>
+                    </Link>
                     </div>
                   </div>
                 </div>
@@ -1450,10 +1532,13 @@ export default function JenksFrontpageV2() {
                       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
                       <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
                       <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
-                    <Link to={section.href} className="jeni-underline-cta mt-9 inline-flex items-center gap-3 text-base font-medium uppercase tracking-[0.04em] text-white/92 hover:text-white sm:text-lg">
+                    <Link
+                      to={toSafeInternalHref(section.href)}
+                      style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                      className="mt-9 inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                    >
                         {section.cta}
-                        <ArrowRight className="h-5 w-5" />
-                      </Link>
+                    </Link>
                     </div>
                   </div>
                 </div>
@@ -1490,14 +1575,17 @@ export default function JenksFrontpageV2() {
           {(['RTW', 'CTW', 'FTB'] as const).map((key) => (
             <div key={key} className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 md:grid-cols-2`}>
               {featuredCardsByKey[key].map((card) => (
-                <Link key={card.id} to={card.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
+                <Link key={card.id} to={toSafeInternalHref(card.href)} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
                   <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
                   <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-white/72">{card.tag}</p>
                   <div className="absolute bottom-[10%] right-6 max-w-[58%] text-right text-white">
                     <p className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">{card.title}</p>
                     <p className="mt-2 text-sm text-white/78">{card.subtitle}</p>
-                    <span className="jeni-underline-cta mt-4 inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.06em] text-white/92">
+                    <span
+                      className="mt-4 inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.06em] text-white/92 hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                      style={buildCTAStyle(card.ctaStyle, DEFAULT_INLINE_CTA_STYLE)}
+                    >
                       {card.cta}
                       <ArrowRight className="h-4 w-4" />
                     </span>
@@ -1568,14 +1656,17 @@ export default function JenksFrontpageV2() {
       {isSectionVisible('DESIGNER_SPOTLIGHT') ? (
         <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 bg-[#101010] md:grid-cols-3`}>
           {spotlightCards.map((spot) => (
-            <Link key={spot.id} to={spot.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
+            <Link key={spot.id} to={toSafeInternalHref(spot.href)} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
               <img src={spot.image} alt={spot.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
               <div className="absolute bottom-8 left-8 right-8 text-white">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{spot.tag}</p>
                 <h3 className="mt-3 font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">{spot.title}</h3>
                 <p className="mt-3 text-sm text-white/78">{spot.description}</p>
-                <span className="jeni-underline-cta mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white">
+                <span
+                  className="mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                  style={buildCTAStyle(spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE)}
+                >
                   {spot.cta}
                   <ArrowRight className="h-4 w-4" />
                 </span>

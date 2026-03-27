@@ -195,8 +195,8 @@ function App() {
               <Route path="/privacy" element={<NavigateWithSearch to="/help-center" />} />
               <Route path="/legal/terms" element={<NavigateWithSearch to="/help-center" />} />
               <Route path="/legal/privacy" element={<NavigateWithSearch to="/help-center" />} />
-              <Route path="/shop" element={<NavigateWithSearch to="/main" />} />
-              <Route path="/shop/*" element={<NavigateWithSearch to="/main" />} />
+              <Route path="/shop" element={<NavigateWithSearch to="/ready-to-wear" />} />
+              <Route path="/shop/*" element={<NavigateWithSearch to="/ready-to-wear" />} />
               <Route path="/country-products" element={<CountryProducts />} />
               <Route path="/ready-to-wear" element={<ReadyToWear />} />
               <Route path="/ready-to-wear/:id" element={<ReadyToWearDetail />} />

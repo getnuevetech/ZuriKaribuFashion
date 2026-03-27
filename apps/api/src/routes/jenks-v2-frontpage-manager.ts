@@ -34,6 +34,16 @@ type MenuLink = {
   enabled: boolean;
 };
 
+type CtaStyle = {
+  backgroundColor: string;
+  textColor: string;
+  borderColor: string;
+  borderWidth: number;
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
+};
+
 type HeroBanner = {
   id: string;
   enabled: boolean;
@@ -47,8 +57,10 @@ type HeroBanner = {
   descriptionFontSize: number;
   primaryCtaText: string;
   primaryCtaLink: string;
+  primaryCtaStyle: CtaStyle;
   secondaryCtaText: string;
   secondaryCtaLink: string;
+  secondaryCtaStyle: CtaStyle;
 };
 
 type TopNavigationsSettings = {
@@ -141,6 +153,7 @@ type CategorySection = {
   description: string;
   ctaText: string;
   ctaLink: string;
+  ctaStyle: CtaStyle;
   enabled: boolean;
   displayOrder: number;
 };
@@ -164,6 +177,7 @@ type FeaturedCard = {
   description: string;
   ctaText: string;
   ctaLink: string;
+  ctaStyle: CtaStyle;
   enabled: boolean;
   displayOrder: number;
 };
@@ -188,6 +202,7 @@ type DesignerSpotlightCard = {
   description: string;
   ctaText: string;
   ctaLink: string;
+  ctaStyle: CtaStyle;
   enabled: boolean;
   displayOrder: number;
 };
@@ -380,12 +395,56 @@ const getNumber = (value: unknown): number | undefined => {
   return undefined;
 };
 
+const defaultCtaStyle = (overrides: Partial<CtaStyle> = {}): CtaStyle => ({
+  backgroundColor: '#e66045',
+  textColor: '#ffffff',
+  borderColor: '#e66045',
+  borderWidth: 0,
+  fontFamily: 'Montserrat, Inter, sans-serif',
+  fontSize: 12,
+  fontWeight: 600,
+  ...overrides,
+});
+
+const normalizeCtaStyle = (raw: unknown, fallback: CtaStyle): CtaStyle => {
+  const row = asRecord(raw);
+  return {
+    backgroundColor: (getString(row.backgroundColor) || fallback.backgroundColor).slice(0, 40),
+    textColor: (getString(row.textColor) || fallback.textColor).slice(0, 40),
+    borderColor: (getString(row.borderColor) || fallback.borderColor).slice(0, 40),
+    borderWidth: clamp(Math.round(getNumber(row.borderWidth) ?? fallback.borderWidth), 0, 12),
+    fontFamily: (getString(row.fontFamily) || fallback.fontFamily).slice(0, 120),
+    fontSize: clamp(Math.round(getNumber(row.fontSize) ?? fallback.fontSize), 8, 72),
+    fontWeight: clamp(Math.round(getNumber(row.fontWeight) ?? fallback.fontWeight), 100, 900),
+  };
+};
+
+const mapLegacyV2Href = (value: string): string => {
+  const normalized = value.trim();
+  if (
+    normalized === '/main' ||
+    normalized === '/main/' ||
+    normalized.startsWith('/main?') ||
+    normalized.startsWith('/main#') ||
+    normalized === '/shop' ||
+    normalized === '/shop/' ||
+    normalized.startsWith('/shop?') ||
+    normalized.startsWith('/shop#')
+  ) {
+    if (normalized.startsWith('/shop?') || normalized.startsWith('/shop#')) {
+      return `/ready-to-wear${normalized.slice('/shop'.length)}`;
+    }
+    return '/ready-to-wear';
+  }
+  return normalized;
+};
+
 const normalizeHref = (value: unknown, fallback: string) => {
   const next = getString(value);
-  if (!next) return fallback;
+  if (!next) return mapLegacyV2Href(fallback);
   if (/^https?:\/\//i.test(next)) return next;
-  if (!next.startsWith('/')) return fallback;
-  return next;
+  if (!next.startsWith('/')) return mapLegacyV2Href(fallback);
+  return mapLegacyV2Href(next);
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -467,8 +526,22 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           descriptionFontSize: 16,
           primaryCtaText: 'SHOP NOW',
           primaryCtaLink: '/shop',
+          primaryCtaStyle: defaultCtaStyle({
+            backgroundColor: '#e66045',
+            textColor: '#ffffff',
+            borderColor: '#e66045',
+            borderWidth: 0,
+            fontSize: 12,
+          }),
           secondaryCtaText: 'EXPLORE DESIGNERS',
           secondaryCtaLink: '/custom',
+          secondaryCtaStyle: defaultCtaStyle({
+            backgroundColor: 'transparent',
+            textColor: '#111111',
+            borderColor: '#111111',
+            borderWidth: 1,
+            fontSize: 12,
+          }),
         },
       ],
     },
@@ -559,6 +632,13 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Manage title, tag, description and CTA for RTW block.',
           ctaText: 'Shop RTW',
           ctaLink: '/ready-to-wear',
+          ctaStyle: defaultCtaStyle({
+            backgroundColor: 'transparent',
+            textColor: '#ffffff',
+            borderColor: 'transparent',
+            borderWidth: 0,
+            fontSize: 18,
+          }),
           enabled: true,
           displayOrder: 1,
         },
@@ -570,6 +650,13 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Manage title, tag, description and CTA for CTW block.',
           ctaText: 'Explore CTW',
           ctaLink: '/custom',
+          ctaStyle: defaultCtaStyle({
+            backgroundColor: 'transparent',
+            textColor: '#ffffff',
+            borderColor: 'transparent',
+            borderWidth: 0,
+            fontSize: 18,
+          }),
           enabled: true,
           displayOrder: 2,
         },
@@ -581,6 +668,13 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Manage title, tag, description and CTA for FTB block.',
           ctaText: 'Shop Fabrics',
           ctaLink: '/fabrics',
+          ctaStyle: defaultCtaStyle({
+            backgroundColor: 'transparent',
+            textColor: '#ffffff',
+            borderColor: 'transparent',
+            borderWidth: 0,
+            fontSize: 18,
+          }),
           enabled: true,
           displayOrder: 3,
         },
@@ -620,6 +714,13 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Spotlight featured RTW products.',
           ctaText: 'Shop RTW',
           ctaLink: '/ready-to-wear',
+          ctaStyle: defaultCtaStyle({
+            backgroundColor: 'transparent',
+            textColor: '#ffffff',
+            borderColor: 'transparent',
+            borderWidth: 0,
+            fontSize: 14,
+          }),
           enabled: true,
           displayOrder: 1,
         },
@@ -632,6 +733,13 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Spotlight featured CTW products.',
           ctaText: 'Explore CTW',
           ctaLink: '/custom',
+          ctaStyle: defaultCtaStyle({
+            backgroundColor: 'transparent',
+            textColor: '#ffffff',
+            borderColor: 'transparent',
+            borderWidth: 0,
+            fontSize: 14,
+          }),
           enabled: true,
           displayOrder: 2,
         },
@@ -644,6 +752,13 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Spotlight featured fabric products.',
           ctaText: 'Shop FTB',
           ctaLink: '/fabrics',
+          ctaStyle: defaultCtaStyle({
+            backgroundColor: 'transparent',
+            textColor: '#ffffff',
+            borderColor: 'transparent',
+            borderWidth: 0,
+            fontSize: 14,
+          }),
           enabled: true,
           displayOrder: 3,
         },
@@ -672,6 +787,13 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Highlight featured designers.',
           ctaText: 'View Designer',
           ctaLink: '/custom',
+          ctaStyle: defaultCtaStyle({
+            backgroundColor: 'transparent',
+            textColor: '#ffffff',
+            borderColor: 'transparent',
+            borderWidth: 0,
+            fontSize: 14,
+          }),
           enabled: true,
           displayOrder: 1,
         },
@@ -775,8 +897,10 @@ const normalizeHeroBanner = (raw: unknown, fallback: HeroBanner, index: number):
     descriptionFontSize: clamp(Math.round(getNumber(row.descriptionFontSize) ?? fallback.descriptionFontSize), 10, 48),
     primaryCtaText: (getString(row.primaryCtaText) || fallback.primaryCtaText).slice(0, 80),
     primaryCtaLink: normalizeHref(row.primaryCtaLink, fallback.primaryCtaLink),
+    primaryCtaStyle: normalizeCtaStyle(row.primaryCtaStyle, fallback.primaryCtaStyle),
     secondaryCtaText: (getString(row.secondaryCtaText) || fallback.secondaryCtaText).slice(0, 80),
     secondaryCtaLink: normalizeHref(row.secondaryCtaLink, fallback.secondaryCtaLink),
+    secondaryCtaStyle: normalizeCtaStyle(row.secondaryCtaStyle, fallback.secondaryCtaStyle),
   };
 };
 
@@ -945,6 +1069,7 @@ const normalizeCategoryManage = (
         description: (getString(item.description) || fallbackItem.description).slice(0, 300),
         ctaText: (getString(item.ctaText) || fallbackItem.ctaText).slice(0, 80),
         ctaLink: normalizeHref(item.ctaLink, fallbackItem.ctaLink),
+        ctaStyle: normalizeCtaStyle(item.ctaStyle, fallbackItem.ctaStyle),
         enabled: getBoolean(item.enabled) ?? fallbackItem.enabled,
         displayOrder: clamp(Math.round(getNumber(item.displayOrder) ?? fallbackItem.displayOrder), 0, 999),
       } as CategorySection;
@@ -1004,6 +1129,7 @@ const normalizeFeatured = (
         description: (getString(item.description) || fallbackItem.description).slice(0, 320),
         ctaText: (getString(item.ctaText) || fallbackItem.ctaText).slice(0, 80),
         ctaLink: normalizeHref(item.ctaLink, fallbackItem.ctaLink),
+        ctaStyle: normalizeCtaStyle(item.ctaStyle, fallbackItem.ctaStyle),
         enabled: getBoolean(item.enabled) ?? fallbackItem.enabled,
         displayOrder: clamp(Math.round(getNumber(item.displayOrder) ?? fallbackItem.displayOrder), 0, 999),
       } as FeaturedCard;
@@ -1055,6 +1181,7 @@ const normalizeDesignerSpotlight = (
         description: (getString(item.description) || fallbackItem.description).slice(0, 320),
         ctaText: (getString(item.ctaText) || fallbackItem.ctaText).slice(0, 80),
         ctaLink: normalizeHref(item.ctaLink, fallbackItem.ctaLink),
+        ctaStyle: normalizeCtaStyle(item.ctaStyle, fallbackItem.ctaStyle),
         enabled: getBoolean(item.enabled) ?? fallbackItem.enabled,
         displayOrder: clamp(Math.round(getNumber(item.displayOrder) ?? fallbackItem.displayOrder), 0, 999),
       } as DesignerSpotlightCard;

@@ -10706,8 +10706,26 @@ const jenksV2FrontpageManagerApi = {
             descriptionFontSize: number;
             primaryCtaText: string;
             primaryCtaLink: string;
+            primaryCtaStyle: {
+              backgroundColor: string;
+              textColor: string;
+              borderColor: string;
+              borderWidth: number;
+              fontFamily: string;
+              fontSize: number;
+              fontWeight: number;
+            };
             secondaryCtaText: string;
             secondaryCtaLink: string;
+            secondaryCtaStyle: {
+              backgroundColor: string;
+              textColor: string;
+              borderColor: string;
+              borderWidth: number;
+              fontFamily: string;
+              fontSize: number;
+              fontWeight: number;
+            };
           }>;
         };
         shopBy: {
@@ -10764,6 +10782,15 @@ const jenksV2FrontpageManagerApi = {
             description: string;
             ctaText: string;
             ctaLink: string;
+            ctaStyle: {
+              backgroundColor: string;
+              textColor: string;
+              borderColor: string;
+              borderWidth: number;
+              fontFamily: string;
+              fontSize: number;
+              fontWeight: number;
+            };
             enabled: boolean;
             displayOrder: number;
           }>;
@@ -10790,6 +10817,15 @@ const jenksV2FrontpageManagerApi = {
             description: string;
             ctaText: string;
             ctaLink: string;
+            ctaStyle: {
+              backgroundColor: string;
+              textColor: string;
+              borderColor: string;
+              borderWidth: number;
+              fontFamily: string;
+              fontSize: number;
+              fontWeight: number;
+            };
             enabled: boolean;
             displayOrder: number;
           }>;
@@ -10816,6 +10852,15 @@ const jenksV2FrontpageManagerApi = {
             description: string;
             ctaText: string;
             ctaLink: string;
+            ctaStyle: {
+              backgroundColor: string;
+              textColor: string;
+              borderColor: string;
+              borderWidth: number;
+              fontFamily: string;
+              fontSize: number;
+              fontWeight: number;
+            };
             enabled: boolean;
             displayOrder: number;
           }>;
