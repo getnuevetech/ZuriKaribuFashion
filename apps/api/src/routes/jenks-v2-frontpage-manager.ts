@@ -55,9 +55,11 @@ type HeroBanner = {
   text: string;
   description: string;
   descriptionFontSize: number;
+  primaryCtaEnabled: boolean;
   primaryCtaText: string;
   primaryCtaLink: string;
   primaryCtaStyle: CtaStyle;
+  secondaryCtaEnabled: boolean;
   secondaryCtaText: string;
   secondaryCtaLink: string;
   secondaryCtaStyle: CtaStyle;
@@ -524,6 +526,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description:
             'Manage title, copy, tags, CTA labels and links for each hero slide directly from admin.',
           descriptionFontSize: 16,
+          primaryCtaEnabled: true,
           primaryCtaText: 'SHOP NOW',
           primaryCtaLink: '/shop',
           primaryCtaStyle: defaultCtaStyle({
@@ -533,6 +536,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
             borderWidth: 0,
             fontSize: 12,
           }),
+          secondaryCtaEnabled: true,
           secondaryCtaText: 'EXPLORE DESIGNERS',
           secondaryCtaLink: '/custom',
           secondaryCtaStyle: defaultCtaStyle({
@@ -895,9 +899,11 @@ const normalizeHeroBanner = (raw: unknown, fallback: HeroBanner, index: number):
     text: (getString(row.text) || fallback.text).slice(0, 240),
     description: (getString(row.description) || fallback.description).slice(0, 500),
     descriptionFontSize: clamp(Math.round(getNumber(row.descriptionFontSize) ?? fallback.descriptionFontSize), 10, 48),
+    primaryCtaEnabled: getBoolean(row.primaryCtaEnabled) ?? fallback.primaryCtaEnabled,
     primaryCtaText: (getString(row.primaryCtaText) || fallback.primaryCtaText).slice(0, 80),
     primaryCtaLink: normalizeHref(row.primaryCtaLink, fallback.primaryCtaLink),
     primaryCtaStyle: normalizeCtaStyle(row.primaryCtaStyle, fallback.primaryCtaStyle),
+    secondaryCtaEnabled: getBoolean(row.secondaryCtaEnabled) ?? fallback.secondaryCtaEnabled,
     secondaryCtaText: (getString(row.secondaryCtaText) || fallback.secondaryCtaText).slice(0, 80),
     secondaryCtaLink: normalizeHref(row.secondaryCtaLink, fallback.secondaryCtaLink),
     secondaryCtaStyle: normalizeCtaStyle(row.secondaryCtaStyle, fallback.secondaryCtaStyle),

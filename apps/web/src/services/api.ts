@@ -10706,6 +10706,7 @@ const jenksV2FrontpageManagerApi = {
             descriptionFontSize: number;
             primaryCtaText: string;
             primaryCtaLink: string;
+            primaryCtaEnabled: boolean;
             primaryCtaStyle: {
               backgroundColor: string;
               textColor: string;
@@ -10717,6 +10718,7 @@ const jenksV2FrontpageManagerApi = {
             };
             secondaryCtaText: string;
             secondaryCtaLink: string;
+            secondaryCtaEnabled: boolean;
             secondaryCtaStyle: {
               backgroundColor: string;
               textColor: string;

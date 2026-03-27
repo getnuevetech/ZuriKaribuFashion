@@ -39,9 +39,11 @@ type HeroBanner = {
   descriptionFontSize: number;
   primaryCtaText: string;
   primaryCtaLink: string;
+  primaryCtaEnabled: boolean;
   primaryCtaStyle: CTAStyle;
   secondaryCtaText: string;
   secondaryCtaLink: string;
+  secondaryCtaEnabled: boolean;
   secondaryCtaStyle: CTAStyle;
 };
 
@@ -323,6 +325,7 @@ const toNumber = (value: string, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+const toBoolean = (value: unknown, fallback: boolean) => (typeof value === 'boolean' ? value : fallback);
 
 const defaultLink = (label: string, href: string, routeKey?: string): MenuLink => ({
   id: uid(),
@@ -484,6 +487,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         text: 'Curated fashion from top designers and textile houses.',
         description: 'Control title, text, tags, font size, CTA labels and links for each hero banner.',
         descriptionFontSize: 16,
+        primaryCtaEnabled: true,
         primaryCtaText: 'SHOP NOW',
         primaryCtaLink: '/ready-to-wear',
         primaryCtaStyle: createCtaStyle({
@@ -493,6 +497,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
           borderWidth: 0,
           fontSize: 12,
         }),
+        secondaryCtaEnabled: true,
         secondaryCtaText: 'EXPLORE DESIGNERS',
         secondaryCtaLink: '/custom',
         secondaryCtaStyle: createCtaStyle({
@@ -995,7 +1000,9 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             const next = { ...fallbackHero, ...banner };
             return {
               ...next,
+              primaryCtaEnabled: toBoolean((banner as HeroBanner)?.primaryCtaEnabled, fallbackHero.primaryCtaEnabled),
               primaryCtaStyle: normalizeCtaStyle((banner as HeroBanner)?.primaryCtaStyle, fallbackHero.primaryCtaStyle),
+              secondaryCtaEnabled: toBoolean((banner as HeroBanner)?.secondaryCtaEnabled, fallbackHero.secondaryCtaEnabled),
               secondaryCtaStyle: normalizeCtaStyle((banner as HeroBanner)?.secondaryCtaStyle, fallbackHero.secondaryCtaStyle),
             };
           })
@@ -1863,6 +1870,7 @@ export default function JenksV2FrontPageManager() {
                           text: '',
                           description: '',
                           descriptionFontSize: 16,
+                          primaryCtaEnabled: true,
                           primaryCtaText: 'SHOP NOW',
                           primaryCtaLink: '/ready-to-wear',
                           primaryCtaStyle: createCtaStyle({
@@ -1872,6 +1880,7 @@ export default function JenksV2FrontPageManager() {
                             borderWidth: 0,
                             fontSize: 12,
                           }),
+                          secondaryCtaEnabled: true,
                           secondaryCtaText: 'EXPLORE',
                           secondaryCtaLink: '/custom',
                           secondaryCtaStyle: createCtaStyle({
@@ -2094,6 +2103,24 @@ export default function JenksV2FrontPageManager() {
                       }
                     />
                   </label>
+                  <label className="text-xs flex items-center gap-2 pt-5">
+                    <input
+                      type="checkbox"
+                      checked={banner.primaryCtaEnabled}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, primaryCtaEnabled: event.target.checked } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                    Primary CTA Enabled
+                  </label>
                   <label className="text-xs">
                     Secondary CTA Text
                     <input
@@ -2129,6 +2156,24 @@ export default function JenksV2FrontPageManager() {
                         }))
                       }
                     />
+                  </label>
+                  <label className="text-xs flex items-center gap-2 pt-5">
+                    <input
+                      type="checkbox"
+                      checked={banner.secondaryCtaEnabled}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, secondaryCtaEnabled: event.target.checked } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                    Secondary CTA Enabled
                   </label>
                 {renderCtaStyleEditor(
                   'Primary CTA Style',

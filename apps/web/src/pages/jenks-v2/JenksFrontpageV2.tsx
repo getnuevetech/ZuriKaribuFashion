@@ -37,9 +37,14 @@ type HeroSlide = {
   titleB: string;
   lineA: string;
   lineB: string;
-  cta: string;
-  href: string;
-  ctaStyle?: CTAStyle;
+  primaryCtaText: string;
+  primaryCtaHref: string;
+  primaryCtaStyle?: CTAStyle;
+  primaryCtaEnabled: boolean;
+  secondaryCtaText: string;
+  secondaryCtaHref: string;
+  secondaryCtaStyle?: CTAStyle;
+  secondaryCtaEnabled: boolean;
 };
 type FeaturedTile = {
   id: string;
@@ -304,8 +309,12 @@ const HERO: HeroSlide[] = [
     titleB: 'THE STORY OF AFRICA',
     lineA: 'Curated fashion from top designers and textile houses.',
     lineB: 'Ready-to-wear, fabrics, and custom looks in one destination.',
-    cta: 'SHOP NOW',
-    href: '/ready-to-wear',
+    primaryCtaText: 'SHOP NOW',
+    primaryCtaHref: '/ready-to-wear',
+    primaryCtaEnabled: true,
+    secondaryCtaText: 'EXPLORE DESIGNERS',
+    secondaryCtaHref: '/custom',
+    secondaryCtaEnabled: true,
   },
   {
     id: '2',
@@ -314,8 +323,12 @@ const HERO: HeroSlide[] = [
     titleB: 'AFRICAN ELEGANCE',
     lineA: 'Signature pieces and modern tailoring from trusted labels.',
     lineB: 'Designed on the continent. Styled for the world.',
-    cta: 'SHOP NOW',
-    href: '/ready-to-wear',
+    primaryCtaText: 'SHOP NOW',
+    primaryCtaHref: '/ready-to-wear',
+    primaryCtaEnabled: true,
+    secondaryCtaText: 'EXPLORE DESIGNERS',
+    secondaryCtaHref: '/custom',
+    secondaryCtaEnabled: true,
   },
 ];
 
@@ -703,9 +716,20 @@ export default function JenksFrontpageV2() {
         titleB: split.titleB || HERO[indexKey % HERO.length]?.titleB || 'THE STORY OF AFRICA',
         lineA: asString(row.text, HERO[indexKey % HERO.length]?.lineA || ''),
         lineB: asString(row.description, HERO[indexKey % HERO.length]?.lineB || ''),
-        cta: asString(row.primaryCtaText, HERO[indexKey % HERO.length]?.cta || 'SHOP NOW'),
-        href: normalizeHref(row.primaryCtaLink, HERO[indexKey % HERO.length]?.href || '/ready-to-wear'),
-        ctaStyle: row.primaryCtaStyle,
+        primaryCtaText: asString(row.primaryCtaText, HERO[indexKey % HERO.length]?.primaryCtaText || 'SHOP NOW'),
+        primaryCtaHref: normalizeHref(
+          row.primaryCtaLink,
+          HERO[indexKey % HERO.length]?.primaryCtaHref || '/ready-to-wear'
+        ),
+        primaryCtaStyle: row.primaryCtaStyle,
+        primaryCtaEnabled: asBoolean(row.primaryCtaEnabled, true),
+        secondaryCtaText: asString(
+          row.secondaryCtaText,
+          HERO[indexKey % HERO.length]?.secondaryCtaText || 'EXPLORE DESIGNERS'
+        ),
+        secondaryCtaHref: normalizeHref(row.secondaryCtaLink, HERO[indexKey % HERO.length]?.secondaryCtaHref || '/custom'),
+        secondaryCtaStyle: row.secondaryCtaStyle,
+        secondaryCtaEnabled: asBoolean(row.secondaryCtaEnabled, true),
       } as HeroSlide;
     });
     return mapped.length > 0 ? mapped : HERO;
@@ -1266,13 +1290,26 @@ export default function JenksFrontpageV2() {
                 </Link>
               ))}
             </div>
-            <Link
-              to={toSafeInternalHref(active.href)}
-              style={buildCTAStyle(active.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-              className="mt-6 inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
-            >
-              {active.cta}
-            </Link>
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+              {active.primaryCtaEnabled ? (
+                <Link
+                  to={toSafeInternalHref(active.primaryCtaHref)}
+                  style={buildCTAStyle(active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                  className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
+                >
+                  {active.primaryCtaText}
+                </Link>
+              ) : null}
+              {active.secondaryCtaEnabled ? (
+                <Link
+                  to={toSafeInternalHref(active.secondaryCtaHref)}
+                  style={buildCTAStyle(active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                  className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
+                >
+                  {active.secondaryCtaText}
+                </Link>
+              ) : null}
+            </div>
           </div>
         </div>
       </section>
