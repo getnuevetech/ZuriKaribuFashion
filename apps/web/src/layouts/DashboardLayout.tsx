@@ -84,7 +84,19 @@ interface DashboardWeatherSnapshot {
 
 const LEGACY_HOMEPAGE_PATHS = ['/admin/homepage', '/admin/homepage-visibility'] as const;
 const JENKS_HOMEPAGE_PATHS = ['/admin/jenks-homepage', '/admin/homepage-sections'] as const;
-
+const JENKS_V2_FRONTPAGE_MANAGER_PATHS = [
+  '/admin/jenks-v2-frontpage-manager',
+  '/admin/jenks-v2-frontpage-manager/top-navigations',
+  '/admin/jenks-v2-frontpage-manager/shop-by',
+  '/admin/jenks-v2-frontpage-manager/category-manage',
+  '/admin/jenks-v2-frontpage-manager/text-icon-cards',
+  '/admin/jenks-v2-frontpage-manager/featured',
+  '/admin/jenks-v2-frontpage-manager/fresh-drops',
+  '/admin/jenks-v2-frontpage-manager/designer-spotlight',
+  '/admin/jenks-v2-frontpage-manager/heritage',
+  '/admin/jenks-v2-frontpage-manager/newsletter-footer',
+  '/admin/jenks-v2-frontpage-manager/section-visibility',
+] as const;
 const navItems: Record<DashboardType, NavItem[]> = {
   admin: [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -117,6 +129,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Banners', href: '/admin/banners', icon: ImageIcon },
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
     { label: 'Jenks FrontPage Manage', href: '/admin/jenks-homepage', icon: LayoutGrid },
+    { label: 'Jenks-V2 FrontPage Manager', href: '/admin/jenks-v2-frontpage-manager', icon: LayoutGrid },
     { label: 'Homepage Runtime Switchboard', href: '/admin/homepage-runtime', icon: LayoutGrid },
     { label: 'Category Pages', href: '/admin/category-pages', icon: LayoutGrid },
     { label: 'Blogs', href: '/admin/blogs', icon: FileText },
@@ -361,6 +374,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isPaymentMenuOpen, setIsPaymentMenuOpen] = useState(true);
   const [isLegacyMenuOpen, setIsLegacyMenuOpen] = useState(true);
   const [isJenksMenuOpen, setIsJenksMenuOpen] = useState(true);
+  const [isJenksV2MenuOpen, setIsJenksV2MenuOpen] = useState(true);
   const [isAdminAccountsMenuOpen, setIsAdminAccountsMenuOpen] = useState(true);
   const [isProductManagementMenuOpen, setIsProductManagementMenuOpen] = useState(true);
   const [isAutomationMenuOpen, setIsAutomationMenuOpen] = useState(true);
@@ -398,7 +412,9 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
         href === '/admin/homepage-visibility' ||
         href === '/admin/homepage-sections' ||
         href === '/admin/jenks-homepage' ||
-        href === '/admin/homepage-runtime') &&
+        href === '/admin/homepage-runtime' ||
+        href === '/admin/jenks-v2-frontpage-manager' ||
+        href.startsWith('/admin/jenks-v2-frontpage-manager/')) &&
       !isSuperAdmin
     ) {
       return false;
@@ -454,6 +470,17 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/homepage-visibility': ['homepage:manage'],
       '/admin/homepage-sections': ['homepage:manage'],
       '/admin/jenks-homepage': ['homepage:manage'],
+      '/admin/jenks-v2-frontpage-manager': ['homepage:manage'],
+      '/admin/jenks-v2-frontpage-manager/top-navigations': ['homepage:manage'],
+      '/admin/jenks-v2-frontpage-manager/shop-by': ['homepage:manage'],
+      '/admin/jenks-v2-frontpage-manager/category-manage': ['homepage:manage'],
+      '/admin/jenks-v2-frontpage-manager/text-icon-cards': ['homepage:manage'],
+      '/admin/jenks-v2-frontpage-manager/featured': ['homepage:manage'],
+      '/admin/jenks-v2-frontpage-manager/fresh-drops': ['homepage:manage'],
+      '/admin/jenks-v2-frontpage-manager/designer-spotlight': ['homepage:manage'],
+      '/admin/jenks-v2-frontpage-manager/heritage': ['homepage:manage'],
+      '/admin/jenks-v2-frontpage-manager/newsletter-footer': ['homepage:manage'],
+      '/admin/jenks-v2-frontpage-manager/section-visibility': ['homepage:manage'],
       '/admin/homepage-runtime': ['homepage:manage'],
       '/admin/category-pages': ['homepage:manage'],
       '/admin/blogs': ['homepage:manage'],
@@ -545,6 +572,18 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const jenksSubmenu = [
     { label: 'FrontPage', href: '/admin/jenks-homepage', icon: ChevronRight },
     { label: 'Legacy Sections', href: '/admin/homepage-sections', icon: ChevronRight },
+  ];
+  const jenksV2Submenu = [
+    { label: 'Top Navigations', href: '/admin/jenks-v2-frontpage-manager/top-navigations', icon: ChevronRight },
+    { label: 'Shop By', href: '/admin/jenks-v2-frontpage-manager/shop-by', icon: ChevronRight },
+    { label: 'Category Manage', href: '/admin/jenks-v2-frontpage-manager/category-manage', icon: ChevronRight },
+    { label: 'Text & Icon Cards', href: '/admin/jenks-v2-frontpage-manager/text-icon-cards', icon: ChevronRight },
+    { label: 'Featured', href: '/admin/jenks-v2-frontpage-manager/featured', icon: ChevronRight },
+    { label: 'Fresh Drops', href: '/admin/jenks-v2-frontpage-manager/fresh-drops', icon: ChevronRight },
+    { label: 'Designer Spotlight', href: '/admin/jenks-v2-frontpage-manager/designer-spotlight', icon: ChevronRight },
+    { label: 'Heritage', href: '/admin/jenks-v2-frontpage-manager/heritage', icon: ChevronRight },
+    { label: 'Newsletter and Footer', href: '/admin/jenks-v2-frontpage-manager/newsletter-footer', icon: ChevronRight },
+    { label: 'Section Visibility', href: '/admin/jenks-v2-frontpage-manager/section-visibility', icon: ChevronRight },
   ];
   const orderManagementSubmenu = [
     { label: 'Order List', href: '/admin/orders?tab=list', icon: ChevronRight },
@@ -873,6 +912,17 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
             })),
           { prefix: 'Jenks FrontPage Manage' }
         );
+        addSearchEntries(
+          entries,
+          jenksV2Submenu
+            .filter((item) => canAccessAdminNav(item.href))
+            .map((item) => ({
+              label: item.label,
+              href: item.href,
+              keywords: ['jenks v2', 'frontpage', 'manager', 'section visibility', 'hero', 'shop by', 'featured'],
+            })),
+          { prefix: 'Jenks-V2 FrontPage Manager' }
+        );
       }
       addSearchEntries(
         entries,
@@ -1132,6 +1182,65 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                     {isJenksMenuOpen && isSidebarOpen ? (
                       <div className="ml-7 space-y-1">
                         {visibleJenksSubmenu.map((subItem) => {
+                          const subMeta = readHrefMeta(subItem.href);
+                          const subActive =
+                            location.pathname === subMeta.pathname &&
+                            (subMeta.tab ? currentTab === subMeta.tab : !currentTab);
+                          const SubIcon = subItem.icon;
+                          return (
+                            <Link
+                              key={subItem.href}
+                              to={subItem.href}
+                              className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
+                                subActive
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <SubIcon className="h-4 w-4" />
+                              <span>{subItem.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+
+              if (userType === 'admin' && item.href === '/admin/jenks-v2-frontpage-manager' && isSuperAdmin) {
+                const jenksV2MenuActive =
+                  JENKS_V2_FRONTPAGE_MANAGER_PATHS.includes(
+                    location.pathname as (typeof JENKS_V2_FRONTPAGE_MANAGER_PATHS)[number]
+                  ) || location.pathname.startsWith('/admin/jenks-v2-frontpage-manager/');
+                const visibleJenksV2Submenu = jenksV2Submenu.filter((subItem) => canAccessAdminNav(subItem.href));
+                if (visibleJenksV2Submenu.length === 0) {
+                  return null;
+                }
+                return (
+                  <div key={item.href} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsJenksV2MenuOpen((prev) => !prev)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
+                        jenksV2MenuActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {isSidebarOpen ? (
+                        <>
+                          <span className="text-sm font-medium">Jenks-V2 FrontPage Manager</span>
+                          <span className="ml-auto">
+                            {isJenksV2MenuOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </span>
+                        </>
+                      ) : null}
+                    </button>
+                    {isJenksV2MenuOpen && isSidebarOpen ? (
+                      <div className="ml-7 space-y-1">
+                        {visibleJenksV2Submenu.map((subItem) => {
                           const subMeta = readHrefMeta(subItem.href);
                           const subActive =
                             location.pathname === subMeta.pathname &&

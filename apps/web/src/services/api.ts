@@ -10625,6 +10625,287 @@ const homepageSectionsApi = {
     apiService.put<{ success: boolean; data: any }>(`/homepage-sections/admin/footer/${id}`, data),
 };
 
+const jenksV2FrontpageManagerApi = {
+  getConfig: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        contractVersion: string;
+        topNavigations: {
+          topStripEnabled: boolean;
+          hamburgerMenu: Array<{
+            id: string;
+            label: string;
+            href: string;
+            routeKey?: string;
+            icon?: string;
+            enabled: boolean;
+          }>;
+          searchIconEnabled: boolean;
+          logo: {
+            mode: 'TEXT' | 'IMAGE';
+            text: string;
+            textColor: string;
+            fontFamily: string;
+            fontSize: number;
+            imageUrl: string;
+            altText: string;
+            width: number;
+            height: number;
+          };
+          additionalTopMenu: Array<{
+            id: string;
+            label: string;
+            href: string;
+            routeKey?: string;
+            icon?: string;
+            enabled: boolean;
+          }>;
+          signInMenu: {
+            enabled: boolean;
+            label: string;
+            href: string;
+            routeKey?: string;
+            icon: string;
+          };
+          controllers: {
+            showControllerIcons: boolean;
+            theme: {
+              enabled: boolean;
+              mode: 'SYSTEM' | 'LIGHT' | 'DARK';
+              icon: string;
+            };
+          };
+          heroBanners: Array<{
+            id: string;
+            enabled: boolean;
+            displayOrder: number;
+            image: string;
+            tag: string;
+            title: string;
+            titleFontSize: number;
+            text: string;
+            description: string;
+            descriptionFontSize: number;
+            primaryCtaText: string;
+            primaryCtaLink: string;
+            secondaryCtaText: string;
+            secondaryCtaLink: string;
+          }>;
+        };
+        shopBy: {
+          enabledTabs: Array<'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE'>;
+          defaultTab: 'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE';
+          countriesCountMode: 'STATIC' | 'DATABASE';
+          categoriesCountMode: 'STATIC' | 'DATABASE';
+          countries: Array<{
+            id: string;
+            code: string;
+            name: string;
+            icon: string;
+            productCountMode: 'STATIC' | 'DATABASE_FTB';
+            staticProductCount: number;
+            enabled: boolean;
+            displayOrder: number;
+          }>;
+          categories: Array<{
+            id: string;
+            key: string;
+            title: string;
+            description: string;
+            image: string;
+            icon: string;
+            productCountMode: 'STATIC' | 'DATABASE_CATEGORY';
+            staticProductCount: number;
+            enabled: boolean;
+            displayOrder: number;
+          }>;
+          styleCards: Array<{
+            id: string;
+            title: string;
+            description: string;
+            href: string;
+            enabled: boolean;
+            displayOrder: number;
+          }>;
+          priceCards: Array<{
+            id: string;
+            title: string;
+            priceLabel: string;
+            description: string;
+            href: string;
+            enabled: boolean;
+            displayOrder: number;
+          }>;
+        };
+        categoryManage: {
+          sections: Array<{
+            id: string;
+            key: string;
+            title: string;
+            tag: string;
+            description: string;
+            ctaText: string;
+            ctaLink: string;
+            enabled: boolean;
+            displayOrder: number;
+          }>;
+        };
+        textIconCards: {
+          allowCustomCards: boolean;
+          cards: Array<{
+            id: string;
+            sectionType: 'HOW_IT_WORKS' | 'SHOP_WITH_CONFIDENCE' | 'CUSTOM';
+            title: string;
+            description: string;
+            icon: string;
+            enabled: boolean;
+            displayOrder: number;
+          }>;
+        };
+        featured: {
+          cards: Array<{
+            id: string;
+            key: string;
+            image: string;
+            tag: string;
+            title: string;
+            description: string;
+            ctaText: string;
+            ctaLink: string;
+            enabled: boolean;
+            displayOrder: number;
+          }>;
+        };
+        freshDrops: {
+          sourceMode: 'NEWLY_LISTED' | 'FILTERED';
+          listingAgeDays: number;
+          countryFilters: string[];
+          categoryFilters: string[];
+          mixCategoryResults: boolean;
+          rows: number;
+          columns: number;
+          title: string;
+          description: string;
+        };
+        designerSpotlight: {
+          rows: number;
+          columns: number;
+          cards: Array<{
+            id: string;
+            image: string;
+            tag: string;
+            title: string;
+            description: string;
+            ctaText: string;
+            ctaLink: string;
+            enabled: boolean;
+            displayOrder: number;
+          }>;
+        };
+        heritage: {
+          image: string;
+          title: string;
+          tag: string;
+          description: string;
+          stats: Array<{
+            id: string;
+            label: string;
+            value: string;
+            suffix: string;
+            positionX: number;
+            positionY: number;
+            enabled: boolean;
+            displayOrder: number;
+          }>;
+        };
+        newsletterFooter: {
+          newsletter: {
+            enabled: boolean;
+            title: string;
+            description: string;
+            emailPlaceholder: string;
+            submitLabel: string;
+            successMessage: string;
+          };
+          footer: {
+            enabled: boolean;
+            brandText: string;
+            address: string;
+            contactEmail: string;
+            contactPhone: string;
+            copyright: string;
+            policyLinks: Array<{ id: string; label: string; href: string; enabled: boolean }>;
+            socialLinks: Array<{ id: string; label: string; href: string; enabled: boolean }>;
+            linkGroups: Array<{
+              id: string;
+              title: string;
+              links: Array<{ id: string; label: string; href: string; enabled: boolean }>;
+            }>;
+          };
+        };
+        sectionVisibility: {
+          sections: Array<{
+            id: string;
+            key: string;
+            name: string;
+            templateKey:
+              | 'TOP_NAVIGATIONS'
+              | 'SHOP_BY'
+              | 'CATEGORY_MANAGE'
+              | 'TEXT_ICON_CARDS'
+              | 'FEATURED'
+              | 'FRESH_DROPS'
+              | 'DESIGNER_SPOTLIGHT'
+              | 'HERITAGE'
+              | 'NEWSLETTER_FOOTER';
+            enabled: boolean;
+            order: number;
+            isCustom: boolean;
+            configSnapshot: Record<string, unknown>;
+          }>;
+        };
+        source?: 'DATABASE' | 'DEFAULT';
+        updatedAt?: string | null;
+      };
+    }>('/jenks-v2-frontpage/admin/config'),
+  updateConfig: (data: {
+    topNavigations?: unknown;
+    shopBy?: unknown;
+    categoryManage?: unknown;
+    textIconCards?: unknown;
+    featured?: unknown;
+    freshDrops?: unknown;
+    designerSpotlight?: unknown;
+    heritage?: unknown;
+    newsletterFooter?: unknown;
+    sectionVisibility?: unknown;
+  }) =>
+    apiService.put<{
+      success: boolean;
+      data: any;
+    }>('/jenks-v2-frontpage/admin/config', data),
+  duplicateSection: (payload: {
+    name: string;
+    templateKey:
+      | 'TOP_NAVIGATIONS'
+      | 'SHOP_BY'
+      | 'CATEGORY_MANAGE'
+      | 'TEXT_ICON_CARDS'
+      | 'FEATURED'
+      | 'FRESH_DROPS'
+      | 'DESIGNER_SPOTLIGHT'
+      | 'HERITAGE'
+      | 'NEWSLETTER_FOOTER';
+    order?: number;
+  }) =>
+    apiService.post<{
+      success: boolean;
+      data: any;
+      message?: string;
+    }>('/jenks-v2-frontpage/admin/section-visibility/duplicate', payload),
+};
+
 const adminBlogReadPaths = ['/blogs/admin', '/admin/blogs'];
 const adminBlogOptionPaths = ['/blogs/admin/options', '/admin/blogs/options'];
 const adminBlogWritePaths = ['/blogs/admin', '/admin/blogs'];
@@ -11757,6 +12038,7 @@ export const api = {
   upload: uploadApi,
   homepage: homepageApi,
   homepageSections: homepageSectionsApi,
+  jenksV2Frontpage: jenksV2FrontpageManagerApi,
   blogs: blogsApi,
   promotions: promotionsApi,
   featuredRequests: featuredRequestsApi,
@@ -11786,6 +12068,7 @@ export {
   uploadApi,
   homepageApi,
   homepageSectionsApi,
+  jenksV2FrontpageManagerApi,
   blogsApi,
   promotionsApi,
   featuredRequestsApi,

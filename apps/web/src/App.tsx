@@ -91,6 +91,7 @@ import AdminHelpCenterContent from './pages/admin/HelpCenterContent';
 import AdminModuleRuntimeSettings from './pages/admin/ModuleRuntimeSettings';
 import AdminHomepageRuntimeSwitchboard from './pages/admin/HomepageRuntimeSwitchboard';
 import AdminJenksHomepageManage from './pages/admin/JenksHomepageManage';
+import AdminJenksV2FrontPageManager from './pages/admin/JenksV2FrontPageManager';
 import { JenksV14Redirect } from './pages/JenksV14Redirect';
 import JenksFrontpageV2 from './pages/jenks-v2/JenksFrontpageV2';
 
@@ -645,6 +646,22 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
                       <AdminJenksHomepageManage />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/jenks-v2-frontpage-manager"
+                  element={
+                    <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
+                      <AdminJenksV2FrontPageManager />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/jenks-v2-frontpage-manager/:submenu"
+                  element={
+                    <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
+                      <AdminJenksV2FrontPageManager />
                     </AdminPermissionGuard>
                   }
                 />
