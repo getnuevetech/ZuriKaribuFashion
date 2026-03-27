@@ -10626,6 +10626,23 @@ const homepageSectionsApi = {
 };
 
 const jenksV2FrontpageManagerApi = {
+  getPublicConfig: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        contractVersion: string;
+        topNavigations: Record<string, unknown>;
+        shopBy: Record<string, unknown>;
+        categoryManage: Record<string, unknown>;
+        textIconCards: Record<string, unknown>;
+        featured: Record<string, unknown>;
+        freshDrops: Record<string, unknown>;
+        designerSpotlight: Record<string, unknown>;
+        heritage: Record<string, unknown>;
+        newsletterFooter: Record<string, unknown>;
+        sectionVisibility: Record<string, unknown>;
+      };
+    }>('/jenks-v2-frontpage/config'),
   getConfig: () =>
     apiService.get<{
       success: boolean;
