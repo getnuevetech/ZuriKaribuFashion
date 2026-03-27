@@ -545,20 +545,12 @@ export default function JenksFrontpageV2() {
 
           {shopByTab === 'COUNTRY' ? (
             <div className="mt-10">
-              <div
-                className={
-                  shopByCountryExpanded
-                    ? 'grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-3 lg:grid-cols-6'
-                    : 'flex gap-6 overflow-x-auto pb-1'
-                }
-              >
+              <div className={shopByCountryExpanded ? 'grid grid-cols-2 gap-x-2 gap-y-2 md:grid-cols-4 lg:grid-cols-12' : 'grid grid-cols-12 gap-x-2 gap-y-0'}>
                 {visibleShopByCountries.map((country) => (
                   <Link
                     key={country.name}
                     to={`/country-products?country=${encodeURIComponent(country.name)}`}
-                    className={`group flex flex-col items-center text-center text-white/78 transition-colors hover:text-[#e66045] ${
-                      shopByCountryExpanded ? '' : 'min-w-[120px] shrink-0'
-                    }`}
+                    className="group flex flex-col items-center text-center text-white/78 transition-colors hover:text-[#e66045]"
                   >
                     <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/12 bg-white/[0.02] transition-colors group-hover:border-[#e66045]">
                       <img
@@ -568,10 +560,10 @@ export default function JenksFrontpageV2() {
                         loading="lazy"
                       />
                     </span>
-                    <p className="mt-3 text-base font-semibold text-white/92">
+                    <p className="mt-2 text-[11px] font-medium text-white/92">
                       {country.name} - {country.count}
                     </p>
-                    <p className="mt-1 text-xs text-white/54 group-hover:text-[#e66045]/85">{country.textiles}</p>
+                    <p className="text-[10px] text-white/54 group-hover:text-[#e66045]/85">{country.textiles}</p>
                   </Link>
                 ))}
               </div>
@@ -579,10 +571,10 @@ export default function JenksFrontpageV2() {
                 <button
                   type="button"
                   onClick={() => setShopByCountryExpanded((prev) => !prev)}
-                  className="inline-flex items-center gap-2 text-base font-medium text-white/85 hover:text-white"
+                  className="inline-flex items-center gap-2 text-xs font-normal text-white/85 hover:text-white"
                 >
-                  View all 54 countries
-                  <ArrowRight className="h-4 w-4" />
+                  {shopByCountryExpanded ? 'Show less countries' : 'View all 54 countries'}
+                  <ArrowRight className="h-3 w-3" />
                 </button>
               </div>
             </div>
@@ -594,7 +586,7 @@ export default function JenksFrontpageV2() {
                 <Link
                   key={styleItem.name}
                   to="/shop"
-                  className="rounded border border-white/10 bg-white/[0.06] px-5 py-9 text-center transition-colors hover:border-white/25"
+                  className="rounded border border-white/10 bg-white/[0.06] px-5 py-9 text-center transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:shadow-[0_16px_34px_rgba(0,0,0,0.35)]"
                 >
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-black/40 text-[#e66045]">
                     <styleItem.Icon className="h-5 w-5" />
@@ -612,7 +604,7 @@ export default function JenksFrontpageV2() {
                 <Link
                   key={priceItem.range}
                   to="/shop"
-                  className="rounded border border-white/10 bg-white/[0.06] px-5 py-7 text-center transition-colors hover:border-white/25"
+                  className="rounded border border-white/10 bg-white/[0.06] px-5 py-7 text-center transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:shadow-[0_16px_34px_rgba(0,0,0,0.35)]"
                 >
                   <div className="flex items-center justify-center gap-2 text-[#e66045]">
                     <Tag className="h-4 w-4" />
@@ -667,20 +659,12 @@ export default function JenksFrontpageV2() {
             })}
           </div>
 
-          <div
-            className={
-              dedicatedCountryExpanded
-                ? 'mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12'
-                : 'mt-6 flex gap-4 overflow-x-auto pb-1'
-            }
-          >
+          <div className={dedicatedCountryExpanded ? 'mt-6 grid grid-cols-2 gap-x-2 gap-y-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12' : 'mt-6 grid grid-cols-12 gap-x-2 gap-y-0'}>
             {visibleDedicatedCountries.map((country) => (
               <Link
                 key={country.name}
                 to={`/country-products?country=${encodeURIComponent(country.name)}`}
-                className={`group flex flex-col items-center px-2 py-2 text-center text-white/75 transition-colors hover:text-[#e66045] ${
-                  dedicatedCountryExpanded ? '' : 'min-w-[112px] shrink-0'
-                }`}
+                className="group flex flex-col items-center px-1 py-2 text-center text-white/75 transition-colors hover:text-[#e66045]"
               >
                 <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/[0.02] transition-colors group-hover:border-[#e66045]">
                   <img
@@ -699,10 +683,10 @@ export default function JenksFrontpageV2() {
             <button
               type="button"
               onClick={() => setDedicatedCountryExpanded((prev) => !prev)}
-              className="inline-flex items-center gap-2 border border-white/18 bg-white/[0.05] px-6 py-3 text-sm text-white transition-colors hover:border-[#e66045] hover:text-[#e66045]"
+              className="inline-flex items-center gap-2 border border-white/18 bg-white/[0.05] px-6 py-3 text-[11px] text-white transition-colors hover:border-[#e66045] hover:text-[#e66045]"
             >
-              Show All 54 Countries
-              <ArrowRight className="h-4 w-4" />
+              {dedicatedCountryExpanded ? 'Show less countries' : 'Show All 54 Countries'}
+              <ArrowRight className="h-3 w-3" />
             </button>
           </div>
         </div>
@@ -730,7 +714,7 @@ export default function JenksFrontpageV2() {
                       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
                       <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
                       <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
-                      <Link to={section.href} className="mt-9 inline-flex items-center gap-3 text-base font-medium uppercase tracking-[0.04em] text-white/92 hover:text-white sm:text-lg">
+                    <Link to={section.href} className="jeni-underline-cta mt-9 inline-flex items-center gap-3 text-base font-medium uppercase tracking-[0.04em] text-white/92 hover:text-white sm:text-lg">
                         {section.cta}
                         <ArrowRight className="h-5 w-5" />
                       </Link>
@@ -753,7 +737,7 @@ export default function JenksFrontpageV2() {
                       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
                       <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
                       <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
-                      <Link to={section.href} className="mt-9 inline-flex items-center gap-3 text-base font-medium uppercase tracking-[0.04em] text-white/92 hover:text-white sm:text-lg">
+                    <Link to={section.href} className="jeni-underline-cta mt-9 inline-flex items-center gap-3 text-base font-medium uppercase tracking-[0.04em] text-white/92 hover:text-white sm:text-lg">
                         {section.cta}
                         <ArrowRight className="h-5 w-5" />
                       </Link>
@@ -795,6 +779,10 @@ export default function JenksFrontpageV2() {
               <div className="absolute bottom-[10%] right-6 max-w-[58%] text-right text-white">
                 <p className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">Featured Ready To Wear</p>
                 <p className="mt-2 text-sm text-white/78">{card.subtitle}</p>
+                <span className="jeni-underline-cta mt-4 inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.06em] text-white/92">
+                  SHOP READY TO WEAR
+                  <ArrowRight className="h-4 w-4" />
+                </span>
               </div>
             </Link>
           ))}
@@ -808,6 +796,10 @@ export default function JenksFrontpageV2() {
               <div className="absolute bottom-[10%] right-6 max-w-[58%] text-right text-white">
                 <p className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">Featured Custom To Wear</p>
                 <p className="mt-2 text-sm text-white/78">{card.subtitle}</p>
+                <span className="jeni-underline-cta mt-4 inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.06em] text-white/92">
+                  SHOP CUSTOM TO WEAR
+                  <ArrowRight className="h-4 w-4" />
+                </span>
               </div>
             </Link>
           ))}
@@ -821,6 +813,10 @@ export default function JenksFrontpageV2() {
               <div className="absolute bottom-[10%] right-6 max-w-[58%] text-right text-white">
                 <p className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">Featured Fabrics To Buy</p>
                 <p className="mt-2 text-sm text-white/78">{card.subtitle}</p>
+                <span className="jeni-underline-cta mt-4 inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.06em] text-white/92">
+                  SHOP FABRICS TO BUY
+                  <ArrowRight className="h-4 w-4" />
+                </span>
               </div>
             </Link>
           ))}
@@ -890,7 +886,7 @@ export default function JenksFrontpageV2() {
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">Designer spotlight</p>
               <h3 className="mt-3 font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">{spot.title}</h3>
               <p className="mt-3 text-sm text-white/78">{spot.description}</p>
-              <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white">
+              <span className="jeni-underline-cta mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white">
                 {spot.cta}
                 <ArrowRight className="h-4 w-4" />
               </span>
@@ -910,7 +906,7 @@ export default function JenksFrontpageV2() {
               The world is yet to experience Africa&apos;s fashion. We&apos;re building the bridge connecting heritage craft to modern wardrobes everywhere.
             </p>
           </div>
-          <div className="absolute bottom-[20%] left-8 flex items-end gap-10">
+          <div className="absolute bottom-[24%] left-8 flex items-end gap-10">
             <div>
               <p className="font-['Oswald'] text-7xl font-bold leading-none">120+</p>
               <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/75">Countries</p>
@@ -933,7 +929,7 @@ export default function JenksFrontpageV2() {
           <h2 className="text-center font-['Oswald'] text-4xl font-bold uppercase leading-none">SHOP WITH CONFIDENCE</h2>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             {trust.map((item) => (
-              <article key={item.label} className="mt-8 flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-8 text-center">
+              <article key={item.label} className="mt-8 flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-8 text-center transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_14px_28px_rgba(0,0,0,0.12)]">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full border border-black/15 bg-white">
                   <item.Icon className="h-5 w-5 text-[#e66045]" />
                 </div>
@@ -946,7 +942,7 @@ export default function JenksFrontpageV2() {
       </section>
 
       {/* NEWSLETTER */}
-      <section className="bg-white pb-16" data-kimi-anim="fade-up">
+      <section className="bg-white py-24" data-kimi-anim="fade-up">
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
             <div>
