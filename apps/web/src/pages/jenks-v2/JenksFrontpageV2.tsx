@@ -711,6 +711,7 @@ export default function JenksFrontpageV2() {
   const [countryRegion, setCountryRegion] = useState<CountryRegion>('ALL');
   const [shopByCountryExpanded, setShopByCountryExpanded] = useState(false);
   const [dedicatedCountryExpanded, setDedicatedCountryExpanded] = useState(false);
+  const [hamburgerOpen, setHamburgerOpen] = useState(false);
   const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
   const topNavigationsCfg = useMemo(() => asRecord(asRecord(managerConfig).topNavigations), [managerConfig]);
   const shopByCfg = useMemo(() => asRecord(asRecord(managerConfig).shopBy), [managerConfig]);
@@ -884,6 +885,8 @@ export default function JenksFrontpageV2() {
       sub: asString(row.description, ''),
       href: normalizeHref(row.href, '/ready-to-wear'),
       Icon: iconFromKey(row.icon, CalendarDays),
+      titleFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.titleFontSize, 15)))),
+      descriptionFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.descriptionFontSize, 14)))),
     }));
   }, [shopByCfg.styleCards]);
 
@@ -897,6 +900,9 @@ export default function JenksFrontpageV2() {
       range: asString(row.priceLabel, asString(row.title, '$0 - $100')),
       sub: asString(row.description, ''),
       href: normalizeHref(row.href, '/ready-to-wear'),
+      Icon: iconFromKey(row.icon, Tag),
+      titleFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.titleFontSize, 24)))),
+      descriptionFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.descriptionFontSize, 14)))),
     }));
   }, [shopByCfg.priceCards]);
 
@@ -948,7 +954,18 @@ export default function JenksFrontpageV2() {
         panelBg: CATEGORY_PANEL_BG_BY_KEY[key] || 'bg-[#111]',
       };
     });
-    return mapped.length > 0 ? mapped : RTW_FTB_CTW_SECTIONS;
+    const source = mapped.length > 0 ? mapped : RTW_FTB_CTW_SECTIONS;
+    const orderedKeys = ['RTW', 'FTB', 'CTW'];
+    const orderedSections = source
+      .slice()
+      .sort((a, b) => {
+        const left = orderedKeys.indexOf(String(a.key || '').toUpperCase());
+        const right = orderedKeys.indexOf(String(b.key || '').toUpperCase());
+        const leftRank = left === -1 ? Number.MAX_SAFE_INTEGER : left;
+        const rightRank = right === -1 ? Number.MAX_SAFE_INTEGER : right;
+        return leftRank - rightRank;
+      });
+    return orderedSections;
   }, [categorySections, shopByCategoryCards]);
 
   const featuredCardsByKey = useMemo(() => {
@@ -993,6 +1010,16 @@ export default function JenksFrontpageV2() {
     if (categoryToken === 'ALL') return '/ready-to-wear';
     return buildCountryProductsHref('Nigeria', categoryToken);
   };
+  const orderedSectionsRtwFtbCtw = useMemo(() => {
+    const orderByKey: Record<string, number> = { RTW: 0, FTB: 1, CTW: 2 };
+    return [...sectionsRtwFtbCtw].sort((a, b) => {
+      const aRank = orderByKey[String(a.key || '').toUpperCase()];
+      const bRank = orderByKey[String(b.key || '').toUpperCase()];
+      const safeARank = Number.isFinite(aRank) ? aRank : 999;
+      const safeBRank = Number.isFinite(bRank) ? bRank : 999;
+      return safeARank - safeBRank;
+    });
+  }, [sectionsRtwFtbCtw]);
 
   const featuredHrefForCountry = (key: 'RTW' | 'CTW' | 'FTB') => {
     const categoryToken = categoryTokenFromSectionKey(key);
@@ -1244,6 +1271,15 @@ export default function JenksFrontpageV2() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (!hamburgerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setHamburgerOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [hamburgerOpen]);
+
   return (
     <div className="kimi-site bg-[#f5f3ee] text-[#111]">
       {/* TOP STRIP + TOP NAVIGATION */}
@@ -1259,19 +1295,14 @@ export default function JenksFrontpageV2() {
           <header className="h-14 border-b border-black/10 bg-[#f5f3ee]/95 backdrop-blur">
             <div className="relative mx-auto flex h-full w-full max-w-[1700px] items-center justify-between px-4 sm:px-6 lg:px-12">
               <div className="flex items-center gap-3 text-black/75">
-                {hamburgerMenuLinks[0] ? (
-                  <Link
-                    to={hamburgerMenuLinks[0].href}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5"
-                    aria-label={hamburgerMenuLinks[0].label}
-                  >
-                    <Menu className="h-4 w-4" />
-                  </Link>
-                ) : (
-                  <button className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5" aria-label="Open menu">
-                    <Menu className="h-4 w-4" />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5"
+                  aria-label="Open menu"
+                  onClick={() => setHamburgerOpen(true)}
+                >
+                  <Menu className="h-4 w-4" />
+                </button>
                 {asBoolean(topNavigationsCfg.searchIconEnabled, true) ? (
                   <button className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5" aria-label="Search">
                     <Search className="h-4 w-4" />
@@ -1341,6 +1372,47 @@ export default function JenksFrontpageV2() {
               </div>
             </div>
           </header>
+          {hamburgerOpen ? (
+            <div className="fixed inset-0 z-[70] bg-black/96">
+              <button
+                type="button"
+                className="absolute left-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white hover:bg-white/10"
+                aria-label="Close menu"
+                onClick={() => setHamburgerOpen(false)}
+              >
+                <span className="text-xl leading-none">×</span>
+              </button>
+              <nav className="mx-auto flex h-full w-full max-w-[1700px] items-center px-10 sm:px-14 lg:px-20">
+                <div className="space-y-3">
+                  {(hamburgerMenuLinks.length > 0
+                    ? hamburgerMenuLinks
+                    : [
+                        { label: 'Home', href: '/' },
+                        { label: 'Shop', href: '/ready-to-wear' },
+                        { label: 'Ready To Wear', href: '/ready-to-wear' },
+                        { label: 'Fabrics To Buy', href: '/fabrics' },
+                        { label: 'Custom To Wear', href: '/custom' },
+                        { label: 'Designers', href: '/designers' },
+                        { label: 'About Us', href: '/about' },
+                        { label: 'Contact Us', href: '/contact' },
+                      ]
+                  ).map((link) => (
+                    <Link
+                      key={`${link.label}-${link.href}`}
+                      to={toSafeInternalHref(link.href)}
+                      className="block font-['Oswald'] text-4xl font-bold uppercase leading-none tracking-[0.01em] text-white transition-colors hover:text-[#e66045] sm:text-5xl"
+                      onClick={() => setHamburgerOpen(false)}
+                    >
+                      {link.label}
+                    </Link>
+                  ))}
+                  <p className="pt-8 text-[10px] font-medium uppercase tracking-[0.2em] text-white/55">
+                    Made by Africans. Worn by the world.
+                  </p>
+                </div>
+              </nav>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -1372,7 +1444,7 @@ export default function JenksFrontpageV2() {
             </h1>
             <p className="mt-6 text-[16px] font-light leading-[1.35] text-black/84 sm:text-[18px]">{active.lineA}</p>
             <p className="mt-4 text-sm text-black/55">{active.lineB}</p>
-            <div className="mt-6 flex flex-wrap items-center gap-2">
+            <div className="mt-6 flex flex-wrap items-center gap-1.5">
               {active.primaryCtaEnabled ? (
                 <Link
                   to={toSafeInternalHref(active.primaryCtaHref)}
@@ -1383,8 +1455,9 @@ export default function JenksFrontpageV2() {
                   onMouseLeave={(event) =>
                     applyHeroCtaHoverState(event.currentTarget, active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
                   }
-                  className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
+                  className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
                 >
+                  <Sparkles className="h-3.5 w-3.5" />
                   {active.primaryCtaText}
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
@@ -1399,8 +1472,9 @@ export default function JenksFrontpageV2() {
                   onMouseLeave={(event) =>
                     applyHeroCtaHoverState(event.currentTarget, active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
                   }
-                  className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
+                  className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
                 >
+                  <Heart className="h-3.5 w-3.5" />
                   {active.secondaryCtaText}
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
@@ -1415,8 +1489,9 @@ export default function JenksFrontpageV2() {
                   onMouseLeave={(event) =>
                     applyHeroCtaHoverState(event.currentTarget, active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
                   }
-                  className="inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
+                  className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
                 >
+                  <ShoppingBag className="h-3.5 w-3.5" />
                   {active.tertiaryCtaText}
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
@@ -1528,8 +1603,15 @@ export default function JenksFrontpageV2() {
                     <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-black/40 text-[#e66045]">
                       <styleItem.Icon className="h-5 w-5" />
                     </div>
-                    <p className="mt-4 text-[15px] font-semibold uppercase tracking-[0.06em] text-white">{styleItem.name}</p>
-                    <p className="mt-1 text-sm text-white/50">{styleItem.sub}</p>
+                    <p
+                      className="mt-4 font-semibold uppercase tracking-[0.06em] text-white"
+                      style={{ fontSize: `${styleItem.titleFontSize}px` }}
+                    >
+                      {styleItem.name}
+                    </p>
+                    <p className="mt-1 text-white/50" style={{ fontSize: `${styleItem.descriptionFontSize}px` }}>
+                      {styleItem.sub}
+                    </p>
                   </Link>
                 ))}
               </div>
@@ -1544,10 +1626,14 @@ export default function JenksFrontpageV2() {
                     className="rounded border border-white/10 bg-white/[0.06] px-5 py-7 text-center transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:shadow-[0_16px_34px_rgba(0,0,0,0.35)]"
                   >
                     <div className="flex items-center justify-center gap-2 text-[#e66045]">
-                      <Tag className="h-4 w-4" />
+                      <priceItem.Icon className="h-4 w-4" />
                     </div>
-                    <p className="mt-3 text-2xl font-semibold text-white">{priceItem.range}</p>
-                    <p className="mt-1 text-sm text-white/55">{priceItem.sub}</p>
+                    <p className="mt-3 font-semibold text-white" style={{ fontSize: `${priceItem.titleFontSize}px` }}>
+                      {priceItem.range}
+                    </p>
+                    <p className="mt-1 text-white/55" style={{ fontSize: `${priceItem.descriptionFontSize}px` }}>
+                      {priceItem.sub}
+                    </p>
                   </Link>
                 ))}
               </div>

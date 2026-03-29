@@ -10838,6 +10838,8 @@ const jenksV2FrontpageManagerApi = {
             title: string;
             description: string;
             href: string;
+            icon: string;
+            fontSize: number;
             enabled: boolean;
             displayOrder: number;
           }>;
@@ -10847,6 +10849,8 @@ const jenksV2FrontpageManagerApi = {
             priceLabel: string;
             description: string;
             href: string;
+            icon: string;
+            fontSize: number;
             enabled: boolean;
             displayOrder: number;
           }>;

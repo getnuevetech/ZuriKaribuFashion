@@ -114,6 +114,8 @@ type ShopByCard = {
   title: string;
   description: string;
   href: string;
+  icon: string;
+  fontSize: number;
   enabled: boolean;
   displayOrder: number;
 };
@@ -324,6 +326,91 @@ const ROUTE_OPTIONS = [
   { key: 'CONTACT', label: 'Contact', href: '/contact' },
   { key: 'AUTH_LOGIN', label: 'Sign In', href: '/auth/login' },
 ];
+
+const AFRICAN_COUNTRIES_54 = [
+  { code: 'DZ', name: 'Algeria' },
+  { code: 'AO', name: 'Angola' },
+  { code: 'BJ', name: 'Benin' },
+  { code: 'BW', name: 'Botswana' },
+  { code: 'BF', name: 'Burkina Faso' },
+  { code: 'BI', name: 'Burundi' },
+  { code: 'CV', name: 'Cabo Verde' },
+  { code: 'CM', name: 'Cameroon' },
+  { code: 'CF', name: 'Central African Republic' },
+  { code: 'TD', name: 'Chad' },
+  { code: 'KM', name: 'Comoros' },
+  { code: 'CG', name: 'Congo' },
+  { code: 'CD', name: 'DR Congo' },
+  { code: 'DJ', name: 'Djibouti' },
+  { code: 'EG', name: 'Egypt' },
+  { code: 'GQ', name: 'Equatorial Guinea' },
+  { code: 'ER', name: 'Eritrea' },
+  { code: 'SZ', name: 'Eswatini' },
+  { code: 'ET', name: 'Ethiopia' },
+  { code: 'GA', name: 'Gabon' },
+  { code: 'GM', name: 'Gambia' },
+  { code: 'GH', name: 'Ghana' },
+  { code: 'GN', name: 'Guinea' },
+  { code: 'GW', name: 'Guinea-Bissau' },
+  { code: 'CI', name: "Cote d'Ivoire" },
+  { code: 'KE', name: 'Kenya' },
+  { code: 'LS', name: 'Lesotho' },
+  { code: 'LR', name: 'Liberia' },
+  { code: 'LY', name: 'Libya' },
+  { code: 'MG', name: 'Madagascar' },
+  { code: 'MW', name: 'Malawi' },
+  { code: 'ML', name: 'Mali' },
+  { code: 'MR', name: 'Mauritania' },
+  { code: 'MU', name: 'Mauritius' },
+  { code: 'MA', name: 'Morocco' },
+  { code: 'MZ', name: 'Mozambique' },
+  { code: 'NA', name: 'Namibia' },
+  { code: 'NE', name: 'Niger' },
+  { code: 'NG', name: 'Nigeria' },
+  { code: 'RW', name: 'Rwanda' },
+  { code: 'ST', name: 'Sao Tome and Principe' },
+  { code: 'SN', name: 'Senegal' },
+  { code: 'SC', name: 'Seychelles' },
+  { code: 'SL', name: 'Sierra Leone' },
+  { code: 'SO', name: 'Somalia' },
+  { code: 'ZA', name: 'South Africa' },
+  { code: 'SS', name: 'South Sudan' },
+  { code: 'SD', name: 'Sudan' },
+  { code: 'TZ', name: 'Tanzania' },
+  { code: 'TG', name: 'Togo' },
+  { code: 'TN', name: 'Tunisia' },
+  { code: 'UG', name: 'Uganda' },
+  { code: 'ZM', name: 'Zambia' },
+  { code: 'ZW', name: 'Zimbabwe' },
+] as const;
+
+const COUNTRY_BY_CODE = new Map(AFRICAN_COUNTRIES_54.map((entry) => [entry.code, entry]));
+
+const ICON_OPTIONS = [
+  'Search',
+  'Palette',
+  'Sparkles',
+  'ShieldCheck',
+  'RefreshCw',
+  'Truck',
+  'Headphones',
+  'ShoppingBag',
+  'Heart',
+  'Briefcase',
+  'CalendarDays',
+  'Globe',
+  'Tag',
+  'ArrowRight',
+  'MapPin',
+] as const;
+
+const flagEmoji = (countryCode: string) => {
+  const normalized = String(countryCode || '')
+    .trim()
+    .toUpperCase();
+  if (!/^[A-Z]{2}$/.test(normalized)) return '🌍';
+  return normalized.replace(/[A-Z]/g, (char) => String.fromCodePoint(char.charCodeAt(0) + 127397));
+};
 
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 const toNumber = (value: string, fallback: number) => {
@@ -583,6 +670,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Occasion',
         description: 'Wedding, Casual, Festival and more',
         href: '/ready-to-wear',
+        icon: 'CalendarDays',
+        fontSize: 15,
         enabled: true,
         displayOrder: 1,
       },
@@ -594,6 +683,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         priceLabel: 'Budget Friendly',
         description: 'Affordable picks for every wardrobe',
         href: '/ready-to-wear?price=under-100',
+        icon: 'Tag',
+        fontSize: 24,
         enabled: true,
         displayOrder: 1,
       },
@@ -1672,53 +1763,75 @@ export default function JenksV2FrontPageManager() {
                 </Button>
               </div>
               {config.topNavigations.hamburgerMenu.map((item, index) => (
-                <div key={item.id} className="grid grid-cols-12 gap-2 rounded border p-2">
-                  <input
-                    className="col-span-3 rounded border px-2 py-1 text-xs"
-                    value={item.label}
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        topNavigations: {
-                          ...prev.topNavigations,
-                          hamburgerMenu: prev.topNavigations.hamburgerMenu.map((entry, itemIndex) =>
-                            itemIndex === index ? { ...entry, label: event.target.value } : entry
-                          ),
-                        },
-                      }))
-                    }
-                  />
-                  <input
-                    className="col-span-5 rounded border px-2 py-1 text-xs"
-                    value={item.href}
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        topNavigations: {
-                          ...prev.topNavigations,
-                          hamburgerMenu: prev.topNavigations.hamburgerMenu.map((entry, itemIndex) =>
-                            itemIndex === index ? { ...entry, href: event.target.value } : entry
-                          ),
-                        },
-                      }))
-                    }
-                  />
-                  <input
-                    className="col-span-2 rounded border px-2 py-1 text-xs"
-                    value={item.routeKey || ''}
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        topNavigations: {
-                          ...prev.topNavigations,
-                          hamburgerMenu: prev.topNavigations.hamburgerMenu.map((entry, itemIndex) =>
-                            itemIndex === index ? { ...entry, routeKey: event.target.value || undefined } : entry
-                          ),
-                        },
-                      }))
-                    }
-                  />
-                  <div className="col-span-2 flex items-center justify-end gap-1">
+                <div key={item.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
+                  <label className="md:col-span-3 text-[11px]">
+                    Label
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={item.label}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            hamburgerMenu: prev.topNavigations.hamburgerMenu.map((entry, itemIndex) =>
+                              itemIndex === index ? { ...entry, label: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="md:col-span-5 text-[11px]">
+                    Route
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={item.href}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            hamburgerMenu: prev.topNavigations.hamburgerMenu.map((entry, itemIndex) =>
+                              itemIndex === index ? { ...entry, href: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      {ROUTE_OPTIONS.map((route) => (
+                        <option key={`${route.key}-${route.href}`} value={route.href}>
+                          {route.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="md:col-span-2 text-[11px]">
+                    Route Key
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={item.routeKey || ''}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            hamburgerMenu: prev.topNavigations.hamburgerMenu.map((entry, itemIndex) =>
+                              itemIndex === index ? { ...entry, routeKey: event.target.value || undefined } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      <option value="">(None)</option>
+                      {ROUTE_OPTIONS.map((route) => (
+                        <option key={route.key} value={route.key}>
+                          {route.key}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="md:col-span-2 flex items-end justify-end gap-1">
                     <input
                       type="checkbox"
                       checked={item.enabled}
@@ -1758,38 +1871,50 @@ export default function JenksV2FrontPageManager() {
               <h3 className="text-sm font-semibold">Additional Top Menu + Sign In + Theme Controller</h3>
               <div className="space-y-2">
                 {config.topNavigations.additionalTopMenu.map((item, index) => (
-                  <div key={item.id} className="grid grid-cols-12 gap-2 rounded border p-2">
-                    <input
-                      className="col-span-3 rounded border px-2 py-1 text-xs"
-                      value={item.label}
-                      onChange={(event) =>
-                        setConfig((prev) => ({
-                          ...prev,
-                          topNavigations: {
-                            ...prev.topNavigations,
-                            additionalTopMenu: prev.topNavigations.additionalTopMenu.map((entry, itemIndex) =>
-                              itemIndex === index ? { ...entry, label: event.target.value } : entry
-                            ),
-                          },
-                        }))
-                      }
-                    />
-                    <input
-                      className="col-span-6 rounded border px-2 py-1 text-xs"
-                      value={item.href}
-                      onChange={(event) =>
-                        setConfig((prev) => ({
-                          ...prev,
-                          topNavigations: {
-                            ...prev.topNavigations,
-                            additionalTopMenu: prev.topNavigations.additionalTopMenu.map((entry, itemIndex) =>
-                              itemIndex === index ? { ...entry, href: event.target.value } : entry
-                            ),
-                          },
-                        }))
-                      }
-                    />
-                    <div className="col-span-3 flex items-center justify-end gap-1">
+                  <div key={item.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
+                    <label className="md:col-span-3 text-[11px]">
+                      Label
+                      <input
+                        className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                        value={item.label}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            topNavigations: {
+                              ...prev.topNavigations,
+                              additionalTopMenu: prev.topNavigations.additionalTopMenu.map((entry, itemIndex) =>
+                                itemIndex === index ? { ...entry, label: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="md:col-span-6 text-[11px]">
+                      Route
+                      <select
+                        className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                        value={item.href}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            topNavigations: {
+                              ...prev.topNavigations,
+                              additionalTopMenu: prev.topNavigations.additionalTopMenu.map((entry, itemIndex) =>
+                                itemIndex === index ? { ...entry, href: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      >
+                        {ROUTE_OPTIONS.map((route) => (
+                          <option key={`top-${route.key}`} value={route.href}>
+                            {route.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="md:col-span-3 flex items-end justify-end gap-1">
                       <input
                         type="checkbox"
                         checked={item.enabled}
@@ -1843,8 +1968,8 @@ export default function JenksV2FrontPageManager() {
                   />
                 </label>
                 <label className="text-xs">
-                  Sign In Link
-                  <input
+                  Sign In Route
+                  <select
                     className="mt-1 w-full rounded border px-2 py-1.5"
                     value={config.topNavigations.signInMenu.href}
                     onChange={(event) =>
@@ -1856,7 +1981,13 @@ export default function JenksV2FrontPageManager() {
                         },
                       }))
                     }
-                  />
+                  >
+                    {ROUTE_OPTIONS.map((route) => (
+                      <option key={`signin-${route.key}`} value={route.href}>
+                        {route.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="text-xs">
                   Theme Mode
@@ -2481,9 +2612,9 @@ export default function JenksV2FrontPageManager() {
                         ...prev.shopBy.countries,
                         {
                           id: uid(),
-                          code: '',
-                          name: 'New Country',
-                          icon: '🌍',
+                          code: 'DZ',
+                          name: 'Algeria',
+                          icon: flagEmoji('DZ'),
                           productCountMode: 'STATIC',
                           staticProductCount: 0,
                           enabled: true,
@@ -2498,58 +2629,76 @@ export default function JenksV2FrontPageManager() {
                 Add Country
               </Button>
             </div>
-            {config.shopBy.countries.map((country, index) => (
+              {config.shopBy.countries.map((country, index) => (
               <div key={country.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
-                <input
-                  className="md:col-span-1 rounded border px-2 py-1 text-xs"
-                  value={country.code}
-                  placeholder="Code"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      shopBy: {
-                        ...prev.shopBy,
-                        countries: prev.shopBy.countries.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, code: event.target.value.toUpperCase() } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
-                <input
-                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
-                  value={country.name}
-                  placeholder="Name"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      shopBy: {
-                        ...prev.shopBy,
-                        countries: prev.shopBy.countries.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, name: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
-                <input
-                  className="md:col-span-1 rounded border px-2 py-1 text-xs"
-                  value={country.icon}
-                  placeholder="Icon"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      shopBy: {
-                        ...prev.shopBy,
-                        countries: prev.shopBy.countries.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, icon: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
+                <label className="md:col-span-4 text-[11px]">
+                  Country (select)
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={country.code}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        shopBy: {
+                          ...prev.shopBy,
+                          countries: prev.shopBy.countries.map((entry, entryIndex) => {
+                            if (entryIndex !== index) return entry;
+                            const selected = COUNTRY_BY_CODE.get(event.target.value);
+                            return {
+                              ...entry,
+                              code: event.target.value,
+                              name: selected?.name || entry.name,
+                              icon: selected ? flagEmoji(selected.code) : entry.icon,
+                            };
+                          }),
+                        },
+                      }))
+                    }
+                  >
+                    {AFRICAN_COUNTRIES_54.map((entry) => (
+                      <option key={entry.code} value={entry.code}>
+                        {entry.name} ({entry.code})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Code
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={country.code}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        shopBy: {
+                          ...prev.shopBy,
+                          countries: prev.shopBy.countries.map((entry, entryIndex) => {
+                            if (entryIndex !== index) return entry;
+                            const selected = COUNTRY_BY_CODE.get(event.target.value);
+                            return {
+                              ...entry,
+                              code: event.target.value,
+                              name: selected?.name || entry.name,
+                              icon: selected ? flagEmoji(selected.code) : entry.icon,
+                            };
+                          }),
+                        },
+                      }))
+                    }
+                  >
+                    {AFRICAN_COUNTRIES_54.map((entry) => (
+                      <option key={entry.code} value={entry.code}>
+                        {entry.code}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="md:col-span-1 text-[11px]">
+                  Flag
+                  <input className="mt-1 w-full rounded border px-2 py-1 text-xs" value={country.icon} readOnly />
+                </label>
                 <select
-                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
+                  className="md:col-span-2 mt-4 rounded border px-2 py-1 text-xs md:mt-0"
                   value={country.productCountMode}
                   onChange={(event) =>
                     setConfig((prev) => ({
@@ -2568,7 +2717,8 @@ export default function JenksV2FrontPageManager() {
                 </select>
                 <input
                   type="number"
-                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
+                  className="md:col-span-1 rounded border px-2 py-1 text-xs"
+                  aria-label="Static Product Count"
                   value={country.staticProductCount}
                   onChange={(event) =>
                     setConfig((prev) => ({
@@ -2587,6 +2737,7 @@ export default function JenksV2FrontPageManager() {
                 <input
                   type="number"
                   className="md:col-span-1 rounded border px-2 py-1 text-xs"
+                  aria-label="Display Order"
                   value={country.displayOrder}
                   onChange={(event) =>
                     setConfig((prev) => ({
@@ -2831,16 +2982,16 @@ export default function JenksV2FrontPageManager() {
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="rounded-lg border p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Shop By Style Cards</h3>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      shopBy: {
-                        ...prev.shopBy,
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Shop By Style Cards</h3>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    shopBy: {
+                      ...prev.shopBy,
                         styleCards: [
                           ...prev.shopBy.styleCards,
                           {
@@ -2848,21 +2999,26 @@ export default function JenksV2FrontPageManager() {
                             title: 'New Style',
                             description: '',
                             href: '/ready-to-wear',
+                            icon: 'CalendarDays',
+                            titleFontSize: 15,
+                            descriptionFontSize: 14,
                             enabled: true,
                             displayOrder: prev.shopBy.styleCards.length + 1,
                           },
                         ],
-                      },
-                    }))
-                  }
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-              {config.shopBy.styleCards.map((card, index) => (
-                <div key={card.id} className="grid grid-cols-12 gap-2 rounded border p-2">
+                    },
+                  }))
+                }
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            {config.shopBy.styleCards.map((card, index) => (
+              <div key={card.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
+                <label className="md:col-span-2 text-[11px]">
+                  Title
                   <input
-                    className="col-span-3 rounded border px-2 py-1 text-xs"
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
                     value={card.title}
                     onChange={(event) =>
                       setConfig((prev) => ({
@@ -2876,8 +3032,11 @@ export default function JenksV2FrontPageManager() {
                       }))
                     }
                   />
+                </label>
+                <label className="md:col-span-3 text-[11px]">
+                  Description
                   <input
-                    className="col-span-4 rounded border px-2 py-1 text-xs"
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
                     value={card.description}
                     onChange={(event) =>
                       setConfig((prev) => ({
@@ -2891,8 +3050,11 @@ export default function JenksV2FrontPageManager() {
                       }))
                     }
                   />
-                  <input
-                    className="col-span-3 rounded border px-2 py-1 text-xs"
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Route (dropdown)
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
                     value={card.href}
                     onChange={(event) =>
                       setConfig((prev) => ({
@@ -2905,41 +3067,114 @@ export default function JenksV2FrontPageManager() {
                         },
                       }))
                     }
-                  />
-                  <div className="col-span-2 flex items-center justify-end gap-1">
+                  >
+                    {ROUTE_OPTIONS.map((route) => (
+                      <option key={`${route.key}-${route.href}`} value={route.href}>
+                        {route.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Icon (dropdown)
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.icon}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        shopBy: {
+                          ...prev.shopBy,
+                          styleCards: prev.shopBy.styleCards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, icon: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  >
+                    {ICON_OPTIONS.map((iconKey) => (
+                      <option key={iconKey} value={iconKey}>
+                        {iconKey}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                  <label className="md:col-span-1 text-[11px]">
+                    Title Font Size
                     <input
-                      type="checkbox"
-                      checked={card.enabled}
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={card.titleFontSize}
                       onChange={(event) =>
                         setConfig((prev) => ({
                           ...prev,
                           shopBy: {
                             ...prev.shopBy,
                             styleCards: prev.shopBy.styleCards.map((entry, entryIndex) =>
-                              entryIndex === index ? { ...entry, enabled: event.target.checked } : entry
+                              entryIndex === index
+                                ? { ...entry, titleFontSize: clamp(toNumber(event.target.value, entry.titleFontSize), 10, 72) }
+                                : entry
                             ),
                           },
                         }))
                       }
                     />
-                    <button
-                      type="button"
-                      className="rounded border p-1"
-                      onClick={() =>
+                  </label>
+                  <label className="md:col-span-1 text-[11px]">
+                    Description Font Size
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={card.descriptionFontSize}
+                      onChange={(event) =>
                         setConfig((prev) => ({
                           ...prev,
                           shopBy: {
                             ...prev.shopBy,
-                            styleCards: prev.shopBy.styleCards.filter((_, entryIndex) => entryIndex !== index),
+                            styleCards: prev.shopBy.styleCards.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, descriptionFontSize: clamp(toNumber(event.target.value, entry.descriptionFontSize), 10, 72) }
+                                : entry
+                            ),
                           },
                         }))
                       }
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+                    />
+                  </label>
+                  <div className="md:col-span-1 flex items-end justify-end gap-1">
+                  <input
+                    type="checkbox"
+                    checked={card.enabled}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        shopBy: {
+                          ...prev.shopBy,
+                          styleCards: prev.shopBy.styleCards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, enabled: event.target.checked } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="rounded border p-1"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        shopBy: {
+                          ...prev.shopBy,
+                          styleCards: prev.shopBy.styleCards.filter((_, entryIndex) => entryIndex !== index),
+                        },
+                      }))
+                    }
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-              ))}
+              </div>
+            ))}
             </div>
 
             <div className="rounded-lg border p-4 space-y-3">
@@ -2960,7 +3195,10 @@ export default function JenksV2FrontPageManager() {
                             title: 'New Price',
                             priceLabel: '',
                             description: '',
-                            href: '/shop',
+                            href: '/ready-to-wear',
+                            icon: 'Tag',
+                            titleFontSize: 24,
+                            descriptionFontSize: 14,
                             enabled: true,
                             displayOrder: prev.shopBy.priceCards.length + 1,
                           },
@@ -2973,68 +3211,129 @@ export default function JenksV2FrontPageManager() {
                 </Button>
               </div>
               {config.shopBy.priceCards.map((card, index) => (
-                <div key={card.id} className="grid grid-cols-12 gap-2 rounded border p-2">
-                  <input
-                    className="col-span-3 rounded border px-2 py-1 text-xs"
-                    value={card.title}
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        shopBy: {
-                          ...prev.shopBy,
-                          priceCards: prev.shopBy.priceCards.map((entry, entryIndex) =>
-                            entryIndex === index ? { ...entry, title: event.target.value } : entry
-                          ),
-                        },
-                      }))
-                    }
-                  />
-                  <input
-                    className="col-span-2 rounded border px-2 py-1 text-xs"
-                    value={card.priceLabel}
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        shopBy: {
-                          ...prev.shopBy,
-                          priceCards: prev.shopBy.priceCards.map((entry, entryIndex) =>
-                            entryIndex === index ? { ...entry, priceLabel: event.target.value } : entry
-                          ),
-                        },
-                      }))
-                    }
-                  />
-                  <input
-                    className="col-span-3 rounded border px-2 py-1 text-xs"
-                    value={card.description}
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        shopBy: {
-                          ...prev.shopBy,
-                          priceCards: prev.shopBy.priceCards.map((entry, entryIndex) =>
-                            entryIndex === index ? { ...entry, description: event.target.value } : entry
-                          ),
-                        },
-                      }))
-                    }
-                  />
-                  <input
-                    className="col-span-2 rounded border px-2 py-1 text-xs"
-                    value={card.href}
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        shopBy: {
-                          ...prev.shopBy,
-                          priceCards: prev.shopBy.priceCards.map((entry, entryIndex) =>
-                            entryIndex === index ? { ...entry, href: event.target.value } : entry
-                          ),
-                        },
-                      }))
-                    }
-                  />
-                  <div className="col-span-2 flex items-center justify-end gap-1">
+                <div key={card.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
+                  <label className="md:col-span-2 text-[11px]">
+                    Title
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={card.title}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          shopBy: {
+                            ...prev.shopBy,
+                            priceCards: prev.shopBy.priceCards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, title: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="md:col-span-2 text-[11px]">
+                    Price Label
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={card.priceLabel}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          shopBy: {
+                            ...prev.shopBy,
+                            priceCards: prev.shopBy.priceCards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, priceLabel: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="md:col-span-2 text-[11px]">
+                    Description
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={card.description}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          shopBy: {
+                            ...prev.shopBy,
+                            priceCards: prev.shopBy.priceCards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, description: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="md:col-span-2 text-[11px]">
+                    Route (dropdown)
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={card.href}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          shopBy: {
+                            ...prev.shopBy,
+                            priceCards: prev.shopBy.priceCards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, href: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      {ROUTE_OPTIONS.map((route) => (
+                        <option key={`${route.key}-${route.href}`} value={route.href}>
+                          {route.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="md:col-span-1 text-[11px]">
+                    Icon (dropdown)
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={card.icon}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          shopBy: {
+                            ...prev.shopBy,
+                            priceCards: prev.shopBy.priceCards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, icon: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      {ICON_OPTIONS.map((iconKey) => (
+                        <option key={iconKey} value={iconKey}>
+                          {iconKey}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="md:col-span-1 text-[11px]">
+                    Font Size
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={card.fontSize}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          shopBy: {
+                            ...prev.shopBy,
+                            priceCards: prev.shopBy.priceCards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, fontSize: clamp(toNumber(event.target.value, entry.fontSize), 10, 72) } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <div className="md:col-span-2 flex items-end justify-end gap-1">
                     <input
                       type="checkbox"
                       checked={card.enabled}

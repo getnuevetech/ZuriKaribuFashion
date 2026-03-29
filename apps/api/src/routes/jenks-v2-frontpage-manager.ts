@@ -134,6 +134,9 @@ type ShopByCard = {
   title: string;
   description: string;
   href: string;
+  icon: string;
+  titleFontSize: number;
+  descriptionFontSize: number;
   enabled: boolean;
   displayOrder: number;
 };
@@ -630,6 +633,9 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           title: 'Occasion',
           description: 'Wedding, Casual, Festival and more',
           href: '/ready-to-wear',
+          icon: 'CalendarDays',
+          titleFontSize: 15,
+          descriptionFontSize: 14,
           enabled: true,
           displayOrder: 1,
         },
@@ -641,6 +647,9 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           priceLabel: 'Budget Friendly',
           description: 'Affordable picks for every wardrobe',
           href: '/shop?price=under-100',
+          icon: 'Tag',
+          titleFontSize: 24,
+          descriptionFontSize: 14,
           enabled: true,
           displayOrder: 1,
         },
@@ -1047,6 +1056,9 @@ const normalizeShopBy = (raw: unknown, fallback: ShopBySettings): ShopBySettings
         title: (getString(item.title) || fallbackItem.title || 'Card').slice(0, 80),
         description: (getString(item.description) || fallbackItem.description || '').slice(0, 220),
         href: normalizeHref(item.href, fallbackItem.href || '/shop'),
+        icon: (getString(item.icon) || fallbackItem.icon || 'CalendarDays').slice(0, 60),
+        titleFontSize: clamp(Math.round(getNumber(item.titleFontSize) ?? fallbackItem.titleFontSize ?? 15), 10, 72),
+        descriptionFontSize: clamp(Math.round(getNumber(item.descriptionFontSize) ?? fallbackItem.descriptionFontSize ?? 14), 10, 72),
         enabled: getBoolean(item.enabled) ?? fallbackItem.enabled ?? true,
         displayOrder: clamp(Math.round(getNumber(item.displayOrder) ?? fallbackItem.displayOrder ?? index + 1), 0, 999),
       } as ShopByCard;
@@ -1063,6 +1075,9 @@ const normalizeShopBy = (raw: unknown, fallback: ShopBySettings): ShopBySettings
         priceLabel: (getString(item.priceLabel) || fallbackItem.priceLabel || '').slice(0, 80),
         description: (getString(item.description) || fallbackItem.description || '').slice(0, 220),
         href: normalizeHref(item.href, fallbackItem.href || '/shop'),
+        icon: (getString(item.icon) || fallbackItem.icon || 'Tag').slice(0, 60),
+        titleFontSize: clamp(Math.round(getNumber(item.titleFontSize) ?? fallbackItem.titleFontSize ?? 24), 10, 72),
+        descriptionFontSize: clamp(Math.round(getNumber(item.descriptionFontSize) ?? fallbackItem.descriptionFontSize ?? 14), 10, 72),
         enabled: getBoolean(item.enabled) ?? fallbackItem.enabled ?? true,
         displayOrder: clamp(Math.round(getNumber(item.displayOrder) ?? fallbackItem.displayOrder ?? index + 1), 0, 999),
       } as ShopByPriceCard;
