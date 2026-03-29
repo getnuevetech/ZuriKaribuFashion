@@ -10839,7 +10839,8 @@ const jenksV2FrontpageManagerApi = {
             description: string;
             href: string;
             icon: string;
-            fontSize: number;
+            titleFontSize: number;
+            descriptionFontSize: number;
             enabled: boolean;
             displayOrder: number;
           }>;
@@ -10850,7 +10851,8 @@ const jenksV2FrontpageManagerApi = {
             description: string;
             href: string;
             icon: string;
-            fontSize: number;
+            titleFontSize: number;
+            descriptionFontSize: number;
             enabled: boolean;
             displayOrder: number;
           }>;
@@ -10986,7 +10988,7 @@ const jenksV2FrontpageManagerApi = {
             contactPhone: string;
             copyright: string;
             policyLinks: Array<{ id: string; label: string; href: string; enabled: boolean }>;
-            socialLinks: Array<{ id: string; label: string; href: string; enabled: boolean }>;
+            socialLinks: Array<{ id: string; label: string; icon?: string; href: string; enabled: boolean }>;
             linkGroups: Array<{
               id: string;
               title: string;

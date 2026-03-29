@@ -115,7 +115,8 @@ type ShopByCard = {
   description: string;
   href: string;
   icon: string;
-  fontSize: number;
+  titleFontSize: number;
+  descriptionFontSize: number;
   enabled: boolean;
   displayOrder: number;
 };
@@ -237,6 +238,7 @@ type Heritage = {
 type LinkItem = {
   id: string;
   label: string;
+  icon?: string;
   href: string;
   enabled: boolean;
 };
@@ -323,7 +325,11 @@ const ROUTE_OPTIONS = [
   { key: 'READY_TO_WEAR', label: 'Ready To Wear', href: '/ready-to-wear' },
   { key: 'FABRICS', label: 'Fabric To Buy', href: '/fabrics' },
   { key: 'CUSTOM_TO_WEAR', label: 'Custom To Wear', href: '/custom' },
+  { key: 'DESIGNERS', label: 'Designers', href: '/designers' },
+  { key: 'ABOUT', label: 'About Us', href: '/about' },
   { key: 'CONTACT', label: 'Contact', href: '/contact' },
+  { key: 'HELP_CENTER', label: 'Help Center', href: '/help-center' },
+  { key: 'COUNTRY_PRODUCTS', label: 'Country Products', href: '/country-products' },
   { key: 'AUTH_LOGIN', label: 'Sign In', href: '/auth/login' },
 ];
 
@@ -403,6 +409,11 @@ const ICON_OPTIONS = [
   'ArrowRight',
   'MapPin',
 ] as const;
+
+const CATEGORY_SECTION_KEY_OPTIONS = ['RTW', 'FTB', 'CTW'] as const;
+
+const SOCIAL_ICON_OPTIONS = ['Instagram', 'Facebook', 'Twitter', 'X', 'Youtube', 'Globe'] as const;
+const LINK_GROUP_TITLE_OPTIONS = ['Shop', 'Company', 'Support', 'Legal', 'Community'] as const;
 
 const flagEmoji = (countryCode: string) => {
   const normalized = String(countryCode || '')
@@ -671,7 +682,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Wedding, Casual, Festival and more',
         href: '/ready-to-wear',
         icon: 'CalendarDays',
-        fontSize: 15,
+        titleFontSize: 15,
+        descriptionFontSize: 14,
         enabled: true,
         displayOrder: 1,
       },
@@ -684,7 +696,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Affordable picks for every wardrobe',
         href: '/ready-to-wear?price=under-100',
         icon: 'Tag',
-        fontSize: 24,
+        titleFontSize: 24,
+        descriptionFontSize: 14,
         enabled: true,
         displayOrder: 1,
       },
@@ -893,7 +906,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       contactPhone: '+234 000 000 0000',
       copyright: '© Jenks. All rights reserved.',
       policyLinks: [{ id: uid(), label: 'Privacy Policy', href: '/help-center', enabled: true }],
-      socialLinks: [{ id: uid(), label: 'Instagram', href: 'https://instagram.com', enabled: true }],
+      socialLinks: [{ id: uid(), label: 'Instagram', icon: 'Instagram', href: 'https://instagram.com', enabled: true }],
       linkGroups: [
         {
           id: uid(),
@@ -1094,6 +1107,17 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
   return next;
 };
 
+const normalizeLinkItemWithDefaults = (entry: unknown): LinkItem => {
+  const row = entry && typeof entry === 'object' ? (entry as Partial<LinkItem>) : {};
+  return {
+    id: String(row.id || uid()),
+    label: String(row.label || ''),
+    icon: typeof row.icon === 'string' ? row.icon : undefined,
+    href: String(row.href || '/'),
+    enabled: typeof row.enabled === 'boolean' ? row.enabled : true,
+  };
+};
+
 const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
   if (!input || typeof input !== 'object') return DEFAULT_CONFIG;
   const data = input as Partial<JenksV2FrontpageConfig>;
@@ -1166,6 +1190,30 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             ctaStyle: normalizeCtaStyle((card as DesignerSpotlightCard)?.ctaStyle, fallbackSpotlight.ctaStyle),
           }))
         : DEFAULT_CONFIG.designerSpotlight.cards,
+    },
+    newsletterFooter: {
+      ...DEFAULT_CONFIG.newsletterFooter,
+      ...(data.newsletterFooter || {}),
+      footer: {
+        ...DEFAULT_CONFIG.newsletterFooter.footer,
+        ...((data.newsletterFooter as NewsletterFooter | undefined)?.footer || {}),
+        policyLinks: Array.isArray((data.newsletterFooter as NewsletterFooter | undefined)?.footer?.policyLinks)
+          ? ((data.newsletterFooter as NewsletterFooter).footer.policyLinks || []).map((entry) => normalizeLinkItemWithDefaults(entry))
+          : DEFAULT_CONFIG.newsletterFooter.footer.policyLinks,
+        socialLinks: Array.isArray((data.newsletterFooter as NewsletterFooter | undefined)?.footer?.socialLinks)
+          ? ((data.newsletterFooter as NewsletterFooter).footer.socialLinks || []).map((entry) => normalizeLinkItemWithDefaults(entry))
+          : DEFAULT_CONFIG.newsletterFooter.footer.socialLinks,
+        linkGroups: Array.isArray((data.newsletterFooter as NewsletterFooter | undefined)?.footer?.linkGroups)
+          ? ((data.newsletterFooter as NewsletterFooter).footer.linkGroups || []).map((group) => {
+              const row = group as Partial<LinkGroup>;
+              return {
+                id: String(row.id || uid()),
+                title: String(row.title || 'Shop'),
+                links: Array.isArray(row.links) ? row.links.map((entry) => normalizeLinkItemWithDefaults(entry)) : [],
+              };
+            })
+          : DEFAULT_CONFIG.newsletterFooter.footer.linkGroups,
+      },
     },
   };
 };
@@ -2802,11 +2850,11 @@ export default function JenksV2FrontPageManager() {
                         ...prev.shopBy.categories,
                         {
                           id: uid(),
-                          key: '',
+                          key: 'RTW',
                           title: 'New Category',
                           description: '',
                           image: '',
-                          icon: '',
+                          icon: 'ShoppingBag',
                           productCountMode: 'STATIC',
                           staticProductCount: 0,
                           enabled: true,
@@ -2824,22 +2872,30 @@ export default function JenksV2FrontPageManager() {
             {config.shopBy.categories.map((category, index) => (
               <div key={category.id} className="rounded border p-2 space-y-2">
                 <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
-                  <input
-                    className="md:col-span-1 rounded border px-2 py-1 text-xs"
-                    value={category.key}
-                    placeholder="Key"
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        shopBy: {
-                          ...prev.shopBy,
-                          categories: prev.shopBy.categories.map((entry, entryIndex) =>
-                            entryIndex === index ? { ...entry, key: event.target.value.toUpperCase() } : entry
-                          ),
-                        },
-                      }))
-                    }
-                  />
+                  <label className="md:col-span-1 text-[11px]">
+                    Key
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={category.key}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          shopBy: {
+                            ...prev.shopBy,
+                            categories: prev.shopBy.categories.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, key: event.target.value.toUpperCase() } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      {CATEGORY_SECTION_KEY_OPTIONS.map((option) => (
+                        <option key={`shopby-category-${option}`} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <input
                     className="md:col-span-2 rounded border px-2 py-1 text-xs"
                     value={category.title}
@@ -2872,22 +2928,30 @@ export default function JenksV2FrontPageManager() {
                       }))
                     }
                   />
-                  <input
-                    className="md:col-span-1 rounded border px-2 py-1 text-xs"
-                    value={category.icon}
-                    placeholder="Icon"
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        shopBy: {
-                          ...prev.shopBy,
-                          categories: prev.shopBy.categories.map((entry, entryIndex) =>
-                            entryIndex === index ? { ...entry, icon: event.target.value } : entry
-                          ),
-                        },
-                      }))
-                    }
-                  />
+                  <label className="md:col-span-1 text-[11px]">
+                    Icon
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={category.icon}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          shopBy: {
+                            ...prev.shopBy,
+                            categories: prev.shopBy.categories.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, icon: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      {ICON_OPTIONS.map((iconKey) => (
+                        <option key={`shopby-category-icon-${iconKey}`} value={iconKey}>
+                          {iconKey}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <select
                     className="md:col-span-2 rounded border px-2 py-1 text-xs"
                     value={category.productCountMode}
@@ -3315,18 +3379,48 @@ export default function JenksV2FrontPageManager() {
                     </select>
                   </label>
                   <label className="md:col-span-1 text-[11px]">
-                    Font Size
+                    Title Font Size
                     <input
                       type="number"
                       className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                      value={card.fontSize}
+                      value={card.titleFontSize}
                       onChange={(event) =>
                         setConfig((prev) => ({
                           ...prev,
                           shopBy: {
                             ...prev.shopBy,
                             priceCards: prev.shopBy.priceCards.map((entry, entryIndex) =>
-                              entryIndex === index ? { ...entry, fontSize: clamp(toNumber(event.target.value, entry.fontSize), 10, 72) } : entry
+                              entryIndex === index
+                                ? { ...entry, titleFontSize: clamp(toNumber(event.target.value, entry.titleFontSize), 10, 72) }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="md:col-span-1 text-[11px]">
+                    Description Font Size
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={card.descriptionFontSize}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          shopBy: {
+                            ...prev.shopBy,
+                            priceCards: prev.shopBy.priceCards.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? {
+                                    ...entry,
+                                    descriptionFontSize: clamp(
+                                      toNumber(event.target.value, entry.descriptionFontSize),
+                                      10,
+                                      72
+                                    ),
+                                  }
+                                : entry
                             ),
                           },
                         }))
@@ -3414,96 +3508,120 @@ export default function JenksV2FrontPageManager() {
           </div>
           {config.categoryManage.sections.map((section, index) => (
             <div key={section.id} className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-16">
-              <input
-                className="md:col-span-1 rounded border px-2 py-1 text-xs"
-                value={section.key}
-                placeholder="Key"
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    categoryManage: {
-                      sections: prev.categoryManage.sections.map((entry, entryIndex) =>
-                        entryIndex === index ? { ...entry, key: event.target.value.toUpperCase() } : entry
-                      ),
-                    },
-                  }))
-                }
-              />
-              <input
-                className="md:col-span-2 rounded border px-2 py-1 text-xs"
-                value={section.title}
-                placeholder="Title"
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    categoryManage: {
-                      sections: prev.categoryManage.sections.map((entry, entryIndex) =>
-                        entryIndex === index ? { ...entry, title: event.target.value } : entry
-                      ),
-                    },
-                  }))
-                }
-              />
-              <input
-                className="md:col-span-1 rounded border px-2 py-1 text-xs"
-                value={section.tag}
-                placeholder="Tag"
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    categoryManage: {
-                      sections: prev.categoryManage.sections.map((entry, entryIndex) =>
-                        entryIndex === index ? { ...entry, tag: event.target.value } : entry
-                      ),
-                    },
-                  }))
-                }
-              />
-              <input
-                className="md:col-span-3 rounded border px-2 py-1 text-xs"
-                value={section.description}
-                placeholder="Description"
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    categoryManage: {
-                      sections: prev.categoryManage.sections.map((entry, entryIndex) =>
-                        entryIndex === index ? { ...entry, description: event.target.value } : entry
-                      ),
-                    },
-                  }))
-                }
-              />
-              <input
-                className="md:col-span-2 rounded border px-2 py-1 text-xs"
-                value={section.ctaText}
-                placeholder="CTA Text"
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    categoryManage: {
-                      sections: prev.categoryManage.sections.map((entry, entryIndex) =>
-                        entryIndex === index ? { ...entry, ctaText: event.target.value } : entry
-                      ),
-                    },
-                  }))
-                }
-              />
-              <input
-                className="md:col-span-2 rounded border px-2 py-1 text-xs"
-                value={section.ctaLink}
-                placeholder="CTA Link"
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    categoryManage: {
-                      sections: prev.categoryManage.sections.map((entry, entryIndex) =>
-                        entryIndex === index ? { ...entry, ctaLink: event.target.value } : entry
-                      ),
-                    },
-                  }))
-                }
-              />
+              <label className="md:col-span-1 text-[11px]">
+                Section Key
+                <select
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={section.key}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      categoryManage: {
+                        sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, key: event.target.value.toUpperCase() } : entry
+                        ),
+                      },
+                    }))
+                  }
+                >
+                  {CATEGORY_SECTION_KEY_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="md:col-span-2 text-[11px]">
+                Title
+                <input
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={section.title}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      categoryManage: {
+                        sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, title: event.target.value } : entry
+                        ),
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="md:col-span-1 text-[11px]">
+                Tag
+                <input
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={section.tag}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      categoryManage: {
+                        sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, tag: event.target.value } : entry
+                        ),
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="md:col-span-3 text-[11px]">
+                Description
+                <input
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={section.description}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      categoryManage: {
+                        sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, description: event.target.value } : entry
+                        ),
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="md:col-span-2 text-[11px]">
+                CTA Text
+                <input
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={section.ctaText}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      categoryManage: {
+                        sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, ctaText: event.target.value } : entry
+                        ),
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="md:col-span-2 text-[11px]">
+                CTA Route (dropdown)
+                <select
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={section.ctaLink}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      categoryManage: {
+                        sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, ctaLink: event.target.value } : entry
+                        ),
+                      },
+                    }))
+                  }
+                >
+                  {ROUTE_OPTIONS.map((route) => (
+                    <option key={`cat-section-${route.key}`} value={route.href}>
+                      {route.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {renderCtaStyleEditor(
                 'Section CTA Style',
                 section.ctaStyle,
@@ -3652,22 +3770,30 @@ export default function JenksV2FrontPageManager() {
                   }))
                 }
               />
-              <input
-                className="md:col-span-2 rounded border px-2 py-1 text-xs"
-                value={card.icon}
-                placeholder="Icon"
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    textIconCards: {
-                      ...prev.textIconCards,
-                      cards: prev.textIconCards.cards.map((entry, entryIndex) =>
-                        entryIndex === index ? { ...entry, icon: event.target.value } : entry
-                      ),
-                    },
-                  }))
-                }
-              />
+              <label className="md:col-span-2 text-[11px]">
+                Icon
+                <select
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={card.icon}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      textIconCards: {
+                        ...prev.textIconCards,
+                        cards: prev.textIconCards.cards.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, icon: event.target.value } : entry
+                        ),
+                      },
+                    }))
+                  }
+                >
+                  {ICON_OPTIONS.map((iconKey) => (
+                    <option key={`text-icon-${iconKey}`} value={iconKey}>
+                      {iconKey}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <div className="md:col-span-1 flex items-center justify-end gap-1">
                 <input
                   type="checkbox"
@@ -3749,21 +3875,29 @@ export default function JenksV2FrontPageManager() {
           {config.featured.cards.map((card, index) => (
             <div key={card.id} className="rounded border p-3 space-y-2">
               <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
-                <input
-                  className="md:col-span-1 rounded border px-2 py-1 text-xs"
-                  value={card.key}
-                  placeholder="Key"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      featured: {
-                        cards: prev.featured.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, key: event.target.value.toUpperCase() } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
+                <label className="md:col-span-1 text-[11px]">
+                  Key
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.key}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        featured: {
+                          cards: prev.featured.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, key: event.target.value.toUpperCase() } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  >
+                    {CATEGORY_SECTION_KEY_OPTIONS.map((option) => (
+                      <option key={`featured-key-${option}`} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <input
                   className="md:col-span-2 rounded border px-2 py-1 text-xs"
                   value={card.tag}
@@ -3824,21 +3958,29 @@ export default function JenksV2FrontPageManager() {
                     }))
                   }
                 />
-                <input
-                  className="md:col-span-1 rounded border px-2 py-1 text-xs"
-                  value={card.ctaLink}
-                  placeholder="Link"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      featured: {
-                        cards: prev.featured.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, ctaLink: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
+                <label className="md:col-span-1 text-[11px]">
+                  CTA Route
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.ctaLink}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        featured: {
+                          cards: prev.featured.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, ctaLink: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  >
+                    {ROUTE_OPTIONS.map((route) => (
+                      <option key={`featured-route-${route.key}`} value={route.href}>
+                        {route.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 {renderCtaStyleEditor(
                   'Card CTA Style',
                   card.ctaStyle,
@@ -4712,6 +4854,385 @@ export default function JenksV2FrontPageManager() {
                 />
               </label>
             </div>
+          </div>
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Footer Social Media Links</h3>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    newsletterFooter: {
+                      ...prev.newsletterFooter,
+                      footer: {
+                        ...prev.newsletterFooter.footer,
+                        socialLinks: [
+                          ...prev.newsletterFooter.footer.socialLinks,
+                          { id: uid(), label: 'Instagram', icon: 'Instagram', href: 'https://instagram.com', enabled: true },
+                        ],
+                      },
+                    },
+                  }))
+                }
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Social Link
+              </Button>
+            </div>
+            {config.newsletterFooter.footer.socialLinks.map((link, index) => (
+              <div key={link.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
+                <label className="md:col-span-2 text-[11px]">
+                  Platform
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={link.label}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        newsletterFooter: {
+                          ...prev.newsletterFooter,
+                          footer: {
+                            ...prev.newsletterFooter.footer,
+                            socialLinks: prev.newsletterFooter.footer.socialLinks.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, label: event.target.value, icon: event.target.value === 'X' ? 'X' : event.target.value }
+                                : entry
+                            ),
+                          },
+                        },
+                      }))
+                    }
+                  >
+                    {SOCIAL_ICON_OPTIONS.map((option) => (
+                      <option key={`social-platform-${option}`} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Icon
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={link.icon || link.label || 'Instagram'}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        newsletterFooter: {
+                          ...prev.newsletterFooter,
+                          footer: {
+                            ...prev.newsletterFooter.footer,
+                            socialLinks: prev.newsletterFooter.footer.socialLinks.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, icon: event.target.value } : entry
+                            ),
+                          },
+                        },
+                      }))
+                    }
+                  >
+                    {SOCIAL_ICON_OPTIONS.map((option) => (
+                      <option key={`social-icon-${option}`} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="md:col-span-5 text-[11px]">
+                  Social URL
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={link.href}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        newsletterFooter: {
+                          ...prev.newsletterFooter,
+                          footer: {
+                            ...prev.newsletterFooter.footer,
+                            socialLinks: prev.newsletterFooter.footer.socialLinks.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, href: event.target.value } : entry
+                            ),
+                          },
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <div className="md:col-span-3 flex items-end justify-end gap-2">
+                  <label className="inline-flex items-center gap-2 text-[11px]">
+                    <input
+                      type="checkbox"
+                      checked={link.enabled}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          newsletterFooter: {
+                            ...prev.newsletterFooter,
+                            footer: {
+                              ...prev.newsletterFooter.footer,
+                              socialLinks: prev.newsletterFooter.footer.socialLinks.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, enabled: event.target.checked } : entry
+                              ),
+                            },
+                          },
+                        }))
+                      }
+                    />
+                    Enabled
+                  </label>
+                  <button
+                    type="button"
+                    className="rounded border p-1"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        newsletterFooter: {
+                          ...prev.newsletterFooter,
+                          footer: {
+                            ...prev.newsletterFooter.footer,
+                            socialLinks: prev.newsletterFooter.footer.socialLinks.filter((_, entryIndex) => entryIndex !== index),
+                          },
+                        },
+                      }))
+                    }
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Footer Menu Groups</h3>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    newsletterFooter: {
+                      ...prev.newsletterFooter,
+                      footer: {
+                        ...prev.newsletterFooter.footer,
+                        linkGroups: [
+                          ...prev.newsletterFooter.footer.linkGroups,
+                          {
+                            id: uid(),
+                            title: 'Shop',
+                            links: [{ id: uid(), label: 'Ready To Wear', href: '/ready-to-wear', enabled: true }],
+                          },
+                        ],
+                      },
+                    },
+                  }))
+                }
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Menu Group
+              </Button>
+            </div>
+            {config.newsletterFooter.footer.linkGroups.map((group, groupIndex) => (
+              <div key={group.id} className="rounded border p-3 space-y-2">
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
+                  <label className="md:col-span-3 text-[11px]">
+                    Group Title
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={group.title}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          newsletterFooter: {
+                            ...prev.newsletterFooter,
+                            footer: {
+                              ...prev.newsletterFooter.footer,
+                              linkGroups: prev.newsletterFooter.footer.linkGroups.map((entry, entryIndex) =>
+                                entryIndex === groupIndex ? { ...entry, title: event.target.value } : entry
+                              ),
+                            },
+                          },
+                        }))
+                      }
+                    >
+                      {LINK_GROUP_TITLE_OPTIONS.map((option) => (
+                        <option key={`group-title-${option}`} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="md:col-span-9 flex items-end justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          newsletterFooter: {
+                            ...prev.newsletterFooter,
+                            footer: {
+                              ...prev.newsletterFooter.footer,
+                              linkGroups: prev.newsletterFooter.footer.linkGroups.map((entry, entryIndex) =>
+                                entryIndex === groupIndex
+                                  ? {
+                                      ...entry,
+                                      links: [...entry.links, { id: uid(), label: 'New Link', href: '/ready-to-wear', enabled: true }],
+                                    }
+                                  : entry
+                              ),
+                            },
+                          },
+                        }))
+                      }
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Menu Link
+                    </Button>
+                    <button
+                      type="button"
+                      className="rounded border p-1"
+                      onClick={() =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          newsletterFooter: {
+                            ...prev.newsletterFooter,
+                            footer: {
+                              ...prev.newsletterFooter.footer,
+                              linkGroups: prev.newsletterFooter.footer.linkGroups.filter((_, entryIndex) => entryIndex !== groupIndex),
+                            },
+                          },
+                        }))
+                      }
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {group.links.map((link, linkIndex) => (
+                    <div key={link.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
+                      <label className="md:col-span-4 text-[11px]">
+                        Menu Label
+                        <input
+                          className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                          value={link.label}
+                          onChange={(event) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              newsletterFooter: {
+                                ...prev.newsletterFooter,
+                                footer: {
+                                  ...prev.newsletterFooter.footer,
+                                  linkGroups: prev.newsletterFooter.footer.linkGroups.map((entry, entryIndex) =>
+                                    entryIndex === groupIndex
+                                      ? {
+                                          ...entry,
+                                          links: entry.links.map((groupLink, groupLinkIndex) =>
+                                            groupLinkIndex === linkIndex ? { ...groupLink, label: event.target.value } : groupLink
+                                          ),
+                                        }
+                                      : entry
+                                  ),
+                                },
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="md:col-span-4 text-[11px]">
+                        Menu Route (dropdown)
+                        <select
+                          className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                          value={link.href}
+                          onChange={(event) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              newsletterFooter: {
+                                ...prev.newsletterFooter,
+                                footer: {
+                                  ...prev.newsletterFooter.footer,
+                                  linkGroups: prev.newsletterFooter.footer.linkGroups.map((entry, entryIndex) =>
+                                    entryIndex === groupIndex
+                                      ? {
+                                          ...entry,
+                                          links: entry.links.map((groupLink, groupLinkIndex) =>
+                                            groupLinkIndex === linkIndex ? { ...groupLink, href: event.target.value } : groupLink
+                                          ),
+                                        }
+                                      : entry
+                                  ),
+                                },
+                              },
+                            }))
+                          }
+                        >
+                          {ROUTE_OPTIONS.map((route) => (
+                            <option key={`footer-menu-${route.key}`} value={route.href}>
+                              {route.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="md:col-span-4 flex items-end justify-end gap-2">
+                        <label className="inline-flex items-center gap-2 text-[11px]">
+                          <input
+                            type="checkbox"
+                            checked={link.enabled}
+                            onChange={(event) =>
+                              setConfig((prev) => ({
+                                ...prev,
+                                newsletterFooter: {
+                                  ...prev.newsletterFooter,
+                                  footer: {
+                                    ...prev.newsletterFooter.footer,
+                                    linkGroups: prev.newsletterFooter.footer.linkGroups.map((entry, entryIndex) =>
+                                      entryIndex === groupIndex
+                                        ? {
+                                            ...entry,
+                                            links: entry.links.map((groupLink, groupLinkIndex) =>
+                                              groupLinkIndex === linkIndex ? { ...groupLink, enabled: event.target.checked } : groupLink
+                                            ),
+                                          }
+                                        : entry
+                                    ),
+                                  },
+                                },
+                              }))
+                            }
+                          />
+                          Enabled
+                        </label>
+                        <button
+                          type="button"
+                          className="rounded border p-1"
+                          onClick={() =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              newsletterFooter: {
+                                ...prev.newsletterFooter,
+                                footer: {
+                                  ...prev.newsletterFooter.footer,
+                                  linkGroups: prev.newsletterFooter.footer.linkGroups.map((entry, entryIndex) =>
+                                    entryIndex === groupIndex
+                                      ? { ...entry, links: entry.links.filter((_, groupLinkIndex) => groupLinkIndex !== linkIndex) }
+                                      : entry
+                                  ),
+                                },
+                              },
+                            }))
+                          }
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       ) : null}

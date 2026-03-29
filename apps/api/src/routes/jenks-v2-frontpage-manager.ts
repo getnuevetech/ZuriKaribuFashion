@@ -246,6 +246,7 @@ type HeritageSettings = {
 type LinkItem = {
   id: string;
   label: string;
+  icon?: string;
   href: string;
   enabled: boolean;
 };
@@ -871,7 +872,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           { id: randomUUID(), label: 'Terms of Service', href: '/help-center', enabled: true },
         ],
         socialLinks: [
-          { id: randomUUID(), label: 'Instagram', href: 'https://instagram.com', enabled: true },
+          { id: randomUUID(), label: 'Instagram', icon: 'Instagram', href: 'https://instagram.com', enabled: true },
         ],
         linkGroups: [
           {
@@ -1272,6 +1273,7 @@ const normalizeLinkItem = (raw: unknown, fallback: LinkItem): LinkItem => {
   return {
     id: getString(row.id) || fallback.id || randomUUID(),
     label: (getString(row.label) || fallback.label).slice(0, 80),
+    icon: (getString(row.icon) || fallback.icon || '').slice(0, 60) || undefined,
     href: normalizeHref(row.href, fallback.href),
     enabled: getBoolean(row.enabled) ?? fallback.enabled,
   };

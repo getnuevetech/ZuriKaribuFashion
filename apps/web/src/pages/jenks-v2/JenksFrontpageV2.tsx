@@ -11,7 +11,6 @@ import {
   Heart,
   Instagram,
   Mail,
-  MapPin,
   Menu,
   Palette,
   Phone,
@@ -1147,6 +1146,7 @@ export default function JenksFrontpageV2() {
         .map((entry, idx) => ({
           id: asString(entry.id, `social-${idx + 1}`),
           label: asString(entry.label, 'Social'),
+          icon: asString(entry.icon, asString(entry.label, 'Instagram')),
           href: normalizeHref(entry.href, 'https://instagram.com'),
         })),
     [footerCfg.socialLinks]
@@ -1721,7 +1721,7 @@ export default function JenksFrontpageV2() {
       {/* RTW / FTB / CTW HERO-HEIGHT SPLIT */}
       {isSectionVisible('CATEGORY_MANAGE') ? (
       <section className="space-y-0">
-        {sectionsRtwFtbCtw.map((section) => (
+        {orderedSectionsRtwFtbCtw.map((section) => (
           <div
             key={section.id}
             className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 ${
@@ -1737,14 +1737,14 @@ export default function JenksFrontpageV2() {
                   />
                   <div className="pointer-events-none absolute inset-0 bg-black/70" />
                   <div className="relative flex h-full items-center">
-                    <div className="max-w-[560px]">
+                    <div className="flex max-w-[560px] flex-col items-start">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
                       <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
                       <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
                     <Link
                       to={sectionHrefForCountry(section.key)}
                       style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                      className="mt-9 inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                      className="mt-9 inline-flex items-center self-start px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
                     >
                         {section.cta}
                     </Link>
@@ -1763,14 +1763,14 @@ export default function JenksFrontpageV2() {
                   />
                   <div className="pointer-events-none absolute inset-0 bg-black/70" />
                   <div className="relative flex h-full items-center">
-                    <div className="max-w-[560px]">
+                    <div className="flex max-w-[560px] flex-col items-start">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
                       <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
                       <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
                     <Link
                       to={sectionHrefForCountry(section.key)}
                       style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                      className="mt-9 inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                      className="mt-9 inline-flex items-center self-start px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
                     >
                         {section.cta}
                     </Link>
@@ -1933,23 +1933,19 @@ export default function JenksFrontpageV2() {
                 )}
               </p>
             </div>
-            {heritageStats.map((stat) => (
-              <div
-                key={stat.id}
-                className="absolute"
-                style={{
-                  left: `${stat.positionX}%`,
-                  top: `${stat.positionY}%`,
-                  transform: 'translate(-50%, -50%)',
-                }}
-              >
-                <p className="font-['Oswald'] text-7xl font-bold leading-none">
-                  {stat.value}
-                  {stat.suffix}
-                </p>
-                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/75">{stat.label}</p>
+            <div className="self-start pb-[14%]">
+              <div className="flex flex-wrap items-end gap-x-8 gap-y-4 rounded border border-white/15 bg-black/28 px-5 py-4 backdrop-blur-[1px]">
+                {heritageStats.map((stat) => (
+                  <div key={stat.id} className="min-w-[120px]">
+                    <p className="font-['Oswald'] text-5xl font-bold leading-none sm:text-6xl">
+                      {stat.value}
+                      {stat.suffix}
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/75">{stat.label}</p>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
           </div>
         </section>
       ) : null}
@@ -2005,16 +2001,7 @@ export default function JenksFrontpageV2() {
               <p className="mt-3 text-sm text-white/65">{asString(footerCfg.address, 'Made by Africans. Worn by the world.')}</p>
               <div className="mt-5 flex items-center gap-3 text-white/75">
                 {footerSocialLinks.map((social) => {
-                  const token = social.label.toLowerCase();
-                  const Icon = token.includes('instagram')
-                    ? Instagram
-                    : token.includes('facebook')
-                    ? Facebook
-                    : token.includes('twitter') || token.includes('x')
-                    ? Twitter
-                    : token.includes('youtube')
-                    ? Youtube
-                    : Globe;
+                  const Icon = toSocialIcon(social.icon || social.label);
                   return (
                     <a key={social.id} href={social.href} className="hover:text-white" target="_blank" rel="noreferrer">
                       <Icon className="h-4 w-4" />
@@ -2042,7 +2029,7 @@ export default function JenksFrontpageV2() {
               <div className="mt-3 space-y-2 text-sm text-white/75">
                 <p className="inline-flex items-center gap-2"><Mail className="h-4 w-4" /> {asString(footerCfg.contactEmail, 'support@zurikaribu.com')}</p>
                 <p className="inline-flex items-center gap-2"><Phone className="h-4 w-4" /> {asString(footerCfg.contactPhone, '+234 000 000 0000')}</p>
-                <p className="inline-flex items-center gap-2"><MapPin className="h-4 w-4" /> {asString(footerCfg.address, 'Lagos, Nigeria')}</p>
+                <p className="pl-6 text-white/72">{asString(footerCfg.address, 'Lagos, Nigeria')}</p>
               </div>
             </div>
           </div>
