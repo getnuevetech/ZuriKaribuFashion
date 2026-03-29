@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { MessageCircle, Phone, Mail, Send } from 'lucide-react';
-import Button from '../components/ui/Button';
+import { ArrowRight, Mail, MessageCircle, Phone, Send } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import '../styles/jenks-v2.css';
 
 const CHAT_SESSION_STORAGE_KEY = 'af_customer_service_chat_session_v1';
 
@@ -32,7 +32,10 @@ export default function ContactPage() {
         setDepartments(rows.map((row: any) => ({ id: String(row.id || ''), name: String(row.name || '') })));
         setLanguages(
           languageRows.length > 0
-            ? languageRows.map((row: any) => ({ code: String(row.code || 'en'), label: String(row.label || row.code || 'Language') }))
+            ? languageRows.map((row: any) => ({
+                code: String(row.code || 'en'),
+                label: String(row.label || row.code || 'Language'),
+              }))
             : [{ code: 'en', label: 'English' }]
         );
         const defaultLanguage = String(response?.data?.settings?.defaultLanguage || 'en');
@@ -110,117 +113,183 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-24 sm:px-6 lg:px-8">
-      <div className="rounded-2xl border bg-white p-8 shadow-sm space-y-8">
-        <div>
-          <h1 className="text-3xl font-semibold text-gray-900">Contact Us</h1>
-          <p className="mt-3 text-sm text-gray-600">
-            Start support immediately, route to the right department, and communicate in your preferred language.
+    <div className="kimi-site min-h-screen bg-[#f4f2ed] text-[#111]">
+      <section className="border-b border-black/10 bg-[#0c0c0d] py-16 text-white">
+        <div className="mx-auto w-full max-w-[1700px] px-4 sm:px-6 lg:px-12">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/65">Support</p>
+          <h1 className="mt-3 font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] sm:text-6xl">Contact Jenks</h1>
+          <p className="mt-4 max-w-2xl text-sm text-white/75 sm:text-base">
+            Start support immediately, route to the correct team, and communicate in your preferred language.
           </p>
         </div>
+      </section>
 
-        {error ? <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
-        {message ? <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</div> : null}
+      <div className="mx-auto w-full max-w-[1700px] space-y-8 px-4 py-10 sm:px-6 lg:px-12">
+        {error ? (
+          <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+        ) : null}
+        {message ? (
+          <div className="border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>
+        ) : null}
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-xl border p-4">
-            <MessageCircle className="h-5 w-5 text-amber-600" />
-            <h2 className="mt-2 text-sm font-semibold text-gray-900">Live Chat</h2>
-            <p className="mt-1 text-xs text-gray-600">
-              Start support here or from the popup icon. Your messages can be translated to agent/admin preferred language.
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <article className="border border-black/10 bg-white p-5">
+            <MessageCircle className="h-5 w-5 text-[#e66045]" />
+            <h2 className="mt-3 text-sm font-semibold uppercase tracking-[0.08em]">Live Chat</h2>
+            <p className="mt-2 text-xs text-black/60">
+              Start support here or from the popup icon. Messages can be translated for agent and admin workflows.
             </p>
-          </div>
-          <div className="rounded-xl border p-4">
-            <Mail className="h-5 w-5 text-amber-600" />
-            <h2 className="mt-2 text-sm font-semibold text-gray-900">Email Support</h2>
-            <p className="mt-1 text-xs text-gray-600">
-              Incoming support emails can be converted into tickets and routed through workflow/SLA rules.
+          </article>
+          <article className="border border-black/10 bg-white p-5">
+            <Mail className="h-5 w-5 text-[#e66045]" />
+            <h2 className="mt-3 text-sm font-semibold uppercase tracking-[0.08em]">Email Support</h2>
+            <p className="mt-2 text-xs text-black/60">
+              Incoming email issues can be converted into tickets and routed through SLA and department rules.
             </p>
-          </div>
-          <div className="rounded-xl border p-4">
-            <Phone className="h-5 w-5 text-amber-600" />
-            <h2 className="mt-2 text-sm font-semibold text-gray-900">VoIP Callback</h2>
-            <p className="mt-1 text-xs text-gray-600">
-              Agents can start in-app VoIP calls where enabled to avoid costly international phone calls.
+          </article>
+          <article className="border border-black/10 bg-white p-5">
+            <Phone className="h-5 w-5 text-[#e66045]" />
+            <h2 className="mt-3 text-sm font-semibold uppercase tracking-[0.08em]">VoIP Callback</h2>
+            <p className="mt-2 text-xs text-black/60">
+              Where enabled, support agents can initiate in-app calls to resolve complex issues quickly.
             </p>
-          </div>
-        </div>
+          </article>
+        </section>
 
-        <section className="rounded-xl border bg-gray-50 p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-gray-900">Start Live Support Now</h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            {!isAuthenticated ? (
-              <>
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_0.8fr]">
+          <div className="border border-black/10 bg-white p-6 sm:p-8">
+            <h2 className="font-['Oswald'] text-3xl font-bold uppercase">Start Live Support Now</h2>
+            <p className="mt-2 text-sm text-black/60">
+              This form is connected to your admin-controlled customer service configuration (departments and languages).
+            </p>
+
+            <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
+              {!isAuthenticated ? (
+                <>
+                  <label className="text-sm">
+                    <span className="mb-1 block text-xs font-medium uppercase tracking-[0.08em] text-black/65">Full Name</span>
+                    <input
+                      value={form.name}
+                      onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                      placeholder="Full name"
+                      className="h-10 w-full border border-black/15 px-3 text-sm outline-none focus:border-black/40"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block text-xs font-medium uppercase tracking-[0.08em] text-black/65">Email Address</span>
+                    <input
+                      value={form.email}
+                      onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+                      placeholder="Email address"
+                      className="h-10 w-full border border-black/15 px-3 text-sm outline-none focus:border-black/40"
+                    />
+                  </label>
+                  <label className="text-sm md:col-span-2">
+                    <span className="mb-1 block text-xs font-medium uppercase tracking-[0.08em] text-black/65">Phone Number</span>
+                    <input
+                      value={form.phone}
+                      onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
+                      placeholder="Phone number"
+                      className="h-10 w-full border border-black/15 px-3 text-sm outline-none focus:border-black/40"
+                    />
+                  </label>
+                </>
+              ) : (
+                <p className="border border-black/10 bg-[#f7f5ef] px-3 py-2 text-xs text-black/65 md:col-span-2">
+                  You are signed in. Contact details from your account will be used automatically.
+                </p>
+              )}
+
+              <label className="text-sm">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-[0.08em] text-black/65">Department</span>
+                <select
+                  value={form.departmentId}
+                  onChange={(event) => setForm((prev) => ({ ...prev, departmentId: event.target.value }))}
+                  className="h-10 w-full border border-black/15 bg-white px-3 text-sm outline-none focus:border-black/40"
+                >
+                  <option value="">Select department</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-[0.08em] text-black/65">Preferred Language</span>
+                <select
+                  value={form.preferredLanguage}
+                  onChange={(event) => setForm((prev) => ({ ...prev, preferredLanguage: event.target.value }))}
+                  className="h-10 w-full border border-black/15 bg-white px-3 text-sm outline-none focus:border-black/40"
+                >
+                  {languages.map((language) => (
+                    <option key={language.code} value={language.code}>
+                      {language.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm md:col-span-2">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-[0.08em] text-black/65">Issue Type</span>
                 <input
-                  value={form.name}
-                  onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                  placeholder="Full name"
-                  className="rounded border px-3 py-2 text-sm"
+                  value={form.issueType}
+                  onChange={(event) => setForm((prev) => ({ ...prev, issueType: event.target.value }))}
+                  placeholder="customer service / track order / refund"
+                  className="h-10 w-full border border-black/15 px-3 text-sm outline-none focus:border-black/40"
                 />
-                <input
-                  value={form.email}
-                  onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-                  placeholder="Email address"
-                  className="rounded border px-3 py-2 text-sm"
+              </label>
+
+              <label className="text-sm md:col-span-2">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-[0.08em] text-black/65">Issue Details</span>
+                <textarea
+                  value={form.issueDetails}
+                  onChange={(event) => setForm((prev) => ({ ...prev, issueDetails: event.target.value }))}
+                  rows={5}
+                  placeholder="Briefly describe your request"
+                  className="w-full border border-black/15 px-3 py-2 text-sm outline-none focus:border-black/40"
                 />
-                <input
-                  value={form.phone}
-                  onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
-                  placeholder="Phone number"
-                  className="rounded border px-3 py-2 text-sm md:col-span-2"
-                />
-              </>
-            ) : (
-              <p className="rounded border bg-white px-3 py-2 text-xs text-gray-600 md:col-span-2">
-                You are signed in. Contact details from your account will be used automatically.
-              </p>
-            )}
-            <select
-              value={form.departmentId}
-              onChange={(event) => setForm((prev) => ({ ...prev, departmentId: event.target.value }))}
-              className="rounded border px-3 py-2 text-sm"
+              </label>
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void startChatNow()}
+                disabled={saving}
+                className="inline-flex h-10 items-center gap-2 border border-black bg-black px-4 text-xs font-semibold uppercase tracking-[0.1em] text-white hover:bg-[#181818] disabled:opacity-60"
+              >
+                <Send className="h-3.5 w-3.5" />
+                {saving ? 'Starting...' : 'Start Live Support Chat'}
+              </button>
+              <button
+                type="button"
+                onClick={() => openChatWidget({ mode: 'support' })}
+                className="inline-flex h-10 items-center gap-2 border border-black/20 bg-white px-4 text-xs font-semibold uppercase tracking-[0.1em] text-black/75 hover:border-black/45"
+              >
+                Open Chat Popup
+              </button>
+            </div>
+          </div>
+
+          <aside className="border border-black/10 bg-[#0f0f11] p-6 text-white">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">Need immediate help?</p>
+            <h3 className="mt-3 font-['Oswald'] text-3xl font-bold uppercase leading-[0.95]">
+              Talk to our support team
+            </h3>
+            <p className="mt-4 text-sm text-white/70">
+              If you already started a chat session, reopen the widget and continue your conversation.
+            </p>
+            <button
+              type="button"
+              onClick={() => openChatWidget({ mode: 'support' })}
+              className="mt-6 inline-flex items-center gap-2 border border-white/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white hover:border-white"
             >
-              <option value="">Select department</option>
-              {departments.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
-                </option>
-              ))}
-            </select>
-            <select
-              value={form.preferredLanguage}
-              onChange={(event) => setForm((prev) => ({ ...prev, preferredLanguage: event.target.value }))}
-              className="rounded border px-3 py-2 text-sm"
-            >
-              {languages.map((language) => (
-                <option key={language.code} value={language.code}>
-                  Preferred language: {language.label}
-                </option>
-              ))}
-            </select>
-            <input
-              value={form.issueType}
-              onChange={(event) => setForm((prev) => ({ ...prev, issueType: event.target.value }))}
-              placeholder="Issue type (customer service / track order / refund)"
-              className="rounded border px-3 py-2 text-sm md:col-span-2"
-            />
-            <textarea
-              value={form.issueDetails}
-              onChange={(event) => setForm((prev) => ({ ...prev, issueDetails: event.target.value }))}
-              rows={4}
-              placeholder="Briefly describe your request"
-              className="rounded border px-3 py-2 text-sm md:col-span-2"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void startChatNow()} disabled={saving}>
-              <Send className="mr-2 h-4 w-4" />
-              {saving ? 'Starting...' : 'Start Live Support Chat'}
-            </Button>
-            <Button variant="outline" onClick={() => openChatWidget({ mode: 'support' })}>
-              Open Chat Popup
-            </Button>
-          </div>
+              Open support widget
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </aside>
         </section>
       </div>
     </div>

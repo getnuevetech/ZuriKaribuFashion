@@ -8,8 +8,6 @@ import MainLayout from './layouts/MainLayout';
 import DashboardLayout from './layouts/DashboardLayout';
 
 // Public Pages
-import Home from './pages/Home';
-import HomeEntry from './pages/HomeEntry';
 import CountryProducts from './pages/CountryProducts';
 import ReadyToWear from './pages/ReadyToWear';
 import ReadyToWearDetail from './pages/ReadyToWearDetail';
@@ -92,7 +90,6 @@ import AdminModuleRuntimeSettings from './pages/admin/ModuleRuntimeSettings';
 import AdminHomepageRuntimeSwitchboard from './pages/admin/HomepageRuntimeSwitchboard';
 import AdminJenksHomepageManage from './pages/admin/JenksHomepageManage';
 import AdminJenksV2FrontPageManager from './pages/admin/JenksV2FrontPageManager';
-import { JenksV14Redirect } from './pages/JenksV14Redirect';
 import JenksFrontpageV2 from './pages/jenks-v2/JenksFrontpageV2';
 
 // Seller Pages
@@ -161,22 +158,22 @@ function App() {
       <Elements stripe={stripePromise}>
         <Router>
           <Routes>
-            <Route path="/" element={<HomeEntry />} />
-            <Route path="/main" element={<JenksV14Redirect />} />
-            <Route path="/main/" element={<JenksV14Redirect />} />
-            <Route path="/jenks" element={<JenksV14Redirect />} />
-            <Route path="/home-jenks-static" element={<JenksV14Redirect />} />
+            <Route path="/" element={<JenksFrontpageV2 />} />
+            <Route path="/main" element={<NavigateWithSearch to="/" />} />
+            <Route path="/main/" element={<NavigateWithSearch to="/" />} />
+            <Route path="/jenks" element={<NavigateWithSearch to="/" />} />
+            <Route path="/home-jenks-static" element={<NavigateWithSearch to="/" />} />
             <Route path="/home-v2-preview" element={<JenksFrontpageV2 />} />
             <Route path="/home-v2-preview/" element={<JenksFrontpageV2 />} />
-            <Route path="/jenks-v2-preview" element={<NavigateWithSearch to="/home-v2-preview" />} />
+            <Route path="/jenks-v2-preview" element={<NavigateWithSearch to="/" />} />
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
-              <Route path="/home-legacy" element={<NavigateWithSearch to="/home" />} />
-              <Route path="/home" element={<JenksV14Redirect />} />
-              <Route path="/home-live" element={<NavigateWithSearch to="/home" />} />
-              <Route path="/jenks-dynamic" element={<NavigateWithSearch to="/home" />} />
-              <Route path="/home-jenks" element={<NavigateWithSearch to="/home" />} />
+              <Route path="/home-legacy" element={<NavigateWithSearch to="/" />} />
+              <Route path="/home" element={<NavigateWithSearch to="/" />} />
+              <Route path="/home-live" element={<NavigateWithSearch to="/" />} />
+              <Route path="/jenks-dynamic" element={<NavigateWithSearch to="/" />} />
+              <Route path="/home-jenks" element={<NavigateWithSearch to="/" />} />
               <Route path="/rtw" element={<Navigate to="/ready-to-wear" replace />} />
               <Route path="/readytowear" element={<Navigate to="/ready-to-wear" replace />} />
               <Route path="/ftb" element={<Navigate to="/fabrics" replace />} />
@@ -186,8 +183,8 @@ function App() {
               <Route path="/ctw" element={<Navigate to="/custom" replace />} />
               <Route path="/customtowear" element={<Navigate to="/custom" replace />} />
               <Route path="/contact-us" element={<Navigate to="/contact" replace />} />
-              <Route path="/about" element={<Navigate to="/home#about" replace />} />
-              <Route path="/about-us" element={<Navigate to="/home#about" replace />} />
+              <Route path="/about" element={<Navigate to="/#about" replace />} />
+              <Route path="/about-us" element={<Navigate to="/#about" replace />} />
               <Route path="/designers" element={<Navigate to="/custom" replace />} />
               <Route path="/support" element={<Navigate to="/help-center" replace />} />
               <Route path="/faq" element={<Navigate to="/help-center" replace />} />
