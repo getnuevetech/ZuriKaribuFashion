@@ -1766,6 +1766,22 @@ export default function JenksV2FrontPageManager() {
               <input ref={logoUploadRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
               <span className="text-xs text-gray-600 break-all">{config.topNavigations.logo.imageUrl || 'No logo image uploaded'}</span>
             </div>
+            <div className="rounded-md border bg-white p-2">
+              {config.topNavigations.logo.imageUrl ? (
+                <img
+                  src={resolvePreviewUrl(config.topNavigations.logo.imageUrl)}
+                  alt="Logo preview"
+                  className="h-20 w-full rounded object-contain bg-gray-50"
+                  onError={(event) => {
+                    event.currentTarget.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div className="flex h-20 items-center justify-center rounded border border-dashed text-xs text-gray-500">
+                  No logo image uploaded
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -3033,6 +3049,22 @@ export default function JenksV2FrontPageManager() {
                   </div>
                 </div>
                 <p className="text-[11px] text-gray-500 break-all">Image: {category.image || 'No image uploaded'}</p>
+                <div className="rounded-md border bg-white p-2">
+                  {category.image ? (
+                    <img
+                      src={resolvePreviewUrl(category.image)}
+                      alt={`Category image preview ${index + 1}`}
+                      className="h-24 w-full rounded object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-24 items-center justify-center rounded border border-dashed text-xs text-gray-500">
+                      No category image uploaded
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
             <input
@@ -4038,6 +4070,22 @@ export default function JenksV2FrontPageManager() {
                 </div>
               </div>
               <p className="text-[11px] text-gray-500 break-all">Image: {card.image || 'No image uploaded'}</p>
+              <div className="rounded-md border bg-white p-2">
+                {card.image ? (
+                  <img
+                    src={resolvePreviewUrl(card.image)}
+                    alt={`Featured image preview ${index + 1}`}
+                    className="h-24 w-full rounded object-cover"
+                    onError={(event) => {
+                      event.currentTarget.style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <div className="flex h-24 items-center justify-center rounded border border-dashed text-xs text-gray-500">
+                    No featured image uploaded
+                  </div>
+                )}
+              </div>
             </div>
           ))}
           <input
@@ -4425,6 +4473,22 @@ export default function JenksV2FrontPageManager() {
                 </div>
               </div>
               <p className="text-[11px] text-gray-500 break-all">Image: {card.image || 'No image uploaded'}</p>
+              <div className="rounded-md border bg-white p-2">
+                {card.image ? (
+                  <img
+                    src={resolvePreviewUrl(card.image)}
+                    alt={`Spotlight image preview ${index + 1}`}
+                    className="h-24 w-full rounded object-cover"
+                    onError={(event) => {
+                      event.currentTarget.style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <div className="flex h-24 items-center justify-center rounded border border-dashed text-xs text-gray-500">
+                    No spotlight image uploaded
+                  </div>
+                )}
+              </div>
             </div>
           ))}
           <input
@@ -4448,6 +4512,22 @@ export default function JenksV2FrontPageManager() {
           </div>
           <input ref={heritageImageUploadRef} type="file" accept="image/*" className="hidden" onChange={handleHeritageImageUpload} />
           <p className="text-[11px] text-gray-500 break-all">Image: {config.heritage.image || 'No image uploaded'}</p>
+          <div className="rounded-md border bg-white p-2">
+            {config.heritage.image ? (
+              <img
+                src={resolvePreviewUrl(config.heritage.image)}
+                alt="Heritage image preview"
+                className="h-28 w-full rounded object-cover"
+                onError={(event) => {
+                  event.currentTarget.style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="flex h-28 items-center justify-center rounded border border-dashed text-xs text-gray-500">
+                No heritage image uploaded
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <label className="text-xs">
               Title

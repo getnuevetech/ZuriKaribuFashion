@@ -12,6 +12,7 @@ import {
   Instagram,
   Mail,
   Menu,
+  Moon,
   Palette,
   Phone,
   RefreshCw,
@@ -711,6 +712,7 @@ export default function JenksFrontpageV2() {
   const [shopByCountryExpanded, setShopByCountryExpanded] = useState(false);
   const [dedicatedCountryExpanded, setDedicatedCountryExpanded] = useState(false);
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
+  const [themeMode, setThemeMode] = useState<'LIGHT' | 'DARK'>('LIGHT');
   const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
   const topNavigationsCfg = useMemo(() => asRecord(asRecord(managerConfig).topNavigations), [managerConfig]);
   const shopByCfg = useMemo(() => asRecord(asRecord(managerConfig).shopBy), [managerConfig]);
@@ -1211,6 +1213,11 @@ export default function JenksFrontpageV2() {
     () => (dedicatedCountryExpanded ? fullDedicatedCountries : filteredCountryShowcase.slice(0, 12)),
     [dedicatedCountryExpanded, filteredCountryShowcase, fullDedicatedCountries]
   );
+  const resolvedThemeMode = useMemo<'LIGHT' | 'DARK'>(() => {
+    const token = asString(themeCfg.mode, 'LIGHT').toUpperCase();
+    return token === 'DARK' ? 'DARK' : 'LIGHT';
+  }, [themeCfg.mode]);
+  const ComputedThemeIcon = themeMode === 'DARK' ? Moon : ThemeIcon;
 
   useEffect(() => {
     let cancelled = false;
@@ -1279,6 +1286,18 @@ export default function JenksFrontpageV2() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [hamburgerOpen]);
+
+  useEffect(() => {
+    setThemeMode(resolvedThemeMode);
+  }, [resolvedThemeMode]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.classList.toggle('dark', themeMode === 'DARK');
+    return () => {
+      document.documentElement.classList.remove('dark');
+    };
+  }, [themeMode]);
 
   return (
     <div className="kimi-site bg-[#f5f3ee] text-[#111]">
@@ -1351,8 +1370,17 @@ export default function JenksFrontpageV2() {
                   ))}
                 </div>
                 {asBoolean(themeCfg.enabled, true) ? (
-                  <button className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/20" aria-label="Theme">
-                    <ThemeIcon className="h-4 w-4 text-[#e66045]" />
+                  <button
+                    type="button"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/20"
+                    aria-label="Toggle theme"
+                    onClick={() => setThemeMode((prev) => (prev === 'LIGHT' ? 'DARK' : 'LIGHT'))}
+                  >
+                    {ComputedThemeIcon ? (
+                      <ComputedThemeIcon className="h-4 w-4 text-[#e66045]" />
+                    ) : (
+                      <Sun className="h-4 w-4 text-[#e66045]" />
+                    )}
                   </button>
                 ) : null}
                 <button className="relative inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5" aria-label="Cart">
@@ -1373,7 +1401,14 @@ export default function JenksFrontpageV2() {
             </div>
           </header>
           {hamburgerOpen ? (
-            <div className="fixed inset-0 z-[70] bg-black/96">
+            <div className="fixed inset-0 z-[70]">
+              <button
+                type="button"
+                aria-label="Close menu overlay"
+                className="absolute inset-0 h-full w-full bg-black/60"
+                onClick={() => setHamburgerOpen(false)}
+              />
+              <div className="absolute left-0 top-0 h-full w-[92vw] max-w-[420px] overflow-y-auto border-r border-white/20 bg-black/96 shadow-[0_20px_80px_rgba(0,0,0,0.55)]">
               <button
                 type="button"
                 className="absolute left-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white hover:bg-white/10"
@@ -1382,8 +1417,8 @@ export default function JenksFrontpageV2() {
               >
                 <span className="text-xl leading-none">×</span>
               </button>
-              <nav className="mx-auto flex h-full w-full max-w-[1700px] items-center px-10 sm:px-14 lg:px-20">
-                <div className="space-y-3">
+              <nav className="flex h-full w-full items-start overflow-y-auto px-6 pt-20 sm:px-8">
+                <div className="w-full space-y-2 pb-8">
                   {(hamburgerMenuLinks.length > 0
                     ? hamburgerMenuLinks
                     : [
@@ -1400,17 +1435,18 @@ export default function JenksFrontpageV2() {
                     <Link
                       key={`${link.label}-${link.href}`}
                       to={toSafeInternalHref(link.href)}
-                      className="block font-['Oswald'] text-4xl font-bold uppercase leading-none tracking-[0.01em] text-white transition-colors hover:text-[#e66045] sm:text-5xl"
+                      className="block rounded border border-white/10 px-4 py-3 font-['Oswald'] text-2xl font-bold uppercase leading-none tracking-[0.01em] text-white transition-colors hover:border-[#e66045] hover:text-[#e66045] sm:text-3xl"
                       onClick={() => setHamburgerOpen(false)}
                     >
                       {link.label}
                     </Link>
                   ))}
-                  <p className="pt-8 text-[10px] font-medium uppercase tracking-[0.2em] text-white/55">
+                  <p className="pt-6 text-[10px] font-medium uppercase tracking-[0.2em] text-white/55">
                     Made by Africans. Worn by the world.
                   </p>
                 </div>
               </nav>
+              </div>
             </div>
           ) : null}
         </div>
@@ -1736,15 +1772,15 @@ export default function JenksFrontpageV2() {
                     style={{ backgroundImage: `url(${section.image})`, opacity: 0.18 }}
                   />
                   <div className="pointer-events-none absolute inset-0 bg-black/70" />
-                  <div className="relative flex h-full items-center">
-                    <div className="flex max-w-[560px] flex-col items-start">
+                  <div className="relative flex h-full items-start">
+                    <div className="flex h-full max-w-[560px] flex-col items-start justify-start text-left">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
                       <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
                       <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
                     <Link
                       to={sectionHrefForCountry(section.key)}
                       style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                      className="mt-9 inline-flex items-center self-start px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                      className="mt-9 inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
                     >
                         {section.cta}
                     </Link>
@@ -1762,15 +1798,15 @@ export default function JenksFrontpageV2() {
                     style={{ backgroundImage: `url(${section.image})`, opacity: 0.18 }}
                   />
                   <div className="pointer-events-none absolute inset-0 bg-black/70" />
-                  <div className="relative flex h-full items-center">
-                    <div className="flex max-w-[560px] flex-col items-start">
+                  <div className="relative flex h-full items-start">
+                    <div className="flex h-full max-w-[560px] flex-col items-start justify-start text-left">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
                       <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
                       <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
                     <Link
                       to={sectionHrefForCountry(section.key)}
                       style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                      className="mt-9 inline-flex items-center self-start px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                      className="mt-9 inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
                     >
                         {section.cta}
                     </Link>

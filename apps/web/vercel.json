@@ -1,71 +1,20 @@
 {
   "framework": "vite",
   "redirects": [
-    {
-      "source": "/",
-      "destination": "/main",
-      "permanent": false
-    },
-    {
-      "source": "/home",
-      "destination": "/main",
-      "permanent": false
-    },
-    {
-      "source": "/home/",
-      "destination": "/main",
-      "permanent": false
-    },
-    {
-      "source": "/home-legacy",
-      "destination": "/main",
-      "permanent": false
-    },
-    {
-      "source": "/legacy",
-      "destination": "/main",
-      "permanent": false
-    },
-    {
-      "source": "/home-kimi",
-      "destination": "/main",
-      "permanent": false
-    },
-    {
-      "source": "/home-live",
-      "destination": "/main",
-      "permanent": false
-    },
-    {
-      "source": "/jenks-dynamic",
-      "destination": "/main",
-      "permanent": false
-    },
-    {
-      "source": "/home-jenks",
-      "destination": "/main",
-      "permanent": false
-    },
-    {
-      "source": "/jenks",
-      "destination": "/main",
-      "permanent": false
-    },
-    {
-      "source": "/jenks/",
-      "destination": "/main",
-      "permanent": false
-    },
-    {
-      "source": "/shop",
-      "destination": "/main",
-      "permanent": false
-    },
-    {
-      "source": "/shop/",
-      "destination": "/main",
-      "permanent": false
-    },
+    { "source": "/home", "destination": "/", "permanent": false },
+    { "source": "/home/", "destination": "/", "permanent": false },
+    { "source": "/home-legacy", "destination": "/", "permanent": false },
+    { "source": "/legacy", "destination": "/", "permanent": false },
+    { "source": "/home-kimi", "destination": "/", "permanent": false },
+    { "source": "/home-live", "destination": "/", "permanent": false },
+    { "source": "/jenks-dynamic", "destination": "/", "permanent": false },
+    { "source": "/home-jenks", "destination": "/", "permanent": false },
+    { "source": "/jenks", "destination": "/", "permanent": false },
+    { "source": "/jenks/", "destination": "/", "permanent": false },
+    { "source": "/main", "destination": "/", "permanent": false },
+    { "source": "/main/", "destination": "/", "permanent": false },
+    { "source": "/shop", "destination": "/ready-to-wear", "permanent": false },
+    { "source": "/shop/", "destination": "/ready-to-wear", "permanent": false },
     {
       "source": "/login",
       "destination": "/auth/login",
@@ -128,14 +77,6 @@
     }
   ],
   "rewrites": [
-    {
-      "source": "/main",
-      "destination": "/main/index.html"
-    },
-    {
-      "source": "/main/",
-      "destination": "/main/index.html"
-    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
