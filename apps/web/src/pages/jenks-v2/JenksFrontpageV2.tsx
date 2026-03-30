@@ -1780,7 +1780,7 @@ export default function JenksFrontpageV2() {
                     <Link
                       to={sectionHrefForCountry(section.key)}
                       style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                      className="mt-9 inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                      className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
                     >
                         {section.cta}
                     </Link>
@@ -1806,7 +1806,7 @@ export default function JenksFrontpageV2() {
                     <Link
                       to={sectionHrefForCountry(section.key)}
                       style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                      className="mt-9 inline-flex items-center px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                      className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
                     >
                         {section.cta}
                     </Link>
