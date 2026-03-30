@@ -5388,7 +5388,7 @@ export default function JenksV2FrontPageManager() {
                         ...prev,
                         sectionVisibility: {
                           sections: prev.sectionVisibility.sections.map((entry, entryIndex) =>
-                            entryIndex === index ? { ...entry, order: clamp(toNumber(event.target.value, entry.order), 1, 999) } : entry
+                            entry.id === section.id ? { ...entry, order: clamp(toNumber(event.target.value, entry.order), 1, 999) } : entry
                           ),
                         },
                       }))
@@ -5403,7 +5403,7 @@ export default function JenksV2FrontPageManager() {
                           ...prev,
                           sectionVisibility: {
                             sections: prev.sectionVisibility.sections.map((entry, entryIndex) =>
-                              entryIndex === index ? { ...entry, enabled: event.target.checked } : entry
+                              entry.id === section.id ? { ...entry, enabled: event.target.checked } : entry
                             ),
                           },
                         }))

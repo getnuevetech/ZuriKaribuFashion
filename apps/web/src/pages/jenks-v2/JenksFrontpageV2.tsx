@@ -725,28 +725,39 @@ export default function JenksFrontpageV2() {
   const newsletterFooterCfg = useMemo(() => asRecord(asRecord(managerConfig).newsletterFooter), [managerConfig]);
   const sectionVisibilityCfg = useMemo(() => asRecord(asRecord(managerConfig).sectionVisibility), [managerConfig]);
 
-  const visibleTemplateKeys = useMemo(() => {
-    const defaults = new Set<TemplateKey>(TEMPLATE_KEYS);
+  const sectionLayoutByTemplate = useMemo(() => {
+    const defaults = new Map<TemplateKey, { enabled: boolean; order: number }>();
+    TEMPLATE_KEYS.forEach((key, index) => {
+      defaults.set(key, { enabled: true, order: index + 1 });
+    });
     const rows = asArray(sectionVisibilityCfg.sections);
     if (rows.length === 0) return defaults;
-    const map = new Map<TemplateKey, boolean>();
-    rows.forEach((entry) => {
+    const byTemplate = new Map<TemplateKey, { enabled: boolean; order: number }>();
+    rows.forEach((entry, index) => {
       const row = asRecord(entry);
       if (asBoolean(row.isCustom, false)) return;
       const token = asString(row.templateKey, '').toUpperCase() as TemplateKey;
       if (!TEMPLATE_KEYS.includes(token)) return;
       const enabled = asBoolean(row.enabled, true);
-      if (!map.has(token)) {
-        map.set(token, enabled);
+      const fallbackOrder = TEMPLATE_KEYS.indexOf(token) + 1 || index + 1;
+      const order = Math.max(1, Math.round(asNumber(row.order, fallbackOrder)));
+      const existing = byTemplate.get(token);
+      if (!existing) {
+        byTemplate.set(token, { enabled, order });
         return;
       }
-      if (enabled) map.set(token, true);
+      byTemplate.set(token, {
+        enabled: existing.enabled || enabled,
+        order: Math.min(existing.order, order),
+      });
     });
-    if (map.size === 0) return defaults;
-    return new Set<TemplateKey>(TEMPLATE_KEYS.filter((key) => map.get(key) !== false));
+    if (byTemplate.size === 0) return defaults;
+    byTemplate.forEach((value, key) => defaults.set(key, value));
+    return defaults;
   }, [sectionVisibilityCfg.sections]);
-  const isSectionVisible = (templateKey: TemplateKey) => visibleTemplateKeys.has(templateKey);
-  const showHeroSection = isSectionVisible('TOP_NAVIGATIONS') || heroSlides.length > 0;
+  const isSectionVisible = (templateKey: TemplateKey) => sectionLayoutByTemplate.get(templateKey)?.enabled ?? true;
+  const getSectionOrder = (templateKey: TemplateKey) =>
+    sectionLayoutByTemplate.get(templateKey)?.order ?? Math.max(1, TEMPLATE_KEYS.indexOf(templateKey) + 1);
 
   const logoCfg = useMemo(() => asRecord(topNavigationsCfg.logo), [topNavigationsCfg.logo]);
   const logoTextRaw = asString(logoCfg.text, 'ZURIKARIBU');
@@ -829,6 +840,7 @@ export default function JenksFrontpageV2() {
     return mapped.length > 0 ? mapped : HERO;
   }, [topNavigationsCfg.heroBanners]);
   const active = useMemo(() => heroSlides[index] || heroSlides[0] || HERO[0], [heroSlides, index]);
+  const showHeroSection = isSectionVisible('TOP_NAVIGATIONS') || heroSlides.length > 0;
 
   const categorySections = useMemo(() => {
     const rows = asArray(categoryManageCfg.sections)
@@ -1011,16 +1023,7 @@ export default function JenksFrontpageV2() {
     if (categoryToken === 'ALL') return '/ready-to-wear';
     return buildCountryProductsHref('Nigeria', categoryToken);
   };
-  const orderedSectionsRtwFtbCtw = useMemo(() => {
-    const orderByKey: Record<string, number> = { RTW: 0, FTB: 1, CTW: 2 };
-    return [...sectionsRtwFtbCtw].sort((a, b) => {
-      const aRank = orderByKey[String(a.key || '').toUpperCase()];
-      const bRank = orderByKey[String(b.key || '').toUpperCase()];
-      const safeARank = Number.isFinite(aRank) ? aRank : 999;
-      const safeBRank = Number.isFinite(bRank) ? bRank : 999;
-      return safeARank - safeBRank;
-    });
-  }, [sectionsRtwFtbCtw]);
+  const orderedSectionsRtwFtbCtw = useMemo(() => [...sectionsRtwFtbCtw], [sectionsRtwFtbCtw]);
 
   const featuredHrefForCountry = (key: 'RTW' | 'CTW' | 'FTB') => {
     const categoryToken = categoryTokenFromSectionKey(key);
@@ -1300,10 +1303,10 @@ export default function JenksFrontpageV2() {
   }, [themeMode]);
 
   return (
-    <div className="kimi-site bg-[#f5f3ee] text-[#111]">
+    <div className="kimi-site flex flex-col bg-[#f5f3ee] text-[#111]">
       {/* TOP STRIP + TOP NAVIGATION */}
       {isSectionVisible('TOP_NAVIGATIONS') ? (
-        <div className="sticky top-0 z-50">
+        <div className="sticky top-0 z-50" style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}>
           {asBoolean(topNavigationsCfg.topStripEnabled, true) ? (
             <div className="h-8 bg-black text-[10px] font-semibold uppercase tracking-[0.18em] text-white/85">
               <div className="mx-auto flex h-full w-full max-w-[1700px] items-center justify-center px-4">
@@ -1454,7 +1457,7 @@ export default function JenksFrontpageV2() {
 
       {/* HERO */}
       {showHeroSection ? (
-      <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 lg:grid-cols-12`}>
+      <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 lg:grid-cols-12`} style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}>
         <div className="relative lg:col-span-7">
           {heroSlides.map((slide, i) => (
             <img
@@ -1540,7 +1543,7 @@ export default function JenksFrontpageV2() {
 
       {/* SHOP BY */}
       {isSectionVisible('SHOP_BY') ? (
-        <section className="bg-[#07090d] py-14 lg:py-16" data-kimi-anim="fade-up">
+        <section className="bg-[#07090d] py-14 lg:py-16" data-kimi-anim="fade-up" style={{ order: getSectionOrder('SHOP_BY') }}>
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
             <p className="text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">Discover</p>
             <h2 className="mt-2 text-center font-['Oswald'] text-6xl font-bold uppercase leading-none text-white">SHOP BY</h2>
@@ -1680,7 +1683,7 @@ export default function JenksFrontpageV2() {
 
       {/* SHOP BY COUNTRY (DEDICATED) */}
       {isSectionVisible('SHOP_BY') ? (
-        <section className="bg-[#06080b] py-12 lg:py-14" data-kimi-anim="fade-up">
+        <section className="bg-[#06080b] py-12 lg:py-14" data-kimi-anim="fade-up" style={{ order: getSectionOrder('SHOP_BY') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -1756,7 +1759,7 @@ export default function JenksFrontpageV2() {
 
       {/* RTW / FTB / CTW HERO-HEIGHT SPLIT */}
       {isSectionVisible('CATEGORY_MANAGE') ? (
-      <section className="space-y-0">
+      <section className="space-y-0" style={{ order: getSectionOrder('CATEGORY_MANAGE') }}>
         {orderedSectionsRtwFtbCtw.map((section) => (
           <div
             key={section.id}
@@ -1822,7 +1825,7 @@ export default function JenksFrontpageV2() {
 
       {/* HOW IT WORKS */}
       {isSectionVisible('TEXT_ICON_CARDS') ? (
-      <section className="bg-white py-12" data-kimi-anim="fade-up">
+      <section className="bg-white py-12" data-kimi-anim="fade-up" style={{ order: getSectionOrder('TEXT_ICON_CARDS') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <h2 className="font-['Oswald'] text-3xl font-bold uppercase">HOW IT WORKS</h2>
           <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -1842,7 +1845,7 @@ export default function JenksFrontpageV2() {
 
       {/* FEATURED RTW + CTW + FTB */}
       {isSectionVisible('FEATURED') ? (
-        <section className="space-y-0">
+        <section className="space-y-0" style={{ order: getSectionOrder('FEATURED') }}>
           {(['RTW', 'CTW', 'FTB'] as const).map((key) => (
             <div key={key} className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 md:grid-cols-2`}>
               {featuredCardsByKey[key].map((card) => (
@@ -1870,7 +1873,7 @@ export default function JenksFrontpageV2() {
 
       {/* FRESH DROPS */}
       {isSectionVisible('FRESH_DROPS') ? (
-      <section className="bg-[#f5f5f3] py-12" data-kimi-anim="fade-up">
+      <section className="bg-[#f5f5f3] py-12" data-kimi-anim="fade-up" style={{ order: getSectionOrder('FRESH_DROPS') }}>
         <div className="w-full px-3 sm:px-4 lg:px-8 xl:px-10">
           <div className="flex items-end justify-between">
             <div>
@@ -1925,7 +1928,7 @@ export default function JenksFrontpageV2() {
 
       {/* SPOTLIGHT */}
       {isSectionVisible('DESIGNER_SPOTLIGHT') ? (
-        <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 bg-[#101010] md:grid-cols-3`}>
+        <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 bg-[#101010] md:grid-cols-3`} style={{ order: getSectionOrder('DESIGNER_SPOTLIGHT') }}>
           {spotlightCards.map((spot) => (
             <Link key={spot.id} to={toSafeInternalHref(spot.href)} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
               <img src={spot.image} alt={spot.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
@@ -1949,7 +1952,7 @@ export default function JenksFrontpageV2() {
 
       {/* ROOTED IN CULTURE */}
       {isSectionVisible('HERITAGE') ? (
-        <section className={`relative ${HERO_HEIGHT_CLASS}`} data-kimi-anim="fade-up">
+        <section className={`relative ${HERO_HEIGHT_CLASS}`} data-kimi-anim="fade-up" style={{ order: getSectionOrder('HERITAGE') }}>
           <img
             src={asString(heritageCfg.image, `${ASSET_BASE}/heritage_story.jpg`)}
             alt="heritage"
@@ -1988,7 +1991,7 @@ export default function JenksFrontpageV2() {
 
       {/* TRUST */}
       {isSectionVisible('TEXT_ICON_CARDS') ? (
-        <section className="bg-white py-16 lg:py-20" data-kimi-anim="fade-up">
+        <section className="bg-white py-16 lg:py-20" data-kimi-anim="fade-up" style={{ order: getSectionOrder('TEXT_ICON_CARDS') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <h2 className="text-center font-['Oswald'] text-4xl font-bold uppercase leading-none">SHOP WITH CONFIDENCE</h2>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
@@ -2008,7 +2011,7 @@ export default function JenksFrontpageV2() {
 
       {/* NEWSLETTER */}
       {isSectionVisible('NEWSLETTER_FOOTER') && asBoolean(newsletterCfg.enabled, true) ? (
-        <section className="bg-white py-24" data-kimi-anim="fade-up">
+        <section className="bg-white py-24" data-kimi-anim="fade-up" style={{ order: getSectionOrder('NEWSLETTER_FOOTER') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
             <div>
@@ -2026,7 +2029,7 @@ export default function JenksFrontpageV2() {
 
       {/* FOOTER */}
       {isSectionVisible('NEWSLETTER_FOOTER') && asBoolean(footerCfg.enabled, true) ? (
-        <footer className="bg-[#0a0a0a] py-12 text-white">
+        <footer className="bg-[#0a0a0a] py-12 text-white" style={{ order: getSectionOrder('NEWSLETTER_FOOTER') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
             <div>
