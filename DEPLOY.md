@@ -89,7 +89,7 @@ Recommended AWS target:
 - Frontend: **S3 + CloudFront**
 - API: **ECS Fargate + ALB**
 - DB: **RDS PostgreSQL**
-- Uploads: **S3** (`AWS_UPLOADS_ENABLED=true`)
+- Uploads: **S3** (`AWS_UPLOADS_ENABLED=true`, `AWS_UPLOADS_REQUIRE_S3=true`)
 
 ---
 

@@ -25,13 +25,40 @@ const allMimeTypes: Record<string, string> = {
   ...documentMimeTypes,
 };
 
-const uploadBucket = String(process.env.AWS_UPLOADS_BUCKET || '').trim();
-const uploadRegion = String(process.env.AWS_UPLOADS_REGION || process.env.AWS_REGION || 'us-east-1').trim();
-const uploadBaseUrl = String(process.env.AWS_UPLOADS_BASE_URL || '').trim().replace(/\/+$/, '');
-const uploadPrefixRaw = String(process.env.AWS_UPLOADS_PREFIX || 'uploads').trim();
+const firstDefinedEnv = (...values: Array<string | undefined | null>) => {
+  for (const value of values) {
+    const normalized = String(value || '').trim();
+    if (normalized) return normalized;
+  }
+  return '';
+};
+
+const uploadBucket = firstDefinedEnv(
+  process.env.AWS_UPLOADS_BUCKET,
+  process.env.S3_UPLOADS_BUCKET,
+  process.env.S3_BUCKET,
+  process.env.AWS_S3_BUCKET,
+  process.env.AWS_BUCKET_NAME
+);
+const uploadRegion = firstDefinedEnv(
+  process.env.AWS_UPLOADS_REGION,
+  process.env.S3_UPLOADS_REGION,
+  process.env.S3_REGION,
+  process.env.AWS_REGION,
+  'us-east-1'
+);
+const uploadBaseUrl = firstDefinedEnv(
+  process.env.AWS_UPLOADS_BASE_URL,
+  process.env.S3_UPLOADS_BASE_URL,
+  process.env.S3_BASE_URL,
+  process.env.CDN_UPLOADS_BASE_URL
+).replace(/\/+$/, '');
+const uploadPrefixRaw = firstDefinedEnv(process.env.AWS_UPLOADS_PREFIX, process.env.S3_UPLOADS_PREFIX, 'uploads');
 const uploadPrefix = uploadPrefixRaw ? uploadPrefixRaw.replace(/^\/+/, '').replace(/\/+$/, '') : 'uploads';
 const uploadsEnabledEnv = String(process.env.AWS_UPLOADS_ENABLED || '').trim().toLowerCase();
 const uploadsExplicitlyDisabled = ['0', 'false', 'no', 'off', 'disabled'].includes(uploadsEnabledEnv);
+const requireS3UploadsEnv = String(process.env.AWS_UPLOADS_REQUIRE_S3 || 'true').trim().toLowerCase();
+const requireS3Uploads = !['0', 'false', 'no', 'off', 'disabled'].includes(requireS3UploadsEnv);
 // Prefer S3 automatically when a bucket is configured, unless explicitly disabled.
 const useS3Uploads = Boolean(uploadBucket) && !uploadsExplicitlyDisabled;
 
@@ -152,6 +179,15 @@ const mixedUpload = createUpload(
   'Only approved image or document files are allowed.'
 );
 
+const ensureS3UploadsConfigured = (_req: any, res: any, next: any) => {
+  if (useS3Uploads || !requireS3Uploads) return next();
+  return res.status(503).json({
+    success: false,
+    message:
+      'S3 uploads are required but not configured. Set AWS_UPLOADS_BUCKET (or S3_BUCKET), AWS region, and credentials.',
+  });
+};
+
 const sendSingleUploadResponse = async (req: any, res: any, file: Express.Multer.File, successMessage: string) => {
   const persisted = await persistUploadedFile(req, file);
   res.json({
@@ -170,7 +206,7 @@ const sendMultiUploadResponse = async (req: any, res: any, files: Express.Multer
   });
 };
 
-router.post('/image', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), imageUpload.single('image'), async (req, res) => {
+router.post('/image', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), ensureS3UploadsConfigured, imageUpload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No image file provided.' });
@@ -181,7 +217,7 @@ router.post('/image', authenticate, authorizePermissions(Permissions.UPLOADS_CRE
   }
 });
 
-router.post('/images', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), imageUpload.array('images', 10), async (req, res) => {
+router.post('/images', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), ensureS3UploadsConfigured, imageUpload.array('images', 10), async (req, res) => {
   try {
     const files = (req.files as Express.Multer.File[]) || [];
     if (files.length === 0) {
@@ -193,7 +229,7 @@ router.post('/images', authenticate, authorizePermissions(Permissions.UPLOADS_CR
   }
 });
 
-router.post('/document', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), documentUpload.single('document'), async (req, res) => {
+router.post('/document', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), ensureS3UploadsConfigured, documentUpload.single('document'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No document file provided.' });
@@ -204,7 +240,7 @@ router.post('/document', authenticate, authorizePermissions(Permissions.UPLOADS_
   }
 });
 
-router.post('/documents', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), documentUpload.array('documents', 10), async (req, res) => {
+router.post('/documents', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), ensureS3UploadsConfigured, documentUpload.array('documents', 10), async (req, res) => {
   try {
     const files = (req.files as Express.Multer.File[]) || [];
     if (files.length === 0) {
@@ -216,7 +252,7 @@ router.post('/documents', authenticate, authorizePermissions(Permissions.UPLOADS
   }
 });
 
-router.post('/file', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), mixedUpload.single('file'), async (req, res) => {
+router.post('/file', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), ensureS3UploadsConfigured, mixedUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file provided.' });
@@ -227,7 +263,7 @@ router.post('/file', authenticate, authorizePermissions(Permissions.UPLOADS_CREA
   }
 });
 
-router.post('/files', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), mixedUpload.array('files', 10), async (req, res) => {
+router.post('/files', authenticate, authorizePermissions(Permissions.UPLOADS_CREATE), ensureS3UploadsConfigured, mixedUpload.array('files', 10), async (req, res) => {
   try {
     const files = (req.files as Express.Multer.File[]) || [];
     if (files.length === 0) {

@@ -65,6 +65,7 @@ For S3 uploads (stateless API containers):
 - `AWS_UPLOADS_REGION=<region>`
 - `AWS_UPLOADS_PREFIX=uploads` (optional)
 - `AWS_UPLOADS_BASE_URL=https://<cloudfront-or-public-bucket-domain>` (optional)
+- `AWS_UPLOADS_REQUIRE_S3=true` (recommended; blocks local-disk upload fallback)
 
 > IAM task role must allow `s3:PutObject` on uploads bucket prefix.
 
