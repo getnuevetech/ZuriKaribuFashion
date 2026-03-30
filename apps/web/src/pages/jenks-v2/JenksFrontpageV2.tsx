@@ -79,7 +79,8 @@ type TemplateKey =
   | 'TOP_NAVIGATIONS'
   | 'SHOP_BY'
   | 'CATEGORY_MANAGE'
-  | 'TEXT_ICON_CARDS'
+  | 'HOW_IT_WORKS'
+  | 'SHOP_WITH_CONFIDENCE'
   | 'FEATURED'
   | 'FRESH_DROPS'
   | 'DESIGNER_SPOTLIGHT'
@@ -96,7 +97,8 @@ const TEMPLATE_KEYS: TemplateKey[] = [
   'TOP_NAVIGATIONS',
   'SHOP_BY',
   'CATEGORY_MANAGE',
-  'TEXT_ICON_CARDS',
+  'HOW_IT_WORKS',
+  'SHOP_WITH_CONFIDENCE',
   'FEATURED',
   'FRESH_DROPS',
   'DESIGNER_SPOTLIGHT',
@@ -1060,6 +1062,7 @@ export default function JenksFrontpageV2() {
   }, [designerSpotlightCfg.cards, designerSpotlightCfg.columns, designerSpotlightCfg.rows]);
 
   const howItWorksCards = useMemo(() => {
+    const allRows = asArray(textIconCfg.cards).map((entry) => asRecord(entry));
     const rows = asArray(textIconCfg.cards)
       .map((entry) => asRecord(entry))
       .filter((entry) => {
@@ -1073,10 +1076,12 @@ export default function JenksFrontpageV2() {
         sub: asString(entry.description, ''),
         Icon: iconFromKey(entry.icon, Sparkles),
       }));
-    return rows.length > 0 ? rows : HOW_IT_WORKS;
+    if (rows.length > 0) return rows;
+    return allRows.length > 0 ? [] : HOW_IT_WORKS;
   }, [textIconCfg.cards]);
 
   const trustCards = useMemo(() => {
+    const allRows = asArray(textIconCfg.cards).map((entry) => asRecord(entry));
     const rows = asArray(textIconCfg.cards)
       .map((entry) => asRecord(entry))
       .filter((entry) => asBoolean(entry.enabled, true) && asString(entry.sectionType, '').toUpperCase() === 'SHOP_WITH_CONFIDENCE')
@@ -1086,8 +1091,11 @@ export default function JenksFrontpageV2() {
         sub: asString(entry.description, ''),
         Icon: iconFromKey(entry.icon, ShieldCheck),
       }));
-    return rows.length > 0 ? rows : trust;
+    if (rows.length > 0) return rows;
+    return allRows.length > 0 ? [] : trust;
   }, [textIconCfg.cards]);
+  const showHowItWorksSection = isSectionVisible('HOW_IT_WORKS') && howItWorksCards.length > 0;
+  const showTrustSection = isSectionVisible('SHOP_WITH_CONFIDENCE') && trustCards.length > 0;
 
   const heritageStats = useMemo(() => {
     const rows = asArray(heritageCfg.stats)
@@ -1824,8 +1832,8 @@ export default function JenksFrontpageV2() {
       ) : null}
 
       {/* HOW IT WORKS */}
-      {isSectionVisible('TEXT_ICON_CARDS') ? (
-      <section className="bg-white py-12" data-kimi-anim="fade-up" style={{ order: getSectionOrder('TEXT_ICON_CARDS') }}>
+      {showHowItWorksSection ? (
+      <section className="bg-white py-12" data-kimi-anim="fade-up" style={{ order: getSectionOrder('HOW_IT_WORKS') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <h2 className="font-['Oswald'] text-3xl font-bold uppercase">HOW IT WORKS</h2>
           <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -1990,8 +1998,8 @@ export default function JenksFrontpageV2() {
       ) : null}
 
       {/* TRUST */}
-      {isSectionVisible('TEXT_ICON_CARDS') ? (
-        <section className="bg-white py-16 lg:py-20" data-kimi-anim="fade-up" style={{ order: getSectionOrder('TEXT_ICON_CARDS') }}>
+      {showTrustSection ? (
+        <section className="bg-white py-16 lg:py-20" data-kimi-anim="fade-up" style={{ order: getSectionOrder('SHOP_WITH_CONFIDENCE') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <h2 className="text-center font-['Oswald'] text-4xl font-bold uppercase leading-none">SHOP WITH CONFIDENCE</h2>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">

@@ -13,7 +13,8 @@ const TEMPLATE_KEYS = [
   'TOP_NAVIGATIONS',
   'SHOP_BY',
   'CATEGORY_MANAGE',
-  'TEXT_ICON_CARDS',
+  'HOW_IT_WORKS',
+  'SHOP_WITH_CONFIDENCE',
   'FEATURED',
   'FRESH_DROPS',
   'DESIGNER_SPOTLIGHT',
@@ -319,7 +320,8 @@ const TEMPLATE_META: Array<{ templateKey: TemplateKey; key: string; name: string
   { templateKey: 'TOP_NAVIGATIONS', key: 'top-navigations', name: 'Top Navigations' },
   { templateKey: 'SHOP_BY', key: 'shop-by', name: 'Shop By' },
   { templateKey: 'CATEGORY_MANAGE', key: 'category-manage', name: 'Category Manage' },
-  { templateKey: 'TEXT_ICON_CARDS', key: 'text-icon-cards', name: 'Text & Icon Cards' },
+  { templateKey: 'HOW_IT_WORKS', key: 'how-it-works', name: 'How It Works' },
+  { templateKey: 'SHOP_WITH_CONFIDENCE', key: 'shop-with-confidence', name: 'Shop With Confidence' },
   { templateKey: 'FEATURED', key: 'featured', name: 'Featured' },
   { templateKey: 'FRESH_DROPS', key: 'fresh-drops', name: 'Fresh Drops' },
   { templateKey: 'DESIGNER_SPOTLIGHT', key: 'designer-spotlight', name: 'Designer Spotlight' },
@@ -1327,6 +1329,20 @@ const buildTemplateSnapshot = (
   settings: JenksV2FrontpageManagerSettings,
   templateKey: TemplateKey
 ): Record<string, unknown> => {
+  const textCards = Array.isArray(settings.textIconCards.cards) ? settings.textIconCards.cards : [];
+  const filterTextCardsByTemplate = (target: 'HOW_IT_WORKS' | 'SHOP_WITH_CONFIDENCE') => {
+    const cards = textCards.filter((card) => {
+      const token = String(card.sectionType || '').toUpperCase();
+      if (target === 'HOW_IT_WORKS') {
+        return token === 'HOW_IT_WORKS' || token === 'CUSTOM';
+      }
+      return token === 'SHOP_WITH_CONFIDENCE';
+    });
+    return {
+      allowCustomCards: settings.textIconCards.allowCustomCards,
+      cards,
+    };
+  };
   switch (templateKey) {
     case 'TOP_NAVIGATIONS':
       return cloneJson(asRecord(settings.topNavigations));
@@ -1334,8 +1350,10 @@ const buildTemplateSnapshot = (
       return cloneJson(asRecord(settings.shopBy));
     case 'CATEGORY_MANAGE':
       return cloneJson(asRecord(settings.categoryManage));
-    case 'TEXT_ICON_CARDS':
-      return cloneJson(asRecord(settings.textIconCards));
+    case 'HOW_IT_WORKS':
+      return cloneJson(asRecord(filterTextCardsByTemplate('HOW_IT_WORKS')));
+    case 'SHOP_WITH_CONFIDENCE':
+      return cloneJson(asRecord(filterTextCardsByTemplate('SHOP_WITH_CONFIDENCE')));
     case 'FEATURED':
       return cloneJson(asRecord(settings.featured));
     case 'FRESH_DROPS':
@@ -1350,19 +1368,87 @@ const buildTemplateSnapshot = (
   }
 };
 
+const mergeLegacyTextIconSectionEntries = (
+  sections: SectionVisibilityEntry[],
+  settings: JenksV2FrontpageManagerSettings
+) => {
+  const next = [...sections];
+  const legacyIndex = next.findIndex((section) => String(section.templateKey || '').toUpperCase() === 'TEXT_ICON_CARDS');
+  if (legacyIndex === -1) return next;
+
+  const legacy = next[legacyIndex];
+  next.splice(legacyIndex, 1);
+
+  const cards = Array.isArray(settings.textIconCards.cards) ? settings.textIconCards.cards : [];
+  const hasHowCards = cards.some((card) => {
+    const token = String(card.sectionType || '').toUpperCase();
+    return token === 'HOW_IT_WORKS' || token === 'CUSTOM';
+  });
+  const hasTrustCards = cards.some((card) => String(card.sectionType || '').toUpperCase() === 'SHOP_WITH_CONFIDENCE');
+
+  const baseOrder = clamp(Math.round(getNumber(legacy.order) ?? 1), 1, 999);
+  const legacyEnabled = getBoolean(legacy.enabled) ?? true;
+
+  next.push({
+    ...legacy,
+    id: randomUUID(),
+    key: 'how-it-works',
+    name: 'How It Works',
+    templateKey: 'HOW_IT_WORKS',
+    enabled: legacyEnabled && hasHowCards,
+    order: baseOrder,
+    isCustom: false,
+    configSnapshot: buildTemplateSnapshot(settings, 'HOW_IT_WORKS'),
+  });
+  next.push({
+    ...legacy,
+    id: randomUUID(),
+    key: 'shop-with-confidence',
+    name: 'Shop With Confidence',
+    templateKey: 'SHOP_WITH_CONFIDENCE',
+    enabled: legacyEnabled && hasTrustCards,
+    order: clamp(baseOrder + 1, 1, 999),
+    isCustom: false,
+    configSnapshot: buildTemplateSnapshot(settings, 'SHOP_WITH_CONFIDENCE'),
+  });
+
+  return next;
+};
+
 const normalizeSectionVisibility = (
   raw: unknown,
   fallback: SectionVisibilitySettings,
   settings: JenksV2FrontpageManagerSettings
 ): SectionVisibilitySettings => {
   const row = asRecord(raw);
-  const rawRows = Array.isArray(row.sections) ? row.sections : fallback.sections;
+  const rawRowsSource = Array.isArray(row.sections) ? row.sections : fallback.sections;
+  const rawRows = mergeLegacyTextIconSectionEntries(
+    rawRowsSource.map((entry, index) => {
+      const source = asRecord(entry);
+      return {
+        ...source,
+        id: getString(source.id) || randomUUID(),
+        key: getString(source.key) || `section-${index + 1}`,
+        name: getString(source.name) || 'Section',
+        templateKey: getString(source.templateKey) || 'TOP_NAVIGATIONS',
+        enabled: getBoolean(source.enabled) ?? true,
+        order: clamp(Math.round(getNumber(source.order) ?? index + 1), 1, 999),
+        isCustom: getBoolean(source.isCustom) ?? false,
+        configSnapshot:
+          source.configSnapshot && typeof source.configSnapshot === 'object'
+            ? cloneJson(source.configSnapshot as Record<string, unknown>)
+            : {},
+      } as SectionVisibilityEntry;
+    }),
+    settings
+  );
   const parsed = rawRows.map((entry, index) => {
     const item = asRecord(entry);
     const fallbackItem = fallback.sections[index] || fallback.sections[0];
-    const templateToken = String(item.templateKey || fallbackItem.templateKey || 'TOP_NAVIGATIONS')
+    const templateTokenRaw = String(item.templateKey || fallbackItem.templateKey || 'TOP_NAVIGATIONS')
       .trim()
       .toUpperCase();
+    const templateToken = templateTokenRaw === 'TEXT_ICON_CARDS' ? 'HOW_IT_WORKS' : templateTokenRaw;
     const templateKey = TEMPLATE_KEYS.includes(templateToken as TemplateKey)
       ? (templateToken as TemplateKey)
       : 'TOP_NAVIGATIONS';

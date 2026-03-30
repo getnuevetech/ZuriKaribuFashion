@@ -10,7 +10,8 @@ type TemplateKey =
   | 'TOP_NAVIGATIONS'
   | 'SHOP_BY'
   | 'CATEGORY_MANAGE'
-  | 'TEXT_ICON_CARDS'
+  | 'HOW_IT_WORKS'
+  | 'SHOP_WITH_CONFIDENCE'
   | 'FEATURED'
   | 'FRESH_DROPS'
   | 'DESIGNER_SPOTLIGHT'
@@ -311,7 +312,8 @@ const TEMPLATES: Array<{ key: TemplateKey; label: string }> = [
   { key: 'TOP_NAVIGATIONS', label: 'Top Navigations' },
   { key: 'SHOP_BY', label: 'Shop By' },
   { key: 'CATEGORY_MANAGE', label: 'Category Manage' },
-  { key: 'TEXT_ICON_CARDS', label: 'Text & Icon Cards' },
+  { key: 'HOW_IT_WORKS', label: 'How It Works' },
+  { key: 'SHOP_WITH_CONFIDENCE', label: 'Shop With Confidence' },
   { key: 'FEATURED', label: 'Featured' },
   { key: 'FRESH_DROPS', label: 'Fresh Drops' },
   { key: 'DESIGNER_SPOTLIGHT', label: 'Designer Spotlight' },
@@ -772,6 +774,15 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         icon: 'Workflow',
         enabled: true,
         displayOrder: 1,
+      },
+      {
+        id: uid(),
+        sectionType: 'SHOP_WITH_CONFIDENCE',
+        title: 'Shop with confidence',
+        description: 'Manage trust cards and icon settings.',
+        icon: 'ShieldCheck',
+        enabled: true,
+        displayOrder: 2,
       },
     ],
   },
