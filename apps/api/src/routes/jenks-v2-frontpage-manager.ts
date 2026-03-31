@@ -1910,6 +1910,10 @@ const appendTemplateContent = (
 
 router.get('/config', async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
     const { settings } = await readSettings();
     return res.json({ success: true, data: settings });
   } catch (error) {
@@ -1920,6 +1924,10 @@ router.get('/config', async (_req, res) => {
 
 router.get('/admin/config', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (_req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
     const { settings, source, updatedAt } = await readSettings();
     return res.json({ success: true, data: { ...settings, source, updatedAt } });
   } catch (error) {
