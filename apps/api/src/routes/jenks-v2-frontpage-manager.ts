@@ -20,6 +20,7 @@ const TEMPLATE_KEYS = [
   'FRESH_DROPS',
   'DESIGNER_SPOTLIGHT',
   'HERITAGE',
+  'CUSTOMER_REVIEWS',
   'NEWSLETTER_FOOTER',
 ] as const;
 
@@ -62,7 +63,9 @@ type HeroBanner = {
   title: string;
   titleFontSize: number;
   text: string;
+  textEnabled: boolean;
   description: string;
+  descriptionEnabled: boolean;
   descriptionFontSize: number;
   primaryCtaEnabled: boolean;
   primaryCtaText: string;
@@ -81,6 +84,8 @@ type HeroBanner = {
 type TopNavigationsSettings = {
   topStripEnabled: boolean;
   hamburgerMenu: MenuLink[];
+  hamburgerMenuFontSize: number;
+  hamburgerMenuFontWeight: number;
   searchIconEnabled: boolean;
   logo: {
     mode: 'TEXT' | 'IMAGE';
@@ -202,9 +207,29 @@ type FeaturedCard = {
   description: string;
   ctaText: string;
   ctaLink: string;
+  ctaMode: 'URL' | 'PRODUCT_GROUP';
+  productGroup: 'ALL' | 'RTW' | 'CTW' | 'FTB';
   ctaStyle: CtaStyle;
   enabled: boolean;
   displayOrder: number;
+};
+
+type CustomerReviewStaticMessage = {
+  id: string;
+  customerName: string;
+  location: string;
+  message: string;
+  rating: number;
+  enabled: boolean;
+  displayOrder: number;
+};
+
+type CustomerReviewsSettings = {
+  enabled: boolean;
+  sectionTitle: string;
+  sourceMode: 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH';
+  maxItems: number;
+  staticMessages: CustomerReviewStaticMessage[];
 };
 
 type FreshDropsSettings = {
@@ -336,6 +361,7 @@ type JenksV2FrontpageManagerSettings = {
   freshDrops: FreshDropsSettings;
   designerSpotlight: DesignerSpotlightSettings;
   heritage: HeritageSettings;
+  customerReviews: CustomerReviewsSettings;
   newsletterFooter: NewsletterFooterSettings;
   sectionVisibility: SectionVisibilitySettings;
 };
@@ -351,6 +377,7 @@ const TEMPLATE_META: Array<{ templateKey: TemplateKey; key: string; name: string
   { templateKey: 'FRESH_DROPS', key: 'fresh-drops', name: 'Fresh Drops' },
   { templateKey: 'DESIGNER_SPOTLIGHT', key: 'designer-spotlight', name: 'Designer Spotlight' },
   { templateKey: 'HERITAGE', key: 'heritage', name: 'Heritage' },
+  { templateKey: 'CUSTOMER_REVIEWS', key: 'customer-reviews', name: 'From Our Customers' },
   { templateKey: 'NEWSLETTER_FOOTER', key: 'newsletter-footer', name: 'Newsletter and Footer' },
 ];
 
@@ -363,6 +390,7 @@ const updateSchema = z.object({
   freshDrops: z.unknown().optional(),
   designerSpotlight: z.unknown().optional(),
   heritage: z.unknown().optional(),
+  customerReviews: z.unknown().optional(),
   newsletterFooter: z.unknown().optional(),
   sectionVisibility: z.unknown().optional(),
 });
@@ -524,6 +552,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         defaultMenuLink('Fabric To Buy', '/fabrics', 'FABRICS'),
         defaultMenuLink('Custom To Wear', '/custom', 'CUSTOM_TO_WEAR'),
       ],
+      hamburgerMenuFontSize: 32,
+      hamburgerMenuFontWeight: 800,
       searchIconEnabled: true,
       logo: {
         mode: 'TEXT',
@@ -570,8 +600,10 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           title: 'Wear the Story of Africa',
           titleFontSize: 56,
           text: 'Curated fashion from top designers and textile houses.',
+          textEnabled: true,
           description:
             'Manage title, copy, tags, CTA labels and links for each hero slide directly from admin.',
+          descriptionEnabled: true,
           descriptionFontSize: 16,
           primaryCtaEnabled: true,
           primaryCtaText: 'SHOP NOW',
@@ -805,6 +837,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Spotlight featured RTW products.',
           ctaText: 'Shop RTW',
           ctaLink: '/ready-to-wear',
+          ctaMode: 'URL',
+          productGroup: 'RTW',
           ctaStyle: defaultCtaStyle({
             backgroundColor: 'transparent',
             textColor: '#ffffff',
@@ -824,6 +858,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Spotlight featured CTW products.',
           ctaText: 'Explore CTW',
           ctaLink: '/custom',
+          ctaMode: 'URL',
+          productGroup: 'CTW',
           ctaStyle: defaultCtaStyle({
             backgroundColor: 'transparent',
             textColor: '#ffffff',
@@ -843,6 +879,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Spotlight featured fabric products.',
           ctaText: 'Shop FTB',
           ctaLink: '/fabrics',
+          ctaMode: 'URL',
+          productGroup: 'FTB',
           ctaStyle: defaultCtaStyle({
             backgroundColor: 'transparent',
             textColor: '#ffffff',
@@ -903,6 +941,23 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           suffix: '+',
           positionX: 12,
           positionY: 80,
+          enabled: true,
+          displayOrder: 1,
+        },
+      ],
+    },
+    customerReviews: {
+      enabled: true,
+      sectionTitle: 'From Our Customers',
+      sourceMode: 'BOTH',
+      maxItems: 6,
+      staticMessages: [
+        {
+          id: randomUUID(),
+          customerName: 'Amara Okafor',
+          location: 'Lagos, Nigeria',
+          message: 'The quality and finishing exceeded my expectations.',
+          rating: 5,
           enabled: true,
           displayOrder: 1,
         },
@@ -1013,7 +1068,9 @@ const normalizeHeroBanner = (raw: unknown, fallback: HeroBanner, index: number):
     title: (getString(row.title) || fallback.title).slice(0, 180),
     titleFontSize: clamp(Math.round(getNumber(row.titleFontSize) ?? fallback.titleFontSize), 16, 120),
     text: (getString(row.text) || fallback.text).slice(0, 240),
+    textEnabled: getBoolean(row.textEnabled) ?? fallback.textEnabled,
     description: (getString(row.description) || fallback.description).slice(0, 500),
+    descriptionEnabled: getBoolean(row.descriptionEnabled) ?? fallback.descriptionEnabled,
     descriptionFontSize: clamp(Math.round(getNumber(row.descriptionFontSize) ?? fallback.descriptionFontSize), 10, 48),
     primaryCtaEnabled: getBoolean(row.primaryCtaEnabled) ?? fallback.primaryCtaEnabled,
     primaryCtaText: (getString(row.primaryCtaText) || fallback.primaryCtaText).slice(0, 80),
@@ -1044,6 +1101,12 @@ const normalizeTopNavigations = (raw: unknown, fallback: TopNavigationsSettings)
     hamburgerMenu: (Array.isArray(row.hamburgerMenu) ? row.hamburgerMenu : fallback.hamburgerMenu)
       .map((entry, index) => normalizeMenuLink(entry, fallback.hamburgerMenu[index] || defaultMenuLink('Menu', '/')))
       .slice(0, 40),
+    hamburgerMenuFontSize: clamp(Math.round(getNumber(row.hamburgerMenuFontSize) ?? fallback.hamburgerMenuFontSize), 16, 72),
+    hamburgerMenuFontWeight: clamp(
+      Math.round(getNumber(row.hamburgerMenuFontWeight) ?? fallback.hamburgerMenuFontWeight),
+      100,
+      900
+    ),
     searchIconEnabled: getBoolean(row.searchIconEnabled) ?? fallback.searchIconEnabled,
     logo: {
       mode: String(logoRaw.mode || fallback.logo.mode).trim().toUpperCase() === 'IMAGE' ? 'IMAGE' : 'TEXT',
@@ -1285,6 +1348,13 @@ const normalizeFeatured = (
         description: (getString(item.description) || fallbackItem.description).slice(0, 320),
         ctaText: (getString(item.ctaText) || fallbackItem.ctaText).slice(0, 80),
         ctaLink: normalizeHref(item.ctaLink, fallbackItem.ctaLink),
+        ctaMode: String(item.ctaMode || fallbackItem.ctaMode || 'URL').trim().toUpperCase() === 'PRODUCT_GROUP' ? 'PRODUCT_GROUP' : 'URL',
+        productGroup: ((): FeaturedCard['productGroup'] => {
+          const token = String(item.productGroup || fallbackItem.productGroup || fallbackItem.key || 'ALL')
+            .trim()
+            .toUpperCase();
+          return token === 'RTW' || token === 'CTW' || token === 'FTB' ? token : 'ALL';
+        })(),
         ctaStyle: normalizeCtaStyle(item.ctaStyle, fallbackItem.ctaStyle),
         enabled: getBoolean(item.enabled) ?? fallbackItem.enabled,
         displayOrder: clamp(Math.round(getNumber(item.displayOrder) ?? fallbackItem.displayOrder), 0, 999),
@@ -1292,6 +1362,40 @@ const normalizeFeatured = (
     })
     .slice(0, 30);
   return { cards };
+};
+
+const normalizeCustomerReviews = (
+  raw: unknown,
+  fallback: CustomerReviewsSettings
+): CustomerReviewsSettings => {
+  const row = asRecord(raw);
+  const staticRows = Array.isArray(row.staticMessages) ? row.staticMessages : fallback.staticMessages;
+  const staticMessages = staticRows
+    .map((entry, index) => {
+      const item = asRecord(entry);
+      const fallbackItem = fallback.staticMessages[index] || fallback.staticMessages[0];
+      return {
+        id: getString(item.id) || fallbackItem?.id || randomUUID(),
+        customerName: (getString(item.customerName) || fallbackItem?.customerName || 'Customer').slice(0, 120),
+        location: (getString(item.location) || fallbackItem?.location || '').slice(0, 120),
+        message: (getString(item.message) || fallbackItem?.message || '').slice(0, 600),
+        rating: clamp(Math.round(getNumber(item.rating) ?? fallbackItem?.rating ?? 5), 1, 5),
+        enabled: getBoolean(item.enabled) ?? fallbackItem?.enabled ?? true,
+        displayOrder: clamp(Math.round(getNumber(item.displayOrder) ?? fallbackItem?.displayOrder ?? index + 1), 0, 999),
+      } as CustomerReviewStaticMessage;
+    })
+    .slice(0, 60);
+  const sourceModeToken = String(row.sourceMode || fallback.sourceMode || 'BOTH').trim().toUpperCase();
+  return {
+    enabled: getBoolean(row.enabled) ?? fallback.enabled,
+    sectionTitle: (getString(row.sectionTitle) || fallback.sectionTitle || 'From Our Customers').slice(0, 140),
+    sourceMode:
+      sourceModeToken === 'STATIC_ONLY' || sourceModeToken === 'PRODUCT_REVIEWS_ONLY' || sourceModeToken === 'BOTH'
+        ? (sourceModeToken as CustomerReviewsSettings['sourceMode'])
+        : 'BOTH',
+    maxItems: clamp(Math.round(getNumber(row.maxItems) ?? fallback.maxItems), 1, 24),
+    staticMessages,
+  };
 };
 
 const normalizeFreshDrops = (raw: unknown, fallback: FreshDropsSettings): FreshDropsSettings => {
@@ -1471,6 +1575,8 @@ const buildTemplateSnapshot = (
       return cloneJson(asRecord(settings.designerSpotlight));
     case 'HERITAGE':
       return cloneJson(asRecord(settings.heritage));
+    case 'CUSTOMER_REVIEWS':
+      return cloneJson(asRecord(settings.customerReviews));
     case 'NEWSLETTER_FOOTER':
     default:
       return cloneJson(asRecord(settings.newsletterFooter));
@@ -1692,6 +1798,9 @@ const applyTemplateSnapshotToSettings = (
     case 'HERITAGE':
       next.heritage = normalizeHeritage(snapshotRecord, next.heritage);
       break;
+    case 'CUSTOMER_REVIEWS':
+      next.customerReviews = normalizeCustomerReviews(snapshotRecord, next.customerReviews);
+      break;
     case 'NEWSLETTER_FOOTER':
       next.newsletterFooter = normalizeNewsletterFooter(snapshotRecord, next.newsletterFooter);
       break;
@@ -1716,6 +1825,7 @@ const normalizeSettings = (
   const freshDrops = normalizeFreshDrops(row.freshDrops, fallback.freshDrops);
   const designerSpotlight = normalizeDesignerSpotlight(row.designerSpotlight, fallback.designerSpotlight);
   const heritage = normalizeHeritage(row.heritage, fallback.heritage);
+  const customerReviews = normalizeCustomerReviews(row.customerReviews, fallback.customerReviews);
   const newsletterFooter = normalizeNewsletterFooter(row.newsletterFooter, fallback.newsletterFooter);
   const base: JenksV2FrontpageManagerSettings = {
     contractVersion: CONTRACT_VERSION,
@@ -1727,6 +1837,7 @@ const normalizeSettings = (
     freshDrops,
     designerSpotlight,
     heritage,
+    customerReviews,
     newsletterFooter,
     sectionVisibility: { sections: [] },
   };
@@ -1807,6 +1918,10 @@ const saveSettings = async (next: Partial<JenksV2FrontpageManagerSettings>) => {
       heritage: {
         ...existing.settings.heritage,
         ...asRecord(next.heritage),
+      },
+      customerReviews: {
+        ...existing.settings.customerReviews,
+        ...asRecord(next.customerReviews),
       },
       newsletterFooter: {
         ...existing.settings.newsletterFooter,

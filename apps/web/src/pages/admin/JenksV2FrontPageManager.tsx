@@ -17,6 +17,7 @@ type TemplateKey =
   | 'FRESH_DROPS'
   | 'DESIGNER_SPOTLIGHT'
   | 'HERITAGE'
+  | 'CUSTOMER_REVIEWS'
   | 'NEWSLETTER_FOOTER';
 
 type MenuLink = {
@@ -42,7 +43,9 @@ type HeroBanner = {
   title: string;
   titleFontSize: number;
   text: string;
+  textEnabled: boolean;
   description: string;
+  descriptionEnabled: boolean;
   descriptionFontSize: number;
   primaryCtaText: string;
   primaryCtaLink: string;
@@ -61,6 +64,8 @@ type HeroBanner = {
 type TopNavigations = {
   topStripEnabled: boolean;
   hamburgerMenu: MenuLink[];
+  hamburgerMenuFontSize: number;
+  hamburgerMenuFontWeight: number;
   searchIconEnabled: boolean;
   logo: {
     mode: 'TEXT' | 'IMAGE';
@@ -192,9 +197,29 @@ type FeaturedCard = {
   description: string;
   ctaText: string;
   ctaLink: string;
+  ctaMode: 'URL' | 'PRODUCT_GROUP';
+  productGroup: 'ALL' | 'RTW' | 'CTW' | 'FTB';
   ctaStyle: CTAStyle;
   enabled: boolean;
   displayOrder: number;
+};
+
+type CustomerReviewStaticMessage = {
+  id: string;
+  customerName: string;
+  location: string;
+  message: string;
+  rating: number;
+  enabled: boolean;
+  displayOrder: number;
+};
+
+type CustomerReviews = {
+  enabled: boolean;
+  sectionTitle: string;
+  sourceMode: 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH';
+  maxItems: number;
+  staticMessages: CustomerReviewStaticMessage[];
 };
 
 type FreshDrops = {
@@ -325,6 +350,7 @@ type JenksV2FrontpageConfig = {
   freshDrops: FreshDrops;
   designerSpotlight: DesignerSpotlight;
   heritage: Heritage;
+  customerReviews: CustomerReviews;
   newsletterFooter: NewsletterFooter;
   sectionVisibility: {
     sections: SectionVisibilityEntry[];
@@ -344,6 +370,7 @@ const TEMPLATES: Array<{ key: TemplateKey; label: string }> = [
   { key: 'FRESH_DROPS', label: 'Fresh Drops' },
   { key: 'DESIGNER_SPOTLIGHT', label: 'Designer Spotlight' },
   { key: 'HERITAGE', label: 'Heritage' },
+  { key: 'CUSTOMER_REVIEWS', label: 'From Our Customers' },
   { key: 'NEWSLETTER_FOOTER', label: 'Newsletter and Footer' },
 ];
 
@@ -598,6 +625,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
   topNavigations: {
     topStripEnabled: true,
     hamburgerMenu: [defaultLink('Home', '/', 'HOME')],
+    hamburgerMenuFontSize: 32,
+    hamburgerMenuFontWeight: 800,
     searchIconEnabled: true,
     logo: {
       mode: 'TEXT',
@@ -641,7 +670,9 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Wear the Story of Africa',
         titleFontSize: 56,
         text: 'Curated fashion from top designers and textile houses.',
+        textEnabled: true,
         description: 'Control title, text, tags, font size, CTA labels and links for each hero banner.',
+        descriptionEnabled: true,
         descriptionFontSize: 16,
         primaryCtaEnabled: true,
         primaryCtaText: 'SHOP NOW',
@@ -851,6 +882,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Spotlight featured RTW products.',
         ctaText: 'Shop RTW',
         ctaLink: '/ready-to-wear',
+        ctaMode: 'URL',
+        productGroup: 'RTW',
         ctaStyle: createCtaStyle({
           backgroundColor: 'transparent',
           textColor: '#ffffff',
@@ -870,6 +903,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Spotlight featured CTW products.',
         ctaText: 'Explore CTW',
         ctaLink: '/custom',
+        ctaMode: 'URL',
+        productGroup: 'CTW',
         ctaStyle: createCtaStyle({
           backgroundColor: 'transparent',
           textColor: '#ffffff',
@@ -889,6 +924,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Spotlight featured fabric products.',
         ctaText: 'Shop FTB',
         ctaLink: '/fabrics',
+        ctaMode: 'URL',
+        productGroup: 'FTB',
         ctaStyle: createCtaStyle({
           backgroundColor: 'transparent',
           textColor: '#ffffff',
@@ -954,6 +991,23 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       },
     ],
   },
+  customerReviews: {
+    enabled: true,
+    sectionTitle: 'From Our Customers',
+    sourceMode: 'BOTH',
+    maxItems: 6,
+    staticMessages: [
+      {
+        id: uid(),
+        customerName: 'Amara Okafor',
+        location: 'Lagos, Nigeria',
+        message: 'The quality and finishing exceeded my expectations.',
+        rating: 5,
+        enabled: true,
+        displayOrder: 1,
+      },
+    ],
+  },
   newsletterFooter: {
     newsletter: {
       enabled: true,
@@ -1007,6 +1061,7 @@ type TabKey =
   | 'freshDrops'
   | 'designerSpotlight'
   | 'heritage'
+  | 'customerReviews'
   | 'newsletterFooter'
   | 'sectionVisibility';
 
@@ -1019,6 +1074,7 @@ const TAB_META: Array<{ key: TabKey; label: string }> = [
   { key: 'freshDrops', label: 'Fresh Drops' },
   { key: 'designerSpotlight', label: 'Designer Spotlight' },
   { key: 'heritage', label: 'Heritage' },
+  { key: 'customerReviews', label: 'From Our Customers' },
   { key: 'newsletterFooter', label: 'Newsletter & Footer' },
   { key: 'sectionVisibility', label: 'Section Visibility' },
 ];
@@ -1031,6 +1087,7 @@ const SUBMENU_TO_TAB: Record<string, TabKey> = {
   'fresh-drops': 'freshDrops',
   'designer-spotlight': 'designerSpotlight',
   heritage: 'heritage',
+  'customer-reviews': 'customerReviews',
   'newsletter-footer': 'newsletterFooter',
   'section-visibility': 'sectionVisibility',
 };
@@ -1043,6 +1100,7 @@ const TAB_TO_SUBMENU: Record<TabKey, string> = {
   freshDrops: 'fresh-drops',
   designerSpotlight: 'designer-spotlight',
   heritage: 'heritage',
+  customerReviews: 'customer-reviews',
   newsletterFooter: 'newsletter-footer',
   sectionVisibility: 'section-visibility',
 };
@@ -1056,6 +1114,7 @@ const toApiPayload = (config: JenksV2FrontpageConfig) => ({
   freshDrops: config.freshDrops,
   designerSpotlight: config.designerSpotlight,
   heritage: config.heritage,
+  customerReviews: config.customerReviews,
   newsletterFooter: config.newsletterFooter,
   sectionVisibility: config.sectionVisibility,
 });
@@ -1222,6 +1281,21 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
     ...data,
     topNavigations: {
       ...topNavigations,
+      hamburgerMenuFontSize: clamp(
+        Math.round(toNumber(String((topNavigations as TopNavigations).hamburgerMenuFontSize ?? DEFAULT_CONFIG.topNavigations.hamburgerMenuFontSize), DEFAULT_CONFIG.topNavigations.hamburgerMenuFontSize)),
+        16,
+        72
+      ),
+      hamburgerMenuFontWeight: clamp(
+        Math.round(
+          toNumber(
+            String((topNavigations as TopNavigations).hamburgerMenuFontWeight ?? DEFAULT_CONFIG.topNavigations.hamburgerMenuFontWeight),
+            DEFAULT_CONFIG.topNavigations.hamburgerMenuFontWeight
+          )
+        ),
+        100,
+        900
+      ),
       heroBanners: Array.isArray(topNavigations.heroBanners)
         ? topNavigations.heroBanners.map((banner, index) => {
             const next = { ...fallbackHero, ...banner };
@@ -1247,6 +1321,8 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
               textVerticalAlign,
               leftWidthPercent,
               rightWidthPercent,
+              textEnabled: toBoolean((banner as HeroBanner)?.textEnabled, fallbackHero.textEnabled),
+              descriptionEnabled: toBoolean((banner as HeroBanner)?.descriptionEnabled, fallbackHero.descriptionEnabled),
               primaryCtaEnabled: toBoolean((banner as HeroBanner)?.primaryCtaEnabled, fallbackHero.primaryCtaEnabled),
               primaryCtaStyle: normalizeCtaStyle((banner as HeroBanner)?.primaryCtaStyle, fallbackHero.primaryCtaStyle),
               secondaryCtaEnabled: toBoolean((banner as HeroBanner)?.secondaryCtaEnabled, fallbackHero.secondaryCtaEnabled),
@@ -1309,6 +1385,14 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         ? featured.cards.map((card) => ({
             ...fallbackFeatured,
             ...card,
+            ctaMode:
+              String((card as FeaturedCard)?.ctaMode || '').trim().toUpperCase() === 'PRODUCT_GROUP'
+                ? 'PRODUCT_GROUP'
+                : 'URL',
+            productGroup: ((): FeaturedCard['productGroup'] => {
+              const token = String((card as FeaturedCard)?.productGroup || '').trim().toUpperCase();
+              return token === 'RTW' || token === 'CTW' || token === 'FTB' ? token : 'ALL';
+            })(),
             ctaStyle: normalizeCtaStyle((card as FeaturedCard)?.ctaStyle, fallbackFeatured.ctaStyle),
           }))
         : DEFAULT_CONFIG.featured.cards,
@@ -1322,6 +1406,39 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             ctaStyle: normalizeCtaStyle((card as DesignerSpotlightCard)?.ctaStyle, fallbackSpotlight.ctaStyle),
           }))
         : DEFAULT_CONFIG.designerSpotlight.cards,
+    },
+    customerReviews: {
+      ...DEFAULT_CONFIG.customerReviews,
+      ...(data.customerReviews || {}),
+      sourceMode: ((): CustomerReviews['sourceMode'] => {
+        const token = String((data.customerReviews as CustomerReviews | undefined)?.sourceMode || '').trim().toUpperCase();
+        if (token === 'STATIC_ONLY' || token === 'PRODUCT_REVIEWS_ONLY' || token === 'BOTH') return token;
+        return DEFAULT_CONFIG.customerReviews.sourceMode;
+      })(),
+      maxItems: clamp(
+        Math.round(
+          toNumber(
+            String((data.customerReviews as CustomerReviews | undefined)?.maxItems ?? DEFAULT_CONFIG.customerReviews.maxItems),
+            DEFAULT_CONFIG.customerReviews.maxItems
+          )
+        ),
+        1,
+        24
+      ),
+      staticMessages: Array.isArray((data.customerReviews as CustomerReviews | undefined)?.staticMessages)
+        ? ((data.customerReviews as CustomerReviews).staticMessages || []).map((item, index) => {
+            const row = item as Partial<CustomerReviewStaticMessage>;
+            return {
+              id: String(row.id || uid()),
+              customerName: String(row.customerName || `Customer ${index + 1}`),
+              location: String(row.location || ''),
+              message: String(row.message || ''),
+              rating: clamp(Math.round(toNumber(String(row.rating ?? 5), 5)), 1, 5),
+              enabled: toBoolean(row.enabled, true),
+              displayOrder: clamp(Math.round(toNumber(String(row.displayOrder ?? index + 1), index + 1)), 1, 999),
+            };
+          })
+        : DEFAULT_CONFIG.customerReviews.staticMessages,
     },
     newsletterFooter: {
       ...DEFAULT_CONFIG.newsletterFooter,
@@ -1772,6 +1889,51 @@ export default function JenksV2FrontPageManager() {
                 }
               />
               Theme Controller Enabled
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label className="text-xs">
+              Hamburger Font Size (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.topNavigations.hamburgerMenuFontSize}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    topNavigations: {
+                      ...prev.topNavigations,
+                      hamburgerMenuFontSize: clamp(
+                        toNumber(event.target.value, prev.topNavigations.hamburgerMenuFontSize),
+                        16,
+                        72
+                      ),
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
+              Hamburger Font Weight
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.topNavigations.hamburgerMenuFontWeight}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    topNavigations: {
+                      ...prev.topNavigations,
+                      hamburgerMenuFontWeight: clamp(
+                        toNumber(event.target.value, prev.topNavigations.hamburgerMenuFontWeight),
+                        100,
+                        900
+                      ),
+                    },
+                  }))
+                }
+              />
             </label>
           </div>
 
@@ -2271,7 +2433,9 @@ export default function JenksV2FrontPageManager() {
                           title: 'New Hero Banner',
                           titleFontSize: 56,
                           text: '',
+                          textEnabled: true,
                           description: '',
+                          descriptionEnabled: true,
                           descriptionFontSize: 16,
                           primaryCtaEnabled: true,
                           primaryCtaText: 'SHOP NOW',
@@ -2433,6 +2597,24 @@ export default function JenksV2FrontPageManager() {
                       }
                     />
                   </label>
+                  <label className="text-xs flex items-center gap-2 pt-5">
+                    <input
+                      type="checkbox"
+                      checked={banner.textEnabled}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, textEnabled: event.target.checked } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                    Text Enabled
+                  </label>
                   <label className="text-xs md:col-span-2">
                     Description
                     <textarea
@@ -2451,6 +2633,24 @@ export default function JenksV2FrontPageManager() {
                         }))
                       }
                     />
+                  </label>
+                  <label className="text-xs flex items-center gap-2 pt-5">
+                    <input
+                      type="checkbox"
+                      checked={banner.descriptionEnabled}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, descriptionEnabled: event.target.checked } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                    Description Enabled
                   </label>
                   <label className="text-xs">
                     Description Font Size
@@ -4407,6 +4607,8 @@ export default function JenksV2FrontPageManager() {
                         description: '',
                         ctaText: 'View',
                         ctaLink: '/ready-to-wear',
+                        ctaMode: 'URL',
+                        productGroup: 'ALL',
                         ctaStyle: createCtaStyle({
                           backgroundColor: 'transparent',
                           textColor: '#ffffff',
@@ -4533,6 +4735,60 @@ export default function JenksV2FrontPageManager() {
                         {route.label}
                       </option>
                     ))}
+                  </select>
+                </label>
+                <label className="md:col-span-1 text-[11px]">
+                  CTA Mode
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.ctaMode}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        featured: {
+                          cards: prev.featured.cards.map((entry, entryIndex) =>
+                            entryIndex === index
+                              ? {
+                                  ...entry,
+                                  ctaMode: event.target.value === 'PRODUCT_GROUP' ? 'PRODUCT_GROUP' : 'URL',
+                                }
+                              : entry
+                          ),
+                        },
+                      }))
+                    }
+                  >
+                    <option value="URL">URL</option>
+                    <option value="PRODUCT_GROUP">PRODUCT_GROUP</option>
+                  </select>
+                </label>
+                <label className="md:col-span-1 text-[11px]">
+                  Product Group
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.productGroup}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        featured: {
+                          cards: prev.featured.cards.map((entry, entryIndex) =>
+                            entryIndex === index
+                              ? {
+                                  ...entry,
+                                  productGroup: ['RTW', 'CTW', 'FTB'].includes(event.target.value)
+                                    ? (event.target.value as FeaturedCard['productGroup'])
+                                    : 'ALL',
+                                }
+                              : entry
+                          ),
+                        },
+                      }))
+                    }
+                  >
+                    <option value="ALL">ALL</option>
+                    <option value="RTW">RTW</option>
+                    <option value="CTW">CTW</option>
+                    <option value="FTB">FTB</option>
                   </select>
                 </label>
                 {renderCtaStyleEditor(
@@ -5243,6 +5499,254 @@ export default function JenksV2FrontPageManager() {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+      ) : null}
+
+      {activeTab === 'customerReviews' ? (
+        <section className="rounded-lg border bg-white p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">From Our Customers</h2>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                setConfig((prev) => ({
+                  ...prev,
+                  customerReviews: {
+                    ...prev.customerReviews,
+                    staticMessages: [
+                      ...prev.customerReviews.staticMessages,
+                      {
+                        id: uid(),
+                        customerName: 'Customer Name',
+                        location: '',
+                        message: '',
+                        rating: 5,
+                        enabled: true,
+                        displayOrder: prev.customerReviews.staticMessages.length + 1,
+                      },
+                    ],
+                  },
+                }))
+              }
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Static Message
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <label className="flex items-center gap-2 text-xs pt-5">
+              <input
+                type="checkbox"
+                checked={config.customerReviews.enabled}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    customerReviews: { ...prev.customerReviews, enabled: event.target.checked },
+                  }))
+                }
+              />
+              Section Enabled
+            </label>
+            <label className="text-xs md:col-span-2">
+              Section Title
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.customerReviews.sectionTitle}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    customerReviews: { ...prev.customerReviews, sectionTitle: event.target.value },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
+              Source Mode
+              <select
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.customerReviews.sourceMode}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    customerReviews: {
+                      ...prev.customerReviews,
+                      sourceMode: event.target.value as CustomerReviews['sourceMode'],
+                    },
+                  }))
+                }
+              >
+                <option value="STATIC_ONLY">STATIC_ONLY</option>
+                <option value="PRODUCT_REVIEWS_ONLY">PRODUCT_REVIEWS_ONLY</option>
+                <option value="BOTH">BOTH</option>
+              </select>
+            </label>
+            <label className="text-xs">
+              Max Items
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.customerReviews.maxItems}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    customerReviews: {
+                      ...prev.customerReviews,
+                      maxItems: clamp(toNumber(event.target.value, prev.customerReviews.maxItems), 1, 24),
+                    },
+                  }))
+                }
+              />
+            </label>
+          </div>
+
+          <div className="space-y-2">
+            {config.customerReviews.staticMessages
+              .slice()
+              .sort((a, b) => a.displayOrder - b.displayOrder)
+              .map((message, index) => (
+                <div key={message.id} className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-12">
+                  <label className="md:col-span-3 text-[11px]">
+                    Customer Name
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={message.customerName}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          customerReviews: {
+                            ...prev.customerReviews,
+                            staticMessages: prev.customerReviews.staticMessages.map((entry, entryIndex) =>
+                              entry.id === message.id ? { ...entry, customerName: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="md:col-span-3 text-[11px]">
+                    Location
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={message.location}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          customerReviews: {
+                            ...prev.customerReviews,
+                            staticMessages: prev.customerReviews.staticMessages.map((entry) =>
+                              entry.id === message.id ? { ...entry, location: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="md:col-span-4 text-[11px]">
+                    Message
+                    <textarea
+                      rows={2}
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={message.message}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          customerReviews: {
+                            ...prev.customerReviews,
+                            staticMessages: prev.customerReviews.staticMessages.map((entry) =>
+                              entry.id === message.id ? { ...entry, message: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="md:col-span-1 text-[11px]">
+                    Rating
+                    <input
+                      type="number"
+                      min={1}
+                      max={5}
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={message.rating}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          customerReviews: {
+                            ...prev.customerReviews,
+                            staticMessages: prev.customerReviews.staticMessages.map((entry) =>
+                              entry.id === message.id
+                                ? { ...entry, rating: clamp(toNumber(event.target.value, entry.rating), 1, 5) }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="md:col-span-1 text-[11px]">
+                    Order
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={message.displayOrder}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          customerReviews: {
+                            ...prev.customerReviews,
+                            staticMessages: prev.customerReviews.staticMessages.map((entry) =>
+                              entry.id === message.id
+                                ? { ...entry, displayOrder: clamp(toNumber(event.target.value, entry.displayOrder), 1, 999) }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <div className="md:col-span-12 flex items-center justify-end gap-2">
+                    <label className="inline-flex items-center gap-2 text-[11px]">
+                      <input
+                        type="checkbox"
+                        checked={message.enabled}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            customerReviews: {
+                              ...prev.customerReviews,
+                              staticMessages: prev.customerReviews.staticMessages.map((entry) =>
+                                entry.id === message.id ? { ...entry, enabled: event.target.checked } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                      Enabled
+                    </label>
+                    <button
+                      type="button"
+                      className="rounded border p-1"
+                      onClick={() =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          customerReviews: {
+                            ...prev.customerReviews,
+                            staticMessages: prev.customerReviews.staticMessages.filter((entry) => entry.id !== message.id),
+                          },
+                        }))
+                      }
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            {config.customerReviews.staticMessages.length === 0 ? (
+              <p className="text-xs text-gray-500">No static customer messages yet.</p>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -6000,6 +6504,7 @@ export default function JenksV2FrontPageManager() {
       activeTab === 'freshDrops' ||
       activeTab === 'designerSpotlight' ||
       activeTab === 'heritage' ||
+      activeTab === 'customerReviews' ||
       activeTab === 'sectionVisibility' ? null : (
         <section className="rounded-lg border bg-white p-5">
           <h2 className="text-xl font-semibold">Section coming soon</h2>

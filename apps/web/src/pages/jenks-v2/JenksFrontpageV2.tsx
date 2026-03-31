@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   ShoppingBag,
   Sparkles,
+  Star,
   Sun,
   Tag,
   Truck,
@@ -39,6 +40,10 @@ type HeroSlide = {
   textVerticalAlign: 'TOP' | 'MIDDLE' | 'BOTTOM';
   leftWidthPercent: number;
   rightWidthPercent: number;
+  titleFontSize: number;
+  textEnabled: boolean;
+  descriptionEnabled: boolean;
+  descriptionFontSize: number;
   titleA: string;
   titleB: string;
   lineA: string;
@@ -64,7 +69,18 @@ type FeaturedTile = {
   href: string;
   tag: string;
   cta: string;
+  ctaMode: 'URL' | 'PRODUCT_GROUP';
+  productGroup: 'ALL' | 'RTW' | 'CTW' | 'FTB';
   ctaStyle?: CTAStyle;
+};
+
+type CustomerReviewCard = {
+  id: string;
+  customerName: string;
+  location: string;
+  message: string;
+  rating: number;
+  source: 'STATIC' | 'PRODUCT';
 };
 type CTAStyle = {
   backgroundColor: string;
@@ -91,6 +107,7 @@ type TemplateKey =
   | 'FRESH_DROPS'
   | 'DESIGNER_SPOTLIGHT'
   | 'HERITAGE'
+  | 'CUSTOMER_REVIEWS'
   | 'NEWSLETTER_FOOTER';
 
 type JenksV2ManagerPayload = Record<string, unknown>;
@@ -110,6 +127,7 @@ const TEMPLATE_KEYS: TemplateKey[] = [
   'FRESH_DROPS',
   'DESIGNER_SPOTLIGHT',
   'HERITAGE',
+  'CUSTOMER_REVIEWS',
   'NEWSLETTER_FOOTER',
 ];
 
@@ -292,6 +310,16 @@ const categoryTokenFromSectionKey = (key: unknown): 'RTW' | 'CTW' | 'FTB' | 'ALL
   if (token === 'CTW') return 'CTW';
   if (token === 'FTB') return 'FTB';
   return 'ALL';
+};
+
+const productGroupHref = (groupRaw: unknown) => {
+  const group = String(groupRaw || '')
+    .trim()
+    .toUpperCase();
+  if (group === 'RTW') return buildCountryProductsHref('Nigeria', 'RTW');
+  if (group === 'CTW') return buildCountryProductsHref('Nigeria', 'CTW');
+  if (group === 'FTB') return buildCountryProductsHref('Nigeria', 'FTB');
+  return '/ready-to-wear';
 };
 
 const resolveManagerImage = (value: unknown, fallback: string) => {
@@ -757,6 +785,7 @@ export default function JenksFrontpageV2() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [themeMode, setThemeMode] = useState<'LIGHT' | 'DARK'>('LIGHT');
+  const [productReviewCards, setProductReviewCards] = useState<CustomerReviewCard[]>([]);
   const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
   const topNavigationsCfg = useMemo(() => asRecord(asRecord(managerConfig).topNavigations), [managerConfig]);
   const shopByCfg = useMemo(() => asRecord(asRecord(managerConfig).shopBy), [managerConfig]);
@@ -766,6 +795,7 @@ export default function JenksFrontpageV2() {
   const freshDropsCfg = useMemo(() => asRecord(asRecord(managerConfig).freshDrops), [managerConfig]);
   const designerSpotlightCfg = useMemo(() => asRecord(asRecord(managerConfig).designerSpotlight), [managerConfig]);
   const heritageCfg = useMemo(() => asRecord(asRecord(managerConfig).heritage), [managerConfig]);
+  const customerReviewsCfg = useMemo(() => asRecord(asRecord(managerConfig).customerReviews), [managerConfig]);
   const newsletterFooterCfg = useMemo(() => asRecord(asRecord(managerConfig).newsletterFooter), [managerConfig]);
   const sectionVisibilityCfg = useMemo(() => asRecord(asRecord(managerConfig).sectionVisibility), [managerConfig]);
 
@@ -867,6 +897,10 @@ export default function JenksFrontpageV2() {
         textVerticalAlign,
         leftWidthPercent,
         rightWidthPercent,
+        titleFontSize: Math.max(32, Math.min(120, Math.round(asNumber(row.titleFontSize, 72)))),
+        textEnabled: asBoolean(row.textEnabled, true),
+        descriptionEnabled: asBoolean(row.descriptionEnabled, true),
+        descriptionFontSize: Math.max(10, Math.min(48, Math.round(asNumber(row.descriptionFontSize, 14)))),
         titleA: split.titleA || HERO[indexKey % HERO.length]?.titleA || 'WEAR',
         titleB: split.titleB || HERO[indexKey % HERO.length]?.titleB || 'THE STORY OF AFRICA',
         lineA: asString(row.text, HERO[indexKey % HERO.length]?.lineA || ''),
@@ -1039,10 +1073,28 @@ export default function JenksFrontpageV2() {
   }, [categorySections, shopByCategoryCards]);
 
   const featuredCardsByKey = useMemo(() => {
-    const defaults = {
-      RTW: FEATURED_RTW,
-      CTW: FEATURED_CTW,
-      FTB: FEATURED_FTB,
+    const defaults: Record<'RTW' | 'CTW' | 'FTB', FeaturedTile[]> = {
+      RTW: FEATURED_RTW.map((row) => ({
+        ...row,
+        tag: FEATURED_LABEL_BY_KEY.RTW,
+        cta: FEATURED_CTA_BY_KEY.RTW,
+        ctaMode: 'PRODUCT_GROUP',
+        productGroup: 'RTW',
+      })),
+      CTW: FEATURED_CTW.map((row) => ({
+        ...row,
+        tag: FEATURED_LABEL_BY_KEY.CTW,
+        cta: FEATURED_CTA_BY_KEY.CTW,
+        ctaMode: 'PRODUCT_GROUP',
+        productGroup: 'CTW',
+      })),
+      FTB: FEATURED_FTB.map((row) => ({
+        ...row,
+        tag: FEATURED_LABEL_BY_KEY.FTB,
+        cta: FEATURED_CTA_BY_KEY.FTB,
+        ctaMode: 'PRODUCT_GROUP',
+        productGroup: 'FTB',
+      })),
     };
     const rows = asArray(featuredCfg.cards)
       .map((entry) => asRecord(entry))
@@ -1065,13 +1117,28 @@ export default function JenksFrontpageV2() {
         href: normalizeHref(row.ctaLink, FEATURED_HREF_BY_KEY[key] || '/ready-to-wear', key),
         tag: asString(row.tag, FEATURED_LABEL_BY_KEY[key] || ''),
         cta: asString(row.ctaText, FEATURED_CTA_BY_KEY[key] || 'SHOP NOW').toUpperCase(),
+        ctaMode: String(row.ctaMode || '').trim().toUpperCase() === 'PRODUCT_GROUP' ? 'PRODUCT_GROUP' : 'URL',
+        productGroup:
+          String(row.productGroup || key)
+            .trim()
+            .toUpperCase() === 'CTW'
+            ? 'CTW'
+            : String(row.productGroup || key)
+                  .trim()
+                  .toUpperCase() === 'FTB'
+              ? 'FTB'
+              : String(row.productGroup || key)
+                    .trim()
+                    .toUpperCase() === 'RTW'
+                ? 'RTW'
+                : 'ALL',
         ctaStyle: row.ctaStyle,
       });
     });
     return {
-      RTW: grouped.RTW.length > 0 ? grouped.RTW : defaults.RTW.map((row) => ({ ...row, tag: FEATURED_LABEL_BY_KEY.RTW, cta: FEATURED_CTA_BY_KEY.RTW })),
-      CTW: grouped.CTW.length > 0 ? grouped.CTW : defaults.CTW.map((row) => ({ ...row, tag: FEATURED_LABEL_BY_KEY.CTW, cta: FEATURED_CTA_BY_KEY.CTW })),
-      FTB: grouped.FTB.length > 0 ? grouped.FTB : defaults.FTB.map((row) => ({ ...row, tag: FEATURED_LABEL_BY_KEY.FTB, cta: FEATURED_CTA_BY_KEY.FTB })),
+      RTW: grouped.RTW.length > 0 ? grouped.RTW : defaults.RTW,
+      CTW: grouped.CTW.length > 0 ? grouped.CTW : defaults.CTW,
+      FTB: grouped.FTB.length > 0 ? grouped.FTB : defaults.FTB,
     };
   }, [featuredCfg.cards]);
 
@@ -1086,6 +1153,13 @@ export default function JenksFrontpageV2() {
     const categoryToken = categoryTokenFromSectionKey(key);
     if (categoryToken === 'ALL') return '/ready-to-wear';
     return buildCountryProductsHref('Nigeria', categoryToken);
+  };
+  const featuredCardHref = (card: FeaturedTile, key: 'RTW' | 'CTW' | 'FTB') => {
+    if (card.ctaMode === 'PRODUCT_GROUP') {
+      const token = card.productGroup === 'ALL' ? key : card.productGroup;
+      return productGroupHref(token);
+    }
+    return toSafeInternalHref(card.href || featuredHrefForCountry(key));
   };
 
   const freshDropsCards = useMemo(() => {
@@ -1115,6 +1189,20 @@ export default function JenksFrontpageV2() {
     const source = entries.length > 0 ? entries : DESIGNER_SPOTLIGHT.map((row) => ({ ...row, tag: 'Designer Spotlight' }));
     return source.slice(0, maxItems);
   }, [designerSpotlightCfg.cards, designerSpotlightCfg.columns, designerSpotlightCfg.rows]);
+  const staticReviewCards = useMemo(() => {
+    const rows = asArray(customerReviewsCfg.staticMessages)
+      .map((entry) => asRecord(entry))
+      .filter((entry) => asBoolean(entry.enabled, true))
+      .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0));
+    return rows.map((entry, idx) => ({
+      id: asString(entry.id, `static-review-${idx + 1}`),
+      customerName: asString(entry.customerName, 'Verified Buyer'),
+      location: asString(entry.location, ''),
+      message: asString(entry.message, ''),
+      rating: Math.max(1, Math.min(5, Math.round(asNumber(entry.rating, 5)))),
+      source: 'STATIC' as const,
+    }));
+  }, [customerReviewsCfg.staticMessages]);
 
   const textIconSectionTitles = useMemo<TextIconSectionTitleConfig>(() => {
     const titles = asRecord(textIconCfg.sectionTitles);
@@ -1304,6 +1392,13 @@ export default function JenksFrontpageV2() {
   const shopBySectionTitle = asString(shopByCfg.sectionTitle, 'Shop By');
   const shopBySectionDescription = asString(shopByCfg.sectionDescription, 'Browse by category, country, style, or budget.');
   const showShopBySectionDescription = asBoolean(shopByCfg.sectionDescriptionEnabled, true);
+  const customerReviewsSourceMode = ((): 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH' => {
+    const token = asString(customerReviewsCfg.sourceMode, 'BOTH').toUpperCase();
+    if (token === 'STATIC_ONLY' || token === 'PRODUCT_REVIEWS_ONLY' || token === 'BOTH') return token;
+    return 'BOTH';
+  })();
+  const customerReviewsMaxItems = Math.max(1, Math.min(24, Math.round(asNumber(customerReviewsCfg.maxItems, 6))));
+  const customerReviewsTitle = asString(customerReviewsCfg.sectionTitle, 'From Our Customers');
   const heroLeftColSpan = Math.max(3, Math.min(9, Math.round((active.leftWidthPercent / 100) * 12)));
   const heroRightColSpan = Math.max(3, 12 - heroLeftColSpan);
   const heroTextAlignClass =
@@ -1313,6 +1408,8 @@ export default function JenksFrontpageV2() {
         ? 'items-end'
         : 'items-center';
   const heroRightHasPanelImage = active.rightPanelBackgroundMode === 'IMAGE' && Boolean(active.rightPanelBackgroundImage);
+  const hamburgerMenuFontSize = Math.max(16, Math.min(72, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontSize, 32))));
+  const hamburgerMenuFontWeight = Math.max(500, Math.min(900, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontWeight, 800))));
   const footerBrandText = asString(footerCfg.brandText, logoTextRaw || 'ZURIKARIBU');
   const footerBrandSplit = useMemo(() => {
     const compact = footerBrandText.replace(/\s+/g, '').trim();
@@ -1366,6 +1463,17 @@ export default function JenksFrontpageV2() {
     return 'LIGHT';
   }, [themeCfg.mode]);
   const ComputedThemeIcon = themeMode === 'DARK' ? Moon : ThemeIcon;
+  const customerReviewCards = useMemo(() => {
+    const staticRows = staticReviewCards.filter((entry) => entry.message.length > 0);
+    const productRows = productReviewCards.filter((entry) => entry.message.length > 0);
+    if (customerReviewsSourceMode === 'STATIC_ONLY') return staticRows.slice(0, customerReviewsMaxItems);
+    if (customerReviewsSourceMode === 'PRODUCT_REVIEWS_ONLY') return productRows.slice(0, customerReviewsMaxItems);
+    return [...staticRows, ...productRows].slice(0, customerReviewsMaxItems);
+  }, [customerReviewsMaxItems, customerReviewsSourceMode, productReviewCards, staticReviewCards]);
+  const showCustomerReviewsSection =
+    isSectionVisible('CUSTOMER_REVIEWS') &&
+    asBoolean(customerReviewsCfg.enabled, true) &&
+    customerReviewCards.length > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -1462,6 +1570,77 @@ export default function JenksFrontpageV2() {
       body.style.color = '';
     };
   }, [themeMode]);
+  useEffect(() => {
+    let cancelled = false;
+    const shouldLoadProducts =
+      asBoolean(customerReviewsCfg.enabled, true) &&
+      (customerReviewsSourceMode === 'PRODUCT_REVIEWS_ONLY' || customerReviewsSourceMode === 'BOTH');
+    if (!shouldLoadProducts) {
+      setProductReviewCards([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+    const loadProductReviews = async () => {
+      try {
+        const [ready, designs, fabrics] = await Promise.all([
+          api.products.getReadyToWear({ page: 1, limit: 8 }).catch(() => null),
+          api.products.getDesigns({ page: 1, limit: 8 }).catch(() => null),
+          api.products.getFabrics({ page: 1, limit: 8 }).catch(() => null),
+        ]);
+        const seeds: Array<{ type: 'ready-to-wear' | 'design' | 'fabric'; id: string; location: string }> = [];
+        const pushSeed = (type: 'ready-to-wear' | 'design' | 'fabric', row: unknown) => {
+          const record = asRecord(row);
+          const id = asString(record.id, asString(record._id, ''));
+          if (!id) return;
+          seeds.push({
+            type,
+            id,
+            location: asString(record.country, ''),
+          });
+        };
+        asArray(asRecord(ready?.data).products).forEach((row) => pushSeed('ready-to-wear', row));
+        asArray(asRecord(designs?.data).designs).forEach((row) => pushSeed('design', row));
+        asArray(asRecord(fabrics?.data).fabrics).forEach((row) => pushSeed('fabric', row));
+        const uniqueSeeds = Array.from(new Map(seeds.map((seed) => [`${seed.type}:${seed.id}`, seed])).values()).slice(0, 10);
+        const reviewResponses = await Promise.all(
+          uniqueSeeds.map(async (seed) => {
+            const response = await api.products.getProductReviews(seed.type, seed.id, 3).catch(() => null);
+            return { seed, response };
+          })
+        );
+        const rows: Array<CustomerReviewCard & { createdAtTs: number }> = [];
+        reviewResponses.forEach(({ seed, response }) => {
+          asArray(asRecord(asRecord(response).data).reviews).forEach((reviewRaw, reviewIdx) => {
+            const review = asRecord(reviewRaw);
+            const comment = asString(review.comment, '');
+            if (!comment) return;
+            const customer = asRecord(review.customer);
+            rows.push({
+              id: `${seed.type}-${seed.id}-${asString(review.id, String(reviewIdx + 1))}`,
+              customerName: asString(customer.name, 'Verified Buyer'),
+              location: seed.location || 'Africa',
+              message: comment,
+              rating: Math.max(1, Math.min(5, Math.round(asNumber(review.rating, 5)))),
+              source: 'PRODUCT',
+              createdAtTs: Date.parse(asString(review.createdAt, '')) || 0,
+            });
+          });
+        });
+        rows.sort((left, right) => right.createdAtTs - left.createdAtTs);
+        const normalized = rows.map(({ createdAtTs: _ignore, ...entry }) => entry);
+        if (!cancelled) {
+          setProductReviewCards(normalized.slice(0, customerReviewsMaxItems * 2));
+        }
+      } catch {
+        if (!cancelled) setProductReviewCards([]);
+      }
+    };
+    void loadProductReviews();
+    return () => {
+      cancelled = true;
+    };
+  }, [customerReviewsCfg.enabled, customerReviewsMaxItems, customerReviewsSourceMode]);
 
   return (
     <div className="kimi-site flex flex-col bg-[#f5f3ee] text-[#111]">
@@ -1497,7 +1676,7 @@ export default function JenksFrontpageV2() {
                 ) : null}
               </div>
 
-              <div className="absolute left-1/2 -translate-x-1/2">
+              <Link to="/" className="absolute left-1/2 -translate-x-1/2">
                 {asString(logoCfg.mode, 'TEXT').toUpperCase() === 'IMAGE' && asString(logoCfg.imageUrl, '') ? (
                   <img
                     src={asString(logoCfg.imageUrl, '')}
@@ -1521,7 +1700,7 @@ export default function JenksFrontpageV2() {
                     <span className="text-[#e66045]">{logoTextSplit.right}</span>
                   </p>
                 )}
-              </div>
+              </Link>
 
               <div className="flex items-center gap-3 text-black/75">
                 <div className="hidden items-center gap-6 text-xs font-semibold uppercase tracking-[0.12em] text-black/75 md:flex">
@@ -1573,23 +1752,23 @@ export default function JenksFrontpageV2() {
               <button
                 type="button"
                 aria-label="Close search overlay"
-                className="absolute inset-0 h-full w-full bg-black/50"
+                className="absolute inset-0 h-full w-full bg-white/40 backdrop-blur-[1px]"
                 onClick={() => setSearchOpen(false)}
               />
-              <div className="absolute left-1/2 top-16 w-[94vw] max-w-[860px] -translate-x-1/2 rounded-xl border border-white/20 bg-[#0d1016] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:p-5">
+              <div className="absolute left-1/2 top-16 w-[94vw] max-w-[860px] -translate-x-1/2 rounded-xl border border-black/10 bg-white/88 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur sm:p-5">
                 <div className="flex items-center gap-2">
-                  <Search className="h-4 w-4 text-white/70" />
+                  <Search className="h-4 w-4 text-black/60" />
                   <input
                     type="text"
                     autoFocus
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="Search products, categories, countries..."
-                    className="h-10 w-full bg-transparent text-sm text-white placeholder:text-white/45 focus:outline-none"
+                    className="h-10 w-full bg-transparent text-sm text-black placeholder:text-black/45 focus:outline-none"
                   />
                   <button
                     type="button"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded border border-white/20 text-white hover:bg-white/10"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded border border-black/20 text-black/70 hover:bg-black/5"
                     onClick={() => {
                       setSearchOpen(false);
                       setSearchQuery('');
@@ -1613,7 +1792,7 @@ export default function JenksFrontpageV2() {
                               : '/country-products'
                       )}
                       onClick={() => setSearchOpen(false)}
-                      className="rounded border border-white/20 px-2.5 py-1 text-white/85 hover:border-[#e66045] hover:text-[#e66045]"
+                      className="rounded border border-black/20 px-2.5 py-1 text-black/75 hover:border-[#e66045] hover:text-[#e66045]"
                     >
                       {suggestion}
                     </Link>
@@ -1657,7 +1836,11 @@ export default function JenksFrontpageV2() {
                       <Link
                         key={`${link.label}-${link.href}`}
                         to={toSafeInternalHref(link.href)}
-                        className="block rounded border border-white/10 px-4 py-3 font-['Oswald'] text-2xl font-bold uppercase leading-none tracking-[0.01em] text-white transition-colors hover:border-[#e66045] hover:text-[#e66045] sm:text-3xl"
+                        className="block rounded border border-white/10 px-4 py-3 font-['Oswald'] uppercase leading-none tracking-[0.01em] text-white transition-colors hover:border-[#e66045] hover:text-[#e66045]"
+                        style={{
+                          fontSize: `${hamburgerMenuFontSize}px`,
+                          fontWeight: hamburgerMenuFontWeight,
+                        }}
                         onClick={() => setHamburgerOpen(false)}
                       >
                         {link.label}
@@ -1695,7 +1878,7 @@ export default function JenksFrontpageV2() {
           ))}
         </div>
         <div
-          className={`relative flex ${heroTextAlignClass} px-5 py-10 lg:px-8 xl:px-10`}
+          className={`relative flex ${heroTextAlignClass} px-5 py-10 lg:pl-8 lg:pr-12 xl:pl-10 xl:pr-16`}
           style={{
             gridColumn: `span ${heroRightColSpan} / span ${heroRightColSpan}`,
             backgroundColor: '#f5f3ee',
@@ -1705,13 +1888,20 @@ export default function JenksFrontpageV2() {
           }}
         >
           {heroRightHasPanelImage ? <div className="absolute inset-0 bg-[#f5f3ee]/68" /> : null}
-          <div className="relative max-w-[540px] pr-1 sm:pr-2 animate-fade-in" data-kimi-anim="fade-up">
-            <h1 className="font-['Oswald'] text-[58px] font-bold uppercase leading-[0.9] sm:text-[72px]">
+          <div className="relative w-full max-w-[520px] pr-3 sm:pr-4 animate-fade-in" data-kimi-anim="fade-up">
+            <h1
+              className="break-words font-['Oswald'] font-bold uppercase leading-[0.9]"
+              style={{ fontSize: `${Math.max(36, Math.min(120, Math.round(active.titleFontSize)))}px` }}
+            >
               <span>{active.titleA}</span>
               <span className="ml-[0.16em] text-[#e66045]">{active.titleB}</span>
             </h1>
-            <p className="mt-6 text-[16px] font-light leading-[1.35] text-black/84 sm:text-[18px]">{active.lineA}</p>
-            <p className="mt-4 text-sm text-black/55">{active.lineB}</p>
+            {active.textEnabled ? (
+              <p className="mt-6 text-[16px] font-light leading-[1.35] text-black/84 sm:text-[18px]">{active.lineA}</p>
+            ) : null}
+            {active.descriptionEnabled ? (
+              <p className="mt-4 text-black/55" style={{ fontSize: `${active.descriptionFontSize}px` }}>{active.lineB}</p>
+            ) : null}
             <div className="mt-6 flex flex-wrap items-center gap-1.5">
               {active.primaryCtaEnabled ? (
                 <Link
@@ -1832,7 +2022,7 @@ export default function JenksFrontpageV2() {
                     <Link
                       key={country.name}
                       to={buildCountryProductsHref(country.name, 'ALL')}
-                      className="group flex flex-col items-center text-center text-white/78 transition-colors hover:text-[#e66045]"
+                      className="group flex flex-col items-center text-center text-white transition-colors hover:text-[#e66045]"
                     >
                       <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/12 bg-white/[0.02] transition-colors group-hover:border-[#e66045]">
                         <img
@@ -1842,7 +2032,7 @@ export default function JenksFrontpageV2() {
                           loading="lazy"
                         />
                       </span>
-                      <p className="mt-2 text-[11px] font-medium text-white/92">
+                      <p className="mt-2 text-[11px] font-medium text-white">
                         {country.name} - {country.count}
                       </p>
                       <p className="text-[10px] text-white/54 group-hover:text-[#e66045]/85">{country.textiles}</p>
@@ -1959,7 +2149,7 @@ export default function JenksFrontpageV2() {
               <Link
                 key={country.name}
                 to={buildCountryProductsHref(country.name, 'ALL')}
-                className="group flex flex-col items-center px-1 py-2 text-center text-white/75 transition-colors hover:text-[#e66045]"
+                className="group flex flex-col items-center px-1 py-2 text-center text-white transition-colors hover:text-[#e66045]"
               >
                 <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/[0.02] transition-colors group-hover:border-[#e66045]">
                   <img
@@ -2006,8 +2196,8 @@ export default function JenksFrontpageV2() {
                     style={{ backgroundImage: `url(${section.image})`, opacity: 0.18 }}
                   />
                   <div className="pointer-events-none absolute inset-0 bg-black/70" />
-                  <div className="relative flex h-full items-start">
-                    <div className="flex h-full max-w-[560px] flex-col items-start justify-start text-left">
+                  <div className="relative flex h-full items-center">
+                    <div className="flex h-full max-w-[560px] flex-col items-start justify-center text-left">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
                       <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
                       <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
@@ -2032,8 +2222,8 @@ export default function JenksFrontpageV2() {
                     style={{ backgroundImage: `url(${section.image})`, opacity: 0.18 }}
                   />
                   <div className="pointer-events-none absolute inset-0 bg-black/70" />
-                  <div className="relative flex h-full items-start">
-                    <div className="flex h-full max-w-[560px] flex-col items-start justify-start text-left">
+                  <div className="relative flex h-full items-center">
+                    <div className="flex h-full max-w-[560px] flex-col items-start justify-center text-left">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
                       <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
                       <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
@@ -2084,7 +2274,7 @@ export default function JenksFrontpageV2() {
           {(['RTW', 'CTW', 'FTB'] as const).map((key) => (
             <div key={key} className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 md:grid-cols-2`}>
               {featuredCardsByKey[key].map((card) => (
-                <Link key={card.id} to={featuredHrefForCountry(key)} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
+                <Link key={card.id} to={featuredCardHref(card, key)} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
                   <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
                   <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-white/72">{card.tag}</p>
@@ -2219,6 +2409,41 @@ export default function JenksFrontpageV2() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {/* FROM OUR CUSTOMERS */}
+      {showCustomerReviewsSection ? (
+        <section className="bg-[#0b0e14] py-14 lg:py-16" data-kimi-anim="fade-up" style={{ order: getSectionOrder('CUSTOMER_REVIEWS') }}>
+          <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+            <p className="text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">From Our Customers</p>
+            <h2 className="mt-2 text-center font-['Oswald'] text-5xl font-bold uppercase leading-none text-white">
+              {customerReviewsTitle}
+            </h2>
+            <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {customerReviewCards.map((review) => (
+                <article
+                  key={review.id}
+                  className="rounded border border-white/12 bg-white/[0.04] p-5 text-white transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:shadow-[0_16px_34px_rgba(0,0,0,0.35)]"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold uppercase tracking-[0.08em]">{review.customerName}</p>
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">{review.source}</p>
+                  </div>
+                  <p className="mt-1 text-xs text-white/62">{review.location || 'Africa'}</p>
+                  <div className="mt-3 flex items-center gap-1 text-[#f6b73c]">
+                    {Array.from({ length: 5 }).map((_, starIndex) => (
+                      <Star
+                        key={`${review.id}-star-${starIndex}`}
+                        className={`h-3.5 w-3.5 ${starIndex < review.rating ? 'fill-current' : 'text-white/20'}`}
+                      />
+                    ))}
+                  </div>
+                  <p className="mt-3 text-sm leading-relaxed text-white/82">{review.message}</p>
+                </article>
+              ))}
             </div>
           </div>
         </section>

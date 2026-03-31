@@ -10716,6 +10716,8 @@ const jenksV2FrontpageManagerApi = {
             icon?: string;
             enabled: boolean;
           }>;
+          hamburgerMenuFontSize: number;
+          hamburgerMenuFontWeight: number;
           searchIconEnabled: boolean;
           logo: {
             mode: 'TEXT' | 'IMAGE';
@@ -10765,7 +10767,9 @@ const jenksV2FrontpageManagerApi = {
             title: string;
             titleFontSize: number;
             text: string;
+            textEnabled: boolean;
             description: string;
+            descriptionEnabled: boolean;
             descriptionFontSize: number;
             primaryCtaText: string;
             primaryCtaLink: string;
@@ -10923,6 +10927,8 @@ const jenksV2FrontpageManagerApi = {
             description: string;
             ctaText: string;
             ctaLink: string;
+            ctaMode: 'URL' | 'PRODUCT_GROUP';
+            productGroup: 'ALL' | 'RTW' | 'CTW' | 'FTB';
             ctaStyle: {
               backgroundColor: string;
               textColor: string;
@@ -10991,6 +10997,21 @@ const jenksV2FrontpageManagerApi = {
             displayOrder: number;
           }>;
         };
+        customerReviews: {
+          enabled: boolean;
+          sectionTitle: string;
+          sourceMode: 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH';
+          maxItems: number;
+          staticMessages: Array<{
+            id: string;
+            customerName: string;
+            location: string;
+            message: string;
+            rating: number;
+            enabled: boolean;
+            displayOrder: number;
+          }>;
+        };
         newsletterFooter: {
           newsletter: {
             enabled: boolean;
@@ -11052,6 +11073,7 @@ const jenksV2FrontpageManagerApi = {
     freshDrops?: unknown;
     designerSpotlight?: unknown;
     heritage?: unknown;
+    customerReviews?: unknown;
     newsletterFooter?: unknown;
     sectionVisibility?: unknown;
   }) =>

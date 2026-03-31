@@ -362,6 +362,13 @@ const getGmtOffsetLabel = (date: Date, timeZone: string) => {
     return 'GMT';
   }
 };
+const weatherLocationFromTimezone = (timeZone: string) => {
+  const token = String(timeZone || '').trim();
+  if (!token.includes('/')) return '';
+  const cityToken = token.split('/').pop() || '';
+  if (!cityToken) return '';
+  return cityToken.replace(/_/g, ' ');
+};
 
 interface DashboardLayoutProps {
   userType: DashboardType;
@@ -532,14 +539,32 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     const match = keywordMap.find(([keyword]) => upper.includes(keyword));
     return match?.[1] || '';
   }, [userCountryRaw]);
-  const userTimeZone = useMemo(() => resolveTimezoneFromCountry(userCountryRaw), [userCountryRaw]);
+  const browserTimeZone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    []
+  );
+  const userTimeZone = useMemo(() => {
+    if (!userCountryRaw) return browserTimeZone;
+    return resolveTimezoneFromCountry(userCountryRaw) || browserTimeZone;
+  }, [browserTimeZone, userCountryRaw]);
   const effectiveWeatherLocation = useMemo(() => {
     if (dashboardClockWeatherSettings.weatherLocationMode === 'CUSTOM_LOCATION') {
       const custom = dashboardClockWeatherSettings.customWeatherLocation.trim();
       if (custom) return custom;
     }
-    return COUNTRY_WEATHER_QUERY_MAP[userCountryCode] || userCountryRaw || 'Lagos, Nigeria';
-  }, [dashboardClockWeatherSettings.customWeatherLocation, dashboardClockWeatherSettings.weatherLocationMode, userCountryCode, userCountryRaw]);
+    const byCountryCode = COUNTRY_WEATHER_QUERY_MAP[userCountryCode];
+    if (byCountryCode) return byCountryCode;
+    if (userCountryRaw) return userCountryRaw;
+    const fromTimezone = weatherLocationFromTimezone(userTimeZone);
+    if (fromTimezone) return fromTimezone;
+    return 'London';
+  }, [
+    dashboardClockWeatherSettings.customWeatherLocation,
+    dashboardClockWeatherSettings.weatherLocationMode,
+    userCountryCode,
+    userCountryRaw,
+    userTimeZone,
+  ]);
   const timePrimaryLabel = useMemo(() => {
     if (!dashboardClockWeatherSettings.showClock) return '';
     const formatter = new Intl.DateTimeFormat('en-US', {
@@ -767,7 +792,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     setWeatherLoading(true);
     setWeatherError('');
     try {
-      const locationToQuery = weatherLocationLabel || 'Lagos, Nigeria';
+      const locationToQuery = weatherLocationLabel || weatherLocationFromTimezone(userTimeZone) || 'London';
       const geoResponse = await fetch(buildGeocodingUrl(locationToQuery));
       const geoPayload = await geoResponse.json().catch(() => null);
       const geoResult = Array.isArray(geoPayload?.results) ? geoPayload.results[0] : null;
@@ -811,6 +836,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     dashboardClockWeatherSettings.showWeather,
     dashboardClockWeatherSettings.weatherRefreshSeconds,
     dashboardClockWeatherSettings.weatherUnit,
+    userTimeZone,
     weatherLocationLabel,
   ]);
 
