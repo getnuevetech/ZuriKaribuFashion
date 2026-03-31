@@ -401,6 +401,7 @@ router.use(async (_req, _res, next) => {
 
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 
 const getString = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
