@@ -34,6 +34,11 @@ type HeroSlide = {
   id: string;
   image: string;
   fallbackImage: string;
+  rightPanelBackgroundMode: 'NONE' | 'IMAGE';
+  rightPanelBackgroundImage: string;
+  textVerticalAlign: 'TOP' | 'MIDDLE' | 'BOTTOM';
+  leftWidthPercent: number;
+  rightWidthPercent: number;
   titleA: string;
   titleB: string;
   lineA: string;
@@ -199,6 +204,16 @@ const DEFAULT_INLINE_CTA_STYLE: CTAStyle = {
   fontFamily: 'Montserrat, Inter, sans-serif',
   fontSize: 16,
   fontWeight: 600,
+};
+
+const HERO_COL_SPAN_CLASS: Record<number, string> = {
+  3: 'lg:col-span-3',
+  4: 'lg:col-span-4',
+  5: 'lg:col-span-5',
+  6: 'lg:col-span-6',
+  7: 'lg:col-span-7',
+  8: 'lg:col-span-8',
+  9: 'lg:col-span-9',
 };
 
 const buildCountryProductsHref = (
@@ -379,6 +394,11 @@ const HERO: HeroSlide[] = [
     id: '1',
     image: `${ASSET_BASE}/hero_model.jpg`,
     fallbackImage: `${ASSET_BASE}/hero_model.jpg`,
+    rightPanelBackgroundMode: 'NONE',
+    rightPanelBackgroundImage: '',
+    textVerticalAlign: 'MIDDLE',
+    leftWidthPercent: 58,
+    rightWidthPercent: 42,
     titleA: 'WEAR',
     titleB: 'THE STORY OF AFRICA',
     lineA: 'Curated fashion from top designers and textile houses.',
@@ -397,6 +417,11 @@ const HERO: HeroSlide[] = [
     id: '2',
     image: `${ASSET_BASE}/rw_full.jpg`,
     fallbackImage: `${ASSET_BASE}/rw_full.jpg`,
+    rightPanelBackgroundMode: 'NONE',
+    rightPanelBackgroundImage: '',
+    textVerticalAlign: 'MIDDLE',
+    leftWidthPercent: 58,
+    rightWidthPercent: 42,
     titleA: 'DISCOVER',
     titleB: 'AFRICAN ELEGANCE',
     lineA: 'Signature pieces and modern tailoring from trusted labels.',
@@ -714,6 +739,8 @@ export default function JenksFrontpageV2() {
   const [shopByCountryExpanded, setShopByCountryExpanded] = useState(false);
   const [dedicatedCountryExpanded, setDedicatedCountryExpanded] = useState(false);
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [themeMode, setThemeMode] = useState<'LIGHT' | 'DARK'>('LIGHT');
   const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
   const topNavigationsCfg = useMemo(() => asRecord(asRecord(managerConfig).topNavigations), [managerConfig]);
@@ -806,12 +833,25 @@ export default function JenksFrontpageV2() {
     if (rows.length === 0) return HERO;
     const mapped = rows.map((row, indexKey) => {
       const fallbackImage = HERO[indexKey % HERO.length]?.image || `${ASSET_BASE}/hero_model.jpg`;
+      const fallbackSlide = HERO[indexKey % HERO.length] || HERO[0];
       const title = asString(row.title, 'Wear the Story of Africa');
       const split = splitHeroTitle(title.toUpperCase());
+      const panelModeToken = asString(row.rightPanelBackgroundMode, fallbackSlide.rightPanelBackgroundMode).toUpperCase();
+      const rightPanelBackgroundMode: HeroSlide['rightPanelBackgroundMode'] = panelModeToken === 'IMAGE' ? 'IMAGE' : 'NONE';
+      const panelAlignToken = asString(row.textVerticalAlign, fallbackSlide.textVerticalAlign).toUpperCase();
+      const textVerticalAlign: HeroSlide['textVerticalAlign'] =
+        panelAlignToken === 'TOP' || panelAlignToken === 'BOTTOM' ? panelAlignToken : 'MIDDLE';
+      const leftWidthPercent = Math.max(20, Math.min(80, Math.round(asNumber(row.leftWidthPercent, fallbackSlide.leftWidthPercent))));
+      const rightWidthPercent = 100 - leftWidthPercent;
       return {
         id: asString(row.id, `hero-${indexKey + 1}`),
         image: resolveManagerImage(row.image, fallbackImage),
         fallbackImage,
+        rightPanelBackgroundMode,
+        rightPanelBackgroundImage: resolveManagerImage(row.rightPanelBackgroundImage, ''),
+        textVerticalAlign,
+        leftWidthPercent,
+        rightWidthPercent,
         titleA: split.titleA || HERO[indexKey % HERO.length]?.titleA || 'WEAR',
         titleB: split.titleB || HERO[indexKey % HERO.length]?.titleB || 'THE STORY OF AFRICA',
         lineA: asString(row.text, HERO[indexKey % HERO.length]?.lineA || ''),
@@ -1180,6 +1220,19 @@ export default function JenksFrontpageV2() {
     () => SHOP_BY_TAB_META.filter((tab) => enabledShopByTabs.includes(tab.key)),
     [enabledShopByTabs]
   );
+  const shopBySectionTag = asString(shopByCfg.sectionTag, 'Discover');
+  const shopBySectionTitle = asString(shopByCfg.sectionTitle, 'Shop By');
+  const shopBySectionDescription = asString(shopByCfg.sectionDescription, 'Browse by category, country, style, or budget.');
+  const showShopBySectionDescription = asBoolean(shopByCfg.sectionDescriptionEnabled, true);
+  const heroLeftColSpan = Math.max(3, Math.min(9, Math.round((active.leftWidthPercent / 100) * 12)));
+  const heroRightColSpan = Math.max(3, 12 - heroLeftColSpan);
+  const heroTextAlignClass =
+    active.textVerticalAlign === 'TOP'
+      ? 'items-start'
+      : active.textVerticalAlign === 'BOTTOM'
+        ? 'items-end'
+        : 'items-center';
+  const heroRightHasPanelImage = active.rightPanelBackgroundMode === 'IMAGE' && Boolean(active.rightPanelBackgroundImage);
   const footerBrandText = asString(footerCfg.brandText, logoTextRaw || 'ZURIKARIBU');
   const footerBrandSplit = useMemo(() => {
     const compact = footerBrandText.replace(/\s+/g, '').trim();
@@ -1226,7 +1279,11 @@ export default function JenksFrontpageV2() {
   );
   const resolvedThemeMode = useMemo<'LIGHT' | 'DARK'>(() => {
     const token = asString(themeCfg.mode, 'LIGHT').toUpperCase();
-    return token === 'DARK' ? 'DARK' : 'LIGHT';
+    if (token === 'DARK') return 'DARK';
+    if (token === 'SYSTEM' && typeof window !== 'undefined') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'DARK' : 'LIGHT';
+    }
+    return 'LIGHT';
   }, [themeCfg.mode]);
   const ComputedThemeIcon = themeMode === 'DARK' ? Moon : ThemeIcon;
 
@@ -1299,14 +1356,30 @@ export default function JenksFrontpageV2() {
   }, [hamburgerOpen]);
 
   useEffect(() => {
+    if (!searchOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSearchOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [searchOpen]);
+
+  useEffect(() => {
     setThemeMode(resolvedThemeMode);
   }, [resolvedThemeMode]);
 
   useEffect(() => {
-    if (typeof document === 'undefined') return;
-    document.documentElement.classList.toggle('dark', themeMode === 'DARK');
+    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+    const root = document.documentElement;
+    const body = document.body;
+    const isDark = themeMode === 'DARK';
+    root.classList.toggle('dark', isDark);
+    body.style.backgroundColor = isDark ? '#090b10' : '#f5f3ee';
+    body.style.color = isDark ? '#f5f3ee' : '#111111';
     return () => {
-      document.documentElement.classList.remove('dark');
+      root.classList.remove('dark');
+      body.style.backgroundColor = '';
+      body.style.color = '';
     };
   }, [themeMode]);
 
@@ -1327,14 +1400,18 @@ export default function JenksFrontpageV2() {
               <div className="flex items-center gap-3 text-black/75">
                 <button
                   type="button"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black text-white shadow-sm transition-colors hover:bg-[#e66045]"
                   aria-label="Open menu"
                   onClick={() => setHamburgerOpen(true)}
                 >
-                  <Menu className="h-4 w-4" />
+                  <Menu className="h-5 w-5 stroke-[2.75]" />
                 </button>
                 {asBoolean(topNavigationsCfg.searchIconEnabled, true) ? (
-                  <button className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5" aria-label="Search">
+                  <button
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/20 hover:bg-black/5"
+                    aria-label="Search"
+                    onClick={() => setSearchOpen(true)}
+                  >
                     <Search className="h-4 w-4" />
                   </button>
                 ) : null}
@@ -1411,6 +1488,60 @@ export default function JenksFrontpageV2() {
               </div>
             </div>
           </header>
+          {searchOpen ? (
+            <div className="fixed inset-0 z-[69]">
+              <button
+                type="button"
+                aria-label="Close search overlay"
+                className="absolute inset-0 h-full w-full bg-black/50"
+                onClick={() => setSearchOpen(false)}
+              />
+              <div className="absolute left-1/2 top-16 w-[94vw] max-w-[860px] -translate-x-1/2 rounded-xl border border-white/20 bg-[#0d1016] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:p-5">
+                <div className="flex items-center gap-2">
+                  <Search className="h-4 w-4 text-white/70" />
+                  <input
+                    type="text"
+                    autoFocus
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search products, categories, countries..."
+                    className="h-10 w-full bg-transparent text-sm text-white placeholder:text-white/45 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded border border-white/20 text-white hover:bg-white/10"
+                    onClick={() => {
+                      setSearchOpen(false);
+                      setSearchQuery('');
+                    }}
+                    aria-label="Close search"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                  {['Ready To Wear', 'Custom To Wear', 'Fabrics', 'Shop By Country'].map((suggestion) => (
+                    <Link
+                      key={suggestion}
+                      to={toSafeInternalHref(
+                        suggestion === 'Ready To Wear'
+                          ? '/ready-to-wear'
+                          : suggestion === 'Custom To Wear'
+                            ? '/custom'
+                            : suggestion === 'Fabrics'
+                              ? '/fabrics'
+                              : '/country-products'
+                      )}
+                      onClick={() => setSearchOpen(false)}
+                      className="rounded border border-white/20 px-2.5 py-1 text-white/85 hover:border-[#e66045] hover:text-[#e66045]"
+                    >
+                      {suggestion}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
           {hamburgerOpen ? (
             <div className="fixed inset-0 z-[70]">
               <button
@@ -1420,43 +1551,43 @@ export default function JenksFrontpageV2() {
                 onClick={() => setHamburgerOpen(false)}
               />
               <div className="absolute left-0 top-0 h-full w-[92vw] max-w-[420px] overflow-y-auto border-r border-white/20 bg-black/96 shadow-[0_20px_80px_rgba(0,0,0,0.55)]">
-              <button
-                type="button"
-                className="absolute left-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white hover:bg-white/10"
-                aria-label="Close menu"
-                onClick={() => setHamburgerOpen(false)}
-              >
-                <span className="text-xl leading-none">×</span>
-              </button>
-              <nav className="flex h-full w-full items-start overflow-y-auto px-6 pt-20 sm:px-8">
-                <div className="w-full space-y-2 pb-8">
-                  {(hamburgerMenuLinks.length > 0
-                    ? hamburgerMenuLinks
-                    : [
-                        { label: 'Home', href: '/' },
-                        { label: 'Shop', href: '/ready-to-wear' },
-                        { label: 'Ready To Wear', href: '/ready-to-wear' },
-                        { label: 'Fabrics To Buy', href: '/fabrics' },
-                        { label: 'Custom To Wear', href: '/custom' },
-                        { label: 'Designers', href: '/designers' },
-                        { label: 'About Us', href: '/about' },
-                        { label: 'Contact Us', href: '/contact' },
-                      ]
-                  ).map((link) => (
-                    <Link
-                      key={`${link.label}-${link.href}`}
-                      to={toSafeInternalHref(link.href)}
-                      className="block rounded border border-white/10 px-4 py-3 font-['Oswald'] text-2xl font-bold uppercase leading-none tracking-[0.01em] text-white transition-colors hover:border-[#e66045] hover:text-[#e66045] sm:text-3xl"
-                      onClick={() => setHamburgerOpen(false)}
-                    >
-                      {link.label}
-                    </Link>
-                  ))}
-                  <p className="pt-6 text-[10px] font-medium uppercase tracking-[0.2em] text-white/55">
-                    Made by Africans. Worn by the world.
-                  </p>
-                </div>
-              </nav>
+                <button
+                  type="button"
+                  className="absolute left-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white hover:bg-white/10"
+                  aria-label="Close menu"
+                  onClick={() => setHamburgerOpen(false)}
+                >
+                  <span className="text-xl leading-none">×</span>
+                </button>
+                <nav className="flex h-full w-full items-start overflow-y-auto px-6 pt-20 sm:px-8">
+                  <div className="w-full space-y-2 pb-8">
+                    {(hamburgerMenuLinks.length > 0
+                      ? hamburgerMenuLinks
+                      : [
+                          { label: 'Home', href: '/' },
+                          { label: 'Shop', href: '/ready-to-wear' },
+                          { label: 'Ready To Wear', href: '/ready-to-wear' },
+                          { label: 'Fabrics To Buy', href: '/fabrics' },
+                          { label: 'Custom To Wear', href: '/custom' },
+                          { label: 'Designers', href: '/designers' },
+                          { label: 'About Us', href: '/about' },
+                          { label: 'Contact Us', href: '/contact' },
+                        ]
+                    ).map((link) => (
+                      <Link
+                        key={`${link.label}-${link.href}`}
+                        to={toSafeInternalHref(link.href)}
+                        className="block rounded border border-white/10 px-4 py-3 font-['Oswald'] text-2xl font-bold uppercase leading-none tracking-[0.01em] text-white transition-colors hover:border-[#e66045] hover:text-[#e66045] sm:text-3xl"
+                        onClick={() => setHamburgerOpen(false)}
+                      >
+                        {link.label}
+                      </Link>
+                    ))}
+                    <p className="pt-6 text-[10px] font-medium uppercase tracking-[0.2em] text-white/55">
+                      Made by Africans. Worn by the world.
+                    </p>
+                  </div>
+                </nav>
               </div>
             </div>
           ) : null}
@@ -1466,7 +1597,7 @@ export default function JenksFrontpageV2() {
       {/* HERO */}
       {showHeroSection ? (
       <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 lg:grid-cols-12`} style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}>
-        <div className="relative lg:col-span-7">
+        <div className="relative lg:col-span-7" style={{ gridColumn: `span ${heroLeftColSpan} / span ${heroLeftColSpan}` }}>
           {heroSlides.map((slide, i) => (
             <img
               key={slide.id}
@@ -1483,8 +1614,18 @@ export default function JenksFrontpageV2() {
             />
           ))}
         </div>
-        <div className="relative flex items-center bg-[#f5f3ee] px-6 py-10 lg:col-span-5 lg:px-12">
-          <div className="max-w-[560px] animate-fade-in" data-kimi-anim="fade-up">
+        <div
+          className={`relative flex ${heroTextAlignClass} px-5 py-10 lg:px-8 xl:px-10`}
+          style={{
+            gridColumn: `span ${heroRightColSpan} / span ${heroRightColSpan}`,
+            backgroundColor: '#f5f3ee',
+            backgroundImage: heroRightHasPanelImage ? `url(${active.rightPanelBackgroundImage})` : 'none',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        >
+          {heroRightHasPanelImage ? <div className="absolute inset-0 bg-[#f5f3ee]/68" /> : null}
+          <div className="relative max-w-[540px] pr-1 sm:pr-2 animate-fade-in" data-kimi-anim="fade-up">
             <h1 className="font-['Oswald'] text-[58px] font-bold uppercase leading-[0.9] sm:text-[72px]">
               <span>{active.titleA}</span>
               <span className="ml-[0.16em] text-[#e66045]">{active.titleB}</span>
@@ -1553,9 +1694,11 @@ export default function JenksFrontpageV2() {
       {isSectionVisible('SHOP_BY') ? (
         <section className="bg-[#07090d] py-14 lg:py-16" data-kimi-anim="fade-up" style={{ order: getSectionOrder('SHOP_BY') }}>
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-            <p className="text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">Discover</p>
-            <h2 className="mt-2 text-center font-['Oswald'] text-6xl font-bold uppercase leading-none text-white">SHOP BY</h2>
-            <p className="mt-3 text-center text-base text-white/60">Browse by category, country, style, or budget.</p>
+            <p className="text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">{shopBySectionTag}</p>
+            <h2 className="mt-2 text-center font-['Oswald'] text-6xl font-bold uppercase leading-none text-white">{shopBySectionTitle}</h2>
+            {showShopBySectionDescription ? (
+              <p className="mt-3 text-center text-base text-white/60">{shopBySectionDescription}</p>
+            ) : null}
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
               {shopByTabs.map((tab) => {

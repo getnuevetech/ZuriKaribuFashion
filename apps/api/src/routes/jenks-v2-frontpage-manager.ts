@@ -52,6 +52,11 @@ type HeroBanner = {
   enabled: boolean;
   displayOrder: number;
   image: string;
+  rightPanelBackgroundMode: 'NONE' | 'IMAGE';
+  rightPanelBackgroundImage: string;
+  textVerticalAlign: 'TOP' | 'MIDDLE' | 'BOTTOM';
+  leftWidthPercent: number;
+  rightWidthPercent: number;
   tag: string;
   title: string;
   titleFontSize: number;
@@ -147,6 +152,10 @@ type ShopByPriceCard = ShopByCard & {
 };
 
 type ShopBySettings = {
+  sectionTag: string;
+  sectionTitle: string;
+  sectionDescription: string;
+  sectionDescriptionEnabled: boolean;
   enabledTabs: Array<'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE'>;
   defaultTab: 'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE';
   countriesCountMode: CountMode;
@@ -535,6 +544,11 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           enabled: true,
           displayOrder: 0,
           image: '',
+          rightPanelBackgroundMode: 'NONE',
+          rightPanelBackgroundImage: '',
+          textVerticalAlign: 'MIDDLE',
+          leftWidthPercent: 58,
+          rightWidthPercent: 42,
           tag: 'Editorial Premium',
           title: 'Wear the Story of Africa',
           titleFontSize: 56,
@@ -576,6 +590,10 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       ],
     },
     shopBy: {
+      sectionTag: 'Discover',
+      sectionTitle: 'Shop By',
+      sectionDescription: 'Browse by category, country, style, or budget.',
+      sectionDescriptionEnabled: true,
       enabledTabs: ['CATEGORY', 'COUNTRY', 'STYLE', 'PRICE'],
       defaultTab: 'CATEGORY',
       countriesCountMode: 'STATIC',
@@ -920,11 +938,40 @@ const normalizeMenuLink = (raw: unknown, fallback: MenuLink): MenuLink => {
 
 const normalizeHeroBanner = (raw: unknown, fallback: HeroBanner, index: number): HeroBanner => {
   const row = asRecord(raw);
+  const modeToken = String(row.rightPanelBackgroundMode || fallback.rightPanelBackgroundMode || 'NONE')
+    .trim()
+    .toUpperCase();
+  const rightPanelBackgroundMode: HeroBanner['rightPanelBackgroundMode'] = modeToken === 'IMAGE' ? 'IMAGE' : 'NONE';
+  const alignToken = String(row.textVerticalAlign || fallback.textVerticalAlign || 'MIDDLE')
+    .trim()
+    .toUpperCase();
+  const textVerticalAlign: HeroBanner['textVerticalAlign'] =
+    alignToken === 'TOP' || alignToken === 'BOTTOM' ? (alignToken as HeroBanner['textVerticalAlign']) : 'MIDDLE';
+  const leftWidthPercent = clamp(Math.round(getNumber(row.leftWidthPercent) ?? fallback.leftWidthPercent), 20, 80);
+  const fallbackRightFromLeft = 100 - leftWidthPercent;
+  const rightWidthPercent = clamp(
+    Math.round(getNumber(row.rightWidthPercent) ?? fallback.rightWidthPercent ?? fallbackRightFromLeft),
+    20,
+    80
+  );
+  const combinedWidth = leftWidthPercent + rightWidthPercent;
+  const scaledLeftPercent =
+    combinedWidth > 0 ? clamp(Math.round((leftWidthPercent / combinedWidth) * 100), 20, 80) : fallback.leftWidthPercent;
+  const normalizedLeftWidthPercent = combinedWidth === 100 ? leftWidthPercent : scaledLeftPercent;
+  const normalizedRightWidthPercent = 100 - normalizedLeftWidthPercent;
   return {
     id: getString(row.id) || fallback.id || `hero-${index + 1}`,
     enabled: getBoolean(row.enabled) ?? fallback.enabled,
     displayOrder: clamp(Math.round(getNumber(row.displayOrder) ?? fallback.displayOrder), 0, 99),
     image: (getString(row.image) || fallback.image).slice(0, 2000),
+    rightPanelBackgroundMode,
+    rightPanelBackgroundImage: (getString(row.rightPanelBackgroundImage) || fallback.rightPanelBackgroundImage || '').slice(
+      0,
+      2000
+    ),
+    textVerticalAlign,
+    leftWidthPercent: normalizedLeftWidthPercent,
+    rightWidthPercent: normalizedRightWidthPercent,
     tag: (getString(row.tag) || fallback.tag).slice(0, 80),
     title: (getString(row.title) || fallback.title).slice(0, 180),
     titleFontSize: clamp(Math.round(getNumber(row.titleFontSize) ?? fallback.titleFontSize), 16, 120),
@@ -1088,6 +1135,10 @@ const normalizeShopBy = (raw: unknown, fallback: ShopBySettings): ShopBySettings
     .slice(0, 50);
 
   return {
+    sectionTag: (getString(row.sectionTag) || fallback.sectionTag || 'Discover').slice(0, 80),
+    sectionTitle: (getString(row.sectionTitle) || fallback.sectionTitle || 'Shop By').slice(0, 120),
+    sectionDescription: (getString(row.sectionDescription) || fallback.sectionDescription || '').slice(0, 280),
+    sectionDescriptionEnabled: getBoolean(row.sectionDescriptionEnabled) ?? fallback.sectionDescriptionEnabled,
     enabledTabs: (dedupTabs.length > 0 ? dedupTabs : fallback.enabledTabs).slice(0, 4) as ShopBySettings['enabledTabs'],
     defaultTab,
     countriesCountMode: normalizeCountMode(row.countriesCountMode, fallback.countriesCountMode),

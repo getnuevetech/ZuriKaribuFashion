@@ -32,6 +32,11 @@ type HeroBanner = {
   enabled: boolean;
   displayOrder: number;
   image: string;
+  rightPanelBackgroundMode: 'NONE' | 'IMAGE';
+  rightPanelBackgroundImage: string;
+  textVerticalAlign: 'TOP' | 'MIDDLE' | 'BOTTOM';
+  leftWidthPercent: number;
+  rightWidthPercent: number;
   tag: string;
   title: string;
   titleFontSize: number;
@@ -127,6 +132,10 @@ type ShopByPriceCard = ShopByCard & {
 };
 
 type ShopBy = {
+  sectionTag: string;
+  sectionTitle: string;
+  sectionDescription: string;
+  sectionDescriptionEnabled: boolean;
   enabledTabs: Array<'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE'>;
   defaultTab: 'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE';
   countriesCountMode: CountMode;
@@ -432,7 +441,6 @@ const toNumber = (value: string, fallback: number) => {
 };
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const toBoolean = (value: unknown, fallback: boolean) => (typeof value === 'boolean' ? value : fallback);
-
 const defaultLink = (label: string, href: string, routeKey?: string): MenuLink => ({
   id: uid(),
   label,
@@ -607,6 +615,11 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         enabled: true,
         displayOrder: 0,
         image: '',
+        rightPanelBackgroundMode: 'NONE',
+        rightPanelBackgroundImage: '',
+        textVerticalAlign: 'MIDDLE',
+        leftWidthPercent: 58,
+        rightWidthPercent: 42,
         tag: 'Editorial Premium',
         title: 'Wear the Story of Africa',
         titleFontSize: 56,
@@ -647,6 +660,10 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     ],
   },
   shopBy: {
+    sectionTag: 'Discover',
+    sectionTitle: 'Shop By',
+    sectionDescription: 'Browse by category, country, style, or budget.',
+    sectionDescriptionEnabled: true,
     enabledTabs: ['CATEGORY', 'COUNTRY', 'STYLE', 'PRICE'],
     defaultTab: 'CATEGORY',
     countriesCountMode: 'STATIC',
@@ -1054,6 +1071,16 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
       ...banner,
       primaryCtaLink: normalizeManagerHref(banner.primaryCtaLink, '/ready-to-wear'),
       secondaryCtaLink: normalizeManagerHref(banner.secondaryCtaLink, '/custom'),
+      rightPanelBackgroundMode:
+        String((banner as HeroBanner)?.rightPanelBackgroundMode || '').trim().toUpperCase() === 'IMAGE' ? 'IMAGE' : 'NONE',
+      rightPanelBackgroundImage: String((banner as HeroBanner)?.rightPanelBackgroundImage || ''),
+      textVerticalAlign: ((): HeroBanner['textVerticalAlign'] => {
+        const token = String((banner as HeroBanner)?.textVerticalAlign || '').trim().toUpperCase();
+        if (token === 'TOP' || token === 'BOTTOM') return token;
+        return 'MIDDLE';
+      })(),
+      leftWidthPercent: clamp(Math.round(toNumber(String((banner as HeroBanner)?.leftWidthPercent ?? 58), 58)), 20, 80),
+      rightWidthPercent: clamp(Math.round(toNumber(String((banner as HeroBanner)?.rightWidthPercent ?? 42), 42)), 20, 80),
     })),
   };
   next.shopBy = {
@@ -1160,8 +1187,28 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
       heroBanners: Array.isArray(topNavigations.heroBanners)
         ? topNavigations.heroBanners.map((banner, index) => {
             const next = { ...fallbackHero, ...banner };
+            const modeToken = String((banner as HeroBanner)?.rightPanelBackgroundMode || next.rightPanelBackgroundMode || 'NONE')
+              .trim()
+              .toUpperCase();
+            const rightPanelBackgroundMode: HeroBanner['rightPanelBackgroundMode'] = modeToken === 'IMAGE' ? 'IMAGE' : 'NONE';
+            const alignToken = String((banner as HeroBanner)?.textVerticalAlign || next.textVerticalAlign || 'MIDDLE')
+              .trim()
+              .toUpperCase();
+            const textVerticalAlign: HeroBanner['textVerticalAlign'] =
+              alignToken === 'TOP' || alignToken === 'BOTTOM' ? alignToken : 'MIDDLE';
+            const leftWidthPercent = clamp(
+              Math.round(toNumber(String((banner as HeroBanner)?.leftWidthPercent ?? next.leftWidthPercent), 58)),
+              20,
+              80
+            );
+            const rightWidthPercent = 100 - leftWidthPercent;
             return {
               ...next,
+              rightPanelBackgroundMode,
+              rightPanelBackgroundImage: String((banner as HeroBanner)?.rightPanelBackgroundImage || next.rightPanelBackgroundImage || ''),
+              textVerticalAlign,
+              leftWidthPercent,
+              rightWidthPercent,
               primaryCtaEnabled: toBoolean((banner as HeroBanner)?.primaryCtaEnabled, fallbackHero.primaryCtaEnabled),
               primaryCtaStyle: normalizeCtaStyle((banner as HeroBanner)?.primaryCtaStyle, fallbackHero.primaryCtaStyle),
               secondaryCtaEnabled: toBoolean((banner as HeroBanner)?.secondaryCtaEnabled, fallbackHero.secondaryCtaEnabled),
@@ -1171,6 +1218,29 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             };
           })
         : DEFAULT_CONFIG.topNavigations.heroBanners,
+    },
+    shopBy: {
+      ...DEFAULT_CONFIG.shopBy,
+      ...(data.shopBy || {}),
+      sectionTag: String((data.shopBy as ShopBy | undefined)?.sectionTag || DEFAULT_CONFIG.shopBy.sectionTag),
+      sectionTitle: String((data.shopBy as ShopBy | undefined)?.sectionTitle || DEFAULT_CONFIG.shopBy.sectionTitle),
+      sectionDescription: String((data.shopBy as ShopBy | undefined)?.sectionDescription || DEFAULT_CONFIG.shopBy.sectionDescription),
+      sectionDescriptionEnabled: toBoolean(
+        (data.shopBy as ShopBy | undefined)?.sectionDescriptionEnabled,
+        DEFAULT_CONFIG.shopBy.sectionDescriptionEnabled
+      ),
+      countries: Array.isArray((data.shopBy as ShopBy | undefined)?.countries)
+        ? (data.shopBy as ShopBy).countries
+        : DEFAULT_CONFIG.shopBy.countries,
+      categories: Array.isArray((data.shopBy as ShopBy | undefined)?.categories)
+        ? (data.shopBy as ShopBy).categories
+        : DEFAULT_CONFIG.shopBy.categories,
+      styleCards: Array.isArray((data.shopBy as ShopBy | undefined)?.styleCards)
+        ? (data.shopBy as ShopBy).styleCards
+        : DEFAULT_CONFIG.shopBy.styleCards,
+      priceCards: Array.isArray((data.shopBy as ShopBy | undefined)?.priceCards)
+        ? (data.shopBy as ShopBy).priceCards
+        : DEFAULT_CONFIG.shopBy.priceCards,
     },
     categoryManage: {
       ...categoryManage,
@@ -1246,6 +1316,7 @@ export default function JenksV2FrontPageManager() {
 
   const logoUploadRef = useRef<HTMLInputElement | null>(null);
   const heroUploadRef = useRef<HTMLInputElement | null>(null);
+  const heroRightPanelUploadRef = useRef<HTMLInputElement | null>(null);
   const categoryImageUploadRef = useRef<HTMLInputElement | null>(null);
   const featuredImageUploadRef = useRef<HTMLInputElement | null>(null);
   const heritageImageUploadRef = useRef<HTMLInputElement | null>(null);
@@ -1347,6 +1418,37 @@ export default function JenksV2FrontPageManager() {
       setSuccess('Hero banner image uploaded.');
     } catch (uploadError: any) {
       setError(uploadError?.message || 'Failed to upload hero image.');
+    } finally {
+      setHeroUploadIndex(null);
+      setUploadingTarget(null);
+      event.target.value = '';
+    }
+  };
+
+  const handleHeroRightPanelUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || heroUploadIndex === null) return;
+    triggerUpload('hero-right-panel');
+    try {
+      const url = await uploadImage(file);
+      setConfig((prev) => ({
+        ...prev,
+        topNavigations: {
+          ...prev.topNavigations,
+          heroBanners: prev.topNavigations.heroBanners.map((banner, index) =>
+            index === heroUploadIndex
+              ? {
+                  ...banner,
+                  rightPanelBackgroundMode: 'IMAGE',
+                  rightPanelBackgroundImage: url,
+                }
+              : banner
+          ),
+        },
+      }));
+      setSuccess('Hero right panel image uploaded.');
+    } catch (uploadError: any) {
+      setError(uploadError?.message || 'Failed to upload hero right panel image.');
     } finally {
       setHeroUploadIndex(null);
       setUploadingTarget(null);
@@ -2109,6 +2211,11 @@ export default function JenksV2FrontPageManager() {
                           enabled: true,
                           displayOrder: prev.topNavigations.heroBanners.length,
                           image: '',
+                          rightPanelBackgroundMode: 'NONE',
+                          rightPanelBackgroundImage: '',
+                          textVerticalAlign: 'MIDDLE',
+                          leftWidthPercent: 58,
+                          rightWidthPercent: 42,
                           tag: '',
                           title: 'New Hero Banner',
                           titleFontSize: 56,
@@ -2323,6 +2430,120 @@ export default function JenksV2FrontPageManager() {
                     />
                   </label>
                   <label className="text-xs">
+                    Right Panel Background
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={banner.rightPanelBackgroundMode}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? {
+                                    ...entry,
+                                    rightPanelBackgroundMode: event.target.value === 'IMAGE' ? 'IMAGE' : 'NONE',
+                                  }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      <option value="NONE">NONE</option>
+                      <option value="IMAGE">IMAGE</option>
+                    </select>
+                  </label>
+                  <label className="text-xs">
+                    Text Position
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={banner.textVerticalAlign}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? {
+                                    ...entry,
+                                    textVerticalAlign:
+                                      event.target.value === 'TOP' || event.target.value === 'BOTTOM'
+                                        ? (event.target.value as HeroBanner['textVerticalAlign'])
+                                        : 'MIDDLE',
+                                  }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      <option value="TOP">TOP</option>
+                      <option value="MIDDLE">MIDDLE</option>
+                      <option value="BOTTOM">BOTTOM</option>
+                    </select>
+                  </label>
+                  <label className="text-xs">
+                    Left Width %
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={banner.leftWidthPercent}
+                      onChange={(event) =>
+                        setConfig((prev) => {
+                          const nextLeft = clamp(toNumber(event.target.value, banner.leftWidthPercent), 20, 80);
+                          const nextRight = 100 - nextLeft;
+                          return {
+                            ...prev,
+                            topNavigations: {
+                              ...prev.topNavigations,
+                              heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? {
+                                      ...entry,
+                                      leftWidthPercent: nextLeft,
+                                      rightWidthPercent: nextRight,
+                                    }
+                                  : entry
+                              ),
+                            },
+                          };
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="text-xs">
+                    Right Width %
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={banner.rightWidthPercent}
+                      onChange={(event) =>
+                        setConfig((prev) => {
+                          const nextRight = clamp(toNumber(event.target.value, banner.rightWidthPercent), 20, 80);
+                          const nextLeft = 100 - nextRight;
+                          return {
+                            ...prev,
+                            topNavigations: {
+                              ...prev.topNavigations,
+                              heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? {
+                                      ...entry,
+                                      leftWidthPercent: nextLeft,
+                                      rightWidthPercent: nextRight,
+                                    }
+                                  : entry
+                              ),
+                            },
+                          };
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="text-xs md:col-span-2">
                     Primary CTA Text
                     <input
                       className="mt-1 w-full rounded border px-2 py-1.5"
@@ -2340,7 +2561,7 @@ export default function JenksV2FrontPageManager() {
                       }
                     />
                   </label>
-                  <label className="text-xs">
+                  <label className="text-xs md:col-span-2">
                     Primary CTA Link
                     <input
                       className="mt-1 w-full rounded border px-2 py-1.5"
@@ -2562,6 +2783,18 @@ export default function JenksV2FrontPageManager() {
                     <Upload className="mr-2 h-4 w-4" />
                     Upload Banner Image
                   </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    isLoading={uploadingTarget === 'hero-right-panel'}
+                    onClick={() => {
+                      setHeroUploadIndex(index);
+                      heroRightPanelUploadRef.current?.click();
+                    }}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Right Panel Image
+                  </Button>
                   <span className="text-xs text-gray-600 break-all">{banner.image || 'No hero image uploaded'}</span>
                 </div>
                 <div className="rounded-md border bg-white p-2">
@@ -2580,9 +2813,32 @@ export default function JenksV2FrontPageManager() {
                     </div>
                   )}
                 </div>
+                <div className="rounded-md border bg-white p-2">
+                  {banner.rightPanelBackgroundImage ? (
+                    <img
+                      src={resolvePreviewUrl(banner.rightPanelBackgroundImage)}
+                      alt={`Hero right panel preview ${index + 1}`}
+                      className="h-24 w-full rounded object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-24 items-center justify-center rounded border border-dashed text-xs text-gray-500">
+                      No right panel image uploaded
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
             <input ref={heroUploadRef} type="file" accept="image/*" className="hidden" onChange={handleHeroUpload} />
+            <input
+              ref={heroRightPanelUploadRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleHeroRightPanelUpload}
+            />
           </div>
         </section>
       ) : null}
@@ -2593,6 +2849,62 @@ export default function JenksV2FrontPageManager() {
           <p className="text-sm text-gray-600">
             Configure Shop By Category/Country/Style/Price, with static or database count modes.
           </p>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <label className="text-xs">
+              Section Tag
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.shopBy.sectionTag}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    shopBy: { ...prev.shopBy, sectionTag: event.target.value },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs md:col-span-2">
+              Section Title
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.shopBy.sectionTitle}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    shopBy: { ...prev.shopBy, sectionTitle: event.target.value },
+                  }))
+                }
+              />
+            </label>
+            <label className="flex items-center gap-2 text-xs pt-5">
+              <input
+                type="checkbox"
+                checked={config.shopBy.sectionDescriptionEnabled}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    shopBy: { ...prev.shopBy, sectionDescriptionEnabled: event.target.checked },
+                  }))
+                }
+              />
+              Description Enabled
+            </label>
+            <label className="text-xs md:col-span-4">
+              Section Description
+              <textarea
+                rows={2}
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.shopBy.sectionDescription}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    shopBy: { ...prev.shopBy, sectionDescription: event.target.value },
+                  }))
+                }
+              />
+            </label>
+          </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <label className="text-xs">

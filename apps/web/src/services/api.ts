@@ -10756,6 +10756,11 @@ const jenksV2FrontpageManagerApi = {
             enabled: boolean;
             displayOrder: number;
             image: string;
+            rightPanelBackgroundMode: 'NONE' | 'IMAGE';
+            rightPanelBackgroundImage: string;
+            textVerticalAlign: 'TOP' | 'MIDDLE' | 'BOTTOM';
+            leftWidthPercent: number;
+            rightWidthPercent: number;
             tag: string;
             title: string;
             titleFontSize: number;
@@ -10807,6 +10812,10 @@ const jenksV2FrontpageManagerApi = {
           }>;
         };
         shopBy: {
+          sectionTag: string;
+          sectionTitle: string;
+          sectionDescription: string;
+          sectionDescriptionEnabled: boolean;
           enabledTabs: Array<'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE'>;
           defaultTab: 'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE';
           countriesCountMode: 'STATIC' | 'DATABASE';
