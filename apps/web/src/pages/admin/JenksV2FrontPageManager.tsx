@@ -170,6 +170,19 @@ type TextIconCard = {
   displayOrder: number;
 };
 
+type TextIconSectionTitles = {
+  howItWorks: string;
+  custom: string;
+  shopWithConfidence: string;
+};
+
+type TextIconCardStyle = {
+  cardMinHeight: number;
+  iconSize: number;
+  titleFontSize: number;
+  descriptionFontSize: number;
+};
+
 type FeaturedCard = {
   id: string;
   key: string;
@@ -301,6 +314,8 @@ type JenksV2FrontpageConfig = {
     sections: CategorySection[];
   };
   textIconCards: {
+    sectionTitles: TextIconSectionTitles;
+    cardStyle: TextIconCardStyle;
     allowCustomCards: boolean;
     cards: TextIconCard[];
   };
@@ -783,6 +798,17 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     ],
   },
   textIconCards: {
+    sectionTitles: {
+      howItWorks: 'How It Works',
+      custom: 'Custom',
+      shopWithConfidence: 'Shop With Confidence',
+    },
+    cardStyle: {
+      cardMinHeight: 220,
+      iconSize: 44,
+      titleFontSize: 11,
+      descriptionFontSize: 12,
+    },
     allowCustomCards: true,
     cards: [
       {
@@ -1190,6 +1216,7 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
   const fallbackCategory = DEFAULT_CONFIG.categoryManage.sections[0];
   const fallbackFeatured = DEFAULT_CONFIG.featured.cards[0];
   const fallbackSpotlight = DEFAULT_CONFIG.designerSpotlight.cards[0];
+  const textIconCards = data.textIconCards as Partial<JenksV2FrontpageConfig['textIconCards']> | undefined;
   return {
     ...DEFAULT_CONFIG,
     ...data,
@@ -1252,6 +1279,19 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
       priceCards: Array.isArray((data.shopBy as ShopBy | undefined)?.priceCards)
         ? (data.shopBy as ShopBy).priceCards
         : DEFAULT_CONFIG.shopBy.priceCards,
+    },
+    textIconCards: {
+      ...DEFAULT_CONFIG.textIconCards,
+      ...(textIconCards || {}),
+      sectionTitles: {
+        ...DEFAULT_CONFIG.textIconCards.sectionTitles,
+        ...(textIconCards?.sectionTitles || {}),
+      },
+      cardStyle: {
+        ...DEFAULT_CONFIG.textIconCards.cardStyle,
+        ...(textIconCards?.cardStyle || {}),
+      },
+      cards: Array.isArray(textIconCards?.cards) ? (textIconCards?.cards as TextIconCard[]) : DEFAULT_CONFIG.textIconCards.cards,
     },
     categoryManage: {
       ...categoryManage,
@@ -4068,6 +4108,154 @@ export default function JenksV2FrontPageManager() {
               <Plus className="mr-2 h-4 w-4" />
               Add Card
             </Button>
+          </div>
+          <div className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-3">
+            <label className="text-[11px]">
+              How It Works Section Title
+              <input
+                className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                value={config.textIconCards.sectionTitles.howItWorks}
+                placeholder="How It Works"
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    textIconCards: {
+                      ...prev.textIconCards,
+                      sectionTitles: {
+                        ...prev.textIconCards.sectionTitles,
+                        howItWorks: event.target.value,
+                      },
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-[11px]">
+              Custom Section Title
+              <input
+                className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                value={config.textIconCards.sectionTitles.custom}
+                placeholder="Custom"
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    textIconCards: {
+                      ...prev.textIconCards,
+                      sectionTitles: {
+                        ...prev.textIconCards.sectionTitles,
+                        custom: event.target.value,
+                      },
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-[11px]">
+              Shop With Confidence Section Title
+              <input
+                className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                value={config.textIconCards.sectionTitles.shopWithConfidence}
+                placeholder="Shop With Confidence"
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    textIconCards: {
+                      ...prev.textIconCards,
+                      sectionTitles: {
+                        ...prev.textIconCards.sectionTitles,
+                        shopWithConfidence: event.target.value,
+                      },
+                    },
+                  }))
+                }
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-4">
+            <label className="text-[11px]">
+              Card Min Height (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                value={config.textIconCards.cardStyle.cardMinHeight}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    textIconCards: {
+                      ...prev.textIconCards,
+                      cardStyle: {
+                        ...prev.textIconCards.cardStyle,
+                        cardMinHeight: clamp(toNumber(event.target.value, prev.textIconCards.cardStyle.cardMinHeight), 160, 520),
+                      },
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-[11px]">
+              Icon Size (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                value={config.textIconCards.cardStyle.iconSize}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    textIconCards: {
+                      ...prev.textIconCards,
+                      cardStyle: {
+                        ...prev.textIconCards.cardStyle,
+                        iconSize: clamp(toNumber(event.target.value, prev.textIconCards.cardStyle.iconSize), 20, 120),
+                      },
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-[11px]">
+              Title Font Size (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                value={config.textIconCards.cardStyle.titleFontSize}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    textIconCards: {
+                      ...prev.textIconCards,
+                      cardStyle: {
+                        ...prev.textIconCards.cardStyle,
+                        titleFontSize: clamp(toNumber(event.target.value, prev.textIconCards.cardStyle.titleFontSize), 8, 72),
+                      },
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-[11px]">
+              Description Font Size (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                value={config.textIconCards.cardStyle.descriptionFontSize}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    textIconCards: {
+                      ...prev.textIconCards,
+                      cardStyle: {
+                        ...prev.textIconCards.cardStyle,
+                        descriptionFontSize: clamp(
+                          toNumber(event.target.value, prev.textIconCards.cardStyle.descriptionFontSize),
+                          8,
+                          72
+                        ),
+                      },
+                    },
+                  }))
+                }
+              />
+            </label>
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input

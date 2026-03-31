@@ -10891,6 +10891,17 @@ const jenksV2FrontpageManagerApi = {
           }>;
         };
         textIconCards: {
+          sectionTitles: {
+            howItWorks: string;
+            custom: string;
+            shopWithConfidence: string;
+          };
+          cardStyle: {
+            cardMinHeight: number;
+            iconSize: number;
+            titleFontSize: number;
+            descriptionFontSize: number;
+          };
           allowCustomCards: boolean;
           cards: Array<{
             id: string;

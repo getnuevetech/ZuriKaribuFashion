@@ -218,6 +218,19 @@ const HERO_COL_SPAN_CLASS: Record<number, string> = {
   9: 'lg:col-span-9',
 };
 
+type TextIconSectionType = 'HOW_IT_WORKS' | 'CUSTOM' | 'SHOP_WITH_CONFIDENCE';
+type TextIconSectionTitleConfig = {
+  howItWorks: string;
+  custom: string;
+  shopWithConfidence: string;
+};
+type TextIconCardStyleConfig = {
+  cardMinHeight: number;
+  iconSize: number;
+  titleFontSize: number;
+  descriptionFontSize: number;
+};
+
 const buildCountryProductsHref = (
   countryName: string,
   category: 'RTW' | 'CTW' | 'FTB' | 'ALL' = 'ALL'
@@ -1103,57 +1116,106 @@ export default function JenksFrontpageV2() {
     return source.slice(0, maxItems);
   }, [designerSpotlightCfg.cards, designerSpotlightCfg.columns, designerSpotlightCfg.rows]);
 
-  const howItWorksCards = useMemo(() => {
+  const textIconSectionTitles = useMemo<TextIconSectionTitleConfig>(() => {
+    const titles = asRecord(textIconCfg.sectionTitles);
+    return {
+      howItWorks: asString(titles.howItWorks, 'How It Works'),
+      custom: asString(titles.custom, 'Custom'),
+      shopWithConfidence: asString(titles.shopWithConfidence, 'Shop With Confidence'),
+    };
+  }, [textIconCfg.sectionTitles]);
+  const textIconCardStyle = useMemo<TextIconCardStyleConfig>(() => {
+    const style = asRecord(textIconCfg.cardStyle);
+    return {
+      cardMinHeight: Math.max(160, Math.min(520, Math.round(asNumber(style.cardMinHeight, 220)))),
+      iconSize: Math.max(20, Math.min(120, Math.round(asNumber(style.iconSize, 44)))),
+      titleFontSize: Math.max(8, Math.min(72, Math.round(asNumber(style.titleFontSize, 11)))),
+      descriptionFontSize: Math.max(8, Math.min(72, Math.round(asNumber(style.descriptionFontSize, 12)))),
+    };
+  }, [textIconCfg.cardStyle]);
+
+  const makeTextIconCards = (
+    target: TextIconSectionType,
+    fallbackRows: Array<{ title?: string; label?: string; sub: string; Icon: IconComponent }>
+  ) => {
     const allRows = asArray(textIconCfg.cards).map((entry) => asRecord(entry));
     const rows = asArray(textIconCfg.cards)
       .map((entry) => asRecord(entry))
       .filter((entry) => {
         if (!asBoolean(entry.enabled, true)) return false;
-        const token = asString(entry.sectionType, '').toUpperCase();
-        return token === 'HOW_IT_WORKS';
+        return asString(entry.sectionType, '').toUpperCase() === target;
       })
       .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
-      .map((entry) => ({
-        title: asString(entry.title, 'Step').toUpperCase(),
+      .map((entry, idx) => ({
+        id: asString(entry.id, `${target}-${idx + 1}`),
+        title: asString(entry.title, target === 'SHOP_WITH_CONFIDENCE' ? 'Trust' : target === 'CUSTOM' ? 'Custom' : 'Step').toUpperCase(),
         sub: asString(entry.description, ''),
-        Icon: iconFromKey(entry.icon, Sparkles),
+        Icon: iconFromKey(entry.icon, target === 'SHOP_WITH_CONFIDENCE' ? ShieldCheck : Sparkles),
       }));
     if (rows.length > 0) return rows;
-    return allRows.length > 0 ? [] : HOW_IT_WORKS;
-  }, [textIconCfg.cards]);
+    if (allRows.length > 0) return [];
+    return fallbackRows.map((row, idx) => ({
+      id: `${target}-fallback-${idx + 1}`,
+      title: asString(row.title || row.label, 'Card').toUpperCase(),
+      sub: asString(row.sub, ''),
+      Icon: row.Icon,
+    }));
+  };
 
-  const customTextIconCards = useMemo(() => {
-    const allRows = asArray(textIconCfg.cards).map((entry) => asRecord(entry));
-    const rows = asArray(textIconCfg.cards)
-      .map((entry) => asRecord(entry))
-      .filter((entry) => asBoolean(entry.enabled, true) && asString(entry.sectionType, '').toUpperCase() === 'CUSTOM')
-      .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
-      .map((entry) => ({
-        title: asString(entry.title, 'Custom').toUpperCase(),
-        sub: asString(entry.description, ''),
-        Icon: iconFromKey(entry.icon, Sparkles),
-      }));
-    if (rows.length > 0) return rows;
-    return allRows.length > 0 ? [] : [];
-  }, [textIconCfg.cards]);
-
-  const trustCards = useMemo(() => {
-    const allRows = asArray(textIconCfg.cards).map((entry) => asRecord(entry));
-    const rows = asArray(textIconCfg.cards)
-      .map((entry) => asRecord(entry))
-      .filter((entry) => asBoolean(entry.enabled, true) && asString(entry.sectionType, '').toUpperCase() === 'SHOP_WITH_CONFIDENCE')
-      .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
-      .map((entry) => ({
-        label: asString(entry.title, 'Trust').toUpperCase(),
-        sub: asString(entry.description, ''),
-        Icon: iconFromKey(entry.icon, ShieldCheck),
-      }));
-    if (rows.length > 0) return rows;
-    return allRows.length > 0 ? [] : trust;
-  }, [textIconCfg.cards]);
+  const howItWorksCards = useMemo(
+    () => makeTextIconCards('HOW_IT_WORKS', HOW_IT_WORKS),
+    [textIconCfg.cards]
+  );
+  const customTextIconCards = useMemo(
+    () => makeTextIconCards('CUSTOM', []),
+    [textIconCfg.cards]
+  );
+  const trustCards = useMemo(
+    () => makeTextIconCards('SHOP_WITH_CONFIDENCE', trust.map((row) => ({ ...row, title: row.label }))),
+    [textIconCfg.cards]
+  );
   const showHowItWorksSection = isSectionVisible('HOW_IT_WORKS') && howItWorksCards.length > 0;
   const showCustomTextIconSection = isSectionVisible('CUSTOM_TEXT_ICON') && customTextIconCards.length > 0;
   const showTrustSection = isSectionVisible('SHOP_WITH_CONFIDENCE') && trustCards.length > 0;
+  const textIconSectionHeading = (sectionType: TextIconSectionType) => {
+    if (sectionType === 'HOW_IT_WORKS') {
+      return asString(textIconSectionTitles.howItWorks, 'How It Works').toUpperCase();
+    }
+    if (sectionType === 'CUSTOM') {
+      return asString(textIconSectionTitles.custom, 'Custom').toUpperCase();
+    }
+    return asString(textIconSectionTitles.shopWithConfidence, 'Shop With Confidence').toUpperCase();
+  };
+  const renderTextIconCard = (item: { id: string; title: string; sub: string; Icon: IconComponent }) => {
+    const iconSize = textIconCardStyle.iconSize;
+    const iconGlyphSize = Math.max(14, Math.round(iconSize * 0.45));
+    return (
+      <article
+        key={item.id}
+        className="mt-2 flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-8 text-center transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_14px_28px_rgba(0,0,0,0.12)]"
+        style={{ minHeight: `${textIconCardStyle.cardMinHeight}px` }}
+      >
+        <div
+          className="flex items-center justify-center rounded-full border border-black/15 bg-white"
+          style={{ width: `${iconSize}px`, height: `${iconSize}px` }}
+        >
+          <item.Icon className="text-[#e66045]" style={{ width: `${iconGlyphSize}px`, height: `${iconGlyphSize}px` }} />
+        </div>
+        <p
+          className="mt-3 font-semibold uppercase tracking-[0.12em]"
+          style={{ fontSize: `${textIconCardStyle.titleFontSize}px` }}
+        >
+          {item.title}
+        </p>
+        <p
+          className="mt-2 text-black/55"
+          style={{ fontSize: `${textIconCardStyle.descriptionFontSize}px` }}
+        >
+          {item.sub}
+        </p>
+      </article>
+    );
+  };
 
   const heritageStats = useMemo(() => {
     const rows = asArray(heritageCfg.stats)
@@ -1996,17 +2058,9 @@ export default function JenksFrontpageV2() {
       {showHowItWorksSection ? (
       <section className="bg-white py-12" data-kimi-anim="fade-up" style={{ order: getSectionOrder('HOW_IT_WORKS') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <h2 className="font-['Oswald'] text-3xl font-bold uppercase">HOW IT WORKS</h2>
+          <h2 className="font-['Oswald'] text-3xl font-bold uppercase">{textIconSectionHeading('HOW_IT_WORKS')}</h2>
           <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-            {howItWorksCards.map(({ title, sub, Icon }) => (
-              <article key={title} className="mt-2 flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-8 text-center transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_14px_28px_rgba(0,0,0,0.12)]">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full border border-black/15 bg-white">
-                  <Icon className="h-5 w-5 text-[#e66045]" />
-                </div>
-                <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em]">{title}</p>
-                <p className="mt-2 text-xs text-black/55">{sub}</p>
-              </article>
-            ))}
+            {howItWorksCards.map((item) => renderTextIconCard(item))}
           </div>
         </div>
       </section>
@@ -2016,17 +2070,9 @@ export default function JenksFrontpageV2() {
       {showCustomTextIconSection ? (
       <section className="bg-white py-12" data-kimi-anim="fade-up" style={{ order: getSectionOrder('CUSTOM_TEXT_ICON') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <h2 className="font-['Oswald'] text-3xl font-bold uppercase">CUSTOM</h2>
+          <h2 className="font-['Oswald'] text-3xl font-bold uppercase">{textIconSectionHeading('CUSTOM')}</h2>
           <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-            {customTextIconCards.map(({ title, sub, Icon }) => (
-              <article key={title} className="mt-2 flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-8 text-center transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_14px_28px_rgba(0,0,0,0.12)]">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full border border-black/15 bg-white">
-                  <Icon className="h-5 w-5 text-[#e66045]" />
-                </div>
-                <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em]">{title}</p>
-                <p className="mt-2 text-xs text-black/55">{sub}</p>
-              </article>
-            ))}
+            {customTextIconCards.map((item) => renderTextIconCard(item))}
           </div>
         </div>
       </section>
@@ -2182,17 +2228,11 @@ export default function JenksFrontpageV2() {
       {showTrustSection ? (
         <section className="bg-white py-16 lg:py-20" data-kimi-anim="fade-up" style={{ order: getSectionOrder('SHOP_WITH_CONFIDENCE') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <h2 className="text-center font-['Oswald'] text-4xl font-bold uppercase leading-none">SHOP WITH CONFIDENCE</h2>
+          <h2 className="text-center font-['Oswald'] text-4xl font-bold uppercase leading-none">
+            {textIconSectionHeading('SHOP_WITH_CONFIDENCE')}
+          </h2>
           <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-3">
-            {trustCards.map((item) => (
-              <article key={item.label} className="flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-8 text-center transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_14px_28px_rgba(0,0,0,0.12)]">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full border border-black/15 bg-white">
-                  <item.Icon className="h-5 w-5 text-[#e66045]" />
-                </div>
-                <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em]">{item.label}</p>
-                <p className="mt-2 text-xs text-black/55">{item.sub}</p>
-              </article>
-            ))}
+            {trustCards.map((item) => renderTextIconCard(item))}
           </div>
         </div>
         </section>

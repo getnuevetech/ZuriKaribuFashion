@@ -180,9 +180,12 @@ type CategorySection = {
   displayOrder: number;
 };
 
+type TextIconSectionType = 'HOW_IT_WORKS' | 'SHOP_WITH_CONFIDENCE' | 'CUSTOM';
+const TEXT_ICON_SECTION_TYPES: TextIconSectionType[] = ['HOW_IT_WORKS', 'CUSTOM', 'SHOP_WITH_CONFIDENCE'];
+
 type TextIconCard = {
   id: string;
-  sectionType: 'HOW_IT_WORKS' | 'SHOP_WITH_CONFIDENCE' | 'CUSTOM';
+  sectionType: TextIconSectionType;
   title: string;
   description: string;
   icon: string;
@@ -313,6 +316,17 @@ type JenksV2FrontpageManagerSettings = {
     sections: CategorySection[];
   };
   textIconCards: {
+    sectionTitles: {
+      howItWorks: string;
+      custom: string;
+      shopWithConfidence: string;
+    };
+    cardStyle: {
+      cardMinHeight: number;
+      iconSize: number;
+      titleFontSize: number;
+      descriptionFontSize: number;
+    };
     allowCustomCards: boolean;
     cards: TextIconCard[];
   };
@@ -738,6 +752,17 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       ],
     },
     textIconCards: {
+      sectionTitles: {
+        howItWorks: 'How It Works',
+        custom: 'Custom',
+        shopWithConfidence: 'Shop With Confidence',
+      },
+      cardStyle: {
+        cardMinHeight: 220,
+        iconSize: 44,
+        titleFontSize: 11,
+        descriptionFontSize: 12,
+      },
       allowCustomCards: true,
       cards: [
         {
@@ -1194,16 +1219,34 @@ const normalizeTextIconCards = (
   fallback: JenksV2FrontpageManagerSettings['textIconCards']
 ): JenksV2FrontpageManagerSettings['textIconCards'] => {
   const row = asRecord(raw);
+  const rawSectionTitles = asRecord(row.sectionTitles);
+  const fallbackSectionTitles = fallback.sectionTitles;
+  const sectionTitles = {
+    howItWorks: (getString(rawSectionTitles.howItWorks) || fallbackSectionTitles.howItWorks).slice(0, 120),
+    custom: (getString(rawSectionTitles.custom) || fallbackSectionTitles.custom).slice(0, 120),
+    shopWithConfidence: (getString(rawSectionTitles.shopWithConfidence) || fallbackSectionTitles.shopWithConfidence).slice(0, 120),
+  };
+  const rawCardStyle = asRecord(row.cardStyle);
+  const fallbackCardStyle = fallback.cardStyle;
+  const cardStyle = {
+    cardMinHeight: clamp(Math.round(getNumber(rawCardStyle.cardMinHeight) ?? fallbackCardStyle.cardMinHeight), 160, 520),
+    iconSize: clamp(Math.round(getNumber(rawCardStyle.iconSize) ?? fallbackCardStyle.iconSize), 20, 120),
+    titleFontSize: clamp(Math.round(getNumber(rawCardStyle.titleFontSize) ?? fallbackCardStyle.titleFontSize), 8, 72),
+    descriptionFontSize: clamp(
+      Math.round(getNumber(rawCardStyle.descriptionFontSize) ?? fallbackCardStyle.descriptionFontSize),
+      8,
+      72
+    ),
+  };
   const rows = Array.isArray(row.cards) ? row.cards : fallback.cards;
   const cards = rows
     .map((entry, index) => {
       const item = asRecord(entry);
       const fallbackItem = fallback.cards[index] || fallback.cards[0];
       const typeToken = String(item.sectionType || fallbackItem.sectionType).trim().toUpperCase();
-      const sectionType: TextIconCard['sectionType'] =
-        typeToken === 'SHOP_WITH_CONFIDENCE' || typeToken === 'CUSTOM'
-          ? (typeToken as TextIconCard['sectionType'])
-          : 'HOW_IT_WORKS';
+      const sectionType: TextIconSectionType = TEXT_ICON_SECTION_TYPES.includes(typeToken as TextIconSectionType)
+        ? (typeToken as TextIconSectionType)
+        : 'HOW_IT_WORKS';
       return {
         id: getString(item.id) || fallbackItem.id || randomUUID(),
         sectionType,
@@ -1216,6 +1259,8 @@ const normalizeTextIconCards = (
     })
     .slice(0, 100);
   return {
+    sectionTitles,
+    cardStyle,
     allowCustomCards: getBoolean(row.allowCustomCards) ?? fallback.allowCustomCards,
     cards,
   };
@@ -1393,12 +1438,14 @@ const buildTemplateSnapshot = (
   templateKey: TemplateKey
 ): Record<string, unknown> => {
   const textCards = Array.isArray(settings.textIconCards.cards) ? settings.textIconCards.cards : [];
-  const filterTextCardsByTemplate = (target: 'HOW_IT_WORKS' | 'CUSTOM' | 'SHOP_WITH_CONFIDENCE') => {
+  const filterTextCardsByTemplate = (target: TextIconSectionType) => {
     const cards = textCards.filter((card) => {
       const token = String(card.sectionType || '').toUpperCase();
       return token === target;
     });
     return {
+      sectionTitles: settings.textIconCards.sectionTitles,
+      cardStyle: settings.textIconCards.cardStyle,
       allowCustomCards: settings.textIconCards.allowCustomCards,
       cards,
     };
@@ -1609,20 +1656,25 @@ const applyTemplateSnapshotToSettings = (
       next.categoryManage = normalizeCategoryManage(snapshotRecord, next.categoryManage);
       break;
     case 'HOW_IT_WORKS':
+    case 'CUSTOM_TEXT_ICON':
     case 'SHOP_WITH_CONFIDENCE': {
       const normalized = normalizeTextIconCards(snapshotRecord, next.textIconCards);
       const scopedRows = normalized.cards.filter((card) => {
         const token = String(card.sectionType || '').toUpperCase();
         if (templateKey === 'HOW_IT_WORKS') return token === 'HOW_IT_WORKS';
+        if (templateKey === 'CUSTOM_TEXT_ICON') return token === 'CUSTOM';
         return token === 'SHOP_WITH_CONFIDENCE';
       });
       const otherRows = next.textIconCards.cards.filter((card) => {
         const token = String(card.sectionType || '').toUpperCase();
         if (templateKey === 'HOW_IT_WORKS') return token !== 'HOW_IT_WORKS';
+        if (templateKey === 'CUSTOM_TEXT_ICON') return token !== 'CUSTOM';
         return token !== 'SHOP_WITH_CONFIDENCE';
       });
       next.textIconCards = {
         ...next.textIconCards,
+        sectionTitles: normalized.sectionTitles,
+        cardStyle: normalized.cardStyle,
         allowCustomCards: normalized.allowCustomCards,
         cards: [...otherRows, ...scopedRows],
       };
@@ -1789,7 +1841,7 @@ const saveSettings = async (next: Partial<JenksV2FrontpageManagerSettings>) => {
   return merged;
 };
 
-const cloneTextCardsWithType = (cards: unknown[], sectionType: TextIconCard['sectionType']) =>
+const cloneTextCardsWithType = (cards: unknown[], sectionType: TextIconSectionType) =>
   cards
     .map((entry, idx) => {
       const row = asRecord(entry);
