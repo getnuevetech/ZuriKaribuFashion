@@ -374,8 +374,9 @@ const sanitizeHtmlForStory = (raw: string) => {
   if (!hasHtmlTag(source)) {
     return escapeHtml(source).replace(/\n/g, '<br/>');
   }
-  const parser = new DOMParser();
-  const parsedDoc = parser.parseFromString(source, 'text/html');
+  if (typeof window === 'undefined') {
+    return escapeHtml(source).replace(/\n/g, '<br/>');
+  }
   const allowedTags = new Set([
     'P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'S',
     'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
@@ -424,8 +425,23 @@ const sanitizeHtmlForStory = (raw: string) => {
     }
     Array.from(node.childNodes).forEach(traverse);
   };
-  traverse(parsedDoc.body);
-  return parsedDoc.body.innerHTML;
+  let rootNode: HTMLElement | null = null;
+  try {
+    if (typeof DOMParser !== 'undefined') {
+      const parser = new DOMParser();
+      const parsedDoc = parser.parseFromString(source, 'text/html');
+      rootNode = parsedDoc?.body || null;
+    }
+  } catch {
+    rootNode = null;
+  }
+  if (!rootNode) {
+    const fallbackNode = document.createElement('div');
+    fallbackNode.innerHTML = source;
+    rootNode = fallbackNode;
+  }
+  traverse(rootNode);
+  return rootNode.innerHTML;
 };
 
 const SOCIAL_ICON_BY_KEY: Record<string, IconComponent> = {
