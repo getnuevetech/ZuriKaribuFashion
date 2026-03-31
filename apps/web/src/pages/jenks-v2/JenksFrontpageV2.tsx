@@ -69,7 +69,8 @@ type FeaturedTile = {
   href: string;
   tag: string;
   cta: string;
-  ctaMode: 'URL' | 'PRODUCT_GROUP';
+  ctaMode: 'URL' | 'PAGE' | 'PRODUCT_GROUP';
+  ctaPageKey?: string;
   productGroup: 'ALL' | 'RTW' | 'CTW' | 'FTB';
   ctaStyle?: CTAStyle;
 };
@@ -322,6 +323,19 @@ const productGroupHref = (groupRaw: unknown) => {
   return '/ready-to-wear';
 };
 
+const PAGE_HREF_BY_KEY: Record<string, string> = {
+  HOME: '/',
+  READY_TO_WEAR: '/ready-to-wear',
+  FABRICS: '/fabrics',
+  CUSTOM_TO_WEAR: '/custom',
+  DESIGNERS: '/custom',
+  ABOUT: '/about',
+  CONTACT: '/contact',
+  HELP_CENTER: '/help-center',
+  COUNTRY_PRODUCTS: '/country-products',
+  AUTH_LOGIN: '/auth/login',
+};
+
 const resolveManagerImage = (value: unknown, fallback: string) => {
   const raw = asString(value, '');
   if (!raw) return fallback;
@@ -344,6 +358,74 @@ const splitHeroTitle = (title: string) => {
     titleA: words.slice(0, 1).join(' '),
     titleB: words.slice(1).join(' '),
   };
+};
+
+const hasHtmlTag = (value: string) => /<\/?[a-z][\s\S]*>/i.test(String(value || ''));
+const escapeHtml = (value: string) =>
+  String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+const sanitizeHtmlForStory = (raw: string) => {
+  const source = String(raw || '');
+  if (!source.trim()) return '';
+  if (!hasHtmlTag(source)) {
+    return escapeHtml(source).replace(/\n/g, '<br/>');
+  }
+  const parser = new DOMParser();
+  const parsedDoc = parser.parseFromString(source, 'text/html');
+  const allowedTags = new Set([
+    'P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'S',
+    'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+    'UL', 'OL', 'LI', 'BLOCKQUOTE', 'A', 'IMG', 'HR',
+  ]);
+  const isSafeUrl = (value: string, image = false) => {
+    const url = String(value || '').trim().toLowerCase();
+    if (!url) return false;
+    if (url.startsWith('/') || url.startsWith('http://') || url.startsWith('https://')) return true;
+    if (!image && (url.startsWith('mailto:') || url.startsWith('tel:'))) return true;
+    if (image && url.startsWith('data:image/')) return true;
+    return false;
+  };
+  const traverse = (node: Node) => {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const element = node as HTMLElement;
+      const tag = element.tagName.toUpperCase();
+      if (!allowedTags.has(tag)) {
+        const parent = element.parentNode;
+        if (parent) {
+          while (element.firstChild) parent.insertBefore(element.firstChild, element);
+          parent.removeChild(element);
+          return;
+        }
+      } else {
+        Array.from(element.attributes).forEach((attribute) => {
+          const name = attribute.name.toLowerCase();
+          const value = attribute.value;
+          if (tag === 'A') {
+            if (name === 'href' && isSafeUrl(value, false)) return;
+            if (name === 'target' || name === 'rel') return;
+            element.removeAttribute(attribute.name);
+          } else if (tag === 'IMG') {
+            if (name === 'src' && isSafeUrl(value, true)) return;
+            if (name === 'alt' || name === 'title') return;
+            element.removeAttribute(attribute.name);
+          } else {
+            element.removeAttribute(attribute.name);
+          }
+        });
+        if (tag === 'A') {
+          element.setAttribute('target', '_blank');
+          element.setAttribute('rel', 'noopener noreferrer');
+        }
+      }
+    }
+    Array.from(node.childNodes).forEach(traverse);
+  };
+  traverse(parsedDoc.body);
+  return parsedDoc.body.innerHTML;
 };
 
 const SOCIAL_ICON_BY_KEY: Record<string, IconComponent> = {
@@ -1078,21 +1160,24 @@ export default function JenksFrontpageV2() {
         ...row,
         tag: FEATURED_LABEL_BY_KEY.RTW,
         cta: FEATURED_CTA_BY_KEY.RTW,
-        ctaMode: 'PRODUCT_GROUP',
+        ctaMode: 'PAGE',
+        ctaPageKey: 'READY_TO_WEAR',
         productGroup: 'RTW',
       })),
       CTW: FEATURED_CTW.map((row) => ({
         ...row,
         tag: FEATURED_LABEL_BY_KEY.CTW,
         cta: FEATURED_CTA_BY_KEY.CTW,
-        ctaMode: 'PRODUCT_GROUP',
+        ctaMode: 'PAGE',
+        ctaPageKey: 'CUSTOM_TO_WEAR',
         productGroup: 'CTW',
       })),
       FTB: FEATURED_FTB.map((row) => ({
         ...row,
         tag: FEATURED_LABEL_BY_KEY.FTB,
         cta: FEATURED_CTA_BY_KEY.FTB,
-        ctaMode: 'PRODUCT_GROUP',
+        ctaMode: 'PAGE',
+        ctaPageKey: 'FABRICS',
         productGroup: 'FTB',
       })),
     };
@@ -1117,7 +1202,13 @@ export default function JenksFrontpageV2() {
         href: normalizeHref(row.ctaLink, FEATURED_HREF_BY_KEY[key] || '/ready-to-wear', key),
         tag: asString(row.tag, FEATURED_LABEL_BY_KEY[key] || ''),
         cta: asString(row.ctaText, FEATURED_CTA_BY_KEY[key] || 'SHOP NOW').toUpperCase(),
-        ctaMode: String(row.ctaMode || '').trim().toUpperCase() === 'PRODUCT_GROUP' ? 'PRODUCT_GROUP' : 'URL',
+        ctaMode: ((): FeaturedTile['ctaMode'] => {
+          const token = String(row.ctaMode || '').trim().toUpperCase();
+          if (token === 'PRODUCT_GROUP') return 'PRODUCT_GROUP';
+          if (token === 'PAGE') return 'PAGE';
+          return 'URL';
+        })(),
+        ctaPageKey: asString(row.ctaPageKey, ''),
         productGroup:
           String(row.productGroup || key)
             .trim()
@@ -1158,6 +1249,11 @@ export default function JenksFrontpageV2() {
     if (card.ctaMode === 'PRODUCT_GROUP') {
       const token = card.productGroup === 'ALL' ? key : card.productGroup;
       return productGroupHref(token);
+    }
+    if (card.ctaMode === 'PAGE') {
+      const routeToken = String(card.ctaPageKey || '').trim().toUpperCase();
+      const pageHref = PAGE_HREF_BY_KEY[routeToken] || card.href || featuredHrefForCountry(key);
+      return toSafeInternalHref(pageHref);
     }
     return toSafeInternalHref(card.href || featuredHrefForCountry(key));
   };
@@ -1326,6 +1422,21 @@ export default function JenksFrontpageV2() {
           { id: 'stat-3', label: 'FABRICS', value: '1M', suffix: '+', positionX: 58, positionY: 76 },
         ];
   }, [heritageCfg.stats]);
+  const heritageStoryHtml = useMemo(
+    () =>
+      sanitizeHtmlForStory(
+        asString(
+          heritageCfg.storyHtml,
+          asString(
+            heritageCfg.description,
+            "The world is yet to experience Africa's fashion. We're building the bridge connecting heritage craft to modern wardrobes everywhere."
+          )
+        )
+      ),
+    [heritageCfg.description, heritageCfg.storyHtml]
+  );
+  const heritageReadMoreLabel = asString(heritageCfg.readMoreLabel, 'Read More');
+  const heritageReadMoreHref = toSafeInternalHref(asString(heritageCfg.readMoreHref, '/stories/our-heritage'));
 
   const newsletterCfg = useMemo(() => asRecord(newsletterFooterCfg.newsletter), [newsletterFooterCfg.newsletter]);
   const footerCfg = useMemo(() => asRecord(newsletterFooterCfg.footer), [newsletterFooterCfg.footer]);
@@ -2377,7 +2488,7 @@ export default function JenksFrontpageV2() {
 
       {/* ROOTED IN CULTURE */}
       {isSectionVisible('HERITAGE') ? (
-        <section className={`relative ${HERO_HEIGHT_CLASS}`} data-kimi-anim="fade-up" style={{ order: getSectionOrder('HERITAGE') }}>
+        <section className="relative min-h-[84vh]" data-kimi-anim="fade-up" style={{ order: getSectionOrder('HERITAGE') }}>
           <img
             src={asString(heritageCfg.image, `${ASSET_BASE}/heritage_story.jpg`)}
             alt="heritage"
@@ -2385,17 +2496,21 @@ export default function JenksFrontpageV2() {
           />
           <div className="absolute inset-0 bg-black/42" />
           <div className="relative h-full px-8 py-10 text-white">
-            <div className="self-end text-right">
+            <div className="ml-auto max-w-xl text-right">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">{asString(heritageCfg.tag, 'Heritage')}</p>
               <h2 className="mt-2 font-['Oswald'] text-6xl font-bold uppercase leading-[0.92]">
                 {asString(heritageCfg.title, 'ROOTED IN CULTURE.')}
               </h2>
-              <p className="mt-4 max-w-xl text-base text-white/80">
-                {asString(
-                  heritageCfg.description,
-                  "The world is yet to experience Africa's fashion. We're building the bridge connecting heritage craft to modern wardrobes everywhere."
-                )}
-              </p>
+              <div className="prose prose-invert mt-4 max-w-xl text-base text-white/80 prose-p:text-white/80 prose-strong:text-white prose-a:text-white">
+                <div dangerouslySetInnerHTML={{ __html: heritageStoryHtml }} />
+              </div>
+              <Link
+                to={heritageReadMoreHref}
+                className="mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white hover:underline"
+              >
+                {heritageReadMoreLabel}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
             <div className="absolute bottom-[20%] left-8">
               <div className="flex flex-wrap items-end gap-x-8 gap-y-4 rounded border border-white/15 bg-black/28 px-5 py-4 backdrop-blur-[1px]">

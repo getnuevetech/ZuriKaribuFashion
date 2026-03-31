@@ -207,7 +207,8 @@ type FeaturedCard = {
   description: string;
   ctaText: string;
   ctaLink: string;
-  ctaMode: 'URL' | 'PRODUCT_GROUP';
+  ctaMode: 'URL' | 'PAGE' | 'PRODUCT_GROUP';
+  ctaPageKey?: string;
   productGroup: 'ALL' | 'RTW' | 'CTW' | 'FTB';
   ctaStyle: CtaStyle;
   enabled: boolean;
@@ -279,6 +280,9 @@ type HeritageSettings = {
   title: string;
   tag: string;
   description: string;
+  storyHtml: string;
+  readMoreLabel: string;
+  readMoreHref: string;
   stats: HeritageStat[];
 };
 
@@ -837,7 +841,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Spotlight featured RTW products.',
           ctaText: 'Shop RTW',
           ctaLink: '/ready-to-wear',
-          ctaMode: 'URL',
+          ctaMode: 'PAGE',
+          ctaPageKey: 'READY_TO_WEAR',
           productGroup: 'RTW',
           ctaStyle: defaultCtaStyle({
             backgroundColor: 'transparent',
@@ -858,7 +863,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Spotlight featured CTW products.',
           ctaText: 'Explore CTW',
           ctaLink: '/custom',
-          ctaMode: 'URL',
+          ctaMode: 'PAGE',
+          ctaPageKey: 'CUSTOM_TO_WEAR',
           productGroup: 'CTW',
           ctaStyle: defaultCtaStyle({
             backgroundColor: 'transparent',
@@ -879,7 +885,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Spotlight featured fabric products.',
           ctaText: 'Shop FTB',
           ctaLink: '/fabrics',
-          ctaMode: 'URL',
+          ctaMode: 'PAGE',
+          ctaPageKey: 'FABRICS',
           productGroup: 'FTB',
           ctaStyle: defaultCtaStyle({
             backgroundColor: 'transparent',
@@ -933,6 +940,10 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       title: 'Our Heritage',
       tag: 'Culture & Craft',
       description: 'Celebrate African textile heritage with configurable stats and layout.',
+      storyHtml:
+        "<p>Our heritage is woven from artisan craft, bold silhouettes, and stories passed down across generations.</p>",
+      readMoreLabel: 'Read More',
+      readMoreHref: '/stories/our-heritage',
       stats: [
         {
           id: randomUUID(),
@@ -1348,7 +1359,13 @@ const normalizeFeatured = (
         description: (getString(item.description) || fallbackItem.description).slice(0, 320),
         ctaText: (getString(item.ctaText) || fallbackItem.ctaText).slice(0, 80),
         ctaLink: normalizeHref(item.ctaLink, fallbackItem.ctaLink),
-        ctaMode: String(item.ctaMode || fallbackItem.ctaMode || 'URL').trim().toUpperCase() === 'PRODUCT_GROUP' ? 'PRODUCT_GROUP' : 'URL',
+        ctaMode: ((): FeaturedCard['ctaMode'] => {
+          const token = String(item.ctaMode || fallbackItem.ctaMode || 'URL').trim().toUpperCase();
+          if (token === 'PRODUCT_GROUP') return 'PRODUCT_GROUP';
+          if (token === 'PAGE') return 'PAGE';
+          return 'URL';
+        })(),
+        ctaPageKey: (getString(item.ctaPageKey) || getString(fallbackItem.ctaPageKey) || '').slice(0, 120) || undefined,
         productGroup: ((): FeaturedCard['productGroup'] => {
           const token = String(item.productGroup || fallbackItem.productGroup || fallbackItem.key || 'ALL')
             .trim()
@@ -1478,6 +1495,9 @@ const normalizeHeritage = (raw: unknown, fallback: HeritageSettings): HeritageSe
     title: (getString(row.title) || fallback.title).slice(0, 140),
     tag: (getString(row.tag) || fallback.tag).slice(0, 80),
     description: (getString(row.description) || fallback.description).slice(0, 320),
+    storyHtml: (getString(row.storyHtml) || fallback.storyHtml || '').slice(0, 12000),
+    readMoreLabel: (getString(row.readMoreLabel) || fallback.readMoreLabel || 'Read More').slice(0, 80),
+    readMoreHref: normalizeHref(row.readMoreHref, fallback.readMoreHref || '/stories/our-heritage'),
     stats,
   };
 };

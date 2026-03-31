@@ -10927,7 +10927,8 @@ const jenksV2FrontpageManagerApi = {
             description: string;
             ctaText: string;
             ctaLink: string;
-            ctaMode: 'URL' | 'PRODUCT_GROUP';
+            ctaMode: 'URL' | 'PAGE' | 'PRODUCT_GROUP';
+            ctaPageKey?: string;
             productGroup: 'ALL' | 'RTW' | 'CTW' | 'FTB';
             ctaStyle: {
               backgroundColor: string;
@@ -10986,6 +10987,9 @@ const jenksV2FrontpageManagerApi = {
           title: string;
           tag: string;
           description: string;
+          storyHtml: string;
+          readMoreLabel: string;
+          readMoreHref: string;
           stats: Array<{
             id: string;
             label: string;

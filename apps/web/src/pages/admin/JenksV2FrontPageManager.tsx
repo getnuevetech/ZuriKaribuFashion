@@ -197,7 +197,8 @@ type FeaturedCard = {
   description: string;
   ctaText: string;
   ctaLink: string;
-  ctaMode: 'URL' | 'PRODUCT_GROUP';
+  ctaMode: 'URL' | 'PAGE' | 'PRODUCT_GROUP';
+  ctaPageKey?: string;
   productGroup: 'ALL' | 'RTW' | 'CTW' | 'FTB';
   ctaStyle: CTAStyle;
   enabled: boolean;
@@ -281,6 +282,9 @@ type Heritage = {
   title: string;
   tag: string;
   description: string;
+  storyHtml: string;
+  readMoreLabel: string;
+  readMoreHref: string;
   stats: HeritageStat[];
 };
 
@@ -376,7 +380,7 @@ const TEMPLATES: Array<{ key: TemplateKey; label: string }> = [
 
 const ROUTE_OPTIONS = [
   { key: 'HOME', label: 'Home', href: '/' },
-  { key: 'SHOP', label: 'Shop', href: '/ready-to-wear' },
+  { key: 'SHOP', label: 'Shop', href: '/shop' },
   { key: 'READY_TO_WEAR', label: 'Ready To Wear', href: '/ready-to-wear' },
   { key: 'FABRICS', label: 'Fabric To Buy', href: '/fabrics' },
   { key: 'CUSTOM_TO_WEAR', label: 'Custom To Wear', href: '/custom' },
@@ -387,6 +391,7 @@ const ROUTE_OPTIONS = [
   { key: 'COUNTRY_PRODUCTS', label: 'Country Products', href: '/country-products' },
   { key: 'AUTH_LOGIN', label: 'Sign In', href: '/auth/login' },
 ];
+const PAGE_ROUTE_OPTIONS = ROUTE_OPTIONS.filter((route) => route.key !== 'SHOP');
 
 const AFRICAN_COUNTRIES_54 = [
   { code: 'DZ', name: 'Algeria' },
@@ -882,7 +887,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Spotlight featured RTW products.',
         ctaText: 'Shop RTW',
         ctaLink: '/ready-to-wear',
-        ctaMode: 'URL',
+        ctaMode: 'PAGE',
+        ctaPageKey: 'READY_TO_WEAR',
         productGroup: 'RTW',
         ctaStyle: createCtaStyle({
           backgroundColor: 'transparent',
@@ -903,7 +909,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Spotlight featured CTW products.',
         ctaText: 'Explore CTW',
         ctaLink: '/custom',
-        ctaMode: 'URL',
+        ctaMode: 'PAGE',
+        ctaPageKey: 'CUSTOM_TO_WEAR',
         productGroup: 'CTW',
         ctaStyle: createCtaStyle({
           backgroundColor: 'transparent',
@@ -924,7 +931,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Spotlight featured fabric products.',
         ctaText: 'Shop FTB',
         ctaLink: '/fabrics',
-        ctaMode: 'URL',
+        ctaMode: 'PAGE',
+        ctaPageKey: 'FABRICS',
         productGroup: 'FTB',
         ctaStyle: createCtaStyle({
           backgroundColor: 'transparent',
@@ -978,6 +986,9 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     title: 'Our Heritage',
     tag: 'Culture & Craft',
     description: 'Configure heritage titles, description and floating stats.',
+    storyHtml: '<p>Our heritage is woven from artisan craft, bold silhouettes, and stories passed down across generations.</p>',
+    readMoreLabel: 'Read More',
+    readMoreHref: '/stories/our-heritage',
     stats: [
       {
         id: uid(),
@@ -1206,7 +1217,18 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
     cards: next.featured.cards.map((item) => ({
       ...item,
       ctaLink: normalizeManagerHref(item.ctaLink, '/ready-to-wear'),
+      ctaMode:
+        String((item as FeaturedCard).ctaMode || '').trim().toUpperCase() === 'PAGE'
+          ? 'PAGE'
+          : String((item as FeaturedCard).ctaMode || '').trim().toUpperCase() === 'PRODUCT_GROUP'
+            ? 'PRODUCT_GROUP'
+            : 'URL',
+      ctaPageKey: String((item as FeaturedCard).ctaPageKey || ''),
     })),
+  };
+  next.heritage = {
+    ...next.heritage,
+    readMoreHref: normalizeManagerHref(next.heritage.readMoreHref, '/stories/our-heritage'),
   };
   next.designerSpotlight = {
     ...next.designerSpotlight,
@@ -1385,10 +1407,20 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         ? featured.cards.map((card) => ({
             ...fallbackFeatured,
             ...card,
-            ctaMode:
-              String((card as FeaturedCard)?.ctaMode || '').trim().toUpperCase() === 'PRODUCT_GROUP'
-                ? 'PRODUCT_GROUP'
-                : 'URL',
+            ctaMode: ((): FeaturedCard['ctaMode'] => {
+              const token = String((card as FeaturedCard)?.ctaMode || '').trim().toUpperCase();
+              if (token === 'PAGE') return 'PAGE';
+              if (token === 'PRODUCT_GROUP') return 'PAGE';
+              return 'URL';
+            })(),
+            ctaPageKey: ((): string => {
+              const explicit = String((card as FeaturedCard)?.ctaPageKey || fallbackFeatured.ctaPageKey || '').trim().toUpperCase();
+              if (explicit) return explicit;
+              const groupToken = String((card as FeaturedCard)?.productGroup || '').trim().toUpperCase();
+              if (groupToken === 'CTW') return 'CUSTOM_TO_WEAR';
+              if (groupToken === 'FTB') return 'FABRICS';
+              return 'READY_TO_WEAR';
+            })(),
             productGroup: ((): FeaturedCard['productGroup'] => {
               const token = String((card as FeaturedCard)?.productGroup || '').trim().toUpperCase();
               return token === 'RTW' || token === 'CTW' || token === 'FTB' ? token : 'ALL';
@@ -1406,6 +1438,16 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             ctaStyle: normalizeCtaStyle((card as DesignerSpotlightCard)?.ctaStyle, fallbackSpotlight.ctaStyle),
           }))
         : DEFAULT_CONFIG.designerSpotlight.cards,
+    },
+    heritage: {
+      ...DEFAULT_CONFIG.heritage,
+      ...((data.heritage as Heritage | undefined) || {}),
+      storyHtml: String((data.heritage as Heritage | undefined)?.storyHtml || DEFAULT_CONFIG.heritage.storyHtml),
+      readMoreLabel: String((data.heritage as Heritage | undefined)?.readMoreLabel || DEFAULT_CONFIG.heritage.readMoreLabel),
+      readMoreHref: normalizeManagerHref(
+        (data.heritage as Heritage | undefined)?.readMoreHref,
+        DEFAULT_CONFIG.heritage.readMoreHref
+      ),
     },
     customerReviews: {
       ...DEFAULT_CONFIG.customerReviews,
@@ -4607,7 +4649,8 @@ export default function JenksV2FrontPageManager() {
                         description: '',
                         ctaText: 'View',
                         ctaLink: '/ready-to-wear',
-                        ctaMode: 'URL',
+                        ctaMode: 'PAGE',
+                        ctaPageKey: 'READY_TO_WEAR',
                         productGroup: 'ALL',
                         ctaStyle: createCtaStyle({
                           backgroundColor: 'transparent',
@@ -4715,30 +4758,7 @@ export default function JenksV2FrontPageManager() {
                   }
                 />
                 <label className="md:col-span-1 text-[11px]">
-                  CTA Route
-                  <select
-                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                    value={card.ctaLink}
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        featured: {
-                          cards: prev.featured.cards.map((entry, entryIndex) =>
-                            entryIndex === index ? { ...entry, ctaLink: event.target.value } : entry
-                          ),
-                        },
-                      }))
-                    }
-                  >
-                    {ROUTE_OPTIONS.map((route) => (
-                      <option key={`featured-route-${route.key}`} value={route.href}>
-                        {route.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="md:col-span-1 text-[11px]">
-                  CTA Mode
+                  CTA Route Type
                   <select
                     className="mt-1 w-full rounded border px-2 py-1 text-xs"
                     value={card.ctaMode}
@@ -4746,50 +4766,80 @@ export default function JenksV2FrontPageManager() {
                       setConfig((prev) => ({
                         ...prev,
                         featured: {
-                          cards: prev.featured.cards.map((entry, entryIndex) =>
-                            entryIndex === index
-                              ? {
-                                  ...entry,
-                                  ctaMode: event.target.value === 'PRODUCT_GROUP' ? 'PRODUCT_GROUP' : 'URL',
-                                }
-                              : entry
-                          ),
+                          cards: prev.featured.cards.map((entry, entryIndex) => {
+                            if (entryIndex !== index) return entry;
+                            const nextMode: FeaturedCard['ctaMode'] = event.target.value === 'URL' ? 'URL' : 'PAGE';
+                            if (nextMode === 'PAGE') {
+                              const fallbackRoute = PAGE_ROUTE_OPTIONS.find(
+                                (route) => route.key === (entry.ctaPageKey || 'READY_TO_WEAR')
+                              ) || PAGE_ROUTE_OPTIONS.find((route) => route.key === 'READY_TO_WEAR') || PAGE_ROUTE_OPTIONS[0];
+                              return {
+                                ...entry,
+                                ctaMode: nextMode,
+                                ctaPageKey: fallbackRoute?.key || 'READY_TO_WEAR',
+                                ctaLink: fallbackRoute?.href || '/ready-to-wear',
+                              };
+                            }
+                            return {
+                              ...entry,
+                              ctaMode: nextMode,
+                              ctaPageKey: '',
+                            };
+                          }),
                         },
                       }))
                     }
                   >
-                    <option value="URL">URL</option>
-                    <option value="PRODUCT_GROUP">PRODUCT_GROUP</option>
+                    <option value="URL">URL Link</option>
+                    <option value="PAGE">Pages Dropdown</option>
                   </select>
                 </label>
-                <label className="md:col-span-1 text-[11px]">
-                  Product Group
-                  <select
-                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                    value={card.productGroup}
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        featured: {
-                          cards: prev.featured.cards.map((entry, entryIndex) =>
-                            entryIndex === index
-                              ? {
-                                  ...entry,
-                                  productGroup: ['RTW', 'CTW', 'FTB'].includes(event.target.value)
-                                    ? (event.target.value as FeaturedCard['productGroup'])
-                                    : 'ALL',
-                                }
-                              : entry
-                          ),
-                        },
-                      }))
-                    }
-                  >
-                    <option value="ALL">ALL</option>
-                    <option value="RTW">RTW</option>
-                    <option value="CTW">CTW</option>
-                    <option value="FTB">FTB</option>
-                  </select>
+                <label className="md:col-span-2 text-[11px]">
+                  {card.ctaMode === 'PAGE' ? 'CTA Page' : 'CTA URL Link'}
+                  {card.ctaMode === 'PAGE' ? (
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={card.ctaPageKey || ''}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          featured: {
+                            cards: prev.featured.cards.map((entry, entryIndex) => {
+                              if (entryIndex !== index) return entry;
+                              const selected = PAGE_ROUTE_OPTIONS.find((route) => route.key === event.target.value);
+                              return {
+                                ...entry,
+                                ctaPageKey: event.target.value,
+                                ctaLink: selected?.href || entry.ctaLink,
+                              };
+                            }),
+                          },
+                        }))
+                      }
+                    >
+                      {PAGE_ROUTE_OPTIONS.map((route) => (
+                        <option key={`featured-page-${route.key}`} value={route.key}>
+                          {route.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={card.ctaLink}
+                      placeholder="/ready-to-wear or https://..."
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          featured: {
+                            cards: prev.featured.cards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, ctaLink: event.target.value, ctaPageKey: '' } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  )}
                 </label>
                 {renderCtaStyleEditor(
                   'Card CTA Style',
@@ -5329,6 +5379,32 @@ export default function JenksV2FrontPageManager() {
                 className="mt-1 w-full rounded border px-2 py-1.5"
                 value={config.heritage.description}
                 onChange={(event) => setConfig((prev) => ({ ...prev, heritage: { ...prev.heritage, description: event.target.value } }))}
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label className="text-xs md:col-span-2">
+              Short Story (supports formatted HTML)
+              <textarea
+                className="mt-1 min-h-[180px] w-full rounded border px-2 py-1.5"
+                value={config.heritage.storyHtml}
+                onChange={(event) => setConfig((prev) => ({ ...prev, heritage: { ...prev.heritage, storyHtml: event.target.value } }))}
+              />
+            </label>
+            <label className="text-xs">
+              Read More Label
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.heritage.readMoreLabel}
+                onChange={(event) => setConfig((prev) => ({ ...prev, heritage: { ...prev.heritage, readMoreLabel: event.target.value } }))}
+              />
+            </label>
+            <label className="text-xs">
+              Read More Link
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.heritage.readMoreHref}
+                onChange={(event) => setConfig((prev) => ({ ...prev, heritage: { ...prev.heritage, readMoreHref: event.target.value } }))}
               />
             </label>
           </div>
