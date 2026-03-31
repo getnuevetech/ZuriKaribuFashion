@@ -14,6 +14,7 @@ const TEMPLATE_KEYS = [
   'SHOP_BY',
   'CATEGORY_MANAGE',
   'HOW_IT_WORKS',
+  'CUSTOM_TEXT_ICON',
   'SHOP_WITH_CONFIDENCE',
   'FEATURED',
   'FRESH_DROPS',
@@ -330,6 +331,7 @@ const TEMPLATE_META: Array<{ templateKey: TemplateKey; key: string; name: string
   { templateKey: 'SHOP_BY', key: 'shop-by', name: 'Shop By' },
   { templateKey: 'CATEGORY_MANAGE', key: 'category-manage', name: 'Category Manage' },
   { templateKey: 'HOW_IT_WORKS', key: 'how-it-works', name: 'How It Works' },
+  { templateKey: 'CUSTOM_TEXT_ICON', key: 'custom-text-icon', name: 'Custom' },
   { templateKey: 'SHOP_WITH_CONFIDENCE', key: 'shop-with-confidence', name: 'Shop With Confidence' },
   { templateKey: 'FEATURED', key: 'featured', name: 'Featured' },
   { templateKey: 'FRESH_DROPS', key: 'fresh-drops', name: 'Fresh Drops' },
@@ -748,12 +750,21 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         },
         {
           id: randomUUID(),
+          sectionType: 'CUSTOM',
+          title: 'Custom',
+          description: 'Standalone custom text and icon cards.',
+          icon: 'Sparkles',
+          enabled: true,
+          displayOrder: 2,
+        },
+        {
+          id: randomUUID(),
           sectionType: 'SHOP_WITH_CONFIDENCE',
           title: 'Shop with confidence',
           description: 'Trust and support card settings.',
           icon: 'ShieldCheck',
           enabled: true,
-          displayOrder: 2,
+          displayOrder: 3,
         },
       ],
     },
@@ -1381,13 +1392,10 @@ const buildTemplateSnapshot = (
   templateKey: TemplateKey
 ): Record<string, unknown> => {
   const textCards = Array.isArray(settings.textIconCards.cards) ? settings.textIconCards.cards : [];
-  const filterTextCardsByTemplate = (target: 'HOW_IT_WORKS' | 'SHOP_WITH_CONFIDENCE') => {
+  const filterTextCardsByTemplate = (target: 'HOW_IT_WORKS' | 'CUSTOM' | 'SHOP_WITH_CONFIDENCE') => {
     const cards = textCards.filter((card) => {
       const token = String(card.sectionType || '').toUpperCase();
-      if (target === 'HOW_IT_WORKS') {
-        return token === 'HOW_IT_WORKS' || token === 'CUSTOM';
-      }
-      return token === 'SHOP_WITH_CONFIDENCE';
+      return token === target;
     });
     return {
       allowCustomCards: settings.textIconCards.allowCustomCards,
@@ -1403,6 +1411,8 @@ const buildTemplateSnapshot = (
       return cloneJson(asRecord(settings.categoryManage));
     case 'HOW_IT_WORKS':
       return cloneJson(asRecord(filterTextCardsByTemplate('HOW_IT_WORKS')));
+    case 'CUSTOM_TEXT_ICON':
+      return cloneJson(asRecord(filterTextCardsByTemplate('CUSTOM')));
     case 'SHOP_WITH_CONFIDENCE':
       return cloneJson(asRecord(filterTextCardsByTemplate('SHOP_WITH_CONFIDENCE')));
     case 'FEATURED':
@@ -1431,10 +1441,8 @@ const mergeLegacyTextIconSectionEntries = (
   next.splice(legacyIndex, 1);
 
   const cards = Array.isArray(settings.textIconCards.cards) ? settings.textIconCards.cards : [];
-  const hasHowCards = cards.some((card) => {
-    const token = String(card.sectionType || '').toUpperCase();
-    return token === 'HOW_IT_WORKS' || token === 'CUSTOM';
-  });
+  const hasHowCards = cards.some((card) => String(card.sectionType || '').toUpperCase() === 'HOW_IT_WORKS');
+  const hasCustomCards = cards.some((card) => String(card.sectionType || '').toUpperCase() === 'CUSTOM');
   const hasTrustCards = cards.some((card) => String(card.sectionType || '').toUpperCase() === 'SHOP_WITH_CONFIDENCE');
 
   const baseOrder = clamp(Math.round(getNumber(legacy.order) ?? 1), 1, 999);
@@ -1454,11 +1462,22 @@ const mergeLegacyTextIconSectionEntries = (
   next.push({
     ...legacy,
     id: randomUUID(),
+    key: 'custom-text-icon',
+    name: 'Custom',
+    templateKey: 'CUSTOM_TEXT_ICON',
+    enabled: legacyEnabled && hasCustomCards,
+    order: clamp(baseOrder + 1, 1, 999),
+    isCustom: false,
+    configSnapshot: buildTemplateSnapshot(settings, 'CUSTOM_TEXT_ICON'),
+  });
+  next.push({
+    ...legacy,
+    id: randomUUID(),
     key: 'shop-with-confidence',
     name: 'Shop With Confidence',
     templateKey: 'SHOP_WITH_CONFIDENCE',
     enabled: legacyEnabled && hasTrustCards,
-    order: clamp(baseOrder + 1, 1, 999),
+    order: clamp(baseOrder + 2, 1, 999),
     isCustom: false,
     configSnapshot: buildTemplateSnapshot(settings, 'SHOP_WITH_CONFIDENCE'),
   });
@@ -1569,6 +1588,65 @@ const normalizeSectionVisibility = (
     .slice(0, 200);
 
   return { sections: normalized };
+};
+
+const applyTemplateSnapshotToSettings = (
+  settings: JenksV2FrontpageManagerSettings,
+  templateKey: TemplateKey,
+  snapshot: Record<string, unknown>
+): JenksV2FrontpageManagerSettings => {
+  const next = cloneJson(settings);
+  const snapshotRecord = asRecord(snapshot);
+  switch (templateKey) {
+    case 'TOP_NAVIGATIONS':
+      next.topNavigations = normalizeTopNavigations(snapshotRecord, next.topNavigations);
+      break;
+    case 'SHOP_BY':
+      next.shopBy = normalizeShopBy(snapshotRecord, next.shopBy);
+      break;
+    case 'CATEGORY_MANAGE':
+      next.categoryManage = normalizeCategoryManage(snapshotRecord, next.categoryManage);
+      break;
+    case 'HOW_IT_WORKS':
+    case 'SHOP_WITH_CONFIDENCE': {
+      const normalized = normalizeTextIconCards(snapshotRecord, next.textIconCards);
+      const scopedRows = normalized.cards.filter((card) => {
+        const token = String(card.sectionType || '').toUpperCase();
+        if (templateKey === 'HOW_IT_WORKS') return token === 'HOW_IT_WORKS';
+        return token === 'SHOP_WITH_CONFIDENCE';
+      });
+      const otherRows = next.textIconCards.cards.filter((card) => {
+        const token = String(card.sectionType || '').toUpperCase();
+        if (templateKey === 'HOW_IT_WORKS') return token !== 'HOW_IT_WORKS';
+        return token !== 'SHOP_WITH_CONFIDENCE';
+      });
+      next.textIconCards = {
+        ...next.textIconCards,
+        allowCustomCards: normalized.allowCustomCards,
+        cards: [...otherRows, ...scopedRows],
+      };
+      break;
+    }
+    case 'FEATURED':
+      next.featured = normalizeFeatured(snapshotRecord, next.featured);
+      break;
+    case 'FRESH_DROPS':
+      next.freshDrops = normalizeFreshDrops(snapshotRecord, next.freshDrops);
+      break;
+    case 'DESIGNER_SPOTLIGHT':
+      next.designerSpotlight = normalizeDesignerSpotlight(snapshotRecord, next.designerSpotlight);
+      break;
+    case 'HERITAGE':
+      next.heritage = normalizeHeritage(snapshotRecord, next.heritage);
+      break;
+    case 'NEWSLETTER_FOOTER':
+      next.newsletterFooter = normalizeNewsletterFooter(snapshotRecord, next.newsletterFooter);
+      break;
+    default:
+      break;
+  }
+  next.sectionVisibility = normalizeSectionVisibility(next.sectionVisibility, next.sectionVisibility, next);
+  return next;
 };
 
 const normalizeSettings = (
@@ -1710,6 +1788,73 @@ const saveSettings = async (next: Partial<JenksV2FrontpageManagerSettings>) => {
   return merged;
 };
 
+const cloneTextCardsWithType = (cards: unknown[], sectionType: TextIconCard['sectionType']) =>
+  cards
+    .map((entry, idx) => {
+      const row = asRecord(entry);
+      return {
+        id: randomUUID(),
+        sectionType,
+        title: (getString(row.title) || `${sectionType} ${idx + 1}`).slice(0, 120),
+        description: (getString(row.description) || '').slice(0, 280),
+        icon: (getString(row.icon) || 'Sparkles').slice(0, 80),
+        enabled: getBoolean(row.enabled) ?? true,
+        displayOrder: idx + 1,
+      } as TextIconCard;
+    })
+    .slice(0, 40);
+
+const appendTemplateContent = (
+  settings: JenksV2FrontpageManagerSettings,
+  templateKey: TemplateKey,
+  snapshot: Record<string, unknown>
+): JenksV2FrontpageManagerSettings => {
+  const next = cloneJson(settings);
+  switch (templateKey) {
+    case 'HOW_IT_WORKS': {
+      const cards = cloneTextCardsWithType(asArray(asRecord(snapshot).cards), 'HOW_IT_WORKS');
+      if (cards.length > 0) {
+        const baseOrder = next.textIconCards.cards.reduce((acc, card) => Math.max(acc, card.displayOrder), 0);
+        next.textIconCards.cards.push(
+          ...cards.map((card, idx) => ({
+            ...card,
+            displayOrder: baseOrder + idx + 1,
+          }))
+        );
+      }
+      return next;
+    }
+    case 'CUSTOM_TEXT_ICON': {
+      const cards = cloneTextCardsWithType(asArray(asRecord(snapshot).cards), 'CUSTOM');
+      if (cards.length > 0) {
+        const baseOrder = next.textIconCards.cards.reduce((acc, card) => Math.max(acc, card.displayOrder), 0);
+        next.textIconCards.cards.push(
+          ...cards.map((card, idx) => ({
+            ...card,
+            displayOrder: baseOrder + idx + 1,
+          }))
+        );
+      }
+      return next;
+    }
+    case 'SHOP_WITH_CONFIDENCE': {
+      const cards = cloneTextCardsWithType(asArray(asRecord(snapshot).cards), 'SHOP_WITH_CONFIDENCE');
+      if (cards.length > 0) {
+        const baseOrder = next.textIconCards.cards.reduce((acc, card) => Math.max(acc, card.displayOrder), 0);
+        next.textIconCards.cards.push(
+          ...cards.map((card, idx) => ({
+            ...card,
+            displayOrder: baseOrder + idx + 1,
+          }))
+        );
+      }
+      return next;
+    }
+    default:
+      return next;
+  }
+};
+
 router.get('/config', async (_req, res) => {
   try {
     const { settings } = await readSettings();
@@ -1766,6 +1911,8 @@ router.post(
       }
       const maxOrder = existingSections.reduce((acc, section) => Math.max(acc, section.order), 0);
       const order = clamp(payload.order ?? maxOrder + 1, 1, 999);
+      const templateSnapshot = buildTemplateSnapshot(settings, payload.templateKey);
+      const withTemplateContent = appendTemplateContent(settings, payload.templateKey, templateSnapshot);
       existingSections.push({
         id: randomUUID(),
         key,
@@ -1774,10 +1921,10 @@ router.post(
         enabled: true,
         order,
         isCustom: true,
-        configSnapshot: buildTemplateSnapshot(settings, payload.templateKey),
+        configSnapshot: templateSnapshot,
       });
       const next = await saveSettings({
-        ...settings,
+        ...withTemplateContent,
         sectionVisibility: {
           sections: existingSections,
         },

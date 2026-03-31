@@ -11,6 +11,7 @@ type TemplateKey =
   | 'SHOP_BY'
   | 'CATEGORY_MANAGE'
   | 'HOW_IT_WORKS'
+  | 'CUSTOM_TEXT_ICON'
   | 'SHOP_WITH_CONFIDENCE'
   | 'FEATURED'
   | 'FRESH_DROPS'
@@ -322,6 +323,7 @@ const TEMPLATES: Array<{ key: TemplateKey; label: string }> = [
   { key: 'SHOP_BY', label: 'Shop By' },
   { key: 'CATEGORY_MANAGE', label: 'Category Manage' },
   { key: 'HOW_IT_WORKS', label: 'How It Works' },
+  { key: 'CUSTOM_TEXT_ICON', label: 'Custom' },
   { key: 'SHOP_WITH_CONFIDENCE', label: 'Shop With Confidence' },
   { key: 'FEATURED', label: 'Featured' },
   { key: 'FRESH_DROPS', label: 'Fresh Drops' },
@@ -794,12 +796,21 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       },
       {
         id: uid(),
+        sectionType: 'CUSTOM',
+        title: 'Custom',
+        description: 'Manage standalone custom text/icon cards.',
+        icon: 'Sparkles',
+        enabled: true,
+        displayOrder: 2,
+      },
+      {
+        id: uid(),
         sectionType: 'SHOP_WITH_CONFIDENCE',
         title: 'Shop with confidence',
         description: 'Manage trust cards and icon settings.',
         icon: 'ShieldCheck',
         enabled: true,
-        displayOrder: 2,
+        displayOrder: 3,
       },
     ],
   },
@@ -5648,6 +5659,38 @@ export default function JenksV2FrontPageManager() {
           </p>
           <div className="rounded-lg border p-4 space-y-3">
             <h3 className="text-sm font-semibold">Create Section from Template</h3>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setTemplateKey('HOW_IT_WORKS');
+                  if (!templateName.trim()) setTemplateName('How It Works Copy');
+                }}
+              >
+                Add Section from Text/Icon block (How It Works)
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setTemplateKey('CUSTOM_TEXT_ICON');
+                  if (!templateName.trim()) setTemplateName('Custom Text/Icon Copy');
+                }}
+              >
+                Add Section from Text/Icon block (Custom)
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setTemplateKey('SHOP_WITH_CONFIDENCE');
+                  if (!templateName.trim()) setTemplateName('Shop With Confidence Copy');
+                }}
+              >
+                Add Section from Text/Icon block (Shop With Confidence)
+              </Button>
+            </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <label className="text-xs md:col-span-2">
                 Section Name

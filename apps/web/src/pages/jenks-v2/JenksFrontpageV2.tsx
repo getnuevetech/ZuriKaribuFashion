@@ -85,6 +85,7 @@ type TemplateKey =
   | 'SHOP_BY'
   | 'CATEGORY_MANAGE'
   | 'HOW_IT_WORKS'
+  | 'CUSTOM_TEXT_ICON'
   | 'SHOP_WITH_CONFIDENCE'
   | 'FEATURED'
   | 'FRESH_DROPS'
@@ -103,6 +104,7 @@ const TEMPLATE_KEYS: TemplateKey[] = [
   'SHOP_BY',
   'CATEGORY_MANAGE',
   'HOW_IT_WORKS',
+  'CUSTOM_TEXT_ICON',
   'SHOP_WITH_CONFIDENCE',
   'FEATURED',
   'FRESH_DROPS',
@@ -1108,7 +1110,7 @@ export default function JenksFrontpageV2() {
       .filter((entry) => {
         if (!asBoolean(entry.enabled, true)) return false;
         const token = asString(entry.sectionType, '').toUpperCase();
-        return token === 'HOW_IT_WORKS' || token === 'CUSTOM';
+        return token === 'HOW_IT_WORKS';
       })
       .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
       .map((entry) => ({
@@ -1118,6 +1120,21 @@ export default function JenksFrontpageV2() {
       }));
     if (rows.length > 0) return rows;
     return allRows.length > 0 ? [] : HOW_IT_WORKS;
+  }, [textIconCfg.cards]);
+
+  const customTextIconCards = useMemo(() => {
+    const allRows = asArray(textIconCfg.cards).map((entry) => asRecord(entry));
+    const rows = asArray(textIconCfg.cards)
+      .map((entry) => asRecord(entry))
+      .filter((entry) => asBoolean(entry.enabled, true) && asString(entry.sectionType, '').toUpperCase() === 'CUSTOM')
+      .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
+      .map((entry) => ({
+        title: asString(entry.title, 'Custom').toUpperCase(),
+        sub: asString(entry.description, ''),
+        Icon: iconFromKey(entry.icon, Sparkles),
+      }));
+    if (rows.length > 0) return rows;
+    return allRows.length > 0 ? [] : [];
   }, [textIconCfg.cards]);
 
   const trustCards = useMemo(() => {
@@ -1135,6 +1152,7 @@ export default function JenksFrontpageV2() {
     return allRows.length > 0 ? [] : trust;
   }, [textIconCfg.cards]);
   const showHowItWorksSection = isSectionVisible('HOW_IT_WORKS') && howItWorksCards.length > 0;
+  const showCustomTextIconSection = isSectionVisible('CUSTOM_TEXT_ICON') && customTextIconCards.length > 0;
   const showTrustSection = isSectionVisible('SHOP_WITH_CONFIDENCE') && trustCards.length > 0;
 
   const heritageStats = useMemo(() => {
@@ -1981,12 +1999,32 @@ export default function JenksFrontpageV2() {
           <h2 className="font-['Oswald'] text-3xl font-bold uppercase">HOW IT WORKS</h2>
           <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
             {howItWorksCards.map(({ title, sub, Icon }) => (
-              <article key={title} className="flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-6 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-black/15 bg-white">
+              <article key={title} className="mt-2 flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-8 text-center transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_14px_28px_rgba(0,0,0,0.12)]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full border border-black/15 bg-white">
                   <Icon className="h-5 w-5 text-[#e66045]" />
                 </div>
-                <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em]">{title}</p>
-                <p className="mt-1 text-xs text-black/55">{sub}</p>
+                <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em]">{title}</p>
+                <p className="mt-2 text-xs text-black/55">{sub}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+      ) : null}
+
+      {/* CUSTOM TEXT & ICON */}
+      {showCustomTextIconSection ? (
+      <section className="bg-white py-12" data-kimi-anim="fade-up" style={{ order: getSectionOrder('CUSTOM_TEXT_ICON') }}>
+        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+          <h2 className="font-['Oswald'] text-3xl font-bold uppercase">CUSTOM</h2>
+          <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
+            {customTextIconCards.map(({ title, sub, Icon }) => (
+              <article key={title} className="mt-2 flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-8 text-center transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_14px_28px_rgba(0,0,0,0.12)]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full border border-black/15 bg-white">
+                  <Icon className="h-5 w-5 text-[#e66045]" />
+                </div>
+                <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em]">{title}</p>
+                <p className="mt-2 text-xs text-black/55">{sub}</p>
               </article>
             ))}
           </div>
@@ -2110,7 +2148,7 @@ export default function JenksFrontpageV2() {
             className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-black/42" />
-          <div className="relative flex h-full flex-col justify-between px-8 py-10 text-white">
+          <div className="relative h-full px-8 py-10 text-white">
             <div className="self-end text-right">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">{asString(heritageCfg.tag, 'Heritage')}</p>
               <h2 className="mt-2 font-['Oswald'] text-6xl font-bold uppercase leading-[0.92]">
@@ -2123,7 +2161,7 @@ export default function JenksFrontpageV2() {
                 )}
               </p>
             </div>
-            <div className="self-start pb-[14%]">
+            <div className="absolute bottom-[20%] left-8">
               <div className="flex flex-wrap items-end gap-x-8 gap-y-4 rounded border border-white/15 bg-black/28 px-5 py-4 backdrop-blur-[1px]">
                 {heritageStats.map((stat) => (
                   <div key={stat.id} className="min-w-[120px]">
@@ -2145,9 +2183,9 @@ export default function JenksFrontpageV2() {
         <section className="bg-white py-16 lg:py-20" data-kimi-anim="fade-up" style={{ order: getSectionOrder('SHOP_WITH_CONFIDENCE') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <h2 className="text-center font-['Oswald'] text-4xl font-bold uppercase leading-none">SHOP WITH CONFIDENCE</h2>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-3">
             {trustCards.map((item) => (
-              <article key={item.label} className="mt-8 flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-8 text-center transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_14px_28px_rgba(0,0,0,0.12)]">
+              <article key={item.label} className="flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-8 text-center transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_14px_28px_rgba(0,0,0,0.12)]">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full border border-black/15 bg-white">
                   <item.Icon className="h-5 w-5 text-[#e66045]" />
                 </div>
@@ -2164,13 +2202,13 @@ export default function JenksFrontpageV2() {
       {isSectionVisible('NEWSLETTER_FOOTER') && asBoolean(newsletterCfg.enabled, true) ? (
         <section className="bg-white py-24" data-kimi-anim="fade-up" style={{ order: getSectionOrder('NEWSLETTER_FOOTER') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
-            <div>
+          <div className="mx-auto flex w-full max-w-[920px] flex-col items-center justify-center gap-6 text-center">
+            <div className="max-w-[760px]">
               <h3 className="font-['Oswald'] text-4xl font-bold uppercase">{asString(newsletterCfg.title, 'JOIN THE MOVEMENT.')}</h3>
               <p className="mt-2 text-sm text-black/60">{asString(newsletterCfg.description, 'Subscribe for new arrivals and stories from the continent.')}</p>
             </div>
-            <form className="flex gap-2" onSubmit={(event) => event.preventDefault()}>
-              <input className="h-10 border border-black/20 px-3 text-sm outline-none" placeholder={asString(newsletterCfg.emailPlaceholder, 'Enter email')} />
+            <form className="flex w-full max-w-[560px] gap-2" onSubmit={(event) => event.preventDefault()}>
+              <input className="h-10 flex-1 border border-black/20 px-3 text-sm outline-none" placeholder={asString(newsletterCfg.emailPlaceholder, 'Enter email')} />
               <button className="h-10 bg-[#e66045] px-4 text-xs font-semibold uppercase tracking-[0.12em] text-white">{asString(newsletterCfg.submitLabel, 'Subscribe')}</button>
             </form>
           </div>
