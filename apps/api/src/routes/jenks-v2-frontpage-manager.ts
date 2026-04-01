@@ -83,6 +83,17 @@ type HeroBanner = {
 
 type TopNavigationsSettings = {
   topStripEnabled: boolean;
+  topStripConfig: {
+    messages: string[];
+    separator: string;
+    repeatCount: number;
+    animationSeconds: number;
+    fontSize: number;
+    isBold: boolean;
+    pauseOnHover: boolean;
+    textColor: string;
+    backgroundColor: string;
+  };
   hamburgerMenu: MenuLink[];
   hamburgerMenuFontSize: number;
   hamburgerMenuFontWeight: number;
@@ -230,6 +241,7 @@ type CustomerReviewsSettings = {
   sectionTitle: string;
   sourceMode: 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH';
   maxItems: number;
+  displayMode: 'GRID' | 'SLIDER';
   autoplayEnabled: boolean;
   autoplayIntervalMs: number;
   pauseOnHover: boolean;
@@ -357,6 +369,7 @@ type JenksV2FrontpageManagerSettings = {
     };
     cardStyle: {
       cardMinHeight: number;
+      cardWidth: number;
       iconSize: number;
       titleFontSize: number;
       descriptionFontSize: number;
@@ -555,6 +568,17 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
     contractVersion: CONTRACT_VERSION,
     topNavigations: {
       topStripEnabled: true,
+      topStripConfig: {
+        messages: ['Made by Africans', 'Worn by the world'],
+        separator: '•',
+        repeatCount: 4,
+        animationSeconds: 36,
+        fontSize: 10,
+        isBold: true,
+        pauseOnHover: true,
+        textColor: '#ffffff',
+        backgroundColor: '#111111',
+      },
       hamburgerMenu: [
         defaultMenuLink('Home', '/', 'HOME'),
         defaultMenuLink('Ready To Wear', '/ready-to-wear', 'READY_TO_WEAR'),
@@ -800,6 +824,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       },
       cardStyle: {
         cardMinHeight: 220,
+        cardWidth: 320,
         iconSize: 44,
         titleFontSize: 11,
         descriptionFontSize: 12,
@@ -967,6 +992,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       sectionTitle: 'From Our Customers',
       sourceMode: 'BOTH',
       maxItems: 6,
+      displayMode: 'SLIDER',
       autoplayEnabled: true,
       autoplayIntervalMs: 5000,
       pauseOnHover: true,
@@ -1117,8 +1143,25 @@ const normalizeTopNavigations = (raw: unknown, fallback: TopNavigationsSettings)
   const mode: ThemeMode = modeToken === 'LIGHT' || modeToken === 'DARK' ? (modeToken as ThemeMode) : 'SYSTEM';
   const heroRows = Array.isArray(row.heroBanners) ? row.heroBanners : [];
   const fallbackHero = fallback.heroBanners.length > 0 ? fallback.heroBanners : defaultSettings().topNavigations.heroBanners;
+  const topStripRaw = asRecord(row.topStripConfig);
+  const fallbackStrip = fallback.topStripConfig;
+  const messages = (Array.isArray(topStripRaw.messages) ? topStripRaw.messages : fallbackStrip.messages)
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean)
+    .slice(0, 20);
   return {
     topStripEnabled: getBoolean(row.topStripEnabled) ?? fallback.topStripEnabled,
+    topStripConfig: {
+      messages: messages.length > 0 ? messages : fallbackStrip.messages,
+      separator: (getString(topStripRaw.separator) || fallbackStrip.separator).slice(0, 20),
+      repeatCount: clamp(Math.round(getNumber(topStripRaw.repeatCount) ?? fallbackStrip.repeatCount), 1, 20),
+      animationSeconds: clamp(Math.round(getNumber(topStripRaw.animationSeconds) ?? fallbackStrip.animationSeconds), 6, 240),
+      fontSize: clamp(Math.round(getNumber(topStripRaw.fontSize) ?? fallbackStrip.fontSize), 8, 40),
+      isBold: getBoolean(topStripRaw.isBold) ?? fallbackStrip.isBold,
+      pauseOnHover: getBoolean(topStripRaw.pauseOnHover) ?? fallbackStrip.pauseOnHover,
+      textColor: (getString(topStripRaw.textColor) || fallbackStrip.textColor).slice(0, 32),
+      backgroundColor: (getString(topStripRaw.backgroundColor) || fallbackStrip.backgroundColor).slice(0, 32),
+    },
     hamburgerMenu: (Array.isArray(row.hamburgerMenu) ? row.hamburgerMenu : fallback.hamburgerMenu)
       .map((entry, index) => normalizeMenuLink(entry, fallback.hamburgerMenu[index] || defaultMenuLink('Menu', '/')))
       .slice(0, 40),
@@ -1314,6 +1357,7 @@ const normalizeTextIconCards = (
   const fallbackCardStyle = fallback.cardStyle;
   const cardStyle = {
     cardMinHeight: clamp(Math.round(getNumber(rawCardStyle.cardMinHeight) ?? fallbackCardStyle.cardMinHeight), 160, 520),
+    cardWidth: clamp(Math.round(getNumber(rawCardStyle.cardWidth) ?? fallbackCardStyle.cardWidth), 180, 520),
     iconSize: clamp(Math.round(getNumber(rawCardStyle.iconSize) ?? fallbackCardStyle.iconSize), 20, 120),
     titleFontSize: clamp(Math.round(getNumber(rawCardStyle.titleFontSize) ?? fallbackCardStyle.titleFontSize), 8, 72),
     descriptionFontSize: clamp(
@@ -1413,6 +1457,7 @@ const normalizeCustomerReviews = (
     })
     .slice(0, 60);
   const sourceModeToken = String(row.sourceMode || fallback.sourceMode || 'BOTH').trim().toUpperCase();
+  const displayModeToken = String(row.displayMode || fallback.displayMode || 'SLIDER').trim().toUpperCase();
   return {
     enabled: getBoolean(row.enabled) ?? fallback.enabled,
     sectionTitle: (getString(row.sectionTitle) || fallback.sectionTitle || 'From Our Customers').slice(0, 140),
@@ -1421,6 +1466,7 @@ const normalizeCustomerReviews = (
         ? (sourceModeToken as CustomerReviewsSettings['sourceMode'])
         : 'BOTH',
     maxItems: clamp(Math.round(getNumber(row.maxItems) ?? fallback.maxItems), 1, 24),
+    displayMode: displayModeToken === 'GRID' ? 'GRID' : 'SLIDER',
     autoplayEnabled: getBoolean(row.autoplayEnabled) ?? fallback.autoplayEnabled,
     autoplayIntervalMs: clamp(Math.round(getNumber(row.autoplayIntervalMs) ?? fallback.autoplayIntervalMs), 1000, 30000),
     pauseOnHover: getBoolean(row.pauseOnHover) ?? fallback.pauseOnHover,

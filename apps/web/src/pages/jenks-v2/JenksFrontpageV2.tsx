@@ -90,6 +90,7 @@ type CustomerReviewSliderSettings = {
   transitionMs: number;
   showArrows: boolean;
   showDots: boolean;
+  pauseOnHover: boolean;
 };
 type CTAStyle = {
   backgroundColor: string;
@@ -253,6 +254,7 @@ type TextIconSectionTitleConfig = {
 };
 type TextIconCardStyleConfig = {
   cardMinHeight: number;
+  cardWidth: number;
   iconSize: number;
   titleFontSize: number;
   descriptionFontSize: number;
@@ -893,6 +895,8 @@ export default function JenksFrontpageV2() {
   const [themeMode, setThemeMode] = useState<'LIGHT' | 'DARK'>('LIGHT');
   const [productReviewCards, setProductReviewCards] = useState<CustomerReviewCard[]>([]);
   const [customerReviewIndex, setCustomerReviewIndex] = useState(0);
+  const [customerReviewsHovered, setCustomerReviewsHovered] = useState(false);
+  const [topStripPaused, setTopStripPaused] = useState(false);
   const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
   const topNavigationsCfg = useMemo(() => asRecord(asRecord(managerConfig).topNavigations), [managerConfig]);
   const shopByCfg = useMemo(() => asRecord(asRecord(managerConfig).shopBy), [managerConfig]);
@@ -1337,6 +1341,7 @@ export default function JenksFrontpageV2() {
     const style = asRecord(textIconCfg.cardStyle);
     return {
       cardMinHeight: Math.max(160, Math.min(520, Math.round(asNumber(style.cardMinHeight, 220)))),
+      cardWidth: Math.max(180, Math.min(520, Math.round(asNumber(style.cardWidth, 320)))),
       iconSize: Math.max(20, Math.min(120, Math.round(asNumber(style.iconSize, 44)))),
       titleFontSize: Math.max(8, Math.min(72, Math.round(asNumber(style.titleFontSize, 11)))),
       descriptionFontSize: Math.max(8, Math.min(72, Math.round(asNumber(style.descriptionFontSize, 12)))),
@@ -1402,7 +1407,13 @@ export default function JenksFrontpageV2() {
       <article
         key={item.id}
         className="mt-2 flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-8 text-center transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_14px_28px_rgba(0,0,0,0.12)]"
-        style={{ minHeight: `${textIconCardStyle.cardMinHeight}px` }}
+        style={{
+          minHeight: `${textIconCardStyle.cardMinHeight}px`,
+          width: '100%',
+          maxWidth: `${textIconCardStyle.cardWidth}px`,
+          marginLeft: 'auto',
+          marginRight: 'auto',
+        }}
       >
         <div
           className="flex items-center justify-center rounded-full border border-black/15 bg-white"
@@ -1528,6 +1539,32 @@ export default function JenksFrontpageV2() {
   const shopBySectionTitle = asString(shopByCfg.sectionTitle, 'Shop By');
   const shopBySectionDescription = asString(shopByCfg.sectionDescription, 'Browse by category, country, style, or budget.');
   const showShopBySectionDescription = asBoolean(shopByCfg.sectionDescriptionEnabled, true);
+  const topStripCfg = useMemo(() => asRecord(topNavigationsCfg.topStripConfig), [topNavigationsCfg.topStripConfig]);
+  const topStripSeparator = asString(topStripCfg.separator, '•');
+  const topStripItems = useMemo(() => {
+    const messages = asArray(topStripCfg.messages)
+      .map((entry) => asString(entry, '').trim())
+      .filter(Boolean);
+    const repeatCount = Math.max(1, Math.min(20, Math.round(asNumber(topStripCfg.repeatCount, 4))));
+    const base =
+      messages.length > 0
+        ? messages
+        : ['Bespoke tailoring. Pan-African elegance. Worldwide delivery.'];
+    const lane: string[] = [];
+    for (let idx = 0; idx < repeatCount; idx += 1) {
+      lane.push(...base);
+    }
+    return lane;
+  }, [topStripCfg.messages, topStripCfg.repeatCount]);
+  const topStripAnimationSeconds = Math.max(
+    6,
+    Math.min(180, Math.round(asNumber(topStripCfg.animationSeconds, 36)))
+  );
+  const topStripPauseOnHover = asBoolean(topStripCfg.pauseOnHover, true);
+  const topStripFontSize = Math.max(8, Math.min(22, Math.round(asNumber(topStripCfg.fontSize, 11))));
+  const topStripIsBold = asBoolean(topStripCfg.isBold, true);
+  const topStripTextColor = asString(topStripCfg.textColor, '#ffffff');
+  const topStripBackgroundColor = asString(topStripCfg.backgroundColor, '#111111');
   const customerReviewsSourceMode = ((): 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH' => {
     const token = asString(customerReviewsCfg.sourceMode, 'BOTH').toUpperCase();
     if (token === 'STATIC_ONLY' || token === 'PRODUCT_REVIEWS_ONLY' || token === 'BOTH') return token;
@@ -1536,22 +1573,29 @@ export default function JenksFrontpageV2() {
   const customerReviewsMaxItems = Math.max(1, Math.min(24, Math.round(asNumber(customerReviewsCfg.maxItems, 6))));
   const customerReviewsTitle = asString(customerReviewsCfg.sectionTitle, 'From Our Customers');
   const customerReviewSliderSettings = useMemo<CustomerReviewSliderSettings>(() => {
-    const token = asString(customerReviewsCfg.displayMode, 'GRID').toUpperCase();
+    const token = asString(
+      customerReviewsCfg.displayMode,
+      'SLIDER'
+    ).toUpperCase();
     return {
       mode: token === 'SLIDER' ? 'SLIDER' : 'GRID',
-      autoPlay: asBoolean(customerReviewsCfg.autoPlay, true),
-      autoPlayIntervalMs: Math.max(1500, Math.min(20000, Math.round(asNumber(customerReviewsCfg.autoPlayIntervalMs, 5000)))),
-      transitionMs: Math.max(120, Math.min(3000, Math.round(asNumber(customerReviewsCfg.transitionMs, 450)))),
-      showArrows: asBoolean(customerReviewsCfg.showArrows, true),
-      showDots: asBoolean(customerReviewsCfg.showDots, true),
+      autoPlay: asBoolean(customerReviewsCfg.autoplayEnabled, true),
+      autoPlayIntervalMs: Math.max(
+        1000,
+        Math.min(30000, Math.round(asNumber(customerReviewsCfg.autoplayIntervalMs, 5000)))
+      ),
+      transitionMs: 450,
+      showArrows: asBoolean(customerReviewsCfg.showNavigation, true),
+      showDots: asBoolean(customerReviewsCfg.showIndicators, true),
+      pauseOnHover: asBoolean(customerReviewsCfg.pauseOnHover, true),
     };
   }, [
-    customerReviewsCfg.autoPlay,
-    customerReviewsCfg.autoPlayIntervalMs,
     customerReviewsCfg.displayMode,
-    customerReviewsCfg.showArrows,
-    customerReviewsCfg.showDots,
-    customerReviewsCfg.transitionMs,
+    customerReviewsCfg.autoplayEnabled,
+    customerReviewsCfg.autoplayIntervalMs,
+    customerReviewsCfg.showNavigation,
+    customerReviewsCfg.showIndicators,
+    customerReviewsCfg.pauseOnHover,
   ]);
   const heroLeftColSpan = Math.max(3, Math.min(9, Math.round((active.leftWidthPercent / 100) * 12)));
   const heroRightColSpan = Math.max(3, 12 - heroLeftColSpan);
@@ -1808,6 +1852,7 @@ export default function JenksFrontpageV2() {
     if (!showCustomerReviewsSection) return;
     if (customerReviewSliderSettings.mode !== 'SLIDER') return;
     if (!customerReviewSliderSettings.autoPlay) return;
+    if (customerReviewSliderSettings.pauseOnHover && customerReviewsHovered) return;
     if (customerReviewCards.length <= 1) return;
     const timer = window.setInterval(() => {
       setCustomerReviewIndex((prev) => (prev + 1) % customerReviewCards.length);
@@ -1818,6 +1863,8 @@ export default function JenksFrontpageV2() {
     customerReviewSliderSettings.autoPlay,
     customerReviewSliderSettings.autoPlayIntervalMs,
     customerReviewSliderSettings.mode,
+    customerReviewSliderSettings.pauseOnHover,
+    customerReviewsHovered,
     showCustomerReviewsSection,
   ]);
 
@@ -1827,9 +1874,33 @@ export default function JenksFrontpageV2() {
       {isSectionVisible('TOP_NAVIGATIONS') ? (
         <div className="sticky top-0 z-50" style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}>
           {asBoolean(topNavigationsCfg.topStripEnabled, true) ? (
-            <div className="h-8 bg-black text-[10px] font-semibold uppercase tracking-[0.18em] text-white/85">
-              <div className="mx-auto flex h-full w-full max-w-[1700px] items-center justify-center px-4">
-                Made by Africans. Worn by the world.
+            <div
+              className="group relative h-8 overflow-hidden uppercase tracking-[0.18em]"
+              style={{
+                backgroundColor: topStripBackgroundColor,
+                color: topStripTextColor,
+                fontSize: `${topStripFontSize}px`,
+                fontWeight: topStripIsBold ? 700 : 500,
+              }}
+              onMouseEnter={() => setTopStripPaused(true)}
+              onMouseLeave={() => setTopStripPaused(false)}
+            >
+              <div
+                className="absolute inset-y-0 left-0 flex items-center whitespace-nowrap px-4"
+                style={{
+                  animationName: 'jenksTopStripMarquee',
+                  animationDuration: `${topStripAnimationSeconds}s`,
+                  animationTimingFunction: 'linear',
+                  animationIterationCount: 'infinite',
+                  animationPlayState: topStripPauseOnHover && topStripPaused ? 'paused' : 'running',
+                  minWidth: 'max-content',
+                }}
+              >
+                {topStripItems.map((item, idx) => (
+                  <span key={`${item}-${idx}`} className="mx-6">
+                    {idx > 0 ? `${topStripSeparator} ${item}` : item}
+                  </span>
+                ))}
               </div>
             </div>
           ) : null}
@@ -1988,7 +2059,7 @@ export default function JenksFrontpageV2() {
                 className="absolute inset-0 h-full w-full bg-black/60"
                 onClick={() => setHamburgerOpen(false)}
               />
-              <div className="absolute left-0 top-0 h-full w-[92vw] max-w-[420px] overflow-y-auto border-r border-white/20 bg-black/96 shadow-[0_20px_80px_rgba(0,0,0,0.55)]">
+              <div className="absolute left-0 top-0 h-full w-[96vw] max-w-[640px] overflow-y-auto bg-black/96 shadow-[0_20px_80px_rgba(0,0,0,0.55)]">
                 <button
                   type="button"
                   className="absolute left-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white hover:bg-white/10"
@@ -2606,7 +2677,11 @@ export default function JenksFrontpageV2() {
               {customerReviewsTitle}
             </h2>
             {customerReviewSliderSettings.mode === 'SLIDER' ? (
-              <div className="relative mx-auto mt-8 max-w-3xl">
+              <div
+                className="relative mx-auto mt-8 max-w-3xl"
+                onMouseEnter={() => setCustomerReviewsHovered(true)}
+                onMouseLeave={() => setCustomerReviewsHovered(false)}
+              >
                 {customerReviewActiveCard ? (
                   <article
                     key={customerReviewActiveCard.id}

@@ -63,6 +63,17 @@ type HeroBanner = {
 
 type TopNavigations = {
   topStripEnabled: boolean;
+  topStripConfig: {
+    messages: string[];
+    separator: string;
+    repeatCount: number;
+    animationSeconds: number;
+    fontSize: number;
+    isBold: boolean;
+    pauseOnHover: boolean;
+    textColor: string;
+    backgroundColor: string;
+  };
   hamburgerMenu: MenuLink[];
   hamburgerMenuFontSize: number;
   hamburgerMenuFontWeight: number;
@@ -183,6 +194,7 @@ type TextIconSectionTitles = {
 
 type TextIconCardStyle = {
   cardMinHeight: number;
+  cardWidth: number;
   iconSize: number;
   titleFontSize: number;
   descriptionFontSize: number;
@@ -220,11 +232,12 @@ type CustomerReviews = {
   sectionTitle: string;
   sourceMode: 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH';
   maxItems: number;
-  sliderEnabled: boolean;
-  autoplay: boolean;
+  displayMode: 'GRID' | 'SLIDER';
+  autoplayEnabled: boolean;
   autoplayIntervalMs: number;
   pauseOnHover: boolean;
-  transitionMs: number;
+  showNavigation: boolean;
+  showIndicators: boolean;
   staticMessages: CustomerReviewStaticMessage[];
 };
 
@@ -634,6 +647,17 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
   contractVersion: 'JENKS_V2_FRONTPAGE_MANAGER_V1',
   topNavigations: {
     topStripEnabled: true,
+    topStripConfig: {
+      messages: ['Made by Africans', 'Worn by the world'],
+      separator: '•',
+      repeatCount: 4,
+      animationSeconds: 36,
+      fontSize: 10,
+      isBold: true,
+      pauseOnHover: true,
+      textColor: '#ffffff',
+      backgroundColor: '#111111',
+    },
     hamburgerMenu: [defaultLink('Home', '/', 'HOME')],
     hamburgerMenuFontSize: 32,
     hamburgerMenuFontWeight: 800,
@@ -846,6 +870,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     },
     cardStyle: {
       cardMinHeight: 220,
+      cardWidth: 320,
       iconSize: 44,
       titleFontSize: 11,
       descriptionFontSize: 12,
@@ -1012,11 +1037,12 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     sectionTitle: 'From Our Customers',
     sourceMode: 'BOTH',
     maxItems: 6,
-    sliderEnabled: true,
-    autoplay: true,
+    displayMode: 'SLIDER',
+    autoplayEnabled: true,
     autoplayIntervalMs: 4500,
     pauseOnHover: true,
-    transitionMs: 450,
+    showNavigation: true,
+    showIndicators: true,
     staticMessages: [
       {
         id: uid(),
@@ -1477,13 +1503,13 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         1,
         24
       ),
-      sliderEnabled: toBoolean(
-        (data.customerReviews as CustomerReviews | undefined)?.sliderEnabled,
-        DEFAULT_CONFIG.customerReviews.sliderEnabled
-      ),
-      autoplay: toBoolean(
-        (data.customerReviews as CustomerReviews | undefined)?.autoplay,
-        DEFAULT_CONFIG.customerReviews.autoplay
+      displayMode: ((): CustomerReviews['displayMode'] => {
+        const token = String((data.customerReviews as CustomerReviews | undefined)?.displayMode || '').trim().toUpperCase();
+        return token === 'GRID' ? 'GRID' : 'SLIDER';
+      })(),
+      autoplayEnabled: toBoolean(
+        (data.customerReviews as CustomerReviews | undefined)?.autoplayEnabled,
+        DEFAULT_CONFIG.customerReviews.autoplayEnabled
       ),
       autoplayIntervalMs: clamp(
         Math.round(
@@ -1495,22 +1521,20 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             DEFAULT_CONFIG.customerReviews.autoplayIntervalMs
           )
         ),
-        1200,
-        20000
+        1000,
+        30000
       ),
       pauseOnHover: toBoolean(
         (data.customerReviews as CustomerReviews | undefined)?.pauseOnHover,
         DEFAULT_CONFIG.customerReviews.pauseOnHover
       ),
-      transitionMs: clamp(
-        Math.round(
-          toNumber(
-            String((data.customerReviews as CustomerReviews | undefined)?.transitionMs ?? DEFAULT_CONFIG.customerReviews.transitionMs),
-            DEFAULT_CONFIG.customerReviews.transitionMs
-          )
-        ),
-        150,
-        3000
+      showNavigation: toBoolean(
+        (data.customerReviews as CustomerReviews | undefined)?.showNavigation,
+        DEFAULT_CONFIG.customerReviews.showNavigation
+      ),
+      showIndicators: toBoolean(
+        (data.customerReviews as CustomerReviews | undefined)?.showIndicators,
+        DEFAULT_CONFIG.customerReviews.showIndicators
       ),
       staticMessages: Array.isArray((data.customerReviews as CustomerReviews | undefined)?.staticMessages)
         ? ((data.customerReviews as CustomerReviews).staticMessages || []).map((item, index) => {
@@ -1977,6 +2001,182 @@ export default function JenksV2FrontPageManager() {
               />
               Theme Controller Enabled
             </label>
+          </div>
+
+          <div className="rounded-lg border p-4 space-y-3">
+            <h3 className="text-sm font-semibold">Top Strip Manager</h3>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="text-xs md:col-span-2">
+                Messages (one per line)
+                <textarea
+                  rows={3}
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={config.topNavigations.topStripConfig.messages.join('\n')}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        topStripConfig: {
+                          ...prev.topNavigations.topStripConfig,
+                          messages: event.target.value
+                            .split('\n')
+                            .map((entry) => entry.trim())
+                            .filter(Boolean)
+                            .slice(0, 20),
+                        },
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="text-xs">
+                Separator
+                <input
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={config.topNavigations.topStripConfig.separator}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        topStripConfig: { ...prev.topNavigations.topStripConfig, separator: event.target.value },
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="text-xs">
+                Repeat Count
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={config.topNavigations.topStripConfig.repeatCount}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        topStripConfig: {
+                          ...prev.topNavigations.topStripConfig,
+                          repeatCount: clamp(toNumber(event.target.value, prev.topNavigations.topStripConfig.repeatCount), 1, 20),
+                        },
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="text-xs">
+                Animation Seconds
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={config.topNavigations.topStripConfig.animationSeconds}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        topStripConfig: {
+                          ...prev.topNavigations.topStripConfig,
+                          animationSeconds: clamp(
+                            toNumber(event.target.value, prev.topNavigations.topStripConfig.animationSeconds),
+                            6,
+                            240
+                          ),
+                        },
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="text-xs">
+                Font Size
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={config.topNavigations.topStripConfig.fontSize}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        topStripConfig: {
+                          ...prev.topNavigations.topStripConfig,
+                          fontSize: clamp(toNumber(event.target.value, prev.topNavigations.topStripConfig.fontSize), 8, 40),
+                        },
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="text-xs">
+                Text Color
+                <input
+                  type="color"
+                  className="mt-1 h-9 w-full rounded border px-1 py-1"
+                  value={config.topNavigations.topStripConfig.textColor}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        topStripConfig: { ...prev.topNavigations.topStripConfig, textColor: event.target.value },
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="text-xs">
+                Background Color
+                <input
+                  type="color"
+                  className="mt-1 h-9 w-full rounded border px-1 py-1"
+                  value={config.topNavigations.topStripConfig.backgroundColor}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        topStripConfig: { ...prev.topNavigations.topStripConfig, backgroundColor: event.target.value },
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="flex items-center gap-2 text-xs pt-5">
+                <input
+                  type="checkbox"
+                  checked={config.topNavigations.topStripConfig.isBold}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        topStripConfig: { ...prev.topNavigations.topStripConfig, isBold: event.target.checked },
+                      },
+                    }))
+                  }
+                />
+                Bold Text
+              </label>
+              <label className="flex items-center gap-2 text-xs pt-5">
+                <input
+                  type="checkbox"
+                  checked={config.topNavigations.topStripConfig.pauseOnHover}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        topStripConfig: { ...prev.topNavigations.topStripConfig, pauseOnHover: event.target.checked },
+                      },
+                    }))
+                  }
+                />
+                Pause On Hover
+              </label>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -3124,6 +3324,24 @@ export default function JenksV2FrontPageManager() {
                   <Button
                     type="button"
                     variant="outline"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        topNavigations: {
+                          ...prev.topNavigations,
+                          heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, image: '' } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Banner Image
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
                     isLoading={uploadingTarget === 'hero-right-panel'}
                     onClick={() => {
                       setHeroUploadIndex(index);
@@ -3132,6 +3350,26 @@ export default function JenksV2FrontPageManager() {
                   >
                     <Upload className="mr-2 h-4 w-4" />
                     Upload Right Panel Image
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        topNavigations: {
+                          ...prev.topNavigations,
+                          heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                            entryIndex === index
+                              ? { ...entry, rightPanelBackgroundImage: '', rightPanelBackgroundMode: 'NONE' }
+                              : entry
+                          ),
+                        },
+                      }))
+                    }
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Right Panel Image
                   </Button>
                   <span className="text-xs text-gray-600 break-all">{banner.image || 'No hero image uploaded'}</span>
                 </div>
@@ -3676,6 +3914,23 @@ export default function JenksV2FrontPageManager() {
                       isLoading={uploadingTarget === 'category'}
                     >
                       <Upload className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          shopBy: {
+                            ...prev.shopBy,
+                            categories: prev.shopBy.categories.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, image: '' } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                     <input
                       type="checkbox"
@@ -4458,7 +4713,7 @@ export default function JenksV2FrontPageManager() {
               />
             </label>
           </div>
-          <div className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-5">
             <label className="text-[11px]">
               Card Min Height (px)
               <input
@@ -4493,6 +4748,26 @@ export default function JenksV2FrontPageManager() {
                       cardStyle: {
                         ...prev.textIconCards.cardStyle,
                         iconSize: clamp(toNumber(event.target.value, prev.textIconCards.cardStyle.iconSize), 20, 120),
+                      },
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-[11px]">
+              Card Width (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                value={config.textIconCards.cardStyle.cardWidth}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    textIconCards: {
+                      ...prev.textIconCards,
+                      cardStyle: {
+                        ...prev.textIconCards.cardStyle,
+                        cardWidth: clamp(toNumber(event.target.value, prev.textIconCards.cardStyle.cardWidth), 180, 520),
                       },
                     },
                   }))
@@ -4912,6 +5187,22 @@ export default function JenksV2FrontPageManager() {
                   >
                     <Upload className="h-3.5 w-3.5" />
                   </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        featured: {
+                          cards: prev.featured.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, image: '' } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                   <input
                     type="checkbox"
                     checked={card.enabled}
@@ -5313,6 +5604,23 @@ export default function JenksV2FrontPageManager() {
                   >
                     <Upload className="h-3.5 w-3.5" />
                   </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        designerSpotlight: {
+                          ...prev.designerSpotlight,
+                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, image: '' } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                   <input
                     type="checkbox"
                     checked={card.enabled}
@@ -5378,10 +5686,20 @@ export default function JenksV2FrontPageManager() {
         <section className="rounded-lg border bg-white p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Heritage</h2>
-            <Button type="button" variant="outline" isLoading={uploadingTarget === 'heritage'} onClick={() => heritageImageUploadRef.current?.click()}>
-              <Upload className="mr-2 h-4 w-4" />
-              Upload Heritage Image
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" isLoading={uploadingTarget === 'heritage'} onClick={() => heritageImageUploadRef.current?.click()}>
+                <Upload className="mr-2 h-4 w-4" />
+                Upload Heritage Image
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setConfig((prev) => ({ ...prev, heritage: { ...prev.heritage, image: '' } }))}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Heritage Image
+              </Button>
+            </div>
           </div>
           <input ref={heritageImageUploadRef} type="file" accept="image/*" className="hidden" onChange={handleHeritageImageUpload} />
           <p className="text-[11px] text-gray-500 break-all">Image: {config.heritage.image || 'No image uploaded'}</p>
@@ -5723,27 +6041,30 @@ export default function JenksV2FrontPageManager() {
             </label>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
-            <label className="flex items-center gap-2 text-xs pt-5">
-              <input
-                type="checkbox"
-                checked={config.customerReviews.sliderEnabled}
+            <label className="text-xs">
+              Display Mode
+              <select
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.customerReviews.displayMode}
                 onChange={(event) =>
                   setConfig((prev) => ({
                     ...prev,
-                    customerReviews: { ...prev.customerReviews, sliderEnabled: event.target.checked },
+                    customerReviews: { ...prev.customerReviews, displayMode: event.target.value as CustomerReviews['displayMode'] },
                   }))
                 }
-              />
-              Slide One-by-One
+              >
+                <option value="SLIDER">SLIDER</option>
+                <option value="GRID">GRID</option>
+              </select>
             </label>
             <label className="flex items-center gap-2 text-xs pt-5">
               <input
                 type="checkbox"
-                checked={config.customerReviews.autoplay}
+                checked={config.customerReviews.autoplayEnabled}
                 onChange={(event) =>
                   setConfig((prev) => ({
                     ...prev,
-                    customerReviews: { ...prev.customerReviews, autoplay: event.target.checked },
+                    customerReviews: { ...prev.customerReviews, autoplayEnabled: event.target.checked },
                   }))
                 }
               />
@@ -5773,28 +6094,42 @@ export default function JenksV2FrontPageManager() {
                     ...prev,
                     customerReviews: {
                       ...prev.customerReviews,
-                      autoplayIntervalMs: clamp(toNumber(event.target.value, prev.customerReviews.autoplayIntervalMs), 1200, 20000),
+                      autoplayIntervalMs: clamp(toNumber(event.target.value, prev.customerReviews.autoplayIntervalMs), 1000, 30000),
                     },
                   }))
                 }
               />
             </label>
             <label className="text-xs">
-              Transition (ms)
-              <input
-                type="number"
-                className="mt-1 w-full rounded border px-2 py-1.5"
-                value={config.customerReviews.transitionMs}
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    customerReviews: {
-                      ...prev.customerReviews,
-                      transitionMs: clamp(toNumber(event.target.value, prev.customerReviews.transitionMs), 150, 3000),
-                    },
-                  }))
-                }
-              />
+              Navigation & Dots
+              <div className="mt-2 flex flex-col gap-2">
+                <label className="inline-flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={config.customerReviews.showNavigation}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        customerReviews: { ...prev.customerReviews, showNavigation: event.target.checked },
+                      }))
+                    }
+                  />
+                  Show Navigation Arrows
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={config.customerReviews.showIndicators}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        customerReviews: { ...prev.customerReviews, showIndicators: event.target.checked },
+                      }))
+                    }
+                  />
+                  Show Dots Indicators
+                </label>
+              </div>
             </label>
           </div>
 

@@ -10708,6 +10708,17 @@ const jenksV2FrontpageManagerApi = {
         contractVersion: string;
         topNavigations: {
           topStripEnabled: boolean;
+          topStripConfig: {
+            messages: string[];
+            separator: string;
+            repeatCount: number;
+            animationSeconds: number;
+            fontSize: number;
+            isBold: boolean;
+            pauseOnHover: boolean;
+            textColor: string;
+            backgroundColor: string;
+          };
           hamburgerMenu: Array<{
             id: string;
             label: string;
@@ -10902,6 +10913,7 @@ const jenksV2FrontpageManagerApi = {
           };
           cardStyle: {
             cardMinHeight: number;
+            cardWidth: number;
             iconSize: number;
             titleFontSize: number;
             descriptionFontSize: number;
@@ -11006,9 +11018,12 @@ const jenksV2FrontpageManagerApi = {
           sectionTitle: string;
           sourceMode: 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH';
           maxItems: number;
-          sliderEnabled: boolean;
-          slideIntervalMs: number;
+          displayMode: 'GRID' | 'SLIDER';
+          autoplayEnabled: boolean;
+          autoplayIntervalMs: number;
           pauseOnHover: boolean;
+          showNavigation: boolean;
+          showIndicators: boolean;
           staticMessages: Array<{
             id: string;
             customerName: string;
