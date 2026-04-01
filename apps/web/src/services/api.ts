@@ -11006,6 +11006,9 @@ const jenksV2FrontpageManagerApi = {
           sectionTitle: string;
           sourceMode: 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH';
           maxItems: number;
+          sliderEnabled: boolean;
+          slideIntervalMs: number;
+          pauseOnHover: boolean;
           staticMessages: Array<{
             id: string;
             customerName: string;

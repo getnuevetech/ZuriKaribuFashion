@@ -230,6 +230,11 @@ type CustomerReviewsSettings = {
   sectionTitle: string;
   sourceMode: 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH';
   maxItems: number;
+  autoplayEnabled: boolean;
+  autoplayIntervalMs: number;
+  pauseOnHover: boolean;
+  showNavigation: boolean;
+  showIndicators: boolean;
   staticMessages: CustomerReviewStaticMessage[];
 };
 
@@ -962,6 +967,11 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       sectionTitle: 'From Our Customers',
       sourceMode: 'BOTH',
       maxItems: 6,
+      autoplayEnabled: true,
+      autoplayIntervalMs: 5000,
+      pauseOnHover: true,
+      showNavigation: true,
+      showIndicators: true,
       staticMessages: [
         {
           id: randomUUID(),
@@ -1411,6 +1421,11 @@ const normalizeCustomerReviews = (
         ? (sourceModeToken as CustomerReviewsSettings['sourceMode'])
         : 'BOTH',
     maxItems: clamp(Math.round(getNumber(row.maxItems) ?? fallback.maxItems), 1, 24),
+    autoplayEnabled: getBoolean(row.autoplayEnabled) ?? fallback.autoplayEnabled,
+    autoplayIntervalMs: clamp(Math.round(getNumber(row.autoplayIntervalMs) ?? fallback.autoplayIntervalMs), 1000, 30000),
+    pauseOnHover: getBoolean(row.pauseOnHover) ?? fallback.pauseOnHover,
+    showNavigation: getBoolean(row.showNavigation) ?? fallback.showNavigation,
+    showIndicators: getBoolean(row.showIndicators) ?? fallback.showIndicators,
     staticMessages,
   };
 };

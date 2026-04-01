@@ -83,6 +83,14 @@ type CustomerReviewCard = {
   rating: number;
   source: 'STATIC' | 'PRODUCT';
 };
+type CustomerReviewSliderSettings = {
+  mode: 'SLIDER' | 'GRID';
+  autoPlay: boolean;
+  autoPlayIntervalMs: number;
+  transitionMs: number;
+  showArrows: boolean;
+  showDots: boolean;
+};
 type CTAStyle = {
   backgroundColor: string;
   textColor: string;
@@ -884,6 +892,7 @@ export default function JenksFrontpageV2() {
   const [searchQuery, setSearchQuery] = useState('');
   const [themeMode, setThemeMode] = useState<'LIGHT' | 'DARK'>('LIGHT');
   const [productReviewCards, setProductReviewCards] = useState<CustomerReviewCard[]>([]);
+  const [customerReviewIndex, setCustomerReviewIndex] = useState(0);
   const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
   const topNavigationsCfg = useMemo(() => asRecord(asRecord(managerConfig).topNavigations), [managerConfig]);
   const shopByCfg = useMemo(() => asRecord(asRecord(managerConfig).shopBy), [managerConfig]);
@@ -1526,6 +1535,24 @@ export default function JenksFrontpageV2() {
   })();
   const customerReviewsMaxItems = Math.max(1, Math.min(24, Math.round(asNumber(customerReviewsCfg.maxItems, 6))));
   const customerReviewsTitle = asString(customerReviewsCfg.sectionTitle, 'From Our Customers');
+  const customerReviewSliderSettings = useMemo<CustomerReviewSliderSettings>(() => {
+    const token = asString(customerReviewsCfg.displayMode, 'GRID').toUpperCase();
+    return {
+      mode: token === 'SLIDER' ? 'SLIDER' : 'GRID',
+      autoPlay: asBoolean(customerReviewsCfg.autoPlay, true),
+      autoPlayIntervalMs: Math.max(1500, Math.min(20000, Math.round(asNumber(customerReviewsCfg.autoPlayIntervalMs, 5000)))),
+      transitionMs: Math.max(120, Math.min(3000, Math.round(asNumber(customerReviewsCfg.transitionMs, 450)))),
+      showArrows: asBoolean(customerReviewsCfg.showArrows, true),
+      showDots: asBoolean(customerReviewsCfg.showDots, true),
+    };
+  }, [
+    customerReviewsCfg.autoPlay,
+    customerReviewsCfg.autoPlayIntervalMs,
+    customerReviewsCfg.displayMode,
+    customerReviewsCfg.showArrows,
+    customerReviewsCfg.showDots,
+    customerReviewsCfg.transitionMs,
+  ]);
   const heroLeftColSpan = Math.max(3, Math.min(9, Math.round((active.leftWidthPercent / 100) * 12)));
   const heroRightColSpan = Math.max(3, 12 - heroLeftColSpan);
   const heroTextAlignClass =
@@ -1601,6 +1628,8 @@ export default function JenksFrontpageV2() {
     isSectionVisible('CUSTOMER_REVIEWS') &&
     asBoolean(customerReviewsCfg.enabled, true) &&
     customerReviewCards.length > 0;
+  const customerReviewActiveCard =
+    customerReviewCards.length > 0 ? customerReviewCards[(customerReviewIndex + customerReviewCards.length) % customerReviewCards.length] : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -1768,6 +1797,29 @@ export default function JenksFrontpageV2() {
       cancelled = true;
     };
   }, [customerReviewsCfg.enabled, customerReviewsMaxItems, customerReviewsSourceMode]);
+  useEffect(() => {
+    if (customerReviewCards.length === 0) {
+      setCustomerReviewIndex(0);
+      return;
+    }
+    setCustomerReviewIndex((prev) => ((prev % customerReviewCards.length) + customerReviewCards.length) % customerReviewCards.length);
+  }, [customerReviewCards.length]);
+  useEffect(() => {
+    if (!showCustomerReviewsSection) return;
+    if (customerReviewSliderSettings.mode !== 'SLIDER') return;
+    if (!customerReviewSliderSettings.autoPlay) return;
+    if (customerReviewCards.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setCustomerReviewIndex((prev) => (prev + 1) % customerReviewCards.length);
+    }, customerReviewSliderSettings.autoPlayIntervalMs);
+    return () => window.clearInterval(timer);
+  }, [
+    customerReviewCards.length,
+    customerReviewSliderSettings.autoPlay,
+    customerReviewSliderSettings.autoPlayIntervalMs,
+    customerReviewSliderSettings.mode,
+    showCustomerReviewsSection,
+  ]);
 
   return (
     <div className="kimi-site flex flex-col bg-[#f5f3ee] text-[#111]">
@@ -2553,29 +2605,93 @@ export default function JenksFrontpageV2() {
             <h2 className="mt-2 text-center font-['Oswald'] text-5xl font-bold uppercase leading-none text-white">
               {customerReviewsTitle}
             </h2>
-            <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {customerReviewCards.map((review) => (
-                <article
-                  key={review.id}
-                  className="rounded border border-white/12 bg-white/[0.04] p-5 text-white transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:shadow-[0_16px_34px_rgba(0,0,0,0.35)]"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold uppercase tracking-[0.08em]">{review.customerName}</p>
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">{review.source}</p>
-                  </div>
-                  <p className="mt-1 text-xs text-white/62">{review.location || 'Africa'}</p>
-                  <div className="mt-3 flex items-center gap-1 text-[#f6b73c]">
-                    {Array.from({ length: 5 }).map((_, starIndex) => (
-                      <Star
-                        key={`${review.id}-star-${starIndex}`}
-                        className={`h-3.5 w-3.5 ${starIndex < review.rating ? 'fill-current' : 'text-white/20'}`}
+            {customerReviewSliderSettings.mode === 'SLIDER' ? (
+              <div className="relative mx-auto mt-8 max-w-3xl">
+                {customerReviewActiveCard ? (
+                  <article
+                    key={customerReviewActiveCard.id}
+                    className="rounded border border-white/12 bg-white/[0.04] p-6 text-white transition-all hover:-translate-y-1 hover:border-white/30 hover:shadow-[0_16px_34px_rgba(0,0,0,0.35)]"
+                    style={{ transitionDuration: `${customerReviewSliderSettings.transitionMs}ms` }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold uppercase tracking-[0.08em]">{customerReviewActiveCard.customerName}</p>
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">{customerReviewActiveCard.source}</p>
+                    </div>
+                    <p className="mt-1 text-xs text-white/62">{customerReviewActiveCard.location || 'Africa'}</p>
+                    <div className="mt-3 flex items-center gap-1 text-[#f6b73c]">
+                      {Array.from({ length: 5 }).map((_, starIndex) => (
+                        <Star
+                          key={`${customerReviewActiveCard.id}-star-${starIndex}`}
+                          className={`h-3.5 w-3.5 ${starIndex < customerReviewActiveCard.rating ? 'fill-current' : 'text-white/20'}`}
+                        />
+                      ))}
+                    </div>
+                    <p className="mt-3 text-sm leading-relaxed text-white/82">{customerReviewActiveCard.message}</p>
+                  </article>
+                ) : null}
+                {customerReviewSliderSettings.showArrows && customerReviewCards.length > 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      className="absolute -left-3 top-1/2 inline-flex -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/40 p-2 text-white hover:bg-black/60"
+                      onClick={() =>
+                        setCustomerReviewIndex((prev) => (prev - 1 + customerReviewCards.length) % customerReviewCards.length)
+                      }
+                      aria-label="Previous review"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      className="absolute -right-3 top-1/2 inline-flex -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/40 p-2 text-white hover:bg-black/60"
+                      onClick={() => setCustomerReviewIndex((prev) => (prev + 1) % customerReviewCards.length)}
+                      aria-label="Next review"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </>
+                ) : null}
+                {customerReviewSliderSettings.showDots && customerReviewCards.length > 1 ? (
+                  <div className="mt-4 flex items-center justify-center gap-2">
+                    {customerReviewCards.map((review, idx) => (
+                      <button
+                        key={`${review.id}-dot`}
+                        type="button"
+                        onClick={() => setCustomerReviewIndex(idx)}
+                        className={`h-2.5 w-2.5 rounded-full transition-colors ${
+                          idx === customerReviewIndex ? 'bg-white' : 'bg-white/35 hover:bg-white/60'
+                        }`}
+                        aria-label={`Go to review ${idx + 1}`}
                       />
                     ))}
                   </div>
-                  <p className="mt-3 text-sm leading-relaxed text-white/82">{review.message}</p>
-                </article>
-              ))}
-            </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {customerReviewCards.map((review) => (
+                  <article
+                    key={review.id}
+                    className="rounded border border-white/12 bg-white/[0.04] p-5 text-white transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:shadow-[0_16px_34px_rgba(0,0,0,0.35)]"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold uppercase tracking-[0.08em]">{review.customerName}</p>
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">{review.source}</p>
+                    </div>
+                    <p className="mt-1 text-xs text-white/62">{review.location || 'Africa'}</p>
+                    <div className="mt-3 flex items-center gap-1 text-[#f6b73c]">
+                      {Array.from({ length: 5 }).map((_, starIndex) => (
+                        <Star
+                          key={`${review.id}-star-${starIndex}`}
+                          className={`h-3.5 w-3.5 ${starIndex < review.rating ? 'fill-current' : 'text-white/20'}`}
+                        />
+                      ))}
+                    </div>
+                    <p className="mt-3 text-sm leading-relaxed text-white/82">{review.message}</p>
+                  </article>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       ) : null}

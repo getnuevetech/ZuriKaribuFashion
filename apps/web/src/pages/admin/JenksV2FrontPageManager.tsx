@@ -220,6 +220,11 @@ type CustomerReviews = {
   sectionTitle: string;
   sourceMode: 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH';
   maxItems: number;
+  sliderEnabled: boolean;
+  autoplay: boolean;
+  autoplayIntervalMs: number;
+  pauseOnHover: boolean;
+  transitionMs: number;
   staticMessages: CustomerReviewStaticMessage[];
 };
 
@@ -1007,6 +1012,11 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     sectionTitle: 'From Our Customers',
     sourceMode: 'BOTH',
     maxItems: 6,
+    sliderEnabled: true,
+    autoplay: true,
+    autoplayIntervalMs: 4500,
+    pauseOnHover: true,
+    transitionMs: 450,
     staticMessages: [
       {
         id: uid(),
@@ -1466,6 +1476,41 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         ),
         1,
         24
+      ),
+      sliderEnabled: toBoolean(
+        (data.customerReviews as CustomerReviews | undefined)?.sliderEnabled,
+        DEFAULT_CONFIG.customerReviews.sliderEnabled
+      ),
+      autoplay: toBoolean(
+        (data.customerReviews as CustomerReviews | undefined)?.autoplay,
+        DEFAULT_CONFIG.customerReviews.autoplay
+      ),
+      autoplayIntervalMs: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (data.customerReviews as CustomerReviews | undefined)?.autoplayIntervalMs ??
+                DEFAULT_CONFIG.customerReviews.autoplayIntervalMs
+            ),
+            DEFAULT_CONFIG.customerReviews.autoplayIntervalMs
+          )
+        ),
+        1200,
+        20000
+      ),
+      pauseOnHover: toBoolean(
+        (data.customerReviews as CustomerReviews | undefined)?.pauseOnHover,
+        DEFAULT_CONFIG.customerReviews.pauseOnHover
+      ),
+      transitionMs: clamp(
+        Math.round(
+          toNumber(
+            String((data.customerReviews as CustomerReviews | undefined)?.transitionMs ?? DEFAULT_CONFIG.customerReviews.transitionMs),
+            DEFAULT_CONFIG.customerReviews.transitionMs
+          )
+        ),
+        150,
+        3000
       ),
       staticMessages: Array.isArray((data.customerReviews as CustomerReviews | undefined)?.staticMessages)
         ? ((data.customerReviews as CustomerReviews).staticMessages || []).map((item, index) => {
@@ -5671,6 +5716,81 @@ export default function JenksV2FrontPageManager() {
                     customerReviews: {
                       ...prev.customerReviews,
                       maxItems: clamp(toNumber(event.target.value, prev.customerReviews.maxItems), 1, 24),
+                    },
+                  }))
+                }
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+            <label className="flex items-center gap-2 text-xs pt-5">
+              <input
+                type="checkbox"
+                checked={config.customerReviews.sliderEnabled}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    customerReviews: { ...prev.customerReviews, sliderEnabled: event.target.checked },
+                  }))
+                }
+              />
+              Slide One-by-One
+            </label>
+            <label className="flex items-center gap-2 text-xs pt-5">
+              <input
+                type="checkbox"
+                checked={config.customerReviews.autoplay}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    customerReviews: { ...prev.customerReviews, autoplay: event.target.checked },
+                  }))
+                }
+              />
+              Autoplay
+            </label>
+            <label className="flex items-center gap-2 text-xs pt-5">
+              <input
+                type="checkbox"
+                checked={config.customerReviews.pauseOnHover}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    customerReviews: { ...prev.customerReviews, pauseOnHover: event.target.checked },
+                  }))
+                }
+              />
+              Pause on Hover
+            </label>
+            <label className="text-xs">
+              Autoplay Interval (ms)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.customerReviews.autoplayIntervalMs}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    customerReviews: {
+                      ...prev.customerReviews,
+                      autoplayIntervalMs: clamp(toNumber(event.target.value, prev.customerReviews.autoplayIntervalMs), 1200, 20000),
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
+              Transition (ms)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.customerReviews.transitionMs}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    customerReviews: {
+                      ...prev.customerReviews,
+                      transitionMs: clamp(toNumber(event.target.value, prev.customerReviews.transitionMs), 150, 3000),
                     },
                   }))
                 }
