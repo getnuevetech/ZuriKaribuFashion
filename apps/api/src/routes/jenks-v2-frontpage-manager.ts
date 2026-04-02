@@ -300,6 +300,7 @@ type HeritageSettings = {
   storyHtml: string;
   readMoreLabel: string;
   readMoreHref: string;
+  statsPosition: 'TOP' | 'MIDDLE' | 'BOTTOM';
   stats: HeritageStat[];
 };
 
@@ -974,6 +975,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         "<p>Our heritage is woven from artisan craft, bold silhouettes, and stories passed down across generations.</p>",
       readMoreLabel: 'Read More',
       readMoreHref: '/stories/our-heritage',
+      statsPosition: 'BOTTOM',
       stats: [
         {
           id: randomUUID(),
@@ -1534,6 +1536,9 @@ const normalizeDesignerSpotlight = (
 
 const normalizeHeritage = (raw: unknown, fallback: HeritageSettings): HeritageSettings => {
   const row = asRecord(raw);
+  const statsPositionToken = String(row.statsPosition || fallback.statsPosition || 'BOTTOM').trim().toUpperCase();
+  const statsPosition: HeritageSettings['statsPosition'] =
+    statsPositionToken === 'TOP' || statsPositionToken === 'MIDDLE' ? statsPositionToken : 'BOTTOM';
   const statRows = Array.isArray(row.stats) ? row.stats : fallback.stats;
   const stats = statRows
     .map((entry, index) => {
@@ -1559,6 +1564,7 @@ const normalizeHeritage = (raw: unknown, fallback: HeritageSettings): HeritageSe
     storyHtml: (getString(row.storyHtml) || fallback.storyHtml || '').slice(0, 12000),
     readMoreLabel: (getString(row.readMoreLabel) || fallback.readMoreLabel || 'Read More').slice(0, 80),
     readMoreHref: normalizeHref(row.readMoreHref, fallback.readMoreHref || '/stories/our-heritage'),
+    statsPosition,
     stats,
   };
 };

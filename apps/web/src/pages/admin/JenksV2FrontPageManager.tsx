@@ -303,6 +303,7 @@ type Heritage = {
   storyHtml: string;
   readMoreLabel: string;
   readMoreHref: string;
+  statsPosition: 'TOP' | 'MIDDLE' | 'BOTTOM';
   stats: HeritageStat[];
 };
 
@@ -1019,6 +1020,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     storyHtml: '<p>Our heritage is woven from artisan craft, bold silhouettes, and stories passed down across generations.</p>',
     readMoreLabel: 'Read More',
     readMoreHref: '/stories/our-heritage',
+    statsPosition: 'BOTTOM',
     stats: [
       {
         id: uid(),
@@ -1484,6 +1486,11 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         (data.heritage as Heritage | undefined)?.readMoreHref,
         DEFAULT_CONFIG.heritage.readMoreHref
       ),
+      statsPosition: ((): Heritage['statsPosition'] => {
+        const token = String((data.heritage as Heritage | undefined)?.statsPosition || '').trim().toUpperCase();
+        if (token === 'TOP' || token === 'MIDDLE' || token === 'BOTTOM') return token;
+        return DEFAULT_CONFIG.heritage.statsPosition;
+      })(),
     },
     customerReviews: {
       ...DEFAULT_CONFIG.customerReviews,
@@ -5735,7 +5742,7 @@ export default function JenksV2FrontPageManager() {
               </div>
             )}
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <label className="text-xs">
               Title
               <input
@@ -5760,8 +5767,25 @@ export default function JenksV2FrontPageManager() {
                 onChange={(event) => setConfig((prev) => ({ ...prev, heritage: { ...prev.heritage, description: event.target.value } }))}
               />
             </label>
+            <label className="text-xs">
+              Stats Position
+              <select
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.heritage.statsPosition}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    heritage: { ...prev.heritage, statsPosition: event.target.value as Heritage['statsPosition'] },
+                  }))
+                }
+              >
+                <option value="TOP">TOP</option>
+                <option value="MIDDLE">MIDDLE</option>
+                <option value="BOTTOM">BOTTOM</option>
+              </select>
+            </label>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <label className="text-xs md:col-span-2">
               Short Story (supports formatted HTML)
               <textarea
@@ -5769,6 +5793,26 @@ export default function JenksV2FrontPageManager() {
                 value={config.heritage.storyHtml}
                 onChange={(event) => setConfig((prev) => ({ ...prev, heritage: { ...prev.heritage, storyHtml: event.target.value } }))}
               />
+            </label>
+            <label className="text-xs">
+              Stats Position
+              <select
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.heritage.statsPosition}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    heritage: {
+                      ...prev.heritage,
+                      statsPosition: event.target.value as Heritage['statsPosition'],
+                    },
+                  }))
+                }
+              >
+                <option value="TOP">TOP</option>
+                <option value="MIDDLE">MIDDLE</option>
+                <option value="BOTTOM">BOTTOM</option>
+              </select>
             </label>
             <label className="text-xs">
               Read More Label

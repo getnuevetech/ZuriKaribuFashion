@@ -1473,6 +1473,17 @@ export default function JenksFrontpageV2() {
   );
   const heritageReadMoreLabel = asString(heritageCfg.readMoreLabel, 'Read More');
   const heritageReadMoreHref = toSafeInternalHref(asString(heritageCfg.readMoreHref, '/stories/our-heritage'));
+  const heritageStatsPosition = ((): 'TOP' | 'MIDDLE' | 'BOTTOM' => {
+    const token = asString(heritageCfg.statsPosition, 'BOTTOM').toUpperCase();
+    if (token === 'TOP' || token === 'MIDDLE' || token === 'BOTTOM') return token;
+    return 'BOTTOM';
+  })();
+  const heritageStatsAnchorClass =
+    heritageStatsPosition === 'TOP'
+      ? 'top-[10%]'
+      : heritageStatsPosition === 'MIDDLE'
+        ? 'top-1/2 -translate-y-1/2'
+        : 'bottom-[20%]';
 
   const newsletterCfg = useMemo(() => asRecord(newsletterFooterCfg.newsletter), [newsletterFooterCfg.newsletter]);
   const footerCfg = useMemo(() => asRecord(newsletterFooterCfg.footer), [newsletterFooterCfg.footer]);
@@ -2669,7 +2680,7 @@ export default function JenksFrontpageV2() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
-            <div className="absolute bottom-[20%] left-8">
+            <div className={`absolute left-8 ${heritageStatsAnchorClass}`}>
               <div className="flex flex-wrap items-end gap-x-8 gap-y-4 rounded border border-white/15 bg-black/28 px-5 py-4 backdrop-blur-[1px]">
                 {heritageStats.map((stat) => (
                   <div key={stat.id} className="min-w-[120px]">

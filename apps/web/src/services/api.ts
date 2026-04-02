@@ -11002,6 +11002,7 @@ const jenksV2FrontpageManagerApi = {
           storyHtml: string;
           readMoreLabel: string;
           readMoreHref: string;
+          statsPosition: 'TOP' | 'MIDDLE' | 'BOTTOM';
           stats: Array<{
             id: string;
             label: string;
