@@ -1554,7 +1554,12 @@ export default function JenksFrontpageV2() {
   const topStripSeparator = asString(topStripCfg.separator, '•');
   const topStripItems = useMemo(() => {
     const messages = asArray(topStripCfg.messages)
-      .map((entry) => asString(entry, '').trim())
+      .flatMap((entry) =>
+        asString(entry, '')
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean)
+      )
       .filter(Boolean);
     const repeatCount = Math.max(1, Math.min(20, Math.round(asNumber(topStripCfg.repeatCount, 4))));
     const base =
@@ -2680,7 +2685,7 @@ export default function JenksFrontpageV2() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
-            <div className={`absolute left-8 ${heritageStatsAnchorClass}`}>
+            <div className={`absolute left-8 right-8 ${heritageStatsAnchorClass}`}>
               <div className="flex flex-wrap items-end gap-x-8 gap-y-4 rounded border border-white/15 bg-black/28 px-5 py-4 backdrop-blur-[1px]">
                 {heritageStats.map((stat) => (
                   <div key={stat.id} className="min-w-[120px]">
@@ -2707,14 +2712,14 @@ export default function JenksFrontpageV2() {
             </h2>
             {customerReviewSliderSettings.mode === 'SLIDER' ? (
               <div
-                className="relative mx-auto mt-8 max-w-3xl"
+                className="relative mx-auto mt-8 flex w-full justify-center"
                 onMouseEnter={() => setCustomerReviewsHovered(true)}
                 onMouseLeave={() => setCustomerReviewsHovered(false)}
               >
                 {customerReviewActiveCard ? (
                   <article
                     key={customerReviewActiveCard.id}
-                    className="rounded border border-white/12 bg-white/[0.04] p-6 text-white transition-all hover:-translate-y-1 hover:border-white/30 hover:shadow-[0_16px_34px_rgba(0,0,0,0.35)]"
+                    className="w-full max-w-3xl rounded border border-white/12 bg-white/[0.04] p-6 text-white transition-all hover:-translate-y-1 hover:border-white/30 hover:shadow-[0_16px_34px_rgba(0,0,0,0.35)]"
                     style={{ transitionDuration: `${customerReviewSliderSettings.transitionMs}ms` }}
                   >
                     <div className="flex items-center justify-between gap-2">

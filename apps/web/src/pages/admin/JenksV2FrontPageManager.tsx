@@ -5795,26 +5795,6 @@ export default function JenksV2FrontPageManager() {
               />
             </label>
             <label className="text-xs">
-              Stats Position
-              <select
-                className="mt-1 w-full rounded border px-2 py-1.5"
-                value={config.heritage.statsPosition}
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    heritage: {
-                      ...prev.heritage,
-                      statsPosition: event.target.value as Heritage['statsPosition'],
-                    },
-                  }))
-                }
-              >
-                <option value="TOP">TOP</option>
-                <option value="MIDDLE">MIDDLE</option>
-                <option value="BOTTOM">BOTTOM</option>
-              </select>
-            </label>
-            <label className="text-xs">
               Read More Label
               <input
                 className="mt-1 w-full rounded border px-2 py-1.5"

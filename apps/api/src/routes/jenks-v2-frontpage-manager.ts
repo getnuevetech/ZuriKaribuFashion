@@ -1147,8 +1147,14 @@ const normalizeTopNavigations = (raw: unknown, fallback: TopNavigationsSettings)
   const fallbackHero = fallback.heroBanners.length > 0 ? fallback.heroBanners : defaultSettings().topNavigations.heroBanners;
   const topStripRaw = asRecord(row.topStripConfig);
   const fallbackStrip = fallback.topStripConfig;
-  const messages = (Array.isArray(topStripRaw.messages) ? topStripRaw.messages : fallbackStrip.messages)
-    .map((entry) => String(entry || '').trim())
+  const rawTopStripMessages = Array.isArray(topStripRaw.messages)
+    ? topStripRaw.messages
+    : typeof topStripRaw.messages === 'string'
+      ? topStripRaw.messages.split(/\r?\n/)
+      : fallbackStrip.messages;
+  const messages = rawTopStripMessages
+    .flatMap((entry) => String(entry || '').split(/\r?\n/))
+    .map((entry) => entry.trim())
     .filter(Boolean)
     .slice(0, 20);
   return {
