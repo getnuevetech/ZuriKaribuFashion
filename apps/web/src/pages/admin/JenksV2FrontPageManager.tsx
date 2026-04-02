@@ -2376,6 +2376,22 @@ export default function JenksV2FrontPageManager() {
                 <Upload className="mr-2 h-4 w-4" />
                 Upload Logo Image
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    topNavigations: {
+                      ...prev.topNavigations,
+                      logo: { ...prev.topNavigations.logo, imageUrl: '' },
+                    },
+                  }))
+                }
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Logo Image
+              </Button>
               <input ref={logoUploadRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
               <span className="text-xs text-gray-600 break-all">{config.topNavigations.logo.imageUrl || 'No logo image uploaded'}</span>
             </div>

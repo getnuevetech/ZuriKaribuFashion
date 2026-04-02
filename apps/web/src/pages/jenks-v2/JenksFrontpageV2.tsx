@@ -1868,6 +1868,24 @@ export default function JenksFrontpageV2() {
     showCustomerReviewsSection,
   ]);
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const styleId = 'jenks-topstrip-marquee-keyframes';
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      @keyframes jenksTopStripMarquee {
+        0% { transform: translateX(100%); }
+        100% { transform: translateX(-100%); }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      style.remove();
+    };
+  }, []);
+
   return (
     <div className="kimi-site flex flex-col bg-[#f5f3ee] text-[#111]">
       {/* TOP STRIP + TOP NAVIGATION */}
