@@ -1483,7 +1483,7 @@ export default function JenksFrontpageV2() {
       ? 'top-[10%]'
       : heritageStatsPosition === 'MIDDLE'
         ? 'top-1/2 -translate-y-1/2'
-        : 'bottom-[20%]';
+        : 'bottom-[8%]';
 
   const newsletterCfg = useMemo(() => asRecord(newsletterFooterCfg.newsletter), [newsletterFooterCfg.newsletter]);
   const footerCfg = useMemo(() => asRecord(newsletterFooterCfg.footer), [newsletterFooterCfg.footer]);
@@ -2685,7 +2685,7 @@ export default function JenksFrontpageV2() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
-            <div className={`absolute left-8 right-8 ${heritageStatsAnchorClass}`}>
+            <div className={`absolute left-8 right-8 z-10 ${heritageStatsAnchorClass}`}>
               <div className="flex flex-wrap items-end gap-x-8 gap-y-4 rounded border border-white/15 bg-black/28 px-5 py-4 backdrop-blur-[1px]">
                 {heritageStats.map((stat) => (
                   <div key={stat.id} className="min-w-[120px]">

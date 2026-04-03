@@ -2026,11 +2026,7 @@ export default function JenksV2FrontPageManager() {
                         ...prev.topNavigations,
                         topStripConfig: {
                           ...prev.topNavigations.topStripConfig,
-                          messages: event.target.value
-                            .split('\n')
-                            .map((entry) => entry.trim())
-                            .filter(Boolean)
-                            .slice(0, 20),
+                          messages: event.target.value.split('\n').slice(0, 20),
                         },
                       },
                     }))
