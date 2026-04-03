@@ -354,6 +354,8 @@ type SectionVisibilityEntry = {
   configSnapshot: Record<string, unknown>;
 };
 
+type SectionTitleAlign = 'LEFT' | 'CENTER' | 'RIGHT';
+
 type JenksV2FrontpageConfig = {
   contractVersion: string;
   topNavigations: TopNavigations;
@@ -377,6 +379,10 @@ type JenksV2FrontpageConfig = {
   newsletterFooter: NewsletterFooter;
   sectionVisibility: {
     sections: SectionVisibilityEntry[];
+    sectionTitleSettings?: {
+      showTitles: boolean;
+      alignment: SectionTitleAlign;
+    };
   };
   source?: 'DATABASE' | 'DEFAULT';
   updatedAt?: string | null;

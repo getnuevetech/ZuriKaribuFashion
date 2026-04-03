@@ -11061,6 +11061,10 @@ const jenksV2FrontpageManagerApi = {
           };
         };
         sectionVisibility: {
+          sectionTitleSettings: {
+            enabled: boolean;
+            alignment: 'LEFT' | 'CENTER' | 'RIGHT';
+          };
           sections: Array<{
             id: string;
             key: string;

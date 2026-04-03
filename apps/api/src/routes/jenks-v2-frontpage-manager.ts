@@ -353,6 +353,10 @@ type SectionVisibilityEntry = {
 
 type SectionVisibilitySettings = {
   sections: SectionVisibilityEntry[];
+  titleSettings: {
+    show: boolean;
+    align: 'LEFT' | 'CENTER' | 'RIGHT';
+  };
 };
 
 type JenksV2FrontpageManagerSettings = {
@@ -1049,6 +1053,10 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
     },
     sectionVisibility: {
       sections: [],
+      titleSettings: {
+        show: true,
+        align: 'LEFT',
+      },
     },
   };
 
@@ -1738,6 +1746,8 @@ const normalizeSectionVisibility = (
   settings: JenksV2FrontpageManagerSettings
 ): SectionVisibilitySettings => {
   const row = asRecord(raw);
+  const titleRaw = asRecord(row.titleSettings);
+  const fallbackTitle = fallback.titleSettings;
   const rawRowsSource = Array.isArray(row.sections) ? row.sections : fallback.sections;
   const rawRows = mergeLegacyTextIconSectionEntries(
     rawRowsSource.map((entry, index) => {
@@ -1834,7 +1844,16 @@ const normalizeSectionVisibility = (
     .sort((a, b) => a.order - b.order)
     .slice(0, 200);
 
-  return { sections: normalized };
+  const alignToken = String(titleRaw.align || fallbackTitle.align || 'LEFT').trim().toUpperCase();
+  const align: SectionVisibilitySettings['titleSettings']['align'] =
+    alignToken === 'CENTER' || alignToken === 'RIGHT' ? alignToken : 'LEFT';
+  return {
+    sections: normalized,
+    titleSettings: {
+      show: getBoolean(titleRaw.show) ?? fallbackTitle.show,
+      align,
+    },
+  };
 };
 
 const applyTemplateSnapshotToSettings = (
@@ -1932,7 +1951,10 @@ const normalizeSettings = (
     heritage,
     customerReviews,
     newsletterFooter,
-    sectionVisibility: { sections: [] },
+    sectionVisibility: {
+      sections: [],
+      titleSettings: fallback.sectionVisibility.titleSettings,
+    },
   };
   base.sectionVisibility = normalizeSectionVisibility(row.sectionVisibility, fallback.sectionVisibility, base);
   return base;
@@ -2196,6 +2218,7 @@ router.post(
         ...withTemplateContent,
         sectionVisibility: {
           sections: existingSections,
+          titleSettings: settings.sectionVisibility.titleSettings,
         },
       });
       return res.status(201).json({

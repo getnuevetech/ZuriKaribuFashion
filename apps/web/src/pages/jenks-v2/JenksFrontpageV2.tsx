@@ -259,6 +259,7 @@ type TextIconCardStyleConfig = {
   titleFontSize: number;
   descriptionFontSize: number;
 };
+type SectionTitlePosition = 'LEFT' | 'CENTER' | 'RIGHT';
 
 const buildCountryProductsHref = (
   countryName: string,
@@ -943,6 +944,15 @@ export default function JenksFrontpageV2() {
   const isSectionVisible = (templateKey: TemplateKey) => sectionLayoutByTemplate.get(templateKey)?.enabled ?? true;
   const getSectionOrder = (templateKey: TemplateKey) =>
     sectionLayoutByTemplate.get(templateKey)?.order ?? Math.max(1, TEMPLATE_KEYS.indexOf(templateKey) + 1);
+  const sectionTitleCfg = useMemo(() => asRecord(sectionVisibilityCfg.titleSettings), [sectionVisibilityCfg.titleSettings]);
+  const sectionTitlesEnabled = asBoolean(sectionTitleCfg.enabled, true);
+  const sectionTitlePosition = ((): SectionTitlePosition => {
+    const token = asString(sectionTitleCfg.position, 'LEFT').toUpperCase();
+    if (token === 'CENTER' || token === 'RIGHT') return token;
+    return 'LEFT';
+  })();
+  const sectionTitleClass =
+    sectionTitlePosition === 'CENTER' ? 'text-center' : sectionTitlePosition === 'RIGHT' ? 'text-right' : 'text-left';
 
   const logoCfg = useMemo(() => asRecord(topNavigationsCfg.logo), [topNavigationsCfg.logo]);
   const logoTextRaw = asString(logoCfg.text, 'ZURIKARIBU');
@@ -2532,8 +2542,12 @@ export default function JenksFrontpageV2() {
       {showHowItWorksSection ? (
       <section className="bg-white py-12" data-kimi-anim="fade-up" style={{ order: getSectionOrder('HOW_IT_WORKS') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <h2 className="font-['Oswald'] text-3xl font-bold uppercase">{textIconSectionHeading('HOW_IT_WORKS')}</h2>
-          <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
+          {sectionTitlesEnabled ? (
+            <h2 className={`font-['Oswald'] text-3xl font-bold uppercase ${sectionTitleClass}`}>
+              {textIconSectionHeading('HOW_IT_WORKS')}
+            </h2>
+          ) : null}
+          <div className={`grid grid-cols-1 gap-2 md:grid-cols-3 ${sectionTitlesEnabled ? 'mt-6' : ''}`}>
             {howItWorksCards.map((item) => renderTextIconCard(item))}
           </div>
         </div>
@@ -2544,8 +2558,12 @@ export default function JenksFrontpageV2() {
       {showCustomTextIconSection ? (
       <section className="bg-white py-12" data-kimi-anim="fade-up" style={{ order: getSectionOrder('CUSTOM_TEXT_ICON') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <h2 className="font-['Oswald'] text-3xl font-bold uppercase">{textIconSectionHeading('CUSTOM')}</h2>
-          <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
+          {sectionTitlesEnabled ? (
+            <h2 className={`font-['Oswald'] text-3xl font-bold uppercase ${sectionTitleClass}`}>
+              {textIconSectionHeading('CUSTOM')}
+            </h2>
+          ) : null}
+          <div className={`grid grid-cols-1 gap-2 md:grid-cols-3 ${sectionTitlesEnabled ? 'mt-6' : ''}`}>
             {customTextIconCards.map((item) => renderTextIconCard(item))}
           </div>
         </div>
@@ -2809,10 +2827,12 @@ export default function JenksFrontpageV2() {
       {showTrustSection ? (
         <section className="bg-white py-16 lg:py-20" data-kimi-anim="fade-up" style={{ order: getSectionOrder('SHOP_WITH_CONFIDENCE') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <h2 className="text-center font-['Oswald'] text-4xl font-bold uppercase leading-none">
-            {textIconSectionHeading('SHOP_WITH_CONFIDENCE')}
-          </h2>
-          <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-3">
+          {sectionTitlesEnabled ? (
+            <h2 className={`font-['Oswald'] text-4xl font-bold uppercase leading-none ${sectionTitleClass}`}>
+              {textIconSectionHeading('SHOP_WITH_CONFIDENCE')}
+            </h2>
+          ) : null}
+          <div className={`grid grid-cols-1 gap-2 md:grid-cols-3 ${sectionTitlesEnabled ? 'mt-8' : ''}`}>
             {trustCards.map((item) => renderTextIconCard(item))}
           </div>
         </div>
