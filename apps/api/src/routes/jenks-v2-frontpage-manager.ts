@@ -209,6 +209,14 @@ type TextIconCard = {
   displayOrder: number;
 };
 
+type TextIconCardStyle = {
+  cardMinHeight: number;
+  cardWidth: number;
+  iconSize: number;
+  titleFontSize: number;
+  descriptionFontSize: number;
+};
+
 type FeaturedCard = {
   id: string;
   key: string;
@@ -372,12 +380,11 @@ type JenksV2FrontpageManagerSettings = {
       custom: string;
       shopWithConfidence: string;
     };
-    cardStyle: {
-      cardMinHeight: number;
-      cardWidth: number;
-      iconSize: number;
-      titleFontSize: number;
-      descriptionFontSize: number;
+    cardStyle: TextIconCardStyle;
+    sectionStyles: {
+      howItWorks: TextIconCardStyle;
+      custom: TextIconCardStyle;
+      shopWithConfidence: TextIconCardStyle;
     };
     allowCustomCards: boolean;
     cards: TextIconCard[];
@@ -833,6 +840,29 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         iconSize: 44,
         titleFontSize: 11,
         descriptionFontSize: 12,
+      },
+      sectionStyles: {
+        howItWorks: {
+          cardMinHeight: 220,
+          cardWidth: 320,
+          iconSize: 44,
+          titleFontSize: 11,
+          descriptionFontSize: 12,
+        },
+        custom: {
+          cardMinHeight: 220,
+          cardWidth: 320,
+          iconSize: 44,
+          titleFontSize: 11,
+          descriptionFontSize: 12,
+        },
+        shopWithConfidence: {
+          cardMinHeight: 220,
+          cardWidth: 320,
+          iconSize: 44,
+          titleFontSize: 11,
+          descriptionFontSize: 12,
+        },
       },
       allowCustomCards: true,
       cards: [
@@ -1371,15 +1401,22 @@ const normalizeTextIconCards = (
   };
   const rawCardStyle = asRecord(row.cardStyle);
   const fallbackCardStyle = fallback.cardStyle;
-  const cardStyle = {
-    cardMinHeight: clamp(Math.round(getNumber(rawCardStyle.cardMinHeight) ?? fallbackCardStyle.cardMinHeight), 160, 520),
-    cardWidth: clamp(Math.round(getNumber(rawCardStyle.cardWidth) ?? fallbackCardStyle.cardWidth), 180, 520),
-    iconSize: clamp(Math.round(getNumber(rawCardStyle.iconSize) ?? fallbackCardStyle.iconSize), 20, 120),
-    titleFontSize: clamp(Math.round(getNumber(rawCardStyle.titleFontSize) ?? fallbackCardStyle.titleFontSize), 8, 72),
-    descriptionFontSize: clamp(
-      Math.round(getNumber(rawCardStyle.descriptionFontSize) ?? fallbackCardStyle.descriptionFontSize),
-      8,
-      72
+  const normalizeCardStyle = (input: Record<string, unknown>, fallbackStyle: TextIconCardStyle): TextIconCardStyle => ({
+    cardMinHeight: clamp(Math.round(getNumber(input.cardMinHeight) ?? fallbackStyle.cardMinHeight), 160, 520),
+    cardWidth: clamp(Math.round(getNumber(input.cardWidth) ?? fallbackStyle.cardWidth), 180, 520),
+    iconSize: clamp(Math.round(getNumber(input.iconSize) ?? fallbackStyle.iconSize), 20, 120),
+    titleFontSize: clamp(Math.round(getNumber(input.titleFontSize) ?? fallbackStyle.titleFontSize), 8, 72),
+    descriptionFontSize: clamp(Math.round(getNumber(input.descriptionFontSize) ?? fallbackStyle.descriptionFontSize), 8, 72),
+  });
+  const cardStyle = normalizeCardStyle(rawCardStyle, fallbackCardStyle);
+  const rawSectionStyles = asRecord(row.sectionStyles);
+  const fallbackSectionStyles = fallback.sectionStyles;
+  const sectionStyles = {
+    howItWorks: normalizeCardStyle(asRecord(rawSectionStyles.howItWorks), fallbackSectionStyles.howItWorks || cardStyle),
+    custom: normalizeCardStyle(asRecord(rawSectionStyles.custom), fallbackSectionStyles.custom || cardStyle),
+    shopWithConfidence: normalizeCardStyle(
+      asRecord(rawSectionStyles.shopWithConfidence),
+      fallbackSectionStyles.shopWithConfidence || cardStyle
     ),
   };
   const rows = Array.isArray(row.cards) ? row.cards : fallback.cards;
@@ -1405,6 +1442,7 @@ const normalizeTextIconCards = (
   return {
     sectionTitles,
     cardStyle,
+    sectionStyles,
     allowCustomCards: getBoolean(row.allowCustomCards) ?? fallback.allowCustomCards,
     cards,
   };
@@ -1651,6 +1689,7 @@ const buildTemplateSnapshot = (
     return {
       sectionTitles: settings.textIconCards.sectionTitles,
       cardStyle: settings.textIconCards.cardStyle,
+      sectionStyles: settings.textIconCards.sectionStyles,
       allowCustomCards: settings.textIconCards.allowCustomCards,
       cards,
     };
@@ -1893,6 +1932,7 @@ const applyTemplateSnapshotToSettings = (
         ...next.textIconCards,
         sectionTitles: normalized.sectionTitles,
         cardStyle: normalized.cardStyle,
+        sectionStyles: normalized.sectionStyles,
         allowCustomCards: normalized.allowCustomCards,
         cards: [...otherRows, ...scopedRows],
       };

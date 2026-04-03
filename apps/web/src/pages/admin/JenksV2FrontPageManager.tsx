@@ -199,6 +199,11 @@ type TextIconCardStyle = {
   titleFontSize: number;
   descriptionFontSize: number;
 };
+type TextIconSectionStyles = {
+  howItWorks: TextIconCardStyle;
+  custom: TextIconCardStyle;
+  shopWithConfidence: TextIconCardStyle;
+};
 
 type FeaturedCard = {
   id: string;
@@ -366,6 +371,7 @@ type JenksV2FrontpageConfig = {
   textIconCards: {
     sectionTitles: TextIconSectionTitles;
     cardStyle: TextIconCardStyle;
+    sectionStyles: TextIconSectionStyles;
     allowCustomCards: boolean;
     cards: TextIconCard[];
   };
@@ -881,6 +887,29 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       iconSize: 44,
       titleFontSize: 11,
       descriptionFontSize: 12,
+    },
+    sectionStyles: {
+      howItWorks: {
+        cardMinHeight: 220,
+        cardWidth: 320,
+        iconSize: 44,
+        titleFontSize: 11,
+        descriptionFontSize: 12,
+      },
+      custom: {
+        cardMinHeight: 220,
+        cardWidth: 320,
+        iconSize: 44,
+        titleFontSize: 11,
+        descriptionFontSize: 12,
+      },
+      shopWithConfidence: {
+        cardMinHeight: 220,
+        cardWidth: 320,
+        iconSize: 44,
+        titleFontSize: 11,
+        descriptionFontSize: 12,
+      },
     },
     allowCustomCards: true,
     cards: [
@@ -1432,6 +1461,10 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
       cardStyle: {
         ...DEFAULT_CONFIG.textIconCards.cardStyle,
         ...(textIconCards?.cardStyle || {}),
+      },
+      sectionStyles: {
+        ...DEFAULT_CONFIG.textIconCards.sectionStyles,
+        ...(textIconCards?.sectionStyles || {}),
       },
       cards: Array.isArray(textIconCards?.cards) ? (textIconCards?.cards as TextIconCard[]) : DEFAULT_CONFIG.textIconCards.cards,
     },
@@ -4843,6 +4876,179 @@ export default function JenksV2FrontPageManager() {
                 }
               />
             </label>
+          </div>
+          <div className="rounded-lg border p-4 space-y-3">
+            <h3 className="text-sm font-semibold">Per-Section Card Dimensions</h3>
+            {(
+              [
+                { key: 'howItWorks', label: 'How It Works' },
+                { key: 'custom', label: 'Custom' },
+                { key: 'shopWithConfidence', label: 'Shop With Confidence' },
+              ] as const
+            ).map((section) => (
+              <div key={`text-icon-style-${section.key}`} className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-6">
+                <p className="text-xs font-semibold md:col-span-6">{section.label}</p>
+                <label className="text-[11px]">
+                  Min Height
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={config.textIconCards.sectionStyles[section.key].cardMinHeight}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        textIconCards: {
+                          ...prev.textIconCards,
+                          sectionStyles: {
+                            ...prev.textIconCards.sectionStyles,
+                            [section.key]: {
+                              ...prev.textIconCards.sectionStyles[section.key],
+                              cardMinHeight: clamp(
+                                toNumber(event.target.value, prev.textIconCards.sectionStyles[section.key].cardMinHeight),
+                                160,
+                                520
+                              ),
+                            },
+                          },
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-[11px]">
+                  Width
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={config.textIconCards.sectionStyles[section.key].cardWidth}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        textIconCards: {
+                          ...prev.textIconCards,
+                          sectionStyles: {
+                            ...prev.textIconCards.sectionStyles,
+                            [section.key]: {
+                              ...prev.textIconCards.sectionStyles[section.key],
+                              cardWidth: clamp(
+                                toNumber(event.target.value, prev.textIconCards.sectionStyles[section.key].cardWidth),
+                                180,
+                                520
+                              ),
+                            },
+                          },
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-[11px]">
+                  Icon
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={config.textIconCards.sectionStyles[section.key].iconSize}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        textIconCards: {
+                          ...prev.textIconCards,
+                          sectionStyles: {
+                            ...prev.textIconCards.sectionStyles,
+                            [section.key]: {
+                              ...prev.textIconCards.sectionStyles[section.key],
+                              iconSize: clamp(
+                                toNumber(event.target.value, prev.textIconCards.sectionStyles[section.key].iconSize),
+                                20,
+                                120
+                              ),
+                            },
+                          },
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-[11px]">
+                  Title Font
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={config.textIconCards.sectionStyles[section.key].titleFontSize}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        textIconCards: {
+                          ...prev.textIconCards,
+                          sectionStyles: {
+                            ...prev.textIconCards.sectionStyles,
+                            [section.key]: {
+                              ...prev.textIconCards.sectionStyles[section.key],
+                              titleFontSize: clamp(
+                                toNumber(event.target.value, prev.textIconCards.sectionStyles[section.key].titleFontSize),
+                                8,
+                                72
+                              ),
+                            },
+                          },
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-[11px]">
+                  Description Font
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={config.textIconCards.sectionStyles[section.key].descriptionFontSize}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        textIconCards: {
+                          ...prev.textIconCards,
+                          sectionStyles: {
+                            ...prev.textIconCards.sectionStyles,
+                            [section.key]: {
+                              ...prev.textIconCards.sectionStyles[section.key],
+                              descriptionFontSize: clamp(
+                                toNumber(
+                                  event.target.value,
+                                  prev.textIconCards.sectionStyles[section.key].descriptionFontSize
+                                ),
+                                8,
+                                72
+                              ),
+                            },
+                          },
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-[11px]">
+                  Copy Global
+                  <button
+                    type="button"
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs hover:bg-gray-50"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        textIconCards: {
+                          ...prev.textIconCards,
+                          sectionStyles: {
+                            ...prev.textIconCards.sectionStyles,
+                            [section.key]: { ...prev.textIconCards.cardStyle },
+                          },
+                        },
+                      }))
+                    }
+                  >
+                    Use Global Style
+                  </button>
+                </label>
+              </div>
+            ))}
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input

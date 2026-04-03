@@ -259,6 +259,7 @@ type TextIconCardStyleConfig = {
   titleFontSize: number;
   descriptionFontSize: number;
 };
+type TextIconSectionStyleConfig = Record<TextIconSectionType, TextIconCardStyleConfig>;
 type SectionTitlePosition = 'LEFT' | 'CENTER' | 'RIGHT';
 
 const buildCountryProductsHref = (
@@ -945,9 +946,9 @@ export default function JenksFrontpageV2() {
   const getSectionOrder = (templateKey: TemplateKey) =>
     sectionLayoutByTemplate.get(templateKey)?.order ?? Math.max(1, TEMPLATE_KEYS.indexOf(templateKey) + 1);
   const sectionTitleCfg = useMemo(() => asRecord(sectionVisibilityCfg.titleSettings), [sectionVisibilityCfg.titleSettings]);
-  const sectionTitlesEnabled = asBoolean(sectionTitleCfg.enabled, true);
+  const sectionTitlesEnabled = asBoolean(sectionTitleCfg.show, asBoolean(sectionTitleCfg.enabled, true));
   const sectionTitlePosition = ((): SectionTitlePosition => {
-    const token = asString(sectionTitleCfg.position, 'LEFT').toUpperCase();
+    const token = asString(sectionTitleCfg.align, asString(sectionTitleCfg.position, 'LEFT')).toUpperCase();
     if (token === 'CENTER' || token === 'RIGHT') return token;
     return 'LEFT';
   })();
@@ -1347,16 +1348,43 @@ export default function JenksFrontpageV2() {
       shopWithConfidence: asString(titles.shopWithConfidence, 'Shop With Confidence'),
     };
   }, [textIconCfg.sectionTitles]);
-  const textIconCardStyle = useMemo<TextIconCardStyleConfig>(() => {
-    const style = asRecord(textIconCfg.cardStyle);
-    return {
-      cardMinHeight: Math.max(160, Math.min(520, Math.round(asNumber(style.cardMinHeight, 220)))),
-      cardWidth: Math.max(180, Math.min(520, Math.round(asNumber(style.cardWidth, 320)))),
-      iconSize: Math.max(20, Math.min(120, Math.round(asNumber(style.iconSize, 44)))),
-      titleFontSize: Math.max(8, Math.min(72, Math.round(asNumber(style.titleFontSize, 11)))),
-      descriptionFontSize: Math.max(8, Math.min(72, Math.round(asNumber(style.descriptionFontSize, 12)))),
+  const textIconSectionStyles = useMemo<TextIconSectionStyleConfig>(() => {
+    const fallbackStyle = asRecord(textIconCfg.cardStyle);
+    const rawSectionStyles = asRecord(textIconCfg.sectionStyles);
+    const makeStyle = (key: TextIconSectionType): TextIconCardStyleConfig => {
+      const row = asRecord(rawSectionStyles[key]);
+      return {
+        cardMinHeight: Math.max(
+          160,
+          Math.min(
+            520,
+            Math.round(asNumber(row.cardMinHeight, asNumber(fallbackStyle.cardMinHeight, 220)))
+          )
+        ),
+        cardWidth: Math.max(
+          180,
+          Math.min(520, Math.round(asNumber(row.cardWidth, asNumber(fallbackStyle.cardWidth, 320))))
+        ),
+        iconSize: Math.max(20, Math.min(120, Math.round(asNumber(row.iconSize, asNumber(fallbackStyle.iconSize, 44))))),
+        titleFontSize: Math.max(
+          8,
+          Math.min(72, Math.round(asNumber(row.titleFontSize, asNumber(fallbackStyle.titleFontSize, 11))))
+        ),
+        descriptionFontSize: Math.max(
+          8,
+          Math.min(
+            72,
+            Math.round(asNumber(row.descriptionFontSize, asNumber(fallbackStyle.descriptionFontSize, 12)))
+          )
+        ),
+      };
     };
-  }, [textIconCfg.cardStyle]);
+    return {
+      HOW_IT_WORKS: makeStyle('HOW_IT_WORKS'),
+      CUSTOM: makeStyle('CUSTOM'),
+      SHOP_WITH_CONFIDENCE: makeStyle('SHOP_WITH_CONFIDENCE'),
+    };
+  }, [textIconCfg.cardStyle, textIconCfg.sectionStyles]);
 
   const makeTextIconCards = (
     target: TextIconSectionType,
@@ -1410,7 +1438,11 @@ export default function JenksFrontpageV2() {
     }
     return asString(textIconSectionTitles.shopWithConfidence, 'Shop With Confidence').toUpperCase();
   };
-  const renderTextIconCard = (item: { id: string; title: string; sub: string; Icon: IconComponent }) => {
+  const renderTextIconCard = (
+    sectionType: TextIconSectionType,
+    item: { id: string; title: string; sub: string; Icon: IconComponent }
+  ) => {
+    const textIconCardStyle = textIconSectionStyles[sectionType];
     const iconSize = textIconCardStyle.iconSize;
     const iconGlyphSize = Math.max(14, Math.round(iconSize * 0.45));
     return (
@@ -2547,8 +2579,8 @@ export default function JenksFrontpageV2() {
               {textIconSectionHeading('HOW_IT_WORKS')}
             </h2>
           ) : null}
-          <div className={`grid grid-cols-1 gap-2 md:grid-cols-3 ${sectionTitlesEnabled ? 'mt-6' : ''}`}>
-            {howItWorksCards.map((item) => renderTextIconCard(item))}
+          <div className={`mt-6 flex w-full gap-2 overflow-x-auto pb-1 scrollbar-hide ${sectionTitlesEnabled ? '' : 'mt-0'}`}>
+            {howItWorksCards.map((item) => renderTextIconCard('HOW_IT_WORKS', item))}
           </div>
         </div>
       </section>
@@ -2563,8 +2595,8 @@ export default function JenksFrontpageV2() {
               {textIconSectionHeading('CUSTOM')}
             </h2>
           ) : null}
-          <div className={`grid grid-cols-1 gap-2 md:grid-cols-3 ${sectionTitlesEnabled ? 'mt-6' : ''}`}>
-            {customTextIconCards.map((item) => renderTextIconCard(item))}
+          <div className={`mt-6 flex w-full gap-2 overflow-x-auto pb-1 scrollbar-hide ${sectionTitlesEnabled ? '' : 'mt-0'}`}>
+            {customTextIconCards.map((item) => renderTextIconCard('CUSTOM', item))}
           </div>
         </div>
       </section>
@@ -2704,7 +2736,7 @@ export default function JenksFrontpageV2() {
               </Link>
             </div>
             <div className={`absolute left-8 right-8 z-10 ${heritageStatsAnchorClass}`}>
-              <div className="flex flex-wrap items-end gap-x-8 gap-y-4 rounded border border-white/15 bg-black/28 px-5 py-4 backdrop-blur-[1px]">
+              <div className="flex flex-wrap items-end gap-x-8 gap-y-4 rounded bg-black/28 px-5 py-4 backdrop-blur-[1px]">
                 {heritageStats.map((stat) => (
                   <div key={stat.id} className="min-w-[120px]">
                     <p className="font-['Oswald'] text-5xl font-bold leading-none sm:text-6xl">
@@ -2756,30 +2788,8 @@ export default function JenksFrontpageV2() {
                     <p className="mt-3 text-sm leading-relaxed text-white/82">{customerReviewActiveCard.message}</p>
                   </article>
                 ) : null}
-                {customerReviewSliderSettings.showArrows && customerReviewCards.length > 1 ? (
-                  <>
-                    <button
-                      type="button"
-                      className="absolute -left-3 top-1/2 inline-flex -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/40 p-2 text-white hover:bg-black/60"
-                      onClick={() =>
-                        setCustomerReviewIndex((prev) => (prev - 1 + customerReviewCards.length) % customerReviewCards.length)
-                      }
-                      aria-label="Previous review"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      className="absolute -right-3 top-1/2 inline-flex -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/40 p-2 text-white hover:bg-black/60"
-                      onClick={() => setCustomerReviewIndex((prev) => (prev + 1) % customerReviewCards.length)}
-                      aria-label="Next review"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                  </>
-                ) : null}
                 {customerReviewSliderSettings.showDots && customerReviewCards.length > 1 ? (
-                  <div className="mt-4 flex items-center justify-center gap-2">
+                  <div className="mt-5 flex w-full items-center justify-center gap-2">
                     {customerReviewCards.map((review, idx) => (
                       <button
                         key={`${review.id}-dot`}
@@ -2832,8 +2842,8 @@ export default function JenksFrontpageV2() {
               {textIconSectionHeading('SHOP_WITH_CONFIDENCE')}
             </h2>
           ) : null}
-          <div className={`grid grid-cols-1 gap-2 md:grid-cols-3 ${sectionTitlesEnabled ? 'mt-8' : ''}`}>
-            {trustCards.map((item) => renderTextIconCard(item))}
+          <div className={`mt-8 flex w-full gap-2 overflow-x-auto pb-1 scrollbar-hide ${sectionTitlesEnabled ? '' : 'mt-0'}`}>
+            {trustCards.map((item) => renderTextIconCard('SHOP_WITH_CONFIDENCE', item))}
           </div>
         </div>
         </section>
