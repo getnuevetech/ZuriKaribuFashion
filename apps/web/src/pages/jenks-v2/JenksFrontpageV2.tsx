@@ -10,11 +10,13 @@ import {
   Headphones,
   Heart,
   Instagram,
+  Loader2,
   Mail,
   Menu,
   Moon,
   Palette,
   Phone,
+  MapPin,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -26,6 +28,7 @@ import {
   Truck,
   Twitter,
   Youtube,
+  Loader2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api, resolveAssetUrl } from '../../services/api';
@@ -88,7 +91,6 @@ type CustomerReviewSliderSettings = {
   autoPlay: boolean;
   autoPlayIntervalMs: number;
   transitionMs: number;
-  showArrows: boolean;
   showDots: boolean;
   pauseOnHover: boolean;
 };
@@ -899,6 +901,7 @@ export default function JenksFrontpageV2() {
   const [customerReviewIndex, setCustomerReviewIndex] = useState(0);
   const [customerReviewsHovered, setCustomerReviewsHovered] = useState(false);
   const [topStripPaused, setTopStripPaused] = useState(false);
+  const [isHeritageImageReady, setIsHeritageImageReady] = useState(false);
   const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
   const topNavigationsCfg = useMemo(() => asRecord(asRecord(managerConfig).topNavigations), [managerConfig]);
   const shopByCfg = useMemo(() => asRecord(asRecord(managerConfig).shopBy), [managerConfig]);
@@ -1355,7 +1358,7 @@ export default function JenksFrontpageV2() {
       const row = asRecord(rawSectionStyles[key]);
       return {
         cardMinHeight: Math.max(
-          160,
+          80,
           Math.min(
             520,
             Math.round(asNumber(row.cardMinHeight, asNumber(fallbackStyle.cardMinHeight, 220)))
@@ -1514,7 +1517,10 @@ export default function JenksFrontpageV2() {
     [heritageCfg.description, heritageCfg.storyHtml]
   );
   const heritageReadMoreLabel = asString(heritageCfg.readMoreLabel, 'Read More');
-  const heritageReadMoreHref = toSafeInternalHref(asString(heritageCfg.readMoreHref, '/stories/our-heritage'));
+  const heritageReadMoreHrefRaw = asString(heritageCfg.readMoreHref, '/stories/our-heritage');
+  const heritageReadMoreHref = isExternalHref(heritageReadMoreHrefRaw)
+    ? heritageReadMoreHrefRaw
+    : toSafeInternalHref(heritageReadMoreHrefRaw);
   const heritageStatsPosition = ((): 'TOP' | 'MIDDLE' | 'BOTTOM' => {
     const token = asString(heritageCfg.statsPosition, 'BOTTOM').toUpperCase();
     if (token === 'TOP' || token === 'MIDDLE' || token === 'BOTTOM') return token;
@@ -1584,6 +1590,10 @@ export default function JenksFrontpageV2() {
         })),
     [footerCfg.policyLinks]
   );
+  const footerMapEnabled = asBoolean(footerCfg.showMapUnderlay, false);
+  const footerMapImage = asString(footerCfg.mapImage, '');
+  const footerMapOverlayOpacity = Math.max(0, Math.min(1, asNumber(footerCfg.mapOverlayOpacity, 0.45)));
+  const footerMapHeight = Math.max(160, Math.min(720, Math.round(asNumber(footerCfg.mapHeight, 300))));
   const shopByTabs = useMemo(
     () => SHOP_BY_TAB_META.filter((tab) => enabledShopByTabs.includes(tab.key)),
     [enabledShopByTabs]
@@ -1643,7 +1653,7 @@ export default function JenksFrontpageV2() {
         Math.min(30000, Math.round(asNumber(customerReviewsCfg.autoplayIntervalMs, 5000)))
       ),
       transitionMs: 450,
-      showArrows: asBoolean(customerReviewsCfg.showNavigation, true),
+      showArrows: false,
       showDots: asBoolean(customerReviewsCfg.showIndicators, true),
       pauseOnHover: asBoolean(customerReviewsCfg.pauseOnHover, true),
     };
@@ -1651,7 +1661,6 @@ export default function JenksFrontpageV2() {
     customerReviewsCfg.displayMode,
     customerReviewsCfg.autoplayEnabled,
     customerReviewsCfg.autoplayIntervalMs,
-    customerReviewsCfg.showNavigation,
     customerReviewsCfg.showIndicators,
     customerReviewsCfg.pauseOnHover,
   ]);
@@ -2716,8 +2725,15 @@ export default function JenksFrontpageV2() {
             src={asString(heritageCfg.image, `${ASSET_BASE}/heritage_story.jpg`)}
             alt="heritage"
             className="absolute inset-0 h-full w-full object-cover"
+            onLoad={() => setIsHeritageImageReady(true)}
+            onError={() => setIsHeritageImageReady(false)}
           />
-          <div className="absolute inset-0 bg-black/42" />
+          {isHeritageImageReady ? <div className="absolute inset-0 bg-black/22" /> : null}
+          {!isHeritageImageReady ? (
+            <div className="absolute inset-0 z-[2] flex items-center justify-center bg-black/10">
+              <RefreshCw className="h-7 w-7 animate-spin text-white/80" />
+            </div>
+          ) : null}
           <div className="relative h-full px-8 py-10 text-white">
             <div className="ml-auto max-w-xl text-right">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">{asString(heritageCfg.tag, 'Heritage')}</p>
@@ -2727,16 +2743,28 @@ export default function JenksFrontpageV2() {
               <div className="prose prose-invert mt-4 max-w-xl text-base text-white/80 prose-p:text-white/80 prose-strong:text-white prose-a:text-white">
                 <div dangerouslySetInnerHTML={{ __html: heritageStoryHtml }} />
               </div>
-              <Link
-                to={heritageReadMoreHref}
-                className="mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white hover:underline"
-              >
-                {heritageReadMoreLabel}
-                <ArrowRight className="h-4 w-4" />
-              </Link>
+              {isExternalHref(heritageReadMoreHref) ? (
+                <a
+                  href={heritageReadMoreHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="relative z-20 mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white hover:underline"
+                >
+                  {heritageReadMoreLabel}
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+              ) : (
+                <Link
+                  to={heritageReadMoreHref}
+                  className="relative z-20 mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white hover:underline"
+                >
+                  {heritageReadMoreLabel}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              )}
             </div>
-            <div className={`absolute left-8 right-8 z-10 ${heritageStatsAnchorClass}`}>
-              <div className="flex flex-wrap items-end gap-x-8 gap-y-4 rounded bg-black/28 px-5 py-4 backdrop-blur-[1px]">
+            <div className={`pointer-events-none absolute left-8 right-8 z-10 ${heritageStatsAnchorClass}`}>
+              <div className="flex flex-wrap items-end gap-x-8 gap-y-4 rounded bg-black/20 px-5 py-4">
                 {heritageStats.map((stat) => (
                   <div key={stat.id} className="min-w-[120px]">
                     <p className="font-['Oswald'] text-5xl font-bold leading-none sm:text-6xl">
@@ -2762,7 +2790,7 @@ export default function JenksFrontpageV2() {
             </h2>
             {customerReviewSliderSettings.mode === 'SLIDER' ? (
               <div
-                className="relative mx-auto mt-8 flex w-full justify-center"
+                className="relative mx-auto mt-8 flex w-full max-w-3xl flex-col items-center justify-center"
                 onMouseEnter={() => setCustomerReviewsHovered(true)}
                 onMouseLeave={() => setCustomerReviewsHovered(false)}
               >
@@ -2869,8 +2897,22 @@ export default function JenksFrontpageV2() {
 
       {/* FOOTER */}
       {isSectionVisible('NEWSLETTER_FOOTER') && asBoolean(footerCfg.enabled, true) ? (
-        <footer className="bg-[#0a0a0a] py-12 text-white" style={{ order: getSectionOrder('NEWSLETTER_FOOTER') }}>
-        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+        <footer className="relative bg-[#0a0a0a] py-12 text-white" style={{ order: getSectionOrder('NEWSLETTER_FOOTER') }}>
+        {footerMapEnabled && footerMapImage ? (
+          <>
+            <img
+              src={footerMapImage}
+              alt="Footer map underlay"
+              className="absolute inset-x-0 bottom-0 w-full object-cover opacity-65"
+              style={{ height: `${footerMapHeight}px` }}
+            />
+            <div
+              className="absolute inset-x-0 bottom-0 bg-black"
+              style={{ height: `${footerMapHeight}px`, opacity: footerMapOverlayOpacity }}
+            />
+          </>
+        ) : null}
+        <div className="relative z-10 w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
             <div>
               <p className="font-['Oswald'] text-3xl uppercase tracking-[0.08em]">
@@ -2908,7 +2950,7 @@ export default function JenksFrontpageV2() {
               <div className="mt-3 space-y-2 text-sm text-white/75">
                 <p className="inline-flex items-center gap-2"><Mail className="h-4 w-4" /> {asString(footerCfg.contactEmail, 'support@zurikaribu.com')}</p>
                 <p className="inline-flex items-center gap-2"><Phone className="h-4 w-4" /> {asString(footerCfg.contactPhone, '+234 000 000 0000')}</p>
-                <p className="pl-6 text-white/72">{asString(footerCfg.address, 'Lagos, Nigeria')}</p>
+                <p className="inline-flex items-center gap-2 text-white/72"><MapPin className="h-4 w-4" /> {asString(footerCfg.address, 'Lagos, Nigeria')}</p>
               </div>
             </div>
           </div>

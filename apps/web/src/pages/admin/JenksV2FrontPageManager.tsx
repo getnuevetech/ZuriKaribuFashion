@@ -312,11 +312,16 @@ type Heritage = {
   stats: HeritageStat[];
 };
 
+type LinkMode = 'DROPDOWN' | 'CUSTOM_URL';
+
 type LinkItem = {
   id: string;
   label: string;
   icon?: string;
   href: string;
+  hrefMode: LinkMode;
+  routeKey?: string;
+  customUrl?: string;
   enabled: boolean;
 };
 
@@ -345,6 +350,10 @@ type NewsletterFooter = {
     policyLinks: LinkItem[];
     socialLinks: LinkItem[];
     linkGroups: LinkGroup[];
+    showMapUnderlay: boolean;
+    mapImage: string;
+    mapOverlayOpacity: number;
+    mapHeight: number;
   };
 };
 
@@ -1338,11 +1347,24 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
 
 const normalizeLinkItemWithDefaults = (entry: unknown): LinkItem => {
   const row = entry && typeof entry === 'object' ? (entry as Partial<LinkItem>) : {};
+  const hrefModeToken = String((row as any).hrefMode || '').trim().toUpperCase();
+  const hrefMode: LinkItem['hrefMode'] = hrefModeToken === 'CUSTOM_URL' ? 'CUSTOM_URL' : 'DROPDOWN';
+  const routeKey = String((row as any).routeKey || '').trim().toUpperCase();
+  const customUrl = String((row as any).customUrl || '').trim();
+  const defaultHref = String(row.href || '/');
+  const routeHref =
+    ROUTE_OPTIONS.find((entry) => entry.key === routeKey)?.href ||
+    defaultHref ||
+    '/';
+  const href = hrefMode === 'CUSTOM_URL' ? (customUrl || defaultHref || '/') : routeHref;
   return {
     id: String(row.id || uid()),
     label: String(row.label || ''),
     icon: typeof row.icon === 'string' ? row.icon : undefined,
-    href: String(row.href || '/'),
+    href,
+    hrefMode,
+    routeKey: routeKey || undefined,
+    customUrl: hrefMode === 'CUSTOM_URL' ? customUrl : '',
     enabled: typeof row.enabled === 'boolean' ? row.enabled : true,
   };
 };
@@ -1619,6 +1641,38 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
               };
             })
           : DEFAULT_CONFIG.newsletterFooter.footer.linkGroups,
+        showMapUnderlay: toBoolean(
+          (data.newsletterFooter as NewsletterFooter | undefined)?.footer?.showMapUnderlay,
+          DEFAULT_CONFIG.newsletterFooter.footer.showMapUnderlay
+        ),
+        mapImage: String(
+          (data.newsletterFooter as NewsletterFooter | undefined)?.footer?.mapImage ||
+            DEFAULT_CONFIG.newsletterFooter.footer.mapImage
+        ),
+        mapOverlayOpacity: clamp(
+          toNumber(
+            String(
+              (data.newsletterFooter as NewsletterFooter | undefined)?.footer?.mapOverlayOpacity ??
+                DEFAULT_CONFIG.newsletterFooter.footer.mapOverlayOpacity
+            ),
+            DEFAULT_CONFIG.newsletterFooter.footer.mapOverlayOpacity
+          ),
+          0,
+          1
+        ),
+        mapHeight: clamp(
+          Math.round(
+            toNumber(
+              String(
+                (data.newsletterFooter as NewsletterFooter | undefined)?.footer?.mapHeight ??
+                  DEFAULT_CONFIG.newsletterFooter.footer.mapHeight
+              ),
+              DEFAULT_CONFIG.newsletterFooter.footer.mapHeight
+            )
+          ),
+          120,
+          720
+        ),
       },
     },
   };
@@ -2048,7 +2102,6 @@ export default function JenksV2FrontPageManager() {
               Theme Controller Enabled
             </label>
           </div>
-
           <div className="rounded-lg border p-4 space-y-3">
             <h3 className="text-sm font-semibold">Top Strip Manager</h3>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -2455,7 +2508,7 @@ export default function JenksV2FrontPageManager() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4">
             <div className="rounded-lg border p-4 space-y-3">
               <h3 className="text-sm font-semibold">Hamburger Menu</h3>
               <div className="flex gap-2">
@@ -4050,7 +4103,7 @@ export default function JenksV2FrontPageManager() {
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="space-y-4">
             <div className="rounded-lg border p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Shop By Style Cards</h3>
@@ -4785,7 +4838,7 @@ export default function JenksV2FrontPageManager() {
                       ...prev.textIconCards,
                       cardStyle: {
                         ...prev.textIconCards.cardStyle,
-                        cardMinHeight: clamp(toNumber(event.target.value, prev.textIconCards.cardStyle.cardMinHeight), 160, 520),
+                        cardMinHeight: clamp(toNumber(event.target.value, prev.textIconCards.cardStyle.cardMinHeight), 80, 520),
                       },
                     },
                   }))
@@ -4905,7 +4958,7 @@ export default function JenksV2FrontPageManager() {
                               ...prev.textIconCards.sectionStyles[section.key],
                               cardMinHeight: clamp(
                                 toNumber(event.target.value, prev.textIconCards.sectionStyles[section.key].cardMinHeight),
-                                160,
+                                80,
                                 520
                               ),
                             },
@@ -6738,6 +6791,84 @@ export default function JenksV2FrontPageManager() {
                   }
                 />
               </label>
+              <label className="text-xs md:col-span-3">
+                <span className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={config.newsletterFooter.footer.showMapUnderlay}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        newsletterFooter: {
+                          ...prev.newsletterFooter,
+                          footer: { ...prev.newsletterFooter.footer, showMapUnderlay: event.target.checked },
+                        },
+                      }))
+                    }
+                  />
+                  Show map underlay behind footer
+                </span>
+              </label>
+              <label className="text-xs md:col-span-2">
+                Map underlay image URL
+                <input
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={config.newsletterFooter.footer.mapImage}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      newsletterFooter: {
+                        ...prev.newsletterFooter,
+                        footer: { ...prev.newsletterFooter.footer, mapImage: event.target.value },
+                      },
+                    }))
+                  }
+                  placeholder="https://.../map.jpg"
+                />
+              </label>
+              <label className="text-xs">
+                Map Height (px)
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={config.newsletterFooter.footer.mapHeight}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      newsletterFooter: {
+                        ...prev.newsletterFooter,
+                        footer: {
+                          ...prev.newsletterFooter.footer,
+                          mapHeight: clamp(toNumber(event.target.value, prev.newsletterFooter.footer.mapHeight), 160, 720),
+                        },
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="text-xs md:col-span-3">
+                Map Overlay Opacity (0 to 1)
+                <input
+                  type="number"
+                  step="0.05"
+                  min={0}
+                  max={1}
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={config.newsletterFooter.footer.mapOverlayOpacity}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      newsletterFooter: {
+                        ...prev.newsletterFooter,
+                        footer: {
+                          ...prev.newsletterFooter.footer,
+                          mapOverlayOpacity: Math.max(0, Math.min(1, Number(event.target.value) || 0)),
+                        },
+                      },
+                    }))
+                  }
+                />
+              </label>
             </div>
           </div>
           <div className="rounded-lg border p-4 space-y-3">
@@ -6964,7 +7095,18 @@ export default function JenksV2FrontPageManager() {
                                 entryIndex === groupIndex
                                   ? {
                                       ...entry,
-                                      links: [...entry.links, { id: uid(), label: 'New Link', href: '/ready-to-wear', enabled: true }],
+                                      links: [
+                                        ...entry.links,
+                                        {
+                                          id: uid(),
+                                          label: 'New Link',
+                                          href: '/ready-to-wear',
+                                          hrefMode: 'DROPDOWN',
+                                          routeKey: 'READY_TO_WEAR',
+                                          customUrl: '',
+                                          enabled: true,
+                                        },
+                                      ],
                                     }
                                   : entry
                               ),
@@ -6999,7 +7141,7 @@ export default function JenksV2FrontPageManager() {
                 <div className="space-y-2">
                   {group.links.map((link, linkIndex) => (
                     <div key={link.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
-                      <label className="md:col-span-4 text-[11px]">
+                      <label className="md:col-span-3 text-[11px]">
                         Menu Label
                         <input
                           className="mt-1 w-full rounded border px-2 py-1 text-xs"
@@ -7027,11 +7169,11 @@ export default function JenksV2FrontPageManager() {
                           }
                         />
                       </label>
-                      <label className="md:col-span-4 text-[11px]">
-                        Menu Route (dropdown)
+                      <label className="md:col-span-2 text-[11px]">
+                        Link Source
                         <select
                           className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                          value={link.href}
+                          value={link.hrefMode || 'DROPDOWN'}
                           onChange={(event) =>
                             setConfig((prev) => ({
                               ...prev,
@@ -7043,9 +7185,23 @@ export default function JenksV2FrontPageManager() {
                                     entryIndex === groupIndex
                                       ? {
                                           ...entry,
-                                          links: entry.links.map((groupLink, groupLinkIndex) =>
-                                            groupLinkIndex === linkIndex ? { ...groupLink, href: event.target.value } : groupLink
-                                          ),
+                                          links: entry.links.map((groupLink, groupLinkIndex) => {
+                                            if (groupLinkIndex !== linkIndex) return groupLink;
+                                            const nextMode = event.target.value as LinkMode;
+                                            const fallbackRoute = ROUTE_OPTIONS.find((route) => route.key === 'READY_TO_WEAR') || ROUTE_OPTIONS[0];
+                                            const activeRoute =
+                                              ROUTE_OPTIONS.find((route) => route.key === (groupLink.routeKey || '')) || fallbackRoute;
+                                            return {
+                                              ...groupLink,
+                                              hrefMode: nextMode,
+                                              routeKey: groupLink.routeKey || activeRoute.key,
+                                              customUrl:
+                                                nextMode === 'CUSTOM_URL'
+                                                  ? groupLink.customUrl || groupLink.href || ''
+                                                  : groupLink.customUrl || '',
+                                              href: nextMode === 'CUSTOM_URL' ? groupLink.customUrl || groupLink.href || '' : activeRoute.href,
+                                            };
+                                          }),
                                         }
                                       : entry
                                   ),
@@ -7054,14 +7210,95 @@ export default function JenksV2FrontPageManager() {
                             }))
                           }
                         >
-                          {ROUTE_OPTIONS.map((route) => (
-                            <option key={`footer-menu-${route.key}`} value={route.href}>
-                              {route.label}
-                            </option>
-                          ))}
+                          <option value="DROPDOWN">Pages dropdown</option>
+                          <option value="CUSTOM_URL">Custom URL</option>
                         </select>
                       </label>
-                      <div className="md:col-span-4 flex items-end justify-end gap-2">
+                      {(link.hrefMode || 'DROPDOWN') === 'CUSTOM_URL' ? (
+                        <label className="md:col-span-4 text-[11px]">
+                          Custom URL
+                          <input
+                            className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                            value={link.customUrl || link.href || ''}
+                            placeholder="/ready-to-wear or https://example.com"
+                            onChange={(event) =>
+                              setConfig((prev) => ({
+                                ...prev,
+                                newsletterFooter: {
+                                  ...prev.newsletterFooter,
+                                  footer: {
+                                    ...prev.newsletterFooter.footer,
+                                    linkGroups: prev.newsletterFooter.footer.linkGroups.map((entry, entryIndex) =>
+                                      entryIndex === groupIndex
+                                        ? {
+                                            ...entry,
+                                            links: entry.links.map((groupLink, groupLinkIndex) =>
+                                              groupLinkIndex === linkIndex
+                                                ? {
+                                                    ...groupLink,
+                                                    customUrl: event.target.value,
+                                                    href: event.target.value,
+                                                    hrefMode: 'CUSTOM_URL',
+                                                  }
+                                                : groupLink
+                                            ),
+                                          }
+                                        : entry
+                                    ),
+                                  },
+                                },
+                              }))
+                            }
+                          />
+                        </label>
+                      ) : (
+                        <label className="md:col-span-4 text-[11px]">
+                          Menu Route (dropdown)
+                          <select
+                            className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                            value={
+                              link.routeKey ||
+                              ROUTE_OPTIONS.find((route) => route.href === link.href)?.key ||
+                              'READY_TO_WEAR'
+                            }
+                            onChange={(event) =>
+                              setConfig((prev) => ({
+                                ...prev,
+                                newsletterFooter: {
+                                  ...prev.newsletterFooter,
+                                  footer: {
+                                    ...prev.newsletterFooter.footer,
+                                    linkGroups: prev.newsletterFooter.footer.linkGroups.map((entry, entryIndex) =>
+                                      entryIndex === groupIndex
+                                        ? {
+                                            ...entry,
+                                            links: entry.links.map((groupLink, groupLinkIndex) => {
+                                              if (groupLinkIndex !== linkIndex) return groupLink;
+                                              const selected = ROUTE_OPTIONS.find((route) => route.key === event.target.value);
+                                              return {
+                                                ...groupLink,
+                                                hrefMode: 'DROPDOWN',
+                                                routeKey: event.target.value,
+                                                href: selected?.href || groupLink.href,
+                                              };
+                                            }),
+                                          }
+                                        : entry
+                                    ),
+                                  },
+                                },
+                              }))
+                            }
+                          >
+                            {ROUTE_OPTIONS.map((route) => (
+                              <option key={`footer-menu-${route.key}`} value={route.key}>
+                                {route.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      <div className="md:col-span-3 flex items-end justify-end gap-2">
                         <label className="inline-flex items-center gap-2 text-[11px]">
                           <input
                             type="checkbox"

@@ -10918,6 +10918,29 @@ const jenksV2FrontpageManagerApi = {
             titleFontSize: number;
             descriptionFontSize: number;
           };
+          sectionStyles: {
+            howItWorks: {
+              cardMinHeight: number;
+              cardWidth: number;
+              iconSize: number;
+              titleFontSize: number;
+              descriptionFontSize: number;
+            };
+            custom: {
+              cardMinHeight: number;
+              cardWidth: number;
+              iconSize: number;
+              titleFontSize: number;
+              descriptionFontSize: number;
+            };
+            shopWithConfidence: {
+              cardMinHeight: number;
+              cardWidth: number;
+              iconSize: number;
+              titleFontSize: number;
+              descriptionFontSize: number;
+            };
+          };
           allowCustomCards: boolean;
           cards: Array<{
             id: string;
@@ -11051,6 +11074,10 @@ const jenksV2FrontpageManagerApi = {
             contactEmail: string;
             contactPhone: string;
             copyright: string;
+            mapEnabled: boolean;
+            mapImage: string;
+            mapOverlayOpacity: number;
+            mapHeight: number;
             policyLinks: Array<{ id: string; label: string; href: string; enabled: boolean }>;
             socialLinks: Array<{ id: string; label: string; icon?: string; href: string; enabled: boolean }>;
             linkGroups: Array<{

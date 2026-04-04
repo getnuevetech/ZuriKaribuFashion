@@ -312,10 +312,22 @@ type HeritageSettings = {
   stats: HeritageStat[];
 };
 
+type FooterLinkMode = 'PAGE' | 'CUSTOM_URL';
+
+type FooterMapSettings = {
+  enabled: boolean;
+  image: string;
+  overlayColor: string;
+  overlayOpacity: number;
+  minHeight: number;
+};
+
 type LinkItem = {
   id: string;
   label: string;
   icon?: string;
+  hrefMode: FooterLinkMode;
+  pageKey?: string;
   href: string;
   enabled: boolean;
 };
@@ -345,6 +357,7 @@ type NewsletterFooterSettings = {
     policyLinks: LinkItem[];
     socialLinks: LinkItem[];
     linkGroups: LinkGroup[];
+    map: FooterMapSettings;
   };
 };
 
@@ -543,6 +556,24 @@ const mapLegacyV2Href = (value: string): string => {
     return '/ready-to-wear';
   }
   return normalized;
+};
+
+const PAGE_HREF_BY_KEY: Record<string, string> = {
+  HOME: '/',
+  READY_TO_WEAR: '/ready-to-wear',
+  CUSTOM_TO_WEAR: '/custom',
+  FABRICS: '/fabrics',
+  COUNTRY_PRODUCTS: '/country-products',
+  ABOUT: '/about',
+  CONTACT: '/contact',
+  HELP_CENTER: '/help-center',
+  AUTH_LOGIN: '/auth/login',
+};
+
+const resolveFooterPageHref = (pageKey: unknown, fallbackHref: string) => {
+  const token = String(pageKey || '').trim().toUpperCase();
+  if (token && PAGE_HREF_BY_KEY[token]) return PAGE_HREF_BY_KEY[token];
+  return mapLegacyV2Href(fallbackHref);
 };
 
 const normalizeHref = (value: unknown, fallback: string) => {
@@ -1063,22 +1094,51 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         contactPhone: '+234 000 000 0000',
         copyright: '© Jenks. All rights reserved.',
         policyLinks: [
-          { id: randomUUID(), label: 'Privacy Policy', href: '/help-center', enabled: true },
-          { id: randomUUID(), label: 'Terms of Service', href: '/help-center', enabled: true },
+          { id: randomUUID(), label: 'Privacy Policy', hrefMode: 'PAGE', pageKey: 'HELP_CENTER', href: '/help-center', enabled: true },
+          { id: randomUUID(), label: 'Terms of Service', hrefMode: 'PAGE', pageKey: 'HELP_CENTER', href: '/help-center', enabled: true },
         ],
         socialLinks: [
-          { id: randomUUID(), label: 'Instagram', icon: 'Instagram', href: 'https://instagram.com', enabled: true },
+          {
+            id: randomUUID(),
+            label: 'Instagram',
+            icon: 'Instagram',
+            hrefMode: 'CUSTOM_URL',
+            pageKey: '',
+            href: 'https://instagram.com',
+            enabled: true,
+          },
         ],
         linkGroups: [
           {
             id: randomUUID(),
             title: 'Shop',
             links: [
-              { id: randomUUID(), label: 'Ready To Wear', href: '/ready-to-wear', enabled: true },
-              { id: randomUUID(), label: 'Custom To Wear', href: '/custom', enabled: true },
+              {
+                id: randomUUID(),
+                label: 'Ready To Wear',
+                hrefMode: 'PAGE',
+                pageKey: 'READY_TO_WEAR',
+                href: '/ready-to-wear',
+                enabled: true,
+              },
+              {
+                id: randomUUID(),
+                label: 'Custom To Wear',
+                hrefMode: 'PAGE',
+                pageKey: 'CUSTOM_TO_WEAR',
+                href: '/custom',
+                enabled: true,
+              },
             ],
           },
         ],
+        map: {
+          enabled: false,
+          image: '',
+          overlayColor: '#0a0a0a',
+          overlayOpacity: 55,
+          minHeight: 320,
+        },
       },
     },
     sectionVisibility: {
@@ -1402,7 +1462,7 @@ const normalizeTextIconCards = (
   const rawCardStyle = asRecord(row.cardStyle);
   const fallbackCardStyle = fallback.cardStyle;
   const normalizeCardStyle = (input: Record<string, unknown>, fallbackStyle: TextIconCardStyle): TextIconCardStyle => ({
-    cardMinHeight: clamp(Math.round(getNumber(input.cardMinHeight) ?? fallbackStyle.cardMinHeight), 160, 520),
+    cardMinHeight: clamp(Math.round(getNumber(input.cardMinHeight) ?? fallbackStyle.cardMinHeight), 80, 520),
     cardWidth: clamp(Math.round(getNumber(input.cardWidth) ?? fallbackStyle.cardWidth), 180, 520),
     iconSize: clamp(Math.round(getNumber(input.iconSize) ?? fallbackStyle.iconSize), 20, 120),
     titleFontSize: clamp(Math.round(getNumber(input.titleFontSize) ?? fallbackStyle.titleFontSize), 8, 72),
@@ -1623,11 +1683,19 @@ const normalizeHeritage = (raw: unknown, fallback: HeritageSettings): HeritageSe
 
 const normalizeLinkItem = (raw: unknown, fallback: LinkItem): LinkItem => {
   const row = asRecord(raw);
+  const fallbackMode: FooterLinkMode = fallback.hrefMode === 'PAGE' ? 'PAGE' : 'CUSTOM_URL';
+  const modeToken = String(row.hrefMode || fallbackMode).trim().toUpperCase();
+  const hrefMode: FooterLinkMode = modeToken === 'PAGE' ? 'PAGE' : 'CUSTOM_URL';
+  const pageKey = (getString(row.pageKey) || fallback.pageKey || '').slice(0, 80).toUpperCase();
+  const baseHref = normalizeHref(row.href, fallback.href);
+  const href = hrefMode === 'PAGE' ? resolveFooterPageHref(pageKey, baseHref) : baseHref;
   return {
     id: getString(row.id) || fallback.id || randomUUID(),
     label: (getString(row.label) || fallback.label).slice(0, 80),
     icon: (getString(row.icon) || fallback.icon || '').slice(0, 60) || undefined,
-    href: normalizeHref(row.href, fallback.href),
+    hrefMode,
+    pageKey,
+    href,
     enabled: getBoolean(row.enabled) ?? fallback.enabled,
   };
 };
@@ -1642,6 +1710,8 @@ const normalizeNewsletterFooter = (
   const groupsRaw = Array.isArray(footerRaw.linkGroups) ? footerRaw.linkGroups : fallback.footer.linkGroups;
   const policyRaw = Array.isArray(footerRaw.policyLinks) ? footerRaw.policyLinks : fallback.footer.policyLinks;
   const socialRaw = Array.isArray(footerRaw.socialLinks) ? footerRaw.socialLinks : fallback.footer.socialLinks;
+  const mapRaw = asRecord(footerRaw.map);
+  const fallbackMap = fallback.footer.map;
   return {
     newsletter: {
       enabled: getBoolean(newsletterRaw.enabled) ?? fallback.newsletter.enabled,
@@ -1672,6 +1742,13 @@ const normalizeNewsletterFooter = (
           } as LinkGroup;
         })
         .slice(0, 20),
+      map: {
+        enabled: getBoolean(mapRaw.enabled) ?? fallbackMap.enabled,
+        image: (getString(mapRaw.image) || fallbackMap.image || '').slice(0, 2000),
+        overlayColor: (getString(mapRaw.overlayColor) || fallbackMap.overlayColor || '#0a0a0a').slice(0, 40),
+        overlayOpacity: clamp(Math.round(getNumber(mapRaw.overlayOpacity) ?? fallbackMap.overlayOpacity), 0, 100),
+        minHeight: clamp(Math.round(getNumber(mapRaw.minHeight) ?? fallbackMap.minHeight), 160, 900),
+      },
     },
   };
 };
