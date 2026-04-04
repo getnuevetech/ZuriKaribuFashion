@@ -28,9 +28,8 @@ import {
   Truck,
   Twitter,
   Youtube,
-  Loader2,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, resolveAssetUrl } from '../../services/api';
 import '../../styles/jenks-v2.css';
 
@@ -253,6 +252,15 @@ type TextIconSectionTitleConfig = {
   howItWorks: string;
   custom: string;
   shopWithConfidence: string;
+};
+type TextIconSectionHeadingConfig = {
+  title: string;
+  titleEnabled: boolean;
+  titlePosition: 'LEFT' | 'CENTER' | 'RIGHT';
+  titleFontSize: number;
+  description: string;
+  descriptionEnabled: boolean;
+  descriptionFontSize: number;
 };
 type TextIconCardStyleConfig = {
   cardMinHeight: number;
@@ -902,6 +910,12 @@ export default function JenksFrontpageV2() {
   const [customerReviewsHovered, setCustomerReviewsHovered] = useState(false);
   const [topStripPaused, setTopStripPaused] = useState(false);
   const [isHeritageImageReady, setIsHeritageImageReady] = useState(false);
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterSubmitting, setNewsletterSubmitting] = useState(false);
+  const [newsletterStatus, setNewsletterStatus] = useState<{ kind: 'idle' | 'success' | 'error'; message: string }>({
+    kind: 'idle',
+    message: '',
+  });
   const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
   const topNavigationsCfg = useMemo(() => asRecord(asRecord(managerConfig).topNavigations), [managerConfig]);
   const shopByCfg = useMemo(() => asRecord(asRecord(managerConfig).shopBy), [managerConfig]);
@@ -1351,6 +1365,40 @@ export default function JenksFrontpageV2() {
       shopWithConfidence: asString(titles.shopWithConfidence, 'Shop With Confidence'),
     };
   }, [textIconCfg.sectionTitles]);
+  const textIconSectionHeadings = useMemo<Record<TextIconSectionType, TextIconSectionHeadingConfig>>(() => {
+    const headings = asRecord(textIconCfg.sectionHeadings);
+    const makeHeading = (
+      key: 'howItWorks' | 'custom' | 'shopWithConfidence',
+      fallbackTitle: string
+    ): TextIconSectionHeadingConfig => {
+      const row = asRecord(headings[key]);
+      const title = asString(
+        row.title,
+        key === 'howItWorks'
+          ? asString(textIconSectionTitles.howItWorks, fallbackTitle)
+          : key === 'custom'
+            ? asString(textIconSectionTitles.custom, fallbackTitle)
+            : asString(textIconSectionTitles.shopWithConfidence, fallbackTitle)
+      );
+      const positionToken = asString(row.titlePosition, 'LEFT').toUpperCase();
+      const titlePosition: 'LEFT' | 'CENTER' | 'RIGHT' =
+        positionToken === 'CENTER' || positionToken === 'RIGHT' ? positionToken : 'LEFT';
+      return {
+        title,
+        titleEnabled: asBoolean(row.titleEnabled, true),
+        titlePosition,
+        titleFontSize: Math.max(12, Math.min(96, Math.round(asNumber(row.titleFontSize, 48)))),
+        description: asString(row.description, ''),
+        descriptionEnabled: asBoolean(row.descriptionEnabled, false),
+        descriptionFontSize: Math.max(8, Math.min(72, Math.round(asNumber(row.descriptionFontSize, 14)))),
+      };
+    };
+    return {
+      HOW_IT_WORKS: makeHeading('howItWorks', 'How It Works'),
+      CUSTOM: makeHeading('custom', 'Custom'),
+      SHOP_WITH_CONFIDENCE: makeHeading('shopWithConfidence', 'Shop With Confidence'),
+    };
+  }, [textIconCfg.sectionHeadings, textIconSectionTitles]);
   const textIconSectionStyles = useMemo<TextIconSectionStyleConfig>(() => {
     const fallbackStyle = asRecord(textIconCfg.cardStyle);
     const rawSectionStyles = asRecord(textIconCfg.sectionStyles);
@@ -1432,14 +1480,16 @@ export default function JenksFrontpageV2() {
   const showHowItWorksSection = isSectionVisible('HOW_IT_WORKS') && howItWorksCards.length > 0;
   const showCustomTextIconSection = isSectionVisible('CUSTOM_TEXT_ICON') && customTextIconCards.length > 0;
   const showTrustSection = isSectionVisible('SHOP_WITH_CONFIDENCE') && trustCards.length > 0;
-  const textIconSectionHeading = (sectionType: TextIconSectionType) => {
-    if (sectionType === 'HOW_IT_WORKS') {
-      return asString(textIconSectionTitles.howItWorks, 'How It Works').toUpperCase();
-    }
-    if (sectionType === 'CUSTOM') {
-      return asString(textIconSectionTitles.custom, 'Custom').toUpperCase();
-    }
-    return asString(textIconSectionTitles.shopWithConfidence, 'Shop With Confidence').toUpperCase();
+  const getTextIconHeadingConfig = (sectionType: TextIconSectionType): TextIconSectionHeadingConfig => {
+    if (sectionType === 'HOW_IT_WORKS') return textIconSectionHeadings.HOW_IT_WORKS;
+    if (sectionType === 'CUSTOM') return textIconSectionHeadings.CUSTOM;
+    return textIconSectionHeadings.SHOP_WITH_CONFIDENCE;
+  };
+  const textIconSectionHeading = (sectionType: TextIconSectionType) =>
+    asString(getTextIconHeadingConfig(sectionType).title, '').toUpperCase();
+  const textIconSectionTitleClass = (sectionType: TextIconSectionType) => {
+    const position = getTextIconHeadingConfig(sectionType).titlePosition;
+    return position === 'CENTER' ? 'text-center' : position === 'RIGHT' ? 'text-right' : 'text-left';
   };
   const renderTextIconCard = (
     sectionType: TextIconSectionType,
@@ -1590,10 +1640,14 @@ export default function JenksFrontpageV2() {
         })),
     [footerCfg.policyLinks]
   );
-  const footerMapEnabled = asBoolean(footerCfg.showMapUnderlay, false);
-  const footerMapImage = asString(footerCfg.mapImage, '');
-  const footerMapOverlayOpacity = Math.max(0, Math.min(1, asNumber(footerCfg.mapOverlayOpacity, 0.45)));
-  const footerMapHeight = Math.max(160, Math.min(720, Math.round(asNumber(footerCfg.mapHeight, 300))));
+  const footerMapCfg = useMemo(() => asRecord(footerCfg.map), [footerCfg.map]);
+  const footerMapEnabled = asBoolean(footerMapCfg.enabled, false);
+  const footerMapImage = asString(footerMapCfg.image, '');
+  const footerMapOverlayOpacity = Math.max(
+    0,
+    Math.min(1, Math.round(asNumber(footerMapCfg.overlayOpacity, 55)) / 100)
+  );
+  const footerMapHeight = Math.max(80, Math.min(900, Math.round(asNumber(footerMapCfg.minHeight, 320))));
   const shopByTabs = useMemo(
     () => SHOP_BY_TAB_META.filter((tab) => enabledShopByTabs.includes(tab.key)),
     [enabledShopByTabs]
@@ -1640,6 +1694,9 @@ export default function JenksFrontpageV2() {
   })();
   const customerReviewsMaxItems = Math.max(1, Math.min(24, Math.round(asNumber(customerReviewsCfg.maxItems, 6))));
   const customerReviewsTitle = asString(customerReviewsCfg.sectionTitle, 'From Our Customers');
+  const customerReviewsTitleFontSize = Math.max(18, Math.min(92, Math.round(asNumber(customerReviewsCfg.titleFontSize, 52))));
+  const customerReviewsMessageFontSize = Math.max(10, Math.min(40, Math.round(asNumber(customerReviewsCfg.messageFontSize, 14))));
+  const customerReviewsMetaFontSize = Math.max(8, Math.min(24, Math.round(asNumber(customerReviewsCfg.metaFontSize, 11))));
   const customerReviewSliderSettings = useMemo<CustomerReviewSliderSettings>(() => {
     const token = asString(
       customerReviewsCfg.displayMode,
@@ -1675,16 +1732,7 @@ export default function JenksFrontpageV2() {
   const heroRightHasPanelImage = active.rightPanelBackgroundMode === 'IMAGE' && Boolean(active.rightPanelBackgroundImage);
   const hamburgerMenuFontSize = Math.max(16, Math.min(72, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontSize, 32))));
   const hamburgerMenuFontWeight = Math.max(500, Math.min(900, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontWeight, 800))));
-  const footerBrandText = asString(footerCfg.brandText, logoTextRaw || 'ZURIKARIBU');
-  const footerBrandSplit = useMemo(() => {
-    const compact = footerBrandText.replace(/\s+/g, '').trim();
-    if (!compact) return { left: 'ZURI', right: 'KARIBU' };
-    const pivot = Math.max(1, Math.ceil(compact.length / 2));
-    return {
-      left: compact.slice(0, pivot),
-      right: compact.slice(pivot),
-    };
-  }, [footerBrandText]);
+  const footerLogoCfg = useMemo(() => asRecord(footerCfg.logo), [footerCfg.logo]);
 
   const filteredCountryShowcase = useMemo(
     () => countryShowcaseData.filter((country) => countryRegion === 'ALL' || country.region === countryRegion),
@@ -2144,7 +2192,7 @@ export default function JenksFrontpageV2() {
                 className="absolute inset-0 h-full w-full bg-black/60"
                 onClick={() => setHamburgerOpen(false)}
               />
-              <div className="absolute left-0 top-0 h-full w-[96vw] max-w-[640px] overflow-y-auto bg-black/96 shadow-[0_20px_80px_rgba(0,0,0,0.55)]">
+              <div className="absolute left-0 top-0 h-full w-[98vw] max-w-[760px] overflow-y-auto bg-black/96 shadow-none">
                 <button
                   type="button"
                   className="absolute left-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white hover:bg-white/10"
@@ -2171,7 +2219,7 @@ export default function JenksFrontpageV2() {
                       <Link
                         key={`${link.label}-${link.href}`}
                         to={toSafeInternalHref(link.href)}
-                        className="block rounded border border-white/10 px-4 py-3 font-['Oswald'] uppercase leading-none tracking-[0.01em] text-white transition-colors hover:border-[#e66045] hover:text-[#e66045]"
+                        className="block whitespace-nowrap rounded border border-white/10 px-4 py-3 font-['Oswald'] uppercase leading-none tracking-[0.01em] text-white transition-colors hover:border-[#e66045] hover:text-[#e66045]"
                         style={{
                           fontSize: `${hamburgerMenuFontSize}px`,
                           fontWeight: hamburgerMenuFontWeight,
@@ -2583,10 +2631,21 @@ export default function JenksFrontpageV2() {
       {showHowItWorksSection ? (
       <section className="bg-white py-12" data-kimi-anim="fade-up" style={{ order: getSectionOrder('HOW_IT_WORKS') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          {sectionTitlesEnabled ? (
-            <h2 className={`font-['Oswald'] text-3xl font-bold uppercase ${sectionTitleClass}`}>
+          {sectionTitlesEnabled && getTextIconHeadingConfig('HOW_IT_WORKS').titleEnabled ? (
+            <h2
+              className={`font-['Oswald'] font-bold uppercase ${textIconSectionTitleClass('HOW_IT_WORKS')}`}
+              style={{ fontSize: `${getTextIconHeadingConfig('HOW_IT_WORKS').titleFontSize}px` }}
+            >
               {textIconSectionHeading('HOW_IT_WORKS')}
             </h2>
+          ) : null}
+          {getTextIconHeadingConfig('HOW_IT_WORKS').descriptionEnabled ? (
+            <p
+              className={`mt-2 text-black/65 ${textIconSectionTitleClass('HOW_IT_WORKS')}`}
+              style={{ fontSize: `${getTextIconHeadingConfig('HOW_IT_WORKS').descriptionFontSize}px` }}
+            >
+              {getTextIconHeadingConfig('HOW_IT_WORKS').description}
+            </p>
           ) : null}
           <div className={`mt-6 flex w-full gap-2 overflow-x-auto pb-1 scrollbar-hide ${sectionTitlesEnabled ? '' : 'mt-0'}`}>
             {howItWorksCards.map((item) => renderTextIconCard('HOW_IT_WORKS', item))}
@@ -2599,10 +2658,21 @@ export default function JenksFrontpageV2() {
       {showCustomTextIconSection ? (
       <section className="bg-white py-12" data-kimi-anim="fade-up" style={{ order: getSectionOrder('CUSTOM_TEXT_ICON') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          {sectionTitlesEnabled ? (
-            <h2 className={`font-['Oswald'] text-3xl font-bold uppercase ${sectionTitleClass}`}>
+          {sectionTitlesEnabled && getTextIconHeadingConfig('CUSTOM').titleEnabled ? (
+            <h2
+              className={`font-['Oswald'] font-bold uppercase ${textIconSectionTitleClass('CUSTOM')}`}
+              style={{ fontSize: `${getTextIconHeadingConfig('CUSTOM').titleFontSize}px` }}
+            >
               {textIconSectionHeading('CUSTOM')}
             </h2>
+          ) : null}
+          {getTextIconHeadingConfig('CUSTOM').descriptionEnabled ? (
+            <p
+              className={`mt-2 text-black/65 ${textIconSectionTitleClass('CUSTOM')}`}
+              style={{ fontSize: `${getTextIconHeadingConfig('CUSTOM').descriptionFontSize}px` }}
+            >
+              {getTextIconHeadingConfig('CUSTOM').description}
+            </p>
           ) : null}
           <div className={`mt-6 flex w-full gap-2 overflow-x-auto pb-1 scrollbar-hide ${sectionTitlesEnabled ? '' : 'mt-0'}`}>
             {customTextIconCards.map((item) => renderTextIconCard('CUSTOM', item))}
@@ -2701,8 +2771,8 @@ export default function JenksFrontpageV2() {
             <Link key={spot.id} to={toSafeInternalHref(spot.href)} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
               <img src={spot.image} alt={spot.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+              <p className="absolute left-8 top-8 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80">{spot.tag}</p>
               <div className="absolute bottom-8 left-8 right-8 text-white">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{spot.tag}</p>
                 <h3 className="mt-3 font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">{spot.title}</h3>
                 <p className="mt-3 text-sm text-white/78">{spot.description}</p>
                 <span
@@ -2764,7 +2834,7 @@ export default function JenksFrontpageV2() {
               )}
             </div>
             <div className={`pointer-events-none absolute left-8 right-8 z-10 ${heritageStatsAnchorClass}`}>
-              <div className="flex flex-wrap items-end gap-x-8 gap-y-4 rounded bg-black/20 px-5 py-4">
+              <div className="flex flex-wrap items-end gap-x-8 gap-y-4 px-1 py-1">
                 {heritageStats.map((stat) => (
                   <div key={stat.id} className="min-w-[120px]">
                     <p className="font-['Oswald'] text-5xl font-bold leading-none sm:text-6xl">
@@ -2785,7 +2855,10 @@ export default function JenksFrontpageV2() {
         <section className="bg-[#0b0e14] py-14 lg:py-16" data-kimi-anim="fade-up" style={{ order: getSectionOrder('CUSTOMER_REVIEWS') }}>
           <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
             <p className="text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">From Our Customers</p>
-            <h2 className="mt-2 text-center font-['Oswald'] text-5xl font-bold uppercase leading-none text-white">
+            <h2
+              className="mt-2 text-center font-['Oswald'] font-bold uppercase leading-none text-white"
+              style={{ fontSize: `${customerReviewsTitleFontSize}px` }}
+            >
               {customerReviewsTitle}
             </h2>
             {customerReviewSliderSettings.mode === 'SLIDER' ? (
@@ -2797,15 +2870,20 @@ export default function JenksFrontpageV2() {
                 {customerReviewActiveCard ? (
                   <article
                     key={customerReviewActiveCard.id}
-                    className="w-full max-w-3xl rounded border border-white/12 bg-white/[0.04] p-6 text-white transition-all hover:-translate-y-1 hover:border-white/30 hover:shadow-[0_16px_34px_rgba(0,0,0,0.35)]"
+                    className="w-full max-w-3xl p-6 text-center text-white transition-all"
                     style={{ transitionDuration: `${customerReviewSliderSettings.transitionMs}ms` }}
                   >
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-center gap-2">
                       <p className="font-semibold uppercase tracking-[0.08em]">{customerReviewActiveCard.customerName}</p>
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">{customerReviewActiveCard.source}</p>
+                      <span className="text-white/45">•</span>
+                      <p className="uppercase tracking-[0.16em] text-white/55" style={{ fontSize: `${customerReviewsMetaFontSize}px` }}>
+                        {customerReviewActiveCard.source}
+                      </p>
                     </div>
-                    <p className="mt-1 text-xs text-white/62">{customerReviewActiveCard.location || 'Africa'}</p>
-                    <div className="mt-3 flex items-center gap-1 text-[#f6b73c]">
+                    <p className="mt-1 text-white/62" style={{ fontSize: `${customerReviewsMetaFontSize}px` }}>
+                      {customerReviewActiveCard.location || 'Africa'}
+                    </p>
+                    <div className="mt-3 flex items-center justify-center gap-1 text-[#f6b73c]">
                       {Array.from({ length: 5 }).map((_, starIndex) => (
                         <Star
                           key={`${customerReviewActiveCard.id}-star-${starIndex}`}
@@ -2813,7 +2891,9 @@ export default function JenksFrontpageV2() {
                         />
                       ))}
                     </div>
-                    <p className="mt-3 text-sm leading-relaxed text-white/82">{customerReviewActiveCard.message}</p>
+                    <p className="mt-3 leading-relaxed text-white/82" style={{ fontSize: `${customerReviewsMessageFontSize}px` }}>
+                      {customerReviewActiveCard.message}
+                    </p>
                   </article>
                 ) : null}
                 {customerReviewSliderSettings.showDots && customerReviewCards.length > 1 ? (
@@ -2837,14 +2917,19 @@ export default function JenksFrontpageV2() {
                 {customerReviewCards.map((review) => (
                   <article
                     key={review.id}
-                    className="rounded border border-white/12 bg-white/[0.04] p-5 text-white transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:shadow-[0_16px_34px_rgba(0,0,0,0.35)]"
+                    className="p-5 text-center text-white transition-all duration-300"
                   >
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-center gap-2">
                       <p className="font-semibold uppercase tracking-[0.08em]">{review.customerName}</p>
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">{review.source}</p>
+                      <span className="text-white/45">•</span>
+                      <p className="uppercase tracking-[0.16em] text-white/55" style={{ fontSize: `${customerReviewsMetaFontSize}px` }}>
+                        {review.source}
+                      </p>
                     </div>
-                    <p className="mt-1 text-xs text-white/62">{review.location || 'Africa'}</p>
-                    <div className="mt-3 flex items-center gap-1 text-[#f6b73c]">
+                    <p className="mt-1 text-white/62" style={{ fontSize: `${customerReviewsMetaFontSize}px` }}>
+                      {review.location || 'Africa'}
+                    </p>
+                    <div className="mt-3 flex items-center justify-center gap-1 text-[#f6b73c]">
                       {Array.from({ length: 5 }).map((_, starIndex) => (
                         <Star
                           key={`${review.id}-star-${starIndex}`}
@@ -2852,7 +2937,9 @@ export default function JenksFrontpageV2() {
                         />
                       ))}
                     </div>
-                    <p className="mt-3 text-sm leading-relaxed text-white/82">{review.message}</p>
+                    <p className="mt-3 leading-relaxed text-white/82" style={{ fontSize: `${customerReviewsMessageFontSize}px` }}>
+                      {review.message}
+                    </p>
                   </article>
                 ))}
               </div>
@@ -2865,10 +2952,21 @@ export default function JenksFrontpageV2() {
       {showTrustSection ? (
         <section className="bg-white py-16 lg:py-20" data-kimi-anim="fade-up" style={{ order: getSectionOrder('SHOP_WITH_CONFIDENCE') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          {sectionTitlesEnabled ? (
-            <h2 className={`font-['Oswald'] text-4xl font-bold uppercase leading-none ${sectionTitleClass}`}>
+          {sectionTitlesEnabled && getTextIconHeadingConfig('SHOP_WITH_CONFIDENCE').titleEnabled ? (
+            <h2
+              className={`font-['Oswald'] font-bold uppercase leading-none ${textIconSectionTitleClass('SHOP_WITH_CONFIDENCE')}`}
+              style={{ fontSize: `${getTextIconHeadingConfig('SHOP_WITH_CONFIDENCE').titleFontSize}px` }}
+            >
               {textIconSectionHeading('SHOP_WITH_CONFIDENCE')}
             </h2>
+          ) : null}
+          {getTextIconHeadingConfig('SHOP_WITH_CONFIDENCE').descriptionEnabled ? (
+            <p
+              className={`mt-2 text-black/65 ${textIconSectionTitleClass('SHOP_WITH_CONFIDENCE')}`}
+              style={{ fontSize: `${getTextIconHeadingConfig('SHOP_WITH_CONFIDENCE').descriptionFontSize}px` }}
+            >
+              {getTextIconHeadingConfig('SHOP_WITH_CONFIDENCE').description}
+            </p>
           ) : null}
           <div className={`mt-8 flex w-full gap-2 overflow-x-auto pb-1 scrollbar-hide ${sectionTitlesEnabled ? '' : 'mt-0'}`}>
             {trustCards.map((item) => renderTextIconCard('SHOP_WITH_CONFIDENCE', item))}
@@ -2886,10 +2984,58 @@ export default function JenksFrontpageV2() {
               <h3 className="font-['Oswald'] text-4xl font-bold uppercase">{asString(newsletterCfg.title, 'JOIN THE MOVEMENT.')}</h3>
               <p className="mt-2 text-sm text-black/60">{asString(newsletterCfg.description, 'Subscribe for new arrivals and stories from the continent.')}</p>
             </div>
-            <form className="flex w-full max-w-[560px] gap-2" onSubmit={(event) => event.preventDefault()}>
-              <input className="h-10 flex-1 border border-black/20 px-3 text-sm outline-none" placeholder={asString(newsletterCfg.emailPlaceholder, 'Enter email')} />
-              <button className="h-10 bg-[#e66045] px-4 text-xs font-semibold uppercase tracking-[0.12em] text-white">{asString(newsletterCfg.submitLabel, 'Subscribe')}</button>
+            <form
+              className="flex w-full max-w-[560px] gap-2"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const email = newsletterEmail.trim().toLowerCase();
+                const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+                if (!emailValid) {
+                  setNewsletterStatus({ kind: 'error', message: 'Enter a valid email address.' });
+                  return;
+                }
+                setNewsletterSubmitting(true);
+                setNewsletterStatus({ kind: 'idle', message: '' });
+                try {
+                  const response = await api.homepageSections.subscribeHomepageNewsletter({
+                    email,
+                    source: 'jenks-v2-frontpage',
+                  });
+                  if (!response.success) {
+                    throw new Error(String(response.message || 'Subscription failed.'));
+                  }
+                  setNewsletterStatus({
+                    kind: 'success',
+                    message: asString(newsletterCfg.successMessage, 'You are subscribed.'),
+                  });
+                  setNewsletterEmail('');
+                } catch (error: any) {
+                  const message = String(error?.response?.data?.message || error?.message || 'Unable to subscribe right now.');
+                  setNewsletterStatus({ kind: 'error', message });
+                } finally {
+                  setNewsletterSubmitting(false);
+                }
+              }}
+            >
+              <input
+                className="h-10 flex-1 border border-black/20 px-3 text-sm outline-none"
+                placeholder={asString(newsletterCfg.emailPlaceholder, 'Enter email')}
+                value={newsletterEmail}
+                onChange={(event) => setNewsletterEmail(event.target.value)}
+              />
+              <button
+                type="submit"
+                disabled={newsletterSubmitting}
+                className="h-10 bg-[#e66045] px-4 text-xs font-semibold uppercase tracking-[0.12em] text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {newsletterSubmitting ? 'Submitting...' : asString(newsletterCfg.submitLabel, 'Subscribe')}
+              </button>
             </form>
+            {newsletterStatus.kind !== 'idle' ? (
+              <p className={`text-xs ${newsletterStatus.kind === 'success' ? 'text-green-700' : 'text-red-600'}`}>
+                {newsletterStatus.message}
+              </p>
+            ) : null}
           </div>
         </div>
         </section>
@@ -2915,10 +3061,29 @@ export default function JenksFrontpageV2() {
         <div className="relative z-10 w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
             <div>
-              <p className="font-['Oswald'] text-3xl uppercase tracking-[0.08em]">
-                {footerBrandSplit.left}
-                <span className="text-[#e66045]">{footerBrandSplit.right}</span>
-              </p>
+              {asString(footerLogoCfg.mode, 'TEXT').toUpperCase() === 'IMAGE' && footerLogoImageUrl ? (
+                <img
+                  src={footerLogoImageUrl}
+                  alt={asString(footerLogoCfg.altText, 'Jenks')}
+                  className="object-contain"
+                  style={{
+                    width: Math.max(80, Math.round(asNumber(footerLogoCfg.width, 180))),
+                    height: Math.max(24, Math.round(asNumber(footerLogoCfg.height, 52))),
+                  }}
+                />
+              ) : (
+                <p
+                  className="font-['Oswald'] uppercase tracking-[0.08em]"
+                  style={{
+                    color: asString(footerLogoCfg.textColor, '#ffffff'),
+                    fontFamily: asString(footerLogoCfg.fontFamily, 'Oswald'),
+                    fontSize: `${Math.max(16, Math.round(asNumber(footerLogoCfg.fontSize, 30)))}px`,
+                    fontWeight: 700,
+                  }}
+                >
+                  {asString(footerLogoCfg.text, asString(footerCfg.brandText, 'Jenks')).toUpperCase()}
+                </p>
+              )}
               <p className="mt-3 text-sm text-white/65">{asString(footerCfg.address, 'Made by Africans. Worn by the world.')}</p>
               <div className="mt-5 flex items-center gap-3 text-white/75">
                 {footerSocialLinks.map((social) => {
@@ -2932,7 +3097,7 @@ export default function JenksFrontpageV2() {
               </div>
             </div>
 
-            {footerLinkGroups.slice(0, 2).map((group) => (
+            {footerLinkGroups.map((group) => (
               <div key={group.id}>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">{group.title}</p>
                 <div className="mt-3 space-y-2 text-sm text-white/75">

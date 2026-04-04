@@ -11070,27 +11070,41 @@ const jenksV2FrontpageManagerApi = {
           footer: {
             enabled: boolean;
             brandText: string;
+            logo: {
+              mode: 'TEXT' | 'IMAGE';
+              text: string;
+              textColor: string;
+              fontFamily: string;
+              fontSize: number;
+              imageUrl: string;
+              altText: string;
+              width: number;
+              height: number;
+            };
             address: string;
             contactEmail: string;
             contactPhone: string;
             copyright: string;
-            mapEnabled: boolean;
-            mapImage: string;
-            mapOverlayOpacity: number;
-            mapHeight: number;
-            policyLinks: Array<{ id: string; label: string; href: string; enabled: boolean }>;
-            socialLinks: Array<{ id: string; label: string; icon?: string; href: string; enabled: boolean }>;
+            map: {
+              enabled: boolean;
+              image: string;
+              overlayColor: string;
+              overlayOpacity: number;
+              minHeight: number;
+            };
+            policyLinks: Array<{ id: string; label: string; hrefMode?: 'PAGE' | 'CUSTOM_URL'; pageKey?: string; href: string; enabled: boolean }>;
+            socialLinks: Array<{ id: string; label: string; icon?: string; hrefMode?: 'PAGE' | 'CUSTOM_URL'; pageKey?: string; href: string; enabled: boolean }>;
             linkGroups: Array<{
               id: string;
               title: string;
-              links: Array<{ id: string; label: string; href: string; enabled: boolean }>;
+              links: Array<{ id: string; label: string; hrefMode?: 'PAGE' | 'CUSTOM_URL'; pageKey?: string; href: string; enabled: boolean }>;
             }>;
           };
         };
         sectionVisibility: {
-          sectionTitleSettings: {
-            enabled: boolean;
-            alignment: 'LEFT' | 'CENTER' | 'RIGHT';
+          titleSettings: {
+            show: boolean;
+            align: 'LEFT' | 'CENTER' | 'RIGHT';
           };
           sections: Array<{
             id: string;

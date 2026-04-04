@@ -217,6 +217,16 @@ type TextIconCardStyle = {
   descriptionFontSize: number;
 };
 
+type TextIconSectionHeading = {
+  title: string;
+  titleEnabled: boolean;
+  titlePosition: 'LEFT' | 'CENTER' | 'RIGHT';
+  titleFontSize: number;
+  description: string;
+  descriptionEnabled: boolean;
+  descriptionFontSize: number;
+};
+
 type FeaturedCard = {
   id: string;
   key: string;
@@ -247,6 +257,9 @@ type CustomerReviewStaticMessage = {
 type CustomerReviewsSettings = {
   enabled: boolean;
   sectionTitle: string;
+  titleFontSize: number;
+  messageFontSize: number;
+  metaFontSize: number;
   sourceMode: 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH';
   maxItems: number;
   displayMode: 'GRID' | 'SLIDER';
@@ -322,6 +335,18 @@ type FooterMapSettings = {
   minHeight: number;
 };
 
+type FooterLogoSettings = {
+  mode: 'TEXT' | 'IMAGE';
+  text: string;
+  textColor: string;
+  fontFamily: string;
+  fontSize: number;
+  imageUrl: string;
+  altText: string;
+  width: number;
+  height: number;
+};
+
 type LinkItem = {
   id: string;
   label: string;
@@ -350,6 +375,7 @@ type NewsletterFooterSettings = {
   footer: {
     enabled: boolean;
     brandText: string;
+    logo: FooterLogoSettings;
     address: string;
     contactEmail: string;
     contactPhone: string;
@@ -392,6 +418,11 @@ type JenksV2FrontpageManagerSettings = {
       howItWorks: string;
       custom: string;
       shopWithConfidence: string;
+    };
+    sectionHeadings: {
+      howItWorks: TextIconSectionHeading;
+      custom: TextIconSectionHeading;
+      shopWithConfidence: TextIconSectionHeading;
     };
     cardStyle: TextIconCardStyle;
     sectionStyles: {
@@ -865,6 +896,35 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         custom: 'Custom',
         shopWithConfidence: 'Shop With Confidence',
       },
+      sectionHeadings: {
+        howItWorks: {
+          title: 'How It Works',
+          titleEnabled: true,
+          titlePosition: 'LEFT',
+          titleFontSize: 30,
+          description: '',
+          descriptionEnabled: false,
+          descriptionFontSize: 14,
+        },
+        custom: {
+          title: 'Custom',
+          titleEnabled: true,
+          titlePosition: 'LEFT',
+          titleFontSize: 30,
+          description: '',
+          descriptionEnabled: false,
+          descriptionFontSize: 14,
+        },
+        shopWithConfidence: {
+          title: 'Shop With Confidence',
+          titleEnabled: true,
+          titlePosition: 'LEFT',
+          titleFontSize: 30,
+          description: '',
+          descriptionEnabled: false,
+          descriptionFontSize: 14,
+        },
+      },
       cardStyle: {
         cardMinHeight: 220,
         cardWidth: 320,
@@ -1057,6 +1117,9 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
     customerReviews: {
       enabled: true,
       sectionTitle: 'From Our Customers',
+      titleFontSize: 56,
+      messageFontSize: 14,
+      metaFontSize: 12,
       sourceMode: 'BOTH',
       maxItems: 6,
       displayMode: 'SLIDER',
@@ -1089,6 +1152,17 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       footer: {
         enabled: true,
         brandText: 'Jenks',
+        logo: {
+          mode: 'TEXT',
+          text: 'Jenks',
+          textColor: '#ffffff',
+          fontFamily: 'Oswald',
+          fontSize: 30,
+          imageUrl: '',
+          altText: 'Jenks',
+          width: 180,
+          height: 48,
+        },
         address: 'Lagos, Nigeria',
         contactEmail: 'support@jenks.africa',
         contactPhone: '+234 000 000 0000',
@@ -1459,6 +1533,37 @@ const normalizeTextIconCards = (
     custom: (getString(rawSectionTitles.custom) || fallbackSectionTitles.custom).slice(0, 120),
     shopWithConfidence: (getString(rawSectionTitles.shopWithConfidence) || fallbackSectionTitles.shopWithConfidence).slice(0, 120),
   };
+  const rawSectionHeadings = asRecord(row.sectionHeadings);
+  const fallbackSectionHeadings = fallback.sectionHeadings;
+  const normalizeHeading = (
+    key: keyof JenksV2FrontpageManagerSettings['textIconCards']['sectionHeadings'],
+    input: Record<string, unknown>,
+    fallbackHeading: TextIconSectionHeading
+  ): TextIconSectionHeading => {
+    const positionToken = String(input.titlePosition || fallbackHeading.titlePosition || 'LEFT')
+      .trim()
+      .toUpperCase();
+    const titlePosition: TextIconSectionHeading['titlePosition'] =
+      positionToken === 'CENTER' || positionToken === 'RIGHT' ? positionToken : 'LEFT';
+    return {
+      title: (getString(input.title) || sectionTitles[key] || fallbackHeading.title).slice(0, 140),
+      titleEnabled: getBoolean(input.titleEnabled) ?? fallbackHeading.titleEnabled,
+      titlePosition,
+      titleFontSize: clamp(Math.round(getNumber(input.titleFontSize) ?? fallbackHeading.titleFontSize), 10, 96),
+      description: (getString(input.description) || fallbackHeading.description || '').slice(0, 400),
+      descriptionEnabled: getBoolean(input.descriptionEnabled) ?? fallbackHeading.descriptionEnabled,
+      descriptionFontSize: clamp(Math.round(getNumber(input.descriptionFontSize) ?? fallbackHeading.descriptionFontSize), 8, 72),
+    };
+  };
+  const sectionHeadings = {
+    howItWorks: normalizeHeading('howItWorks', asRecord(rawSectionHeadings.howItWorks), fallbackSectionHeadings.howItWorks),
+    custom: normalizeHeading('custom', asRecord(rawSectionHeadings.custom), fallbackSectionHeadings.custom),
+    shopWithConfidence: normalizeHeading(
+      'shopWithConfidence',
+      asRecord(rawSectionHeadings.shopWithConfidence),
+      fallbackSectionHeadings.shopWithConfidence
+    ),
+  };
   const rawCardStyle = asRecord(row.cardStyle);
   const fallbackCardStyle = fallback.cardStyle;
   const normalizeCardStyle = (input: Record<string, unknown>, fallbackStyle: TextIconCardStyle): TextIconCardStyle => ({
@@ -1472,11 +1577,11 @@ const normalizeTextIconCards = (
   const rawSectionStyles = asRecord(row.sectionStyles);
   const fallbackSectionStyles = fallback.sectionStyles;
   const sectionStyles = {
-    howItWorks: normalizeCardStyle(asRecord(rawSectionStyles.howItWorks), fallbackSectionStyles.howItWorks || cardStyle),
-    custom: normalizeCardStyle(asRecord(rawSectionStyles.custom), fallbackSectionStyles.custom || cardStyle),
+    howItWorks: normalizeCardStyle(asRecord(rawSectionStyles.howItWorks), fallbackSectionStyles.howItWorks),
+    custom: normalizeCardStyle(asRecord(rawSectionStyles.custom), fallbackSectionStyles.custom),
     shopWithConfidence: normalizeCardStyle(
       asRecord(rawSectionStyles.shopWithConfidence),
-      fallbackSectionStyles.shopWithConfidence || cardStyle
+      fallbackSectionStyles.shopWithConfidence
     ),
   };
   const rows = Array.isArray(row.cards) ? row.cards : fallback.cards;
@@ -1501,6 +1606,7 @@ const normalizeTextIconCards = (
     .slice(0, 100);
   return {
     sectionTitles,
+    sectionHeadings,
     cardStyle,
     sectionStyles,
     allowCustomCards: getBoolean(row.allowCustomCards) ?? fallback.allowCustomCards,
@@ -1575,6 +1681,9 @@ const normalizeCustomerReviews = (
   return {
     enabled: getBoolean(row.enabled) ?? fallback.enabled,
     sectionTitle: (getString(row.sectionTitle) || fallback.sectionTitle || 'From Our Customers').slice(0, 140),
+    titleFontSize: clamp(Math.round(getNumber(row.titleFontSize) ?? fallback.titleFontSize), 14, 120),
+    messageFontSize: clamp(Math.round(getNumber(row.messageFontSize) ?? fallback.messageFontSize), 10, 64),
+    metaFontSize: clamp(Math.round(getNumber(row.metaFontSize) ?? fallback.metaFontSize), 8, 40),
     sourceMode:
       sourceModeToken === 'STATIC_ONLY' || sourceModeToken === 'PRODUCT_REVIEWS_ONLY' || sourceModeToken === 'BOTH'
         ? (sourceModeToken as CustomerReviewsSettings['sourceMode'])
@@ -1685,8 +1794,10 @@ const normalizeLinkItem = (raw: unknown, fallback: LinkItem): LinkItem => {
   const row = asRecord(raw);
   const fallbackMode: FooterLinkMode = fallback.hrefMode === 'PAGE' ? 'PAGE' : 'CUSTOM_URL';
   const modeToken = String(row.hrefMode || fallbackMode).trim().toUpperCase();
-  const hrefMode: FooterLinkMode = modeToken === 'PAGE' ? 'PAGE' : 'CUSTOM_URL';
-  const pageKey = (getString(row.pageKey) || fallback.pageKey || '').slice(0, 80).toUpperCase();
+  const hrefMode: FooterLinkMode = modeToken === 'PAGE' || modeToken === 'DROPDOWN' ? 'PAGE' : 'CUSTOM_URL';
+  const pageKey = (getString(row.pageKey) || getString((row as Record<string, unknown>).routeKey) || fallback.pageKey || '')
+    .slice(0, 80)
+    .toUpperCase();
   const baseHref = normalizeHref(row.href, fallback.href);
   const href = hrefMode === 'PAGE' ? resolveFooterPageHref(pageKey, baseHref) : baseHref;
   return {
@@ -1710,8 +1821,27 @@ const normalizeNewsletterFooter = (
   const groupsRaw = Array.isArray(footerRaw.linkGroups) ? footerRaw.linkGroups : fallback.footer.linkGroups;
   const policyRaw = Array.isArray(footerRaw.policyLinks) ? footerRaw.policyLinks : fallback.footer.policyLinks;
   const socialRaw = Array.isArray(footerRaw.socialLinks) ? footerRaw.socialLinks : fallback.footer.socialLinks;
-  const mapRaw = asRecord(footerRaw.map);
+  const mapRawRecord = asRecord(footerRaw.map);
   const fallbackMap = fallback.footer.map;
+  const footerLogoRaw = asRecord(footerRaw.logo);
+  const fallbackLogo = fallback.footer.logo;
+  const legacyMapOverlay = getNumber(footerRaw.mapOverlayOpacity);
+  const legacyMapOverlayPercent =
+    typeof legacyMapOverlay === 'number'
+      ? legacyMapOverlay <= 1
+        ? Math.round(legacyMapOverlay * 100)
+        : Math.round(legacyMapOverlay)
+      : undefined;
+  const mapRaw =
+    Object.keys(mapRawRecord).length > 0
+      ? mapRawRecord
+      : ({
+          enabled: footerRaw.showMapUnderlay,
+          image: footerRaw.mapImage,
+          overlayColor: '#0a0a0a',
+          overlayOpacity: legacyMapOverlayPercent,
+          minHeight: footerRaw.mapHeight,
+        } as Record<string, unknown>);
   return {
     newsletter: {
       enabled: getBoolean(newsletterRaw.enabled) ?? fallback.newsletter.enabled,
@@ -1724,6 +1854,17 @@ const normalizeNewsletterFooter = (
     footer: {
       enabled: getBoolean(footerRaw.enabled) ?? fallback.footer.enabled,
       brandText: (getString(footerRaw.brandText) || fallback.footer.brandText).slice(0, 120),
+      logo: {
+        mode: String(footerLogoRaw.mode || fallbackLogo.mode || 'TEXT').trim().toUpperCase() === 'IMAGE' ? 'IMAGE' : 'TEXT',
+        text: (getString(footerLogoRaw.text) || fallbackLogo.text || '').slice(0, 120),
+        textColor: (getString(footerLogoRaw.textColor) || fallbackLogo.textColor || '#ffffff').slice(0, 30),
+        fontFamily: (getString(footerLogoRaw.fontFamily) || fallbackLogo.fontFamily || 'Oswald').slice(0, 120),
+        fontSize: clamp(Math.round(getNumber(footerLogoRaw.fontSize) ?? fallbackLogo.fontSize), 10, 96),
+        imageUrl: (getString(footerLogoRaw.imageUrl) || fallbackLogo.imageUrl || '').slice(0, 2000),
+        altText: (getString(footerLogoRaw.altText) || fallbackLogo.altText || 'Footer logo').slice(0, 120),
+        width: clamp(Math.round(getNumber(footerLogoRaw.width) ?? fallbackLogo.width), 40, 900),
+        height: clamp(Math.round(getNumber(footerLogoRaw.height) ?? fallbackLogo.height), 16, 500),
+      },
       address: (getString(footerRaw.address) || fallback.footer.address).slice(0, 200),
       contactEmail: (getString(footerRaw.contactEmail) || fallback.footer.contactEmail).slice(0, 120),
       contactPhone: (getString(footerRaw.contactPhone) || fallback.footer.contactPhone).slice(0, 80),
@@ -1747,7 +1888,7 @@ const normalizeNewsletterFooter = (
         image: (getString(mapRaw.image) || fallbackMap.image || '').slice(0, 2000),
         overlayColor: (getString(mapRaw.overlayColor) || fallbackMap.overlayColor || '#0a0a0a').slice(0, 40),
         overlayOpacity: clamp(Math.round(getNumber(mapRaw.overlayOpacity) ?? fallbackMap.overlayOpacity), 0, 100),
-        minHeight: clamp(Math.round(getNumber(mapRaw.minHeight) ?? fallbackMap.minHeight), 160, 900),
+        minHeight: clamp(Math.round(getNumber(mapRaw.minHeight) ?? fallbackMap.minHeight), 120, 900),
       },
     },
   };
@@ -1765,6 +1906,7 @@ const buildTemplateSnapshot = (
     });
     return {
       sectionTitles: settings.textIconCards.sectionTitles,
+      sectionHeadings: settings.textIconCards.sectionHeadings,
       cardStyle: settings.textIconCards.cardStyle,
       sectionStyles: settings.textIconCards.sectionStyles,
       allowCustomCards: settings.textIconCards.allowCustomCards,
@@ -2008,6 +2150,7 @@ const applyTemplateSnapshotToSettings = (
       next.textIconCards = {
         ...next.textIconCards,
         sectionTitles: normalized.sectionTitles,
+        sectionHeadings: normalized.sectionHeadings,
         cardStyle: normalized.cardStyle,
         sectionStyles: normalized.sectionStyles,
         allowCustomCards: normalized.allowCustomCards,

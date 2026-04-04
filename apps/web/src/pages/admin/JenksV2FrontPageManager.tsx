@@ -235,6 +235,9 @@ type CustomerReviewStaticMessage = {
 type CustomerReviews = {
   enabled: boolean;
   sectionTitle: string;
+  titleFontSize: number;
+  messageFontSize: number;
+  metaFontSize: number;
   sourceMode: 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH';
   maxItems: number;
   displayMode: 'GRID' | 'SLIDER';
@@ -312,7 +315,7 @@ type Heritage = {
   stats: HeritageStat[];
 };
 
-type LinkMode = 'DROPDOWN' | 'CUSTOM_URL';
+type LinkMode = 'PAGE' | 'CUSTOM_URL';
 
 type LinkItem = {
   id: string;
@@ -320,6 +323,7 @@ type LinkItem = {
   icon?: string;
   href: string;
   hrefMode: LinkMode;
+  pageKey?: string;
   routeKey?: string;
   customUrl?: string;
   enabled: boolean;
@@ -329,6 +333,36 @@ type LinkGroup = {
   id: string;
   title: string;
   links: LinkItem[];
+};
+
+type FooterLogoSettings = {
+  mode: 'TEXT' | 'IMAGE';
+  text: string;
+  textColor: string;
+  fontFamily: string;
+  fontSize: number;
+  imageUrl: string;
+  altText: string;
+  width: number;
+  height: number;
+};
+
+type FooterMapSettings = {
+  enabled: boolean;
+  image: string;
+  overlayColor: string;
+  overlayOpacity: number;
+  minHeight: number;
+};
+
+type TextIconSectionHeading = {
+  title: string;
+  titleEnabled: boolean;
+  titlePosition: 'LEFT' | 'CENTER' | 'RIGHT';
+  titleFontSize: number;
+  description: string;
+  descriptionEnabled: boolean;
+  descriptionFontSize: number;
 };
 
 type NewsletterFooter = {
@@ -343,6 +377,7 @@ type NewsletterFooter = {
   footer: {
     enabled: boolean;
     brandText: string;
+    logo: FooterLogoSettings;
     address: string;
     contactEmail: string;
     contactPhone: string;
@@ -350,10 +385,7 @@ type NewsletterFooter = {
     policyLinks: LinkItem[];
     socialLinks: LinkItem[];
     linkGroups: LinkGroup[];
-    showMapUnderlay: boolean;
-    mapImage: string;
-    mapOverlayOpacity: number;
-    mapHeight: number;
+    map: FooterMapSettings;
   };
 };
 
@@ -379,6 +411,11 @@ type JenksV2FrontpageConfig = {
   };
   textIconCards: {
     sectionTitles: TextIconSectionTitles;
+    sectionHeadings: {
+      howItWorks: TextIconSectionHeading;
+      custom: TextIconSectionHeading;
+      shopWithConfidence: TextIconSectionHeading;
+    };
     cardStyle: TextIconCardStyle;
     sectionStyles: TextIconSectionStyles;
     allowCustomCards: boolean;
@@ -397,6 +434,10 @@ type JenksV2FrontpageConfig = {
     sectionTitleSettings?: {
       showTitles: boolean;
       alignment: SectionTitleAlign;
+    };
+    titleSettings?: {
+      show: boolean;
+      align: SectionTitleAlign;
     };
   };
   source?: 'DATABASE' | 'DEFAULT';
@@ -418,7 +459,13 @@ const TEMPLATES: Array<{ key: TemplateKey; label: string }> = [
   { key: 'NEWSLETTER_FOOTER', label: 'Newsletter and Footer' },
 ];
 
-const ROUTE_OPTIONS = [
+type RouteOption = {
+  key: string;
+  label: string;
+  href: string;
+};
+
+const ROUTE_OPTIONS: RouteOption[] = [
   { key: 'HOME', label: 'Home', href: '/' },
   { key: 'SHOP', label: 'Shop', href: '/shop' },
   { key: 'READY_TO_WEAR', label: 'Ready To Wear', href: '/ready-to-wear' },
@@ -432,6 +479,38 @@ const ROUTE_OPTIONS = [
   { key: 'AUTH_LOGIN', label: 'Sign In', href: '/auth/login' },
 ];
 const PAGE_ROUTE_OPTIONS = ROUTE_OPTIONS.filter((route) => route.key !== 'SHOP');
+
+const toBlogRouteOptions = (input: unknown): RouteOption[] => {
+  if (!Array.isArray(input)) return [];
+  const seenHrefs = new Set<string>();
+  const seenKeys = new Set<string>();
+  const routes: RouteOption[] = [];
+  for (const entry of input) {
+    const row = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+    const rawSlug = String(row.slug || '').trim();
+    const rawTitle = String(row.title || '').trim();
+    const rawLink = String(row.link || '').trim();
+    const href = rawLink || (rawSlug ? `/stories/${rawSlug}` : '');
+    if (!href || !href.startsWith('/')) continue;
+    if (seenHrefs.has(href)) continue;
+    const slugToken = rawSlug ? rawSlug : rawTitle || `story-${routes.length + 1}`;
+    const normalizedKeyBase = `BLOG_${slugToken.replace(/[^a-z0-9]+/gi, '_').toUpperCase()}`;
+    let key = normalizedKeyBase || `BLOG_${routes.length + 1}`;
+    let keyCounter = 2;
+    while (seenKeys.has(key)) {
+      key = `${normalizedKeyBase}_${keyCounter}`;
+      keyCounter += 1;
+    }
+    seenKeys.add(key);
+    seenHrefs.add(href);
+    routes.push({
+      key,
+      label: rawTitle ? `Story: ${rawTitle}` : `Story: ${rawSlug || `#${routes.length + 1}`}`,
+      href,
+    });
+  }
+  return routes;
+};
 
 const AFRICAN_COUNTRIES_54 = [
   { code: 'DZ', name: 'Algeria' },
@@ -1081,6 +1160,9 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
   customerReviews: {
     enabled: true,
     sectionTitle: 'From Our Customers',
+    titleFontSize: 56,
+    messageFontSize: 14,
+    metaFontSize: 12,
     sourceMode: 'BOTH',
     maxItems: 6,
     displayMode: 'SLIDER',
@@ -1113,22 +1195,40 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     footer: {
       enabled: true,
       brandText: 'Jenks',
+      logo: {
+        mode: 'TEXT',
+        text: 'Jenks',
+        textColor: '#ffffff',
+        fontFamily: 'Oswald',
+        fontSize: 30,
+        imageUrl: '',
+        altText: 'Jenks',
+        width: 180,
+        height: 52,
+      },
       address: 'Lagos, Nigeria',
       contactEmail: 'support@jenks.africa',
       contactPhone: '+234 000 000 0000',
       copyright: '© Jenks. All rights reserved.',
-      policyLinks: [{ id: uid(), label: 'Privacy Policy', href: '/help-center', enabled: true }],
-      socialLinks: [{ id: uid(), label: 'Instagram', icon: 'Instagram', href: 'https://instagram.com', enabled: true }],
+      policyLinks: [{ id: uid(), label: 'Privacy Policy', hrefMode: 'PAGE', pageKey: 'HELP_CENTER', href: '/help-center', enabled: true }],
+      socialLinks: [{ id: uid(), label: 'Instagram', icon: 'Instagram', hrefMode: 'CUSTOM_URL', customUrl: 'https://instagram.com', href: 'https://instagram.com', enabled: true }],
       linkGroups: [
         {
           id: uid(),
           title: 'Shop',
           links: [
-            { id: uid(), label: 'Ready To Wear', href: '/ready-to-wear', enabled: true },
-            { id: uid(), label: 'Custom To Wear', href: '/custom', enabled: true },
+            { id: uid(), label: 'Ready To Wear', hrefMode: 'PAGE', pageKey: 'READY_TO_WEAR', href: '/ready-to-wear', enabled: true },
+            { id: uid(), label: 'Custom To Wear', hrefMode: 'PAGE', pageKey: 'CUSTOM_TO_WEAR', href: '/custom', enabled: true },
           ],
         },
       ],
+      map: {
+        enabled: false,
+        image: '',
+        overlayColor: '#0a0a0a',
+        overlayOpacity: 55,
+        minHeight: 320,
+      },
     },
   },
   sectionVisibility: {
@@ -1142,6 +1242,10 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       isCustom: false,
       configSnapshot: {},
     })),
+    titleSettings: {
+      show: true,
+      align: 'LEFT',
+    },
   },
 };
 
@@ -1348,12 +1452,13 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
 const normalizeLinkItemWithDefaults = (entry: unknown): LinkItem => {
   const row = entry && typeof entry === 'object' ? (entry as Partial<LinkItem>) : {};
   const hrefModeToken = String((row as any).hrefMode || '').trim().toUpperCase();
-  const hrefMode: LinkItem['hrefMode'] = hrefModeToken === 'CUSTOM_URL' ? 'CUSTOM_URL' : 'DROPDOWN';
-  const routeKey = String((row as any).routeKey || '').trim().toUpperCase();
+  const hrefMode: LinkItem['hrefMode'] =
+    hrefModeToken === 'CUSTOM_URL' ? 'CUSTOM_URL' : hrefModeToken === 'DROPDOWN' ? 'PAGE' : 'PAGE';
+  const pageKey = String((row as any).pageKey || (row as any).routeKey || '').trim().toUpperCase();
   const customUrl = String((row as any).customUrl || '').trim();
   const defaultHref = String(row.href || '/');
   const routeHref =
-    ROUTE_OPTIONS.find((entry) => entry.key === routeKey)?.href ||
+    ROUTE_OPTIONS.find((entry) => entry.key === pageKey)?.href ||
     defaultHref ||
     '/';
   const href = hrefMode === 'CUSTOM_URL' ? (customUrl || defaultHref || '/') : routeHref;
@@ -1363,9 +1468,62 @@ const normalizeLinkItemWithDefaults = (entry: unknown): LinkItem => {
     icon: typeof row.icon === 'string' ? row.icon : undefined,
     href,
     hrefMode,
-    routeKey: routeKey || undefined,
+    pageKey: pageKey || undefined,
+    routeKey: pageKey || undefined,
     customUrl: hrefMode === 'CUSTOM_URL' ? customUrl : '',
     enabled: typeof row.enabled === 'boolean' ? row.enabled : true,
+  };
+};
+
+const ensureSectionVisibilityTitleSettings = (
+  sectionVisibility: JenksV2FrontpageConfig['sectionVisibility'] | undefined
+): JenksV2FrontpageConfig['sectionVisibility'] => {
+  const current = sectionVisibility || { sections: [] };
+  const legacy = current.sectionTitleSettings;
+  const titleSettings = current.titleSettings || {
+    show: toBoolean(legacy?.showTitles, true),
+    align:
+      legacy?.alignment === 'CENTER' || legacy?.alignment === 'RIGHT'
+        ? legacy.alignment
+        : 'LEFT',
+  };
+  return {
+    ...current,
+    titleSettings: {
+      show: toBoolean(titleSettings.show, true),
+      align:
+        titleSettings.align === 'CENTER' || titleSettings.align === 'RIGHT'
+          ? titleSettings.align
+          : 'LEFT',
+    },
+  };
+};
+
+const normalizeTextIconHeading = (
+  raw: unknown,
+  fallback: TextIconSectionHeading,
+  fallbackTitle: string
+): TextIconSectionHeading => {
+  const row = raw && typeof raw === 'object' ? (raw as Partial<TextIconSectionHeading>) : {};
+  const titlePositionToken = String(row.titlePosition || fallback.titlePosition || 'LEFT').trim().toUpperCase();
+  const titlePosition: TextIconSectionHeading['titlePosition'] =
+    titlePositionToken === 'CENTER' || titlePositionToken === 'RIGHT' ? titlePositionToken : 'LEFT';
+  return {
+    title: String(row.title || fallback.title || fallbackTitle),
+    titleEnabled: toBoolean(row.titleEnabled, fallback.titleEnabled),
+    titlePosition,
+    titleFontSize: clamp(
+      Math.round(toNumber(String(row.titleFontSize ?? fallback.titleFontSize), fallback.titleFontSize)),
+      10,
+      72
+    ),
+    description: String(row.description || fallback.description || ''),
+    descriptionEnabled: toBoolean(row.descriptionEnabled, fallback.descriptionEnabled),
+    descriptionFontSize: clamp(
+      Math.round(toNumber(String(row.descriptionFontSize ?? fallback.descriptionFontSize), fallback.descriptionFontSize)),
+      8,
+      72
+    ),
   };
 };
 
@@ -1556,6 +1714,36 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
     customerReviews: {
       ...DEFAULT_CONFIG.customerReviews,
       ...(data.customerReviews || {}),
+      titleFontSize: clamp(
+        Math.round(
+          toNumber(
+            String((data.customerReviews as CustomerReviews | undefined)?.titleFontSize ?? DEFAULT_CONFIG.customerReviews.titleFontSize),
+            DEFAULT_CONFIG.customerReviews.titleFontSize
+          )
+        ),
+        14,
+        120
+      ),
+      messageFontSize: clamp(
+        Math.round(
+          toNumber(
+            String((data.customerReviews as CustomerReviews | undefined)?.messageFontSize ?? DEFAULT_CONFIG.customerReviews.messageFontSize),
+            DEFAULT_CONFIG.customerReviews.messageFontSize
+          )
+        ),
+        10,
+        64
+      ),
+      metaFontSize: clamp(
+        Math.round(
+          toNumber(
+            String((data.customerReviews as CustomerReviews | undefined)?.metaFontSize ?? DEFAULT_CONFIG.customerReviews.metaFontSize),
+            DEFAULT_CONFIG.customerReviews.metaFontSize
+          )
+        ),
+        8,
+        40
+      ),
       sourceMode: ((): CustomerReviews['sourceMode'] => {
         const token = String((data.customerReviews as CustomerReviews | undefined)?.sourceMode || '').trim().toUpperCase();
         if (token === 'STATIC_ONLY' || token === 'PRODUCT_REVIEWS_ONLY' || token === 'BOTH') return token;
@@ -1641,38 +1829,48 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
               };
             })
           : DEFAULT_CONFIG.newsletterFooter.footer.linkGroups,
-        showMapUnderlay: toBoolean(
-          (data.newsletterFooter as NewsletterFooter | undefined)?.footer?.showMapUnderlay,
-          DEFAULT_CONFIG.newsletterFooter.footer.showMapUnderlay
-        ),
-        mapImage: String(
-          (data.newsletterFooter as NewsletterFooter | undefined)?.footer?.mapImage ||
-            DEFAULT_CONFIG.newsletterFooter.footer.mapImage
-        ),
-        mapOverlayOpacity: clamp(
-          toNumber(
-            String(
-              (data.newsletterFooter as NewsletterFooter | undefined)?.footer?.mapOverlayOpacity ??
-                DEFAULT_CONFIG.newsletterFooter.footer.mapOverlayOpacity
+        map: {
+          ...DEFAULT_CONFIG.newsletterFooter.footer.map,
+          ...((data.newsletterFooter as NewsletterFooter | undefined)?.footer?.map || {}),
+          enabled: toBoolean(
+            (data.newsletterFooter as NewsletterFooter | undefined)?.footer?.map?.enabled,
+            DEFAULT_CONFIG.newsletterFooter.footer.map.enabled
+          ),
+          image: String(
+            (data.newsletterFooter as NewsletterFooter | undefined)?.footer?.map?.image ||
+              DEFAULT_CONFIG.newsletterFooter.footer.map.image
+          ),
+          overlayColor: String(
+            (data.newsletterFooter as NewsletterFooter | undefined)?.footer?.map?.overlayColor ||
+              DEFAULT_CONFIG.newsletterFooter.footer.map.overlayColor
+          ),
+          overlayOpacity: clamp(
+            Math.round(
+              toNumber(
+                String(
+                  (data.newsletterFooter as NewsletterFooter | undefined)?.footer?.map?.overlayOpacity ??
+                    DEFAULT_CONFIG.newsletterFooter.footer.map.overlayOpacity
+                ),
+                DEFAULT_CONFIG.newsletterFooter.footer.map.overlayOpacity
+              )
             ),
-            DEFAULT_CONFIG.newsletterFooter.footer.mapOverlayOpacity
+            0,
+            100
           ),
-          0,
-          1
-        ),
-        mapHeight: clamp(
-          Math.round(
-            toNumber(
-              String(
-                (data.newsletterFooter as NewsletterFooter | undefined)?.footer?.mapHeight ??
-                  DEFAULT_CONFIG.newsletterFooter.footer.mapHeight
-              ),
-              DEFAULT_CONFIG.newsletterFooter.footer.mapHeight
-            )
+          minHeight: clamp(
+            Math.round(
+              toNumber(
+                String(
+                  (data.newsletterFooter as NewsletterFooter | undefined)?.footer?.map?.minHeight ??
+                    DEFAULT_CONFIG.newsletterFooter.footer.map.minHeight
+                ),
+                DEFAULT_CONFIG.newsletterFooter.footer.map.minHeight
+              )
+            ),
+            80,
+            900
           ),
-          120,
-          720
-        ),
+        },
       },
     },
   };
@@ -1692,8 +1890,11 @@ export default function JenksV2FrontPageManager() {
   const [templateKey, setTemplateKey] = useState<TemplateKey>('TOP_NAVIGATIONS');
   const [templateOrder, setTemplateOrder] = useState('');
   const [addingMenuRouteKey, setAddingMenuRouteKey] = useState<string>('HOME');
+  const [blogRouteOptions, setBlogRouteOptions] = useState<RouteOption[]>([]);
 
   const logoUploadRef = useRef<HTMLInputElement | null>(null);
+  const footerLogoUploadRef = useRef<HTMLInputElement | null>(null);
+  const footerMapUploadRef = useRef<HTMLInputElement | null>(null);
   const heroUploadRef = useRef<HTMLInputElement | null>(null);
   const heroRightPanelUploadRef = useRef<HTMLInputElement | null>(null);
   const categoryImageUploadRef = useRef<HTMLInputElement | null>(null);
@@ -1712,13 +1913,28 @@ export default function JenksV2FrontPageManager() {
     return Number.isNaN(parsed.getTime()) ? 'Never' : parsed.toLocaleString();
   }, [config.updatedAt]);
 
+  const routeOptions = useMemo(() => {
+    if (blogRouteOptions.length === 0) return ROUTE_OPTIONS;
+    const seen = new Set<string>(ROUTE_OPTIONS.map((entry) => entry.href));
+    const merged = [...ROUTE_OPTIONS];
+    for (const route of blogRouteOptions) {
+      if (!seen.has(route.href)) {
+        merged.push(route);
+        seen.add(route.href);
+      }
+    }
+    return merged;
+  }, [blogRouteOptions]);
+
+  const pageRouteOptions = useMemo(() => routeOptions.filter((route) => route.key !== 'SHOP'), [routeOptions]);
+
   const fetchConfig = async () => {
     setLoading(true);
     setError('');
     try {
       const response = await api.jenksV2Frontpage.getConfig();
       if (!response.success || !response.data) throw new Error('Failed to load Jenks-V2 frontpage manager config.');
-      setConfig(sanitizeConfigHrefs(asApiConfig(response.data)));
+      setConfig(ensureSectionVisibilityTitleSettings(sanitizeConfigHrefs(asApiConfig(response.data))));
     } catch (loadError: any) {
       setError(loadError?.response?.data?.message || loadError?.message || 'Failed to load Jenks-V2 frontpage manager config.');
     } finally {
@@ -1726,8 +1942,22 @@ export default function JenksV2FrontPageManager() {
     }
   };
 
+  const fetchBlogRouteOptions = async () => {
+    try {
+      const response = await api.blogs.getAdminOptions();
+      if (response.success) {
+        setBlogRouteOptions(toBlogRouteOptions(response.data));
+        return;
+      }
+    } catch {
+      // Blog options are auxiliary; keep manager usable if this request fails.
+    }
+    setBlogRouteOptions([]);
+  };
+
   useEffect(() => {
     void fetchConfig();
+    void fetchBlogRouteOptions();
   }, []);
 
   useEffect(() => {
@@ -1773,6 +2003,31 @@ export default function JenksV2FrontPageManager() {
       setSuccess('Logo image uploaded.');
     } catch (uploadError: any) {
       setError(uploadError?.message || 'Failed to upload logo image.');
+    } finally {
+      setUploadingTarget(null);
+      event.target.value = '';
+    }
+  };
+
+  const handleFooterLogoUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    triggerUpload('footer-logo');
+    try {
+      const url = await uploadImage(file);
+      setConfig((prev) => ({
+        ...prev,
+        newsletterFooter: {
+          ...prev.newsletterFooter,
+          footer: {
+            ...prev.newsletterFooter.footer,
+            logo: { ...prev.newsletterFooter.footer.logo, mode: 'IMAGE', imageUrl: url },
+          },
+        },
+      }));
+      setSuccess('Footer logo image uploaded.');
+    } catch (uploadError: any) {
+      setError(uploadError?.message || 'Failed to upload footer logo image.');
     } finally {
       setUploadingTarget(null);
       event.target.value = '';
@@ -1932,6 +2187,31 @@ export default function JenksV2FrontPageManager() {
     }
   };
 
+  const handleFooterMapUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    triggerUpload('footer-map');
+    try {
+      const url = await uploadImage(file);
+      setConfig((prev) => ({
+        ...prev,
+        newsletterFooter: {
+          ...prev.newsletterFooter,
+          footer: {
+            ...prev.newsletterFooter.footer,
+            map: { ...prev.newsletterFooter.footer.map, image: url },
+          },
+        },
+      }));
+      setSuccess('Footer map image uploaded.');
+    } catch (uploadError: any) {
+      setError(uploadError?.message || 'Failed to upload footer map image.');
+    } finally {
+      setUploadingTarget(null);
+      event.target.value = '';
+    }
+  };
+
   const saveConfig = async () => {
     setSaving(true);
     setError('');
@@ -1940,7 +2220,7 @@ export default function JenksV2FrontPageManager() {
       const sanitized = sanitizeConfigHrefs(config);
       const response = await api.jenksV2Frontpage.updateConfig(toApiPayload(sanitized));
       if (!response.success) throw new Error('Failed to save Jenks-V2 frontpage manager config.');
-      setConfig(sanitizeConfigHrefs(asApiConfig(response.data)));
+      setConfig(ensureSectionVisibilityTitleSettings(sanitizeConfigHrefs(asApiConfig(response.data))));
       setSuccess('Jenks-V2 frontpage manager config saved.');
     } catch (saveError: any) {
       const issues = saveError?.response?.data?.issues;
@@ -1980,7 +2260,7 @@ export default function JenksV2FrontPageManager() {
       }
       const response = await api.jenksV2Frontpage.duplicateSection(payload);
       if (!response.success) throw new Error('Failed to duplicate section template.');
-      setConfig(sanitizeConfigHrefs(asApiConfig(response.data)));
+      setConfig(ensureSectionVisibilityTitleSettings(sanitizeConfigHrefs(asApiConfig(response.data))));
       setTemplateName('');
       setTemplateOrder('');
       setSuccess(response.message || 'Section template duplicated successfully.');
@@ -2517,7 +2797,7 @@ export default function JenksV2FrontPageManager() {
                   value={addingMenuRouteKey}
                   onChange={(event) => setAddingMenuRouteKey(event.target.value)}
                 >
-                  {ROUTE_OPTIONS.map((option) => (
+                  {routeOptions.map((option) => (
                     <option key={option.key} value={option.key}>
                       {option.label} ({option.href})
                     </option>
@@ -2526,7 +2806,7 @@ export default function JenksV2FrontPageManager() {
                 <Button
                   type="button"
                   onClick={() => {
-                    const route = ROUTE_OPTIONS.find((item) => item.key === addingMenuRouteKey);
+                    const route = routeOptions.find((item) => item.key === addingMenuRouteKey);
                     if (!route) return;
                     setConfig((prev) => ({
                       ...prev,
@@ -2587,7 +2867,7 @@ export default function JenksV2FrontPageManager() {
                         }))
                       }
                     >
-                      {ROUTE_OPTIONS.map((route) => (
+                      {routeOptions.map((route) => (
                         <option key={`${route.key}-${route.href}`} value={route.href}>
                           {route.label}
                         </option>
@@ -2612,7 +2892,7 @@ export default function JenksV2FrontPageManager() {
                       }
                     >
                       <option value="">(None)</option>
-                      {ROUTE_OPTIONS.map((route) => (
+                      {routeOptions.map((route) => (
                         <option key={route.key} value={route.key}>
                           {route.key}
                         </option>
@@ -2695,7 +2975,7 @@ export default function JenksV2FrontPageManager() {
                           }))
                         }
                       >
-                        {ROUTE_OPTIONS.map((route) => (
+                        {routeOptions.map((route) => (
                           <option key={`top-${route.key}`} value={route.href}>
                             {route.label}
                           </option>
@@ -2770,7 +3050,7 @@ export default function JenksV2FrontPageManager() {
                       }))
                     }
                   >
-                    {ROUTE_OPTIONS.map((route) => (
+                    {routeOptions.map((route) => (
                       <option key={`signin-${route.key}`} value={route.href}>
                         {route.label}
                       </option>
@@ -4191,7 +4471,7 @@ export default function JenksV2FrontPageManager() {
                       }))
                     }
                   >
-                    {ROUTE_OPTIONS.map((route) => (
+                    {routeOptions.map((route) => (
                       <option key={`${route.key}-${route.href}`} value={route.href}>
                         {route.label}
                       </option>
@@ -4406,7 +4686,7 @@ export default function JenksV2FrontPageManager() {
                         }))
                       }
                     >
-                      {ROUTE_OPTIONS.map((route) => (
+                      {routeOptions.map((route) => (
                         <option key={`${route.key}-${route.href}`} value={route.href}>
                           {route.label}
                         </option>
@@ -4674,7 +4954,7 @@ export default function JenksV2FrontPageManager() {
                     }))
                   }
                 >
-                  {ROUTE_OPTIONS.map((route) => (
+                  {routeOptions.map((route) => (
                     <option key={`cat-section-${route.key}`} value={route.href}>
                       {route.label}
                     </option>
@@ -4824,111 +5104,174 @@ export default function JenksV2FrontPageManager() {
               />
             </label>
           </div>
-          <div className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-5">
-            <label className="text-[11px]">
-              Card Min Height (px)
-              <input
-                type="number"
-                className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                value={config.textIconCards.cardStyle.cardMinHeight}
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    textIconCards: {
-                      ...prev.textIconCards,
-                      cardStyle: {
-                        ...prev.textIconCards.cardStyle,
-                        cardMinHeight: clamp(toNumber(event.target.value, prev.textIconCards.cardStyle.cardMinHeight), 80, 520),
-                      },
-                    },
-                  }))
-                }
-              />
-            </label>
-            <label className="text-[11px]">
-              Icon Size (px)
-              <input
-                type="number"
-                className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                value={config.textIconCards.cardStyle.iconSize}
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    textIconCards: {
-                      ...prev.textIconCards,
-                      cardStyle: {
-                        ...prev.textIconCards.cardStyle,
-                        iconSize: clamp(toNumber(event.target.value, prev.textIconCards.cardStyle.iconSize), 20, 120),
-                      },
-                    },
-                  }))
-                }
-              />
-            </label>
-            <label className="text-[11px]">
-              Card Width (px)
-              <input
-                type="number"
-                className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                value={config.textIconCards.cardStyle.cardWidth}
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    textIconCards: {
-                      ...prev.textIconCards,
-                      cardStyle: {
-                        ...prev.textIconCards.cardStyle,
-                        cardWidth: clamp(toNumber(event.target.value, prev.textIconCards.cardStyle.cardWidth), 180, 520),
-                      },
-                    },
-                  }))
-                }
-              />
-            </label>
-            <label className="text-[11px]">
-              Title Font Size (px)
-              <input
-                type="number"
-                className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                value={config.textIconCards.cardStyle.titleFontSize}
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    textIconCards: {
-                      ...prev.textIconCards,
-                      cardStyle: {
-                        ...prev.textIconCards.cardStyle,
-                        titleFontSize: clamp(toNumber(event.target.value, prev.textIconCards.cardStyle.titleFontSize), 8, 72),
-                      },
-                    },
-                  }))
-                }
-              />
-            </label>
-            <label className="text-[11px]">
-              Description Font Size (px)
-              <input
-                type="number"
-                className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                value={config.textIconCards.cardStyle.descriptionFontSize}
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    textIconCards: {
-                      ...prev.textIconCards,
-                      cardStyle: {
-                        ...prev.textIconCards.cardStyle,
-                        descriptionFontSize: clamp(
-                          toNumber(event.target.value, prev.textIconCards.cardStyle.descriptionFontSize),
-                          8,
-                          72
-                        ),
-                      },
-                    },
-                  }))
-                }
-              />
-            </label>
+          <div className="rounded-lg border p-4 space-y-3">
+            <h3 className="text-sm font-semibold">Per-Section Heading & Description Controls</h3>
+            {(
+              [
+                { key: 'howItWorks', label: 'How It Works' },
+                { key: 'custom', label: 'Custom' },
+                { key: 'shopWithConfidence', label: 'Shop With Confidence' },
+              ] as const
+            ).map((section) => (
+              <div key={`text-icon-heading-${section.key}`} className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-12">
+                <p className="text-xs font-semibold md:col-span-12">{section.label}</p>
+                <label className="md:col-span-3 flex items-center gap-2 text-[11px]">
+                  <input
+                    type="checkbox"
+                    checked={toBoolean(config.textIconCards.sectionHeadings?.[section.key]?.titleEnabled, true)}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        textIconCards: {
+                          ...prev.textIconCards,
+                          sectionHeadings: {
+                            ...prev.textIconCards.sectionHeadings,
+                            [section.key]: {
+                              ...prev.textIconCards.sectionHeadings[section.key],
+                              titleEnabled: event.target.checked,
+                            },
+                          },
+                        },
+                      }))
+                    }
+                  />
+                  Show Section Title
+                </label>
+                <label className="md:col-span-3 text-[11px]">
+                  Title Position
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={config.textIconCards.sectionHeadings?.[section.key]?.titlePosition || 'LEFT'}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        textIconCards: {
+                          ...prev.textIconCards,
+                          sectionHeadings: {
+                            ...prev.textIconCards.sectionHeadings,
+                            [section.key]: {
+                              ...prev.textIconCards.sectionHeadings[section.key],
+                              titlePosition:
+                                event.target.value === 'CENTER' || event.target.value === 'RIGHT'
+                                  ? (event.target.value as 'LEFT' | 'CENTER' | 'RIGHT')
+                                  : 'LEFT',
+                            },
+                          },
+                        },
+                      }))
+                    }
+                  >
+                    <option value="LEFT">Left</option>
+                    <option value="CENTER">Center</option>
+                    <option value="RIGHT">Right</option>
+                  </select>
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Title Font Size (px)
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={config.textIconCards.sectionHeadings?.[section.key]?.titleFontSize ?? 36}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        textIconCards: {
+                          ...prev.textIconCards,
+                          sectionHeadings: {
+                            ...prev.textIconCards.sectionHeadings,
+                            [section.key]: {
+                              ...prev.textIconCards.sectionHeadings[section.key],
+                              titleFontSize: clamp(
+                                toNumber(event.target.value, prev.textIconCards.sectionHeadings[section.key]?.titleFontSize || 36),
+                                10,
+                                120
+                              ),
+                            },
+                          },
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="md:col-span-2 flex items-center gap-2 text-[11px]">
+                  <input
+                    type="checkbox"
+                    checked={toBoolean(config.textIconCards.sectionHeadings?.[section.key]?.descriptionEnabled, true)}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        textIconCards: {
+                          ...prev.textIconCards,
+                          sectionHeadings: {
+                            ...prev.textIconCards.sectionHeadings,
+                            [section.key]: {
+                              ...prev.textIconCards.sectionHeadings[section.key],
+                              descriptionEnabled: event.target.checked,
+                            },
+                          },
+                        },
+                      }))
+                    }
+                  />
+                  Show Description
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Description Font Size (px)
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={config.textIconCards.sectionHeadings?.[section.key]?.descriptionFontSize ?? 14}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        textIconCards: {
+                          ...prev.textIconCards,
+                          sectionHeadings: {
+                            ...prev.textIconCards.sectionHeadings,
+                            [section.key]: {
+                              ...prev.textIconCards.sectionHeadings[section.key],
+                              descriptionFontSize: clamp(
+                                toNumber(
+                                  event.target.value,
+                                  prev.textIconCards.sectionHeadings[section.key]?.descriptionFontSize || 14
+                                ),
+                                8,
+                                72
+                              ),
+                            },
+                          },
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="md:col-span-10 text-[11px]">
+                  Section Description
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={config.textIconCards.sectionHeadings?.[section.key]?.description || ''}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        textIconCards: {
+                          ...prev.textIconCards,
+                          sectionHeadings: {
+                            ...prev.textIconCards.sectionHeadings,
+                            [section.key]: {
+                              ...prev.textIconCards.sectionHeadings[section.key],
+                              description: event.target.value,
+                            },
+                          },
+                        },
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            ))}
+          </div>
+          <div className="rounded border bg-gray-50 px-3 py-2 text-[11px] text-gray-600">
+            Global card dimension controls are inactive. Use per-section card dimensions below.
           </div>
           <div className="rounded-lg border p-4 space-y-3">
             <h3 className="text-sm font-semibold">Per-Section Card Dimensions</h3>
@@ -5080,7 +5423,7 @@ export default function JenksV2FrontPageManager() {
                   />
                 </label>
                 <label className="text-[11px]">
-                  Copy Global
+                  Reset
                   <button
                     type="button"
                     className="mt-1 w-full rounded border px-2 py-1 text-xs hover:bg-gray-50"
@@ -5091,13 +5434,13 @@ export default function JenksV2FrontPageManager() {
                           ...prev.textIconCards,
                           sectionStyles: {
                             ...prev.textIconCards.sectionStyles,
-                            [section.key]: { ...prev.textIconCards.cardStyle },
+                            [section.key]: { ...DEFAULT_CONFIG.textIconCards.sectionStyles[section.key] },
                           },
                         },
                       }))
                     }
                   >
-                    Use Global Style
+                    Reset Section Style
                   </button>
                 </label>
               </div>
@@ -5374,9 +5717,9 @@ export default function JenksV2FrontPageManager() {
                             if (entryIndex !== index) return entry;
                             const nextMode: FeaturedCard['ctaMode'] = event.target.value === 'URL' ? 'URL' : 'PAGE';
                             if (nextMode === 'PAGE') {
-                              const fallbackRoute = PAGE_ROUTE_OPTIONS.find(
+                              const fallbackRoute = pageRouteOptions.find(
                                 (route) => route.key === (entry.ctaPageKey || 'READY_TO_WEAR')
-                              ) || PAGE_ROUTE_OPTIONS.find((route) => route.key === 'READY_TO_WEAR') || PAGE_ROUTE_OPTIONS[0];
+                              ) || pageRouteOptions.find((route) => route.key === 'READY_TO_WEAR') || pageRouteOptions[0];
                               return {
                                 ...entry,
                                 ctaMode: nextMode,
@@ -5410,7 +5753,7 @@ export default function JenksV2FrontPageManager() {
                           featured: {
                             cards: prev.featured.cards.map((entry, entryIndex) => {
                               if (entryIndex !== index) return entry;
-                              const selected = PAGE_ROUTE_OPTIONS.find((route) => route.key === event.target.value);
+                              const selected = pageRouteOptions.find((route) => route.key === event.target.value);
                               return {
                                 ...entry,
                                 ctaPageKey: event.target.value,
@@ -5421,7 +5764,7 @@ export default function JenksV2FrontPageManager() {
                         }))
                       }
                     >
-                      {PAGE_ROUTE_OPTIONS.map((route) => (
+                      {pageRouteOptions.map((route) => (
                         <option key={`featured-page-${route.key}`} value={route.key}>
                           {route.label}
                         </option>
@@ -6303,6 +6646,23 @@ export default function JenksV2FrontPageManager() {
                 }
               />
             </label>
+              <label className="text-xs">
+                Title Font Size (px)
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={config.customerReviews.titleFontSize}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      customerReviews: {
+                        ...prev.customerReviews,
+                        titleFontSize: clamp(toNumber(event.target.value, prev.customerReviews.titleFontSize), 14, 120),
+                      },
+                    }))
+                  }
+                />
+              </label>
             <label className="text-xs">
               Source Mode
               <select
@@ -6335,6 +6695,40 @@ export default function JenksV2FrontPageManager() {
                     customerReviews: {
                       ...prev.customerReviews,
                       maxItems: clamp(toNumber(event.target.value, prev.customerReviews.maxItems), 1, 24),
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
+              Message Font Size (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.customerReviews.messageFontSize}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    customerReviews: {
+                      ...prev.customerReviews,
+                      messageFontSize: clamp(toNumber(event.target.value, prev.customerReviews.messageFontSize), 10, 64),
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
+              Meta Font Size (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.customerReviews.metaFontSize}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    customerReviews: {
+                      ...prev.customerReviews,
+                      metaFontSize: clamp(toNumber(event.target.value, prev.customerReviews.metaFontSize), 8, 40),
                     },
                   }))
                 }
@@ -6795,13 +7189,16 @@ export default function JenksV2FrontPageManager() {
                 <span className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    checked={config.newsletterFooter.footer.showMapUnderlay}
+                    checked={config.newsletterFooter.footer.map.enabled}
                     onChange={(event) =>
                       setConfig((prev) => ({
                         ...prev,
                         newsletterFooter: {
                           ...prev.newsletterFooter,
-                          footer: { ...prev.newsletterFooter.footer, showMapUnderlay: event.target.checked },
+                          footer: {
+                            ...prev.newsletterFooter.footer,
+                            map: { ...prev.newsletterFooter.footer.map, enabled: event.target.checked },
+                          },
                         },
                       }))
                     }
@@ -6813,13 +7210,16 @@ export default function JenksV2FrontPageManager() {
                 Map underlay image URL
                 <input
                   className="mt-1 w-full rounded border px-2 py-1.5"
-                  value={config.newsletterFooter.footer.mapImage}
+                  value={config.newsletterFooter.footer.map.image}
                   onChange={(event) =>
                     setConfig((prev) => ({
                       ...prev,
                       newsletterFooter: {
                         ...prev.newsletterFooter,
-                        footer: { ...prev.newsletterFooter.footer, mapImage: event.target.value },
+                        footer: {
+                          ...prev.newsletterFooter.footer,
+                          map: { ...prev.newsletterFooter.footer.map, image: event.target.value },
+                        },
                       },
                     }))
                   }
@@ -6831,7 +7231,7 @@ export default function JenksV2FrontPageManager() {
                 <input
                   type="number"
                   className="mt-1 w-full rounded border px-2 py-1.5"
-                  value={config.newsletterFooter.footer.mapHeight}
+                  value={config.newsletterFooter.footer.map.minHeight}
                   onChange={(event) =>
                     setConfig((prev) => ({
                       ...prev,
@@ -6839,7 +7239,10 @@ export default function JenksV2FrontPageManager() {
                         ...prev.newsletterFooter,
                         footer: {
                           ...prev.newsletterFooter.footer,
-                          mapHeight: clamp(toNumber(event.target.value, prev.newsletterFooter.footer.mapHeight), 160, 720),
+                          map: {
+                            ...prev.newsletterFooter.footer.map,
+                            minHeight: clamp(toNumber(event.target.value, prev.newsletterFooter.footer.map.minHeight), 80, 900),
+                          },
                         },
                       },
                     }))
@@ -6854,7 +7257,7 @@ export default function JenksV2FrontPageManager() {
                   min={0}
                   max={1}
                   className="mt-1 w-full rounded border px-2 py-1.5"
-                  value={config.newsletterFooter.footer.mapOverlayOpacity}
+                  value={config.newsletterFooter.footer.map.overlayOpacity}
                   onChange={(event) =>
                     setConfig((prev) => ({
                       ...prev,
@@ -6862,7 +7265,10 @@ export default function JenksV2FrontPageManager() {
                         ...prev.newsletterFooter,
                         footer: {
                           ...prev.newsletterFooter.footer,
-                          mapOverlayOpacity: Math.max(0, Math.min(1, Number(event.target.value) || 0)),
+                          map: {
+                            ...prev.newsletterFooter.footer.map,
+                            overlayOpacity: clamp(Math.round((Math.max(0, Math.min(1, Number(event.target.value) || 0)) * 100)), 0, 100),
+                          },
                         },
                       },
                     }))
@@ -7101,8 +7507,8 @@ export default function JenksV2FrontPageManager() {
                                           id: uid(),
                                           label: 'New Link',
                                           href: '/ready-to-wear',
-                                          hrefMode: 'DROPDOWN',
-                                          routeKey: 'READY_TO_WEAR',
+                                          hrefMode: 'PAGE',
+                                          pageKey: 'READY_TO_WEAR',
                                           customUrl: '',
                                           enabled: true,
                                         },
@@ -7173,7 +7579,7 @@ export default function JenksV2FrontPageManager() {
                         Link Source
                         <select
                           className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                          value={link.hrefMode || 'DROPDOWN'}
+                          value={link.hrefMode || 'PAGE'}
                           onChange={(event) =>
                             setConfig((prev) => ({
                               ...prev,
@@ -7188,13 +7594,14 @@ export default function JenksV2FrontPageManager() {
                                           links: entry.links.map((groupLink, groupLinkIndex) => {
                                             if (groupLinkIndex !== linkIndex) return groupLink;
                                             const nextMode = event.target.value as LinkMode;
-                                            const fallbackRoute = ROUTE_OPTIONS.find((route) => route.key === 'READY_TO_WEAR') || ROUTE_OPTIONS[0];
+                                            const fallbackRoute = pageRouteOptions.find((route) => route.key === 'READY_TO_WEAR') || pageRouteOptions[0];
                                             const activeRoute =
-                                              ROUTE_OPTIONS.find((route) => route.key === (groupLink.routeKey || '')) || fallbackRoute;
+                                              pageRouteOptions.find((route) => route.key === (groupLink.pageKey || groupLink.routeKey || '')) ||
+                                              fallbackRoute;
                                             return {
                                               ...groupLink,
                                               hrefMode: nextMode,
-                                              routeKey: groupLink.routeKey || activeRoute.key,
+                                              pageKey: groupLink.pageKey || groupLink.routeKey || activeRoute.key,
                                               customUrl:
                                                 nextMode === 'CUSTOM_URL'
                                                   ? groupLink.customUrl || groupLink.href || ''
@@ -7210,11 +7617,11 @@ export default function JenksV2FrontPageManager() {
                             }))
                           }
                         >
-                          <option value="DROPDOWN">Pages dropdown</option>
+                          <option value="PAGE">Pages dropdown</option>
                           <option value="CUSTOM_URL">Custom URL</option>
                         </select>
                       </label>
-                      {(link.hrefMode || 'DROPDOWN') === 'CUSTOM_URL' ? (
+                      {(link.hrefMode || 'PAGE') === 'CUSTOM_URL' ? (
                         <label className="md:col-span-4 text-[11px]">
                           Custom URL
                           <input
@@ -7257,8 +7664,9 @@ export default function JenksV2FrontPageManager() {
                           <select
                             className="mt-1 w-full rounded border px-2 py-1 text-xs"
                             value={
+                              link.pageKey ||
                               link.routeKey ||
-                              ROUTE_OPTIONS.find((route) => route.href === link.href)?.key ||
+                              pageRouteOptions.find((route) => route.href === link.href)?.key ||
                               'READY_TO_WEAR'
                             }
                             onChange={(event) =>
@@ -7274,10 +7682,11 @@ export default function JenksV2FrontPageManager() {
                                             ...entry,
                                             links: entry.links.map((groupLink, groupLinkIndex) => {
                                               if (groupLinkIndex !== linkIndex) return groupLink;
-                                              const selected = ROUTE_OPTIONS.find((route) => route.key === event.target.value);
+                                              const selected = pageRouteOptions.find((route) => route.key === event.target.value);
                                               return {
                                                 ...groupLink,
-                                                hrefMode: 'DROPDOWN',
+                                                hrefMode: 'PAGE',
+                                                pageKey: event.target.value,
                                                 routeKey: event.target.value,
                                                 href: selected?.href || groupLink.href,
                                               };
@@ -7290,7 +7699,7 @@ export default function JenksV2FrontPageManager() {
                               }))
                             }
                           >
-                            {ROUTE_OPTIONS.map((route) => (
+                            {pageRouteOptions.map((route) => (
                               <option key={`footer-menu-${route.key}`} value={route.key}>
                                 {route.label}
                               </option>
@@ -7441,6 +7850,54 @@ export default function JenksV2FrontPageManager() {
 
           <div className="rounded-lg border p-4 space-y-2">
             <h3 className="text-sm font-semibold">Section Order and Visibility</h3>
+            <div className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
+              <p className="text-xs font-medium md:col-span-3">Global Section Title Controls</p>
+              <label className="md:col-span-3 flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={toBoolean(config.sectionVisibility.titleSettings?.show, true)}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      sectionVisibility: {
+                        ...prev.sectionVisibility,
+                        titleSettings: {
+                          show: event.target.checked,
+                          align: prev.sectionVisibility.titleSettings?.align || 'LEFT',
+                        },
+                      },
+                    }))
+                  }
+                />
+                Show Section Titles
+              </label>
+              <label className="md:col-span-3 text-[11px]">
+                Title Alignment
+                <select
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={config.sectionVisibility.titleSettings?.align || 'LEFT'}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      sectionVisibility: {
+                        ...prev.sectionVisibility,
+                        titleSettings: {
+                          show: toBoolean(prev.sectionVisibility.titleSettings?.show, true),
+                          align:
+                            event.target.value === 'CENTER' || event.target.value === 'RIGHT'
+                              ? (event.target.value as 'LEFT' | 'CENTER' | 'RIGHT')
+                              : 'LEFT',
+                        },
+                      },
+                    }))
+                  }
+                >
+                  <option value="LEFT">Left</option>
+                  <option value="CENTER">Center</option>
+                  <option value="RIGHT">Right</option>
+                </select>
+              </label>
+            </div>
             {config.sectionVisibility.sections
               .slice()
               .sort((a, b) => a.order - b.order)
@@ -7461,6 +7918,7 @@ export default function JenksV2FrontPageManager() {
                       setConfig((prev) => ({
                         ...prev,
                         sectionVisibility: {
+                        ...prev.sectionVisibility,
                           sections: prev.sectionVisibility.sections.map((entry, entryIndex) =>
                             entry.id === section.id ? { ...entry, order: clamp(toNumber(event.target.value, entry.order), 1, 999) } : entry
                           ),
@@ -7476,6 +7934,7 @@ export default function JenksV2FrontPageManager() {
                         setConfig((prev) => ({
                           ...prev,
                           sectionVisibility: {
+                            ...prev.sectionVisibility,
                             sections: prev.sectionVisibility.sections.map((entry, entryIndex) =>
                               entry.id === section.id ? { ...entry, enabled: event.target.checked } : entry
                             ),
@@ -7494,6 +7953,7 @@ export default function JenksV2FrontPageManager() {
                           setConfig((prev) => ({
                             ...prev,
                             sectionVisibility: {
+                              ...prev.sectionVisibility,
                               sections: prev.sectionVisibility.sections.filter((entry) => entry.id !== section.id),
                             },
                           }))
