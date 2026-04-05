@@ -92,7 +92,7 @@ const DEFAULT_SETTINGS: CategoryPageSettings = {
   bannerTitle: '',
   bannerSubtitle: '',
   bannerImage: '',
-  designPreset: 'STANDARD',
+  designPreset: 'EDITORIAL',
   bannerHeight: 360,
   pageSize: 24,
   columns: 4,
@@ -286,31 +286,17 @@ export default function KimiCategoryPage({
   }, [kind, searchParams]);
 
   useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const response = await api.products.getCategoryPageSettings(pageType);
-        if (!response.success || !response.data?.settings) return;
-        const normalized = normalizeSettings(response.data.settings, { pageLabel, defaultBanner, defaultSubtitle });
-        setSettings(normalized);
-
-        const managedFeaturedRows = Array.isArray(response.data.featuredProducts)
-          ? response.data.featuredProducts.map((row) => normalizeManagedProduct(row, routeBase))
-          : [];
-        setFeaturedProducts(managedFeaturedRows.slice(0, 3));
-
-        const rotatingPool = Array.isArray(response.data.rotatingProducts)
-          ? response.data.rotatingProducts.map((row) => normalizeManagedProduct(row, routeBase))
-          : [];
-        const rotatingCount =
-          Math.max(1, Math.min(6, Math.round(Number(normalized.rotatingColumns || 2)))) *
-          Math.max(1, Math.min(6, Math.round(Number(normalized.rotatingRows || 1))));
-        setRotatingProducts(pickRandomProducts(rotatingPool, rotatingCount));
-      } catch {
-        // Keep defaults when settings API is unavailable.
-      }
-    };
-    void loadSettings();
-  }, [defaultBanner, defaultSubtitle, pageLabel, pageType, routeBase]);
+    // Hard-lock Jenks V14 category pages to a stable visual baseline.
+    setSettings({
+      ...DEFAULT_SETTINGS,
+      bannerTitle: pageLabel,
+      bannerSubtitle: defaultSubtitle,
+      bannerImage: defaultBanner,
+      designPreset: 'EDITORIAL',
+    });
+    setFeaturedProducts([]);
+    setRotatingProducts([]);
+  }, [defaultBanner, defaultSubtitle, pageLabel]);
 
   useEffect(() => {
     const loadTaxonomy = async () => {
@@ -395,24 +381,28 @@ export default function KimiCategoryPage({
           });
           if (!response.success) throw new Error('Unable to load products');
           const rows = Array.isArray(response.data?.products) ? response.data.products : [];
-          setProducts(
-            rows.map((row: any) => {
-              const variationPrices = (Array.isArray(row?.sizeVariations) ? row.sizeVariations : [])
-                .map((entry: any) => Number(entry?.price || 0))
-                .filter((value: number) => Number.isFinite(value) && value > 0);
-              const priceUsd = variationPrices.length > 0 ? Math.min(...variationPrices) : Number(row?.basePrice || 0);
-              return {
-                id: asString(row?.id, ''),
-                name: asString(row?.name, 'Ready To Wear'),
-                ownerName: asString(row?.designer?.businessName, 'Designer'),
-                country: asString(row?.designer?.country, ''),
-                image: asString(row?.images?.[0]?.url, '/placeholder.jpg'),
-                priceUsd,
-                href: `${routeBase}/${asString(row?.id, '')}`,
-                labels: Array.isArray(row?.productLabels) ? row.productLabels.map(normalizeProductLabel) : [],
-              } satisfies ProductCard;
-            })
-          );
+          const nextProducts = rows.map((row: any) => {
+            const variationPrices = (Array.isArray(row?.sizeVariations) ? row.sizeVariations : [])
+              .map((entry: any) => Number(entry?.price || 0))
+              .filter((value: number) => Number.isFinite(value) && value > 0);
+            const priceUsd = variationPrices.length > 0 ? Math.min(...variationPrices) : Number(row?.basePrice || 0);
+            return {
+              id: asString(row?.id, ''),
+              name: asString(row?.name, 'Ready To Wear'),
+              ownerName: asString(row?.designer?.businessName, 'Designer'),
+              country: asString(row?.designer?.country, ''),
+              image: asString(row?.images?.[0]?.url, '/placeholder.jpg'),
+              priceUsd,
+              href: `${routeBase}/${asString(row?.id, '')}`,
+              labels: Array.isArray(row?.productLabels) ? row.productLabels.map(normalizeProductLabel) : [],
+            } satisfies ProductCard;
+          });
+          setProducts(nextProducts);
+          setFeaturedProducts(nextProducts.slice(0, 3));
+          const rotatingCount =
+            Math.max(1, Math.min(6, Math.round(Number(settings.rotatingColumns || 2)))) *
+            Math.max(1, Math.min(6, Math.round(Number(settings.rotatingRows || 1))));
+          setRotatingProducts(pickRandomProducts(nextProducts, rotatingCount));
           setPagination(response.data?.pagination || null);
           return;
         }
@@ -430,18 +420,22 @@ export default function KimiCategoryPage({
           });
           if (!response.success) throw new Error('Unable to load products');
           const rows = Array.isArray(response.data?.designs) ? response.data.designs : [];
-          setProducts(
-            rows.map((row: any) => ({
-              id: asString(row?.id, ''),
-              name: asString(row?.name, 'Custom To Wear'),
-              ownerName: asString(row?.designer?.businessName, 'Designer'),
-              country: asString(row?.designer?.country, ''),
-              image: asString(row?.images?.[0]?.url, '/placeholder.jpg'),
-              priceUsd: Number(row?.finalPrice || row?.basePrice || 0),
-              href: `${routeBase}/${asString(row?.id, '')}`,
-              labels: Array.isArray(row?.productLabels) ? row.productLabels.map(normalizeProductLabel) : [],
-            }))
-          );
+          const nextProducts = rows.map((row: any) => ({
+            id: asString(row?.id, ''),
+            name: asString(row?.name, 'Custom To Wear'),
+            ownerName: asString(row?.designer?.businessName, 'Designer'),
+            country: asString(row?.designer?.country, ''),
+            image: asString(row?.images?.[0]?.url, '/placeholder.jpg'),
+            priceUsd: Number(row?.finalPrice || row?.basePrice || 0),
+            href: `${routeBase}/${asString(row?.id, '')}`,
+            labels: Array.isArray(row?.productLabels) ? row.productLabels.map(normalizeProductLabel) : [],
+          }));
+          setProducts(nextProducts);
+          setFeaturedProducts(nextProducts.slice(0, 3));
+          const rotatingCount =
+            Math.max(1, Math.min(6, Math.round(Number(settings.rotatingColumns || 2)))) *
+            Math.max(1, Math.min(6, Math.round(Number(settings.rotatingRows || 1))));
+          setRotatingProducts(pickRandomProducts(nextProducts, rotatingCount));
           setPagination(response.data?.pagination || null);
           return;
         }
@@ -456,21 +450,27 @@ export default function KimiCategoryPage({
         });
         if (!response.success) throw new Error('Unable to load products');
         const rows = Array.isArray(response.data?.fabrics) ? response.data.fabrics : [];
-        setProducts(
-          rows.map((row: any) => ({
-            id: asString(row?.id, ''),
-            name: asString(row?.name, 'Fabric'),
-            ownerName: asString(row?.seller?.businessName, 'Seller'),
-            country: asString(row?.seller?.country, ''),
-            image: asString(row?.images?.[0]?.url, '/placeholder.jpg'),
-            priceUsd: Number(row?.pricePerMeter || row?.finalPrice || row?.sellerPrice || 0),
-            href: `${routeBase}/${asString(row?.id, '')}`,
-            labels: Array.isArray(row?.productLabels) ? row.productLabels.map(normalizeProductLabel) : [],
-          }))
-        );
+        const nextProducts = rows.map((row: any) => ({
+          id: asString(row?.id, ''),
+          name: asString(row?.name, 'Fabric'),
+          ownerName: asString(row?.seller?.businessName, 'Seller'),
+          country: asString(row?.seller?.country, ''),
+          image: asString(row?.images?.[0]?.url, '/placeholder.jpg'),
+          priceUsd: Number(row?.pricePerMeter || row?.finalPrice || row?.sellerPrice || 0),
+          href: `${routeBase}/${asString(row?.id, '')}`,
+          labels: Array.isArray(row?.productLabels) ? row.productLabels.map(normalizeProductLabel) : [],
+        }));
+        setProducts(nextProducts);
+        setFeaturedProducts(nextProducts.slice(0, 3));
+        const rotatingCount =
+          Math.max(1, Math.min(6, Math.round(Number(settings.rotatingColumns || 2)))) *
+          Math.max(1, Math.min(6, Math.round(Number(settings.rotatingRows || 1))));
+        setRotatingProducts(pickRandomProducts(nextProducts, rotatingCount));
         setPagination(response.data?.pagination || null);
       } catch {
         setProducts([]);
+        setFeaturedProducts([]);
+        setRotatingProducts([]);
         setPagination(null);
         setError(`Unable to load ${pageLabel.toLowerCase()} products.`);
       } finally {
