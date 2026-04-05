@@ -9553,6 +9553,24 @@ const homepageSectionsApi = {
         updatedAt?: string | null;
       };
     }>('/homepage-sections/admin/newsletter-settings'),
+  getAdminNewsletterSubscribers: (params?: { page?: number; limit?: number; search?: string; source?: string }) =>
+    apiService.get<{
+      success: boolean;
+      data: Array<{
+        id: string;
+        email: string;
+        source: string;
+        metadata: Record<string, unknown> | null;
+        createdAt: string;
+        updatedAt: string;
+      }>;
+      pagination?: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+      };
+    }>('/homepage-sections/admin/newsletter-subscribers', { params }),
   getAdminNavigationSettings: () =>
     apiService.get<{
       success: boolean;
@@ -10768,6 +10786,7 @@ const jenksV2FrontpageManagerApi = {
             id: string;
             enabled: boolean;
             displayOrder: number;
+            layoutMode: 'SPLIT' | 'FULL';
             image: string;
             rightPanelBackgroundMode: 'NONE' | 'IMAGE';
             rightPanelBackgroundImage: string;
@@ -10970,6 +10989,7 @@ const jenksV2FrontpageManagerApi = {
           }>;
         };
         featured: {
+          columns: number;
           cards: Array<{
             id: string;
             key: string;
@@ -11093,6 +11113,7 @@ const jenksV2FrontpageManagerApi = {
               textColor: string;
               fontFamily: string;
               fontSize: number;
+              fontWeight: number;
               imageUrl: string;
               altText: string;
               width: number;

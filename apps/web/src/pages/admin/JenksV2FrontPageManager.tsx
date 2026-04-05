@@ -35,6 +35,7 @@ type HeroBanner = {
   enabled: boolean;
   displayOrder: number;
   image: string;
+  layoutMode?: 'SPLIT' | 'FULL';
   rightPanelBackgroundMode: 'NONE' | 'IMAGE';
   rightPanelBackgroundImage: string;
   textVerticalAlign: 'TOP' | 'MIDDLE' | 'BOTTOM';
@@ -351,6 +352,7 @@ type FooterLogoSettings = {
   textColor: string;
   fontFamily: string;
   fontSize: number;
+  fontWeight: number;
   imageUrl: string;
   altText: string;
   width: number;
@@ -399,6 +401,15 @@ type NewsletterFooter = {
   };
 };
 
+type NewsletterSubscriber = {
+  id: string;
+  email: string;
+  source: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type SectionVisibilityEntry = {
   id: string;
   key: string;
@@ -433,6 +444,7 @@ type JenksV2FrontpageConfig = {
     cards: TextIconCard[];
   };
   featured: {
+    columns: number;
     cards: FeaturedCard[];
   };
   freshDrops: FreshDrops;
@@ -807,6 +819,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         enabled: true,
         displayOrder: 0,
         image: '',
+        layoutMode: 'SPLIT',
         rightPanelBackgroundMode: 'NONE',
         rightPanelBackgroundImage: '',
         textVerticalAlign: 'MIDDLE',
@@ -1061,6 +1074,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     ],
   },
   featured: {
+    columns: 2,
     cards: [
       {
         id: uid(),
@@ -1231,6 +1245,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         textColor: '#ffffff',
         fontFamily: 'Oswald',
         fontSize: 30,
+        fontWeight: 700,
         imageUrl: '',
         altText: 'Jenks',
         width: 180,
@@ -1669,10 +1684,15 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
       heroBanners: Array.isArray(topNavigations.heroBanners)
         ? topNavigations.heroBanners.map((banner, index) => {
             const next = { ...fallbackHero, ...banner };
+            const layoutToken = String((banner as HeroBanner)?.layoutMode || next.layoutMode || 'SPLIT')
+              .trim()
+              .toUpperCase();
+            const layoutMode: HeroBanner['layoutMode'] = layoutToken === 'FULL' ? 'FULL' : 'SPLIT';
             const modeToken = String((banner as HeroBanner)?.rightPanelBackgroundMode || next.rightPanelBackgroundMode || 'NONE')
               .trim()
               .toUpperCase();
-            const rightPanelBackgroundMode: HeroBanner['rightPanelBackgroundMode'] = modeToken === 'IMAGE' ? 'IMAGE' : 'NONE';
+            const rightPanelBackgroundMode: HeroBanner['rightPanelBackgroundMode'] =
+              layoutMode === 'FULL' ? 'NONE' : modeToken === 'IMAGE' ? 'IMAGE' : 'NONE';
             const alignToken = String((banner as HeroBanner)?.textVerticalAlign || next.textVerticalAlign || 'MIDDLE')
               .trim()
               .toUpperCase();
@@ -1686,6 +1706,7 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             const rightWidthPercent = 100 - leftWidthPercent;
             return {
               ...next,
+              layoutMode,
               rightPanelBackgroundMode,
               rightPanelBackgroundImage: String((banner as HeroBanner)?.rightPanelBackgroundImage || next.rightPanelBackgroundImage || ''),
               textVerticalAlign,
@@ -1930,6 +1951,29 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
       footer: {
         ...DEFAULT_CONFIG.newsletterFooter.footer,
         ...((data.newsletterFooter as NewsletterFooter | undefined)?.footer || {}),
+        logo: {
+          ...DEFAULT_CONFIG.newsletterFooter.footer.logo,
+          ...((data.newsletterFooter as NewsletterFooter | undefined)?.footer?.logo || {}),
+          mode:
+            String((data.newsletterFooter as NewsletterFooter | undefined)?.footer?.logo?.mode || 'TEXT')
+              .trim()
+              .toUpperCase() === 'IMAGE'
+              ? 'IMAGE'
+              : 'TEXT',
+          fontWeight: clamp(
+            Math.round(
+              toNumber(
+                String(
+                  (data.newsletterFooter as NewsletterFooter | undefined)?.footer?.logo?.fontWeight ??
+                    DEFAULT_CONFIG.newsletterFooter.footer.logo.fontWeight
+                ),
+                DEFAULT_CONFIG.newsletterFooter.footer.logo.fontWeight
+              )
+            ),
+            100,
+            900
+          ),
+        },
         policyLinks: Array.isArray((data.newsletterFooter as NewsletterFooter | undefined)?.footer?.policyLinks)
           ? ((data.newsletterFooter as NewsletterFooter).footer.policyLinks || []).map((entry) => normalizeLinkItemWithDefaults(entry))
           : DEFAULT_CONFIG.newsletterFooter.footer.policyLinks,
@@ -2245,6 +2289,16 @@ export default function JenksV2FrontPageManager() {
   const [uploadingTarget, setUploadingTarget] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [newsletterSubscribers, setNewsletterSubscribers] = useState<NewsletterSubscriber[]>([]);
+  const [newsletterSubscribersLoading, setNewsletterSubscribersLoading] = useState(false);
+  const [newsletterSubscribersError, setNewsletterSubscribersError] = useState('');
+  const [newsletterSubscribersPage, setNewsletterSubscribersPage] = useState(1);
+  const [newsletterSubscribersLimit] = useState(50);
+  const [newsletterSubscribersTotal, setNewsletterSubscribersTotal] = useState(0);
+  const [newsletterSubscribersTotalPages, setNewsletterSubscribersTotalPages] = useState(1);
+  const [newsletterSubscriberSearchInput, setNewsletterSubscriberSearchInput] = useState('');
+  const [newsletterSubscriberSearch, setNewsletterSubscriberSearch] = useState('');
+  const [newsletterSubscriberSource, setNewsletterSubscriberSource] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>('topNavigations');
   const [templateName, setTemplateName] = useState('');
   const [templateKey, setTemplateKey] = useState<TemplateKey>('TOP_NAVIGATIONS');
@@ -2333,6 +2387,40 @@ export default function JenksV2FrontPageManager() {
       setActiveTab('topNavigations');
     }
   }, [submenu, activeTab]);
+
+  const fetchNewsletterSubscribers = async (override?: { page?: number; search?: string; source?: string }) => {
+    const page = Math.max(1, Math.round(override?.page ?? newsletterSubscribersPage));
+    const search = String(override?.search ?? newsletterSubscriberSearch).trim();
+    const source = String(override?.source ?? newsletterSubscriberSource).trim().toUpperCase();
+    setNewsletterSubscribersLoading(true);
+    setNewsletterSubscribersError('');
+    try {
+      const response = await api.homepageSections.getAdminNewsletterSubscribers({
+        page,
+        limit: newsletterSubscribersLimit,
+        search: search || undefined,
+        source: source || undefined,
+      });
+      if (!response.success) throw new Error('Failed to fetch newsletter subscribers.');
+      const rows = Array.isArray(response.data) ? response.data : [];
+      const pagination = response.pagination;
+      setNewsletterSubscribers(rows);
+      setNewsletterSubscribersPage(Math.max(1, Number(pagination?.page) || page));
+      setNewsletterSubscribersTotal(Math.max(0, Number(pagination?.total) || 0));
+      setNewsletterSubscribersTotalPages(Math.max(1, Number(pagination?.totalPages) || 1));
+    } catch (loadError: any) {
+      setNewsletterSubscribersError(
+        loadError?.response?.data?.message || loadError?.message || 'Failed to fetch newsletter subscribers.'
+      );
+    } finally {
+      setNewsletterSubscribersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'newsletterFooter') return;
+    void fetchNewsletterSubscribers({ page: 1 });
+  }, [activeTab, newsletterSubscribersLimit]);
 
   const uploadImage = async (file: File) => {
     const formData = new FormData();
@@ -3478,6 +3566,7 @@ export default function JenksV2FrontPageManager() {
                           enabled: true,
                           displayOrder: prev.topNavigations.heroBanners.length,
                           image: '',
+                          layoutMode: 'SPLIT',
                           rightPanelBackgroundMode: 'NONE',
                           rightPanelBackgroundImage: '',
                           textVerticalAlign: 'MIDDLE',
@@ -3733,6 +3822,34 @@ export default function JenksV2FrontPageManager() {
                         }))
                       }
                     />
+                  </label>
+                  <label className="text-xs">
+                    Layout Mode
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={banner.layoutMode || 'SPLIT'}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? {
+                                    ...entry,
+                                    layoutMode: event.target.value === 'FULL' ? 'FULL' : 'SPLIT',
+                                    rightPanelBackgroundMode:
+                                      event.target.value === 'FULL' ? 'NONE' : entry.rightPanelBackgroundMode,
+                                  }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      <option value="SPLIT">Split (Image + Side Panel)</option>
+                      <option value="FULL">Full Banner Image</option>
+                    </select>
                   </label>
                   <label className="text-xs">
                     Right Panel Background
@@ -6026,6 +6143,7 @@ export default function JenksV2FrontPageManager() {
                 setConfig((prev) => ({
                   ...prev,
                   featured: {
+                    ...prev.featured,
                     cards: [
                       ...prev.featured.cards,
                       {
@@ -6059,6 +6177,25 @@ export default function JenksV2FrontPageManager() {
               Add Featured Card
             </Button>
           </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <label className="text-xs">
+              Featured Columns
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.featured.columns}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    featured: {
+                      ...prev.featured,
+                      columns: clamp(toNumber(event.target.value, prev.featured.columns), 1, 4),
+                    },
+                  }))
+                }
+              />
+            </label>
+          </div>
           {config.featured.cards.map((card, index) => (
             <div key={card.id} className="rounded border p-3 space-y-2">
               <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
@@ -6071,6 +6208,7 @@ export default function JenksV2FrontPageManager() {
                       setConfig((prev) => ({
                         ...prev,
                         featured: {
+                          ...prev.featured,
                           cards: prev.featured.cards.map((entry, entryIndex) =>
                             entryIndex === index ? { ...entry, key: event.target.value.toUpperCase() } : entry
                           ),
@@ -6093,6 +6231,7 @@ export default function JenksV2FrontPageManager() {
                     setConfig((prev) => ({
                       ...prev,
                       featured: {
+                        ...prev.featured,
                         cards: prev.featured.cards.map((entry, entryIndex) =>
                           entryIndex === index ? { ...entry, tag: event.target.value } : entry
                         ),
@@ -6108,6 +6247,7 @@ export default function JenksV2FrontPageManager() {
                     setConfig((prev) => ({
                       ...prev,
                       featured: {
+                        ...prev.featured,
                         cards: prev.featured.cards.map((entry, entryIndex) =>
                           entryIndex === index ? { ...entry, title: event.target.value } : entry
                         ),
@@ -6123,6 +6263,7 @@ export default function JenksV2FrontPageManager() {
                     setConfig((prev) => ({
                       ...prev,
                       featured: {
+                        ...prev.featured,
                         cards: prev.featured.cards.map((entry, entryIndex) =>
                           entryIndex === index ? { ...entry, description: event.target.value } : entry
                         ),
@@ -6138,6 +6279,7 @@ export default function JenksV2FrontPageManager() {
                     setConfig((prev) => ({
                       ...prev,
                       featured: {
+                        ...prev.featured,
                         cards: prev.featured.cards.map((entry, entryIndex) =>
                           entryIndex === index ? { ...entry, ctaText: event.target.value } : entry
                         ),
@@ -6154,6 +6296,7 @@ export default function JenksV2FrontPageManager() {
                       setConfig((prev) => ({
                         ...prev,
                         featured: {
+                          ...prev.featured,
                           cards: prev.featured.cards.map((entry, entryIndex) => {
                             if (entryIndex !== index) return entry;
                             const nextMode: FeaturedCard['ctaMode'] = event.target.value === 'URL' ? 'URL' : 'PAGE';
@@ -6192,6 +6335,7 @@ export default function JenksV2FrontPageManager() {
                         setConfig((prev) => ({
                           ...prev,
                           featured: {
+                            ...prev.featured,
                             cards: prev.featured.cards.map((entry, entryIndex) => {
                               if (entryIndex !== index) return entry;
                               const selected = pageRouteOptions.find((route) => route.key === event.target.value);
@@ -6220,6 +6364,7 @@ export default function JenksV2FrontPageManager() {
                         setConfig((prev) => ({
                           ...prev,
                           featured: {
+                            ...prev.featured,
                             cards: prev.featured.cards.map((entry, entryIndex) =>
                               entryIndex === index ? { ...entry, ctaLink: event.target.value, ctaPageKey: '' } : entry
                             ),
@@ -6236,6 +6381,7 @@ export default function JenksV2FrontPageManager() {
                     setConfig((prev) => ({
                       ...prev,
                       featured: {
+                        ...prev.featured,
                         cards: prev.featured.cards.map((entry, entryIndex) =>
                           entryIndex === index ? { ...entry, ctaStyle: nextStyle } : entry
                         ),
@@ -6262,6 +6408,7 @@ export default function JenksV2FrontPageManager() {
                       setConfig((prev) => ({
                         ...prev,
                         featured: {
+                          ...prev.featured,
                           cards: prev.featured.cards.map((entry, entryIndex) =>
                             entryIndex === index ? { ...entry, image: '' } : entry
                           ),
@@ -6278,6 +6425,7 @@ export default function JenksV2FrontPageManager() {
                       setConfig((prev) => ({
                         ...prev,
                         featured: {
+                          ...prev.featured,
                           cards: prev.featured.cards.map((entry, entryIndex) =>
                             entryIndex === index ? { ...entry, enabled: event.target.checked } : entry
                           ),
@@ -6292,6 +6440,7 @@ export default function JenksV2FrontPageManager() {
                       setConfig((prev) => ({
                         ...prev,
                         featured: {
+                          ...prev.featured,
                           cards: prev.featured.cards.filter((_, entryIndex) => entryIndex !== index),
                         },
                       }))
@@ -7524,6 +7673,122 @@ export default function JenksV2FrontPageManager() {
               </label>
             </div>
           </div>
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Newsletter Subscribers</h3>
+              <Button type="button" variant="outline" isLoading={newsletterSubscribersLoading} onClick={() => void fetchNewsletterSubscribers()}>
+                Refresh Subscribers
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+              <label className="text-xs md:col-span-3">
+                Search by email
+                <input
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={newsletterSubscriberSearchInput}
+                  onChange={(event) => setNewsletterSubscriberSearchInput(event.target.value)}
+                  placeholder="customer@example.com"
+                />
+              </label>
+              <label className="text-xs">
+                Source
+                <select
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={newsletterSubscriberSource}
+                  onChange={(event) => setNewsletterSubscriberSource(event.target.value)}
+                >
+                  <option value="">All sources</option>
+                  <option value="HOMEPAGE">HOMEPAGE</option>
+                  <option value="JENKS_V2">JENKS_V2</option>
+                </select>
+              </label>
+              <div className="flex items-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const nextSearch = newsletterSubscriberSearchInput.trim();
+                    const nextSource = newsletterSubscriberSource.trim().toUpperCase();
+                    setNewsletterSubscriberSearch(nextSearch);
+                    setNewsletterSubscriberSource(nextSource);
+                    setNewsletterSubscribersPage(1);
+                    void fetchNewsletterSubscribers({ page: 1, search: nextSearch, source: nextSource });
+                  }}
+                >
+                  Apply Filters
+                </Button>
+              </div>
+            </div>
+            {newsletterSubscribersError ? (
+              <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{newsletterSubscribersError}</div>
+            ) : null}
+            <div className="overflow-x-auto rounded border">
+              <table className="min-w-full text-left text-xs">
+                <thead className="bg-gray-50 text-gray-700">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Email</th>
+                    <th className="px-3 py-2 font-semibold">Source</th>
+                    <th className="px-3 py-2 font-semibold">Metadata</th>
+                    <th className="px-3 py-2 font-semibold">Subscribed At</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {newsletterSubscribers.map((row) => (
+                    <tr key={row.id} className="border-t">
+                      <td className="px-3 py-2 text-gray-900">{row.email}</td>
+                      <td className="px-3 py-2 text-gray-700">{row.source}</td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {row.metadata ? (
+                          <span className="line-clamp-1 block max-w-[360px]">{JSON.stringify(row.metadata)}</span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {Number.isNaN(new Date(row.createdAt).getTime())
+                          ? row.createdAt
+                          : new Date(row.createdAt).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                  {newsletterSubscribers.length === 0 ? (
+                    <tr>
+                      <td className="px-3 py-4 text-center text-gray-500" colSpan={4}>
+                        {newsletterSubscribersLoading ? 'Loading subscribers...' : 'No subscribers found.'}
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
+              <span>
+                Showing page {newsletterSubscribersPage} of {newsletterSubscribersTotalPages} • {newsletterSubscribersTotal} total
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={newsletterSubscribersPage <= 1 || newsletterSubscribersLoading}
+                  onClick={() => void fetchNewsletterSubscribers({ page: Math.max(1, newsletterSubscribersPage - 1) })}
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={newsletterSubscribersPage >= newsletterSubscribersTotalPages || newsletterSubscribersLoading}
+                  onClick={() =>
+                    void fetchNewsletterSubscribers({
+                      page: Math.min(newsletterSubscribersTotalPages, newsletterSubscribersPage + 1),
+                    })
+                  }
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </div>
 
           <div className="rounded-lg border p-4 space-y-3">
             <h3 className="text-sm font-semibold">Footer Controls</h3>
@@ -7626,6 +7891,255 @@ export default function JenksV2FrontPageManager() {
                   }
                 />
               </label>
+              <div className="md:col-span-3 rounded border p-3">
+                <p className="text-xs font-semibold">Footer Logo Manager</p>
+                <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-4">
+                  <label className="text-xs">
+                    Logo Mode
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={config.newsletterFooter.footer.logo.mode}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          newsletterFooter: {
+                            ...prev.newsletterFooter,
+                            footer: {
+                              ...prev.newsletterFooter.footer,
+                              logo: {
+                                ...prev.newsletterFooter.footer.logo,
+                                mode: event.target.value === 'IMAGE' ? 'IMAGE' : 'TEXT',
+                              },
+                            },
+                          },
+                        }))
+                      }
+                    >
+                      <option value="TEXT">TEXT</option>
+                      <option value="IMAGE">IMAGE</option>
+                    </select>
+                  </label>
+                  <label className="text-xs">
+                    Logo Text
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={config.newsletterFooter.footer.logo.text}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          newsletterFooter: {
+                            ...prev.newsletterFooter,
+                            footer: {
+                              ...prev.newsletterFooter.footer,
+                              logo: { ...prev.newsletterFooter.footer.logo, text: event.target.value },
+                            },
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs">
+                    Font Family
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={config.newsletterFooter.footer.logo.fontFamily}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          newsletterFooter: {
+                            ...prev.newsletterFooter,
+                            footer: {
+                              ...prev.newsletterFooter.footer,
+                              logo: { ...prev.newsletterFooter.footer.logo, fontFamily: event.target.value },
+                            },
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs">
+                    Text Color
+                    <input
+                      type="color"
+                      className="mt-1 h-9 w-full rounded border px-1 py-1"
+                      value={config.newsletterFooter.footer.logo.textColor}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          newsletterFooter: {
+                            ...prev.newsletterFooter,
+                            footer: {
+                              ...prev.newsletterFooter.footer,
+                              logo: { ...prev.newsletterFooter.footer.logo, textColor: event.target.value },
+                            },
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs">
+                    Font Size
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={config.newsletterFooter.footer.logo.fontSize}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          newsletterFooter: {
+                            ...prev.newsletterFooter,
+                            footer: {
+                              ...prev.newsletterFooter.footer,
+                              logo: {
+                                ...prev.newsletterFooter.footer.logo,
+                                fontSize: clamp(toNumber(event.target.value, prev.newsletterFooter.footer.logo.fontSize), 10, 96),
+                              },
+                            },
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs">
+                    Font Weight
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={config.newsletterFooter.footer.logo.fontWeight}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          newsletterFooter: {
+                            ...prev.newsletterFooter,
+                            footer: {
+                              ...prev.newsletterFooter.footer,
+                              logo: {
+                                ...prev.newsletterFooter.footer.logo,
+                                fontWeight: clamp(
+                                  toNumber(event.target.value, prev.newsletterFooter.footer.logo.fontWeight),
+                                  100,
+                                  900
+                                ),
+                              },
+                            },
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs">
+                    Width
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={config.newsletterFooter.footer.logo.width}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          newsletterFooter: {
+                            ...prev.newsletterFooter,
+                            footer: {
+                              ...prev.newsletterFooter.footer,
+                              logo: {
+                                ...prev.newsletterFooter.footer.logo,
+                                width: clamp(toNumber(event.target.value, prev.newsletterFooter.footer.logo.width), 40, 900),
+                              },
+                            },
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs">
+                    Height
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={config.newsletterFooter.footer.logo.height}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          newsletterFooter: {
+                            ...prev.newsletterFooter,
+                            footer: {
+                              ...prev.newsletterFooter.footer,
+                              logo: {
+                                ...prev.newsletterFooter.footer.logo,
+                                height: clamp(toNumber(event.target.value, prev.newsletterFooter.footer.logo.height), 16, 500),
+                              },
+                            },
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs">
+                    Alt Text
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={config.newsletterFooter.footer.logo.altText}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          newsletterFooter: {
+                            ...prev.newsletterFooter,
+                            footer: {
+                              ...prev.newsletterFooter.footer,
+                              logo: { ...prev.newsletterFooter.footer.logo, altText: event.target.value },
+                            },
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    isLoading={uploadingTarget === 'footer-logo'}
+                    onClick={() => footerLogoUploadRef.current?.click()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Footer Logo Image
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        newsletterFooter: {
+                          ...prev.newsletterFooter,
+                          footer: {
+                            ...prev.newsletterFooter.footer,
+                            logo: { ...prev.newsletterFooter.footer.logo, imageUrl: '' },
+                          },
+                        },
+                      }))
+                    }
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Footer Logo Image
+                  </Button>
+                  <span className="text-xs text-gray-600 break-all">
+                    {config.newsletterFooter.footer.logo.imageUrl || 'No footer logo image uploaded'}
+                  </span>
+                </div>
+                <div className="mt-2 rounded-md border bg-white p-2">
+                  {config.newsletterFooter.footer.logo.imageUrl ? (
+                    <img
+                      src={resolvePreviewUrl(config.newsletterFooter.footer.logo.imageUrl)}
+                      alt="Footer logo preview"
+                      className="h-24 w-full rounded object-contain"
+                    />
+                  ) : (
+                    <div className="flex h-24 items-center justify-center rounded border border-dashed text-xs text-gray-500">
+                      No footer logo image uploaded
+                    </div>
+                  )}
+                </div>
+              </div>
               <label className="text-xs md:col-span-3">
                 <span className="flex items-center gap-2">
                   <input
@@ -7691,12 +8205,35 @@ export default function JenksV2FrontPageManager() {
                 />
               </label>
               <label className="text-xs md:col-span-3">
-                Map Overlay Opacity (0 to 1)
+                Map Overlay Color
+                <input
+                  type="color"
+                  className="mt-1 h-9 w-full rounded border px-1 py-1"
+                  value={config.newsletterFooter.footer.map.overlayColor}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      newsletterFooter: {
+                        ...prev.newsletterFooter,
+                        footer: {
+                          ...prev.newsletterFooter.footer,
+                          map: {
+                            ...prev.newsletterFooter.footer.map,
+                            overlayColor: event.target.value,
+                          },
+                        },
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="text-xs md:col-span-3">
+                Map Overlay Opacity (%)
                 <input
                   type="number"
-                  step="0.05"
+                  step="1"
                   min={0}
-                  max={1}
+                  max={100}
                   className="mt-1 w-full rounded border px-2 py-1.5"
                   value={config.newsletterFooter.footer.map.overlayOpacity}
                   onChange={(event) =>
@@ -7716,7 +8253,39 @@ export default function JenksV2FrontPageManager() {
                   }
                 />
               </label>
+              <div className="md:col-span-3 flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  isLoading={uploadingTarget === 'footer-map'}
+                  onClick={() => footerMapUploadRef.current?.click()}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload Map Underlay Image
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      newsletterFooter: {
+                        ...prev.newsletterFooter,
+                        footer: {
+                          ...prev.newsletterFooter.footer,
+                          map: { ...prev.newsletterFooter.footer.map, image: '' },
+                        },
+                      },
+                    }))
+                  }
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Map Image
+                </Button>
+              </div>
             </div>
+            <input ref={footerLogoUploadRef} type="file" accept="image/*" className="hidden" onChange={handleFooterLogoUpload} />
+            <input ref={footerMapUploadRef} type="file" accept="image/*" className="hidden" onChange={handleFooterMapUpload} />
           </div>
           <div className="rounded-lg border p-4 space-y-3">
             <div className="flex items-center justify-between">

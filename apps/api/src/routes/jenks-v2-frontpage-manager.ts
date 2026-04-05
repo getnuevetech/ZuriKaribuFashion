@@ -54,6 +54,7 @@ type HeroBanner = {
   id: string;
   enabled: boolean;
   displayOrder: number;
+  layoutMode: 'SPLIT' | 'FULL';
   image: string;
   rightPanelBackgroundMode: 'NONE' | 'IMAGE';
   rightPanelBackgroundImage: string;
@@ -445,6 +446,7 @@ type JenksV2FrontpageManagerSettings = {
     cards: TextIconCard[];
   };
   featured: {
+    columns: number;
     cards: FeaturedCard[];
   };
   freshDrops: FreshDropsSettings;
@@ -710,6 +712,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           id: randomUUID(),
           enabled: true,
           displayOrder: 0,
+          layoutMode: 'SPLIT',
           image: '',
           rightPanelBackgroundMode: 'NONE',
           rightPanelBackgroundImage: '',
@@ -1019,6 +1022,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       ],
     },
     featured: {
+      columns: 2,
       cards: [
         {
           id: randomUUID(),
@@ -1283,6 +1287,10 @@ const normalizeMenuLink = (raw: unknown, fallback: MenuLink): MenuLink => {
 
 const normalizeHeroBanner = (raw: unknown, fallback: HeroBanner, index: number): HeroBanner => {
   const row = asRecord(raw);
+  const layoutToken = String(row.layoutMode || fallback.layoutMode || 'SPLIT')
+    .trim()
+    .toUpperCase();
+  const layoutMode: HeroBanner['layoutMode'] = layoutToken === 'FULL' ? 'FULL' : 'SPLIT';
   const modeToken = String(row.rightPanelBackgroundMode || fallback.rightPanelBackgroundMode || 'NONE')
     .trim()
     .toUpperCase();
@@ -1308,6 +1316,7 @@ const normalizeHeroBanner = (raw: unknown, fallback: HeroBanner, index: number):
     id: getString(row.id) || fallback.id || `hero-${index + 1}`,
     enabled: getBoolean(row.enabled) ?? fallback.enabled,
     displayOrder: clamp(Math.round(getNumber(row.displayOrder) ?? fallback.displayOrder), 0, 99),
+    layoutMode,
     image: (getString(row.image) || fallback.image).slice(0, 2000),
     rightPanelBackgroundMode,
     rightPanelBackgroundImage: (getString(row.rightPanelBackgroundImage) || fallback.rightPanelBackgroundImage || '').slice(
@@ -1714,6 +1723,7 @@ const normalizeFeatured = (
   fallback: JenksV2FrontpageManagerSettings['featured']
 ): JenksV2FrontpageManagerSettings['featured'] => {
   const row = asRecord(raw);
+  const columns = clamp(Math.round(getNumber(row.columns) ?? fallback.columns), 1, 4);
   const rows = Array.isArray(row.cards) ? row.cards : fallback.cards;
   const cards = rows
     .map((entry, index) => {
@@ -1747,7 +1757,7 @@ const normalizeFeatured = (
       } as FeaturedCard;
     })
     .slice(0, 30);
-  return { cards };
+  return { columns, cards };
 };
 
 const normalizeCustomerReviews = (
@@ -1983,7 +1993,7 @@ const normalizeNewsletterFooter = (
         image: (getString(mapRaw.image) || fallbackMap.image || '').slice(0, 2000),
         overlayColor: (getString(mapRaw.overlayColor) || fallbackMap.overlayColor || '#0a0a0a').slice(0, 40),
         overlayOpacity: clamp(Math.round(getNumber(mapRaw.overlayOpacity) ?? fallbackMap.overlayOpacity), 0, 100),
-        minHeight: clamp(Math.round(getNumber(mapRaw.minHeight) ?? fallbackMap.minHeight), 120, 900),
+        minHeight: clamp(Math.round(getNumber(mapRaw.minHeight) ?? fallbackMap.minHeight), 80, 900),
       },
     },
   };

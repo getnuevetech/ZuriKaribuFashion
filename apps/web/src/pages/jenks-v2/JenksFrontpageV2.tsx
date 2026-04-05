@@ -35,6 +35,7 @@ import '../../styles/jenks-v2.css';
 
 type HeroSlide = {
   id: string;
+  layoutMode: 'SPLIT' | 'FULL';
   image: string;
   rightPanelBackgroundMode: 'NONE' | 'IMAGE';
   rightPanelBackgroundImage: string;
@@ -555,6 +556,7 @@ const socialIconFromLabel = (label: string): IconComponent => {
 const HERO: HeroSlide[] = [
   {
     id: '1',
+    layoutMode: 'SPLIT',
     image: `${ASSET_BASE}/hero_model.jpg`,
     rightPanelBackgroundMode: 'NONE',
     rightPanelBackgroundImage: '',
@@ -577,6 +579,7 @@ const HERO: HeroSlide[] = [
   },
   {
     id: '2',
+    layoutMode: 'SPLIT',
     image: `${ASSET_BASE}/rw_full.jpg`,
     rightPanelBackgroundMode: 'NONE',
     rightPanelBackgroundImage: '',
@@ -903,6 +906,9 @@ export default function JenksFrontpageV2() {
   const [searchQuery, setSearchQuery] = useState('');
   const [themeMode, setThemeMode] = useState<'LIGHT' | 'DARK'>('LIGHT');
   const [heroImageLoadFailed, setHeroImageLoadFailed] = useState<Record<string, boolean>>({});
+  const [freshDropsProducts, setFreshDropsProducts] = useState<
+    Array<{ id: string; image: string; name: string; brand: string; price: string; createdAtTs: number }>
+  >([]);
   const [productReviewCards, setProductReviewCards] = useState<CustomerReviewCard[]>([]);
   const [customerReviewIndex, setCustomerReviewIndex] = useState(0);
   const [customerReviewsHovered, setCustomerReviewsHovered] = useState(false);
@@ -1018,8 +1024,11 @@ export default function JenksFrontpageV2() {
       const fallbackSlide = HERO[indexKey % HERO.length] || HERO[0];
       const title = asString(row.title, 'Wear the Story of Africa');
       const split = splitHeroTitle(title.toUpperCase());
+      const layoutToken = asString(row.layoutMode, fallbackSlide.layoutMode).toUpperCase();
+      const layoutMode: HeroSlide['layoutMode'] = layoutToken === 'FULL' ? 'FULL' : 'SPLIT';
       const panelModeToken = asString(row.rightPanelBackgroundMode, fallbackSlide.rightPanelBackgroundMode).toUpperCase();
-      const rightPanelBackgroundMode: HeroSlide['rightPanelBackgroundMode'] = panelModeToken === 'IMAGE' ? 'IMAGE' : 'NONE';
+      const rightPanelBackgroundMode: HeroSlide['rightPanelBackgroundMode'] =
+        layoutMode === 'FULL' ? 'NONE' : panelModeToken === 'IMAGE' ? 'IMAGE' : 'NONE';
       const panelAlignToken = asString(row.textVerticalAlign, fallbackSlide.textVerticalAlign).toUpperCase();
       const textVerticalAlign: HeroSlide['textVerticalAlign'] =
         panelAlignToken === 'TOP' || panelAlignToken === 'BOTTOM' ? panelAlignToken : 'MIDDLE';
@@ -1027,6 +1036,7 @@ export default function JenksFrontpageV2() {
       const rightWidthPercent = 100 - leftWidthPercent;
       return {
         id: asString(row.id, `hero-${indexKey + 1}`),
+        layoutMode,
         image: resolveManagerImage(row.image, ''),
         rightPanelBackgroundMode,
         rightPanelBackgroundImage: resolveManagerImage(row.rightPanelBackgroundImage, ''),
@@ -1286,6 +1296,7 @@ export default function JenksFrontpageV2() {
       FTB: grouped.FTB.length > 0 ? grouped.FTB : defaults.FTB,
     };
   }, [featuredCfg.cards]);
+  const featuredColumns = Math.max(1, Math.min(4, Math.round(asNumber(featuredCfg.columns, 2))));
 
   const sectionHrefForCountry = (sectionKey: unknown) => {
     const categoryToken = categoryTokenFromSectionKey(sectionKey);
@@ -1311,12 +1322,37 @@ export default function JenksFrontpageV2() {
     }
     return toSafeInternalHref(card.href || featuredHrefForCountry(key));
   };
+  const freshDropsCountryFilterTokens = useMemo(
+    () =>
+      asArray(freshDropsCfg.countryFilters)
+        .map((entry) => String(entry || '').trim().toUpperCase())
+        .filter(Boolean)
+        .slice(0, 100),
+    [freshDropsCfg.countryFilters]
+  );
+  const freshDropsCategoryFilterTokens = useMemo(
+    () =>
+      asArray(freshDropsCfg.categoryFilters)
+        .map((entry) => String(entry || '').trim().toUpperCase())
+        .filter(Boolean)
+        .slice(0, 40),
+    [freshDropsCfg.categoryFilters]
+  );
 
   const freshDropsCards = useMemo(() => {
     const rows = Math.max(1, Math.round(asNumber(freshDropsCfg.rows, 2)));
     const cols = Math.max(1, Math.round(asNumber(freshDropsCfg.columns, 4)));
-    return FRESH_DROPS.slice(0, rows * cols);
-  }, [freshDropsCfg.columns, freshDropsCfg.rows]);
+    const maxItems = rows * cols;
+    const dynamicRows = freshDropsProducts.map((entry) => ({
+      id: entry.id,
+      image: entry.image,
+      name: entry.name,
+      brand: entry.brand,
+      price: entry.price,
+    }));
+    if (dynamicRows.length > 0) return dynamicRows.slice(0, maxItems);
+    return FRESH_DROPS.slice(0, maxItems);
+  }, [freshDropsCfg.columns, freshDropsCfg.rows, freshDropsProducts]);
 
   const spotlightCards = useMemo(() => {
     const rows = Math.max(1, Math.round(asNumber(designerSpotlightCfg.rows, 1)));
@@ -1369,14 +1405,13 @@ export default function JenksFrontpageV2() {
       fallbackTitle: string
     ): TextIconSectionHeadingConfig => {
       const row = asRecord(headings[key]);
-      const title = asString(
-        row.title,
+      const sectionTitleOverride =
         key === 'howItWorks'
-          ? asString(textIconSectionTitles.howItWorks, fallbackTitle)
+          ? asString(textIconSectionTitles.howItWorks, '')
           : key === 'custom'
-            ? asString(textIconSectionTitles.custom, fallbackTitle)
-            : asString(textIconSectionTitles.shopWithConfidence, fallbackTitle)
-      );
+            ? asString(textIconSectionTitles.custom, '')
+            : asString(textIconSectionTitles.shopWithConfidence, '');
+      const title = asString(sectionTitleOverride, asString(row.title, fallbackTitle));
       const positionToken = asString(row.titlePosition, 'LEFT').toUpperCase();
       const titlePosition: 'LEFT' | 'CENTER' | 'RIGHT' =
         positionToken === 'CENTER' || positionToken === 'RIGHT' ? positionToken : 'LEFT';
@@ -1400,7 +1435,13 @@ export default function JenksFrontpageV2() {
     const fallbackStyle = asRecord(textIconCfg.cardStyle);
     const rawSectionStyles = asRecord(textIconCfg.sectionStyles);
     const makeStyle = (key: TextIconSectionType): TextIconCardStyleConfig => {
-      const row = asRecord(rawSectionStyles[key]);
+      const sectionStyleRow =
+        key === 'HOW_IT_WORKS'
+          ? rawSectionStyles.howItWorks ?? rawSectionStyles.HOW_IT_WORKS
+          : key === 'CUSTOM'
+            ? rawSectionStyles.custom ?? rawSectionStyles.CUSTOM
+            : rawSectionStyles.shopWithConfidence ?? rawSectionStyles.SHOP_WITH_CONFIDENCE;
+      const row = asRecord(sectionStyleRow);
       return {
         cardMinHeight: Math.max(
           80,
@@ -1578,7 +1619,7 @@ export default function JenksFrontpageV2() {
       ? 'top-[10%]'
       : heritageStatsPosition === 'MIDDLE'
         ? 'top-1/2 -translate-y-1/2'
-        : 'bottom-[8%]';
+        : 'bottom-[18%]';
 
   const newsletterCfg = useMemo(() => asRecord(newsletterFooterCfg.newsletter), [newsletterFooterCfg.newsletter]);
   const footerCfg = useMemo(() => asRecord(newsletterFooterCfg.footer), [newsletterFooterCfg.footer]);
@@ -1640,6 +1681,7 @@ export default function JenksFrontpageV2() {
   const footerMapCfg = useMemo(() => asRecord(footerCfg.map), [footerCfg.map]);
   const footerMapEnabled = asBoolean(footerMapCfg.enabled, false);
   const footerMapImage = asString(footerMapCfg.image, '');
+  const footerMapOverlayColor = asString(footerMapCfg.overlayColor, '#0a0a0a');
   const footerMapOverlayOpacity = Math.max(
     0,
     Math.min(1, Math.round(asNumber(footerMapCfg.overlayOpacity, 55)) / 100)
@@ -1737,6 +1779,8 @@ export default function JenksFrontpageV2() {
   const hamburgerMenuFontSize = Math.max(16, Math.min(72, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontSize, 32))));
   const hamburgerMenuFontWeight = Math.max(500, Math.min(900, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontWeight, 800))));
   const footerLogoCfg = useMemo(() => asRecord(footerCfg.logo), [footerCfg.logo]);
+  const footerLogoImageUrl = resolveManagerImage(footerLogoCfg.imageUrl, '');
+  const footerLogoFontWeight = Math.max(100, Math.min(900, Math.round(asNumber(footerLogoCfg.fontWeight, 700))));
 
   const filteredCountryShowcase = useMemo(
     () => countryShowcaseData.filter((country) => countryRegion === 'ALL' || country.region === countryRegion),
@@ -1952,6 +1996,96 @@ export default function JenksFrontpageV2() {
       cancelled = true;
     };
   }, [customerReviewsCfg.enabled, customerReviewsMaxItems, customerReviewsSourceMode]);
+  useEffect(() => {
+    let cancelled = false;
+    const loadFreshDropsProducts = async () => {
+      try {
+        if (asString(freshDropsCfg.sourceMode, 'NEWLY_LISTED').toUpperCase() !== 'FILTERED') {
+          if (!cancelled) setFreshDropsProducts([]);
+          return;
+        }
+        const rowsPerSource = Math.max(8, Math.round(asNumber(freshDropsCfg.rows, 2)) * Math.round(asNumber(freshDropsCfg.columns, 4)) * 2);
+        const [ready, designs, fabrics] = await Promise.all([
+          api.products.getReadyToWear({ page: 1, limit: rowsPerSource }).catch(() => null),
+          api.products.getDesigns({ page: 1, limit: rowsPerSource }).catch(() => null),
+          api.products.getFabrics({ page: 1, limit: rowsPerSource }).catch(() => null),
+        ]);
+
+        const toTimestamp = (value: unknown) => {
+          const ts = Date.parse(String(value || ''));
+          return Number.isFinite(ts) ? ts : 0;
+        };
+        const normalizedCategoryToken = (value: unknown): 'RTW' | 'CTW' | 'FTB' | '' => {
+          const token = String(value || '').trim().toUpperCase();
+          if (token === 'RTW' || token === 'READY_TO_WEAR' || token === 'READY-TO-WEAR') return 'RTW';
+          if (token === 'CTW' || token === 'CUSTOM_TO_WEAR' || token === 'CUSTOM-TO-WEAR' || token === 'CUSTOM') return 'CTW';
+          if (token === 'FTB' || token === 'FABRIC' || token === 'FABRICS' || token === 'FABRICS_TO_BUY' || token === 'FABRICS-TO-BUY') return 'FTB';
+          return '';
+        };
+        const selectedCategoryTokens = freshDropsCategoryFilterTokens
+          .map((entry) => normalizedCategoryToken(entry))
+          .filter(Boolean);
+        const selectedCategorySet = new Set(selectedCategoryTokens);
+        const selectedCountrySet = new Set(freshDropsCountryFilterTokens);
+        const listingAgeDays = Math.max(1, Math.round(asNumber(freshDropsCfg.listingAgeDays, 14)));
+        const listingAgeCutoff = Date.now() - listingAgeDays * 24 * 60 * 60 * 1000;
+        const includeOnlyFresh = asString(freshDropsCfg.sourceMode, 'NEWLY_LISTED').toUpperCase() === 'NEWLY_LISTED';
+
+        const rows: Array<{ id: string; image: string; name: string; brand: string; price: string; createdAtTs: number; category: 'RTW' | 'CTW' | 'FTB' }> = [];
+        const pushRows = (sourceRows: unknown[], category: 'RTW' | 'CTW' | 'FTB') => {
+          sourceRows.forEach((raw, index) => {
+            const row = asRecord(raw);
+            const id = asString(row.id, asString(row._id, `${category}-${index + 1}`));
+            if (!id) return;
+            const countryToken = asString(row.country, '').toUpperCase();
+            if (selectedCountrySet.size > 0 && !selectedCountrySet.has(countryToken)) return;
+            if (selectedCategorySet.size > 0 && !selectedCategorySet.has(category)) return;
+            const createdAtTs = toTimestamp(row.createdAt);
+            if (includeOnlyFresh && createdAtTs > 0 && createdAtTs < listingAgeCutoff) return;
+            const image = resolveManagerImage(
+              asArray(row.images).map((entry) => asString(asRecord(entry).url, '')).find(Boolean) || row.image || row.coverImage || '',
+              '/images/placeholder.jpg'
+            );
+            const priceValue = asNumber(row.price, asNumber(row.basePrice, asNumber(row.finalPrice, 0)));
+            const formattedPrice = `$${Math.max(0, priceValue).toFixed(2)}`;
+            rows.push({
+              id: `${category}-${id}`,
+              image,
+              name: asString(row.name, category === 'FTB' ? 'Fabric' : 'Product'),
+              brand: asString(row.designerName, asString(row.sellerName, asString(row.ownerName, 'Jenks'))),
+              price: formattedPrice,
+              createdAtTs,
+              category,
+            });
+          });
+        };
+
+        pushRows(asArray(asRecord(ready?.data).products), 'RTW');
+        pushRows(asArray(asRecord(designs?.data).designs), 'CTW');
+        pushRows(asArray(asRecord(fabrics?.data).fabrics), 'FTB');
+        rows.sort((left, right) => right.createdAtTs - left.createdAtTs);
+
+        if (!cancelled) {
+          setFreshDropsProducts(
+            rows.map(({ createdAtTs: _createdAtTs, category: _category, ...entry }) => entry)
+          );
+        }
+      } catch {
+        if (!cancelled) setFreshDropsProducts([]);
+      }
+    };
+    void loadFreshDropsProducts();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    freshDropsCfg.columns,
+    freshDropsCfg.listingAgeDays,
+    freshDropsCfg.rows,
+    freshDropsCfg.sourceMode,
+    freshDropsCategoryFilterTokens,
+    freshDropsCountryFilterTokens,
+  ]);
   useEffect(() => {
     if (customerReviewCards.length === 0) {
       setCustomerReviewIndex(0);
@@ -2191,7 +2325,7 @@ export default function JenksFrontpageV2() {
               <div className="absolute left-0 top-0 h-full w-[98vw] max-w-[760px] overflow-y-auto bg-black/96 shadow-none">
                 <button
                   type="button"
-                  className="absolute left-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white hover:bg-white/10"
+                  className="absolute left-4 top-8 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white hover:bg-white/10"
                   aria-label="Close menu"
                   onClick={() => setHamburgerOpen(false)}
                 >
@@ -2266,6 +2400,86 @@ export default function JenksFrontpageV2() {
             </div>
           ) : null}
         </div>
+        {active.layoutMode === 'FULL' ? (
+          <div
+            className="relative flex h-full items-end px-5 py-10 sm:px-8 lg:col-span-12 lg:px-12 xl:px-16"
+            style={{
+              backgroundImage: active.image ? `url(${active.image})` : 'none',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-black/58 via-black/34 to-black/45" />
+            <div className="relative w-full max-w-[720px] pr-3 sm:pr-4 animate-fade-in" data-kimi-anim="fade-up">
+              <h1
+                className="break-words font-['Oswald'] font-bold uppercase leading-[0.9] text-white"
+                style={{ fontSize: `${Math.max(36, Math.min(120, Math.round(active.titleFontSize)))}px` }}
+              >
+                <span>{active.titleA}</span>
+                <span className="ml-[0.16em] text-[#e66045]">{active.titleB}</span>
+              </h1>
+              {active.textEnabled ? (
+                <p className="mt-6 text-[16px] font-light leading-[1.35] text-white/92 sm:text-[18px]">{active.lineA}</p>
+              ) : null}
+              {active.descriptionEnabled ? (
+                <p className="mt-4 text-white/82" style={{ fontSize: `${active.descriptionFontSize}px` }}>{active.lineB}</p>
+              ) : null}
+              <div className="mt-6 flex flex-wrap items-center gap-1.5">
+                {active.primaryCtaEnabled ? (
+                  <Link
+                    to={toSafeInternalHref(active.primaryCtaHref)}
+                    style={buildCTAStyle(active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                    onMouseEnter={(event) =>
+                      applyHeroCtaHoverState(event.currentTarget, active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
+                    }
+                    onMouseLeave={(event) =>
+                      applyHeroCtaHoverState(event.currentTarget, active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
+                    }
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {active.primaryCtaText}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                ) : null}
+                {active.secondaryCtaEnabled ? (
+                  <Link
+                    to={toSafeInternalHref(active.secondaryCtaHref)}
+                    style={buildCTAStyle(active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                    onMouseEnter={(event) =>
+                      applyHeroCtaHoverState(event.currentTarget, active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
+                    }
+                    onMouseLeave={(event) =>
+                      applyHeroCtaHoverState(event.currentTarget, active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
+                    }
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
+                  >
+                    <Heart className="h-3.5 w-3.5" />
+                    {active.secondaryCtaText}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                ) : null}
+                {active.tertiaryCtaEnabled ? (
+                  <Link
+                    to={toSafeInternalHref(active.tertiaryCtaHref)}
+                    style={buildCTAStyle(active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                    onMouseEnter={(event) =>
+                      applyHeroCtaHoverState(event.currentTarget, active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
+                    }
+                    onMouseLeave={(event) =>
+                      applyHeroCtaHoverState(event.currentTarget, active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
+                    }
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
+                  >
+                    <ShoppingBag className="h-3.5 w-3.5" />
+                    {active.tertiaryCtaText}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : (
         <div
           className={`relative flex ${heroTextAlignClass} px-5 py-10 lg:pl-8 lg:pr-12 xl:pl-10 xl:pr-16`}
           style={{
@@ -2346,6 +2560,7 @@ export default function JenksFrontpageV2() {
             </div>
           </div>
         </div>
+        )}
       </section>
       ) : (
       <section
@@ -2567,7 +2782,7 @@ export default function JenksFrontpageV2() {
                     <Link
                       to={sectionHrefForCountry(section.key)}
                       style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                      className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                      className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em]"
                     >
                         {section.cta}
                     </Link>
@@ -2593,7 +2808,7 @@ export default function JenksFrontpageV2() {
                     <Link
                       to={sectionHrefForCountry(section.key)}
                       style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                      className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                      className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em]"
                     >
                         {section.cta}
                     </Link>
@@ -2665,7 +2880,18 @@ export default function JenksFrontpageV2() {
       {isSectionVisible('FEATURED') ? (
         <section className="space-y-0" style={{ order: getSectionOrder('FEATURED') }}>
           {(['RTW', 'CTW', 'FTB'] as const).map((key) => (
-            <div key={key} className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 md:grid-cols-2`}>
+            <div
+              key={key}
+              className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 ${
+                featuredColumns >= 4
+                  ? 'md:grid-cols-4'
+                  : featuredColumns === 3
+                    ? 'md:grid-cols-3'
+                    : featuredColumns === 1
+                      ? 'md:grid-cols-1'
+                      : 'md:grid-cols-2'
+              }`}
+            >
               {featuredCardsByKey[key].map((card) => (
                 <Link key={card.id} to={featuredCardHref(card, key)} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
                   <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
@@ -2675,7 +2901,7 @@ export default function JenksFrontpageV2() {
                     <p className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">{card.title}</p>
                     <p className="mt-2 text-sm text-white/78">{card.subtitle}</p>
                     <span
-                      className="mt-4 inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.06em] text-white/92 hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                      className="mt-4 inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.06em] text-white/92"
                       style={buildCTAStyle(card.ctaStyle, DEFAULT_INLINE_CTA_STYLE)}
                     >
                       {card.cta}
@@ -2735,7 +2961,7 @@ export default function JenksFrontpageV2() {
                 <div className="p-4">
                   <p className="text-xl font-semibold">{drop.name}</p>
                   <p className="mt-1 text-sm text-black/60">{drop.brand}</p>
-                  <p className="mt-2 text-xl font-semibold text-[#e66045]">{drop.price}</p>
+                  <p className="mt-2 text-base font-semibold text-[#e66045]">{drop.price}</p>
                 </div>
               </article>
             ))}
@@ -2756,7 +2982,7 @@ export default function JenksFrontpageV2() {
                 <h3 className="mt-3 font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">{spot.title}</h3>
                 <p className="mt-3 text-sm text-white/78">{spot.description}</p>
                 <span
-                  className="mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white hover:underline hover:decoration-[#d40000] underline-offset-[6px]"
+                  className="mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white"
                   style={buildCTAStyle(spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE)}
                 >
                   {spot.cta}
@@ -3015,23 +3241,25 @@ export default function JenksFrontpageV2() {
 
       {/* FOOTER */}
       {isSectionVisible('NEWSLETTER_FOOTER') && asBoolean(footerCfg.enabled, true) ? (
-        <footer className="relative bg-[#0a0a0a] py-12 text-white" style={{ order: getSectionOrder('NEWSLETTER_FOOTER') }}>
+        <footer
+          className="relative bg-[#0a0a0a] text-white"
+          style={{ order: getSectionOrder('NEWSLETTER_FOOTER'), minHeight: `${footerMapHeight}px` }}
+        >
         {footerMapEnabled && footerMapImage ? (
           <>
             <img
               src={footerMapImage}
               alt="Footer map underlay"
-              className="absolute inset-x-0 bottom-0 w-full object-cover opacity-65"
-              style={{ height: `${footerMapHeight}px` }}
+              className="absolute inset-0 h-full w-full object-cover"
             />
             <div
-              className="absolute inset-x-0 bottom-0 bg-black"
-              style={{ height: `${footerMapHeight}px`, opacity: footerMapOverlayOpacity }}
+              className="absolute inset-0"
+              style={{ backgroundColor: footerMapOverlayColor, opacity: footerMapOverlayOpacity }}
             />
           </>
         ) : null}
-        <div className="relative z-10 w-full px-4 sm:px-6 lg:px-12 xl:px-20">
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
+        <div className="relative z-10 w-full px-4 pt-12 sm:px-6 lg:px-12 xl:px-20">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-5">
             <div>
               {asString(footerLogoCfg.mode, 'TEXT').toUpperCase() === 'IMAGE' && footerLogoImageUrl ? (
                 <img
@@ -3039,8 +3267,8 @@ export default function JenksFrontpageV2() {
                   alt={asString(footerLogoCfg.altText, 'Jenks')}
                   className="object-contain"
                   style={{
-                    width: Math.max(80, Math.round(asNumber(footerLogoCfg.width, 180))),
-                    height: Math.max(24, Math.round(asNumber(footerLogoCfg.height, 52))),
+                    width: Math.max(40, Math.round(asNumber(footerLogoCfg.width, 180))),
+                    height: Math.max(16, Math.round(asNumber(footerLogoCfg.height, 52))),
                   }}
                 />
               ) : (
@@ -3049,14 +3277,13 @@ export default function JenksFrontpageV2() {
                   style={{
                     color: asString(footerLogoCfg.textColor, '#ffffff'),
                     fontFamily: asString(footerLogoCfg.fontFamily, 'Oswald'),
-                    fontSize: `${Math.max(16, Math.round(asNumber(footerLogoCfg.fontSize, 30)))}px`,
-                    fontWeight: 700,
+                    fontSize: `${Math.max(10, Math.round(asNumber(footerLogoCfg.fontSize, 30)))}px`,
+                    fontWeight: footerLogoFontWeight,
                   }}
                 >
                   {asString(footerLogoCfg.text, asString(footerCfg.brandText, 'Jenks')).toUpperCase()}
                 </p>
               )}
-              <p className="mt-3 text-sm text-white/65">{asString(footerCfg.address, 'Made by Africans. Worn by the world.')}</p>
               <div className="mt-5 flex items-center gap-3 text-white/75">
                 {footerSocialLinks.map((social) => {
                   const Icon = toSocialIcon(social.icon || social.label);
@@ -3070,7 +3297,7 @@ export default function JenksFrontpageV2() {
             </div>
 
             {footerLinkGroups.map((group) => (
-              <div key={group.id}>
+              <div key={group.id} className="md:col-span-1">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">{group.title}</p>
                 <div className="mt-3 space-y-2 text-sm text-white/75">
                   {group.links.map((link) => (
@@ -3082,7 +3309,7 @@ export default function JenksFrontpageV2() {
               </div>
             ))}
 
-            <div>
+            <div className="md:col-span-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">Contact</p>
               <div className="mt-3 space-y-2 text-sm text-white/75">
                 <p className="inline-flex items-center gap-2"><Mail className="h-4 w-4" /> {asString(footerCfg.contactEmail, 'support@zurikaribu.com')}</p>

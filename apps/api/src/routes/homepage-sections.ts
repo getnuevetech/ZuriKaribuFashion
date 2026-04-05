@@ -506,6 +506,52 @@ const ensureNewsletterSubscriptionSchema = async () => {
   }
 };
 
+type NewsletterSubscriberListItem = {
+  id: string;
+  email: string;
+  source: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const parseNewsletterSubscriberListItem = (input: unknown): NewsletterSubscriberListItem | null => {
+  if (!input || typeof input !== 'object') return null;
+  const row = input as Record<string, unknown>;
+  const id = String(row.id || '').trim();
+  const email = String(row.email || '').trim().toLowerCase();
+  if (!id || !email) return null;
+  const source = String(row.source || 'HOMEPAGE').trim().toUpperCase() || 'HOMEPAGE';
+  let metadata: Record<string, unknown> | null = null;
+  if (row.metadata && typeof row.metadata === 'object') {
+    metadata = row.metadata as Record<string, unknown>;
+  } else if (typeof row.metadata === 'string' && row.metadata.trim()) {
+    try {
+      const parsed = JSON.parse(row.metadata);
+      if (parsed && typeof parsed === 'object') {
+        metadata = parsed as Record<string, unknown>;
+      }
+    } catch {
+      metadata = null;
+    }
+  }
+  const toIsoTimestamp = (value: unknown, fallbackIso: string) => {
+    const parsed = new Date(String(value || ''));
+    return Number.isNaN(parsed.getTime()) ? fallbackIso : parsed.toISOString();
+  };
+  const nowIso = new Date().toISOString();
+  const createdAt = row.createdAt ? toIsoTimestamp(row.createdAt, nowIso) : nowIso;
+  const updatedAt = row.updatedAt ? toIsoTimestamp(row.updatedAt, createdAt) : createdAt;
+  return {
+    id,
+    email,
+    source,
+    metadata,
+    createdAt,
+    updatedAt,
+  };
+};
+
 router.use(async (_req, _res, next) => {
   try {
     await ensureHomepageSettingsSchema();
@@ -5487,6 +5533,75 @@ router.patch('/admin/newsletter-settings', authenticate, authorizePermissions(Pe
     }
     console.error('Error updating newsletter settings:', error);
     res.status(500).json({ success: false, message: 'Failed to update newsletter settings.' });
+  }
+});
+
+router.get('/admin/newsletter-subscribers', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), async (req, res) => {
+  try {
+    const page = Math.max(1, Math.min(2000, Math.floor(Number(req.query.page) || 1)));
+    const limit = Math.max(1, Math.min(200, Math.floor(Number(req.query.limit) || 50)));
+    const search = String(req.query.search || '').trim().toLowerCase();
+    const source = String(req.query.source || '')
+      .trim()
+      .toUpperCase();
+
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+    if (search) {
+      params.push(`%${search}%`);
+      clauses.push(`LOWER("email") LIKE $${params.length}`);
+    }
+    if (source) {
+      params.push(source);
+      clauses.push(`"source" = $${params.length}`);
+    }
+    const whereSql = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+
+    const totalRows = await prisma.$queryRawUnsafe<Array<{ total: number }>>(
+      `SELECT COUNT(*)::int AS "total"
+       FROM "NewsletterSubscription"
+       ${whereSql}`,
+      ...params
+    );
+    const total = Array.isArray(totalRows) && totalRows.length > 0 ? Number(totalRows[0]?.total || 0) : 0;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.min(page, totalPages);
+    const safeOffset = (safePage - 1) * limit;
+
+    const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT
+         "id",
+         "email",
+         "source",
+         "metadata",
+         "createdAt",
+         "updatedAt"
+       FROM "NewsletterSubscription"
+       ${whereSql}
+       ORDER BY "createdAt" DESC
+       LIMIT $${params.length + 1}
+       OFFSET $${params.length + 2}`,
+      ...params,
+      limit,
+      safeOffset
+    );
+    const data = (Array.isArray(rows) ? rows : [])
+      .map((entry) => parseNewsletterSubscriberListItem(entry))
+      .filter((entry): entry is NewsletterSubscriberListItem => Boolean(entry));
+
+    res.json({
+      success: true,
+      data,
+      pagination: {
+        page: safePage,
+        limit,
+        total,
+        totalPages,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching newsletter subscribers:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch newsletter subscribers.' });
   }
 });
 
