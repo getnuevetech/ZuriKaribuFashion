@@ -38,26 +38,26 @@ const MODE_CONFIG: Record<
   DetailMode,
   {
     title: string;
-    listHref: '/jenks-v14/ready-to-wear' | '/jenks-v14/fabrics' | '/jenks-v14/custom-to-wear';
+    listHref: '/readytowear' | '/fabricstobuy' | '/cystomtowear';
     apiType: 'ready-to-wear' | 'fabric' | 'design';
     ownerFallback: string;
   }
 > = {
   READY: {
     title: 'Ready To Wear',
-    listHref: '/jenks-v14/ready-to-wear',
+    listHref: '/readytowear',
     apiType: 'ready-to-wear',
     ownerFallback: 'Designer',
   },
   FABRIC: {
     title: 'Fabrics To Buy',
-    listHref: '/jenks-v14/fabrics',
+    listHref: '/fabricstobuy',
     apiType: 'fabric',
     ownerFallback: 'Seller',
   },
   CUSTOM: {
     title: 'Custom To Wear',
-    listHref: '/jenks-v14/custom-to-wear',
+    listHref: '/cystomtowear',
     apiType: 'design',
     ownerFallback: 'Designer',
   },
@@ -87,10 +87,10 @@ const flagEmoji = (countryCode: string) => {
 
 const discoverHref = (entry: DiscoverProduct) =>
   entry.productType === 'DESIGN'
-    ? `/jenks-v14/custom-to-wear/${entry.id}`
+    ? `/cystomtowear/${entry.id}`
     : entry.productType === 'FABRIC'
-      ? `/jenks-v14/fabrics/${entry.id}`
-      : `/jenks-v14/ready-to-wear/${entry.id}`;
+      ? `/fabricstobuy/${entry.id}`
+      : `/readytowear/${entry.id}`;
 
 export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetailPageProps) {
   const config = MODE_CONFIG[mode];

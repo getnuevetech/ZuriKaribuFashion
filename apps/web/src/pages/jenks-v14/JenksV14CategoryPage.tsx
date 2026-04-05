@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ChevronDown, Globe, Loader2 } from 'lucide-react';
+import { ArrowRight, ChevronDown, ChevronRight, Globe, Home, Loader2, Menu, Search, ShoppingBag, X } from 'lucide-react';
 import '../../styles/jenks-v2.css';
 import { api } from '../../services/api';
 import { useCurrencyStore } from '../../store/currencyStore';
@@ -11,7 +11,7 @@ type CategoryMode = 'FABRICS' | 'READY' | 'CUSTOM';
 
 type JenksV14CategoryPageProps = {
   mode: CategoryMode;
-  routeBase: '/jenks-v14/fabrics' | '/jenks-v14/ready-to-wear' | '/jenks-v14/custom-to-wear';
+  routeBase: '/fabricstobuy' | '/readytowear' | '/cystomtowear';
 };
 
 type TaxonomyOption = {
@@ -79,6 +79,38 @@ const flagEmoji = (countryCode: string) => {
 };
 
 const sortByName = (rows: TaxonomyOption[]) => [...rows].sort((a, b) => a.name.localeCompare(b.name));
+const ASSET_BASE = 'https://african-fashion-zurikaribu.vercel.app';
+
+const CATEGORY_HERO_BY_MODE: Record<
+  CategoryMode,
+  {
+    image: string;
+    subtitle: string;
+    breadcrumb: string;
+  }
+> = {
+  READY: {
+    image: `${ASSET_BASE}/rw_full.jpg`,
+    subtitle: 'Curated ready-to-wear edits inspired by African craftsmanship and modern silhouettes.',
+    breadcrumb: 'Ready To Wear',
+  },
+  CUSTOM: {
+    image: `${ASSET_BASE}/custom_full.jpg`,
+    subtitle: 'Design your bespoke look with premium materials, expert tailors, and timeless style.',
+    breadcrumb: 'Custom To Wear',
+  },
+  FABRICS: {
+    image: `${ASSET_BASE}/fabrics_full.jpg`,
+    subtitle: 'Source high-quality fabrics from trusted artisan houses across Africa.',
+    breadcrumb: 'Fabrics To Buy',
+  },
+};
+
+const CATEGORY_NAV_LINKS = [
+  { label: 'Ready To Wear', href: '/readytowear' },
+  { label: 'Custom To Wear', href: '/cystomtowear' },
+  { label: 'Fabrics To Buy', href: '/fabricstobuy' },
+];
 
 export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14CategoryPageProps) {
   const { formatFromUsd } = useCurrencyStore();
@@ -91,6 +123,8 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showAllCountries, setShowAllCountries] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   const countryOptions = useMemo(
     () =>
@@ -120,6 +154,14 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
   const taxonomyLabel = mode === 'FABRICS' ? 'MATERIAL' : mode === 'READY' ? 'CATEGORY' : 'STYLE';
   const sectionTitle = mode === 'FABRICS' ? 'Fabrics To Buy' : mode === 'READY' ? 'Ready To Wear' : 'Custom To Wear';
   const countLabel = mode === 'FABRICS' ? 'fabrics' : 'products';
+  const heroConfig = CATEGORY_HERO_BY_MODE[mode];
+  const heroImage = asText(products[0]?.image, heroConfig.image);
+
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
     const loadTaxonomy = async () => {
@@ -303,7 +345,98 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
 
   return (
     <div className="min-h-screen bg-[#F8F6F1] text-[#1A1A1A]">
-      <div className="sticky top-0 z-30 border-b border-[#1A1A1A]/10 bg-[#F8F6F1]/95 backdrop-blur-md">
+      <header
+        className={`fixed left-0 right-0 top-0 z-40 border-b transition-all ${
+          isScrolled
+            ? 'border-[#1A1A1A]/10 bg-[#F8F6F1]/95 shadow-sm backdrop-blur-md'
+            : 'border-transparent bg-[#F8F6F1]/85 backdrop-blur-sm'
+        }`}
+      >
+        <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between px-4 py-4 sm:px-6 lg:px-10">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen((prev) => !prev)}
+              className="inline-flex h-10 w-10 items-center justify-center border border-[#1A1A1A]/15 bg-white text-[#1A1A1A] transition hover:border-[#E85A3C] md:hidden"
+              aria-label="Toggle category menu"
+            >
+              {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+            <Link to="/" className="font-['Montserrat'] text-xl font-extrabold tracking-[0.08em] sm:text-2xl">
+              <span>ZURI</span>
+              <span className="text-[#E85A3C]">KARIBU</span>
+            </Link>
+          </div>
+          <nav className="hidden items-center gap-8 md:flex">
+            {CATEGORY_NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                to={link.href}
+                className={`text-sm font-medium uppercase tracking-[0.08em] transition-colors ${
+                  routeBase === link.href ? 'text-[#E85A3C]' : 'text-[#1A1A1A] hover:text-[#E85A3C]'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+          <div className="flex items-center gap-2 text-[#1A1A1A]">
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center border border-[#1A1A1A]/15 bg-white transition hover:border-[#E85A3C]"
+              aria-label="Search"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+            <Link
+              to="/cart"
+              className="inline-flex h-10 w-10 items-center justify-center border border-[#1A1A1A]/15 bg-white transition hover:border-[#E85A3C]"
+              aria-label="Cart"
+            >
+              <ShoppingBag className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+        {isMenuOpen ? (
+          <nav className="border-t border-[#1A1A1A]/10 bg-[#F8F6F1] px-4 py-3 md:hidden">
+            <div className="flex flex-col gap-1">
+              {CATEGORY_NAV_LINKS.map((link) => (
+                <Link
+                  key={`mobile-${link.href}`}
+                  to={link.href}
+                  onClick={() => setIsMenuOpen(false)}
+                  className={`px-3 py-2 text-sm font-medium uppercase tracking-[0.08em] ${
+                    routeBase === link.href ? 'text-[#E85A3C]' : 'text-[#1A1A1A]'
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+          </nav>
+        ) : null}
+      </header>
+
+      <section className="relative mt-[72px] h-[58vh] min-h-[380px] overflow-hidden sm:min-h-[460px]">
+        <img src={heroImage} alt={sectionTitle} className="h-full w-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/25 to-[#F8F6F1]/95" />
+        <div className="absolute inset-0 flex items-end">
+          <div className="mx-auto w-full max-w-[1600px] px-4 pb-10 sm:px-6 lg:px-10">
+            <nav className="mb-4 flex items-center gap-2 text-sm text-white/85">
+              <Link to="/" className="inline-flex items-center gap-1 text-white/80 transition hover:text-white">
+                <Home className="h-4 w-4" />
+                <span>Home</span>
+              </Link>
+              <ChevronRight className="h-4 w-4 text-white/65" />
+              <span className="text-white">{heroConfig.breadcrumb}</span>
+            </nav>
+            <h1 className="headline-lg text-[clamp(2rem,5vw,5rem)] text-white">{sectionTitle}</h1>
+            <p className="mt-3 max-w-2xl text-sm text-white/85 sm:text-base">{heroConfig.subtitle}</p>
+          </div>
+        </div>
+      </section>
+
+      <div className="sticky top-[72px] z-30 border-b border-[#1A1A1A]/10 bg-[#F8F6F1]/95 backdrop-blur-md">
         <div className="mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6 lg:px-10">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>

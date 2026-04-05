@@ -39,21 +39,21 @@ const NAVIGATION_SETTINGS_DEFAULTS = {
   logoHeight: 48,
   leftMenuLinks: [
     { label: 'Home', href: '/', enabled: true },
-    { label: 'Ready To Wear', href: '/jenks-v14/ready-to-wear', enabled: true },
-    { label: 'Fabric To Buy', href: '/jenks-v14/fabrics', enabled: true },
-    { label: 'Custom To Wear', href: '/jenks-v14/custom-to-wear', enabled: true },
+    { label: 'Ready To Wear', href: '/readytowear', enabled: true },
+    { label: 'Fabric To Buy', href: '/fabricstobuy', enabled: true },
+    { label: 'Custom To Wear', href: '/cystomtowear', enabled: true },
   ] as NavMenuLink[],
   rightMenuLinks: [
-    { label: 'Shop', href: '/jenks-v14/ready-to-wear', enabled: true },
+    { label: 'Shop', href: '/readytowear', enabled: true },
     { label: 'About Us', href: '/#about', enabled: true },
     { label: 'Contact Us', href: '/contact', enabled: true },
   ] as NavMenuLink[],
   hamburgerMenuLinks: [
     { label: 'Home', href: '/', enabled: true },
-    { label: 'Shop', href: '/jenks-v14/ready-to-wear', enabled: true },
-    { label: 'Ready To Wear', href: '/jenks-v14/ready-to-wear', enabled: true },
-    { label: 'Fabric To Buy', href: '/jenks-v14/fabrics', enabled: true },
-    { label: 'Custom To Wear', href: '/jenks-v14/custom-to-wear', enabled: true },
+    { label: 'Shop', href: '/readytowear', enabled: true },
+    { label: 'Ready To Wear', href: '/readytowear', enabled: true },
+    { label: 'Fabric To Buy', href: '/fabricstobuy', enabled: true },
+    { label: 'Custom To Wear', href: '/cystomtowear', enabled: true },
     { label: 'About Us', href: '/#about', enabled: true },
     { label: 'Contact Us', href: '/contact', enabled: true },
   ] as NavMenuLink[],
@@ -150,7 +150,9 @@ export default function MainLayout() {
   const profileRoute = userRole === 'CUSTOMER' ? '/profile' : dashboardRoute;
   const ordersRoute = userRole === 'CUSTOMER' ? '/orders' : null;
   const cartItemCount = getItemCount();
-  const isProductRetailPath = /^\/(designs|custom|ready-to-wear|fabrics)\/[^/]+$/i.test(location.pathname);
+  const isProductRetailPath = /^\/(readytowear|cystomtowear|fabricstobuy|designs|custom|ready-to-wear|fabrics)\/[^/]+$/i.test(
+    location.pathname
+  );
   const showFloatingCheckout = isProductRetailPath && cartItemCount > 0;
   const profileLabel = userRole === 'CUSTOMER' ? 'My Profile' : 'Dashboard';
   const ordersLabel = 'My Orders';
@@ -277,7 +279,7 @@ export default function MainLayout() {
             id: `rtw-${row.id}`,
             title: String(row?.name || row?.title || 'Ready to Wear'),
             subtitle: String(row?.country || row?.designer?.country || 'Ready to Wear'),
-            href: `/jenks-v14/ready-to-wear/${row.id}`,
+            href: `/readytowear/${row.id}`,
             image: resolveRowImage(row),
             typeLabel: 'RTW' as const,
           })),
@@ -285,7 +287,7 @@ export default function MainLayout() {
             id: `ctw-${row.id}`,
             title: String(row?.name || row?.title || 'Custom to Wear'),
             subtitle: String(row?.country || row?.designer?.country || 'Custom to Wear'),
-            href: `/jenks-v14/custom-to-wear/${row.id}`,
+            href: `/cystomtowear/${row.id}`,
             image: resolveRowImage(row),
             typeLabel: 'CTW' as const,
           })),
@@ -293,7 +295,7 @@ export default function MainLayout() {
             id: `fab-${row.id}`,
             title: String(row?.name || row?.title || 'Fabrics'),
             subtitle: String(row?.country || row?.seller?.country || 'Fabrics'),
-            href: `/jenks-v14/fabrics/${row.id}`,
+            href: `/fabricstobuy/${row.id}`,
             image: resolveRowImage(row),
             typeLabel: 'FABRIC' as const,
           })),

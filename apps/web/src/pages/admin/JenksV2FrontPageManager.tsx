@@ -503,9 +503,9 @@ type RouteOption = {
 
 const PAGE_HREF_BY_KEY: Record<string, string> = {
   HOME: '/',
-  READY_TO_WEAR: '/jenks-v14/ready-to-wear',
-  CUSTOM_TO_WEAR: '/jenks-v14/custom-to-wear',
-  FABRICS: '/jenks-v14/fabrics',
+  READY_TO_WEAR: '/readytowear',
+  CUSTOM_TO_WEAR: '/cystomtowear',
+  FABRICS: '/fabricstobuy',
   DESIGNERS: '/designers',
   ABOUT: '/about',
   CONTACT: '/contact',
@@ -525,9 +525,9 @@ const normalizeCtaMode = (value: unknown, fallback: 'URL' | 'PAGE' = 'PAGE'): 'U
 
 const ROUTE_OPTIONS: RouteOption[] = [
   { key: 'HOME', label: 'Home', href: '/' },
-  { key: 'READY_TO_WEAR', label: 'Ready To Wear', href: '/jenks-v14/ready-to-wear' },
-  { key: 'FABRICS', label: 'Fabric To Buy', href: '/jenks-v14/fabrics' },
-  { key: 'CUSTOM_TO_WEAR', label: 'Custom To Wear', href: '/jenks-v14/custom-to-wear' },
+  { key: 'READY_TO_WEAR', label: 'Ready To Wear', href: '/readytowear' },
+  { key: 'FABRICS', label: 'Fabric To Buy', href: '/fabricstobuy' },
+  { key: 'CUSTOM_TO_WEAR', label: 'Custom To Wear', href: '/cystomtowear' },
   { key: 'DESIGNERS', label: 'Designers', href: '/designers' },
   { key: 'ABOUT', label: 'About Us', href: '/about' },
   { key: 'CONTACT', label: 'Contact', href: '/contact' },
@@ -831,7 +831,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       width: 180,
       height: 50,
     },
-    additionalTopMenu: [defaultLink('Shop', '/jenks-v14/ready-to-wear', 'SHOP')],
+    additionalTopMenu: [defaultLink('Shop', '/readytowear', 'SHOP')],
     signInMenu: {
       enabled: true,
       label: 'Sign In',
@@ -869,7 +869,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         descriptionFontSize: 16,
         primaryCtaEnabled: true,
         primaryCtaText: 'SHOP NOW',
-        primaryCtaLink: '/jenks-v14/ready-to-wear',
+        primaryCtaLink: '/readytowear',
         primaryCtaStyle: createCtaStyle({
           backgroundColor: '#e66045',
           textColor: '#ffffff',
@@ -879,7 +879,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         }),
         secondaryCtaEnabled: true,
         secondaryCtaText: 'EXPLORE DESIGNERS',
-        secondaryCtaLink: '/jenks-v14/custom-to-wear',
+        secondaryCtaLink: '/cystomtowear',
         secondaryCtaStyle: createCtaStyle({
           backgroundColor: 'transparent',
           textColor: '#111111',
@@ -889,7 +889,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         }),
         tertiaryCtaEnabled: true,
         tertiaryCtaText: 'SHOP FABRICS',
-        tertiaryCtaLink: '/jenks-v14/fabrics',
+        tertiaryCtaLink: '/fabricstobuy',
         tertiaryCtaStyle: createCtaStyle({
           backgroundColor: 'transparent',
           textColor: '#111111',
@@ -940,7 +940,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         id: uid(),
         title: 'Occasion',
         description: 'Wedding, Casual, Festival and more',
-        href: '/jenks-v14/ready-to-wear',
+        href: '/readytowear',
         icon: 'CalendarDays',
         titleFontSize: 15,
         descriptionFontSize: 14,
@@ -954,7 +954,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Under $100',
         priceLabel: 'Budget Friendly',
         description: 'Affordable picks for every wardrobe',
-        href: '/jenks-v14/ready-to-wear?price=under-100',
+        href: '/readytowear?price=under-100',
         icon: 'Tag',
         titleFontSize: 24,
         descriptionFontSize: 14,
@@ -991,7 +991,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         tag: 'RTW',
         description: 'Manage title, tag, description and CTA for RTW block.',
         ctaText: 'Shop RTW',
-        ctaLink: '/jenks-v14/ready-to-wear',
+        ctaLink: '/readytowear',
         ctaStyle: createCtaStyle({
           backgroundColor: 'transparent',
           textColor: '#ffffff',
@@ -1009,7 +1009,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         tag: 'CTW',
         description: 'Manage title, tag, description and CTA for CTW block.',
         ctaText: 'Explore CTW',
-        ctaLink: '/jenks-v14/custom-to-wear',
+        ctaLink: '/cystomtowear',
         ctaStyle: createCtaStyle({
           backgroundColor: 'transparent',
           textColor: '#ffffff',
@@ -1027,7 +1027,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         tag: 'FTB',
         description: 'Manage title, tag, description and CTA for FTB block.',
         ctaText: 'Shop FTB',
-        ctaLink: '/jenks-v14/fabrics',
+        ctaLink: '/fabricstobuy',
         ctaStyle: createCtaStyle({
           backgroundColor: 'transparent',
           textColor: '#ffffff',
@@ -1123,7 +1123,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Featured Ready To Wear',
         description: 'Spotlight featured RTW products.',
         ctaText: 'Shop RTW',
-        ctaLink: '/jenks-v14/ready-to-wear',
+        ctaLink: '/readytowear',
         ctaMode: 'PAGE',
         ctaPageKey: 'READY_TO_WEAR',
         productGroup: 'RTW',
@@ -1145,7 +1145,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Featured Custom To Wear',
         description: 'Spotlight featured CTW products.',
         ctaText: 'Explore CTW',
-        ctaLink: '/jenks-v14/custom-to-wear',
+        ctaLink: '/cystomtowear',
         ctaMode: 'PAGE',
         ctaPageKey: 'CUSTOM_TO_WEAR',
         productGroup: 'CTW',
@@ -1167,7 +1167,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Featured Fabric To Buy',
         description: 'Spotlight featured fabric products.',
         ctaText: 'Shop FTB',
-        ctaLink: '/jenks-v14/fabrics',
+        ctaLink: '/fabricstobuy',
         ctaMode: 'PAGE',
         ctaPageKey: 'FABRICS',
         productGroup: 'FTB',
@@ -1205,7 +1205,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Meet the Designers',
         description: 'Highlight featured designers with CTA.',
         ctaText: 'View Designer',
-        ctaLink: '/jenks-v14/custom-to-wear',
+        ctaLink: '/cystomtowear',
         ctaMode: 'PAGE',
         ctaPageKey: 'CUSTOM_TO_WEAR',
         ctaStyle: createCtaStyle({
@@ -1303,8 +1303,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
           id: uid(),
           title: 'Shop',
           links: [
-            { id: uid(), label: 'Ready To Wear', hrefMode: 'PAGE', pageKey: 'READY_TO_WEAR', href: '/jenks-v14/ready-to-wear', enabled: true },
-            { id: uid(), label: 'Custom To Wear', hrefMode: 'PAGE', pageKey: 'CUSTOM_TO_WEAR', href: '/jenks-v14/custom-to-wear', enabled: true },
+            { id: uid(), label: 'Ready To Wear', hrefMode: 'PAGE', pageKey: 'READY_TO_WEAR', href: '/readytowear', enabled: true },
+            { id: uid(), label: 'Custom To Wear', hrefMode: 'PAGE', pageKey: 'CUSTOM_TO_WEAR', href: '/cystomtowear', enabled: true },
           ],
         },
       ],
@@ -1420,9 +1420,9 @@ const mapLegacyManagerHref = (href: string) => {
     normalized.startsWith('/shop#')
   ) {
     if (normalized.startsWith('/shop?') || normalized.startsWith('/shop#')) {
-      return `/jenks-v14/ready-to-wear${normalized.slice('/shop'.length)}`;
+      return `/readytowear${normalized.slice('/shop'.length)}`;
     }
-    return '/jenks-v14/ready-to-wear';
+    return '/readytowear';
   }
   return normalized;
 };
@@ -1472,8 +1472,8 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
     },
     heroBanners: next.topNavigations.heroBanners.map((banner) => ({
       ...banner,
-      primaryCtaLink: normalizeManagerHref(banner.primaryCtaLink, '/jenks-v14/ready-to-wear'),
-      secondaryCtaLink: normalizeManagerHref(banner.secondaryCtaLink, '/jenks-v14/custom-to-wear'),
+      primaryCtaLink: normalizeManagerHref(banner.primaryCtaLink, '/readytowear'),
+      secondaryCtaLink: normalizeManagerHref(banner.secondaryCtaLink, '/cystomtowear'),
       rightPanelBackgroundMode:
         String((banner as HeroBanner)?.rightPanelBackgroundMode || '').trim().toUpperCase() === 'IMAGE' ? 'IMAGE' : 'NONE',
       rightPanelBackgroundImage: String((banner as HeroBanner)?.rightPanelBackgroundImage || ''),
@@ -1494,11 +1494,11 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
     })),
     styleCards: next.shopBy.styleCards.map((item) => ({
       ...item,
-      href: normalizeManagerHref(item.href, '/jenks-v14/ready-to-wear'),
+      href: normalizeManagerHref(item.href, '/readytowear'),
     })),
     priceCards: next.shopBy.priceCards.map((item) => ({
       ...item,
-      href: normalizeManagerHref(item.href, '/jenks-v14/ready-to-wear'),
+      href: normalizeManagerHref(item.href, '/readytowear'),
     })),
   };
   next.categoryManage = {
@@ -1509,8 +1509,8 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
       ctaPageKey: String(item.ctaPageKey || '').trim().toUpperCase(),
       ctaLink:
         normalizeCtaMode(item.ctaMode, 'PAGE') === 'PAGE'
-          ? resolvePageHrefForKey(item.ctaPageKey, '/jenks-v14/ready-to-wear')
-          : normalizeManagerHref(item.ctaLink, '/jenks-v14/ready-to-wear'),
+          ? resolvePageHrefForKey(item.ctaPageKey, '/readytowear')
+          : normalizeManagerHref(item.ctaLink, '/readytowear'),
     })),
   };
   next.featured = {
@@ -1531,7 +1531,7 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
     },
     cards: next.featured.cards.map((item) => ({
       ...item,
-      ctaLink: normalizeManagerHref(item.ctaLink, '/jenks-v14/ready-to-wear'),
+      ctaLink: normalizeManagerHref(item.ctaLink, '/readytowear'),
       ctaMode:
         String((item as FeaturedCard).ctaMode || '').trim().toUpperCase() === 'PAGE'
           ? 'PAGE'
@@ -1553,8 +1553,8 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
       ctaPageKey: String(item.ctaPageKey || '').trim().toUpperCase(),
       ctaLink:
         normalizeCtaMode(item.ctaMode, 'PAGE') === 'PAGE'
-          ? resolvePageHrefForKey(item.ctaPageKey, '/jenks-v14/custom-to-wear')
-          : normalizeManagerHref(item.ctaLink, '/jenks-v14/custom-to-wear'),
+          ? resolvePageHrefForKey(item.ctaPageKey, '/cystomtowear')
+          : normalizeManagerHref(item.ctaLink, '/cystomtowear'),
     })),
   };
   next.newsletterFooter = {
@@ -1575,7 +1575,7 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
         ...group,
         links: group.links.map((link) => ({
           ...link,
-          href: normalizeManagerHref(link.href, '/jenks-v14/ready-to-wear'),
+          href: normalizeManagerHref(link.href, '/readytowear'),
         })),
       })),
     },
@@ -3763,7 +3763,7 @@ export default function JenksV2FrontPageManager() {
                           descriptionFontSize: 16,
                           primaryCtaEnabled: true,
                           primaryCtaText: 'SHOP NOW',
-                          primaryCtaLink: '/jenks-v14/ready-to-wear',
+                          primaryCtaLink: '/readytowear',
                           primaryCtaStyle: createCtaStyle({
                             backgroundColor: '#e66045',
                             textColor: '#ffffff',
@@ -3773,7 +3773,7 @@ export default function JenksV2FrontPageManager() {
                           }),
                           secondaryCtaEnabled: true,
                           secondaryCtaText: 'EXPLORE',
-                          secondaryCtaLink: '/jenks-v14/custom-to-wear',
+                          secondaryCtaLink: '/cystomtowear',
                           secondaryCtaStyle: createCtaStyle({
                             backgroundColor: 'transparent',
                             textColor: '#111111',
@@ -3783,7 +3783,7 @@ export default function JenksV2FrontPageManager() {
                           }),
                           tertiaryCtaEnabled: true,
                           tertiaryCtaText: 'SHOP FABRICS',
-                          tertiaryCtaLink: '/jenks-v14/fabrics',
+                          tertiaryCtaLink: '/fabricstobuy',
                           tertiaryCtaStyle: createCtaStyle({
                             backgroundColor: 'transparent',
                             textColor: '#111111',
@@ -4866,7 +4866,7 @@ export default function JenksV2FrontPageManager() {
                             id: uid(),
                             title: 'New Style',
                             description: '',
-                            href: '/jenks-v14/ready-to-wear',
+                            href: '/readytowear',
                             icon: 'CalendarDays',
                             titleFontSize: 15,
                             descriptionFontSize: 14,
@@ -5063,7 +5063,7 @@ export default function JenksV2FrontPageManager() {
                             title: 'New Price',
                             priceLabel: '',
                             description: '',
-                            href: '/jenks-v14/ready-to-wear',
+                            href: '/readytowear',
                             icon: 'Tag',
                             titleFontSize: 24,
                             descriptionFontSize: 14,
@@ -5564,7 +5564,7 @@ export default function JenksV2FrontPageManager() {
                         tag: '',
                         description: '',
                         ctaText: '',
-                        ctaLink: '/jenks-v14/ready-to-wear',
+                        ctaLink: '/readytowear',
                         ctaMode: 'PAGE',
                         ctaPageKey: 'READY_TO_WEAR',
                         ctaStyle: createCtaStyle({
@@ -5700,7 +5700,7 @@ export default function JenksV2FrontPageManager() {
                               ...entry,
                               ctaMode: 'PAGE',
                               ctaPageKey: fallbackRoute?.key || 'READY_TO_WEAR',
-                              ctaLink: fallbackRoute?.href || '/jenks-v14/ready-to-wear',
+                              ctaLink: fallbackRoute?.href || '/readytowear',
                             };
                           }
                           return {
@@ -5751,7 +5751,7 @@ export default function JenksV2FrontPageManager() {
                   <input
                     className="mt-1 w-full rounded border px-2 py-1 text-xs"
                     value={section.ctaLink}
-                    placeholder="/jenks-v14/ready-to-wear or https://..."
+                    placeholder="/readytowear or https://..."
                     onChange={(event) =>
                       setConfig((prev) => ({
                         ...prev,
@@ -6402,7 +6402,7 @@ export default function JenksV2FrontPageManager() {
                         title: 'New Featured Section',
                         description: '',
                         ctaText: 'View',
-                        ctaLink: '/jenks-v14/ready-to-wear',
+                        ctaLink: '/readytowear',
                         ctaMode: 'PAGE',
                         ctaPageKey: 'READY_TO_WEAR',
                         productGroup: 'ALL',
@@ -6611,7 +6611,7 @@ export default function JenksV2FrontPageManager() {
                                 ...entry,
                                 ctaMode: nextMode,
                                 ctaPageKey: fallbackRoute?.key || 'READY_TO_WEAR',
-                                ctaLink: fallbackRoute?.href || '/jenks-v14/ready-to-wear',
+                                ctaLink: fallbackRoute?.href || '/readytowear',
                               };
                             }
                             return {
@@ -6662,7 +6662,7 @@ export default function JenksV2FrontPageManager() {
                     <input
                       className="mt-1 w-full rounded border px-2 py-1 text-xs"
                       value={card.ctaLink}
-                      placeholder="/jenks-v14/ready-to-wear or https://..."
+                      placeholder="/readytowear or https://..."
                       onChange={(event) =>
                         setConfig((prev) => ({
                           ...prev,
@@ -6957,7 +6957,7 @@ export default function JenksV2FrontPageManager() {
                         title: 'New Spotlight Card',
                         description: '',
                         ctaText: 'View Designer',
-                        ctaLink: '/jenks-v14/custom-to-wear',
+                        ctaLink: '/cystomtowear',
                         ctaMode: 'PAGE',
                         ctaPageKey: 'CUSTOM_TO_WEAR',
                         ctaStyle: createCtaStyle({
@@ -7105,7 +7105,7 @@ export default function JenksV2FrontPageManager() {
                                 ...entry,
                                 ctaMode: 'PAGE',
                                 ctaPageKey: fallbackRoute?.key || 'CUSTOM_TO_WEAR',
-                                ctaLink: fallbackRoute?.href || '/jenks-v14/custom-to-wear',
+                                ctaLink: fallbackRoute?.href || '/cystomtowear',
                               };
                             }
                             return {
@@ -7157,7 +7157,7 @@ export default function JenksV2FrontPageManager() {
                     <input
                       className="mt-1 w-full rounded border px-2 py-1 text-xs"
                       value={card.ctaLink}
-                      placeholder="/jenks-v14/custom-to-wear or https://..."
+                      placeholder="/cystomtowear or https://..."
                       onChange={(event) =>
                         setConfig((prev) => ({
                           ...prev,
@@ -8834,7 +8834,7 @@ export default function JenksV2FrontPageManager() {
                           {
                             id: uid(),
                             title: 'Shop',
-                            links: [{ id: uid(), label: 'Ready To Wear', href: '/jenks-v14/ready-to-wear', enabled: true }],
+                            links: [{ id: uid(), label: 'Ready To Wear', href: '/readytowear', enabled: true }],
                           },
                         ],
                       },
@@ -8896,7 +8896,7 @@ export default function JenksV2FrontPageManager() {
                                         {
                                           id: uid(),
                                           label: 'New Link',
-                                          href: '/jenks-v14/ready-to-wear',
+                                          href: '/readytowear',
                                           hrefMode: 'PAGE',
                                           pageKey: 'READY_TO_WEAR',
                                           customUrl: '',
@@ -9017,7 +9017,7 @@ export default function JenksV2FrontPageManager() {
                           <input
                             className="mt-1 w-full rounded border px-2 py-1 text-xs"
                             value={link.customUrl || link.href || ''}
-                            placeholder="/jenks-v14/ready-to-wear or https://example.com"
+                            placeholder="/readytowear or https://example.com"
                             onChange={(event) =>
                               setConfig((prev) => ({
                                 ...prev,
