@@ -213,16 +213,16 @@ function App() {
             <Route path="/jenks-v14/custom-to-wear/:id" element={<NavigateCategoryDetailWithSearch toBase="/cystomtowear" />} />
             <Route path="/shop" element={<NavigateWithSearch to="/readytowear" />} />
             <Route path="/shop/*" element={<NavigateWithSearch to="/readytowear" />} />
-            <Route path="/readytowear" element={<ReadyToWear />} />
-            <Route path="/fabricstobuy" element={<Fabrics />} />
-            <Route path="/cystomtowear" element={<Designs />} />
-            <Route path="/readytowear/:id" element={<ReadyToWearDetail />} />
-            <Route path="/fabricstobuy/:id" element={<FabricDetail />} />
-            <Route path="/cystomtowear/:id" element={<DesignDetail />} />
-            <Route path="/readytowear/:id/try-on" element={<ReadyToWearTryOn />} />
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
+              <Route path="/readytowear" element={<ReadyToWear />} />
+              <Route path="/fabricstobuy" element={<Fabrics />} />
+              <Route path="/cystomtowear" element={<Designs />} />
+              <Route path="/readytowear/:id" element={<ReadyToWearDetail />} />
+              <Route path="/fabricstobuy/:id" element={<FabricDetail />} />
+              <Route path="/cystomtowear/:id" element={<DesignDetail />} />
+              <Route path="/readytowear/:id/try-on" element={<ReadyToWearTryOn />} />
               <Route path="/home-legacy" element={<NavigateWithSearch to="/" />} />
               <Route path="/home" element={<NavigateWithSearch to="/" />} />
               <Route path="/home-live" element={<NavigateWithSearch to="/" />} />
