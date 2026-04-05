@@ -194,6 +194,13 @@ type ShopByCountrySettings = {
   countries: ShopByCountry[];
 };
 
+type CtaMode = 'URL' | 'PAGE';
+type FeaturedCategoryKey = 'RTW' | 'CTW' | 'FTB';
+type FeaturedLayout = {
+  rows: number;
+  columns: number;
+};
+
 type CategorySection = {
   id: string;
   key: string;
@@ -202,6 +209,8 @@ type CategorySection = {
   description: string;
   ctaText: string;
   ctaLink: string;
+  ctaMode: CtaMode;
+  ctaPageKey?: string;
   ctaStyle: CtaStyle;
   enabled: boolean;
   displayOrder: number;
@@ -302,6 +311,8 @@ type DesignerSpotlightCard = {
   description: string;
   ctaText: string;
   ctaLink: string;
+  ctaMode: CtaMode;
+  ctaPageKey?: string;
   ctaStyle: CtaStyle;
   enabled: boolean;
   displayOrder: number;
@@ -447,6 +458,7 @@ type JenksV2FrontpageManagerSettings = {
   };
   featured: {
     columns: number;
+    layoutByKey: Record<FeaturedCategoryKey, FeaturedLayout>;
     cards: FeaturedCard[];
   };
   freshDrops: FreshDropsSettings;
@@ -621,6 +633,15 @@ const resolveFooterPageHref = (pageKey: unknown, fallbackHref: string) => {
   if (token && PAGE_HREF_BY_KEY[token]) return PAGE_HREF_BY_KEY[token];
   return mapLegacyV2Href(fallbackHref);
 };
+
+const resolveCtaPageHref = (pageKey: unknown, fallbackHref: string) => {
+  const token = String(pageKey || '').trim().toUpperCase();
+  if (token && PAGE_HREF_BY_KEY[token]) return PAGE_HREF_BY_KEY[token];
+  return mapLegacyV2Href(fallbackHref);
+};
+
+const normalizeCtaMode = (value: unknown, fallback: CtaMode = 'PAGE'): CtaMode =>
+  String(value || fallback).trim().toUpperCase() === 'PAGE' ? 'PAGE' : 'URL';
 
 const normalizeHref = (value: unknown, fallback: string) => {
   const next = getString(value);
@@ -877,6 +898,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Manage title, tag, description and CTA for RTW block.',
           ctaText: 'Shop RTW',
           ctaLink: '/jenks-v14/ready-to-wear',
+          ctaMode: 'PAGE',
+          ctaPageKey: 'READY_TO_WEAR',
           ctaStyle: defaultCtaStyle({
             backgroundColor: 'transparent',
             textColor: '#ffffff',
@@ -895,6 +918,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Manage title, tag, description and CTA for CTW block.',
           ctaText: 'Explore CTW',
           ctaLink: '/jenks-v14/custom-to-wear',
+          ctaMode: 'PAGE',
+          ctaPageKey: 'CUSTOM_TO_WEAR',
           ctaStyle: defaultCtaStyle({
             backgroundColor: 'transparent',
             textColor: '#ffffff',
@@ -913,6 +938,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Manage title, tag, description and CTA for FTB block.',
           ctaText: 'Shop Fabrics',
           ctaLink: '/jenks-v14/fabrics',
+          ctaMode: 'PAGE',
+          ctaPageKey: 'FABRICS',
           ctaStyle: defaultCtaStyle({
             backgroundColor: 'transparent',
             textColor: '#ffffff',
@@ -1023,6 +1050,11 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
     },
     featured: {
       columns: 2,
+      layoutByKey: {
+        RTW: { rows: 1, columns: 2 },
+        CTW: { rows: 1, columns: 2 },
+        FTB: { rows: 1, columns: 2 },
+      },
       cards: [
         {
           id: randomUUID(),
@@ -1115,6 +1147,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           description: 'Highlight featured designers.',
           ctaText: 'View Designer',
           ctaLink: '/jenks-v14/custom-to-wear',
+          ctaMode: 'PAGE',
+          ctaPageKey: 'CUSTOM_TO_WEAR',
           ctaStyle: defaultCtaStyle({
             backgroundColor: 'transparent',
             textColor: '#ffffff',
@@ -1615,7 +1649,12 @@ const normalizeCategoryManage = (
         tag: (getString(item.tag) || fallbackItem.tag).slice(0, 80),
         description: (getString(item.description) || fallbackItem.description).slice(0, 300),
         ctaText: (getString(item.ctaText) || fallbackItem.ctaText).slice(0, 80),
-        ctaLink: normalizeHref(item.ctaLink, fallbackItem.ctaLink),
+        ctaMode: normalizeCtaMode(item.ctaMode, fallbackItem.ctaMode),
+        ctaPageKey: (getString(item.ctaPageKey) || getString(fallbackItem.ctaPageKey) || '').slice(0, 120) || undefined,
+        ctaLink:
+          normalizeCtaMode(item.ctaMode, fallbackItem.ctaMode) === 'PAGE'
+            ? resolveCtaPageHref(getString(item.ctaPageKey) || getString(fallbackItem.ctaPageKey), fallbackItem.ctaLink)
+            : normalizeHref(item.ctaLink, fallbackItem.ctaLink),
         ctaStyle: normalizeCtaStyle(item.ctaStyle, fallbackItem.ctaStyle),
         enabled: getBoolean(item.enabled) ?? fallbackItem.enabled,
         displayOrder: clamp(Math.round(getNumber(item.displayOrder) ?? fallbackItem.displayOrder), 0, 999),
@@ -1723,6 +1762,62 @@ const normalizeFeatured = (
   fallback: JenksV2FrontpageManagerSettings['featured']
 ): JenksV2FrontpageManagerSettings['featured'] => {
   const row = asRecord(raw);
+  const fallbackLayout = fallback.layoutByKey || {
+    RTW: { rows: 1, columns: 2 },
+    CTW: { rows: 1, columns: 2 },
+    FTB: { rows: 1, columns: 2 },
+  };
+  const rawLayoutByKey = asRecord(row.layoutByKey);
+  const layoutByKey: Record<FeaturedCategoryKey, FeaturedLayout> = {
+    RTW: {
+      rows: clamp(
+        Math.round(getNumber(asRecord(rawLayoutByKey.RTW).rows) ?? getNumber(asRecord(rawLayoutByKey.rtw).rows) ?? fallbackLayout.RTW.rows),
+        1,
+        12
+      ),
+      columns: clamp(
+        Math.round(
+          getNumber(asRecord(rawLayoutByKey.RTW).columns) ??
+            getNumber(asRecord(rawLayoutByKey.rtw).columns) ??
+            fallbackLayout.RTW.columns
+        ),
+        1,
+        4
+      ),
+    },
+    CTW: {
+      rows: clamp(
+        Math.round(getNumber(asRecord(rawLayoutByKey.CTW).rows) ?? getNumber(asRecord(rawLayoutByKey.ctw).rows) ?? fallbackLayout.CTW.rows),
+        1,
+        12
+      ),
+      columns: clamp(
+        Math.round(
+          getNumber(asRecord(rawLayoutByKey.CTW).columns) ??
+            getNumber(asRecord(rawLayoutByKey.ctw).columns) ??
+            fallbackLayout.CTW.columns
+        ),
+        1,
+        4
+      ),
+    },
+    FTB: {
+      rows: clamp(
+        Math.round(getNumber(asRecord(rawLayoutByKey.FTB).rows) ?? getNumber(asRecord(rawLayoutByKey.ftb).rows) ?? fallbackLayout.FTB.rows),
+        1,
+        12
+      ),
+      columns: clamp(
+        Math.round(
+          getNumber(asRecord(rawLayoutByKey.FTB).columns) ??
+            getNumber(asRecord(rawLayoutByKey.ftb).columns) ??
+            fallbackLayout.FTB.columns
+        ),
+        1,
+        4
+      ),
+    },
+  };
   const columns = clamp(Math.round(getNumber(row.columns) ?? fallback.columns), 1, 4);
   const rows = Array.isArray(row.cards) ? row.cards : fallback.cards;
   const cards = rows
@@ -1737,7 +1832,10 @@ const normalizeFeatured = (
         title: (getString(item.title) || fallbackItem.title).slice(0, 140),
         description: (getString(item.description) || fallbackItem.description).slice(0, 320),
         ctaText: (getString(item.ctaText) || fallbackItem.ctaText).slice(0, 80),
-        ctaLink: normalizeHref(item.ctaLink, fallbackItem.ctaLink),
+        ctaLink:
+          String(item.ctaMode || fallbackItem.ctaMode || 'URL').trim().toUpperCase() === 'PAGE'
+            ? resolveCtaPageHref(getString(item.ctaPageKey) || getString(fallbackItem.ctaPageKey), fallbackItem.ctaLink)
+            : normalizeHref(item.ctaLink, fallbackItem.ctaLink),
         ctaMode: ((): FeaturedCard['ctaMode'] => {
           const token = String(item.ctaMode || fallbackItem.ctaMode || 'URL').trim().toUpperCase();
           if (token === 'PRODUCT_GROUP') return 'PRODUCT_GROUP';
@@ -1757,7 +1855,7 @@ const normalizeFeatured = (
       } as FeaturedCard;
     })
     .slice(0, 30);
-  return { columns, cards };
+  return { columns, layoutByKey, cards };
 };
 
 const normalizeCustomerReviews = (
@@ -1846,7 +1944,12 @@ const normalizeDesignerSpotlight = (
         title: (getString(item.title) || fallbackItem.title).slice(0, 140),
         description: (getString(item.description) || fallbackItem.description).slice(0, 320),
         ctaText: (getString(item.ctaText) || fallbackItem.ctaText).slice(0, 80),
-        ctaLink: normalizeHref(item.ctaLink, fallbackItem.ctaLink),
+        ctaMode: normalizeCtaMode(item.ctaMode, fallbackItem.ctaMode),
+        ctaPageKey: (getString(item.ctaPageKey) || getString(fallbackItem.ctaPageKey) || '').slice(0, 120) || undefined,
+        ctaLink:
+          normalizeCtaMode(item.ctaMode, fallbackItem.ctaMode) === 'PAGE'
+            ? resolveCtaPageHref(getString(item.ctaPageKey) || getString(fallbackItem.ctaPageKey), fallbackItem.ctaLink)
+            : normalizeHref(item.ctaLink, fallbackItem.ctaLink),
         ctaStyle: normalizeCtaStyle(item.ctaStyle, fallbackItem.ctaStyle),
         enabled: getBoolean(item.enabled) ?? fallbackItem.enabled,
         displayOrder: clamp(Math.round(getNumber(item.displayOrder) ?? fallbackItem.displayOrder), 0, 999),

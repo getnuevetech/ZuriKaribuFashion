@@ -76,6 +76,39 @@ type FeaturedTile = {
   productGroup: 'ALL' | 'RTW' | 'CTW' | 'FTB';
   ctaStyle?: CTAStyle;
 };
+type CtaMode = 'URL' | 'PAGE';
+type FeaturedCategoryKey = 'RTW' | 'CTW' | 'FTB';
+type FeaturedLayout = {
+  rows: number;
+  columns: number;
+};
+type CategorySectionRuntime = {
+  id: string;
+  key: string;
+  sectionName: string;
+  title: string;
+  description: string;
+  cta: string;
+  href: string;
+  ctaMode: CtaMode;
+  ctaPageKey?: string;
+  ctaStyle?: CTAStyle;
+  image: string;
+  textOnLeft: boolean;
+  panelBg: string;
+};
+type SpotlightRuntime = {
+  id: string;
+  image: string;
+  title: string;
+  description: string;
+  cta: string;
+  href: string;
+  ctaMode: CtaMode;
+  ctaPageKey?: string;
+  tag: string;
+  ctaStyle?: CTAStyle;
+};
 
 type CustomerReviewCard = {
   id: string;
@@ -1185,11 +1218,18 @@ export default function JenksFrontpageV2() {
     })) as Array<{ name: string; flag: string; region: Exclude<CountryRegion, 'ALL'> }>;
   }, [shopByCountriesData]);
 
-  const sectionsRtwFtbCtw = useMemo(() => {
+  const sectionsRtwFtbCtw = useMemo<CategorySectionRuntime[]>(() => {
     if (categorySections.length === 0) return RTW_FTB_CTW_SECTIONS;
     const mapped = categorySections.map((entry, idx) => {
       const key = asString(entry.key, '').toUpperCase();
       const matchingCategory = shopByCategoryCards.find((row) => row.title.includes(key) || row.id.toUpperCase().includes(key));
+      const ctaMode = asString(entry.ctaMode, 'PAGE').toUpperCase() === 'PAGE' ? 'PAGE' : 'URL';
+      const ctaPageKey = asString(entry.ctaPageKey, '').toUpperCase();
+      const fallbackHref = FEATURED_HREF_BY_KEY[key] || '/jenks-v14/ready-to-wear';
+      const href =
+        ctaMode === 'PAGE'
+          ? toSafeInternalHref(PAGE_HREF_BY_KEY[ctaPageKey] || fallbackHref)
+          : normalizeHref(entry.ctaLink, fallbackHref, key);
       return {
         id: asString(entry.id, `cat-${idx + 1}`),
         key,
@@ -1197,7 +1237,9 @@ export default function JenksFrontpageV2() {
         title: asString(entry.title, key || 'Category').toUpperCase(),
         description: asString(entry.description, ''),
         cta: asString(entry.ctaText, FEATURED_CTA_BY_KEY[key] || 'SHOP NOW').toUpperCase(),
-        href: normalizeHref(entry.ctaLink, FEATURED_HREF_BY_KEY[key] || '/jenks-v14/ready-to-wear', key),
+        href,
+        ctaMode,
+        ctaPageKey: ctaPageKey || undefined,
         ctaStyle: entry.ctaStyle,
         image: matchingCategory?.image || CATEGORY_IMAGE_BY_KEY[key] || `${ASSET_BASE}/rw_full.jpg`,
         textOnLeft: CATEGORY_TEXT_LEFT_BY_KEY[key] ?? (idx % 2 === 1),
@@ -1297,11 +1339,27 @@ export default function JenksFrontpageV2() {
     };
   }, [featuredCfg.cards]);
   const featuredColumns = Math.max(1, Math.min(4, Math.round(asNumber(featuredCfg.columns, 2))));
-
-  const sectionHrefForCountry = (sectionKey: unknown) => {
-    const categoryToken = categoryTokenFromSectionKey(sectionKey);
-    if (categoryToken === 'ALL') return '/jenks-v14/ready-to-wear';
-    return buildCountryProductsHref('Nigeria', categoryToken);
+  const featuredLayoutByKey = useMemo<Record<FeaturedCategoryKey, FeaturedLayout>>(() => {
+    const raw = asRecord(featuredCfg.layoutByKey);
+    const make = (key: FeaturedCategoryKey): FeaturedLayout => {
+      const row = asRecord(raw[key] ?? raw[key.toLowerCase()]);
+      const rows = Math.max(1, Math.min(12, Math.round(asNumber(row.rows, 1))));
+      const columns = Math.max(1, Math.min(4, Math.round(asNumber(row.columns, featuredColumns))));
+      return { rows, columns };
+    };
+    return {
+      RTW: make('RTW'),
+      CTW: make('CTW'),
+      FTB: make('FTB'),
+    };
+  }, [featuredCfg.layoutByKey, featuredColumns]);
+  const sectionCtaHref = (section: CategorySectionRuntime) => {
+    if (section.ctaMode === 'PAGE') {
+      const routeToken = String(section.ctaPageKey || '').trim().toUpperCase();
+      const pageHref = PAGE_HREF_BY_KEY[routeToken] || section.href;
+      return toSafeInternalHref(pageHref || '/jenks-v14/ready-to-wear');
+    }
+    return normalizeHref(section.href, '/jenks-v14/ready-to-wear');
   };
   const orderedSectionsRtwFtbCtw = useMemo(() => [...sectionsRtwFtbCtw], [sectionsRtwFtbCtw]);
 
@@ -1354,6 +1412,15 @@ export default function JenksFrontpageV2() {
     return FRESH_DROPS.slice(0, maxItems);
   }, [freshDropsCfg.columns, freshDropsCfg.rows, freshDropsProducts]);
 
+  const spotCtaHref = (entry: Record<string, unknown>, fallbackHref: string) => {
+    const ctaMode = asString(entry.ctaMode, 'PAGE').toUpperCase() === 'PAGE' ? 'PAGE' : 'URL';
+    if (ctaMode === 'PAGE') {
+      const pageKey = asString(entry.ctaPageKey, '').toUpperCase();
+      return toSafeInternalHref(PAGE_HREF_BY_KEY[pageKey] || fallbackHref);
+    }
+    return normalizeHref(entry.ctaLink, fallbackHref);
+  };
+
   const spotlightCards = useMemo(() => {
     const rows = Math.max(1, Math.round(asNumber(designerSpotlightCfg.rows, 1)));
     const cols = Math.max(1, Math.round(asNumber(designerSpotlightCfg.columns, 3)));
@@ -1362,16 +1429,19 @@ export default function JenksFrontpageV2() {
       .map((entry) => asRecord(entry))
       .filter((entry) => asBoolean(entry.enabled, true))
       .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
-      .map((entry, idx) => ({
-        id: asString(entry.id, `spot-${idx + 1}`),
-        image: asString(entry.image, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.image || `${ASSET_BASE}/designer_spotlight.jpg`),
-        title: asString(entry.title, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.title || 'Designer Spotlight'),
-        description: asString(entry.description, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.description || ''),
-        cta: asString(entry.ctaText, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.cta || 'VIEW DESIGNER').toUpperCase(),
-        href: normalizeHref(entry.ctaLink, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.href || '/jenks-v14/custom-to-wear'),
-        tag: asString(entry.tag, 'Designer Spotlight'),
-        ctaStyle: entry.ctaStyle,
-      }));
+      .map((entry, idx) => {
+        const fallbackHref = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.href || '/jenks-v14/custom-to-wear';
+        return {
+          id: asString(entry.id, `spot-${idx + 1}`),
+          image: asString(entry.image, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.image || `${ASSET_BASE}/designer_spotlight.jpg`),
+          title: asString(entry.title, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.title || 'Designer Spotlight'),
+          description: asString(entry.description, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.description || ''),
+          cta: asString(entry.ctaText, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.cta || 'VIEW DESIGNER').toUpperCase(),
+          href: spotCtaHref(entry, fallbackHref),
+          tag: asString(entry.tag, 'Designer Spotlight'),
+          ctaStyle: entry.ctaStyle,
+        };
+      });
     const source = entries.length > 0 ? entries : DESIGNER_SPOTLIGHT.map((row) => ({ ...row, tag: 'Designer Spotlight' }));
     return source.slice(0, maxItems);
   }, [designerSpotlightCfg.cards, designerSpotlightCfg.columns, designerSpotlightCfg.rows]);
@@ -2780,7 +2850,7 @@ export default function JenksFrontpageV2() {
                       <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
                       <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
                     <Link
-                      to={sectionHrefForCountry(section.key)}
+                      to={sectionCtaHref(section)}
                       style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
                       className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
                     >
@@ -2806,7 +2876,7 @@ export default function JenksFrontpageV2() {
                       <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
                       <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
                     <Link
-                      to={sectionHrefForCountry(section.key)}
+                      to={sectionCtaHref(section)}
                       style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
                       className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
                     >
@@ -2883,16 +2953,16 @@ export default function JenksFrontpageV2() {
             <div
               key={key}
               className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 ${
-                featuredColumns >= 4
+                (featuredLayoutByKey[key]?.columns ?? featuredColumns) >= 4
                   ? 'md:grid-cols-4'
-                  : featuredColumns === 3
+                  : (featuredLayoutByKey[key]?.columns ?? featuredColumns) === 3
                     ? 'md:grid-cols-3'
-                    : featuredColumns === 1
+                    : (featuredLayoutByKey[key]?.columns ?? featuredColumns) === 1
                       ? 'md:grid-cols-1'
                       : 'md:grid-cols-2'
               }`}
             >
-              {featuredCardsByKey[key].map((card) => (
+              {featuredCardsByKey[key].slice(0, (featuredLayoutByKey[key]?.rows ?? 1) * (featuredLayoutByKey[key]?.columns ?? featuredColumns)).map((card) => (
                 <Link key={card.id} to={featuredCardHref(card, key)} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
                   <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
@@ -2974,7 +3044,7 @@ export default function JenksFrontpageV2() {
       {isSectionVisible('DESIGNER_SPOTLIGHT') ? (
         <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 bg-[#101010] md:grid-cols-3`} style={{ order: getSectionOrder('DESIGNER_SPOTLIGHT') }}>
           {spotlightCards.map((spot) => (
-            <Link key={spot.id} to={toSafeInternalHref(spot.href)} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
+            <Link key={spot.id} to={spot.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
               <img src={spot.image} alt={spot.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
               <p className="absolute left-8 top-8 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80">{spot.tag}</p>

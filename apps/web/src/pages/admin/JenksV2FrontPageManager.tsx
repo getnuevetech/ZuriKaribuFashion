@@ -182,6 +182,8 @@ type CategorySection = {
   description: string;
   ctaText: string;
   ctaLink: string;
+  ctaMode: 'URL' | 'PAGE';
+  ctaPageKey?: string;
   ctaStyle: CTAStyle;
   enabled: boolean;
   displayOrder: number;
@@ -233,6 +235,13 @@ type FeaturedCard = {
   displayOrder: number;
 };
 
+type FeaturedCategoryKey = 'RTW' | 'CTW' | 'FTB';
+type FeaturedLayout = {
+  rows: number;
+  columns: number;
+};
+const FEATURED_KEYS: FeaturedCategoryKey[] = ['RTW', 'CTW', 'FTB'];
+
 type CustomerReviewStaticMessage = {
   id: string;
   customerName: string;
@@ -280,6 +289,8 @@ type DesignerSpotlightCard = {
   description: string;
   ctaText: string;
   ctaLink: string;
+  ctaMode: 'URL' | 'PAGE';
+  ctaPageKey?: string;
   ctaStyle: CTAStyle;
   enabled: boolean;
   displayOrder: number;
@@ -445,6 +456,7 @@ type JenksV2FrontpageConfig = {
   };
   featured: {
     columns: number;
+    layoutByKey: Record<FeaturedCategoryKey, FeaturedLayout>;
     cards: FeaturedCard[];
   };
   freshDrops: FreshDrops;
@@ -488,6 +500,28 @@ type RouteOption = {
   label: string;
   href: string;
 };
+
+const PAGE_HREF_BY_KEY: Record<string, string> = {
+  HOME: '/',
+  READY_TO_WEAR: '/jenks-v14/ready-to-wear',
+  CUSTOM_TO_WEAR: '/jenks-v14/custom-to-wear',
+  FABRICS: '/jenks-v14/fabrics',
+  DESIGNERS: '/designers',
+  ABOUT: '/about',
+  CONTACT: '/contact',
+  HELP_CENTER: '/help-center',
+  COUNTRY_PRODUCTS: '/country-products',
+  AUTH_LOGIN: '/auth/login',
+};
+
+const resolvePageHrefForKey = (pageKey: unknown, fallbackHref: string) => {
+  const token = String(pageKey || '').trim().toUpperCase();
+  if (token && PAGE_HREF_BY_KEY[token]) return PAGE_HREF_BY_KEY[token];
+  return mapLegacyManagerHref(fallbackHref);
+};
+
+const normalizeCtaMode = (value: unknown, fallback: 'URL' | 'PAGE' = 'PAGE'): 'URL' | 'PAGE' =>
+  String(value || fallback).trim().toUpperCase() === 'PAGE' ? 'PAGE' : 'URL';
 
 const ROUTE_OPTIONS: RouteOption[] = [
   { key: 'HOME', label: 'Home', href: '/' },
@@ -1075,6 +1109,11 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
   },
   featured: {
     columns: 2,
+    layoutByKey: {
+      RTW: { rows: 1, columns: 2 },
+      CTW: { rows: 1, columns: 2 },
+      FTB: { rows: 1, columns: 2 },
+    },
     cards: [
       {
         id: uid(),
@@ -1167,6 +1206,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Highlight featured designers with CTA.',
         ctaText: 'View Designer',
         ctaLink: '/jenks-v14/custom-to-wear',
+        ctaMode: 'PAGE',
+        ctaPageKey: 'CUSTOM_TO_WEAR',
         ctaStyle: createCtaStyle({
           backgroundColor: 'transparent',
           textColor: '#ffffff',
@@ -1394,6 +1435,25 @@ const normalizeManagerHref = (value: unknown, fallback: string) => {
   return mapLegacyManagerHref(raw);
 };
 
+const normalizeFeaturedLayoutByKey = (
+  input: unknown,
+  fallbackColumns = 2
+): Record<FeaturedCategoryKey, FeaturedLayout> => {
+  const row = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  const clampLayout = (value: unknown, fallbackRows: number, fallbackCols: number): FeaturedLayout => {
+    const item = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+    return {
+      rows: clamp(Math.round(toNumber(String(item.rows ?? fallbackRows), fallbackRows)), 1, 12),
+      columns: clamp(Math.round(toNumber(String(item.columns ?? fallbackCols), fallbackCols)), 1, 4),
+    };
+  };
+  return {
+    RTW: clampLayout((row as any).RTW ?? (row as any).rtw, 1, fallbackColumns),
+    CTW: clampLayout((row as any).CTW ?? (row as any).ctw, 1, fallbackColumns),
+    FTB: clampLayout((row as any).FTB ?? (row as any).ftb, 1, fallbackColumns),
+  };
+};
+
 const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageConfig => {
   const next = { ...input };
   next.topNavigations = {
@@ -1445,11 +1505,30 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
     ...next.categoryManage,
     sections: next.categoryManage.sections.map((item) => ({
       ...item,
-      ctaLink: normalizeManagerHref(item.ctaLink, '/jenks-v14/ready-to-wear'),
+      ctaMode: normalizeCtaMode(item.ctaMode, 'PAGE'),
+      ctaPageKey: String(item.ctaPageKey || '').trim().toUpperCase(),
+      ctaLink:
+        normalizeCtaMode(item.ctaMode, 'PAGE') === 'PAGE'
+          ? resolvePageHrefForKey(item.ctaPageKey, '/jenks-v14/ready-to-wear')
+          : normalizeManagerHref(item.ctaLink, '/jenks-v14/ready-to-wear'),
     })),
   };
   next.featured = {
     ...next.featured,
+    layoutByKey: {
+      RTW: {
+        rows: clamp(toNumber(String((next.featured.layoutByKey as any)?.RTW?.rows ?? 1), 1), 1, 12),
+        columns: clamp(toNumber(String((next.featured.layoutByKey as any)?.RTW?.columns ?? next.featured.columns ?? 2), 2), 1, 4),
+      },
+      CTW: {
+        rows: clamp(toNumber(String((next.featured.layoutByKey as any)?.CTW?.rows ?? 1), 1), 1, 12),
+        columns: clamp(toNumber(String((next.featured.layoutByKey as any)?.CTW?.columns ?? next.featured.columns ?? 2), 2), 1, 4),
+      },
+      FTB: {
+        rows: clamp(toNumber(String((next.featured.layoutByKey as any)?.FTB?.rows ?? 1), 1), 1, 12),
+        columns: clamp(toNumber(String((next.featured.layoutByKey as any)?.FTB?.columns ?? next.featured.columns ?? 2), 2), 1, 4),
+      },
+    },
     cards: next.featured.cards.map((item) => ({
       ...item,
       ctaLink: normalizeManagerHref(item.ctaLink, '/jenks-v14/ready-to-wear'),
@@ -1470,7 +1549,12 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
     ...next.designerSpotlight,
     cards: next.designerSpotlight.cards.map((item) => ({
       ...item,
-      ctaLink: normalizeManagerHref(item.ctaLink, '/jenks-v14/custom-to-wear'),
+      ctaMode: normalizeCtaMode(item.ctaMode, 'PAGE'),
+      ctaPageKey: String(item.ctaPageKey || '').trim().toUpperCase(),
+      ctaLink:
+        normalizeCtaMode(item.ctaMode, 'PAGE') === 'PAGE'
+          ? resolvePageHrefForKey(item.ctaPageKey, '/jenks-v14/custom-to-wear')
+          : normalizeManagerHref(item.ctaLink, '/jenks-v14/custom-to-wear'),
     })),
   };
   next.newsletterFooter = {
@@ -1792,12 +1876,96 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         ? categoryManage.sections.map((section) => ({
             ...fallbackCategory,
             ...section,
+            ctaMode: normalizeCtaMode((section as CategorySection)?.ctaMode, fallbackCategory.ctaMode),
+            ctaPageKey: ((): string => {
+              const explicit = String((section as CategorySection)?.ctaPageKey || fallbackCategory.ctaPageKey || '').trim().toUpperCase();
+              if (explicit) return explicit;
+              const keyToken = String((section as CategorySection)?.key || '').trim().toUpperCase();
+              if (keyToken === 'CTW') return 'CUSTOM_TO_WEAR';
+              if (keyToken === 'FTB') return 'FABRICS';
+              return 'READY_TO_WEAR';
+            })(),
+            ctaLink:
+              normalizeCtaMode((section as CategorySection)?.ctaMode, fallbackCategory.ctaMode) === 'PAGE'
+                ? resolvePageHrefForKey(
+                    (section as CategorySection)?.ctaPageKey,
+                    (section as CategorySection)?.ctaLink || fallbackCategory.ctaLink
+                  )
+                : normalizeManagerHref((section as CategorySection)?.ctaLink, fallbackCategory.ctaLink),
             ctaStyle: normalizeCtaStyle((section as CategorySection)?.ctaStyle, fallbackCategory.ctaStyle),
           }))
         : DEFAULT_CONFIG.categoryManage.sections,
     },
     featured: {
       ...featured,
+      layoutByKey: {
+        RTW: {
+          rows: clamp(
+            Math.round(
+              toNumber(
+                String((featured as any)?.layoutByKey?.RTW?.rows ?? (featured as any)?.layoutByKey?.rtw?.rows ?? 1),
+                1
+              )
+            ),
+            1,
+            12
+          ),
+          columns: clamp(
+            Math.round(
+              toNumber(
+                String((featured as any)?.layoutByKey?.RTW?.columns ?? (featured as any)?.layoutByKey?.rtw?.columns ?? featured.columns ?? 2),
+                2
+              )
+            ),
+            1,
+            4
+          ),
+        },
+        CTW: {
+          rows: clamp(
+            Math.round(
+              toNumber(
+                String((featured as any)?.layoutByKey?.CTW?.rows ?? (featured as any)?.layoutByKey?.ctw?.rows ?? 1),
+                1
+              )
+            ),
+            1,
+            12
+          ),
+          columns: clamp(
+            Math.round(
+              toNumber(
+                String((featured as any)?.layoutByKey?.CTW?.columns ?? (featured as any)?.layoutByKey?.ctw?.columns ?? featured.columns ?? 2),
+                2
+              )
+            ),
+            1,
+            4
+          ),
+        },
+        FTB: {
+          rows: clamp(
+            Math.round(
+              toNumber(
+                String((featured as any)?.layoutByKey?.FTB?.rows ?? (featured as any)?.layoutByKey?.ftb?.rows ?? 1),
+                1
+              )
+            ),
+            1,
+            12
+          ),
+          columns: clamp(
+            Math.round(
+              toNumber(
+                String((featured as any)?.layoutByKey?.FTB?.columns ?? (featured as any)?.layoutByKey?.ftb?.columns ?? featured.columns ?? 2),
+                2
+              )
+            ),
+            1,
+            4
+          ),
+        },
+      },
       cards: Array.isArray(featured.cards)
         ? featured.cards.map((card) => ({
             ...fallbackFeatured,
@@ -1830,6 +1998,19 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         ? designerSpotlight.cards.map((card) => ({
             ...fallbackSpotlight,
             ...card,
+            ctaMode: normalizeCtaMode((card as DesignerSpotlightCard)?.ctaMode, fallbackSpotlight.ctaMode),
+            ctaPageKey: ((): string => {
+              const explicit = String((card as DesignerSpotlightCard)?.ctaPageKey || fallbackSpotlight.ctaPageKey || '').trim().toUpperCase();
+              if (explicit) return explicit;
+              return 'CUSTOM_TO_WEAR';
+            })(),
+            ctaLink:
+              normalizeCtaMode((card as DesignerSpotlightCard)?.ctaMode, fallbackSpotlight.ctaMode) === 'PAGE'
+                ? resolvePageHrefForKey(
+                    (card as DesignerSpotlightCard)?.ctaPageKey,
+                    (card as DesignerSpotlightCard)?.ctaLink || fallbackSpotlight.ctaLink
+                  )
+                : normalizeManagerHref((card as DesignerSpotlightCard)?.ctaLink, fallbackSpotlight.ctaLink),
             ctaStyle: normalizeCtaStyle((card as DesignerSpotlightCard)?.ctaStyle, fallbackSpotlight.ctaStyle),
           }))
         : DEFAULT_CONFIG.designerSpotlight.cards,
@@ -5384,6 +5565,8 @@ export default function JenksV2FrontPageManager() {
                         description: '',
                         ctaText: '',
                         ctaLink: '/jenks-v14/ready-to-wear',
+                        ctaMode: 'PAGE',
+                        ctaPageKey: 'READY_TO_WEAR',
                         ctaStyle: createCtaStyle({
                           backgroundColor: 'transparent',
                           textColor: '#ffffff',
@@ -5497,27 +5680,92 @@ export default function JenksV2FrontPageManager() {
                 />
               </label>
               <label className="md:col-span-2 text-[11px]">
-                CTA Route (dropdown)
+                CTA Route Type
                 <select
                   className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                  value={section.ctaLink}
+                  value={section.ctaMode || 'PAGE'}
                   onChange={(event) =>
                     setConfig((prev) => ({
                       ...prev,
                       categoryManage: {
-                        sections: prev.categoryManage.sections.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, ctaLink: event.target.value } : entry
-                        ),
+                        sections: prev.categoryManage.sections.map((entry, entryIndex) => {
+                          if (entryIndex !== index) return entry;
+                          const nextMode: 'URL' | 'PAGE' = event.target.value === 'URL' ? 'URL' : 'PAGE';
+                          if (nextMode === 'PAGE') {
+                            const fallbackRoute =
+                              pageRouteOptions.find((route) => route.key === (entry.ctaPageKey || 'READY_TO_WEAR')) ||
+                              pageRouteOptions.find((route) => route.key === 'READY_TO_WEAR') ||
+                              pageRouteOptions[0];
+                            return {
+                              ...entry,
+                              ctaMode: 'PAGE',
+                              ctaPageKey: fallbackRoute?.key || 'READY_TO_WEAR',
+                              ctaLink: fallbackRoute?.href || '/jenks-v14/ready-to-wear',
+                            };
+                          }
+                          return {
+                            ...entry,
+                            ctaMode: 'URL',
+                            ctaPageKey: '',
+                          };
+                        }),
                       },
                     }))
                   }
                 >
-                  {routeOptions.map((route) => (
-                    <option key={`cat-section-${route.key}`} value={route.href}>
-                      {route.label}
-                    </option>
-                  ))}
+                  <option value="PAGE">Pages dropdown</option>
+                  <option value="URL">Custom URL</option>
                 </select>
+              </label>
+              <label className="md:col-span-2 text-[11px]">
+                {(section.ctaMode || 'PAGE') === 'PAGE' ? 'CTA Page' : 'CTA URL'}
+                {(section.ctaMode || 'PAGE') === 'PAGE' ? (
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={section.ctaPageKey || ''}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        categoryManage: {
+                          sections: prev.categoryManage.sections.map((entry, entryIndex) => {
+                            if (entryIndex !== index) return entry;
+                            const selected = pageRouteOptions.find((route) => route.key === event.target.value);
+                            return {
+                              ...entry,
+                              ctaMode: 'PAGE',
+                              ctaPageKey: event.target.value,
+                              ctaLink: selected?.href || entry.ctaLink,
+                            };
+                          }),
+                        },
+                      }))
+                    }
+                  >
+                    {pageRouteOptions.map((route) => (
+                      <option key={`cat-section-page-${route.key}`} value={route.key}>
+                        {route.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={section.ctaLink}
+                    placeholder="/jenks-v14/ready-to-wear or https://..."
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        categoryManage: {
+                          sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                            entryIndex === index
+                              ? { ...entry, ctaMode: 'URL', ctaPageKey: '', ctaLink: event.target.value }
+                              : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                )}
               </label>
               {renderCtaStyleEditor(
                 'Section CTA Style',
@@ -6177,24 +6425,79 @@ export default function JenksV2FrontPageManager() {
               Add Featured Card
             </Button>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-            <label className="text-xs">
-              Featured Columns
-              <input
-                type="number"
-                className="mt-1 w-full rounded border px-2 py-1.5"
-                value={config.featured.columns}
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    featured: {
-                      ...prev.featured,
-                      columns: clamp(toNumber(event.target.value, prev.featured.columns), 1, 4),
-                    },
-                  }))
-                }
-              />
-            </label>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-6">
+            {(['RTW', 'CTW', 'FTB'] as const).flatMap((key) => [
+              <label key={`featured-${key}-rows`} className="text-xs">
+                {key} Rows
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={config.featured.layoutByKey?.[key]?.rows ?? 1}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      featured: {
+                        ...prev.featured,
+                        layoutByKey: {
+                          ...(prev.featured.layoutByKey || ({} as Record<FeaturedCategoryKey, FeaturedLayout>)),
+                          RTW: {
+                            rows: prev.featured.layoutByKey?.RTW?.rows ?? 1,
+                            columns: prev.featured.layoutByKey?.RTW?.columns ?? prev.featured.columns ?? 2,
+                          },
+                          CTW: {
+                            rows: prev.featured.layoutByKey?.CTW?.rows ?? 1,
+                            columns: prev.featured.layoutByKey?.CTW?.columns ?? prev.featured.columns ?? 2,
+                          },
+                          FTB: {
+                            rows: prev.featured.layoutByKey?.FTB?.rows ?? 1,
+                            columns: prev.featured.layoutByKey?.FTB?.columns ?? prev.featured.columns ?? 2,
+                          },
+                          [key]: {
+                            rows: clamp(toNumber(event.target.value, prev.featured.layoutByKey?.[key]?.rows ?? 1), 1, 12),
+                            columns: prev.featured.layoutByKey?.[key]?.columns ?? prev.featured.columns ?? 2,
+                          },
+                        },
+                      },
+                    }))
+                  }
+                />
+              </label>,
+              <label key={`featured-${key}-columns`} className="text-xs">
+                {key} Columns
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={config.featured.layoutByKey?.[key]?.columns ?? config.featured.columns ?? 2}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      featured: {
+                        ...prev.featured,
+                        layoutByKey: {
+                          ...(prev.featured.layoutByKey || ({} as Record<FeaturedCategoryKey, FeaturedLayout>)),
+                          RTW: {
+                            rows: prev.featured.layoutByKey?.RTW?.rows ?? 1,
+                            columns: prev.featured.layoutByKey?.RTW?.columns ?? prev.featured.columns ?? 2,
+                          },
+                          CTW: {
+                            rows: prev.featured.layoutByKey?.CTW?.rows ?? 1,
+                            columns: prev.featured.layoutByKey?.CTW?.columns ?? prev.featured.columns ?? 2,
+                          },
+                          FTB: {
+                            rows: prev.featured.layoutByKey?.FTB?.rows ?? 1,
+                            columns: prev.featured.layoutByKey?.FTB?.columns ?? prev.featured.columns ?? 2,
+                          },
+                          [key]: {
+                            rows: prev.featured.layoutByKey?.[key]?.rows ?? 1,
+                            columns: clamp(toNumber(event.target.value, prev.featured.layoutByKey?.[key]?.columns ?? 2), 1, 4),
+                          },
+                        },
+                      },
+                    }))
+                  }
+                />
+              </label>,
+            ])}
           </div>
           {config.featured.cards.map((card, index) => (
             <div key={card.id} className="rounded border p-3 space-y-2">
@@ -6655,6 +6958,8 @@ export default function JenksV2FrontPageManager() {
                         description: '',
                         ctaText: 'View Designer',
                         ctaLink: '/jenks-v14/custom-to-wear',
+                        ctaMode: 'PAGE',
+                        ctaPageKey: 'CUSTOM_TO_WEAR',
                         ctaStyle: createCtaStyle({
                           backgroundColor: 'transparent',
                           textColor: '#ffffff',
@@ -6778,22 +7083,97 @@ export default function JenksV2FrontPageManager() {
                     }))
                   }
                 />
-                <input
-                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
-                  value={card.ctaLink}
-                  placeholder="CTA Link"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      designerSpotlight: {
-                        ...prev.designerSpotlight,
-                        cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, ctaLink: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
+                <label className="md:col-span-2 text-[11px]">
+                  CTA Route Type
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.ctaMode || 'PAGE'}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        designerSpotlight: {
+                          ...prev.designerSpotlight,
+                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) => {
+                            if (entryIndex !== index) return entry;
+                            const nextMode: 'URL' | 'PAGE' = event.target.value === 'URL' ? 'URL' : 'PAGE';
+                            if (nextMode === 'PAGE') {
+                              const fallbackRoute =
+                                pageRouteOptions.find((route) => route.key === (entry.ctaPageKey || 'CUSTOM_TO_WEAR')) ||
+                                pageRouteOptions.find((route) => route.key === 'CUSTOM_TO_WEAR') ||
+                                pageRouteOptions[0];
+                              return {
+                                ...entry,
+                                ctaMode: 'PAGE',
+                                ctaPageKey: fallbackRoute?.key || 'CUSTOM_TO_WEAR',
+                                ctaLink: fallbackRoute?.href || '/jenks-v14/custom-to-wear',
+                              };
+                            }
+                            return {
+                              ...entry,
+                              ctaMode: 'URL',
+                              ctaPageKey: '',
+                            };
+                          }),
+                        },
+                      }))
+                    }
+                  >
+                    <option value="PAGE">Pages dropdown</option>
+                    <option value="URL">Custom URL</option>
+                  </select>
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  {(card.ctaMode || 'PAGE') === 'PAGE' ? 'CTA Page' : 'CTA URL'}
+                  {(card.ctaMode || 'PAGE') === 'PAGE' ? (
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={card.ctaPageKey || ''}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          designerSpotlight: {
+                            ...prev.designerSpotlight,
+                            cards: prev.designerSpotlight.cards.map((entry, entryIndex) => {
+                              if (entryIndex !== index) return entry;
+                              const selected = pageRouteOptions.find((route) => route.key === event.target.value);
+                              return {
+                                ...entry,
+                                ctaMode: 'PAGE',
+                                ctaPageKey: event.target.value,
+                                ctaLink: selected?.href || entry.ctaLink,
+                              };
+                            }),
+                          },
+                        }))
+                      }
+                    >
+                      {pageRouteOptions.map((route) => (
+                        <option key={`spot-page-${route.key}`} value={route.key}>
+                          {route.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={card.ctaLink}
+                      placeholder="/jenks-v14/custom-to-wear or https://..."
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          designerSpotlight: {
+                            ...prev.designerSpotlight,
+                            cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, ctaMode: 'URL', ctaPageKey: '', ctaLink: event.target.value }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  )}
+                </label>
                 {renderCtaStyleEditor(
                   'Card CTA Style',
                   card.ctaStyle,
