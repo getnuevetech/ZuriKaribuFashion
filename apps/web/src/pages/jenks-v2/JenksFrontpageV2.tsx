@@ -2782,7 +2782,7 @@ export default function JenksFrontpageV2() {
                     <Link
                       to={sectionHrefForCountry(section.key)}
                       style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                      className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em]"
+                      className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
                     >
                         {section.cta}
                     </Link>
@@ -2808,7 +2808,7 @@ export default function JenksFrontpageV2() {
                     <Link
                       to={sectionHrefForCountry(section.key)}
                       style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                      className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em]"
+                      className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
                     >
                         {section.cta}
                     </Link>
@@ -2901,7 +2901,7 @@ export default function JenksFrontpageV2() {
                     <p className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">{card.title}</p>
                     <p className="mt-2 text-sm text-white/78">{card.subtitle}</p>
                     <span
-                      className="mt-4 inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.06em] text-white/92"
+                      className="mt-4 inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.06em] text-white/92 hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
                       style={buildCTAStyle(card.ctaStyle, DEFAULT_INLINE_CTA_STYLE)}
                     >
                       {card.cta}
@@ -2982,7 +2982,7 @@ export default function JenksFrontpageV2() {
                 <h3 className="mt-3 font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">{spot.title}</h3>
                 <p className="mt-3 text-sm text-white/78">{spot.description}</p>
                 <span
-                  className="mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white"
+                  className="mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
                   style={buildCTAStyle(spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE)}
                 >
                   {spot.cta}

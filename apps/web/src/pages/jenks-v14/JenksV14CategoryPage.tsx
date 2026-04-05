@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, Globe, Loader2 } from 'lucide-react';
+import { ArrowRight, ChevronDown, Globe, Loader2 } from 'lucide-react';
+import '../../styles/jenks-v2.css';
 import { api } from '../../services/api';
 import { useCurrencyStore } from '../../store/currencyStore';
 import { AFRICAN_COUNTRIES } from '../../data/africanCountries';
@@ -34,9 +35,11 @@ type ProductCard = {
   priceUsd: number;
   href: string;
   labels: Label[];
+  material?: string;
+  isNew?: boolean;
 };
 
-const QUICK_COUNTRY_CODES = ['NG', 'GH', 'KE', 'ZA', 'MA', 'SN', 'ET', 'TZ'] as const;
+const QUICK_COUNTRY_CODES = ['NG', 'GH', 'KE', 'ZA', 'MA', 'SN', 'ET', 'TZ', 'UG', 'ML', 'EG', 'CM'] as const;
 
 const FABRIC_FALLBACK_FILTERS = [
   'Ankara',
@@ -53,20 +56,19 @@ const FABRIC_FALLBACK_FILTERS = [
 
 const READY_FALLBACK_FILTERS = ['Dresses', 'Kaftan', 'Agbada', 'Skirt Sets', 'Shirts', 'Jackets', 'Occasion', 'Casual'];
 
-const CUSTOM_FALLBACK_FILTERS = [
-  'Bridal',
-  'Traditional',
-  'Modern',
-  'Menswear',
-  'Womenswear',
-  'Luxury',
-  'Event',
-  'Bespoke',
-];
+const CUSTOM_FALLBACK_FILTERS = ['Bridal', 'Traditional', 'Modern', 'Menswear', 'Womenswear', 'Luxury', 'Event', 'Bespoke'];
 
 const asText = (value: unknown, fallback = '') => {
   const text = String(value || '').trim();
   return text || fallback;
+};
+
+const toNumber = (...values: unknown[]) => {
+  for (const value of values) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
 };
 
 const flagEmoji = (countryCode: string) => {
@@ -88,7 +90,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
   const [products, setProducts] = useState<ProductCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showMoreCountries, setShowMoreCountries] = useState(false);
+  const [showAllCountries, setShowAllCountries] = useState(false);
 
   const countryOptions = useMemo(
     () =>
@@ -110,14 +112,14 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
     [countryOptions]
   );
 
-  const visibleCountryChips = useMemo(() => {
-    if (showMoreCountries) return countryOptions;
-    return quickCountries;
-  }, [countryOptions, quickCountries, showMoreCountries]);
+  const visibleCountries = useMemo(
+    () => (showAllCountries ? countryOptions : quickCountries),
+    [countryOptions, quickCountries, showAllCountries]
+  );
 
   const taxonomyLabel = mode === 'FABRICS' ? 'MATERIAL' : mode === 'READY' ? 'CATEGORY' : 'STYLE';
-
   const sectionTitle = mode === 'FABRICS' ? 'Fabrics To Buy' : mode === 'READY' ? 'Ready To Wear' : 'Custom To Wear';
+  const countLabel = mode === 'FABRICS' ? 'fabrics' : 'products';
 
   useEffect(() => {
     const loadTaxonomy = async () => {
@@ -152,7 +154,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
           }
         }
       } catch {
-        // Fallback chips below.
+        // Keep graceful fallback.
       }
 
       const fallbackNames =
@@ -172,9 +174,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
       try {
         const fallbackTaxonomyToken =
           !taxonomyLoadedFromApi && selectedTaxonomyId
-            ? String(
-                taxonomyOptions.find((entry) => entry.id === selectedTaxonomyId)?.name || selectedTaxonomyId || ''
-              )
+            ? String(taxonomyOptions.find((entry) => entry.id === selectedTaxonomyId)?.name || selectedTaxonomyId || '')
                 .trim()
                 .toLowerCase()
             : '';
@@ -184,7 +184,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
             country: selectedCountry || undefined,
             fabricCategoryId: taxonomyLoadedFromApi && selectedTaxonomyId ? selectedTaxonomyId : undefined,
             page: 1,
-            limit: 24,
+            limit: 32,
           });
           if (!response.success) throw new Error('Unable to load fabrics.');
           const sourceRows = Array.isArray(response.data?.fabrics) ? response.data.fabrics : [];
@@ -210,9 +210,11 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
               ownerName: asText(row?.seller?.businessName, 'Seller'),
               country: asText(row?.seller?.country, ''),
               image: asText(row?.images?.[0]?.url, '/images/placeholder.jpg'),
-              priceUsd: Number(row?.pricePerMeter || row?.finalPrice || row?.sellerPrice || 0),
+              priceUsd: toNumber(row?.pricePerMeter, row?.finalPrice, row?.sellerPrice, 0),
               href: `${routeBase}/${asText(row?.id, '')}`,
               labels: Array.isArray(row?.productLabels) ? row.productLabels : [],
+              material: asText(row?.materialType?.name, asText(row?.materialTypeName, '')),
+              isNew: true,
             }))
           );
           return;
@@ -223,7 +225,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
             country: selectedCountry || undefined,
             categoryId: taxonomyLoadedFromApi && selectedTaxonomyId ? selectedTaxonomyId : undefined,
             page: 1,
-            limit: 24,
+            limit: 32,
           });
           if (!response.success) throw new Error('Unable to load ready-to-wear products.');
           const sourceRows = Array.isArray(response.data?.products) ? response.data.products : [];
@@ -238,9 +240,9 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
           setProducts(
             rows.map((row: any) => {
               const variationPrices = (Array.isArray(row?.sizeVariations) ? row.sizeVariations : [])
-                .map((entry: any) => Number(entry?.price || 0))
-                .filter((value: number) => Number.isFinite(value) && value > 0);
-              const price = variationPrices.length > 0 ? Math.min(...variationPrices) : Number(row?.basePrice || 0);
+                .map((entry: any) => toNumber(entry?.price, 0))
+                .filter((value: number) => value > 0);
+              const price = variationPrices.length > 0 ? Math.min(...variationPrices) : toNumber(row?.basePrice, row?.finalPrice, 0);
               return {
                 id: asText(row?.id, ''),
                 name: asText(row?.name, 'Ready To Wear'),
@@ -250,6 +252,8 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
                 priceUsd: price,
                 href: `${routeBase}/${asText(row?.id, '')}`,
                 labels: Array.isArray(row?.productLabels) ? row.productLabels : [],
+                material: asText(row?.materialType?.name, asText(row?.materialTypeName, '')),
+                isNew: true,
               } satisfies ProductCard;
             })
           );
@@ -260,7 +264,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
           country: selectedCountry || undefined,
           categoryId: taxonomyLoadedFromApi && selectedTaxonomyId ? selectedTaxonomyId : undefined,
           page: 1,
-          limit: 24,
+          limit: 32,
         });
         if (!response.success) throw new Error('Unable to load custom products.');
         const sourceRows = Array.isArray(response.data?.designs) ? response.data.designs : [];
@@ -279,9 +283,11 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
             ownerName: asText(row?.designer?.businessName, 'Designer'),
             country: asText(row?.designer?.country, ''),
             image: asText(row?.images?.[0]?.url, '/images/placeholder.jpg'),
-            priceUsd: Number(row?.finalPrice || row?.basePrice || 0),
+            priceUsd: toNumber(row?.finalPrice, row?.basePrice, 0),
             href: `${routeBase}/${asText(row?.id, '')}`,
             labels: Array.isArray(row?.productLabels) ? row.productLabels : [],
+            material: asText(row?.materialType?.name, asText(row?.materialTypeName, '')),
+            isNew: true,
           }))
         );
       } catch (loadError) {
@@ -295,76 +301,88 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
     void loadProducts();
   }, [mode, routeBase, selectedCountry, selectedTaxonomyId, taxonomyLoadedFromApi, taxonomyOptions]);
 
-  const allCountLabel = mode === 'FABRICS' ? 'fabrics' : 'products';
-
   return (
-    <div className="min-h-screen bg-[#f1efe9] text-[#1a1a1a]">
-      <div className="border-b border-[#d8d4cb] bg-[#ece9e2]">
-        <div className="mx-auto w-full max-w-[1560px] px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="font-['Montserrat'] text-lg font-semibold uppercase tracking-[0.06em]">{sectionTitle}</h1>
-            <p className="text-xs uppercase tracking-[0.08em] text-[#6f6a60]">
-              {products.length} {allCountLabel}
+    <div className="min-h-screen bg-[#F8F6F1] text-[#1A1A1A]">
+      <div className="sticky top-0 z-30 border-b border-[#1A1A1A]/10 bg-[#F8F6F1]/95 backdrop-blur-md">
+        <div className="mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6 lg:px-10">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="label-mono text-[#6B6B6B]">{mode === 'FABRICS' ? 'Kimi v14 Category' : 'Kimi v14 Collection'}</p>
+              <h1 className="headline-lg mt-2 text-[clamp(2rem,4vw,4.5rem)]">{sectionTitle}</h1>
+            </div>
+            <p className="text-xs uppercase tracking-[0.12em] text-[#6B6B6B]">
+              {products.length} {countLabel}
             </p>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="mr-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7e776d]">COUNTRY</span>
-            {visibleCountryChips.map((country) => {
-              const active = selectedCountry === country.name;
-              return (
-                <button
-                  key={`country-filter-${country.code}`}
-                  type="button"
-                  onClick={() => setSelectedCountry((previous) => (previous === country.name ? '' : country.name))}
-                  className={`inline-flex items-center gap-2 border px-3 py-1.5 text-sm transition ${
-                    active
-                      ? 'border-[#1a1a1a] bg-[#1a1a1a] text-white'
-                      : 'border-[#d3cec4] bg-white text-[#2b2b2b] hover:border-[#a6a093]'
-                  }`}
-                >
-                  <span>{flagEmoji(country.code)}</span>
-                  <span>{country.name}</span>
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setShowMoreCountries((previous) => !previous)}
-              className="inline-flex items-center gap-2 border border-[#d3cec4] bg-white px-3 py-1.5 text-sm text-[#2b2b2b] hover:border-[#a6a093]"
-            >
-              <Globe className="h-4 w-4" />
-              <span>{showMoreCountries ? 'Less' : 'More'}</span>
-              <ChevronDown className={`h-4 w-4 transition-transform ${showMoreCountries ? 'rotate-180' : ''}`} />
-            </button>
+
+          <div className="mt-5">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="label-mono text-[#6B6B6B]">COUNTRY</p>
+              <button
+                type="button"
+                onClick={() => setShowAllCountries((prev) => !prev)}
+                className="inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.12em] text-[#E85A3C] hover:underline"
+              >
+                <Globe className="h-3.5 w-3.5" />
+                {showAllCountries ? 'Show less' : `View all ${countryOptions.length} countries`}
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAllCountries ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+            <div className={`${showAllCountries ? 'grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12' : 'grid grid-cols-12 gap-2'}`}>
+              {visibleCountries.map((country) => {
+                const active = selectedCountry === country.name;
+                return (
+                  <button
+                    key={`country-filter-${country.code}`}
+                    type="button"
+                    onClick={() => setSelectedCountry((previous) => (previous === country.name ? '' : country.name))}
+                    className={`group flex flex-col items-center px-1 py-2 text-center transition-colors ${
+                      active ? 'text-[#E85A3C]' : 'text-[#1A1A1A] hover:text-[#E85A3C]'
+                    }`}
+                  >
+                    <span
+                      className={`flex h-12 w-12 items-center justify-center rounded-full border transition-colors ${
+                        active ? 'border-[#E85A3C]' : 'border-[#1A1A1A]/12 group-hover:border-[#E85A3C]'
+                      }`}
+                    >
+                      <span className="text-lg">{flagEmoji(country.code)}</span>
+                    </span>
+                    <span className="mt-1 line-clamp-1 text-[10px] font-medium uppercase tracking-[0.08em]">{country.name}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="mr-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7e776d]">{taxonomyLabel}</span>
-            {taxonomyOptions.map((option) => {
-              const active = selectedTaxonomyId === option.id;
-              return (
-                <button
-                  key={`taxonomy-filter-${option.id}`}
-                  type="button"
-                  onClick={() => setSelectedTaxonomyId((previous) => (previous === option.id ? '' : option.id))}
-                  className={`border px-3 py-1 text-sm transition ${
-                    active
-                      ? 'border-[#1a1a1a] bg-[#1a1a1a] text-white'
-                      : 'border-[#d3cec4] bg-white text-[#343434] hover:border-[#a6a093]'
-                  }`}
-                >
-                  {option.name}
-                </button>
-              );
-            })}
+          <div className="mt-4">
+            <p className="label-mono mb-2 text-[#6B6B6B]">{taxonomyLabel}</p>
+            <div className="flex flex-wrap gap-2">
+              {taxonomyOptions.map((option) => {
+                const active = selectedTaxonomyId === option.id;
+                return (
+                  <button
+                    key={`taxonomy-filter-${option.id}`}
+                    type="button"
+                    onClick={() => setSelectedTaxonomyId((previous) => (previous === option.id ? '' : option.id))}
+                    className={`border px-3 py-1.5 text-sm transition ${
+                      active
+                        ? 'border-[#E85A3C] bg-[#E85A3C] text-white'
+                        : 'border-[#1A1A1A]/14 bg-white text-[#1A1A1A] hover:border-[#E85A3C]/40'
+                    }`}
+                  >
+                    {option.name}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-[1560px] px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-10 sm:px-6 lg:px-10">
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-9 w-9 animate-spin text-[#1a1a1a]" />
+            <Loader2 className="h-9 w-9 animate-spin text-[#1A1A1A]" />
           </div>
         ) : error ? (
           <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
@@ -373,45 +391,55 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
             No products found for the selected filters.
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {products.map((product) => {
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {products.map((product, index) => {
               const countryCode = resolveCountryCode(product.country);
               return (
                 <Link
                   key={product.id}
                   to={product.href}
-                  className="group overflow-hidden border border-[#ddd8cf] bg-white transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(0,0,0,0.12)]"
+                  className={`product-card group bg-white ${index % 5 === 0 ? 'sm:col-span-2 lg:col-span-1' : ''}`}
                 >
-                  <div className="relative aspect-[4/5] overflow-hidden bg-[#efede7]">
+                  <div className="relative aspect-[3/4] overflow-hidden bg-[#ece8df]">
                     <img
                       src={product.image || '/images/placeholder.jpg'}
                       alt={product.name}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
-                    <div className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/92 text-[16px] shadow">
+                    <div className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-[16px] shadow">
                       {flagEmoji(countryCode || 'NG')}
                     </div>
+                    {product.material ? (
+                      <div className="absolute bottom-3 left-3">
+                        <span className="bg-white/90 px-2 py-1 text-[10px] uppercase tracking-[0.08em] text-[#1A1A1A]">
+                          {product.material}
+                        </span>
+                      </div>
+                    ) : null}
                     {product.labels.length > 0 ? (
                       <span
                         className="absolute right-3 top-3 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em]"
                         style={{
                           color: asText(product.labels[0]?.textColor, '#ffffff'),
-                          backgroundColor: asText(product.labels[0]?.backgroundColor, '#e85a3c'),
+                          backgroundColor: asText(product.labels[0]?.backgroundColor, '#E85A3C'),
                         }}
                       >
                         {product.labels[0].name}
                       </span>
+                    ) : product.isNew ? (
+                      <span className="label-mono absolute right-3 top-3 bg-[#E85A3C] px-2.5 py-1 text-white">NEW</span>
                     ) : null}
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition-all duration-300 group-hover:bg-black/24">
-                      <span className="translate-y-2 border border-[#e85a3c] bg-[#e85a3c] px-5 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-white opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-                        View Details →
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-all duration-300 group-hover:bg-black/35">
+                      <span className="cta-button translate-y-2 px-5 py-2 text-[11px] opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                        <span>View Product</span>
+                        <ArrowRight className="h-3.5 w-3.5" />
                       </span>
                     </div>
                   </div>
-                  <div className="space-y-0.5 px-4 py-3">
-                    <p className="line-clamp-1 text-[30px] font-semibold text-[#202020]">{product.name}</p>
-                    <p className="line-clamp-1 text-sm text-[#726f67]">{product.ownerName}</p>
-                    <p className="pt-1 text-sm font-semibold text-[#e85a3c]">{formatFromUsd(product.priceUsd)}</p>
+                  <div className="px-4 pb-4 pt-4">
+                    <p className="line-clamp-1 text-lg font-medium text-[#1A1A1A] transition-colors group-hover:text-[#E85A3C]">{product.name}</p>
+                    <p className="line-clamp-1 text-sm text-[#6B6B6B]">{product.ownerName}</p>
+                    <p className="mt-1 font-medium text-[#E85A3C]">{formatFromUsd(product.priceUsd)}</p>
                   </div>
                 </Link>
               );
