@@ -61,7 +61,13 @@ type KimiCategoryPageProps = {
   pageType: CategoryPageType;
   kind: PageKind;
   pageLabel: string;
-  routeBase: '/ready-to-wear' | '/custom' | '/fabrics';
+  routeBase:
+    | '/ready-to-wear'
+    | '/custom'
+    | '/fabrics'
+    | '/jenks-v14/ready-to-wear'
+    | '/jenks-v14/custom-to-wear'
+    | '/jenks-v14/fabrics';
   defaultBanner: string;
   defaultSubtitle: string;
 };

@@ -163,7 +163,7 @@ export default function FabricDetail() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-500 mb-4">{error || 'Fabric not found'}</p>
-          <Link to="/fabrics" className="text-black hover:underline">
+          <Link to="/jenks-v14/fabrics" className="text-black hover:underline">
             Back to Fabrics To Buy
           </Link>
         </div>
@@ -256,7 +256,7 @@ export default function FabricDetail() {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
         {/* Breadcrumb */}
-        <Link to="/fabrics" className="mb-6 inline-flex items-center text-gray-500 hover:text-black">
+        <Link to="/jenks-v14/fabrics" className="mb-6 inline-flex items-center text-gray-500 hover:text-black">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Fabrics To Buy
         </Link>

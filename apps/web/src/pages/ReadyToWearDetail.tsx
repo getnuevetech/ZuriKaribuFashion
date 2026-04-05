@@ -304,7 +304,7 @@ export default function ReadyToWearDetail() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-500 mb-4">{error || 'Product not found'}</p>
-          <Link to="/ready-to-wear" className="text-black hover:underline">
+          <Link to="/jenks-v14/ready-to-wear" className="text-black hover:underline">
             Back to Ready To Wear
           </Link>
         </div>
@@ -460,7 +460,7 @@ export default function ReadyToWearDetail() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
-        <Link to="/ready-to-wear" className="mb-6 inline-flex items-center text-gray-500 hover:text-black">
+        <Link to="/jenks-v14/ready-to-wear" className="mb-6 inline-flex items-center text-gray-500 hover:text-black">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Ready To Wear
         </Link>

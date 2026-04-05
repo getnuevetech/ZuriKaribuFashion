@@ -6,7 +6,7 @@ export default function Designs() {
       pageType="CUSTOM_TO_WEAR"
       kind="CUSTOM"
       pageLabel="Custom To Wear"
-      routeBase="/custom"
+      routeBase="/jenks-v14/custom-to-wear"
       defaultBanner="/images/hero-designs.jpg"
       defaultSubtitle="Discover custom designs from top fashion designers."
     />

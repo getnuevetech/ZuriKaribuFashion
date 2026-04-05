@@ -6,7 +6,7 @@ export default function ReadyToWear() {
       pageType="READY_TO_WEAR"
       kind="READY"
       pageLabel="Ready To Wear"
-      routeBase="/ready-to-wear"
+      routeBase="/jenks-v14/ready-to-wear"
       defaultBanner="/images/hero-readytowear.jpg"
       defaultSubtitle="Shop ready styles from designers across Africa."
     />

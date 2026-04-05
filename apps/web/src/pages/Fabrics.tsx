@@ -6,7 +6,7 @@ export default function Fabrics() {
       pageType="FABRIC_TO_BUY"
       kind="FABRIC"
       pageLabel="Fabrics To Buy"
-      routeBase="/fabrics"
+      routeBase="/jenks-v14/fabrics"
       defaultBanner="/images/hero-fabrics.jpg"
       defaultSubtitle="Choose quality fabrics by fabric category and country."
     />

@@ -164,14 +164,14 @@ const SHOP_BY_TAB_META: Array<{ key: ShopByTab; label: string; Icon: IconCompone
 ];
 
 const DEFAULT_HREF_BY_KEY: Record<string, string> = {
-  RTW: '/ready-to-wear',
-  CTW: '/custom',
-  FTB: '/fabrics',
+  RTW: '/jenks-v14/ready-to-wear',
+  CTW: '/jenks-v14/custom-to-wear',
+  FTB: '/jenks-v14/fabrics',
   HOME: '/',
-  SHOP: '/ready-to-wear',
-  READY_TO_WEAR: '/ready-to-wear',
-  CUSTOM_TO_WEAR: '/custom',
-  FABRICS: '/fabrics',
+  SHOP: '/jenks-v14/ready-to-wear',
+  READY_TO_WEAR: '/jenks-v14/ready-to-wear',
+  CUSTOM_TO_WEAR: '/jenks-v14/custom-to-wear',
+  FABRICS: '/jenks-v14/fabrics',
   CONTACT: '/contact',
   AUTH_LOGIN: '/auth/login',
 };
@@ -189,9 +189,9 @@ const FEATURED_CTA_BY_KEY: Record<string, string> = {
 };
 
 const FEATURED_HREF_BY_KEY: Record<string, string> = {
-  RTW: '/ready-to-wear',
-  CTW: '/custom',
-  FTB: '/fabrics',
+  RTW: '/jenks-v14/ready-to-wear',
+  CTW: '/jenks-v14/custom-to-wear',
+  FTB: '/jenks-v14/fabrics',
 };
 
 const CATEGORY_IMAGE_BY_KEY: Record<string, string> = {
@@ -341,15 +341,15 @@ const productGroupHref = (groupRaw: unknown) => {
   if (group === 'RTW') return buildCountryProductsHref('Nigeria', 'RTW');
   if (group === 'CTW') return buildCountryProductsHref('Nigeria', 'CTW');
   if (group === 'FTB') return buildCountryProductsHref('Nigeria', 'FTB');
-  return '/ready-to-wear';
+  return '/jenks-v14/ready-to-wear';
 };
 
 const PAGE_HREF_BY_KEY: Record<string, string> = {
   HOME: '/',
-  READY_TO_WEAR: '/ready-to-wear',
-  FABRICS: '/fabrics',
-  CUSTOM_TO_WEAR: '/custom',
-  DESIGNERS: '/custom',
+  READY_TO_WEAR: '/jenks-v14/ready-to-wear',
+  FABRICS: '/jenks-v14/fabrics',
+  CUSTOM_TO_WEAR: '/jenks-v14/custom-to-wear',
+  DESIGNERS: '/jenks-v14/custom-to-wear',
   ABOUT: '/about',
   CONTACT: '/contact',
   HELP_CENTER: '/help-center',
@@ -484,7 +484,7 @@ const isExternalHref = (href: string) => /^https?:\/\//i.test(href);
 
 const sanitizeLegacyInternalHref = (href: string) => {
   const trimmed = href.trim();
-  if (!trimmed) return '/ready-to-wear';
+  if (!trimmed) return '/jenks-v14/ready-to-wear';
   if (
     trimmed === '/main' ||
     trimmed === '/main/' ||
@@ -496,9 +496,9 @@ const sanitizeLegacyInternalHref = (href: string) => {
     trimmed.startsWith('/shop#')
   ) {
     if (trimmed.startsWith('/shop?') || trimmed.startsWith('/shop#')) {
-      return `/ready-to-wear${trimmed.slice('/shop'.length)}`;
+      return `/jenks-v14/ready-to-wear${trimmed.slice('/shop'.length)}`;
     }
-    return '/ready-to-wear';
+    return '/jenks-v14/ready-to-wear';
   }
   return trimmed;
 };
@@ -565,13 +565,13 @@ const HERO: HeroSlide[] = [
     lineA: 'Curated fashion from top designers and textile houses.',
     lineB: 'Ready-to-wear, fabrics, and custom looks in one destination.',
     primaryCtaText: 'SHOP NOW',
-    primaryCtaHref: '/ready-to-wear',
+    primaryCtaHref: '/jenks-v14/ready-to-wear',
     primaryCtaEnabled: true,
     secondaryCtaText: 'EXPLORE DESIGNERS',
-    secondaryCtaHref: '/custom',
+    secondaryCtaHref: '/jenks-v14/custom-to-wear',
     secondaryCtaEnabled: true,
     tertiaryCtaText: 'SHOP FABRICS',
-    tertiaryCtaHref: '/fabrics',
+    tertiaryCtaHref: '/jenks-v14/fabrics',
     tertiaryCtaEnabled: true,
   },
   {
@@ -587,13 +587,13 @@ const HERO: HeroSlide[] = [
     lineA: 'Signature pieces and modern tailoring from trusted labels.',
     lineB: 'Designed on the continent. Styled for the world.',
     primaryCtaText: 'SHOP NOW',
-    primaryCtaHref: '/ready-to-wear',
+    primaryCtaHref: '/jenks-v14/ready-to-wear',
     primaryCtaEnabled: true,
     secondaryCtaText: 'EXPLORE DESIGNERS',
-    secondaryCtaHref: '/custom',
+    secondaryCtaHref: '/jenks-v14/custom-to-wear',
     secondaryCtaEnabled: true,
     tertiaryCtaText: 'SHOP FABRICS',
-    tertiaryCtaHref: '/fabrics',
+    tertiaryCtaHref: '/jenks-v14/fabrics',
     tertiaryCtaEnabled: true,
   },
 ];
@@ -620,7 +620,7 @@ const SHOP_BY_CATEGORY = [
     title: 'READY TO WEAR',
     subtitle: 'Everyday edits in premium African style',
     meta: '48 products',
-    href: '/ready-to-wear',
+    href: '/jenks-v14/ready-to-wear',
     image: `${ASSET_BASE}/featured_rw_left.jpg`,
     Icon: ShoppingBag,
   },
@@ -629,7 +629,7 @@ const SHOP_BY_CATEGORY = [
     title: 'CUSTOM TO WEAR',
     subtitle: 'Bespoke pieces tailored for your story',
     meta: '24 products',
-    href: '/custom',
+    href: '/jenks-v14/custom-to-wear',
     image: `${ASSET_BASE}/featured_custom_right.jpg`,
     Icon: Sparkles,
   },
@@ -638,7 +638,7 @@ const SHOP_BY_CATEGORY = [
     title: 'FABRICS TO BUY',
     subtitle: 'Signature textiles from across the continent',
     meta: '64 products',
-    href: '/fabrics',
+    href: '/jenks-v14/fabrics',
     image: `${ASSET_BASE}/fabrics_full.jpg`,
     Icon: Palette,
   },
@@ -747,14 +747,14 @@ const FEATURED_RTW = [
     image: `${ASSET_BASE}/product4.jpg`,
     title: 'Bridal Traditional',
     subtitle: 'Made to standard sizes for all',
-    href: '/ready-to-wear',
+    href: '/jenks-v14/ready-to-wear',
   },
   {
     id: 'fr2',
     image: `${ASSET_BASE}/featured_rw_right.jpg`,
     title: 'Afigan',
     subtitle: 'Premium ready-to-wear edits',
-    href: '/ready-to-wear',
+    href: '/jenks-v14/ready-to-wear',
   },
 ];
 
@@ -764,14 +764,14 @@ const FEATURED_CTW = [
     image: `${ASSET_BASE}/product1.jpg`,
     title: 'Exclusive Gorgeous',
     subtitle: 'Custom craftsmanship for your story',
-    href: '/custom',
+    href: '/jenks-v14/custom-to-wear',
   },
   {
     id: 'fc2',
     image: `${ASSET_BASE}/featured_custom_left.jpg`,
     title: 'Signature Couture',
     subtitle: 'Tailored by African designers',
-    href: '/custom',
+    href: '/jenks-v14/custom-to-wear',
   },
 ];
 
@@ -781,14 +781,14 @@ const FEATURED_FTB = [
     image: `${ASSET_BASE}/fabrics_full.jpg`,
     title: 'Signature Textile Vault',
     subtitle: 'Premium fabrics sourced from artisan houses across Africa.',
-    href: '/fabrics',
+    href: '/jenks-v14/fabrics',
   },
   {
     id: 'ff2',
     image: `${ASSET_BASE}/product6.jpg`,
     title: 'Occasion Fabric Edit',
     subtitle: 'Handpicked weaves and prints for ceremony and statement looks.',
-    href: '/fabrics',
+    href: '/jenks-v14/fabrics',
   },
 ];
 
@@ -800,7 +800,7 @@ const RTW_FTB_CTW_SECTIONS = [
     title: 'FEATURED READY TO WEAR',
     description: 'Curated fits built for real life - tailored enough to feel special, versatile enough to wear anywhere.',
     cta: 'SHOP READY TO WEAR',
-    href: '/ready-to-wear',
+    href: '/jenks-v14/ready-to-wear',
     image: `${ASSET_BASE}/rw_full.jpg`,
     textOnLeft: false,
     panelBg: 'bg-[#111]',
@@ -812,7 +812,7 @@ const RTW_FTB_CTW_SECTIONS = [
     title: 'FEATURED FABRICS TO BUY',
     description: 'Handpicked textiles from trusted makers across Africa, ready for your next design and story.',
     cta: 'SHOP FABRICS TO BUY',
-    href: '/fabrics',
+    href: '/jenks-v14/fabrics',
     image: `${ASSET_BASE}/fabrics_full.jpg`,
     textOnLeft: true,
     panelBg: 'bg-[#171717]',
@@ -824,7 +824,7 @@ const RTW_FTB_CTW_SECTIONS = [
     title: 'FEATURED CUSTOM TO WEAR',
     description: 'Work directly with designers for made-to-measure pieces shaped around your fit and vision.',
     cta: 'SHOP CUSTOM TO WEAR',
-    href: '/custom',
+    href: '/jenks-v14/custom-to-wear',
     image: `${ASSET_BASE}/custom_full.jpg`,
     textOnLeft: false,
     panelBg: 'bg-[#111]',
@@ -877,7 +877,7 @@ const DESIGNER_SPOTLIGHT = [
     title: 'DAKAR COUTURE STUDIO',
     description: 'Elegant made-to-measure looks inspired by Senegalese heritage details.',
     cta: 'SHOP COLLECTION',
-    href: '/custom',
+    href: '/jenks-v14/custom-to-wear',
   },
   {
     id: 'spot-3',
@@ -885,7 +885,7 @@ const DESIGNER_SPOTLIGHT = [
     title: 'ACCRA READY EDIT',
     description: 'Ready pieces styled for events, work, and everyday confidence.',
     cta: 'EXPLORE RTW',
-    href: '/ready-to-wear',
+    href: '/jenks-v14/ready-to-wear',
   },
 ] as const;
 
@@ -1043,7 +1043,7 @@ export default function JenksFrontpageV2() {
         primaryCtaText: asString(row.primaryCtaText, HERO[indexKey % HERO.length]?.primaryCtaText || 'SHOP NOW'),
         primaryCtaHref: normalizeHref(
           row.primaryCtaLink,
-          HERO[indexKey % HERO.length]?.primaryCtaHref || '/ready-to-wear'
+          HERO[indexKey % HERO.length]?.primaryCtaHref || '/jenks-v14/ready-to-wear'
         ),
         primaryCtaStyle: row.primaryCtaStyle,
         primaryCtaEnabled: asBoolean(row.primaryCtaEnabled, true),
@@ -1051,14 +1051,14 @@ export default function JenksFrontpageV2() {
           row.secondaryCtaText,
           HERO[indexKey % HERO.length]?.secondaryCtaText || 'EXPLORE DESIGNERS'
         ),
-        secondaryCtaHref: normalizeHref(row.secondaryCtaLink, HERO[indexKey % HERO.length]?.secondaryCtaHref || '/custom'),
+        secondaryCtaHref: normalizeHref(row.secondaryCtaLink, HERO[indexKey % HERO.length]?.secondaryCtaHref || '/jenks-v14/custom-to-wear'),
         secondaryCtaStyle: row.secondaryCtaStyle,
         secondaryCtaEnabled: asBoolean(row.secondaryCtaEnabled, true),
         tertiaryCtaText: asString(
           row.tertiaryCtaText,
           HERO[indexKey % HERO.length]?.tertiaryCtaText || 'SHOP FABRICS'
         ),
-        tertiaryCtaHref: normalizeHref(row.tertiaryCtaLink, HERO[indexKey % HERO.length]?.tertiaryCtaHref || '/fabrics'),
+        tertiaryCtaHref: normalizeHref(row.tertiaryCtaLink, HERO[indexKey % HERO.length]?.tertiaryCtaHref || '/jenks-v14/fabrics'),
         tertiaryCtaStyle: row.tertiaryCtaStyle,
         tertiaryCtaEnabled: asBoolean(row.tertiaryCtaEnabled, true),
       } as HeroSlide;
@@ -1105,7 +1105,7 @@ export default function JenksFrontpageV2() {
         title: asString(row.title, key || `Category ${idx + 1}`).toUpperCase(),
         subtitle: asString(row.description, ''),
         meta: `${Math.max(0, Math.round(asNumber(row.staticProductCount, 0)))} products`,
-        href: normalizeHref(row.href, DEFAULT_HREF_BY_KEY[key] || '/ready-to-wear', key),
+        href: normalizeHref(row.href, DEFAULT_HREF_BY_KEY[key] || '/jenks-v14/ready-to-wear', key),
         image: asString(row.image, CATEGORY_IMAGE_BY_KEY[key] || `${ASSET_BASE}/featured_rw_left.jpg`),
         Icon: iconFromKey(row.icon, ShoppingBag),
       };
@@ -1122,7 +1122,7 @@ export default function JenksFrontpageV2() {
     return rows.map((row) => ({
       name: asString(row.title, 'Style'),
       sub: asString(row.description, ''),
-      href: normalizeHref(row.href, '/ready-to-wear'),
+      href: normalizeHref(row.href, '/jenks-v14/ready-to-wear'),
       Icon: iconFromKey(row.icon, CalendarDays),
       titleFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.titleFontSize, 15)))),
       descriptionFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.descriptionFontSize, 14)))),
@@ -1138,7 +1138,7 @@ export default function JenksFrontpageV2() {
     return rows.map((row) => ({
       range: asString(row.priceLabel, asString(row.title, '$0 - $100')),
       sub: asString(row.description, ''),
-      href: normalizeHref(row.href, '/ready-to-wear'),
+      href: normalizeHref(row.href, '/jenks-v14/ready-to-wear'),
       Icon: iconFromKey(row.icon, Tag),
       titleFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.titleFontSize, 24)))),
       descriptionFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.descriptionFontSize, 14)))),
@@ -1186,7 +1186,7 @@ export default function JenksFrontpageV2() {
         title: asString(entry.title, key || 'Category').toUpperCase(),
         description: asString(entry.description, ''),
         cta: asString(entry.ctaText, FEATURED_CTA_BY_KEY[key] || 'SHOP NOW').toUpperCase(),
-        href: normalizeHref(entry.ctaLink, FEATURED_HREF_BY_KEY[key] || '/ready-to-wear', key),
+        href: normalizeHref(entry.ctaLink, FEATURED_HREF_BY_KEY[key] || '/jenks-v14/ready-to-wear', key),
         ctaStyle: entry.ctaStyle,
         image: matchingCategory?.image || CATEGORY_IMAGE_BY_KEY[key] || `${ASSET_BASE}/rw_full.jpg`,
         textOnLeft: CATEGORY_TEXT_LEFT_BY_KEY[key] ?? (idx % 2 === 1),
@@ -1252,7 +1252,7 @@ export default function JenksFrontpageV2() {
         image: asString(row.image, defaults[key][0]?.image || `${ASSET_BASE}/product4.jpg`),
         title: asString(row.title, defaults[key][0]?.title || ''),
         subtitle: asString(row.description, defaults[key][0]?.subtitle || ''),
-        href: normalizeHref(row.ctaLink, FEATURED_HREF_BY_KEY[key] || '/ready-to-wear', key),
+        href: normalizeHref(row.ctaLink, FEATURED_HREF_BY_KEY[key] || '/jenks-v14/ready-to-wear', key),
         tag: asString(row.tag, FEATURED_LABEL_BY_KEY[key] || ''),
         cta: asString(row.ctaText, FEATURED_CTA_BY_KEY[key] || 'SHOP NOW').toUpperCase(),
         ctaMode: ((): FeaturedTile['ctaMode'] => {
@@ -1288,14 +1288,14 @@ export default function JenksFrontpageV2() {
 
   const sectionHrefForCountry = (sectionKey: unknown) => {
     const categoryToken = categoryTokenFromSectionKey(sectionKey);
-    if (categoryToken === 'ALL') return '/ready-to-wear';
+    if (categoryToken === 'ALL') return '/jenks-v14/ready-to-wear';
     return buildCountryProductsHref('Nigeria', categoryToken);
   };
   const orderedSectionsRtwFtbCtw = useMemo(() => [...sectionsRtwFtbCtw], [sectionsRtwFtbCtw]);
 
   const featuredHrefForCountry = (key: 'RTW' | 'CTW' | 'FTB') => {
     const categoryToken = categoryTokenFromSectionKey(key);
-    if (categoryToken === 'ALL') return '/ready-to-wear';
+    if (categoryToken === 'ALL') return '/jenks-v14/ready-to-wear';
     return buildCountryProductsHref('Nigeria', categoryToken);
   };
   const featuredCardHref = (card: FeaturedTile, key: 'RTW' | 'CTW' | 'FTB') => {
@@ -1331,7 +1331,7 @@ export default function JenksFrontpageV2() {
         title: asString(entry.title, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.title || 'Designer Spotlight'),
         description: asString(entry.description, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.description || ''),
         cta: asString(entry.ctaText, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.cta || 'VIEW DESIGNER').toUpperCase(),
-        href: normalizeHref(entry.ctaLink, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.href || '/custom'),
+        href: normalizeHref(entry.ctaLink, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.href || '/jenks-v14/custom-to-wear'),
         tag: asString(entry.tag, 'Designer Spotlight'),
         ctaStyle: entry.ctaStyle,
       }));
@@ -1604,9 +1604,9 @@ export default function JenksFrontpageV2() {
             id: 'fallback-shop',
             title: 'Shop',
             links: [
-              { id: 'fallback-rtw', label: 'Ready To Wear', href: '/ready-to-wear' },
-              { id: 'fallback-ctw', label: 'Custom To Wear', href: '/custom' },
-              { id: 'fallback-ftb', label: 'Fabrics', href: '/fabrics' },
+              { id: 'fallback-rtw', label: 'Ready To Wear', href: '/jenks-v14/ready-to-wear' },
+              { id: 'fallback-ctw', label: 'Custom To Wear', href: '/jenks-v14/custom-to-wear' },
+              { id: 'fallback-ftb', label: 'Fabrics', href: '/jenks-v14/fabrics' },
             ],
           },
         ];
@@ -2163,11 +2163,11 @@ export default function JenksFrontpageV2() {
                       key={suggestion}
                       to={toSafeInternalHref(
                         suggestion === 'Ready To Wear'
-                          ? '/ready-to-wear'
+                          ? '/jenks-v14/ready-to-wear'
                           : suggestion === 'Custom To Wear'
-                            ? '/custom'
+                            ? '/jenks-v14/custom-to-wear'
                             : suggestion === 'Fabrics'
-                              ? '/fabrics'
+                              ? '/jenks-v14/fabrics'
                               : '/country-products'
                       )}
                       onClick={() => setSearchOpen(false)}
@@ -2203,10 +2203,10 @@ export default function JenksFrontpageV2() {
                       ? hamburgerMenuLinks
                       : [
                           { label: 'Home', href: '/' },
-                          { label: 'Shop', href: '/ready-to-wear' },
-                          { label: 'Ready To Wear', href: '/ready-to-wear' },
-                          { label: 'Fabrics To Buy', href: '/fabrics' },
-                          { label: 'Custom To Wear', href: '/custom' },
+                          { label: 'Shop', href: '/jenks-v14/ready-to-wear' },
+                          { label: 'Ready To Wear', href: '/jenks-v14/ready-to-wear' },
+                          { label: 'Fabrics To Buy', href: '/jenks-v14/fabrics' },
+                          { label: 'Custom To Wear', href: '/jenks-v14/custom-to-wear' },
                           { label: 'Designers', href: '/designers' },
                           { label: 'About Us', href: '/about' },
                           { label: 'Contact Us', href: '/contact' },
