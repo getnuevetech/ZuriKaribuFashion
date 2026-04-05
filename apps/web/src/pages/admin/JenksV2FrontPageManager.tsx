@@ -1498,6 +1498,66 @@ const ensureSectionVisibilityTitleSettings = (
   };
 };
 
+const templateKeyToSectionKey = (key: TemplateKey) =>
+  key.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+const ensureCompleteSectionVisibility = (
+  sectionVisibility: JenksV2FrontpageConfig['sectionVisibility'] | undefined
+): JenksV2FrontpageConfig['sectionVisibility'] => {
+  const withTitleSettings = ensureSectionVisibilityTitleSettings(sectionVisibility);
+  const existing = Array.isArray(withTitleSettings.sections) ? withTitleSettings.sections : [];
+  const normalized = existing.map((entry, index) => {
+    const template =
+      TEMPLATES.find((item) => item.key === entry.templateKey) ||
+      TEMPLATES.find((item) => item.key === 'TOP_NAVIGATIONS');
+    const fallbackOrder = index + 1;
+    return {
+      ...entry,
+      id: String(entry.id || uid()),
+      key: String(entry.key || templateKeyToSectionKey(template!.key)),
+      name: String(entry.name || template?.label || 'Section'),
+      templateKey: (template?.key || 'TOP_NAVIGATIONS') as TemplateKey,
+      enabled: toBoolean(entry.enabled, true),
+      order: clamp(Math.round(toNumber(String(entry.order ?? fallbackOrder), fallbackOrder)), 1, 999),
+      isCustom: toBoolean(entry.isCustom, false),
+      configSnapshot: entry.configSnapshot || {},
+    } as SectionVisibilityEntry;
+  });
+
+  const coreSections = normalized.filter((entry) => !entry.isCustom);
+  const customSections = normalized.filter((entry) => entry.isCustom);
+  const coreByTemplate = new Map<TemplateKey, SectionVisibilityEntry>();
+  const maxOrder = normalized.reduce((acc, entry) => Math.max(acc, entry.order), 0);
+
+  coreSections.forEach((entry) => {
+    // Keep the first core section per template.
+    if (!coreByTemplate.has(entry.templateKey)) {
+      coreByTemplate.set(entry.templateKey, entry);
+    }
+  });
+
+  TEMPLATES.forEach((template, index) => {
+    if (!coreByTemplate.has(template.key)) {
+      const fallbackOrder = maxOrder + index + 1;
+      coreByTemplate.set(template.key, {
+        id: uid(),
+        key: templateKeyToSectionKey(template.key),
+        name: template.label,
+        templateKey: template.key,
+        enabled: true,
+        order: fallbackOrder,
+        isCustom: false,
+        configSnapshot: {},
+      });
+    }
+  });
+
+  return {
+    ...withTitleSettings,
+    sections: [...Array.from(coreByTemplate.values()), ...customSections].sort((a, b) => a.order - b.order),
+  };
+};
+
 const normalizeTextIconHeading = (
   raw: unknown,
   fallback: TextIconSectionHeading,
@@ -1933,7 +1993,11 @@ export default function JenksV2FrontPageManager() {
     try {
       const response = await api.jenksV2Frontpage.getConfig();
       if (!response.success || !response.data) throw new Error('Failed to load Jenks-V2 frontpage manager config.');
-      setConfig(ensureSectionVisibilityTitleSettings(sanitizeConfigHrefs(asApiConfig(response.data))));
+      const nextConfig = sanitizeConfigHrefs(asApiConfig(response.data));
+      setConfig({
+        ...nextConfig,
+        sectionVisibility: ensureCompleteSectionVisibility(nextConfig.sectionVisibility),
+      });
     } catch (loadError: any) {
       setError(loadError?.response?.data?.message || loadError?.message || 'Failed to load Jenks-V2 frontpage manager config.');
     } finally {
@@ -2219,7 +2283,13 @@ export default function JenksV2FrontPageManager() {
       const sanitized = sanitizeConfigHrefs(config);
       const response = await api.jenksV2Frontpage.updateConfig(toApiPayload(sanitized));
       if (!response.success) throw new Error('Failed to save Jenks-V2 frontpage manager config.');
-      setConfig(ensureSectionVisibilityTitleSettings(sanitizeConfigHrefs(asApiConfig(response.data))));
+      {
+        const nextConfig = sanitizeConfigHrefs(asApiConfig(response.data));
+        setConfig({
+          ...nextConfig,
+          sectionVisibility: ensureCompleteSectionVisibility(nextConfig.sectionVisibility),
+        });
+      }
       setSuccess('Jenks-V2 frontpage manager config saved.');
     } catch (saveError: any) {
       const issues = saveError?.response?.data?.issues;
@@ -2259,7 +2329,13 @@ export default function JenksV2FrontPageManager() {
       }
       const response = await api.jenksV2Frontpage.duplicateSection(payload);
       if (!response.success) throw new Error('Failed to duplicate section template.');
-      setConfig(ensureSectionVisibilityTitleSettings(sanitizeConfigHrefs(asApiConfig(response.data))));
+      {
+        const nextConfig = sanitizeConfigHrefs(asApiConfig(response.data));
+        setConfig({
+          ...nextConfig,
+          sectionVisibility: ensureCompleteSectionVisibility(nextConfig.sectionVisibility),
+        });
+      }
       setTemplateName('');
       setTemplateOrder('');
       setSuccess(response.message || 'Section template duplicated successfully.');

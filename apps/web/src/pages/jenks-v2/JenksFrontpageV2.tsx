@@ -1066,7 +1066,7 @@ export default function JenksFrontpageV2() {
     return mapped.length > 0 ? mapped : [];
   }, [topNavigationsCfg.heroBanners]);
   const active = useMemo(() => heroSlides[index] || heroSlides[0] || null, [heroSlides, index]);
-  const showHeroSection = isSectionVisible('TOP_NAVIGATIONS') || heroSlides.length > 0;
+  const showHeroSection = isSectionVisible('TOP_NAVIGATIONS') && heroSlides.length > 0;
 
   const categorySections = useMemo(() => {
     const rows = asArray(categoryManageCfg.sections)
