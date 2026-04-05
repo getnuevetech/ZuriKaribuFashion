@@ -1,14 +1,5 @@
-import KimiCategoryPage from './jenks-v2/KimiCategoryPage';
+import JenksV14CategoryPage from './jenks-v14/JenksV14CategoryPage';
 
 export default function Fabrics() {
-  return (
-    <KimiCategoryPage
-      pageType="FABRIC_TO_BUY"
-      kind="FABRIC"
-      pageLabel="Fabrics To Buy"
-      routeBase="/jenks-v14/fabrics"
-      defaultBanner="/images/hero-fabrics.jpg"
-      defaultSubtitle="Choose quality fabrics by fabric category and country."
-    />
-  );
+  return <JenksV14CategoryPage mode="FABRICS" routeBase="/jenks-v14/fabrics" />;
 }

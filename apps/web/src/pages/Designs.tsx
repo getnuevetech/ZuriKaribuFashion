@@ -1,14 +1,5 @@
-import KimiCategoryPage from './jenks-v2/KimiCategoryPage';
+import JenksV14CategoryPage from './jenks-v14/JenksV14CategoryPage';
 
 export default function Designs() {
-  return (
-    <KimiCategoryPage
-      pageType="CUSTOM_TO_WEAR"
-      kind="CUSTOM"
-      pageLabel="Custom To Wear"
-      routeBase="/jenks-v14/custom-to-wear"
-      defaultBanner="/images/hero-designs.jpg"
-      defaultSubtitle="Discover custom designs from top fashion designers."
-    />
-  );
+  return <JenksV14CategoryPage mode="CUSTOM" routeBase="/jenks-v14/custom-to-wear" />;
 }

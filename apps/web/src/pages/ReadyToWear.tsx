@@ -1,14 +1,5 @@
-import KimiCategoryPage from './jenks-v2/KimiCategoryPage';
+import JenksV14CategoryPage from './jenks-v14/JenksV14CategoryPage';
 
 export default function ReadyToWear() {
-  return (
-    <KimiCategoryPage
-      pageType="READY_TO_WEAR"
-      kind="READY"
-      pageLabel="Ready To Wear"
-      routeBase="/jenks-v14/ready-to-wear"
-      defaultBanner="/images/hero-readytowear.jpg"
-      defaultSubtitle="Shop ready styles from designers across Africa."
-    />
-  );
+  return <JenksV14CategoryPage mode="READY" routeBase="/jenks-v14/ready-to-wear" />;
 }
