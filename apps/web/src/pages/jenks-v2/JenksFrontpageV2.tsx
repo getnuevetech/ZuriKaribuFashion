@@ -36,7 +36,6 @@ import '../../styles/jenks-v2.css';
 type HeroSlide = {
   id: string;
   image: string;
-  fallbackImage: string;
   rightPanelBackgroundMode: 'NONE' | 'IMAGE';
   rightPanelBackgroundImage: string;
   textVerticalAlign: 'TOP' | 'MIDDLE' | 'BOTTOM';
@@ -556,7 +555,6 @@ const HERO: HeroSlide[] = [
   {
     id: '1',
     image: `${ASSET_BASE}/hero_model.jpg`,
-    fallbackImage: `${ASSET_BASE}/hero_model.jpg`,
     rightPanelBackgroundMode: 'NONE',
     rightPanelBackgroundImage: '',
     textVerticalAlign: 'MIDDLE',
@@ -579,7 +577,6 @@ const HERO: HeroSlide[] = [
   {
     id: '2',
     image: `${ASSET_BASE}/rw_full.jpg`,
-    fallbackImage: `${ASSET_BASE}/rw_full.jpg`,
     rightPanelBackgroundMode: 'NONE',
     rightPanelBackgroundImage: '',
     textVerticalAlign: 'MIDDLE',
@@ -905,6 +902,7 @@ export default function JenksFrontpageV2() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [themeMode, setThemeMode] = useState<'LIGHT' | 'DARK'>('LIGHT');
+  const [heroImageLoadFailed, setHeroImageLoadFailed] = useState<Record<string, boolean>>({});
   const [productReviewCards, setProductReviewCards] = useState<CustomerReviewCard[]>([]);
   const [customerReviewIndex, setCustomerReviewIndex] = useState(0);
   const [customerReviewsHovered, setCustomerReviewsHovered] = useState(false);
@@ -1014,9 +1012,8 @@ export default function JenksFrontpageV2() {
       .map((entry) => asRecord(entry))
       .filter((entry) => asBoolean(entry.enabled, true))
       .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0));
-    if (rows.length === 0) return HERO;
+    if (rows.length === 0) return [];
     const mapped = rows.map((row, indexKey) => {
-      const fallbackImage = HERO[indexKey % HERO.length]?.image || `${ASSET_BASE}/hero_model.jpg`;
       const fallbackSlide = HERO[indexKey % HERO.length] || HERO[0];
       const title = asString(row.title, 'Wear the Story of Africa');
       const split = splitHeroTitle(title.toUpperCase());
@@ -1029,8 +1026,7 @@ export default function JenksFrontpageV2() {
       const rightWidthPercent = 100 - leftWidthPercent;
       return {
         id: asString(row.id, `hero-${indexKey + 1}`),
-        image: resolveManagerImage(row.image, fallbackImage),
-        fallbackImage,
+        image: resolveManagerImage(row.image, ''),
         rightPanelBackgroundMode,
         rightPanelBackgroundImage: resolveManagerImage(row.rightPanelBackgroundImage, ''),
         textVerticalAlign,
@@ -1067,9 +1063,9 @@ export default function JenksFrontpageV2() {
         tertiaryCtaEnabled: asBoolean(row.tertiaryCtaEnabled, true),
       } as HeroSlide;
     });
-    return mapped.length > 0 ? mapped : HERO;
+    return mapped.length > 0 ? mapped : [];
   }, [topNavigationsCfg.heroBanners]);
-  const active = useMemo(() => heroSlides[index] || heroSlides[0] || HERO[0], [heroSlides, index]);
+  const active = useMemo(() => heroSlides[index] || heroSlides[0] || null, [heroSlides, index]);
   const showHeroSection = isSectionVisible('TOP_NAVIGATIONS') || heroSlides.length > 0;
 
   const categorySections = useMemo(() => {
@@ -1721,15 +1717,15 @@ export default function JenksFrontpageV2() {
     customerReviewsCfg.showIndicators,
     customerReviewsCfg.pauseOnHover,
   ]);
-  const heroLeftColSpan = Math.max(3, Math.min(9, Math.round((active.leftWidthPercent / 100) * 12)));
+  const heroLeftColSpan = Math.max(3, Math.min(9, Math.round(((active?.leftWidthPercent || 58) / 100) * 12)));
   const heroRightColSpan = Math.max(3, 12 - heroLeftColSpan);
   const heroTextAlignClass =
-    active.textVerticalAlign === 'TOP'
+    active?.textVerticalAlign === 'TOP'
       ? 'items-start'
-      : active.textVerticalAlign === 'BOTTOM'
+      : active?.textVerticalAlign === 'BOTTOM'
         ? 'items-end'
         : 'items-center';
-  const heroRightHasPanelImage = active.rightPanelBackgroundMode === 'IMAGE' && Boolean(active.rightPanelBackgroundImage);
+  const heroRightHasPanelImage = active?.rightPanelBackgroundMode === 'IMAGE' && Boolean(active?.rightPanelBackgroundImage);
   const hamburgerMenuFontSize = Math.max(16, Math.min(72, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontSize, 32))));
   const hamburgerMenuFontWeight = Math.max(500, Math.min(900, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontWeight, 800))));
   const footerLogoCfg = useMemo(() => asRecord(footerCfg.logo), [footerCfg.logo]);
@@ -2219,7 +2215,7 @@ export default function JenksFrontpageV2() {
                       <Link
                         key={`${link.label}-${link.href}`}
                         to={toSafeInternalHref(link.href)}
-                        className="block whitespace-nowrap rounded border border-white/10 px-4 py-3 font-['Oswald'] uppercase leading-none tracking-[0.01em] text-white transition-colors hover:border-[#e66045] hover:text-[#e66045]"
+                        className="block whitespace-nowrap px-4 py-3 font-['Oswald'] uppercase leading-none tracking-[0.01em] text-white transition-colors hover:text-[#e66045]"
                         style={{
                           fontSize: `${hamburgerMenuFontSize}px`,
                           fontWeight: hamburgerMenuFontWeight,
@@ -2242,23 +2238,33 @@ export default function JenksFrontpageV2() {
 
       {/* HERO */}
       {showHeroSection ? (
+      heroSlides.length > 0 && active ? (
       <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 lg:grid-cols-12`} style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}>
         <div className="relative lg:col-span-7" style={{ gridColumn: `span ${heroLeftColSpan} / span ${heroLeftColSpan}` }}>
           {heroSlides.map((slide, i) => (
-            <img
-              key={slide.id}
-              src={slide.image}
-              alt={slide.titleA}
-              onError={(event) => {
-                if (event.currentTarget.src !== slide.fallbackImage) {
-                  event.currentTarget.src = slide.fallbackImage;
+            !heroImageLoadFailed[slide.id] && slide.image ? (
+              <img
+                key={slide.id}
+                src={slide.image}
+                alt={slide.titleA}
+                onError={() =>
+                  setHeroImageLoadFailed((prev) => ({
+                    ...prev,
+                    [slide.id]: true,
+                  }))
                 }
-              }}
-              className={`absolute inset-0 h-full w-full object-cover transition-all duration-1000 ${
-                i === index ? 'scale-100 opacity-100' : 'scale-105 opacity-0'
-              }`}
-            />
+                className={`absolute inset-0 h-full w-full object-cover transition-all duration-1000 ${
+                  i === index ? 'scale-100 opacity-100' : 'scale-105 opacity-0'
+                }`}
+              />
+            ) : null
           ))}
+          {!active.image || heroImageLoadFailed[active.id] ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#0e0e0e] text-white">
+              <Loader2 className="h-8 w-8 animate-spin text-[#e66045]" />
+              <p className="font-['Oswald'] text-3xl font-bold uppercase tracking-[0.08em]">ZURIKARIBU</p>
+            </div>
+          ) : null}
         </div>
         <div
           className={`relative flex ${heroTextAlignClass} px-5 py-10 lg:pl-8 lg:pr-12 xl:pl-10 xl:pr-16`}
@@ -2341,6 +2347,17 @@ export default function JenksFrontpageV2() {
           </div>
         </div>
       </section>
+      ) : (
+      <section
+        className={`relative flex ${HERO_HEIGHT_CLASS} items-center justify-center bg-[#0e0e0e]`}
+        style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}
+      >
+        <div className="flex flex-col items-center gap-4 text-white">
+          <Loader2 className="h-8 w-8 animate-spin text-[#e66045]" />
+          <p className="font-['Oswald'] text-3xl font-bold uppercase tracking-[0.08em]">ZURIKARIBU</p>
+        </div>
+      </section>
+      )
       ) : null}
 
       {/* SHOP BY */}
@@ -2875,10 +2892,6 @@ export default function JenksFrontpageV2() {
                   >
                     <div className="flex items-center justify-center gap-2">
                       <p className="font-semibold uppercase tracking-[0.08em]">{customerReviewActiveCard.customerName}</p>
-                      <span className="text-white/45">•</span>
-                      <p className="uppercase tracking-[0.16em] text-white/55" style={{ fontSize: `${customerReviewsMetaFontSize}px` }}>
-                        {customerReviewActiveCard.source}
-                      </p>
                     </div>
                     <p className="mt-1 text-white/62" style={{ fontSize: `${customerReviewsMetaFontSize}px` }}>
                       {customerReviewActiveCard.location || 'Africa'}
@@ -2921,10 +2934,6 @@ export default function JenksFrontpageV2() {
                   >
                     <div className="flex items-center justify-center gap-2">
                       <p className="font-semibold uppercase tracking-[0.08em]">{review.customerName}</p>
-                      <span className="text-white/45">•</span>
-                      <p className="uppercase tracking-[0.16em] text-white/55" style={{ fontSize: `${customerReviewsMetaFontSize}px` }}>
-                        {review.source}
-                      </p>
                     </div>
                     <p className="mt-1 text-white/62" style={{ fontSize: `${customerReviewsMetaFontSize}px` }}>
                       {review.location || 'Africa'}
