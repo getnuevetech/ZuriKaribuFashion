@@ -9,6 +9,7 @@ type CountMode = 'STATIC' | 'DATABASE';
 type TemplateKey =
   | 'TOP_NAVIGATIONS'
   | 'SHOP_BY'
+  | 'SHOP_BY_COUNTRY'
   | 'CATEGORY_MANAGE'
   | 'HOW_IT_WORKS'
   | 'CUSTOM_TEXT_ICON'
@@ -153,14 +154,23 @@ type ShopBy = {
   sectionTitle: string;
   sectionDescription: string;
   sectionDescriptionEnabled: boolean;
-  enabledTabs: Array<'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE'>;
-  defaultTab: 'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE';
+  enabledTabs: Array<'CATEGORY' | 'STYLE' | 'PRICE'>;
+  defaultTab: 'CATEGORY' | 'STYLE' | 'PRICE';
   countriesCountMode: CountMode;
   categoriesCountMode: CountMode;
   countries: ShopByCountry[];
   categories: ShopByCategory[];
   styleCards: ShopByCard[];
   priceCards: ShopByPriceCard[];
+};
+
+type ShopByCountrySection = {
+  sectionTag: string;
+  sectionTitle: string;
+  sectionDescription: string;
+  sectionDescriptionEnabled: boolean;
+  countriesCountMode: CountMode;
+  countries: ShopByCountry[];
 };
 
 type CategorySection = {
@@ -406,6 +416,7 @@ type JenksV2FrontpageConfig = {
   contractVersion: string;
   topNavigations: TopNavigations;
   shopBy: ShopBy;
+  shopByCountry: ShopByCountrySection;
   categoryManage: {
     sections: CategorySection[];
   };
@@ -447,6 +458,7 @@ type JenksV2FrontpageConfig = {
 const TEMPLATES: Array<{ key: TemplateKey; label: string }> = [
   { key: 'TOP_NAVIGATIONS', label: 'Top Navigations' },
   { key: 'SHOP_BY', label: 'Shop By' },
+  { key: 'SHOP_BY_COUNTRY', label: 'Shop By Country' },
   { key: 'CATEGORY_MANAGE', label: 'Category Manage' },
   { key: 'HOW_IT_WORKS', label: 'How It Works' },
   { key: 'CUSTOM_TEXT_ICON', label: 'Custom' },
@@ -844,9 +856,9 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
   shopBy: {
     sectionTag: 'Discover',
     sectionTitle: 'Shop By',
-    sectionDescription: 'Browse by category, country, style, or budget.',
+    sectionDescription: 'Browse by category, style, or budget.',
     sectionDescriptionEnabled: true,
-    enabledTabs: ['CATEGORY', 'COUNTRY', 'STYLE', 'PRICE'],
+    enabledTabs: ['CATEGORY', 'STYLE', 'PRICE'],
     defaultTab: 'CATEGORY',
     countriesCountMode: 'STATIC',
     categoriesCountMode: 'STATIC',
@@ -899,6 +911,25 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         icon: 'Tag',
         titleFontSize: 24,
         descriptionFontSize: 14,
+        enabled: true,
+        displayOrder: 1,
+      },
+    ],
+  },
+  shopByCountry: {
+    sectionTag: 'Discover',
+    sectionTitle: 'Shop By Country',
+    sectionDescription: 'Explore traditional textiles and contemporary designs from across the African continent.',
+    sectionDescriptionEnabled: true,
+    countriesCountMode: 'STATIC',
+    countries: [
+      {
+        id: uid(),
+        code: 'NG',
+        name: 'Nigeria',
+        icon: '🇳🇬',
+        productCountMode: 'STATIC',
+        staticProductCount: 120,
         enabled: true,
         displayOrder: 1,
       },
@@ -1251,6 +1282,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
 type TabKey =
   | 'topNavigations'
   | 'shopBy'
+  | 'shopByCountry'
   | 'categoryManage'
   | 'textIconCards'
   | 'featured'
@@ -1264,6 +1296,7 @@ type TabKey =
 const TAB_META: Array<{ key: TabKey; label: string }> = [
   { key: 'topNavigations', label: 'Top Navigations' },
   { key: 'shopBy', label: 'Shop By' },
+  { key: 'shopByCountry', label: 'Shop By Country' },
   { key: 'categoryManage', label: 'Category Manage' },
   { key: 'textIconCards', label: 'Text & Icon Cards' },
   { key: 'featured', label: 'Featured' },
@@ -1277,6 +1310,7 @@ const TAB_META: Array<{ key: TabKey; label: string }> = [
 const SUBMENU_TO_TAB: Record<string, TabKey> = {
   'top-navigations': 'topNavigations',
   'shop-by': 'shopBy',
+  'shop-by-country': 'shopByCountry',
   'category-manage': 'categoryManage',
   'text-icon-cards': 'textIconCards',
   featured: 'featured',
@@ -1290,6 +1324,7 @@ const SUBMENU_TO_TAB: Record<string, TabKey> = {
 const TAB_TO_SUBMENU: Record<TabKey, string> = {
   topNavigations: 'top-navigations',
   shopBy: 'shop-by',
+  shopByCountry: 'shop-by-country',
   categoryManage: 'category-manage',
   textIconCards: 'text-icon-cards',
   featured: 'featured',
@@ -1304,6 +1339,7 @@ const TAB_TO_SUBMENU: Record<TabKey, string> = {
 const toApiPayload = (config: JenksV2FrontpageConfig) => ({
   topNavigations: config.topNavigations,
   shopBy: config.shopBy,
+  shopByCountry: config.shopByCountry,
   categoryManage: config.categoryManage,
   textIconCards: config.textIconCards,
   featured: config.featured,
@@ -1690,6 +1726,28 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         ? (data.shopBy as ShopBy).priceCards
         : DEFAULT_CONFIG.shopBy.priceCards,
     },
+    shopByCountry: {
+      ...DEFAULT_CONFIG.shopByCountry,
+      ...((data as any).shopByCountry || {}),
+      sectionTag: String((data as any).shopByCountry?.sectionTag || DEFAULT_CONFIG.shopByCountry.sectionTag),
+      sectionTitle: String((data as any).shopByCountry?.sectionTitle || DEFAULT_CONFIG.shopByCountry.sectionTitle),
+      sectionDescription: String(
+        (data as any).shopByCountry?.sectionDescription || DEFAULT_CONFIG.shopByCountry.sectionDescription
+      ),
+      sectionDescriptionEnabled: toBoolean(
+        (data as any).shopByCountry?.sectionDescriptionEnabled,
+        DEFAULT_CONFIG.shopByCountry.sectionDescriptionEnabled
+      ),
+      countriesCountMode:
+        String((data as any).shopByCountry?.countriesCountMode || '').trim().toUpperCase() === 'DATABASE'
+          ? 'DATABASE'
+          : DEFAULT_CONFIG.shopByCountry.countriesCountMode,
+      countries: Array.isArray((data as any).shopByCountry?.countries)
+        ? (data as any).shopByCountry.countries
+        : Array.isArray((data.shopBy as ShopBy | undefined)?.countries)
+          ? (data.shopBy as ShopBy).countries
+          : DEFAULT_CONFIG.shopByCountry.countries,
+    },
     textIconCards: {
       ...DEFAULT_CONFIG.textIconCards,
       ...(textIconCards || {}),
@@ -1939,6 +1997,249 @@ export default function JenksV2FrontPageManager() {
   const navigate = useNavigate();
   const { submenu } = useParams<{ submenu?: string }>();
   const [config, setConfig] = useState<JenksV2FrontpageConfig>(DEFAULT_CONFIG);
+
+  const renderShopByCountryManager = (
+    countryConfig: ShopByCountrySection,
+    setCountryConfig: (updater: (prev: ShopByCountrySection) => ShopByCountrySection) => void
+  ) => (
+    <div className="rounded-lg border p-4 space-y-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <label className="text-xs">
+          Section Tag
+          <input
+            className="mt-1 w-full rounded border px-2 py-1.5"
+            value={countryConfig.sectionTag}
+            onChange={(event) =>
+              setCountryConfig((prev) => ({
+                ...prev,
+                sectionTag: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label className="text-xs md:col-span-2">
+          Section Title
+          <input
+            className="mt-1 w-full rounded border px-2 py-1.5"
+            value={countryConfig.sectionTitle}
+            onChange={(event) =>
+              setCountryConfig((prev) => ({
+                ...prev,
+                sectionTitle: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label className="flex items-center gap-2 text-xs pt-5">
+          <input
+            type="checkbox"
+            checked={countryConfig.sectionDescriptionEnabled}
+            onChange={(event) =>
+              setCountryConfig((prev) => ({
+                ...prev,
+                sectionDescriptionEnabled: event.target.checked,
+              }))
+            }
+          />
+          Description Enabled
+        </label>
+        <label className="text-xs md:col-span-3">
+          Section Description
+          <textarea
+            rows={2}
+            className="mt-1 w-full rounded border px-2 py-1.5"
+            value={countryConfig.sectionDescription}
+            onChange={(event) =>
+              setCountryConfig((prev) => ({
+                ...prev,
+                sectionDescription: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label className="text-xs">
+          Countries Count Mode
+          <select
+            className="mt-1 w-full rounded border px-2 py-1.5"
+            value={countryConfig.countriesCountMode}
+            onChange={(event) =>
+              setCountryConfig((prev) => ({
+                ...prev,
+                countriesCountMode: event.target.value as CountMode,
+              }))
+            }
+          >
+            <option value="STATIC">STATIC</option>
+            <option value="DATABASE">DATABASE</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold">Shop By Country Manager</h3>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() =>
+            setCountryConfig((prev) => ({
+              ...prev,
+              countries: [
+                ...prev.countries,
+                {
+                  id: uid(),
+                  code: 'DZ',
+                  name: 'Algeria',
+                  icon: flagEmoji('DZ'),
+                  productCountMode: 'STATIC',
+                  staticProductCount: 0,
+                  enabled: true,
+                  displayOrder: prev.countries.length + 1,
+                },
+              ],
+            }))
+          }
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Country
+        </Button>
+      </div>
+      {countryConfig.countries.map((country, index) => (
+        <div key={country.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
+          <label className="md:col-span-4 text-[11px]">
+            Country (select)
+            <select
+              className="mt-1 w-full rounded border px-2 py-1 text-xs"
+              value={country.code}
+              onChange={(event) =>
+                setCountryConfig((prev) => ({
+                  ...prev,
+                  countries: prev.countries.map((entry, entryIndex) => {
+                    if (entryIndex !== index) return entry;
+                    const selected = COUNTRY_BY_CODE.get(event.target.value);
+                    return {
+                      ...entry,
+                      code: event.target.value,
+                      name: selected?.name || entry.name,
+                      icon: selected ? flagEmoji(selected.code) : entry.icon,
+                    };
+                  }),
+                }))
+              }
+            >
+              {AFRICAN_COUNTRIES_54.map((entry) => (
+                <option key={entry.code} value={entry.code}>
+                  {entry.name} ({entry.code})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="md:col-span-2 text-[11px]">
+            Code
+            <select
+              className="mt-1 w-full rounded border px-2 py-1 text-xs"
+              value={country.code}
+              onChange={(event) =>
+                setCountryConfig((prev) => ({
+                  ...prev,
+                  countries: prev.countries.map((entry, entryIndex) => {
+                    if (entryIndex !== index) return entry;
+                    const selected = COUNTRY_BY_CODE.get(event.target.value);
+                    return {
+                      ...entry,
+                      code: event.target.value,
+                      name: selected?.name || entry.name,
+                      icon: selected ? flagEmoji(selected.code) : entry.icon,
+                    };
+                  }),
+                }))
+              }
+            >
+              {AFRICAN_COUNTRIES_54.map((entry) => (
+                <option key={entry.code} value={entry.code}>
+                  {entry.code}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="md:col-span-1 text-[11px]">
+            Flag
+            <input className="mt-1 w-full rounded border px-2 py-1 text-xs" value={country.icon} readOnly />
+          </label>
+          <select
+            className="md:col-span-2 mt-4 rounded border px-2 py-1 text-xs md:mt-0"
+            value={country.productCountMode}
+            onChange={(event) =>
+              setCountryConfig((prev) => ({
+                ...prev,
+                countries: prev.countries.map((entry, entryIndex) =>
+                  entryIndex === index ? { ...entry, productCountMode: event.target.value as ShopByCountry['productCountMode'] } : entry
+                ),
+              }))
+            }
+          >
+            <option value="STATIC">STATIC</option>
+            <option value="DATABASE_FTB">DATABASE_FTB</option>
+          </select>
+          <input
+            type="number"
+            className="md:col-span-1 rounded border px-2 py-1 text-xs"
+            aria-label="Static Product Count"
+            value={country.staticProductCount}
+            onChange={(event) =>
+              setCountryConfig((prev) => ({
+                ...prev,
+                countries: prev.countries.map((entry, entryIndex) =>
+                  entryIndex === index
+                    ? { ...entry, staticProductCount: clamp(toNumber(event.target.value, 0), 0, 999999) }
+                    : entry
+                ),
+              }))
+            }
+          />
+          <input
+            type="number"
+            className="md:col-span-1 rounded border px-2 py-1 text-xs"
+            aria-label="Display Order"
+            value={country.displayOrder}
+            onChange={(event) =>
+              setCountryConfig((prev) => ({
+                ...prev,
+                countries: prev.countries.map((entry, entryIndex) =>
+                  entryIndex === index ? { ...entry, displayOrder: clamp(toNumber(event.target.value, 1), 1, 999) } : entry
+                ),
+              }))
+            }
+          />
+          <div className="md:col-span-1 flex items-center gap-2 justify-end">
+            <input
+              type="checkbox"
+              checked={country.enabled}
+              onChange={(event) =>
+                setCountryConfig((prev) => ({
+                  ...prev,
+                  countries: prev.countries.map((entry, entryIndex) =>
+                    entryIndex === index ? { ...entry, enabled: event.target.checked } : entry
+                  ),
+                }))
+              }
+            />
+            <button
+              type="button"
+              className="rounded border p-1"
+              onClick={() =>
+                setCountryConfig((prev) => ({
+                  ...prev,
+                  countries: prev.countries.filter((_, entryIndex) => entryIndex !== index),
+                }))
+              }
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingTarget, setUploadingTarget] = useState<string | null>(null);
@@ -3888,9 +4189,7 @@ export default function JenksV2FrontPageManager() {
       {activeTab === 'shopBy' ? (
         <section className="rounded-lg border bg-white p-5 space-y-6">
           <h2 className="text-xl font-semibold">Shop By</h2>
-          <p className="text-sm text-gray-600">
-            Configure Shop By Category/Country/Style/Price, with static or database count modes.
-          </p>
+          <p className="text-sm text-gray-600">Configure Shop By Category, Style and Price cards.</p>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <label className="text-xs">
@@ -3948,7 +4247,7 @@ export default function JenksV2FrontPageManager() {
             </label>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <label className="text-xs">
               Default Tab
               <select
@@ -3962,25 +4261,8 @@ export default function JenksV2FrontPageManager() {
                 }
               >
                 <option value="CATEGORY">CATEGORY</option>
-                <option value="COUNTRY">COUNTRY</option>
                 <option value="STYLE">STYLE</option>
                 <option value="PRICE">PRICE</option>
-              </select>
-            </label>
-            <label className="text-xs">
-              Countries Count Mode
-              <select
-                className="mt-1 w-full rounded border px-2 py-1.5"
-                value={config.shopBy.countriesCountMode}
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    shopBy: { ...prev.shopBy, countriesCountMode: event.target.value as CountMode },
-                  }))
-                }
-              >
-                <option value="STATIC">STATIC</option>
-                <option value="DATABASE">DATABASE</option>
               </select>
             </label>
             <label className="text-xs">
@@ -4002,7 +4284,7 @@ export default function JenksV2FrontPageManager() {
             <div className="text-xs">
               Enabled Tabs
               <div className="mt-1 flex flex-wrap gap-2">
-                {(['CATEGORY', 'COUNTRY', 'STYLE', 'PRICE'] as const).map((tab) => (
+                {(['CATEGORY', 'STYLE', 'PRICE'] as const).map((tab) => (
                   <label key={tab} className="flex items-center gap-1 rounded border px-2 py-1">
                     <input
                       type="checkbox"
@@ -4024,196 +4306,6 @@ export default function JenksV2FrontPageManager() {
                 ))}
               </div>
             </div>
-          </div>
-
-          <div className="rounded-lg border p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Shop By Country Manager</h3>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    shopBy: {
-                      ...prev.shopBy,
-                      countries: [
-                        ...prev.shopBy.countries,
-                        {
-                          id: uid(),
-                          code: 'DZ',
-                          name: 'Algeria',
-                          icon: flagEmoji('DZ'),
-                          productCountMode: 'STATIC',
-                          staticProductCount: 0,
-                          enabled: true,
-                          displayOrder: prev.shopBy.countries.length + 1,
-                        },
-                      ],
-                    },
-                  }))
-                }
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add Country
-              </Button>
-            </div>
-              {config.shopBy.countries.map((country, index) => (
-              <div key={country.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
-                <label className="md:col-span-4 text-[11px]">
-                  Country (select)
-                  <select
-                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                    value={country.code}
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        shopBy: {
-                          ...prev.shopBy,
-                          countries: prev.shopBy.countries.map((entry, entryIndex) => {
-                            if (entryIndex !== index) return entry;
-                            const selected = COUNTRY_BY_CODE.get(event.target.value);
-                            return {
-                              ...entry,
-                              code: event.target.value,
-                              name: selected?.name || entry.name,
-                              icon: selected ? flagEmoji(selected.code) : entry.icon,
-                            };
-                          }),
-                        },
-                      }))
-                    }
-                  >
-                    {AFRICAN_COUNTRIES_54.map((entry) => (
-                      <option key={entry.code} value={entry.code}>
-                        {entry.name} ({entry.code})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="md:col-span-2 text-[11px]">
-                  Code
-                  <select
-                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                    value={country.code}
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        shopBy: {
-                          ...prev.shopBy,
-                          countries: prev.shopBy.countries.map((entry, entryIndex) => {
-                            if (entryIndex !== index) return entry;
-                            const selected = COUNTRY_BY_CODE.get(event.target.value);
-                            return {
-                              ...entry,
-                              code: event.target.value,
-                              name: selected?.name || entry.name,
-                              icon: selected ? flagEmoji(selected.code) : entry.icon,
-                            };
-                          }),
-                        },
-                      }))
-                    }
-                  >
-                    {AFRICAN_COUNTRIES_54.map((entry) => (
-                      <option key={entry.code} value={entry.code}>
-                        {entry.code}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="md:col-span-1 text-[11px]">
-                  Flag
-                  <input className="mt-1 w-full rounded border px-2 py-1 text-xs" value={country.icon} readOnly />
-                </label>
-                <select
-                  className="md:col-span-2 mt-4 rounded border px-2 py-1 text-xs md:mt-0"
-                  value={country.productCountMode}
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      shopBy: {
-                        ...prev.shopBy,
-                        countries: prev.shopBy.countries.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, productCountMode: event.target.value as ShopByCountry['productCountMode'] } : entry
-                        ),
-                      },
-                    }))
-                  }
-                >
-                  <option value="STATIC">STATIC</option>
-                  <option value="DATABASE_FTB">DATABASE_FTB</option>
-                </select>
-                <input
-                  type="number"
-                  className="md:col-span-1 rounded border px-2 py-1 text-xs"
-                  aria-label="Static Product Count"
-                  value={country.staticProductCount}
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      shopBy: {
-                        ...prev.shopBy,
-                        countries: prev.shopBy.countries.map((entry, entryIndex) =>
-                          entryIndex === index
-                            ? { ...entry, staticProductCount: clamp(toNumber(event.target.value, 0), 0, 999999) }
-                            : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
-                <input
-                  type="number"
-                  className="md:col-span-1 rounded border px-2 py-1 text-xs"
-                  aria-label="Display Order"
-                  value={country.displayOrder}
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      shopBy: {
-                        ...prev.shopBy,
-                        countries: prev.shopBy.countries.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, displayOrder: clamp(toNumber(event.target.value, 1), 1, 999) } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
-                <div className="md:col-span-1 flex items-center gap-2 justify-end">
-                  <input
-                    type="checkbox"
-                    checked={country.enabled}
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        shopBy: {
-                          ...prev.shopBy,
-                          countries: prev.shopBy.countries.map((entry, entryIndex) =>
-                            entryIndex === index ? { ...entry, enabled: event.target.checked } : entry
-                          ),
-                        },
-                      }))
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="rounded border p-1"
-                    onClick={() =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        shopBy: {
-                          ...prev.shopBy,
-                          countries: prev.shopBy.countries.filter((_, entryIndex) => entryIndex !== index),
-                        },
-                      }))
-                    }
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
           </div>
 
           <div className="rounded-lg border p-4 space-y-3">
@@ -4876,6 +4968,280 @@ export default function JenksV2FrontPageManager() {
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+      ) : null}
+
+      
+
+      {activeTab === 'shopByCountry' ? (
+        <section className="rounded-lg border bg-white p-5 space-y-6">
+          <h2 className="text-xl font-semibold">Shop By Country</h2>
+          <p className="text-sm text-gray-600">Configure standalone Shop By Country section and country list.</p>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <label className="text-xs">
+              Section Tag
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.shopByCountry.sectionTag}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    shopByCountry: { ...prev.shopByCountry, sectionTag: event.target.value },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs md:col-span-2">
+              Section Title
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.shopByCountry.sectionTitle}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    shopByCountry: { ...prev.shopByCountry, sectionTitle: event.target.value },
+                  }))
+                }
+              />
+            </label>
+            <label className="flex items-center gap-2 text-xs pt-5">
+              <input
+                type="checkbox"
+                checked={config.shopByCountry.sectionDescriptionEnabled}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    shopByCountry: { ...prev.shopByCountry, sectionDescriptionEnabled: event.target.checked },
+                  }))
+                }
+              />
+              Description Enabled
+            </label>
+            <label className="text-xs md:col-span-4">
+              Section Description
+              <textarea
+                rows={2}
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.shopByCountry.sectionDescription}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    shopByCountry: { ...prev.shopByCountry, sectionDescription: event.target.value },
+                  }))
+                }
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <label className="text-xs">
+              Countries Count Mode
+              <select
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.shopByCountry.countriesCountMode}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    shopByCountry: { ...prev.shopByCountry, countriesCountMode: event.target.value as CountMode },
+                  }))
+                }
+              >
+                <option value="STATIC">STATIC</option>
+                <option value="DATABASE">DATABASE</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Shop By Country Manager</h3>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    shopByCountry: {
+                      ...prev.shopByCountry,
+                      countries: [
+                        ...prev.shopByCountry.countries,
+                        {
+                          id: uid(),
+                          code: 'DZ',
+                          name: 'Algeria',
+                          icon: flagEmoji('DZ'),
+                          productCountMode: 'STATIC',
+                          staticProductCount: 0,
+                          enabled: true,
+                          displayOrder: prev.shopByCountry.countries.length + 1,
+                        },
+                      ],
+                    },
+                  }))
+                }
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Country
+              </Button>
+            </div>
+            {config.shopByCountry.countries.map((country, index) => (
+              <div key={country.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
+                <label className="md:col-span-4 text-[11px]">
+                  Country (select)
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={country.code}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        shopByCountry: {
+                          ...prev.shopByCountry,
+                          countries: prev.shopByCountry.countries.map((entry, entryIndex) => {
+                            if (entryIndex !== index) return entry;
+                            const selected = COUNTRY_BY_CODE.get(event.target.value);
+                            return {
+                              ...entry,
+                              code: event.target.value,
+                              name: selected?.name || entry.name,
+                              icon: selected ? flagEmoji(selected.code) : entry.icon,
+                            };
+                          }),
+                        },
+                      }))
+                    }
+                  >
+                    {AFRICAN_COUNTRIES_54.map((entry) => (
+                      <option key={entry.code} value={entry.code}>
+                        {entry.name} ({entry.code})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Code
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={country.code}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        shopByCountry: {
+                          ...prev.shopByCountry,
+                          countries: prev.shopByCountry.countries.map((entry, entryIndex) => {
+                            if (entryIndex !== index) return entry;
+                            const selected = COUNTRY_BY_CODE.get(event.target.value);
+                            return {
+                              ...entry,
+                              code: event.target.value,
+                              name: selected?.name || entry.name,
+                              icon: selected ? flagEmoji(selected.code) : entry.icon,
+                            };
+                          }),
+                        },
+                      }))
+                    }
+                  >
+                    {AFRICAN_COUNTRIES_54.map((entry) => (
+                      <option key={entry.code} value={entry.code}>
+                        {entry.code}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="md:col-span-1 text-[11px]">
+                  Flag
+                  <input className="mt-1 w-full rounded border px-2 py-1 text-xs" value={country.icon} readOnly />
+                </label>
+                <select
+                  className="md:col-span-2 mt-4 rounded border px-2 py-1 text-xs md:mt-0"
+                  value={country.productCountMode}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      shopByCountry: {
+                        ...prev.shopByCountry,
+                        countries: prev.shopByCountry.countries.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, productCountMode: event.target.value as ShopByCountry['productCountMode'] } : entry
+                        ),
+                      },
+                    }))
+                  }
+                >
+                  <option value="STATIC">STATIC</option>
+                  <option value="DATABASE_FTB">DATABASE_FTB</option>
+                </select>
+                <input
+                  type="number"
+                  className="md:col-span-1 rounded border px-2 py-1 text-xs"
+                  aria-label="Static Product Count"
+                  value={country.staticProductCount}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      shopByCountry: {
+                        ...prev.shopByCountry,
+                        countries: prev.shopByCountry.countries.map((entry, entryIndex) =>
+                          entryIndex === index
+                            ? { ...entry, staticProductCount: clamp(toNumber(event.target.value, 0), 0, 999999) }
+                            : entry
+                        ),
+                      },
+                    }))
+                  }
+                />
+                <input
+                  type="number"
+                  className="md:col-span-1 rounded border px-2 py-1 text-xs"
+                  aria-label="Display Order"
+                  value={country.displayOrder}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      shopByCountry: {
+                        ...prev.shopByCountry,
+                        countries: prev.shopByCountry.countries.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, displayOrder: clamp(toNumber(event.target.value, 1), 1, 999) } : entry
+                        ),
+                      },
+                    }))
+                  }
+                />
+                <div className="md:col-span-1 flex items-center gap-2 justify-end">
+                  <input
+                    type="checkbox"
+                    checked={country.enabled}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        shopByCountry: {
+                          ...prev.shopByCountry,
+                          countries: prev.shopByCountry.countries.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, enabled: event.target.checked } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="rounded border p-1"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        shopByCountry: {
+                          ...prev.shopByCountry,
+                          countries: prev.shopByCountry.countries.filter((_, entryIndex) => entryIndex !== index),
+                        },
+                      }))
+                    }
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       ) : null}
@@ -8048,6 +8414,7 @@ export default function JenksV2FrontPageManager() {
 
       {activeTab === 'newsletterFooter' ||
       activeTab === 'shopBy' ||
+      activeTab === 'shopByCountry' ||
       activeTab === 'topNavigations' ||
       activeTab === 'categoryManage' ||
       activeTab === 'textIconCards' ||

@@ -104,11 +104,12 @@ type CTAStyle = {
   fontWeight: number;
 };
 
-type ShopByTab = 'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE';
+type ShopByTab = 'CATEGORY' | 'STYLE' | 'PRICE';
 type CountryRegion = 'ALL' | 'NORTH' | 'WEST' | 'CENTRAL' | 'EAST' | 'SOUTHERN';
 type TemplateKey =
   | 'TOP_NAVIGATIONS'
   | 'SHOP_BY'
+  | 'SHOP_BY_COUNTRY'
   | 'CATEGORY_MANAGE'
   | 'HOW_IT_WORKS'
   | 'CUSTOM_TEXT_ICON'
@@ -129,6 +130,7 @@ const HERO_HEIGHT_CLASS = 'min-h-[106vh]';
 const TEMPLATE_KEYS: TemplateKey[] = [
   'TOP_NAVIGATIONS',
   'SHOP_BY',
+  'SHOP_BY_COUNTRY',
   'CATEGORY_MANAGE',
   'HOW_IT_WORKS',
   'CUSTOM_TEXT_ICON',
@@ -158,7 +160,6 @@ const ICON_BY_KEY: Record<string, IconComponent> = {
 
 const SHOP_BY_TAB_META: Array<{ key: ShopByTab; label: string; Icon: IconComponent }> = [
   { key: 'CATEGORY', label: 'Category', Icon: ShoppingBag },
-  { key: 'COUNTRY', label: 'Country', Icon: Globe },
   { key: 'STYLE', label: 'Occasion / Style', Icon: CalendarDays },
   { key: 'PRICE', label: 'Price', Icon: Tag },
 ];
@@ -896,7 +897,6 @@ export default function JenksFrontpageV2() {
   const [index, setIndex] = useState(0);
   const [shopByTab, setShopByTab] = useState<ShopByTab>('CATEGORY');
   const [countryRegion, setCountryRegion] = useState<CountryRegion>('ALL');
-  const [shopByCountryExpanded, setShopByCountryExpanded] = useState(false);
   const [dedicatedCountryExpanded, setDedicatedCountryExpanded] = useState(false);
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -917,6 +917,7 @@ export default function JenksFrontpageV2() {
   const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
   const topNavigationsCfg = useMemo(() => asRecord(asRecord(managerConfig).topNavigations), [managerConfig]);
   const shopByCfg = useMemo(() => asRecord(asRecord(managerConfig).shopBy), [managerConfig]);
+  const shopByCountryCfg = useMemo(() => asRecord(asRecord(managerConfig).shopByCountry), [managerConfig]);
   const categoryManageCfg = useMemo(() => asRecord(asRecord(managerConfig).categoryManage), [managerConfig]);
   const textIconCfg = useMemo(() => asRecord(asRecord(managerConfig).textIconCards), [managerConfig]);
   const featuredCfg = useMemo(() => asRecord(asRecord(managerConfig).featured), [managerConfig]);
@@ -1077,7 +1078,7 @@ export default function JenksFrontpageV2() {
   }, [categoryManageCfg.sections]);
 
   const enabledShopByTabs = useMemo(() => {
-    const allowed: ShopByTab[] = ['CATEGORY', 'COUNTRY', 'STYLE', 'PRICE'];
+    const allowed: ShopByTab[] = ['CATEGORY', 'STYLE', 'PRICE'];
     const rows = asArray(shopByCfg.enabledTabs)
       .map((entry) => String(entry || '').trim().toUpperCase())
       .map((token) => (token === 'OCCASION_STYLE' ? 'STYLE' : token))
@@ -1147,7 +1148,7 @@ export default function JenksFrontpageV2() {
 
   const shopByCountriesData = useMemo(() => {
     const baselineByName = new Map(SHOP_BY_COUNTRY.map((row) => [row.name.toLowerCase(), row]));
-    const rows = asArray(shopByCfg.countries)
+    const rows = asArray(shopByCountryCfg.countries)
       .map((entry) => asRecord(entry))
       .filter((entry) => asBoolean(entry.enabled, true))
       .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0));
@@ -1164,7 +1165,7 @@ export default function JenksFrontpageV2() {
       };
     });
     return mapped.length > 0 ? mapped : SHOP_BY_COUNTRY;
-  }, [shopByCfg.countries]);
+  }, [shopByCountryCfg.countries]);
   const countryShowcaseData = useMemo(() => {
     const regionByName = new Map(AFRICAN_COUNTRIES_54.map((row) => [row.name.toLowerCase(), row.region]));
     return shopByCountriesData.map((row) => ({
@@ -1650,8 +1651,15 @@ export default function JenksFrontpageV2() {
   );
   const shopBySectionTag = asString(shopByCfg.sectionTag, 'Discover');
   const shopBySectionTitle = asString(shopByCfg.sectionTitle, 'Shop By');
-  const shopBySectionDescription = asString(shopByCfg.sectionDescription, 'Browse by category, country, style, or budget.');
+  const shopBySectionDescription = asString(shopByCfg.sectionDescription, 'Browse by category, style, or budget.');
   const showShopBySectionDescription = asBoolean(shopByCfg.sectionDescriptionEnabled, true);
+  const shopByCountrySectionTag = asString(shopByCountryCfg.sectionTag, 'Discover');
+  const shopByCountrySectionTitle = asString(shopByCountryCfg.sectionTitle, 'Shop By Country');
+  const shopByCountrySectionDescription = asString(
+    shopByCountryCfg.sectionDescription,
+    'Explore traditional textiles and contemporary designs from across the African continent.'
+  );
+  const showShopByCountrySectionDescription = asBoolean(shopByCountryCfg.sectionDescriptionEnabled, true);
   const topStripCfg = useMemo(() => asRecord(topNavigationsCfg.topStripConfig), [topNavigationsCfg.topStripConfig]);
   const topStripSeparator = asString(topStripCfg.separator, '•');
   const topStripItems = useMemo(() => {
@@ -1747,18 +1755,10 @@ export default function JenksFrontpageV2() {
       { ALL: countryShowcaseData.length, NORTH: 0, WEST: 0, CENTRAL: 0, EAST: 0, SOUTHERN: 0 }
     );
   }, [countryShowcaseData]);
-  const fullShopByCountries = useMemo(
-    () => shopByCountriesData.slice(0, Math.max(ALL_COUNTRIES_COUNT, shopByCountriesData.length)),
-    [shopByCountriesData]
-  );
   const fullDedicatedCountries = useMemo(
     () => countryShowcaseData.slice(0, Math.max(ALL_COUNTRIES_COUNT, countryShowcaseData.length)),
     [countryShowcaseData]
   );
-  const visibleShopByCountries = useMemo(() => {
-    if (shopByCountryExpanded) return fullShopByCountries;
-    return fullShopByCountries.slice(0, 12);
-  }, [fullShopByCountries, shopByCountryExpanded]);
   const visibleDedicatedCountries = useMemo(
     () => (dedicatedCountryExpanded ? fullDedicatedCountries : filteredCountryShowcase.slice(0, 12)),
     [dedicatedCountryExpanded, filteredCountryShowcase, fullDedicatedCountries]
@@ -2415,43 +2415,6 @@ export default function JenksFrontpageV2() {
               </div>
             ) : null}
 
-            {shopByTab === 'COUNTRY' ? (
-              <div className="mt-10">
-                <div className={shopByCountryExpanded ? 'grid grid-cols-2 gap-x-2 gap-y-2 md:grid-cols-4 lg:grid-cols-12' : 'grid grid-cols-12 gap-x-2 gap-y-0'}>
-                  {visibleShopByCountries.map((country) => (
-                    <Link
-                      key={country.name}
-                      to={buildCountryProductsHref(country.name, 'ALL')}
-                      className="group flex flex-col items-center text-center text-white transition-colors hover:text-[#e66045]"
-                    >
-                      <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/12 bg-white/[0.02] transition-colors group-hover:border-[#e66045]">
-                        <img
-                          src={`https://flagcdn.com/w80/${country.flag}.png`}
-                          alt={`${country.name} flag`}
-                          className="h-10 w-10 rounded-full border border-white/10 object-cover"
-                          loading="lazy"
-                        />
-                      </span>
-                      <p className="mt-2 text-[11px] font-medium text-white">
-                        {country.name} - {country.count}
-                      </p>
-                      <p className="text-[10px] text-white/54 group-hover:text-[#e66045]/85">{country.textiles}</p>
-                    </Link>
-                  ))}
-                </div>
-                <div className="mt-8 text-center">
-                  <button
-                    type="button"
-                    onClick={() => setShopByCountryExpanded((prev) => !prev)}
-                    className="inline-flex items-center gap-2 text-xs font-normal text-white/85 hover:text-white"
-                  >
-                    {shopByCountryExpanded ? 'Show less countries' : `View all ${ALL_COUNTRIES_COUNT} countries`}
-                    <ArrowRight className="h-3 w-3" />
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
             {shopByTab === 'STYLE' ? (
               <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {shopByStyleCards.map((styleItem) => (
@@ -2503,16 +2466,16 @@ export default function JenksFrontpageV2() {
       ) : null}
 
       {/* SHOP BY COUNTRY (DEDICATED) */}
-      {isSectionVisible('SHOP_BY') ? (
-        <section className="bg-[#06080b] py-12 lg:py-14" data-kimi-anim="fade-up" style={{ order: getSectionOrder('SHOP_BY') }}>
+      {isSectionVisible('SHOP_BY_COUNTRY') ? (
+        <section className="bg-[#06080b] py-12 lg:py-14" data-kimi-anim="fade-up" style={{ order: getSectionOrder('SHOP_BY_COUNTRY') }}>
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">Discover</p>
-              <h2 className="mt-2 font-['Oswald'] text-6xl font-bold uppercase leading-none text-white">SHOP BY COUNTRY</h2>
-              <p className="mt-3 max-w-2xl text-base text-white/62">
-                Explore traditional textiles and contemporary designs from across the African continent.
-              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">{shopByCountrySectionTag}</p>
+              <h2 className="mt-2 font-['Oswald'] text-6xl font-bold uppercase leading-none text-white">{shopByCountrySectionTitle}</h2>
+              {showShopByCountrySectionDescription ? (
+                <p className="mt-3 max-w-2xl text-base text-white/62">{shopByCountrySectionDescription}</p>
+              ) : null}
             </div>
             <Link
               to={buildCountryProductsHref('Nigeria', 'ALL')}

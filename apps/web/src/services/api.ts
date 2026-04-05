@@ -10831,8 +10831,8 @@ const jenksV2FrontpageManagerApi = {
           sectionTitle: string;
           sectionDescription: string;
           sectionDescriptionEnabled: boolean;
-          enabledTabs: Array<'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE'>;
-          defaultTab: 'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE';
+          enabledTabs: Array<'CATEGORY' | 'STYLE' | 'PRICE'>;
+          defaultTab: 'CATEGORY' | 'STYLE' | 'PRICE';
           countriesCountMode: 'STATIC' | 'DATABASE';
           categoriesCountMode: 'STATIC' | 'DATABASE';
           countries: Array<{
@@ -10877,6 +10877,23 @@ const jenksV2FrontpageManagerApi = {
             icon: string;
             titleFontSize: number;
             descriptionFontSize: number;
+            enabled: boolean;
+            displayOrder: number;
+          }>;
+        };
+        shopByCountry: {
+          sectionTag: string;
+          sectionTitle: string;
+          sectionDescription: string;
+          sectionDescriptionEnabled: boolean;
+          countriesCountMode: 'STATIC' | 'DATABASE';
+          countries: Array<{
+            id: string;
+            code: string;
+            name: string;
+            icon: string;
+            productCountMode: 'STATIC' | 'DATABASE_FTB';
+            staticProductCount: number;
             enabled: boolean;
             displayOrder: number;
           }>;
@@ -11113,6 +11130,7 @@ const jenksV2FrontpageManagerApi = {
             templateKey:
               | 'TOP_NAVIGATIONS'
               | 'SHOP_BY'
+              | 'SHOP_BY_COUNTRY'
               | 'CATEGORY_MANAGE'
               | 'HOW_IT_WORKS'
               | 'CUSTOM_TEXT_ICON'
@@ -11121,6 +11139,7 @@ const jenksV2FrontpageManagerApi = {
               | 'FRESH_DROPS'
               | 'DESIGNER_SPOTLIGHT'
               | 'HERITAGE'
+              | 'CUSTOMER_REVIEWS'
               | 'NEWSLETTER_FOOTER';
             enabled: boolean;
             order: number;
@@ -11135,6 +11154,7 @@ const jenksV2FrontpageManagerApi = {
   updateConfig: (data: {
     topNavigations?: unknown;
     shopBy?: unknown;
+    shopByCountry?: unknown;
     categoryManage?: unknown;
     textIconCards?: unknown;
     featured?: unknown;
@@ -11154,6 +11174,7 @@ const jenksV2FrontpageManagerApi = {
     templateKey:
       | 'TOP_NAVIGATIONS'
       | 'SHOP_BY'
+      | 'SHOP_BY_COUNTRY'
       | 'CATEGORY_MANAGE'
       | 'HOW_IT_WORKS'
       | 'CUSTOM_TEXT_ICON'
@@ -11162,6 +11183,7 @@ const jenksV2FrontpageManagerApi = {
       | 'FRESH_DROPS'
       | 'DESIGNER_SPOTLIGHT'
       | 'HERITAGE'
+      | 'CUSTOMER_REVIEWS'
       | 'NEWSLETTER_FOOTER';
     order?: number;
   }) =>

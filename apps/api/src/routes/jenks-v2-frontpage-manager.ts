@@ -12,6 +12,7 @@ const CONTRACT_VERSION = 'JENKS_V2_FRONTPAGE_MANAGER_V1';
 const TEMPLATE_KEYS = [
   'TOP_NAVIGATIONS',
   'SHOP_BY',
+  'SHOP_BY_COUNTRY',
   'CATEGORY_MANAGE',
   'HOW_IT_WORKS',
   'CUSTOM_TEXT_ICON',
@@ -173,14 +174,23 @@ type ShopBySettings = {
   sectionTitle: string;
   sectionDescription: string;
   sectionDescriptionEnabled: boolean;
-  enabledTabs: Array<'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE'>;
-  defaultTab: 'CATEGORY' | 'COUNTRY' | 'STYLE' | 'PRICE';
+  enabledTabs: Array<'CATEGORY' | 'STYLE' | 'PRICE'>;
+  defaultTab: 'CATEGORY' | 'STYLE' | 'PRICE';
   countriesCountMode: CountMode;
   categoriesCountMode: CountMode;
   countries: ShopByCountry[];
   categories: ShopByCategory[];
   styleCards: ShopByCard[];
   priceCards: ShopByPriceCard[];
+};
+
+type ShopByCountrySettings = {
+  sectionTag: string;
+  sectionTitle: string;
+  sectionDescription: string;
+  sectionDescriptionEnabled: boolean;
+  countriesCountMode: CountMode;
+  countries: ShopByCountry[];
 };
 
 type CategorySection = {
@@ -410,6 +420,7 @@ type JenksV2FrontpageManagerSettings = {
   contractVersion: string;
   topNavigations: TopNavigationsSettings;
   shopBy: ShopBySettings;
+  shopByCountry: ShopByCountrySettings;
   categoryManage: {
     sections: CategorySection[];
   };
@@ -447,6 +458,7 @@ type JenksV2FrontpageManagerSettings = {
 const TEMPLATE_META: Array<{ templateKey: TemplateKey; key: string; name: string }> = [
   { templateKey: 'TOP_NAVIGATIONS', key: 'top-navigations', name: 'Top Navigations' },
   { templateKey: 'SHOP_BY', key: 'shop-by', name: 'Shop By' },
+  { templateKey: 'SHOP_BY_COUNTRY', key: 'shop-by-country', name: 'Shop By Country' },
   { templateKey: 'CATEGORY_MANAGE', key: 'category-manage', name: 'Category Manage' },
   { templateKey: 'HOW_IT_WORKS', key: 'how-it-works', name: 'How It Works' },
   { templateKey: 'CUSTOM_TEXT_ICON', key: 'custom-text-icon', name: 'Custom' },
@@ -462,6 +474,7 @@ const TEMPLATE_META: Array<{ templateKey: TemplateKey; key: string; name: string
 const updateSchema = z.object({
   topNavigations: z.unknown().optional(),
   shopBy: z.unknown().optional(),
+  shopByCountry: z.unknown().optional(),
   categoryManage: z.unknown().optional(),
   textIconCards: z.unknown().optional(),
   featured: z.unknown().optional(),
@@ -748,9 +761,9 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
     shopBy: {
       sectionTag: 'Discover',
       sectionTitle: 'Shop By',
-      sectionDescription: 'Browse by category, country, style, or budget.',
+      sectionDescription: 'Browse by category, style, or budget.',
       sectionDescriptionEnabled: true,
-      enabledTabs: ['CATEGORY', 'COUNTRY', 'STYLE', 'PRICE'],
+      enabledTabs: ['CATEGORY', 'STYLE', 'PRICE'],
       defaultTab: 'CATEGORY',
       countriesCountMode: 'STATIC',
       categoriesCountMode: 'STATIC',
@@ -827,6 +840,25 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           icon: 'Tag',
           titleFontSize: 24,
           descriptionFontSize: 14,
+          enabled: true,
+          displayOrder: 1,
+        },
+      ],
+    },
+    shopByCountry: {
+      sectionTag: 'Discover',
+      sectionTitle: 'Shop By Country',
+      sectionDescription: 'Explore traditional textiles and contemporary designs from across the African continent.',
+      sectionDescriptionEnabled: true,
+      countriesCountMode: 'STATIC',
+      countries: [
+        {
+          id: randomUUID(),
+          code: 'NG',
+          name: 'Nigeria',
+          icon: '🇳🇬',
+          productCountMode: 'STATIC',
+          staticProductCount: 120,
           enabled: true,
           displayOrder: 1,
         },
@@ -1393,7 +1425,7 @@ const normalizeShopBy = (raw: unknown, fallback: ShopBySettings): ShopBySettings
   const normalizeCountMode = (value: unknown, fallbackMode: CountMode): CountMode =>
     String(value || '').trim().toUpperCase() === 'DATABASE' ? 'DATABASE' : fallbackMode;
   const tabsSource = Array.isArray(row.enabledTabs) ? row.enabledTabs : fallback.enabledTabs;
-  const allowedTabs: ShopBySettings['enabledTabs'] = ['CATEGORY', 'COUNTRY', 'STYLE', 'PRICE'];
+  const allowedTabs: ShopBySettings['enabledTabs'] = ['CATEGORY', 'STYLE', 'PRICE'];
   const enabledTabs = tabsSource
     .map((entry) => String(entry || '').trim().toUpperCase())
     .filter((entry): entry is ShopBySettings['enabledTabs'][number] =>
@@ -1483,7 +1515,7 @@ const normalizeShopBy = (raw: unknown, fallback: ShopBySettings): ShopBySettings
     sectionTitle: (getString(row.sectionTitle) || fallback.sectionTitle || 'Shop By').slice(0, 120),
     sectionDescription: (getString(row.sectionDescription) || fallback.sectionDescription || '').slice(0, 280),
     sectionDescriptionEnabled: getBoolean(row.sectionDescriptionEnabled) ?? fallback.sectionDescriptionEnabled,
-    enabledTabs: (dedupTabs.length > 0 ? dedupTabs : fallback.enabledTabs).slice(0, 4) as ShopBySettings['enabledTabs'],
+    enabledTabs: (dedupTabs.length > 0 ? dedupTabs : fallback.enabledTabs).slice(0, 3) as ShopBySettings['enabledTabs'],
     defaultTab,
     countriesCountMode: normalizeCountMode(row.countriesCountMode, fallback.countriesCountMode),
     categoriesCountMode: normalizeCountMode(row.categoriesCountMode, fallback.categoriesCountMode),
@@ -1491,6 +1523,69 @@ const normalizeShopBy = (raw: unknown, fallback: ShopBySettings): ShopBySettings
     categories,
     styleCards,
     priceCards,
+  };
+};
+
+const normalizeShopByCountry = (
+  raw: unknown,
+  fallback: ShopByCountrySettings,
+  legacyShopBy?: ShopBySettings
+): ShopByCountrySettings => {
+  const row = asRecord(raw);
+  const sourceCountries =
+    Array.isArray(row.countries) && row.countries.length > 0
+      ? row.countries
+      : Array.isArray(legacyShopBy?.countries) && legacyShopBy.countries.length > 0
+        ? legacyShopBy.countries
+        : fallback.countries;
+  const countryFallbackRows =
+    Array.isArray(fallback.countries) && fallback.countries.length > 0
+      ? fallback.countries
+      : [
+          {
+            id: randomUUID(),
+            code: 'NG',
+            name: 'Nigeria',
+            icon: '🇳🇬',
+            productCountMode: 'STATIC' as const,
+            staticProductCount: 0,
+            enabled: true,
+            displayOrder: 1,
+          },
+        ];
+  const countries = sourceCountries
+    .map((entry, index) => {
+      const item = asRecord(entry);
+      const fallbackItem = countryFallbackRows[index] || countryFallbackRows[0];
+      return {
+        id: getString(item.id) || fallbackItem.id || randomUUID(),
+        code: (getString(item.code) || fallbackItem.code || '').slice(0, 8).toUpperCase(),
+        name: (getString(item.name) || fallbackItem.name || 'Country').slice(0, 80),
+        icon: (getString(item.icon) || fallbackItem.icon || '🌍').slice(0, 64),
+        productCountMode: String(item.productCountMode || '').trim().toUpperCase() === 'DATABASE_FTB' ? 'DATABASE_FTB' : 'STATIC',
+        staticProductCount: clamp(Math.round(getNumber(item.staticProductCount) ?? fallbackItem.staticProductCount ?? 0), 0, 999999),
+        enabled: getBoolean(item.enabled) ?? fallbackItem.enabled ?? true,
+        displayOrder: clamp(Math.round(getNumber(item.displayOrder) ?? fallbackItem.displayOrder ?? index + 1), 0, 999),
+      } as ShopByCountry;
+    })
+    .slice(0, 200);
+
+  return {
+    sectionTag: (getString(row.sectionTag) || getString(legacyShopBy?.sectionTag) || fallback.sectionTag || 'Discover').slice(0, 80),
+    sectionTitle: (getString(row.sectionTitle) || fallback.sectionTitle || 'Shop By Country').slice(0, 120),
+    sectionDescription: (
+      getString(row.sectionDescription) ||
+      fallback.sectionDescription ||
+      'Explore traditional textiles and contemporary designs from across the African continent.'
+    ).slice(0, 280),
+    sectionDescriptionEnabled: getBoolean(row.sectionDescriptionEnabled) ?? fallback.sectionDescriptionEnabled,
+    countriesCountMode:
+      String(row.countriesCountMode || '').trim().toUpperCase() === 'DATABASE'
+        ? 'DATABASE'
+        : String(legacyShopBy?.countriesCountMode || '').trim().toUpperCase() === 'DATABASE'
+          ? 'DATABASE'
+          : fallback.countriesCountMode,
+    countries,
   };
 };
 
@@ -1918,6 +2013,8 @@ const buildTemplateSnapshot = (
       return cloneJson(asRecord(settings.topNavigations));
     case 'SHOP_BY':
       return cloneJson(asRecord(settings.shopBy));
+    case 'SHOP_BY_COUNTRY':
+      return cloneJson(asRecord(settings.shopByCountry));
     case 'CATEGORY_MANAGE':
       return cloneJson(asRecord(settings.categoryManage));
     case 'HOW_IT_WORKS':
@@ -2128,6 +2225,9 @@ const applyTemplateSnapshotToSettings = (
     case 'SHOP_BY':
       next.shopBy = normalizeShopBy(snapshotRecord, next.shopBy);
       break;
+    case 'SHOP_BY_COUNTRY':
+      next.shopByCountry = normalizeShopByCountry(snapshotRecord, next.shopByCountry, next.shopBy);
+      break;
     case 'CATEGORY_MANAGE':
       next.categoryManage = normalizeCategoryManage(snapshotRecord, next.categoryManage);
       break;
@@ -2191,6 +2291,11 @@ const normalizeSettings = (
   const row = asRecord(raw);
   const topNavigations = normalizeTopNavigations(row.topNavigations, fallback.topNavigations);
   const shopBy = normalizeShopBy(row.shopBy, fallback.shopBy);
+  const shopByCountry = normalizeShopByCountry(
+    row.shopByCountry,
+    fallback.shopByCountry,
+    shopBy
+  );
   const categoryManage = normalizeCategoryManage(row.categoryManage, fallback.categoryManage);
   const textIconCards = normalizeTextIconCards(row.textIconCards, fallback.textIconCards);
   const featured = normalizeFeatured(row.featured, fallback.featured);
@@ -2203,6 +2308,7 @@ const normalizeSettings = (
     contractVersion: CONTRACT_VERSION,
     topNavigations,
     shopBy,
+    shopByCountry,
     categoryManage,
     textIconCards,
     featured,
@@ -2269,6 +2375,10 @@ const saveSettings = async (next: Partial<JenksV2FrontpageManagerSettings>) => {
       shopBy: {
         ...existing.settings.shopBy,
         ...asRecord(next.shopBy),
+      },
+      shopByCountry: {
+        ...existing.settings.shopByCountry,
+        ...asRecord(next.shopByCountry),
       },
       categoryManage: {
         ...existing.settings.categoryManage,
