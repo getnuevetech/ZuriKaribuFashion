@@ -1099,10 +1099,10 @@ export default function DesignDetail() {
               {discoverProducts.map((entry) => {
                 const href =
                   entry.productType === 'DESIGN'
-                    ? `/custom/${entry.id}`
+                    ? `/jenks-v14/custom-to-wear/${entry.id}`
                     : entry.productType === 'FABRIC'
-                      ? `/fabrics/${entry.id}`
-                      : `/ready-to-wear/${entry.id}`;
+                      ? `/jenks-v14/fabrics/${entry.id}`
+                      : `/jenks-v14/ready-to-wear/${entry.id}`;
                 return (
                   <Link
                     key={`${entry.productType}-${entry.id}`}

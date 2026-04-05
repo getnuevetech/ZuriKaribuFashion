@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
@@ -149,6 +149,20 @@ function NavigateWithSearch({ to }: { to: string }) {
   return <Navigate to={`${to}${location.search || ''}${location.hash || ''}`} replace />;
 }
 
+function NavigateCategoryDetailWithSearch({
+  toBase,
+  includeTryOn = false,
+}: {
+  toBase: '/jenks-v14/ready-to-wear' | '/jenks-v14/fabrics' | '/jenks-v14/custom-to-wear';
+  includeTryOn?: boolean;
+}) {
+  const location = useLocation();
+  const { id } = useParams<{ id: string }>();
+  const safeId = encodeURIComponent(String(id || '').trim());
+  const suffix = includeTryOn ? '/try-on' : '';
+  return <Navigate to={`${toBase}/${safeId}${suffix}${location.search || ''}${location.hash || ''}`} replace />;
+}
+
 function App() {
   const { isAuthenticated, user } = useAuthStore();
   const authenticatedHomeRoute = getHomeRouteForUser(user);
@@ -166,6 +180,37 @@ function App() {
             <Route path="/home-v2-preview" element={<JenksFrontpageV2 />} />
             <Route path="/home-v2-preview/" element={<JenksFrontpageV2 />} />
             <Route path="/jenks-v2-preview" element={<NavigateWithSearch to="/" />} />
+            <Route path="/rtw" element={<NavigateWithSearch to="/jenks-v14/ready-to-wear" />} />
+            <Route path="/readytowear" element={<NavigateWithSearch to="/jenks-v14/ready-to-wear" />} />
+            <Route path="/ready-to-wear" element={<NavigateWithSearch to="/jenks-v14/ready-to-wear" />} />
+            <Route path="/ready-to-wear/:id" element={<NavigateCategoryDetailWithSearch toBase="/jenks-v14/ready-to-wear" />} />
+            <Route
+              path="/ready-to-wear/:id/try-on"
+              element={<NavigateCategoryDetailWithSearch toBase="/jenks-v14/ready-to-wear" includeTryOn />}
+            />
+            <Route path="/ftb" element={<NavigateWithSearch to="/jenks-v14/fabrics" />} />
+            <Route path="/fabric" element={<NavigateWithSearch to="/jenks-v14/fabrics" />} />
+            <Route path="/fabric-to-buy" element={<NavigateWithSearch to="/jenks-v14/fabrics" />} />
+            <Route path="/fabrics-to-buy" element={<NavigateWithSearch to="/jenks-v14/fabrics" />} />
+            <Route path="/fabrics" element={<NavigateWithSearch to="/jenks-v14/fabrics" />} />
+            <Route path="/fabrics/:id" element={<NavigateCategoryDetailWithSearch toBase="/jenks-v14/fabrics" />} />
+            <Route path="/ctw" element={<NavigateWithSearch to="/jenks-v14/custom-to-wear" />} />
+            <Route path="/customtowear" element={<NavigateWithSearch to="/jenks-v14/custom-to-wear" />} />
+            <Route path="/custom-to-wear" element={<NavigateWithSearch to="/jenks-v14/custom-to-wear" />} />
+            <Route path="/custom-to-wear/:id" element={<NavigateCategoryDetailWithSearch toBase="/jenks-v14/custom-to-wear" />} />
+            <Route path="/custom" element={<NavigateWithSearch to="/jenks-v14/custom-to-wear" />} />
+            <Route path="/custom/:id" element={<NavigateCategoryDetailWithSearch toBase="/jenks-v14/custom-to-wear" />} />
+            <Route path="/designs" element={<NavigateWithSearch to="/jenks-v14/custom-to-wear" />} />
+            <Route path="/designs/:id" element={<NavigateCategoryDetailWithSearch toBase="/jenks-v14/custom-to-wear" />} />
+            <Route path="/shop" element={<NavigateWithSearch to="/jenks-v14/ready-to-wear" />} />
+            <Route path="/shop/*" element={<NavigateWithSearch to="/jenks-v14/ready-to-wear" />} />
+            <Route path="/jenks-v14/ready-to-wear" element={<ReadyToWear />} />
+            <Route path="/jenks-v14/fabrics" element={<Fabrics />} />
+            <Route path="/jenks-v14/custom-to-wear" element={<Designs />} />
+            <Route path="/jenks-v14/ready-to-wear/:id" element={<ReadyToWearDetail />} />
+            <Route path="/jenks-v14/fabrics/:id" element={<FabricDetail />} />
+            <Route path="/jenks-v14/custom-to-wear/:id" element={<DesignDetail />} />
+            <Route path="/jenks-v14/ready-to-wear/:id/try-on" element={<ReadyToWearTryOn />} />
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
@@ -174,14 +219,6 @@ function App() {
               <Route path="/home-live" element={<NavigateWithSearch to="/" />} />
               <Route path="/jenks-dynamic" element={<NavigateWithSearch to="/" />} />
               <Route path="/home-jenks" element={<NavigateWithSearch to="/" />} />
-              <Route path="/rtw" element={<Navigate to="/jenks-v14/ready-to-wear" replace />} />
-              <Route path="/readytowear" element={<Navigate to="/jenks-v14/ready-to-wear" replace />} />
-              <Route path="/ftb" element={<Navigate to="/jenks-v14/fabrics" replace />} />
-              <Route path="/fabric" element={<Navigate to="/jenks-v14/fabrics" replace />} />
-              <Route path="/fabric-to-buy" element={<Navigate to="/jenks-v14/fabrics" replace />} />
-              <Route path="/fabrics-to-buy" element={<Navigate to="/jenks-v14/fabrics" replace />} />
-              <Route path="/ctw" element={<Navigate to="/jenks-v14/custom-to-wear" replace />} />
-              <Route path="/customtowear" element={<Navigate to="/jenks-v14/custom-to-wear" replace />} />
               <Route path="/contact-us" element={<Navigate to="/contact" replace />} />
               <Route path="/about" element={<Navigate to="/#about" replace />} />
               <Route path="/about-us" element={<Navigate to="/#about" replace />} />
@@ -192,27 +229,7 @@ function App() {
               <Route path="/privacy" element={<NavigateWithSearch to="/help-center" />} />
               <Route path="/legal/terms" element={<NavigateWithSearch to="/help-center" />} />
               <Route path="/legal/privacy" element={<NavigateWithSearch to="/help-center" />} />
-              <Route path="/shop" element={<NavigateWithSearch to="/jenks-v14/ready-to-wear" />} />
-              <Route path="/shop/*" element={<NavigateWithSearch to="/jenks-v14/ready-to-wear" />} />
               <Route path="/country-products" element={<CountryProducts />} />
-              <Route path="/jenks-v14/ready-to-wear" element={<ReadyToWear />} />
-              <Route path="/ready-to-wear" element={<NavigateWithSearch to="/jenks-v14/ready-to-wear" />} />
-              <Route path="/ready-to-wear/:id" element={<ReadyToWearDetail />} />
-              <Route path="/jenks-v14/fabrics" element={<Fabrics />} />
-              <Route path="/fabrics" element={<NavigateWithSearch to="/jenks-v14/fabrics" />} />
-              <Route path="/fabrics/:id" element={<FabricDetail />} />
-              <Route path="/jenks-v14/custom-to-wear" element={<Designs />} />
-              <Route path="/custom" element={<NavigateWithSearch to="/jenks-v14/custom-to-wear" />} />
-              <Route path="/custom/:id" element={<DesignDetail />} />
-              <Route path="/designs" element={<NavigateWithSearch to="/jenks-v14/custom-to-wear" />} />
-              <Route path="/designs/:id" element={<DesignDetail />} />
-              <Route path="/custom-to-wear" element={<NavigateWithSearch to="/jenks-v14/custom-to-wear" />} />
-              <Route path="/custom-to-wear/:id" element={<DesignDetail />} />
-              <Route path="/jenks-v14/ready-to-wear/:id" element={<ReadyToWearDetail />} />
-              <Route path="/jenks-v14/fabrics/:id" element={<FabricDetail />} />
-              <Route path="/jenks-v14/custom-to-wear/:id" element={<DesignDetail />} />
-              <Route path="/jenks-v14/ready-to-wear/:id/try-on" element={<ReadyToWearTryOn />} />
-              <Route path="/ready-to-wear/:id/try-on" element={<ReadyToWearTryOn />} />
               <Route path="/try-on/:id" element={<TryOn />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/stories/:slug" element={<StoryPage />} />
