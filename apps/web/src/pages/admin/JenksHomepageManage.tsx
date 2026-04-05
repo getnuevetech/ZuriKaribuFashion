@@ -195,8 +195,7 @@ const TRUST_BADGE_ICONS = ['SHIELD_CHECK', 'TRUCK', 'REFRESH_CW', 'HEADPHONES', 
 
 const ROUTE_OPTIONS: RouteOption[] = [
   { key: 'HOME', label: 'Home', href: '/' },
-  { key: 'MAIN_STATIC', label: 'Static Main', href: '/main' },
-  { key: 'SHOP', label: 'Shop', href: '/shop' },
+  { key: 'SHOP', label: 'Shop', href: '/ready-to-wear' },
   { key: 'READY_TO_WEAR', label: 'Ready To Wear', href: '/ready-to-wear' },
   { key: 'FABRICS', label: 'Fabrics', href: '/fabrics' },
   { key: 'CUSTOM_TO_WEAR', label: 'Custom To Wear', href: '/custom' },
@@ -240,7 +239,7 @@ const newHeroBanner = (index: number): HeroBanner => ({
   subtitle: '',
   description: '',
   primaryCtaText: 'SHOP NOW',
-  primaryCtaLink: '/shop',
+  primaryCtaLink: '/ready-to-wear',
   secondaryCtaText: '',
   secondaryCtaLink: '/custom',
 });
@@ -332,13 +331,13 @@ const DEFAULT_CONFIG: JenksHomepageConfig = {
       { label: 'Custom To Wear', href: '/custom', routeKey: 'CUSTOM_TO_WEAR', enabled: true },
     ],
     rightMenuLinks: [
-      { label: 'Shop', href: '/shop', routeKey: 'SHOP', enabled: true },
+      { label: 'Shop', href: '/ready-to-wear', routeKey: 'READY_TO_WEAR', enabled: true },
       { label: 'About Us', href: '/home#about', routeKey: 'ABOUT', enabled: true },
       { label: 'Contact Us', href: '/contact', routeKey: 'CONTACT', enabled: true },
     ],
     hamburgerMenuLinks: [
       { label: 'Home', href: '/', routeKey: 'HOME', enabled: true },
-      { label: 'Shop', href: '/shop', routeKey: 'SHOP', enabled: true },
+      { label: 'Shop', href: '/ready-to-wear', routeKey: 'READY_TO_WEAR', enabled: true },
       { label: 'Ready To Wear', href: '/ready-to-wear', routeKey: 'READY_TO_WEAR', enabled: true },
       { label: 'Fabric To Buy', href: '/fabrics', routeKey: 'FABRICS', enabled: true },
       { label: 'Custom To Wear', href: '/custom', routeKey: 'CUSTOM_TO_WEAR', enabled: true },

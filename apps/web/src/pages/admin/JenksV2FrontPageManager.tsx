@@ -467,7 +467,6 @@ type RouteOption = {
 
 const ROUTE_OPTIONS: RouteOption[] = [
   { key: 'HOME', label: 'Home', href: '/' },
-  { key: 'SHOP', label: 'Shop', href: '/shop' },
   { key: 'READY_TO_WEAR', label: 'Ready To Wear', href: '/ready-to-wear' },
   { key: 'FABRICS', label: 'Fabric To Buy', href: '/fabrics' },
   { key: 'CUSTOM_TO_WEAR', label: 'Custom To Wear', href: '/custom' },
@@ -478,7 +477,7 @@ const ROUTE_OPTIONS: RouteOption[] = [
   { key: 'COUNTRY_PRODUCTS', label: 'Country Products', href: '/country-products' },
   { key: 'AUTH_LOGIN', label: 'Sign In', href: '/auth/login' },
 ];
-const PAGE_ROUTE_OPTIONS = ROUTE_OPTIONS.filter((route) => route.key !== 'SHOP');
+const PAGE_ROUTE_OPTIONS = ROUTE_OPTIONS;
 
 const toBlogRouteOptions = (input: unknown): RouteOption[] => {
   if (!Array.isArray(input)) return [];

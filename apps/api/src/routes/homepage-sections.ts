@@ -1488,9 +1488,9 @@ const SHOP_BY_BLOCKS_DEFAULTS: ShopByBlocksSettings = {
     { label: 'Festival', href: '/ready-to-wear?occasion=festival' },
   ],
   priceOptions: [
-    { label: 'Under $100', href: '/shop?price=under-100' },
-    { label: '$100 - $300', href: '/shop?price=100-300' },
-    { label: 'Above $300', href: '/shop?price=above-300' },
+    { label: 'Under $100', href: '/ready-to-wear?price=under-100' },
+    { label: '$100 - $300', href: '/ready-to-wear?price=100-300' },
+    { label: 'Above $300', href: '/ready-to-wear?price=above-300' },
   ],
   enabledTabs: ['CATEGORY', 'COUNTRY', 'OCCASION_STYLE', 'PRICE'],
   defaultTab: 'CATEGORY',
@@ -1528,13 +1528,13 @@ const NAVIGATION_SETTINGS_DEFAULTS: HomepageNavigationSettings = {
     { label: 'Custom To Wear', href: '/custom', routeKey: 'CUSTOM_TO_WEAR', enabled: true },
   ],
   rightMenuLinks: [
-    { label: 'Shop', href: '/shop', routeKey: 'SHOP', enabled: true },
+    { label: 'Shop', href: '/ready-to-wear', routeKey: 'READY_TO_WEAR', enabled: true },
     { label: 'About Us', href: '/#about', routeKey: 'ABOUT', enabled: true },
     { label: 'Contact Us', href: '/contact', routeKey: 'CONTACT', enabled: true },
   ],
   hamburgerMenuLinks: [
     { label: 'Home', href: '/', routeKey: 'HOME', enabled: true },
-    { label: 'Shop', href: '/shop', routeKey: 'SHOP', enabled: true },
+    { label: 'Shop', href: '/ready-to-wear', routeKey: 'READY_TO_WEAR', enabled: true },
     { label: 'Ready To Wear', href: '/ready-to-wear', routeKey: 'READY_TO_WEAR', enabled: true },
     { label: 'Fabric To Buy', href: '/fabrics', routeKey: 'FABRICS', enabled: true },
     { label: 'Custom To Wear', href: '/custom', routeKey: 'CUSTOM_TO_WEAR', enabled: true },
@@ -1563,7 +1563,7 @@ const HERO_BANNERS_DEFAULTS: HomepageHeroBanner[] = [
     description:
       'Discover modern African style with trusted sellers, quality curation, and flexible shopping paths.',
     primaryCtaText: 'SHOP NOW',
-    primaryCtaLink: '/shop',
+    primaryCtaLink: '/ready-to-wear',
     secondaryCtaText: 'EXPLORE DESIGNERS',
     secondaryCtaLink: '/designers',
   },
@@ -1821,7 +1821,7 @@ const normalizeShopByOption = (value: unknown): ShopByOption | null => {
   if (!label || !href) return null;
   return {
     label: label.slice(0, 60),
-    href: normalizeHref(href, '/shop'),
+    href: normalizeHref(href, '/ready-to-wear'),
   };
 };
 const normalizeShopByBlocksSettings = (raw: unknown): ShopByBlocksSettings => {
@@ -1958,7 +1958,7 @@ const normalizeHeroQuickLinks = (value: unknown, fallback: HeroQuickLink[]): Her
       if (!label || !href) return null;
       return {
         label: label.slice(0, 32),
-        href: normalizeHref(href, '/shop'),
+        href: normalizeHref(href, '/ready-to-wear'),
       } as HeroQuickLink;
     })
     .filter((entry): entry is HeroQuickLink => Boolean(entry))

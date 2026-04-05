@@ -52,7 +52,7 @@ const clampText = (value: unknown, maxLength: number, fallback = '') => {
 };
 
 const safeHref = (...values: unknown[]) => {
-  const fallback = asText(values[values.length - 1], '/shop') || '/shop';
+  const fallback = asText(values[values.length - 1], '/ready-to-wear') || '/ready-to-wear';
   const href = asText(...values)
     .replace(/^\/designs(\/|$)/i, '/custom$1')
     .replace(/^\/custom-to-wear(\/|$)/i, '/custom$1');
@@ -231,7 +231,7 @@ export const mapShopByCategories = (args: ShopByCategoryMapperArgs): ShopByCateg
       description: clampText(row?.description, 120, asText(fallback?.description, 'Explore African fashion products.')),
       image: images[0] || normalizeImageUrl(fallback?.image) || '/product1.jpg',
       images,
-      link: safeHref(row?.ctaLink, row?.link, fallback?.link, '/shop'),
+      link: safeHref(row?.ctaLink, row?.link, fallback?.link, '/ready-to-wear'),
       ctaText: 'SHOP NOW',
       countLabel: normalizeCountLabel(row?.countText ?? row?.productCount ?? row?.count),
     } as ShopByCategoryDTO;

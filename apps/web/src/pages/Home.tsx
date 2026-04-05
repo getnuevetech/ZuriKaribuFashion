@@ -480,7 +480,7 @@ const clampText = (value: unknown, maxLength: number, fallback = '') => {
   return source.length > maxLength ? `${source.slice(0, Math.max(0, maxLength - 1)).trim()}…` : source;
 };
 const safeHref = (...values: any[]) => {
-  const fallback = asText(values[values.length - 1], '/shop') || '/shop';
+  const fallback = asText(values[values.length - 1], '/ready-to-wear') || '/ready-to-wear';
   const href = asText(...values)
     .replace(/^\/designs(\/|$)/i, '/custom$1')
     .replace(/^\/custom-to-wear(\/|$)/i, '/custom$1');
@@ -702,7 +702,7 @@ function EditorialFeatureSection({
             <p className="mt-5 max-w-[52ch] text-sm leading-relaxed text-white/75 line-clamp-4">
               {clampText(description, 140, 'Discover premium African fashion stories.')}
             </p>
-            <Link to={safeHref(ctaLink, '/shop')} className={`${CTA_BUTTON_OVERLAY_CLASS} mt-6`}>
+            <Link to={safeHref(ctaLink, '/ready-to-wear')} className={`${CTA_BUTTON_OVERLAY_CLASS} mt-6`}>
               {toCtaLabel(ctaText, 'Explore')}
               <ArrowRight className="h-4 w-4" />
             </Link>
@@ -869,7 +869,7 @@ export default function Home() {
       ? row.quickLinks
           .map((entry: any) => ({
             label: String(entry?.label || '').trim(),
-            href: safeHref(entry?.href, '/shop'),
+            href: safeHref(entry?.href, '/ready-to-wear'),
           }))
           .filter((entry: any) => Boolean(entry.label && entry.href))
           .slice(0, 8)
@@ -1502,7 +1502,7 @@ export default function Home() {
                           {heroQuickLinks.map((quickLink) => (
                             <Link
                               key={`${slide.id}-${quickLink.href}`}
-                              to={safeHref(quickLink.href, '/shop')}
+                              to={safeHref(quickLink.href, '/ready-to-wear')}
                               onClick={() => handleHeroQuickLinkClick(quickLink.label, quickLink.href)}
                               className={`${CTA_BUTTON_OVERLAY_CLASS} px-4 py-2 text-xs`}
                             >
@@ -1546,7 +1546,7 @@ export default function Home() {
                             aria-label="Search products"
                           />
                           <Link
-                            to="/shop"
+                            to="/ready-to-wear"
                             className="inline-flex items-center rounded border border-black px-3 py-1 text-xs font-semibold"
                           >
                             Go
@@ -1653,7 +1653,7 @@ export default function Home() {
                     {shopByStyleOptions.map((option: any, index: number) => (
                       <Link
                         key={`style-${index}-${asText(option?.label)}`}
-                        to={safeHref(option?.href, '/shop')}
+                        to={safeHref(option?.href, '/ready-to-wear')}
                         className="rounded border border-white/20 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.08em] text-white/80 hover:border-white/60 hover:text-white"
                       >
                         {clampText(option?.label, 40, 'Style')}
@@ -1666,7 +1666,7 @@ export default function Home() {
                     {shopByPriceOptions.map((option: any, index: number) => (
                       <Link
                         key={`price-${index}-${asText(option?.label)}`}
-                        to={safeHref(option?.href, '/shop')}
+                        to={safeHref(option?.href, '/ready-to-wear')}
                         className="rounded border border-white/15 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.08em] text-white/70 hover:border-white/50 hover:text-white"
                       >
                         {clampText(option?.label, 40, 'Price')}
@@ -1674,7 +1674,7 @@ export default function Home() {
                     ))}
                   </div>
                 ) : null}
-                <Link to="/shop" className={`${CTA_BUTTON_OVERLAY_CLASS} mt-7`}>
+                <Link to="/ready-to-wear" className={`${CTA_BUTTON_OVERLAY_CLASS} mt-7`}>
                   {toCtaLabel('Explore countries', 'Explore countries')}
                   <ArrowRight className="h-4 w-4" />
                 </Link>

@@ -36,7 +36,7 @@ const clampText = (value: unknown, maxLength: number, fallback = '') => {
 };
 
 const safeHref = (...values: unknown[]) => {
-  const fallback = asText(values[values.length - 1], '/shop') || '/shop';
+  const fallback = asText(values[values.length - 1], '/ready-to-wear') || '/ready-to-wear';
   const href = asText(...values)
     .replace(/^\/designs(\/|$)/i, '/custom$1')
     .replace(/^\/custom-to-wear(\/|$)/i, '/custom$1');
@@ -79,7 +79,7 @@ export const mapHeroSlides = (args: HeroMapperArgs): HeroSlideDTO[] => {
         subtitle: 'Made by Africans. Worn by the world.',
         badge: 'GLOBAL AFRICAN FASHION',
         ctaText: 'SHOP NOW',
-        ctaLink: '/shop',
+        ctaLink: '/ready-to-wear',
       },
     ];
   }

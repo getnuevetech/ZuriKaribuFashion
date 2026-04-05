@@ -44,13 +44,13 @@ const NAVIGATION_SETTINGS_DEFAULTS = {
     { label: 'Custom To Wear', href: '/custom', enabled: true },
   ] as NavMenuLink[],
   rightMenuLinks: [
-    { label: 'Shop', href: '/shop', enabled: true },
+    { label: 'Shop', href: '/ready-to-wear', enabled: true },
     { label: 'About Us', href: '/#about', enabled: true },
     { label: 'Contact Us', href: '/contact', enabled: true },
   ] as NavMenuLink[],
   hamburgerMenuLinks: [
     { label: 'Home', href: '/', enabled: true },
-    { label: 'Shop', href: '/shop', enabled: true },
+    { label: 'Shop', href: '/ready-to-wear', enabled: true },
     { label: 'Ready To Wear', href: '/ready-to-wear', enabled: true },
     { label: 'Fabric To Buy', href: '/fabrics', enabled: true },
     { label: 'Custom To Wear', href: '/custom', enabled: true },

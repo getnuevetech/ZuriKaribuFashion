@@ -26,7 +26,7 @@ const HERO_COPY = {
   title: 'ZURI KARIBU',
   subtitle: 'Made by Africans. Worn by the world.',
   ctaText: 'Shop now',
-  ctaLink: '/shop',
+  ctaLink: '/ready-to-wear',
 };
 
 const TRUST_BADGES = [
@@ -40,21 +40,21 @@ const SHOP_BY_CATEGORIES = [
   { label: 'Ready to Wear', href: '/ready-to-wear', image: JENKS_FEATURE_IMAGES.readyToWear, count: '480+' },
   { label: 'Custom to Wear', href: '/custom', image: JENKS_FEATURE_IMAGES.customToWear, count: '220+' },
   { label: 'Fabrics', href: '/fabrics', image: JENKS_FEATURE_IMAGES.fabrics, count: '640+' },
-  { label: 'Fresh Drops', href: '/shop', image: JENKS_FEATURE_IMAGES.freshDrops, count: '80+' },
+  { label: 'Fresh Drops', href: '/ready-to-wear', image: JENKS_FEATURE_IMAGES.freshDrops, count: '80+' },
 ];
 
 const OCCASION_ITEMS = [
-  { label: 'Wedding', href: '/shop' },
-  { label: 'Casual', href: '/shop' },
-  { label: 'Formal', href: '/shop' },
-  { label: 'Festival', href: '/shop' },
+  { label: 'Wedding', href: '/ready-to-wear' },
+  { label: 'Casual', href: '/ready-to-wear' },
+  { label: 'Formal', href: '/ready-to-wear' },
+  { label: 'Festival', href: '/ready-to-wear' },
 ];
 
 const PRICE_ITEMS = [
-  { label: 'Under $100', href: '/shop' },
-  { label: '$100 - $300', href: '/shop' },
-  { label: '$300 - $500', href: '/shop' },
-  { label: '$500+', href: '/shop' },
+  { label: 'Under $100', href: '/ready-to-wear' },
+  { label: '$100 - $300', href: '/ready-to-wear' },
+  { label: '$300 - $500', href: '/ready-to-wear' },
+  { label: '$500+', href: '/ready-to-wear' },
 ];
 
 const STATIC_PRODUCTS = {

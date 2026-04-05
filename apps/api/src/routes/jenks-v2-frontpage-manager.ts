@@ -674,7 +674,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         height: 50,
       },
       additionalTopMenu: [
-        defaultMenuLink('Shop', '/ready-to-wear', 'SHOP'),
+        defaultMenuLink('Shop', '/ready-to-wear', 'READY_TO_WEAR'),
         defaultMenuLink('Contact', '/contact', 'CONTACT'),
       ],
       signInMenu: {
