@@ -4,7 +4,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 
 // Layouts
-import MainLayout from './layouts/MainLayout';
+import JenksV2MainLayout from './layouts/JenksV2MainLayout';
 import DashboardLayout from './layouts/DashboardLayout';
 
 // Public Pages
@@ -216,7 +216,7 @@ function App() {
             <Route path="/shop/*" element={<NavigateWithSearch to="/readytowear" />} />
 
             {/* Public Routes */}
-            <Route element={<MainLayout />}>
+            <Route element={<JenksV2MainLayout />}>
               <Route path="/readytowear" element={<ReadyToWear />} />
               <Route path="/fabricstobuy" element={<Fabrics />} />
               <Route path="/cystomtowear" element={<Designs />} />
