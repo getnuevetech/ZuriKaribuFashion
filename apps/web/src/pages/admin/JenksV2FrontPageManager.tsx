@@ -174,17 +174,31 @@ type ShopByCountrySection = {
   countries: ShopByCountry[];
 };
 
+type CategoryStepCard = {
+  id: string;
+  icon: string;
+  title: string;
+  description: string;
+  enabled: boolean;
+  displayOrder: number;
+};
+
 type CategorySection = {
   id: string;
   key: string;
   title: string;
   tag: string;
   description: string;
+  image: string;
   ctaText: string;
   ctaLink: string;
   ctaMode: 'URL' | 'PAGE';
   ctaPageKey?: string;
   ctaStyle: CTAStyle;
+  stepCardBackgroundColor: string;
+  stepCardOverlayOpacity: number;
+  stepCardsEnabled: boolean;
+  stepCards: CategoryStepCard[];
   enabled: boolean;
   displayOrder: number;
 };
@@ -635,9 +649,20 @@ const ICON_OPTIONS = [
   'Tag',
   'ArrowRight',
   'MapPin',
+  'Ruler',
+  'Scissors',
+  'CheckSquare',
+  'CreditCard',
+  'Package',
+  'PenLine',
 ] as const;
 
 const CATEGORY_SECTION_KEY_OPTIONS = ['RTW', 'FTB', 'CTW'] as const;
+const CATEGORY_FALLBACK_IMAGE_BY_KEY: Record<string, string> = {
+  RTW: 'https://african-fashion-zurikaribu.vercel.app/rw_full.jpg',
+  FTB: 'https://african-fashion-zurikaribu.vercel.app/fabrics_full.jpg',
+  CTW: 'https://african-fashion-zurikaribu.vercel.app/custom_full.jpg',
+};
 
 const SOCIAL_ICON_OPTIONS = ['Instagram', 'Facebook', 'Twitter', 'X', 'Youtube', 'Globe'] as const;
 const LINK_GROUP_TITLE_OPTIONS = ['Shop', 'Company', 'Support', 'Legal', 'Community'] as const;
@@ -657,6 +682,89 @@ const toNumber = (value: string, fallback: number) => {
 };
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const toBoolean = (value: unknown, fallback: boolean) => (typeof value === 'boolean' ? value : fallback);
+
+
+const defaultCategoryStepCards = (keyRaw: string): CategoryStepCard[] => {
+  const key = String(keyRaw || '').trim().toUpperCase();
+  const ctwCards: CategoryStepCard[] = [
+    {
+      id: uid(),
+      icon: 'Sparkles',
+      title: 'Select A Design',
+      description: 'Choose from designer templates.',
+      enabled: true,
+      displayOrder: 1,
+    },
+    {
+      id: uid(),
+      icon: 'Palette',
+      title: 'Pick Your Fabric',
+      description: 'Browse prints and premium textiles.',
+      enabled: true,
+      displayOrder: 2,
+    },
+    {
+      id: uid(),
+      icon: 'Briefcase',
+      title: 'Add Measurements',
+      description: 'Provide exact sizing for your fit.',
+      enabled: true,
+      displayOrder: 3,
+    },
+    {
+      id: uid(),
+      icon: 'RefreshCw',
+      title: 'Virtual Try-On',
+      description: 'Preview the look before ordering.',
+      enabled: true,
+      displayOrder: 4,
+    },
+    {
+      id: uid(),
+      icon: 'ShoppingBag',
+      title: 'Checkout & Pay',
+      description: 'Secure payment and order confirmation.',
+      enabled: true,
+      displayOrder: 5,
+    },
+    {
+      id: uid(),
+      icon: 'Truck',
+      title: 'Receive Your Design',
+      description: 'Track shipment to your doorstep.',
+      enabled: true,
+      displayOrder: 6,
+    },
+  ];
+  const genericCards: CategoryStepCard[] = [
+    {
+      id: uid(),
+      icon: 'Search',
+      title: 'Discover',
+      description: 'Browse curated products.',
+      enabled: true,
+      displayOrder: 1,
+    },
+    {
+      id: uid(),
+      icon: 'ShoppingBag',
+      title: 'Select',
+      description: 'Pick your preferred item.',
+      enabled: true,
+      displayOrder: 2,
+    },
+    {
+      id: uid(),
+      icon: 'Truck',
+      title: 'Delivery',
+      description: 'Fast and secure shipping.',
+      enabled: true,
+      displayOrder: 3,
+    },
+  ];
+  if (key === 'CTW') return ctwCards;
+  return genericCards;
+};
 const defaultLink = (label: string, href: string, routeKey?: string): MenuLink => ({
   id: uid(),
   label,
@@ -676,6 +784,12 @@ const DEFAULT_CTA_STYLE: CTAStyle = {
   fontFamily: 'Montserrat, Inter, sans-serif',
   fontSize: 12,
   fontWeight: 600,
+};
+
+const DEFAULT_CATEGORY_IMAGE_BY_KEY: Record<string, string> = {
+  RTW: 'https://african-fashion-zurikaribu.vercel.app/rw_full.jpg',
+  FTB: 'https://african-fashion-zurikaribu.vercel.app/fabrics_full.jpg',
+  CTW: 'https://african-fashion-zurikaribu.vercel.app/custom_full.jpg',
 };
 
 const createCtaStyle = (overrides: Partial<CTAStyle> = {}): CTAStyle => ({
@@ -703,6 +817,7 @@ const normalizeCtaStyle = (value: unknown, fallback: CTAStyle = DEFAULT_CTA_STYL
     fontWeight: clampNumber(row.fontWeight, 100, 900, fallback.fontWeight),
   };
 };
+
 
 const renderCtaStyleEditor = (
   label: string,
@@ -981,6 +1096,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Ready To Wear',
         tag: 'RTW',
         description: 'Manage title, tag, description and CTA for RTW block.',
+        image: CATEGORY_FALLBACK_IMAGE_BY_KEY.RTW,
         ctaText: 'Shop RTW',
         ctaLink: '/readytowear',
         ctaStyle: createCtaStyle({
@@ -990,6 +1106,43 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
           borderWidth: 0,
           fontSize: 18,
         }),
+        stepCardBackgroundColor: '#111111',
+        stepCardOverlayOpacity: 78,
+        stepCardsEnabled: true,
+        stepCards: [
+          {
+            id: uid(),
+            icon: 'Palette',
+            title: 'Select a Design',
+            description: 'Choose from designer templates.',
+            enabled: true,
+            displayOrder: 1,
+          },
+          {
+            id: uid(),
+            icon: 'Tag',
+            title: 'Pick Your Fabric',
+            description: 'Browse and choose your preferred textile.',
+            enabled: true,
+            displayOrder: 2,
+          },
+          {
+            id: uid(),
+            icon: 'Ruler',
+            title: 'Add Measurements',
+            description: 'Enter your exact measurements.',
+            enabled: true,
+            displayOrder: 3,
+          },
+          {
+            id: uid(),
+            icon: 'ShoppingBag',
+            title: 'Checkout & Pay',
+            description: 'Secure payment options.',
+            enabled: true,
+            displayOrder: 4,
+          },
+        ],
         enabled: true,
         displayOrder: 1,
       },
@@ -999,6 +1152,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Custom To Wear',
         tag: 'CTW',
         description: 'Manage title, tag, description and CTA for CTW block.',
+        image: CATEGORY_FALLBACK_IMAGE_BY_KEY.CTW,
         ctaText: 'Explore CTW',
         ctaLink: '/cystomtowear',
         ctaStyle: createCtaStyle({
@@ -1008,6 +1162,43 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
           borderWidth: 0,
           fontSize: 18,
         }),
+        stepCardBackgroundColor: '#111111',
+        stepCardOverlayOpacity: 78,
+        stepCardsEnabled: true,
+        stepCards: [
+          {
+            id: uid(),
+            icon: 'Search',
+            title: 'Discover Designer',
+            description: 'Find a designer that matches your vibe.',
+            enabled: true,
+            displayOrder: 1,
+          },
+          {
+            id: uid(),
+            icon: 'Palette',
+            title: 'Define Your Style',
+            description: 'Share design references and preferences.',
+            enabled: true,
+            displayOrder: 2,
+          },
+          {
+            id: uid(),
+            icon: 'Ruler',
+            title: 'Submit Measurements',
+            description: 'Provide fit details for precision tailoring.',
+            enabled: true,
+            displayOrder: 3,
+          },
+          {
+            id: uid(),
+            icon: 'Sparkles',
+            title: 'Approve & Produce',
+            description: 'Review and confirm before production.',
+            enabled: true,
+            displayOrder: 4,
+          },
+        ],
         enabled: true,
         displayOrder: 2,
       },
@@ -1017,6 +1208,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Fabric To Buy',
         tag: 'FTB',
         description: 'Manage title, tag, description and CTA for FTB block.',
+        image: CATEGORY_FALLBACK_IMAGE_BY_KEY.FTB,
         ctaText: 'Shop FTB',
         ctaLink: '/fabricstobuy',
         ctaStyle: createCtaStyle({
@@ -1026,6 +1218,43 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
           borderWidth: 0,
           fontSize: 18,
         }),
+        stepCardBackgroundColor: '#111111',
+        stepCardOverlayOpacity: 78,
+        stepCardsEnabled: true,
+        stepCards: [
+          {
+            id: uid(),
+            icon: 'Search',
+            title: 'Browse Fabric Types',
+            description: 'Filter by weave, print, and material.',
+            enabled: true,
+            displayOrder: 1,
+          },
+          {
+            id: uid(),
+            icon: 'ShieldCheck',
+            title: 'Check Quality',
+            description: 'Review specs, weight, and quality notes.',
+            enabled: true,
+            displayOrder: 2,
+          },
+          {
+            id: uid(),
+            icon: 'Truck',
+            title: 'Place Order',
+            description: 'Secure checkout and shipping selection.',
+            enabled: true,
+            displayOrder: 3,
+          },
+          {
+            id: uid(),
+            icon: 'RefreshCw',
+            title: 'Track Delivery',
+            description: 'Follow your order to final delivery.',
+            enabled: true,
+            displayOrder: 4,
+          },
+        ],
         enabled: true,
         displayOrder: 3,
       },
@@ -1867,6 +2096,7 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         ? categoryManage.sections.map((section) => ({
             ...fallbackCategory,
             ...section,
+            image: String((section as CategorySection)?.image || fallbackCategory.image || CATEGORY_FALLBACK_IMAGE_BY_KEY[String((section as CategorySection)?.key || '').toUpperCase()] || ''),
             ctaMode: normalizeCtaMode((section as CategorySection)?.ctaMode, fallbackCategory.ctaMode),
             ctaPageKey: ((): string => {
               const explicit = String((section as CategorySection)?.ctaPageKey || fallbackCategory.ctaPageKey || '').trim().toUpperCase();
@@ -1884,6 +2114,30 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
                   )
                 : normalizeManagerHref((section as CategorySection)?.ctaLink, fallbackCategory.ctaLink),
             ctaStyle: normalizeCtaStyle((section as CategorySection)?.ctaStyle, fallbackCategory.ctaStyle),
+            stepCardBackgroundColor: String(
+              (section as CategorySection)?.stepCardBackgroundColor || fallbackCategory.stepCardBackgroundColor || '#111111'
+            ),
+            stepCardOverlayOpacity: clamp(
+              toNumber(
+                String((section as CategorySection)?.stepCardOverlayOpacity ?? fallbackCategory.stepCardOverlayOpacity ?? 78),
+                fallbackCategory.stepCardOverlayOpacity ?? 78
+              ),
+              0,
+              100
+            ),
+            stepCardsEnabled: toBoolean((section as CategorySection)?.stepCardsEnabled, fallbackCategory.stepCardsEnabled),
+            stepCards: Array.isArray((section as CategorySection)?.stepCards)
+              ? (section as CategorySection).stepCards
+                  .map((card, cardIndex) => ({
+                    id: String(card?.id || `${section.id}-step-${cardIndex + 1}`),
+                    icon: String(card?.icon || 'Sparkles'),
+                    title: String(card?.title || `Step ${cardIndex + 1}`),
+                    description: String(card?.description || ''),
+                    enabled: toBoolean(card?.enabled, true),
+                    displayOrder: clamp(toNumber(String(card?.displayOrder ?? cardIndex + 1), cardIndex + 1), 0, 999),
+                  }))
+                  .slice(0, 12)
+              : fallbackCategory.stepCards,
           }))
         : DEFAULT_CONFIG.categoryManage.sections,
     },
@@ -2473,13 +2727,15 @@ export default function JenksV2FrontPageManager() {
   const footerMapUploadRef = useRef<HTMLInputElement | null>(null);
   const heroUploadRef = useRef<HTMLInputElement | null>(null);
   const heroRightPanelUploadRef = useRef<HTMLInputElement | null>(null);
-  const categoryImageUploadRef = useRef<HTMLInputElement | null>(null);
+  const shopByCategoryImageUploadRef = useRef<HTMLInputElement | null>(null);
+  const categoryManageImageUploadRef = useRef<HTMLInputElement | null>(null);
   const featuredImageUploadRef = useRef<HTMLInputElement | null>(null);
   const heritageImageUploadRef = useRef<HTMLInputElement | null>(null);
   const spotlightImageUploadRef = useRef<HTMLInputElement | null>(null);
 
   const [heroUploadIndex, setHeroUploadIndex] = useState<number | null>(null);
-  const [categoryUploadIndex, setCategoryUploadIndex] = useState<number | null>(null);
+  const [shopByCategoryUploadIndex, setShopByCategoryUploadIndex] = useState<number | null>(null);
+  const [categoryManageUploadIndex, setCategoryManageUploadIndex] = useState<number | null>(null);
   const [featuredUploadIndex, setFeaturedUploadIndex] = useState<number | null>(null);
   const [spotlightUploadIndex, setSpotlightUploadIndex] = useState<number | null>(null);
 
@@ -2670,9 +2926,9 @@ export default function JenksV2FrontPageManager() {
     }
   };
 
-  const handleCategoryImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleShopByCategoryImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || categoryUploadIndex === null) return;
+    if (!file || shopByCategoryUploadIndex === null) return;
     triggerUpload('category');
     try {
       const url = await uploadImage(file);
@@ -2681,7 +2937,7 @@ export default function JenksV2FrontPageManager() {
         shopBy: {
           ...prev.shopBy,
           categories: prev.shopBy.categories.map((category, index) =>
-            index === categoryUploadIndex ? { ...category, image: url } : category
+            index === shopByCategoryUploadIndex ? { ...category, image: url } : category
           ),
         },
       }));
@@ -2689,7 +2945,32 @@ export default function JenksV2FrontPageManager() {
     } catch (uploadError: any) {
       setError(uploadError?.message || 'Failed to upload category image.');
     } finally {
-      setCategoryUploadIndex(null);
+      setShopByCategoryUploadIndex(null);
+      setUploadingTarget(null);
+      event.target.value = '';
+    }
+  };
+
+  const handleCategoryManageImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || categoryManageUploadIndex === null) return;
+    triggerUpload('category-manage');
+    try {
+      const url = await uploadImage(file);
+      setConfig((prev) => ({
+        ...prev,
+        categoryManage: {
+          ...prev.categoryManage,
+          sections: prev.categoryManage.sections.map((section, index) =>
+            index === categoryManageUploadIndex ? { ...section, image: url } : section
+          ),
+        },
+      }));
+      setSuccess('Category section image uploaded.');
+    } catch (uploadError: any) {
+      setError(uploadError?.message || 'Failed to upload category section image.');
+    } finally {
+      setCategoryManageUploadIndex(null);
       setUploadingTarget(null);
       event.target.value = '';
     }
@@ -4711,8 +4992,8 @@ export default function JenksV2FrontPageManager() {
                       type="button"
                       variant="outline"
                       onClick={() => {
-                        setCategoryUploadIndex(index);
-                        categoryImageUploadRef.current?.click();
+                        setShopByCategoryUploadIndex(index);
+                        shopByCategoryImageUploadRef.current?.click();
                       }}
                       isLoading={uploadingTarget === 'category'}
                     >
@@ -4787,11 +5068,11 @@ export default function JenksV2FrontPageManager() {
               </div>
             ))}
             <input
-              ref={categoryImageUploadRef}
+              ref={shopByCategoryImageUploadRef}
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={handleCategoryImageUpload}
+              onChange={handleShopByCategoryImageUpload}
             />
           </div>
 
@@ -5534,7 +5815,8 @@ export default function JenksV2FrontPageManager() {
             </Button>
           </div>
           {config.categoryManage.sections.map((section, index) => (
-            <div key={section.id} className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-16">
+            <div key={section.id} className="space-y-3 rounded border p-3">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-16">
               <label className="md:col-span-1 text-[11px]">
                 Section Key
                 <select
@@ -5609,6 +5891,58 @@ export default function JenksV2FrontPageManager() {
                   }
                 />
               </label>
+              <div className="md:col-span-3 space-y-1 text-[11px]">
+                <span className="font-medium">Category Image</span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setCategoryManageUploadIndex(index);
+                      categoryManageImageUploadRef.current?.click();
+                    }}
+                    isLoading={uploadingTarget === 'category-manage'}
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    <span className="ml-1">Upload</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        categoryManage: {
+                          ...prev.categoryManage,
+                          sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, image: '' } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span className="ml-1">Remove</span>
+                  </Button>
+                </div>
+                <p className="break-all text-[10px] text-gray-500">{section.image || 'No image uploaded'}</p>
+                <div className="rounded-md border bg-white p-2">
+                  {section.image ? (
+                    <img
+                      src={resolvePreviewUrl(section.image)}
+                      alt={`Category section image preview ${index + 1}`}
+                      className="h-24 w-full rounded object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-24 items-center justify-center rounded border border-dashed text-xs text-gray-500">
+                      No category image uploaded
+                    </div>
+                  )}
+                </div>
+              </div>
               <label className="md:col-span-2 text-[11px]">
                 CTA Text
                 <input
@@ -5728,6 +6062,200 @@ export default function JenksV2FrontPageManager() {
                   })),
                 'md:col-span-4'
               )}
+              <div className="md:col-span-4 rounded border p-2">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <label className="inline-flex items-center gap-2 text-[11px] font-medium">
+                    <input
+                      type="checkbox"
+                      checked={section.stepCardsEnabled}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          categoryManage: {
+                            ...prev.categoryManage,
+                            sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, stepCardsEnabled: event.target.checked } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                    Enable Step Icon Cards
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        categoryManage: {
+                          ...prev.categoryManage,
+                          sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                            entryIndex === index
+                              ? {
+                                  ...entry,
+                                  stepCards: [
+                                    ...(Array.isArray(entry.stepCards) ? entry.stepCards : []),
+                                    {
+                                      id: uid(),
+                                      icon: 'Sparkles',
+                                      title: 'New Step',
+                                      description: '',
+                                      enabled: true,
+                                      displayOrder: (Array.isArray(entry.stepCards) ? entry.stepCards.length : 0) + 1,
+                                    },
+                                  ],
+                                }
+                              : entry
+                          ),
+                        },
+                      }))
+                    }
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    Add Step
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {(Array.isArray(section.stepCards) ? section.stepCards : []).map((step, stepIndex) => (
+                    <div key={step.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-14">
+                      <label className="md:col-span-2 text-[11px]">
+                        Icon
+                        <select
+                          className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                          value={step.icon}
+                          onChange={(event) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              categoryManage: {
+                                ...prev.categoryManage,
+                                sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? {
+                                        ...entry,
+                                        stepCards: (entry.stepCards || []).map((stepEntry, mappedIndex) =>
+                                          mappedIndex === stepIndex ? { ...stepEntry, icon: event.target.value } : stepEntry
+                                        ),
+                                      }
+                                    : entry
+                                ),
+                              },
+                            }))
+                          }
+                        >
+                          {ICON_OPTIONS.map((iconKey) => (
+                            <option key={`category-step-icon-${iconKey}`} value={iconKey}>
+                              {iconKey}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="md:col-span-4 text-[11px]">
+                        Title
+                        <input
+                          className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                          value={step.title}
+                          onChange={(event) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              categoryManage: {
+                                ...prev.categoryManage,
+                                sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? {
+                                        ...entry,
+                                        stepCards: (entry.stepCards || []).map((stepEntry, mappedIndex) =>
+                                          mappedIndex === stepIndex ? { ...stepEntry, title: event.target.value } : stepEntry
+                                        ),
+                                      }
+                                    : entry
+                                ),
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="md:col-span-6 text-[11px]">
+                        Description
+                        <input
+                          className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                          value={step.description}
+                          onChange={(event) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              categoryManage: {
+                                ...prev.categoryManage,
+                                sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? {
+                                        ...entry,
+                                        stepCards: (entry.stepCards || []).map((stepEntry, mappedIndex) =>
+                                          mappedIndex === stepIndex ? { ...stepEntry, description: event.target.value } : stepEntry
+                                        ),
+                                      }
+                                    : entry
+                                ),
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                      <div className="md:col-span-2 flex items-end justify-end gap-2">
+                        <label className="inline-flex items-center gap-1 text-[11px]">
+                          <input
+                            type="checkbox"
+                            checked={step.enabled}
+                            onChange={(event) =>
+                              setConfig((prev) => ({
+                                ...prev,
+                                categoryManage: {
+                                  ...prev.categoryManage,
+                                  sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                    entryIndex === index
+                                      ? {
+                                          ...entry,
+                                          stepCards: (entry.stepCards || []).map((stepEntry, mappedIndex) =>
+                                            mappedIndex === stepIndex ? { ...stepEntry, enabled: event.target.checked } : stepEntry
+                                          ),
+                                        }
+                                      : entry
+                                  ),
+                                },
+                              }))
+                            }
+                          />
+                          Enabled
+                        </label>
+                        <button
+                          type="button"
+                          className="rounded border p-1"
+                          onClick={() =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              categoryManage: {
+                                ...prev.categoryManage,
+                                sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? {
+                                        ...entry,
+                                        stepCards: (entry.stepCards || []).filter((_, mappedIndex) => mappedIndex !== stepIndex),
+                                      }
+                                    : entry
+                                ),
+                              },
+                            }))
+                          }
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {(section.stepCards || []).length === 0 ? (
+                    <p className="text-[11px] text-gray-500">No step cards added yet.</p>
+                  ) : null}
+                </div>
+              </div>
               <div className="md:col-span-1 flex items-center justify-end gap-1">
                 <input
                   type="checkbox"
@@ -5758,8 +6286,264 @@ export default function JenksV2FrontPageManager() {
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
+                <div className="md:col-span-5 rounded border p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-700">Category Image</h4>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        isLoading={uploadingTarget === 'category-manage'}
+                        onClick={() => {
+                          setCategoryManageUploadIndex(index);
+                          categoryManageImageUploadRef.current?.click();
+                        }}
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            categoryManage: {
+                              ...prev.categoryManage,
+                              sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, image: '' } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-gray-500 break-all">Image: {section.image || 'No image uploaded'}</p>
+                  <div className="rounded-md border bg-white p-2">
+                    {section.image ? (
+                      <img
+                        src={resolvePreviewUrl(section.image)}
+                        alt={`Category section image preview ${index + 1}`}
+                        className="h-28 w-full rounded object-cover"
+                        onError={(event) => {
+                          event.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="flex h-28 items-center justify-center rounded border border-dashed text-xs text-gray-500">
+                        No category image uploaded
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="md:col-span-7 rounded border p-3 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-700">Left Side Step Cards</h4>
+                    <div className="flex items-center gap-2">
+                      <label className="inline-flex items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={section.stepCardsEnabled}
+                          onChange={(event) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              categoryManage: {
+                                ...prev.categoryManage,
+                                sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, stepCardsEnabled: event.target.checked } : entry
+                                ),
+                              },
+                            }))
+                          }
+                        />
+                        Enabled
+                      </label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            categoryManage: {
+                              ...prev.categoryManage,
+                              sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? {
+                                      ...entry,
+                                      stepCards: [
+                                        ...entry.stepCards,
+                                        {
+                                          id: uid(),
+                                          icon: 'Sparkles',
+                                          title: `Step ${entry.stepCards.length + 1}`,
+                                          description: '',
+                                          enabled: true,
+                                          displayOrder: entry.stepCards.length + 1,
+                                        },
+                                      ],
+                                    }
+                                  : entry
+                              ),
+                            },
+                          }))
+                        }
+                      >
+                        <Plus className="mr-1 h-3.5 w-3.5" />
+                        Add Step
+                      </Button>
+                    </div>
+                  </div>
+                  {section.stepCards.map((step, stepIndex) => (
+                    <div key={step.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
+                      <label className="text-[11px] md:col-span-2">
+                        Icon
+                        <select
+                          className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                          value={step.icon}
+                          onChange={(event) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              categoryManage: {
+                                ...prev.categoryManage,
+                                sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? {
+                                        ...entry,
+                                        stepCards: entry.stepCards.map((row, rowIndex) =>
+                                          rowIndex === stepIndex ? { ...row, icon: event.target.value } : row
+                                        ),
+                                      }
+                                    : entry
+                                ),
+                              },
+                            }))
+                          }
+                        >
+                          {ICON_OPTIONS.map((iconKey) => (
+                            <option key={`cat-step-${step.id}-${iconKey}`} value={iconKey}>
+                              {iconKey}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-[11px] md:col-span-3">
+                        Title
+                        <input
+                          className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                          value={step.title}
+                          onChange={(event) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              categoryManage: {
+                                ...prev.categoryManage,
+                                sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? {
+                                        ...entry,
+                                        stepCards: entry.stepCards.map((row, rowIndex) =>
+                                          rowIndex === stepIndex ? { ...row, title: event.target.value } : row
+                                        ),
+                                      }
+                                    : entry
+                                ),
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="text-[11px] md:col-span-5">
+                        Description
+                        <input
+                          className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                          value={step.description}
+                          onChange={(event) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              categoryManage: {
+                                ...prev.categoryManage,
+                                sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? {
+                                        ...entry,
+                                        stepCards: entry.stepCards.map((row, rowIndex) =>
+                                          rowIndex === stepIndex ? { ...row, description: event.target.value } : row
+                                        ),
+                                      }
+                                    : entry
+                                ),
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                      <div className="md:col-span-2 flex items-end justify-end gap-2">
+                        <label className="inline-flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={step.enabled}
+                            onChange={(event) =>
+                              setConfig((prev) => ({
+                                ...prev,
+                                categoryManage: {
+                                  ...prev.categoryManage,
+                                  sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                    entryIndex === index
+                                      ? {
+                                          ...entry,
+                                          stepCards: entry.stepCards.map((row, rowIndex) =>
+                                            rowIndex === stepIndex ? { ...row, enabled: event.target.checked } : row
+                                          ),
+                                        }
+                                      : entry
+                                  ),
+                                },
+                              }))
+                            }
+                          />
+                          On
+                        </label>
+                        <button
+                          type="button"
+                          className="rounded border p-1"
+                          onClick={() =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              categoryManage: {
+                                ...prev.categoryManage,
+                                sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? { ...entry, stepCards: entry.stepCards.filter((_, rowIndex) => rowIndex !== stepIndex) }
+                                    : entry
+                                ),
+                              },
+                            }))
+                          }
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {section.stepCards.length === 0 ? (
+                    <div className="rounded border border-dashed px-3 py-2 text-xs text-gray-500">
+                      No step cards yet. Click "Add Step" to create icon guide cards.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
             </div>
           ))}
+          <input
+            ref={categoryManageImageUploadRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleCategoryManageImageUpload}
+          />
         </section>
       ) : null}
 

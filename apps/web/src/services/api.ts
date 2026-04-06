@@ -10924,8 +10924,11 @@ const jenksV2FrontpageManagerApi = {
             title: string;
             tag: string;
             description: string;
+            image: string;
             ctaText: string;
             ctaLink: string;
+            ctaMode: 'URL' | 'PAGE';
+            ctaPageKey?: string;
             ctaStyle: {
               backgroundColor: string;
               textColor: string;
@@ -10939,6 +10942,17 @@ const jenksV2FrontpageManagerApi = {
             };
             enabled: boolean;
             displayOrder: number;
+            stepsEnabled: boolean;
+            stepCardBackgroundColor: string;
+            stepCardOverlayOpacity: number;
+            stepCards: Array<{
+              id: string;
+              icon: string;
+              title: string;
+              description: string;
+              enabled: boolean;
+              displayOrder: number;
+            }>;
           }>;
         };
         textIconCards: {

@@ -207,6 +207,7 @@ type CategorySection = {
   title: string;
   tag: string;
   description: string;
+  image: string;
   ctaText: string;
   ctaLink: string;
   ctaMode: CtaMode;
@@ -214,6 +215,17 @@ type CategorySection = {
   ctaStyle: CtaStyle;
   enabled: boolean;
   displayOrder: number;
+  stepsEnabled: boolean;
+  stepCardBackgroundColor: string;
+  stepCardOverlayOpacity: number;
+  stepCards: Array<{
+    id: string;
+    icon: string;
+    title: string;
+    description: string;
+    enabled: boolean;
+    displayOrder: number;
+  }>;
 };
 
 type TextIconSectionType = 'HOW_IT_WORKS' | 'SHOP_WITH_CONFIDENCE' | 'CUSTOM';
@@ -896,6 +908,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           title: 'Ready To Wear',
           tag: 'RTW',
           description: 'Manage title, tag, description and CTA for RTW block.',
+          image: '',
           ctaText: 'Shop RTW',
           ctaLink: '/readytowear',
           ctaMode: 'PAGE',
@@ -909,6 +922,59 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           }),
           enabled: true,
           displayOrder: 1,
+          stepsEnabled: true,
+          stepCardBackgroundColor: '#111111',
+          stepCardOverlayOpacity: 78,
+          stepCards: [
+            {
+              id: randomUUID(),
+              icon: 'Search',
+              title: 'SELECT A DESIGN',
+              description: 'Choose from designer templates',
+              enabled: true,
+              displayOrder: 1,
+            },
+            {
+              id: randomUUID(),
+              icon: 'Palette',
+              title: 'PICK YOUR FABRIC',
+              description: 'Browse kente, Ankara and more',
+              enabled: true,
+              displayOrder: 2,
+            },
+            {
+              id: randomUUID(),
+              icon: 'Ruler',
+              title: 'ADD MEASUREMENTS',
+              description: 'Enter your exact measurements',
+              enabled: true,
+              displayOrder: 3,
+            },
+            {
+              id: randomUUID(),
+              icon: 'Sparkles',
+              title: 'VIRTUAL TRY-ON',
+              description: 'See how it looks before ordering',
+              enabled: true,
+              displayOrder: 4,
+            },
+            {
+              id: randomUUID(),
+              icon: 'CreditCard',
+              title: 'CHECKOUT & PAY',
+              description: 'Secure payment options',
+              enabled: true,
+              displayOrder: 5,
+            },
+            {
+              id: randomUUID(),
+              icon: 'Truck',
+              title: 'RECEIVE YOUR DESIGN',
+              description: 'Crafted and delivered to you',
+              enabled: true,
+              displayOrder: 6,
+            },
+          ],
         },
         {
           id: randomUUID(),
@@ -916,6 +982,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           title: 'Custom To Wear',
           tag: 'CTW',
           description: 'Manage title, tag, description and CTA for CTW block.',
+          image: '',
           ctaText: 'Explore CTW',
           ctaLink: '/cystomtowear',
           ctaMode: 'PAGE',
@@ -929,6 +996,59 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           }),
           enabled: true,
           displayOrder: 2,
+          stepsEnabled: true,
+          stepCardBackgroundColor: '#111111',
+          stepCardOverlayOpacity: 78,
+          stepCards: [
+            {
+              id: randomUUID(),
+              icon: 'Search',
+              title: 'SELECT A DESIGN',
+              description: 'Choose from designer templates',
+              enabled: true,
+              displayOrder: 1,
+            },
+            {
+              id: randomUUID(),
+              icon: 'Palette',
+              title: 'PICK YOUR FABRIC',
+              description: 'Browse kente, Ankara and more',
+              enabled: true,
+              displayOrder: 2,
+            },
+            {
+              id: randomUUID(),
+              icon: 'Ruler',
+              title: 'ADD MEASUREMENTS',
+              description: 'Enter your exact measurements',
+              enabled: true,
+              displayOrder: 3,
+            },
+            {
+              id: randomUUID(),
+              icon: 'Sparkles',
+              title: 'VIRTUAL TRY-ON',
+              description: 'See how it looks before ordering',
+              enabled: true,
+              displayOrder: 4,
+            },
+            {
+              id: randomUUID(),
+              icon: 'CreditCard',
+              title: 'CHECKOUT & PAY',
+              description: 'Secure payment options',
+              enabled: true,
+              displayOrder: 5,
+            },
+            {
+              id: randomUUID(),
+              icon: 'Truck',
+              title: 'RECEIVE YOUR DESIGN',
+              description: 'Crafted and delivered to you',
+              enabled: true,
+              displayOrder: 6,
+            },
+          ],
         },
         {
           id: randomUUID(),
@@ -936,6 +1056,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           title: 'Fabric To Buy',
           tag: 'FTB',
           description: 'Manage title, tag, description and CTA for FTB block.',
+          image: '',
           ctaText: 'Shop Fabrics',
           ctaLink: '/fabricstobuy',
           ctaMode: 'PAGE',
@@ -949,6 +1070,59 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           }),
           enabled: true,
           displayOrder: 3,
+          stepsEnabled: true,
+          stepCardBackgroundColor: '#111111',
+          stepCardOverlayOpacity: 78,
+          stepCards: [
+            {
+              id: randomUUID(),
+              icon: 'Search',
+              title: 'SELECT A DESIGN',
+              description: 'Choose from designer templates',
+              enabled: true,
+              displayOrder: 1,
+            },
+            {
+              id: randomUUID(),
+              icon: 'Palette',
+              title: 'PICK YOUR FABRIC',
+              description: 'Browse kente, Ankara and more',
+              enabled: true,
+              displayOrder: 2,
+            },
+            {
+              id: randomUUID(),
+              icon: 'Ruler',
+              title: 'ADD MEASUREMENTS',
+              description: 'Enter your exact measurements',
+              enabled: true,
+              displayOrder: 3,
+            },
+            {
+              id: randomUUID(),
+              icon: 'Sparkles',
+              title: 'VIRTUAL TRY-ON',
+              description: 'See how it looks before ordering',
+              enabled: true,
+              displayOrder: 4,
+            },
+            {
+              id: randomUUID(),
+              icon: 'CreditCard',
+              title: 'CHECKOUT & PAY',
+              description: 'Secure payment options',
+              enabled: true,
+              displayOrder: 5,
+            },
+            {
+              id: randomUUID(),
+              icon: 'Truck',
+              title: 'RECEIVE YOUR DESIGN',
+              description: 'Crafted and delivered to you',
+              enabled: true,
+              displayOrder: 6,
+            },
+          ],
         },
       ],
     },
@@ -1648,6 +1822,7 @@ const normalizeCategoryManage = (
         title: (getString(item.title) || fallbackItem.title).slice(0, 120),
         tag: (getString(item.tag) || fallbackItem.tag).slice(0, 80),
         description: (getString(item.description) || fallbackItem.description).slice(0, 300),
+        image: normalizeHref(item.image, fallbackItem.image || ''),
         ctaText: (getString(item.ctaText) || fallbackItem.ctaText).slice(0, 80),
         ctaMode: normalizeCtaMode(item.ctaMode, fallbackItem.ctaMode),
         ctaPageKey: (getString(item.ctaPageKey) || getString(fallbackItem.ctaPageKey) || '').slice(0, 120) || undefined,
@@ -1658,6 +1833,34 @@ const normalizeCategoryManage = (
         ctaStyle: normalizeCtaStyle(item.ctaStyle, fallbackItem.ctaStyle),
         enabled: getBoolean(item.enabled) ?? fallbackItem.enabled,
         displayOrder: clamp(Math.round(getNumber(item.displayOrder) ?? fallbackItem.displayOrder), 0, 999),
+        stepsEnabled: getBoolean(item.stepsEnabled) ?? fallbackItem.stepsEnabled ?? true,
+        stepCardBackgroundColor: (getString(item.stepCardBackgroundColor) || fallbackItem.stepCardBackgroundColor || '#111111').slice(0, 40),
+        stepCardOverlayOpacity: clamp(
+          Math.round(getNumber(item.stepCardOverlayOpacity) ?? fallbackItem.stepCardOverlayOpacity ?? 78),
+          0,
+          100
+        ),
+        stepCards: (Array.isArray(item.stepCards) ? item.stepCards : fallbackItem.stepCards || [])
+          .map((stepEntry, stepIndex) => {
+            const step = asRecord(stepEntry);
+            const fallbackStep = (fallbackItem.stepCards || [])[stepIndex] || (fallbackItem.stepCards || [])[0] || {
+              id: randomUUID(),
+              icon: 'Sparkles',
+              title: `STEP ${stepIndex + 1}`,
+              description: '',
+              enabled: true,
+              displayOrder: stepIndex + 1,
+            };
+            return {
+              id: getString(step.id) || fallbackStep.id || randomUUID(),
+              icon: (getString(step.icon) || fallbackStep.icon || 'Sparkles').slice(0, 60),
+              title: (getString(step.title) || fallbackStep.title || `STEP ${stepIndex + 1}`).slice(0, 120),
+              description: (getString(step.description) || fallbackStep.description || '').slice(0, 220),
+              enabled: getBoolean(step.enabled) ?? fallbackStep.enabled ?? true,
+              displayOrder: clamp(Math.round(getNumber(step.displayOrder) ?? fallbackStep.displayOrder ?? stepIndex + 1), 0, 999),
+            };
+          })
+          .slice(0, 20),
       } as CategorySection;
     })
     .slice(0, 30);

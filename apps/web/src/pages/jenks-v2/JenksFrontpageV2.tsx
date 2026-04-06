@@ -3,6 +3,7 @@ import {
   ArrowRight,
   Briefcase,
   CalendarDays,
+  CreditCard,
   ChevronLeft,
   ChevronRight,
   Facebook,
@@ -14,6 +15,7 @@ import {
   Mail,
   Menu,
   Moon,
+  Ruler,
   Palette,
   Phone,
   MapPin,
@@ -96,6 +98,17 @@ type CategorySectionRuntime = {
   image: string;
   textOnLeft: boolean;
   panelBg: string;
+  stepsEnabled: boolean;
+  stepCardBackgroundColor: string;
+  stepCardOverlayOpacity: number;
+  stepCards: Array<{
+    id: string;
+    icon: string;
+    title: string;
+    description: string;
+    enabled: boolean;
+    displayOrder: number;
+  }>;
 };
 type SpotlightRuntime = {
   id: string;
@@ -190,6 +203,8 @@ const ICON_BY_KEY: Record<string, IconComponent> = {
   Briefcase,
   CalendarDays,
   Globe,
+  Ruler,
+  CreditCard,
 };
 
 const SHOP_BY_TAB_META: Array<{ key: ShopByTab; label: string; Icon: IconComponent }> = [
@@ -246,6 +261,15 @@ const CATEGORY_TEXT_LEFT_BY_KEY: Record<string, boolean> = {
   FTB: true,
   CTW: false,
 };
+
+const CATEGORY_STEP_CARD_DEFAULTS = [
+  { id: 'step-1', icon: 'Search', title: 'SELECT A DESIGN', description: 'Choose from designer templates', enabled: true, displayOrder: 1 },
+  { id: 'step-2', icon: 'Palette', title: 'PICK YOUR FABRIC', description: 'Browse kente, Ankara and more', enabled: true, displayOrder: 2 },
+  { id: 'step-3', icon: 'Ruler', title: 'ADD MEASUREMENTS', description: 'Enter your exact measurements', enabled: true, displayOrder: 3 },
+  { id: 'step-4', icon: 'Sparkles', title: 'VIRTUAL TRY-ON', description: 'See how it looks before ordering', enabled: true, displayOrder: 4 },
+  { id: 'step-5', icon: 'CreditCard', title: 'CHECKOUT & PAY', description: 'Secure payment options', enabled: true, displayOrder: 5 },
+  { id: 'step-6', icon: 'Truck', title: 'RECEIVE YOUR DESIGN', description: 'Crafted and delivered to you', enabled: true, displayOrder: 6 },
+] as const;
 
 const DEFAULT_SOLID_CTA_STYLE: CTAStyle = {
   backgroundColor: '#e66045',
@@ -1241,9 +1265,35 @@ export default function JenksFrontpageV2() {
         ctaMode,
         ctaPageKey: ctaPageKey || undefined,
         ctaStyle: entry.ctaStyle,
-        image: matchingCategory?.image || CATEGORY_IMAGE_BY_KEY[key] || `${ASSET_BASE}/rw_full.jpg`,
+        image: asString(entry.image, matchingCategory?.image || CATEGORY_IMAGE_BY_KEY[key] || `${ASSET_BASE}/rw_full.jpg`),
         textOnLeft: CATEGORY_TEXT_LEFT_BY_KEY[key] ?? (idx % 2 === 1),
         panelBg: CATEGORY_PANEL_BG_BY_KEY[key] || 'bg-[#111]',
+        stepsEnabled: asBoolean(entry.stepsEnabled, true),
+        stepCardBackgroundColor: asString(entry.stepCardBackgroundColor, '#111111'),
+        stepCardOverlayOpacity: Math.max(0, Math.min(100, Math.round(asNumber(entry.stepCardOverlayOpacity, 78)))),
+        stepCards: ((): CategorySectionRuntime['stepCards'] => {
+          const rawSteps = asArray(entry.stepCards)
+            .map((step) => asRecord(step))
+            .filter((step) => asBoolean(step.enabled, true))
+            .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
+            .map((step, stepIdx) => ({
+              id: asString(step.id, `${asString(entry.id, `cat-${idx + 1}`)}-step-${stepIdx + 1}`),
+              icon: asString(step.icon, 'Sparkles'),
+              title: asString(step.title, `STEP ${stepIdx + 1}`).toUpperCase(),
+              description: asString(step.description, ''),
+              enabled: asBoolean(step.enabled, true),
+              displayOrder: Math.max(0, Math.round(asNumber(step.displayOrder, stepIdx + 1))),
+            }));
+          if (rawSteps.length > 0) return rawSteps;
+          return CATEGORY_STEP_CARD_DEFAULTS.map((step, stepIdx) => ({
+            id: `${asString(entry.id, `cat-${idx + 1}`)}-default-${step.id}`,
+            icon: step.icon,
+            title: step.title,
+            description: step.description,
+            enabled: step.enabled,
+            displayOrder: step.displayOrder || stepIdx + 1,
+          }));
+        })(),
       };
     });
     const source = mapped.length > 0 ? mapped : RTW_FTB_CTW_SECTIONS;
@@ -1362,6 +1412,16 @@ export default function JenksFrontpageV2() {
     return normalizeHref(section.href, '/readytowear');
   };
   const orderedSectionsRtwFtbCtw = useMemo(() => [...sectionsRtwFtbCtw], [sectionsRtwFtbCtw]);
+  const categoryStepCardOverlayStyle = (section: CategorySectionRuntime): CSSProperties => {
+    const alpha = Math.max(0, Math.min(1, section.stepCardOverlayOpacity / 100));
+    const background = asString(section.stepCardBackgroundColor, '#111111');
+    return {
+      backgroundColor: background,
+      borderColor: `rgba(255,255,255,${Math.max(0.18, alpha * 0.4)})`,
+      color: '#ffffff',
+      opacity: Math.max(0.38, alpha),
+    };
+  };
 
   const featuredHrefForCountry = (key: 'RTW' | 'CTW' | 'FTB') => {
     const categoryToken = categoryTokenFromSectionKey(key);
@@ -2874,11 +2934,81 @@ export default function JenksFrontpageV2() {
                     </div>
                   </div>
                 </div>
-                <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover" data-kimi-anim="zoom-in" />
+                <div className="relative h-full w-full">
+                  <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover" data-kimi-anim="zoom-in" />
+                  {section.stepsEnabled && section.stepCards.length > 0 ? (
+                    <div className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden w-[240px] overflow-y-auto pr-1 md:block">
+                      <div className="space-y-1">
+                        {section.stepCards
+                          .slice()
+                          .sort((left, right) => left.displayOrder - right.displayOrder)
+                          .map((step, stepIndex) => {
+                            const StepIcon = iconFromKey(step.icon, Sparkles);
+                            const orderLabel = String(stepIndex + 1).padStart(2, '0');
+                            return (
+                              <div
+                                key={step.id}
+                                className="rounded border px-3 py-2 backdrop-blur-[1px]"
+                                style={categoryStepCardOverlayStyle(section)}
+                              >
+                                <div className="flex items-start gap-2">
+                                  <div className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#e66045]/95 text-[10px] font-semibold text-white">
+                                    {orderLabel}
+                                  </div>
+                                  <StepIcon className="mt-0.5 h-4 w-4 shrink-0 text-[#ff7c61]" />
+                                  <div className="min-w-0">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white">{step.title}</p>
+                                    {step.description ? (
+                                      <p className="mt-1 text-[10px] leading-tight text-white/82">{step.description}</p>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </>
             ) : (
               <>
-                <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover" data-kimi-anim="zoom-in" />
+                <div className="relative h-full w-full">
+                  <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover" data-kimi-anim="zoom-in" />
+                  {section.stepsEnabled && section.stepCards.length > 0 ? (
+                    <div className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden w-[240px] overflow-y-auto pr-1 md:block">
+                      <div className="space-y-1">
+                        {section.stepCards
+                          .slice()
+                          .sort((left, right) => left.displayOrder - right.displayOrder)
+                          .map((step, stepIndex) => {
+                            const StepIcon = iconFromKey(step.icon, Sparkles);
+                            const orderLabel = String(stepIndex + 1).padStart(2, '0');
+                            return (
+                              <div
+                                key={step.id}
+                                className="rounded border px-3 py-2 backdrop-blur-[1px]"
+                                style={categoryStepCardOverlayStyle(section)}
+                              >
+                                <div className="flex items-start gap-2">
+                                  <div className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#e66045]/95 text-[10px] font-semibold text-white">
+                                    {orderLabel}
+                                  </div>
+                                  <StepIcon className="mt-0.5 h-4 w-4 shrink-0 text-[#ff7c61]" />
+                                  <div className="min-w-0">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white">{step.title}</p>
+                                    {step.description ? (
+                                      <p className="mt-1 text-[10px] leading-tight text-white/82">{step.description}</p>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
                 <div className={`relative overflow-hidden px-8 py-12 text-white ${section.panelBg}`} data-kimi-anim="sidebar-right">
                   <div
                     className="pointer-events-none absolute inset-0 scale-105 bg-cover bg-center blur-2xl"
