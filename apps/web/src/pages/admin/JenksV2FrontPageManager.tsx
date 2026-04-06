@@ -5791,6 +5791,7 @@ export default function JenksV2FrontPageManager() {
                         title: 'New Category Section',
                         tag: '',
                         description: '',
+                        image: CATEGORY_FALLBACK_IMAGE_BY_KEY.RTW,
                         ctaText: '',
                         ctaLink: '/readytowear',
                         ctaMode: 'PAGE',
@@ -5802,6 +5803,10 @@ export default function JenksV2FrontPageManager() {
                           borderWidth: 0,
                           fontSize: 18,
                         }),
+                        stepCardBackgroundColor: '#111111',
+                        stepCardOverlayOpacity: 78,
+                        stepCardsEnabled: true,
+                        stepCards: defaultCategoryStepCards('RTW'),
                         enabled: true,
                         displayOrder: prev.categoryManage.sections.length + 1,
                       },
@@ -5925,6 +5930,25 @@ export default function JenksV2FrontPageManager() {
                     <span className="ml-1">Remove</span>
                   </Button>
                 </div>
+                <label className="text-[11px]">
+                  Image URL
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={section.image}
+                    placeholder="https://... or /path"
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        categoryManage: {
+                          ...prev.categoryManage,
+                          sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, image: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
                 <p className="break-all text-[10px] text-gray-500">{section.image || 'No image uploaded'}</p>
                 <div className="rounded-md border bg-white p-2">
                   {section.image ? (
@@ -6302,6 +6326,7 @@ export default function JenksV2FrontPageManager() {
                         }}
                       >
                         <Upload className="h-3.5 w-3.5" />
+                        <span className="ml-1">Upload Image</span>
                       </Button>
                       <Button
                         type="button"
@@ -6319,9 +6344,29 @@ export default function JenksV2FrontPageManager() {
                         }
                       >
                         <Trash2 className="h-3.5 w-3.5" />
+                        <span className="ml-1">Remove</span>
                       </Button>
                     </div>
                   </div>
+                  <label className="text-[11px]">
+                    Image URL
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={section.image}
+                      placeholder="https://... or /path"
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          categoryManage: {
+                            ...prev.categoryManage,
+                            sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, image: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
                   <p className="text-[11px] text-gray-500 break-all">Image: {section.image || 'No image uploaded'}</p>
                   <div className="rounded-md border bg-white p-2">
                     {section.image ? (
