@@ -197,7 +197,7 @@ type CategorySection = {
   ctaStyle: CTAStyle;
   stepCardBackgroundColor: string;
   stepCardOverlayOpacity: number;
-  stepCardsEnabled: boolean;
+  stepsEnabled: boolean;
   stepCards: CategoryStepCard[];
   enabled: boolean;
   displayOrder: number;
@@ -1108,7 +1108,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         }),
         stepCardBackgroundColor: '#111111',
         stepCardOverlayOpacity: 78,
-        stepCardsEnabled: true,
+        stepsEnabled: true,
         stepCards: [
           {
             id: uid(),
@@ -1164,7 +1164,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         }),
         stepCardBackgroundColor: '#111111',
         stepCardOverlayOpacity: 78,
-        stepCardsEnabled: true,
+        stepsEnabled: true,
         stepCards: [
           {
             id: uid(),
@@ -1220,7 +1220,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         }),
         stepCardBackgroundColor: '#111111',
         stepCardOverlayOpacity: 78,
-        stepCardsEnabled: true,
+        stepsEnabled: true,
         stepCards: [
           {
             id: uid(),
@@ -2125,7 +2125,10 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
               0,
               100
             ),
-            stepCardsEnabled: toBoolean((section as CategorySection)?.stepCardsEnabled, fallbackCategory.stepCardsEnabled),
+            stepsEnabled: toBoolean(
+              (section as any)?.stepsEnabled ?? (section as any)?.stepCardsEnabled,
+              (fallbackCategory as any)?.stepsEnabled ?? true
+            ),
             stepCards: Array.isArray((section as CategorySection)?.stepCards)
               ? (section as CategorySection).stepCards
                   .map((card, cardIndex) => ({
@@ -5805,7 +5808,7 @@ export default function JenksV2FrontPageManager() {
                         }),
                         stepCardBackgroundColor: '#111111',
                         stepCardOverlayOpacity: 78,
-                        stepCardsEnabled: true,
+                        stepsEnabled: true,
                         stepCards: defaultCategoryStepCards('RTW'),
                         enabled: true,
                         displayOrder: prev.categoryManage.sections.length + 1,
@@ -6091,14 +6094,14 @@ export default function JenksV2FrontPageManager() {
                   <label className="inline-flex items-center gap-2 text-[11px] font-medium">
                     <input
                       type="checkbox"
-                      checked={section.stepCardsEnabled}
+                      checked={section.stepsEnabled}
                       onChange={(event) =>
                         setConfig((prev) => ({
                           ...prev,
                           categoryManage: {
                             ...prev.categoryManage,
                             sections: prev.categoryManage.sections.map((entry, entryIndex) =>
-                              entryIndex === index ? { ...entry, stepCardsEnabled: event.target.checked } : entry
+                              entryIndex === index ? { ...entry, stepsEnabled: event.target.checked } : entry
                             ),
                           },
                         }))
@@ -6392,14 +6395,14 @@ export default function JenksV2FrontPageManager() {
                       <label className="inline-flex items-center gap-2 text-xs">
                         <input
                           type="checkbox"
-                          checked={section.stepCardsEnabled}
+                          checked={section.stepsEnabled}
                           onChange={(event) =>
                             setConfig((prev) => ({
                               ...prev,
                               categoryManage: {
                                 ...prev.categoryManage,
                                 sections: prev.categoryManage.sections.map((entry, entryIndex) =>
-                                  entryIndex === index ? { ...entry, stepCardsEnabled: event.target.checked } : entry
+                                  entryIndex === index ? { ...entry, stepsEnabled: event.target.checked } : entry
                                 ),
                               },
                             }))
