@@ -386,6 +386,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isProductManagementMenuOpen, setIsProductManagementMenuOpen] = useState(true);
   const [isAutomationMenuOpen, setIsAutomationMenuOpen] = useState(true);
   const [isReferralMenuOpen, setIsReferralMenuOpen] = useState(true);
+  const [isCustomerAccountsMenuOpen, setIsCustomerAccountsMenuOpen] = useState(true);
   const [isEnterpriseMenuOpen, setIsEnterpriseMenuOpen] = useState(true);
   const [enterpriseRoleManagementAllowed, setEnterpriseRoleManagementAllowed] = useState(false);
   const [supportCalling, setSupportCalling] = useState(false);
@@ -431,6 +432,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/users': ['users:read'],
       '/admin/profile': [],
       '/admin/customer-accounts': ['users:read'],
+      '/admin/customer-accounts/newsletter-subscribers': ['users:read'],
       '/admin/administrator-accounts': [],
       '/admin/administrators': ['users:read'],
       '/admin/roles': ['admin:roles:manage', 'users:read'],
@@ -624,6 +626,10 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Role Management', href: '/admin/roles', icon: ChevronRight },
     { label: 'Authenticator Security', href: '/admin/authenticator-security', icon: ChevronRight },
     { label: 'Backup Center', href: '/admin/backups', icon: Database },
+  ];
+  const customerAccountsSubmenu = [
+    { label: 'Customer List', href: '/admin/customer-accounts', icon: ChevronRight },
+    { label: 'Newsletter Subscribers', href: '/admin/customer-accounts/newsletter-subscribers', icon: ChevronRight },
   ];
   const canRenderAdminAccountsSubItem = (href: string) => {
     if (href === '/admin/backups') return true;
@@ -1572,6 +1578,70 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                     {isAdminAccountsMenuOpen && isSidebarOpen ? (
                       <div className="ml-7 space-y-1">
                         {visibleAdminAccountSubmenu.map((subItem) => {
+                          const subMeta = readHrefMeta(subItem.href);
+                          const subActive =
+                            location.pathname === subMeta.pathname &&
+                            (subMeta.tab ? currentTab === subMeta.tab : !currentTab);
+                          const SubIcon = subItem.icon;
+                          return (
+                            <Link
+                              key={subItem.href}
+                              to={subItem.href}
+                              className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
+                                subActive
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <SubIcon className="h-4 w-4" />
+                              <span>{subItem.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+
+              if (userType === 'admin' && item.href === '/admin/customer-accounts') {
+                const customerAccountsMenuActive =
+                  location.pathname === '/admin/customer-accounts' ||
+                  location.pathname === '/admin/customer-accounts/newsletter-subscribers';
+                const visibleCustomerAccountsSubmenu = customerAccountsSubmenu.filter((subItem) =>
+                  canAccessAdminNav(subItem.href)
+                );
+                if (visibleCustomerAccountsSubmenu.length === 0) {
+                  return null;
+                }
+                return (
+                  <div key={item.href} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomerAccountsMenuOpen((prev) => !prev)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
+                        customerAccountsMenuActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {isSidebarOpen ? (
+                        <>
+                          <span className="text-sm font-medium">Customer Accounts</span>
+                          <span className="ml-auto">
+                            {isCustomerAccountsMenuOpen ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </span>
+                        </>
+                      ) : null}
+                    </button>
+                    {isCustomerAccountsMenuOpen && isSidebarOpen ? (
+                      <div className="ml-7 space-y-1">
+                        {visibleCustomerAccountsSubmenu.map((subItem) => {
                           const subMeta = readHrefMeta(subItem.href);
                           const subActive =
                             location.pathname === subMeta.pathname &&

@@ -56,6 +56,7 @@ import AdminRoleManagement from './pages/admin/RoleManagement';
 import AdminVendorProfiles from './pages/admin/VendorProfiles';
 import AdminSessionAudit from './pages/admin/SessionAudit';
 import AdminTraffic from './pages/admin/Traffic';
+import AdminNewsletterSubscribersPage from './pages/admin/NewsletterSubscribers';
 import AdminMeasurementTemplates from './pages/admin/MeasurementTemplates';
 import AdminCurrencyMatrix from './pages/admin/CurrencyMatrix';
 import AdminPayments from './pages/admin/Payments';
@@ -317,6 +318,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['users:read']}>
                       <AdminUsers />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/customer-accounts/newsletter-subscribers"
+                  element={
+                    <AdminPermissionGuard required={['users:read']}>
+                      <AdminNewsletterSubscribersPage />
                     </AdminPermissionGuard>
                   }
                 />
