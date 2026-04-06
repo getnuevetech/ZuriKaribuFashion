@@ -1421,10 +1421,25 @@ export default function JenksFrontpageV2() {
     return normalizeHref(entry.ctaLink, fallbackHref);
   };
 
+  const designerSpotlightRows = Math.max(1, Math.round(asNumber(designerSpotlightCfg.rows, 1)));
+  const designerSpotlightColumns = Math.max(1, Math.min(12, Math.round(asNumber(designerSpotlightCfg.columns, 3))));
+  const designerSpotlightColsClass = (() => {
+    if (designerSpotlightColumns <= 1) return 'md:grid-cols-1';
+    if (designerSpotlightColumns === 2) return 'md:grid-cols-2';
+    if (designerSpotlightColumns === 3) return 'md:grid-cols-3';
+    if (designerSpotlightColumns === 4) return 'md:grid-cols-4';
+    if (designerSpotlightColumns === 5) return 'md:grid-cols-5';
+    if (designerSpotlightColumns === 6) return 'md:grid-cols-6';
+    if (designerSpotlightColumns === 7) return 'md:grid-cols-7';
+    if (designerSpotlightColumns === 8) return 'md:grid-cols-8';
+    if (designerSpotlightColumns === 9) return 'md:grid-cols-9';
+    if (designerSpotlightColumns === 10) return 'md:grid-cols-10';
+    if (designerSpotlightColumns === 11) return 'md:grid-cols-11';
+    return 'md:grid-cols-12';
+  })();
+
   const spotlightCards = useMemo(() => {
-    const rows = Math.max(1, Math.round(asNumber(designerSpotlightCfg.rows, 1)));
-    const cols = Math.max(1, Math.round(asNumber(designerSpotlightCfg.columns, 3)));
-    const maxItems = rows * cols;
+    const maxItems = designerSpotlightRows * designerSpotlightColumns;
     const entries = asArray(designerSpotlightCfg.cards)
       .map((entry) => asRecord(entry))
       .filter((entry) => asBoolean(entry.enabled, true))
@@ -1444,7 +1459,7 @@ export default function JenksFrontpageV2() {
       });
     const source = entries.length > 0 ? entries : DESIGNER_SPOTLIGHT.map((row) => ({ ...row, tag: 'Designer Spotlight' }));
     return source.slice(0, maxItems);
-  }, [designerSpotlightCfg.cards, designerSpotlightCfg.columns, designerSpotlightCfg.rows]);
+  }, [designerSpotlightCfg.cards, designerSpotlightColumns, designerSpotlightRows]);
   const staticReviewCards = useMemo(() => {
     const rows = asArray(customerReviewsCfg.staticMessages)
       .map((entry) => asRecord(entry))
@@ -3042,7 +3057,10 @@ export default function JenksFrontpageV2() {
 
       {/* SPOTLIGHT */}
       {isSectionVisible('DESIGNER_SPOTLIGHT') ? (
-        <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 bg-[#101010] md:grid-cols-3`} style={{ order: getSectionOrder('DESIGNER_SPOTLIGHT') }}>
+        <section
+          className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 bg-[#101010] ${designerSpotlightColsClass}`}
+          style={{ order: getSectionOrder('DESIGNER_SPOTLIGHT') }}
+        >
           {spotlightCards.map((spot) => (
             <Link key={spot.id} to={spot.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
               <img src={spot.image} alt={spot.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
