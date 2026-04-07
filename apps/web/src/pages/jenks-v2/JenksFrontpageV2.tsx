@@ -31,8 +31,10 @@ import {
   Twitter,
   Youtube,
 } from 'lucide-react';
+import BrandImageWithFallback from '../../components/BrandImageWithFallback';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, resolveAssetUrl } from '../../services/api';
+import { stripLegacyFallbackImage } from '../../utils/imageFallback';
 import '../../styles/jenks-v2.css';
 
 type HeroSlide = {
@@ -419,12 +421,15 @@ const PAGE_HREF_BY_KEY: Record<string, string> = {
   AUTH_LOGIN: '/auth/login',
 };
 
-const resolveManagerImage = (value: unknown, fallback: string) => {
+const resolveManagerImage = (value: unknown, fallback = '') => {
   const raw = asString(value, '');
   if (!raw) return fallback;
   const resolved = resolveAssetUrl(raw);
-  return asString(resolved, fallback);
+  const sanitized = stripLegacyFallbackImage(asString(resolved, fallback));
+  return asString(sanitized, '');
 };
+
+const hasImageSource = (value: unknown) => stripLegacyFallbackImage(asString(value, '')).length > 0;
 
 const iconFromKey = (iconKey: unknown, fallback: IconComponent) => {
   const token = asString(iconKey, '');
@@ -441,6 +446,34 @@ const splitHeroTitle = (title: string) => {
     titleA: words.slice(0, 1).join(' '),
     titleB: words.slice(1).join(' '),
   };
+};
+
+const normalizeDesignerSpotlightTag = (value: unknown) => {
+  const raw = asString(value, '').trim().toUpperCase();
+  if (!raw) return 'NIGERIA';
+  if (raw.length <= 3 && COUNTRY_LABEL_BY_CODE[raw]) return COUNTRY_LABEL_BY_CODE[raw].toUpperCase();
+  return raw;
+};
+
+const normalizeDesignerSpotlightTitle = (value: unknown, fallback = 'DESIGNER SPOTLIGHT') => {
+  const text = asString(value, fallback).trim();
+  return text.toUpperCase();
+};
+
+const normalizeDesignerSpotlightRole = (value: unknown, fallback = 'Contemporary African Designer') => {
+  const text = asString(value, fallback).trim();
+  if (!text) return fallback;
+  return text;
+};
+
+const normalizeDesignerSpotlightDescription = (
+  value: unknown,
+  fallback = 'Crafted pieces that honor heritage while embracing modern silhouettes.'
+) => {
+  const text = asString(value, fallback).trim();
+  if (!text) return fallback;
+  const clean = text.replace(/\s+/g, ' ');
+  return clean.length > 180 ? `${clean.slice(0, 177).trim()}...` : clean;
 };
 
 const hasHtmlTag = (value: string) => /<\/?[a-z][\s\S]*>/i.test(String(value || ''));
@@ -567,6 +600,11 @@ const sanitizeLegacyInternalHref = (href: string) => {
 
 const toSafeInternalHref = (href: string) =>
   isExternalHref(href) ? href : sanitizeLegacyInternalHref(href);
+
+const toSafeBackgroundImage = (value: unknown) => {
+  const safe = stripLegacyFallbackImage(value);
+  return safe ? `url(${safe})` : 'none';
+};
 
 const buildCTAStyle = (raw: unknown, fallback: CTAStyle): CSSProperties => {
   const row = asRecord(raw);
@@ -930,25 +968,34 @@ const DESIGNER_SPOTLIGHT = [
   {
     id: 'spot-1',
     image: `${ASSET_BASE}/designer_spotlight.jpg`,
-    title: 'LAGOS TAILORING HOUSE',
-    description: 'Sharp silhouettes, modern cuts, and rooted craftsmanship from Nigeria.',
-    cta: 'VIEW DESIGNER',
+    title: 'OLUWASEUN ADEYEMI',
+    country: 'NIGERIA',
+    specialty: 'Contemporary Menswear Designer',
+    description:
+      'With over 15 years of experience, Oluwaseun blends traditional Nigerian craftsmanship with modern silhouettes, creating pieces that honor heritage while embracing contemporary elegance.',
+    cta: 'VIEW COLLECTION',
     href: '/designers',
   },
   {
     id: 'spot-2',
     image: `${ASSET_BASE}/featured_custom_right.jpg`,
-    title: 'DAKAR COUTURE STUDIO',
-    description: 'Elegant made-to-measure looks inspired by Senegalese heritage details.',
-    cta: 'SHOP COLLECTION',
+    title: 'AMINATA DIALLO',
+    country: 'SENEGAL',
+    specialty: 'Luxury Custom Tailor',
+    description:
+      'Aminata creates tailored pieces that blend Dakar elegance with contemporary silhouettes for ceremonies and modern city life.',
+    cta: 'VIEW COLLECTION',
     href: '/customtowear',
   },
   {
     id: 'spot-3',
     image: `${ASSET_BASE}/featured_rw_left.jpg`,
-    title: 'ACCRA READY EDIT',
-    description: 'Ready pieces styled for events, work, and everyday confidence.',
-    cta: 'EXPLORE RTW',
+    title: 'KWESI MENSAH',
+    country: 'GHANA',
+    specialty: 'Ready-To-Wear Creative Director',
+    description:
+      'Kwesi curates bold ready-to-wear edits inspired by Ghanaian heritage and modern global street tailoring.',
+    cta: 'VIEW COLLECTION',
     href: '/readytowear',
   },
 ] as const;
@@ -1021,7 +1068,6 @@ export default function JenksFrontpageV2() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [themeMode, setThemeMode] = useState<'LIGHT' | 'DARK'>('LIGHT');
-  const [heroImageLoadFailed, setHeroImageLoadFailed] = useState<Record<string, boolean>>({});
   const [freshDropsProducts, setFreshDropsProducts] = useState<
     Array<{ id: string; image: string; name: string; brand: string; price: string; createdAtTs: number }>
   >([]);
@@ -1029,7 +1075,6 @@ export default function JenksFrontpageV2() {
   const [customerReviewIndex, setCustomerReviewIndex] = useState(0);
   const [customerReviewsHovered, setCustomerReviewsHovered] = useState(false);
   const [topStripPaused, setTopStripPaused] = useState(false);
-  const [isHeritageImageReady, setIsHeritageImageReady] = useState(false);
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterSubmitting, setNewsletterSubmitting] = useState(false);
   const [newsletterStatus, setNewsletterStatus] = useState<{ kind: 'idle' | 'success' | 'error'; message: string }>({
@@ -1240,7 +1285,7 @@ export default function JenksFrontpageV2() {
         subtitle: asString(row.description, ''),
         meta: `${Math.max(0, Math.round(asNumber(row.staticProductCount, 0)))} products`,
         href: normalizeHref(row.href, DEFAULT_HREF_BY_KEY[key] || '/readytowear', key),
-        image: asString(row.image, CATEGORY_IMAGE_BY_KEY[key] || `${ASSET_BASE}/featured_rw_left.jpg`),
+        image: asString(stripLegacyFallbackImage(row.image), ''),
         Icon: iconFromKey(row.icon, ShoppingBag),
       };
     });
@@ -1331,7 +1376,10 @@ export default function JenksFrontpageV2() {
         ctaMode,
         ctaPageKey: ctaPageKey || undefined,
         ctaStyle: entry.ctaStyle,
-        image: asString(entry.image, matchingCategory?.image || CATEGORY_IMAGE_BY_KEY[key] || `${ASSET_BASE}/rw_full.jpg`),
+        image: asString(
+          stripLegacyFallbackImage(entry.image),
+          asString(stripLegacyFallbackImage(matchingCategory?.image), '')
+        ),
         textOnLeft: CATEGORY_TEXT_LEFT_BY_KEY[key] ?? (idx % 2 === 1),
         panelBg: CATEGORY_PANEL_BG_BY_KEY[key] || 'bg-[#111]',
         stepsEnabled: asBoolean(entry.stepsEnabled, true),
@@ -1418,7 +1466,7 @@ export default function JenksFrontpageV2() {
       if (key !== 'RTW' && key !== 'CTW' && key !== 'FTB') return;
       grouped[key].push({
         id: asString(row.id, `${key.toLowerCase()}-${idx + 1}`),
-        image: asString(row.image, defaults[key][0]?.image || `${ASSET_BASE}/product4.jpg`),
+        image: asString(stripLegacyFallbackImage(row.image), ''),
         title: asString(row.title, defaults[key][0]?.title || ''),
         subtitle: asString(row.description, defaults[key][0]?.subtitle || ''),
         href: normalizeHref(row.ctaLink, FEATURED_HREF_BY_KEY[key] || '/readytowear', key),
@@ -1572,25 +1620,46 @@ export default function JenksFrontpageV2() {
       .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
       .map((entry, idx) => {
         const fallbackHref = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.href || '/customtowear';
+        const fallbackTitle = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.title || 'OLUWASEUN ADEYEMI';
+        const fallbackDescription =
+          DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.description ||
+          'With over 15 years of experience, Oluwaseun blends traditional Nigerian craftsmanship with modern silhouettes, creating pieces that honor heritage while embracing contemporary elegance.';
+        const fallbackCountry = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.country || 'NIGERIA';
+        const fallbackSpecialty =
+          DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.specialty || 'Contemporary Menswear Designer';
+        const fallbackTag = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.tag || 'NIGERIA';
         const countryToken = asString((entry as Record<string, unknown>).countryCode, '').trim().toUpperCase();
+        const designerName = asString(entry.designerName, asString(entry.title, fallbackTitle));
+        const specialty = asString(entry.specialty, asString(entry.designerSpecialty, fallbackSpecialty));
+        const country = asString(
+          entry.country,
+          asString(entry.designerCountry, COUNTRY_LABEL_BY_CODE[countryToken] || fallbackCountry)
+        );
         return {
           id: asString(entry.id, `spot-${idx + 1}`),
-          image: asString(entry.image, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.image || `${ASSET_BASE}/designer_spotlight.jpg`),
-          title: asString(entry.title, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.title || 'Designer Spotlight'),
-          designerName: asString(entry.designerName, ''),
-          designerCountry: asString(
-            entry.country,
-            asString(entry.designerCountry, COUNTRY_LABEL_BY_CODE[countryToken] || '')
-          ),
-          designerSpecialty: asString(entry.specialty, asString(entry.designerSpecialty, '')),
-          description: asString(entry.description, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.description || ''),
-          cta: asString(entry.ctaText, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.cta || 'VIEW DESIGNER').toUpperCase(),
+          image: asString(stripLegacyFallbackImage(entry.image), ''),
+          title: designerName,
+          designerName,
+          designerCountry: country,
+          designerSpecialty: specialty,
+          description: asString(entry.description, fallbackDescription),
+          cta: asString(entry.ctaText, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.cta || 'VIEW COLLECTION').toUpperCase(),
           href: spotCtaHref(entry, fallbackHref),
-          tag: asString(entry.tag, 'Designer Spotlight'),
+          tag: asString(country, asString(entry.tag, fallbackTag)),
           ctaStyle: entry.ctaStyle,
         };
       });
-    const source = entries.length > 0 ? entries : DESIGNER_SPOTLIGHT.map((row) => ({ ...row, tag: 'Designer Spotlight' }));
+    const source =
+      entries.length > 0
+        ? entries
+        : DESIGNER_SPOTLIGHT.map((row) => ({
+            ...row,
+            designerName: row.title,
+            title: row.title,
+            designerCountry: asString((row as any).country, ''),
+            designerSpecialty: asString((row as any).specialty, ''),
+            tag: asString((row as any).country, asString(row.tag, 'NIGERIA')),
+          }));
     return source.slice(0, maxItems);
   }, [designerSpotlightCfg.cards, designerSpotlightColumns, designerSpotlightRows]);
   const staticReviewCards = useMemo(() => {
@@ -1983,7 +2052,9 @@ export default function JenksFrontpageV2() {
       : active?.textVerticalAlign === 'BOTTOM'
         ? 'items-end'
         : 'items-center';
-  const heroRightHasPanelImage = active?.rightPanelBackgroundMode === 'IMAGE' && Boolean(active?.rightPanelBackgroundImage);
+  const heroRightHasPanelImage =
+    active?.rightPanelBackgroundMode === 'IMAGE' &&
+    Boolean(stripLegacyFallbackImage(active?.rightPanelBackgroundImage || ''));
   const hamburgerMenuFontSize = Math.max(16, Math.min(72, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontSize, 32))));
   const hamburgerMenuFontWeight = Math.max(500, Math.min(900, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontWeight, 800))));
   const footerLogoCfg = useMemo(() => asRecord(footerCfg.logo), [footerCfg.logo]);
@@ -2252,7 +2323,7 @@ export default function JenksFrontpageV2() {
             if (includeOnlyFresh && createdAtTs > 0 && createdAtTs < listingAgeCutoff) return;
             const image = resolveManagerImage(
               asArray(row.images).map((entry) => asString(asRecord(entry).url, '')).find(Boolean) || row.image || row.coverImage || '',
-              '/images/placeholder.jpg'
+              ''
             );
             const priceValue = asNumber(row.price, asNumber(row.basePrice, asNumber(row.finalPrice, 0)));
             const formattedPrice = `$${Math.max(0, priceValue).toFixed(2)}`;
@@ -2399,7 +2470,7 @@ export default function JenksFrontpageV2() {
 
               <Link to="/" className="absolute left-1/2 -translate-x-1/2">
                 {asString(logoCfg.mode, 'TEXT').toUpperCase() === 'IMAGE' && asString(logoCfg.imageUrl, '') ? (
-                  <img
+                  <BrandImageWithFallback
                     src={asString(logoCfg.imageUrl, '')}
                     alt={asString(logoCfg.altText, 'Jenks')}
                     className="object-contain"
@@ -2407,6 +2478,7 @@ export default function JenksFrontpageV2() {
                       width: Math.max(80, Math.round(asNumber(logoCfg.width, 180))),
                       height: Math.max(24, Math.round(asNumber(logoCfg.height, 50))),
                     }}
+                    spinnerClassName="h-4 w-4"
                   />
                 ) : (
                   <p
@@ -2586,25 +2658,12 @@ export default function JenksFrontpageV2() {
               className={`relative flex ${HERO_HEIGHT_CLASS} items-end px-5 py-10 sm:px-8 lg:px-12 xl:px-16`}
               style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}
             >
-              {active.image && !heroImageLoadFailed[active.id] ? (
-                <img
-                  src={active.image}
-                  alt={active.titleA}
-                  onError={() =>
-                    setHeroImageLoadFailed((prev) => ({
-                      ...prev,
-                      [active.id]: true,
-                    }))
-                  }
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-              ) : null}
-              {!active.image || heroImageLoadFailed[active.id] ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#0e0e0e] text-white">
-                  <Loader2 className="h-8 w-8 animate-spin text-[#e66045]" />
-                  <p className="font-['Oswald'] text-3xl font-bold uppercase tracking-[0.08em]">ZURIKARIBU</p>
-                </div>
-              ) : null}
+              <BrandImageWithFallback
+                src={active.image}
+                alt={active.titleA}
+                className="absolute inset-0 h-full w-full object-cover"
+                spinnerClassName="h-8 w-8"
+              />
               <div className="absolute inset-0 bg-gradient-to-r from-black/58 via-black/34 to-black/45" />
               <div className="relative ml-auto w-full max-w-[720px] text-right animate-fade-in" data-kimi-anim="fade-up">
                 <h1
@@ -2679,36 +2738,23 @@ export default function JenksFrontpageV2() {
             <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 lg:grid-cols-12`} style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}>
               <div className="relative lg:col-span-7" style={{ gridColumn: `span ${heroLeftColSpan} / span ${heroLeftColSpan}` }}>
                 {heroSlides.map((slide, i) => (
-                  !heroImageLoadFailed[slide.id] && slide.image ? (
-                    <img
-                      key={slide.id}
-                      src={slide.image}
-                      alt={slide.titleA}
-                      onError={() =>
-                        setHeroImageLoadFailed((prev) => ({
-                          ...prev,
-                          [slide.id]: true,
-                        }))
-                      }
-                      className={`absolute inset-0 h-full w-full object-cover transition-all duration-1000 ${
-                        i === index ? 'scale-100 opacity-100' : 'scale-105 opacity-0'
-                      }`}
-                    />
-                  ) : null
+                  <BrandImageWithFallback
+                    key={slide.id}
+                    src={slide.image}
+                    alt={slide.titleA}
+                    className={`absolute inset-0 h-full w-full object-cover transition-all duration-1000 ${
+                      i === index ? 'scale-100 opacity-100' : 'scale-105 opacity-0'
+                    }`}
+                    spinnerClassName="h-8 w-8"
+                  />
                 ))}
-                {!active.image || heroImageLoadFailed[active.id] ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#0e0e0e] text-white">
-                    <Loader2 className="h-8 w-8 animate-spin text-[#e66045]" />
-                    <p className="font-['Oswald'] text-3xl font-bold uppercase tracking-[0.08em]">ZURIKARIBU</p>
-                  </div>
-                ) : null}
               </div>
               <div
                 className={`relative flex ${heroTextAlignClass} px-5 py-10 lg:pl-8 lg:pr-12 xl:pl-10 xl:pr-16`}
                 style={{
                   gridColumn: `span ${heroRightColSpan} / span ${heroRightColSpan}`,
                   backgroundColor: '#f5f3ee',
-                  backgroundImage: heroRightHasPanelImage ? `url(${active.rightPanelBackgroundImage})` : 'none',
+                  backgroundImage: heroRightHasPanelImage ? toSafeBackgroundImage(active.rightPanelBackgroundImage) : 'none',
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
                 }}
@@ -2833,10 +2879,11 @@ export default function JenksFrontpageV2() {
               <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
                 {shopByCategoryCards.map((card) => (
                   <Link key={card.id} to={toSafeInternalHref(card.href)} className="group relative overflow-hidden border border-white/10">
-                    <img
+                    <BrandImageWithFallback
                       src={card.image}
                       alt={card.title}
                       className="h-[82vh] w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      spinnerClassName="h-6 w-6"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                     <div className="absolute right-4 top-4 text-white/50 transition-colors group-hover:text-white">
@@ -2994,7 +3041,7 @@ export default function JenksFrontpageV2() {
                 <div className={`relative overflow-hidden px-8 py-12 text-white ${section.panelBg}`} data-kimi-anim="sidebar-left">
                   <div
                     className="pointer-events-none absolute inset-0 scale-105 bg-cover bg-center blur-2xl"
-                    style={{ backgroundImage: `url(${section.image})`, opacity: 0.18 }}
+                    style={{ backgroundImage: toSafeBackgroundImage(section.image), opacity: 0.18 }}
                   />
                   <div className="pointer-events-none absolute inset-0 bg-black/70" />
                   <div className="relative flex h-full items-center">
@@ -3013,7 +3060,13 @@ export default function JenksFrontpageV2() {
                   </div>
                 </div>
                 <div className="relative h-full w-full">
-                  <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover" data-kimi-anim="zoom-in" />
+                  <BrandImageWithFallback
+                    src={section.image}
+                    alt={section.sectionName}
+                    className="h-full w-full object-cover"
+                    spinnerClassName="h-7 w-7"
+                    data-kimi-anim="zoom-in"
+                  />
                   {section.stepsEnabled && section.stepCards.length > 0 ? (
                     <div className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden w-[312px] overflow-y-auto pr-1 md:block">
                       <div className="space-y-1">
@@ -3052,7 +3105,13 @@ export default function JenksFrontpageV2() {
             ) : (
               <>
                 <div className="relative h-full w-full">
-                  <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover" data-kimi-anim="zoom-in" />
+                  <BrandImageWithFallback
+                    src={section.image}
+                    alt={section.sectionName}
+                    className="h-full w-full object-cover"
+                    spinnerClassName="h-7 w-7"
+                    data-kimi-anim="zoom-in"
+                  />
                   {section.stepsEnabled && section.stepCards.length > 0 ? (
                     <div className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden w-[312px] overflow-y-auto pr-1 md:block">
                       <div className="space-y-1">
@@ -3187,7 +3246,12 @@ export default function JenksFrontpageV2() {
             >
               {featuredCardsByKey[key].slice(0, (featuredLayoutByKey[key]?.rows ?? 1) * (featuredLayoutByKey[key]?.columns ?? featuredColumns)).map((card) => (
                 <Link key={card.id} to={featuredCardHref(card, key)} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
-                  <img src={card.image} alt={card.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                  <BrandImageWithFallback
+                    src={card.image}
+                    alt={card.title}
+                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    spinnerClassName="h-6 w-6"
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
                   <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-white/72">{card.tag}</p>
                   <div className="absolute bottom-[10%] right-6 max-w-[58%] text-right text-white">
@@ -3246,7 +3310,12 @@ export default function JenksFrontpageV2() {
                 className="group min-w-[312px] flex-1 overflow-hidden border border-black/10 bg-white transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_18px_46px_rgba(0,0,0,0.2)] md:min-w-[calc((100%-24px)/4)]"
               >
                 <div className="relative">
-                  <img src={drop.image} alt={drop.name} className="h-[63vh] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+                  <BrandImageWithFallback
+                    src={drop.image}
+                    alt={drop.name}
+                    className="h-[63vh] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                    spinnerClassName="h-6 w-6"
+                  />
                   <span className="absolute left-4 top-4 bg-[#e66045] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white">
                     NEW
                   </span>
@@ -3271,23 +3340,29 @@ export default function JenksFrontpageV2() {
         >
           {spotlightCards.map((spot) => (
             <Link key={spot.id} to={spot.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
-              <img src={spot.image} alt={spot.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-              <p className="absolute left-8 top-8 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80">{spot.tag}</p>
-              <div className="absolute bottom-8 left-8 right-8 text-white">
-                <h3 className="mt-3 font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">{spot.title}</h3>
-                {spot.designerName ? (
-                  <p className="mt-2 text-sm font-semibold uppercase tracking-[0.08em] text-white/88">{spot.designerName}</p>
+              <BrandImageWithFallback
+                src={spot.image}
+                alt={spot.title}
+                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                spinnerClassName="h-8 w-8"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />
+              <div className="absolute bottom-8 left-8 right-8 bg-[#ececec]/95 p-6 text-[#111] shadow-[0_20px_46px_rgba(0,0,0,0.28)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/80">{spot.tag}</p>
+                <h3 className="mt-3 font-['Oswald'] text-[clamp(34px,3vw,52px)] font-bold uppercase leading-[0.95]">{spot.title}</h3>
+                {spot.designerSpecialty ? (
+                  <p className="mt-2 text-[clamp(20px,1.35vw,36px)] font-medium normal-case leading-[1.2] text-[#667085]">{spot.designerSpecialty}</p>
                 ) : null}
-                {(spot.designerCountry || spot.designerSpecialty) ? (
-                  <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-white/74">
-                    {[spot.designerCountry, spot.designerSpecialty].filter(Boolean).join(' • ')}
-                  </p>
-                ) : null}
-                <p className="mt-3 text-sm text-white/78">{spot.description}</p>
+                <p className="mt-4 max-w-[42ch] text-[clamp(18px,1.15vw,28px)] leading-[1.4] text-[#4b5563]">{spot.description}</p>
                 <span
-                  className="mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
-                  style={buildCTAStyle(spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE)}
+                  className="mt-6 inline-flex items-center gap-3 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-black"
+                  style={buildCTAStyle(spot.ctaStyle, {
+                    ...DEFAULT_INLINE_CTA_STYLE,
+                    textColor: '#111111',
+                    hoverTextColor: '#111111',
+                    borderColor: 'transparent',
+                    hoverBorderColor: 'transparent',
+                  })}
                 >
                   {spot.cta}
                   <ArrowRight className="h-4 w-4" />
@@ -3301,19 +3376,13 @@ export default function JenksFrontpageV2() {
       {/* ROOTED IN CULTURE */}
       {isSectionVisible('HERITAGE') ? (
         <section className="relative min-h-[84vh]" data-kimi-anim="fade-up" style={{ order: getSectionOrder('HERITAGE') }}>
-          <img
-            src={asString(heritageCfg.image, `${ASSET_BASE}/heritage_story.jpg`)}
+          <BrandImageWithFallback
+            src={asString(stripLegacyFallbackImage(heritageCfg.image), '')}
             alt="heritage"
             className="absolute inset-0 h-full w-full object-cover"
-            onLoad={() => setIsHeritageImageReady(true)}
-            onError={() => setIsHeritageImageReady(false)}
+            spinnerClassName="h-7 w-7"
           />
-          {isHeritageImageReady ? <div className="absolute inset-0 bg-black/22" /> : null}
-          {!isHeritageImageReady ? (
-            <div className="absolute inset-0 z-[2] flex items-center justify-center bg-black/10">
-              <RefreshCw className="h-7 w-7 animate-spin text-white/80" />
-            </div>
-          ) : null}
+          {hasImageSource(stripLegacyFallbackImage(heritageCfg.image)) ? <div className="absolute inset-0 bg-black/22" /> : null}
           <div className="relative h-full px-8 py-10 text-white">
             <div className="ml-auto max-w-xl text-right">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">{asString(heritageCfg.tag, 'Heritage')}</p>
@@ -3549,12 +3618,13 @@ export default function JenksFrontpageV2() {
           className="relative bg-[#0a0a0a] text-white"
           style={{ order: getSectionOrder('NEWSLETTER_FOOTER'), minHeight: `${footerMapHeight}px` }}
         >
-        {footerMapEnabled && footerMapImage ? (
+        {footerMapEnabled && stripLegacyFallbackImage(footerMapImage) ? (
           <>
-            <img
-              src={footerMapImage}
+            <BrandImageWithFallback
+              src={stripLegacyFallbackImage(footerMapImage)}
               alt="Footer map underlay"
               className="absolute inset-0 h-full w-full object-cover"
+              spinnerClassName="h-6 w-6"
             />
             <div
               className="absolute inset-0"
@@ -3566,7 +3636,7 @@ export default function JenksFrontpageV2() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4 lg:grid-cols-5">
             <div>
               {asString(footerLogoCfg.mode, 'TEXT').toUpperCase() === 'IMAGE' && footerLogoImageUrl ? (
-                <img
+                <BrandImageWithFallback
                   src={footerLogoImageUrl}
                   alt={asString(footerLogoCfg.altText, 'Jenks')}
                   className="object-contain"
@@ -3574,6 +3644,7 @@ export default function JenksFrontpageV2() {
                     width: Math.max(40, Math.round(asNumber(footerLogoCfg.width, 180))),
                     height: Math.max(16, Math.round(asNumber(footerLogoCfg.height, 52))),
                   }}
+                  spinnerClassName="h-4 w-4"
                 />
               ) : (
                 <p

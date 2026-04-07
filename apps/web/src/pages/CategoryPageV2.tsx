@@ -4,6 +4,7 @@ import { Loader2, Search } from 'lucide-react';
 import { api, resolveAssetUrl } from '../services/api';
 import { resolveCountryCode } from '../data/locationOptions';
 import { ThemeProvider } from './jenks-v14/context/ThemeContext';
+import BrandImageWithFallback from '../components/BrandImageWithFallback';
 import '../styles/jenks-v2.css';
 
 type CategoryPageType = 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR' | 'COUNTRY' | 'SHOP';
@@ -240,8 +241,8 @@ export default function CategoryPageV2({
         ) : (
           <>
             <section className="relative overflow-hidden" style={{ minHeight: `${Math.max(320, Number(runtime?.settings.bannerHeight || 680))}px` }}>
-              <img
-                src={resolveAssetUrl(runtime?.settings.bannerImage || '') || '/rw_hero.jpg'}
+              <BrandImageWithFallback
+                src={resolveAssetUrl(runtime?.settings.bannerImage || '')}
                 alt={runtime?.settings.title || 'Category banner'}
                 className="absolute inset-0 h-full w-full object-cover"
               />
@@ -351,7 +352,11 @@ export default function CategoryPageV2({
                     {primaryProducts.map((row) => (
                       <Link key={`primary-${row.id}`} to={row.href} className="group bg-[var(--bg-secondary)] border border-[var(--border)]">
                         <div className="relative aspect-[3/4] overflow-hidden">
-                          <img src={resolveAssetUrl(row.image) || '/images/placeholder.jpg'} alt={row.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                          <BrandImageWithFallback
+                            src={resolveAssetUrl(row.image)}
+                            alt={row.name}
+                            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                          />
                         </div>
                         <div className="px-4 py-3">
                           <p className="text-sm text-[var(--text-secondary)]">{row.ownerName}</p>
@@ -381,7 +386,11 @@ export default function CategoryPageV2({
                     {listingProducts.map((row) => (
                       <Link key={`product-${row.sourceType}-${row.id}`} to={row.href} className="group bg-[var(--bg-secondary)] border border-[var(--border)]">
                         <div className="relative aspect-[3/4] overflow-hidden">
-                          <img src={resolveAssetUrl(row.image) || '/images/placeholder.jpg'} alt={row.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                          <BrandImageWithFallback
+                            src={resolveAssetUrl(row.image)}
+                            alt={row.name}
+                            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                          />
                         </div>
                         <div className="px-4 py-4">
                           <p className="text-sm text-[var(--text-secondary)]">{row.ownerName}</p>
