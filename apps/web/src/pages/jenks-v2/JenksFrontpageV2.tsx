@@ -1820,17 +1820,7 @@ export default function JenksFrontpageV2() {
   const heritageReadMoreHref = isExternalHref(heritageReadMoreHrefRaw)
     ? heritageReadMoreHrefRaw
     : toSafeInternalHref(heritageReadMoreHrefRaw);
-  const heritageStatsPosition = ((): 'TOP' | 'MIDDLE' | 'BOTTOM' => {
-    const token = asString(heritageCfg.statsPosition, 'BOTTOM').toUpperCase();
-    if (token === 'TOP' || token === 'MIDDLE' || token === 'BOTTOM') return token;
-    return 'BOTTOM';
-  })();
-  const heritageStatsAnchorClass =
-    heritageStatsPosition === 'TOP'
-      ? 'top-[10%]'
-      : heritageStatsPosition === 'MIDDLE'
-        ? 'top-1/2 -translate-y-1/2'
-        : 'bottom-[18%]';
+  const heritageStatsAnchorClass = 'bottom-[12%]';
 
   const newsletterCfg = useMemo(() => asRecord(newsletterFooterCfg.newsletter), [newsletterFooterCfg.newsletter]);
   const footerCfg = useMemo(() => asRecord(newsletterFooterCfg.footer), [newsletterFooterCfg.footer]);
@@ -3018,7 +3008,7 @@ export default function JenksFrontpageV2() {
                 <div className="relative h-full w-full">
                   <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover" data-kimi-anim="zoom-in" />
                   {section.stepsEnabled && section.stepCards.length > 0 ? (
-                    <div className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden w-[240px] overflow-y-auto pr-1 md:block">
+                    <div className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden w-[312px] overflow-y-auto pr-1 md:block">
                       <div className="space-y-1">
                         {section.stepCards
                           .slice()
@@ -3029,18 +3019,18 @@ export default function JenksFrontpageV2() {
                             return (
                               <div
                                 key={step.id}
-                                className="rounded border px-3 py-2 backdrop-blur-[1px]"
+                                className="rounded border px-4 py-3 backdrop-blur-[1px]"
                                 style={categoryStepCardOverlayStyle(section)}
                               >
-                                <div className="flex items-start gap-2">
+                                <div className="flex flex-col items-center text-center">
                                   <div className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#e66045]/95 text-[10px] font-semibold text-white">
                                     {orderLabel}
                                   </div>
-                                  <StepIcon className="mt-0.5 h-4 w-4 shrink-0 text-[#ff7c61]" />
-                                  <div className="min-w-0">
-                                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white">{step.title}</p>
+                                  <StepIcon className="mt-1.5 h-5 w-5 shrink-0 text-[#ff7c61]" />
+                                  <div className="mt-1 min-w-0">
+                                    <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white">{step.title}</p>
                                     {step.description ? (
-                                      <p className="mt-1 text-[10px] leading-tight text-white/82">{step.description}</p>
+                                      <p className="mt-1 text-[12px] leading-tight text-white/88">{step.description}</p>
                                     ) : null}
                                   </div>
                                 </div>
@@ -3057,7 +3047,7 @@ export default function JenksFrontpageV2() {
                 <div className="relative h-full w-full">
                   <img src={section.image} alt={section.sectionName} className="h-full w-full object-cover" data-kimi-anim="zoom-in" />
                   {section.stepsEnabled && section.stepCards.length > 0 ? (
-                    <div className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden w-[240px] overflow-y-auto pr-1 md:block">
+                    <div className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden w-[312px] overflow-y-auto pr-1 md:block">
                       <div className="space-y-1">
                         {section.stepCards
                           .slice()
@@ -3068,18 +3058,18 @@ export default function JenksFrontpageV2() {
                             return (
                               <div
                                 key={step.id}
-                                className="rounded border px-3 py-2 backdrop-blur-[1px]"
+                                className="rounded border px-4 py-3 backdrop-blur-[1px]"
                                 style={categoryStepCardOverlayStyle(section)}
                               >
-                                <div className="flex items-start gap-2">
+                                <div className="flex flex-col items-center text-center">
                                   <div className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#e66045]/95 text-[10px] font-semibold text-white">
                                     {orderLabel}
                                   </div>
-                                  <StepIcon className="mt-0.5 h-4 w-4 shrink-0 text-[#ff7c61]" />
-                                  <div className="min-w-0">
-                                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white">{step.title}</p>
+                                  <StepIcon className="mt-1.5 h-5 w-5 shrink-0 text-[#ff7c61]" />
+                                  <div className="mt-1 min-w-0">
+                                    <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white">{step.title}</p>
                                     {step.description ? (
-                                      <p className="mt-1 text-[10px] leading-tight text-white/82">{step.description}</p>
+                                      <p className="mt-1 text-[12px] leading-tight text-white/88">{step.description}</p>
                                     ) : null}
                                   </div>
                                 </div>
