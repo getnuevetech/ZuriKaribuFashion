@@ -18,7 +18,6 @@ import {
   Check,
   Star
 } from 'lucide-react';
-import Navigation from './jenks-v14/components/Navigation';
 import ContactFooter from './jenks-v14/components/ContactFooter';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -182,7 +181,6 @@ export default function ProductDetailPage() {
     <ThemeProvider>
       <div className="relative bg-[#F8F6F1] min-h-screen">
       <div className="grain-overlay" />
-      <Navigation />
 
       {/* Breadcrumb Bar */}
       <div className="pt-24 pb-4 px-8 md:px-[8vw] bg-[#F8F6F1] border-b border-[#1A1A1A]/10">

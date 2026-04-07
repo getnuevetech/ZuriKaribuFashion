@@ -5,7 +5,6 @@ import { Link } from 'react-router-dom';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ArrowRight, Home, ChevronRight, Search, X } from 'lucide-react';
-import Navigation from './jenks-v14/components/Navigation';
 import ContactFooter from './jenks-v14/components/ContactFooter';
 import CountryFilter from './jenks-v14/components/CountryFilter';
 
@@ -139,7 +138,6 @@ export default function ReadyToWearPage() {
     <ThemeProvider>
       <div className="relative bg-[var(--bg-primary)] min-h-screen">
       <div className="grain-overlay" />
-      <Navigation />
 
       {/* Editorial Hero */}
       <section ref={heroRef} className="relative h-[85vh] min-h-[600px] overflow-hidden">
