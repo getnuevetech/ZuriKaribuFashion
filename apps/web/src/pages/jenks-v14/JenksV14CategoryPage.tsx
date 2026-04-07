@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ChevronDown, ChevronRight, Globe, Home, Loader2 } from 'lucide-react';
+import { ArrowRight, ChevronDown, Globe, Loader2 } from 'lucide-react';
 import '../../styles/jenks-v2.css';
 import { api } from '../../services/api';
 import { useCurrencyStore } from '../../store/currencyStore';
@@ -8,11 +8,16 @@ import { AFRICAN_COUNTRIES } from '../../data/africanCountries';
 import { resolveCountryCode } from '../../data/locationOptions';
 
 type CategoryMode = 'FABRICS' | 'READY' | 'CUSTOM';
-type CategoryPageType = 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
 
 type JenksV14CategoryPageProps = {
   mode: CategoryMode;
-  routeBase: '/fabricstobuy' | '/readytowear' | '/cystomtowear';
+  routeBase:
+    | '/jenks-v14/fabrics'
+    | '/jenks-v14/ready-to-wear'
+    | '/jenks-v14/custom-to-wear'
+    | '/fabricstobuy'
+    | '/readytowear'
+    | '/cystomtowear';
 };
 
 type TaxonomyOption = {
@@ -36,43 +41,28 @@ type ProductCard = {
   priceUsd: number;
   href: string;
   labels: Label[];
-  taxonomyId?: string;
-  style?: string;
-  fabricType?: string;
   material?: string;
-  color?: string;
   isNew?: boolean;
-};
-
-type CategoryFilterDefinition = {
-  id: string;
-  key: 'STYLE' | 'FABRIC_TYPE' | 'MATERIAL' | 'COUNTRY' | 'PRICE' | 'COLOR' | 'CATEGORY';
-  label: string;
-  inputType: 'DROPDOWN' | 'SUGGESTIVE_SEARCH';
-  enabled: boolean;
-  options: string[];
-  displayOrder: number;
-};
-
-type CategoryPageSettings = {
-  bannerTitle: string;
-  bannerSubtitle: string;
-  bannerImage: string;
-  bannerHeight: number;
-  columns: number;
-  primaryGridRows: number;
-  primaryGridColumns: number;
-  primaryGridProductIds: string[];
-  filterDefinitions: CategoryFilterDefinition[];
 };
 
 const QUICK_COUNTRY_CODES = ['NG', 'GH', 'KE', 'ZA', 'MA', 'SN', 'ET', 'TZ', 'UG', 'ML', 'EG', 'CM'] as const;
 
-const FALLBACK_FILTERS_BY_MODE: Record<CategoryMode, string[]> = {
-  FABRICS: ['Ankara', 'Kente', 'Adire', 'Mud Cloth', 'Silk', 'Cotton', 'Kanga', 'Raffia', 'Shweshwe', 'Toghu'],
-  READY: ['Dresses', 'Kaftan', 'Agbada', 'Skirt Sets', 'Shirts', 'Jackets', 'Occasion', 'Casual'],
-  CUSTOM: ['Bridal', 'Traditional', 'Modern', 'Menswear', 'Womenswear', 'Luxury', 'Event', 'Bespoke'],
-};
+const FABRIC_FALLBACK_FILTERS = [
+  'Ankara',
+  'Kente',
+  'Adire',
+  'Mud Cloth',
+  'Silk',
+  'Cotton',
+  'Kanga',
+  'Raffia',
+  'Shweshwe',
+  'Toghu',
+];
+
+const READY_FALLBACK_FILTERS = ['Dresses', 'Kaftan', 'Agbada', 'Skirt Sets', 'Shirts', 'Jackets', 'Occasion', 'Casual'];
+
+const CUSTOM_FALLBACK_FILTERS = ['Bridal', 'Traditional', 'Modern', 'Menswear', 'Womenswear', 'Luxury', 'Event', 'Bespoke'];
 
 const asText = (value: unknown, fallback = '') => {
   const text = String(value || '').trim();
@@ -95,122 +85,18 @@ const flagEmoji = (countryCode: string) => {
 };
 
 const sortByName = (rows: TaxonomyOption[]) => [...rows].sort((a, b) => a.name.localeCompare(b.name));
-const ASSET_BASE = 'https://african-fashion-zurikaribu.vercel.app';
-
-const CATEGORY_HERO_BY_MODE: Record<
-  CategoryMode,
-  {
-    image: string;
-    subtitle: string;
-    breadcrumb: string;
-  }
-> = {
-  READY: {
-    image: `${ASSET_BASE}/rw_full.jpg`,
-    subtitle: 'Curated ready-to-wear edits inspired by African craftsmanship and modern silhouettes.',
-    breadcrumb: 'Ready To Wear',
-  },
-  CUSTOM: {
-    image: `${ASSET_BASE}/custom_full.jpg`,
-    subtitle: 'Design your bespoke look with premium materials, expert tailors, and timeless style.',
-    breadcrumb: 'Custom To Wear',
-  },
-  FABRICS: {
-    image: `${ASSET_BASE}/fabrics_full.jpg`,
-    subtitle: 'Source high-quality fabrics from trusted artisan houses across Africa.',
-    breadcrumb: 'Fabrics To Buy',
-  },
-};
-
-const defaultFilterDefinitionsByMode = (mode: CategoryMode): CategoryFilterDefinition[] => {
-  if (mode === 'READY') {
-    return [
-      { id: 'style', key: 'STYLE', label: 'Style', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 1 },
-      { id: 'fabric-type', key: 'FABRIC_TYPE', label: 'Fabric Type', inputType: 'SUGGESTIVE_SEARCH', enabled: true, options: [], displayOrder: 2 },
-      { id: 'material', key: 'MATERIAL', label: 'Material', inputType: 'SUGGESTIVE_SEARCH', enabled: true, options: [], displayOrder: 3 },
-      { id: 'country', key: 'COUNTRY', label: 'Country', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 4 },
-      { id: 'price', key: 'PRICE', label: 'Price', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 5 },
-    ];
-  }
-  if (mode === 'CUSTOM') {
-    return [
-      { id: 'style', key: 'STYLE', label: 'Style', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 1 },
-      { id: 'country', key: 'COUNTRY', label: 'Country', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 2 },
-      { id: 'price', key: 'PRICE', label: 'Price', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 3 },
-    ];
-  }
-  return [
-    { id: 'color', key: 'COLOR', label: 'Color', inputType: 'SUGGESTIVE_SEARCH', enabled: true, options: [], displayOrder: 1 },
-    { id: 'fabric-type', key: 'FABRIC_TYPE', label: 'Fabric Type', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 2 },
-    { id: 'material', key: 'MATERIAL', label: 'Material', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 3 },
-    { id: 'price', key: 'PRICE', label: 'Price', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 4 },
-    { id: 'country', key: 'COUNTRY', label: 'Country', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 5 },
-  ];
-};
-
-const normalizeSettings = (mode: CategoryMode, input: any): CategoryPageSettings => {
-  const fallback = defaultFilterDefinitionsByMode(mode);
-  const filters = Array.isArray(input?.filterDefinitions) ? input.filterDefinitions : fallback;
-  return {
-    bannerTitle: asText(input?.bannerTitle, mode === 'FABRICS' ? 'Fabrics To Buy' : mode === 'READY' ? 'Ready To Wear' : 'Custom To Wear'),
-    bannerSubtitle: asText(input?.bannerSubtitle, ''),
-    bannerImage: asText(input?.bannerImage, ''),
-    bannerHeight: Math.max(220, Math.min(560, Math.round(toNumber(input?.bannerHeight, 420)))),
-    columns: Math.max(1, Math.min(6, Math.round(toNumber(input?.columns, 4)))),
-    primaryGridRows: Math.max(1, Math.min(2, Math.round(toNumber(input?.primaryGridRows, 2)))),
-    primaryGridColumns: Math.max(1, Math.min(6, Math.round(toNumber(input?.primaryGridColumns, 3)))),
-    primaryGridProductIds: Array.isArray(input?.primaryGridProductIds)
-      ? Array.from(new Set(input.primaryGridProductIds.map((entry: any) => asText(entry, '')).filter(Boolean))).slice(0, 24)
-      : [],
-    filterDefinitions: filters
-      .map((entry: any, index: number) => ({
-        id: asText(entry?.id, `${index + 1}`),
-        key: String(entry?.key || fallback[index]?.key || 'STYLE').trim().toUpperCase() as CategoryFilterDefinition['key'],
-        label: asText(entry?.label, fallback[index]?.label || 'Filter'),
-        inputType: String(entry?.inputType || fallback[index]?.inputType || 'DROPDOWN').trim().toUpperCase() === 'SUGGESTIVE_SEARCH'
-          ? 'SUGGESTIVE_SEARCH'
-          : 'DROPDOWN',
-        enabled: entry?.enabled !== false,
-        options: Array.isArray(entry?.options)
-          ? entry.options.map((token: any) => asText(token, '')).filter(Boolean).slice(0, 40)
-          : [],
-        displayOrder: Math.max(0, Math.min(999, Math.round(toNumber(entry?.displayOrder, index + 1)))),
-      }))
-      .sort((a, b) => a.displayOrder - b.displayOrder)
-      .slice(0, 20),
-  };
-};
-
-const PRICE_BUCKETS = ['Under $50', '$50 - $100', '$100 - $250', '$250+'] as const;
-
-const normalizeToken = (value: unknown) => String(value || '').trim().toLowerCase();
-
-const priceBucketFor = (value: number) => {
-  const price = Number(value || 0);
-  if (price < 50) return 'Under $50';
-  if (price <= 100) return '$50 - $100';
-  if (price <= 250) return '$100 - $250';
-  return '$250+';
-};
-
-const matchesBucket = (price: number, bucket: string) => priceBucketFor(price).toLowerCase() === normalizeToken(bucket);
 
 export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14CategoryPageProps) {
   const { formatFromUsd } = useCurrencyStore();
 
   const [selectedCountry, setSelectedCountry] = useState('');
   const [selectedTaxonomyId, setSelectedTaxonomyId] = useState('');
-  const [taxonomySearch, setTaxonomySearch] = useState('');
   const [taxonomyOptions, setTaxonomyOptions] = useState<TaxonomyOption[]>([]);
   const [taxonomyLoadedFromApi, setTaxonomyLoadedFromApi] = useState(true);
   const [products, setProducts] = useState<ProductCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showAllCountries, setShowAllCountries] = useState(false);
-  const [settings, setSettings] = useState<CategoryPageSettings | null>(null);
-  const [extraFilterValues, setExtraFilterValues] = useState<Record<string, string>>({});
-
-  const pageType: CategoryPageType = mode === 'FABRICS' ? 'FABRIC_TO_BUY' : mode === 'CUSTOM' ? 'CUSTOM_TO_WEAR' : 'READY_TO_WEAR';
 
   const countryOptions = useMemo(
     () =>
@@ -237,132 +123,9 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
     [countryOptions, quickCountries, showAllCountries]
   );
 
-  const activeFilterDefinitions = useMemo(
-    () => (settings?.filterDefinitions || defaultFilterDefinitionsByMode(mode)).filter((entry) => entry.enabled),
-    [mode, settings?.filterDefinitions]
-  );
-  const countryFilterMeta = useMemo(
-    () => activeFilterDefinitions.find((entry) => entry.key === 'COUNTRY'),
-    [activeFilterDefinitions]
-  );
-  const taxonomyFilterMeta = useMemo(
-    () =>
-      activeFilterDefinitions.find((entry) =>
-        mode === 'FABRICS'
-          ? entry.key === 'FABRIC_TYPE' || entry.key === 'MATERIAL'
-          : entry.key === 'STYLE' || entry.key === 'CATEGORY'
-      ),
-    [activeFilterDefinitions, mode]
-  );
-  const extraFilterDefinitions = useMemo(
-    () =>
-      activeFilterDefinitions.filter((entry) => {
-        if (entry.key === 'COUNTRY') return false;
-        if (!taxonomyFilterMeta) return true;
-        return entry.key !== taxonomyFilterMeta.key;
-      }),
-    [activeFilterDefinitions, taxonomyFilterMeta]
-  );
-  const taxonomyLabel = taxonomyFilterMeta?.label || (mode === 'FABRICS' ? 'MATERIAL' : mode === 'READY' ? 'STYLE' : 'STYLE');
-  const sectionTitle = settings?.bannerTitle || (mode === 'FABRICS' ? 'Fabrics To Buy' : mode === 'READY' ? 'Ready To Wear' : 'Custom To Wear');
+  const taxonomyLabel = mode === 'FABRICS' ? 'MATERIAL' : mode === 'READY' ? 'CATEGORY' : 'STYLE';
+  const sectionTitle = mode === 'FABRICS' ? 'Fabrics To Buy' : mode === 'READY' ? 'Ready To Wear' : 'Custom To Wear';
   const countLabel = mode === 'FABRICS' ? 'fabrics' : 'products';
-  const heroConfig = CATEGORY_HERO_BY_MODE[mode];
-  const heroImage = asText(settings?.bannerImage, asText(products[0]?.image, heroConfig.image));
-  const heroSubtitle = asText(settings?.bannerSubtitle, heroConfig.subtitle);
-  const heroHeight = Math.max(320, Math.min(560, settings?.bannerHeight || 420));
-
-  const filterOptionsByKey = useMemo(() => {
-    const buildUnique = (values: Array<string | undefined>) =>
-      Array.from(new Set(values.map((entry) => asText(entry, '')).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-    const taxonomyNames = buildUnique(products.map((entry) => entry.style));
-    const fabricTypes = buildUnique(products.map((entry) => entry.fabricType));
-    const materials = buildUnique(products.map((entry) => entry.material));
-    const colors = buildUnique(products.map((entry) => entry.color));
-    return {
-      STYLE: taxonomyNames,
-      CATEGORY: taxonomyNames,
-      FABRIC_TYPE: fabricTypes,
-      MATERIAL: materials,
-      COUNTRY: countryOptions.map((entry) => entry.name),
-      PRICE: [...PRICE_BUCKETS],
-      COLOR: colors,
-    } as const;
-  }, [countryOptions, products]);
-
-  const primaryGridLimit = Math.max(1, Math.min(24, (settings?.primaryGridRows || 2) * (settings?.primaryGridColumns || 3)));
-  const filteredProducts = useMemo(() => {
-    const activeTaxonomyName = asText(taxonomyOptions.find((entry) => entry.id === selectedTaxonomyId)?.name, '');
-    return products.filter((product) => {
-      for (const filter of extraFilterDefinitions) {
-        const selected = normalizeToken(extraFilterValues[filter.key]);
-        if (!selected) continue;
-        if (filter.key === 'PRICE') {
-          if (!matchesBucket(product.priceUsd, selected)) return false;
-          continue;
-        }
-        const value =
-          filter.key === 'STYLE' || filter.key === 'CATEGORY'
-            ? normalizeToken(product.style)
-            : filter.key === 'FABRIC_TYPE'
-              ? normalizeToken(product.fabricType)
-              : filter.key === 'MATERIAL'
-                ? normalizeToken(product.material)
-                : filter.key === 'COLOR'
-                  ? normalizeToken(product.color)
-                  : '';
-        if (!value) return false;
-        if (filter.inputType === 'DROPDOWN') {
-          if (value !== selected) return false;
-        } else if (!value.includes(selected)) {
-          return false;
-        }
-      }
-      if (selectedTaxonomyId && activeTaxonomyName) {
-        const styleToken = normalizeToken(product.style || product.fabricType || product.material);
-        const taxonomyToken = normalizeToken(activeTaxonomyName);
-        if (!styleToken.includes(taxonomyToken) && normalizeToken(product.taxonomyId) !== normalizeToken(selectedTaxonomyId)) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [extraFilterDefinitions, extraFilterValues, products, selectedTaxonomyId, taxonomyOptions]);
-  const configuredPrimaryCards = useMemo(() => {
-    if (!settings?.primaryGridProductIds?.length) return [] as ProductCard[];
-    const byId = new Map(filteredProducts.map((entry) => [entry.id, entry] as const));
-    return settings.primaryGridProductIds.map((id) => byId.get(id)).filter((entry): entry is ProductCard => Boolean(entry)).slice(0, primaryGridLimit);
-  }, [filteredProducts, primaryGridLimit, settings?.primaryGridProductIds]);
-  const cardsToDisplay = configuredPrimaryCards.length > 0 ? configuredPrimaryCards : filteredProducts.slice(0, primaryGridLimit);
-  const gridColumnsClass = useMemo(() => {
-    const cols = Math.max(1, Math.min(6, settings?.primaryGridColumns || settings?.columns || 4));
-    if (cols === 1) return 'lg:grid-cols-1';
-    if (cols === 2) return 'lg:grid-cols-2';
-    if (cols === 3) return 'lg:grid-cols-3';
-    if (cols === 4) return 'lg:grid-cols-4';
-    if (cols === 5) return 'lg:grid-cols-5';
-    return 'lg:grid-cols-6';
-  }, [settings?.columns, settings?.primaryGridColumns]);
-
-  useEffect(() => {
-    let mounted = true;
-    const loadSettings = async () => {
-      try {
-        const response = await api.products.getCategoryPageSettings(pageType);
-        if (!mounted) return;
-        if (response.success && response.data?.settings) {
-          setSettings(normalizeSettings(mode, response.data.settings));
-        } else {
-          setSettings(normalizeSettings(mode, null));
-        }
-      } catch {
-        if (mounted) setSettings(normalizeSettings(mode, null));
-      }
-    };
-    void loadSettings();
-    return () => {
-      mounted = false;
-    };
-  }, [mode, pageType]);
 
   useEffect(() => {
     const loadTaxonomy = async () => {
@@ -397,20 +160,18 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
           }
         }
       } catch {
-        // fallback below
+        // Keep graceful fallback.
       }
-      const fallbackNames = FALLBACK_FILTERS_BY_MODE[mode];
+
+      const fallbackNames =
+        mode === 'FABRICS' ? FABRIC_FALLBACK_FILTERS : mode === 'READY' ? READY_FALLBACK_FILTERS : CUSTOM_FALLBACK_FILTERS;
       setTaxonomyOptions(fallbackNames.map((name) => ({ id: name.toLowerCase().replace(/\s+/g, '-'), name })));
       setTaxonomyLoadedFromApi(false);
     };
+
     setSelectedTaxonomyId('');
-    setTaxonomySearch('');
     void loadTaxonomy();
   }, [mode]);
-
-  useEffect(() => {
-    setExtraFilterValues({});
-  }, [mode, settings?.filterDefinitions]);
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -423,22 +184,26 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
                 .trim()
                 .toLowerCase()
             : '';
-        const maxRows = Math.max(32, Math.min(120, (settings?.pageSize || 24) + 24));
 
         if (mode === 'FABRICS') {
           const response = await api.products.getFabrics({
             country: selectedCountry || undefined,
             fabricCategoryId: taxonomyLoadedFromApi && selectedTaxonomyId ? selectedTaxonomyId : undefined,
-            materialTypeId: taxonomyLoadedFromApi && selectedTaxonomyId ? selectedTaxonomyId : undefined,
-            search: taxonomyLoadedFromApi ? undefined : fallbackTaxonomyToken || undefined,
             page: 1,
-            limit: maxRows,
+            limit: 32,
           });
           if (!response.success) throw new Error('Unable to load fabrics.');
           const sourceRows = Array.isArray(response.data?.fabrics) ? response.data.fabrics : [];
           const rows = fallbackTaxonomyToken
             ? sourceRows.filter((row: any) => {
-                const haystack = [row?.name, row?.description, row?.fabricCategory?.name, row?.materialType?.name]
+                const haystack = [
+                  row?.name,
+                  row?.description,
+                  row?.fabricCategory?.name,
+                  row?.fabricCategoryName,
+                  row?.materialType?.name,
+                  row?.materialTypeName,
+                ]
                   .map((entry) => asText(entry, '').toLowerCase())
                   .join(' ');
                 return haystack.includes(fallbackTaxonomyToken);
@@ -454,11 +219,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
               priceUsd: toNumber(row?.pricePerMeter, row?.finalPrice, row?.sellerPrice, 0),
               href: `${routeBase}/${asText(row?.id, '')}`,
               labels: Array.isArray(row?.productLabels) ? row.productLabels : [],
-              taxonomyId: asText(row?.fabricCategoryId, ''),
-              style: asText(row?.fabricCategory?.name, asText(row?.fabricCategoryName, '')),
-              fabricType: asText(row?.fabricCategory?.name, asText(row?.fabricCategoryName, '')),
               material: asText(row?.materialType?.name, asText(row?.materialTypeName, '')),
-              color: asText(row?.predominantColor, asText(row?.color, '')),
               isNew: true,
             }))
           );
@@ -469,16 +230,14 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
           const response = await api.products.getReadyToWear({
             country: selectedCountry || undefined,
             categoryId: taxonomyLoadedFromApi && selectedTaxonomyId ? selectedTaxonomyId : undefined,
-            materialTypeId: taxonomyLoadedFromApi && selectedTaxonomyId ? selectedTaxonomyId : undefined,
-            search: taxonomyLoadedFromApi ? undefined : fallbackTaxonomyToken || undefined,
             page: 1,
-            limit: maxRows,
+            limit: 32,
           });
           if (!response.success) throw new Error('Unable to load ready-to-wear products.');
           const sourceRows = Array.isArray(response.data?.products) ? response.data.products : [];
           const rows = fallbackTaxonomyToken
             ? sourceRows.filter((row: any) => {
-                const haystack = [row?.name, row?.description, row?.category?.name, row?.materialType?.name]
+                const haystack = [row?.name, row?.description, row?.category?.name, row?.categoryName]
                   .map((entry) => asText(entry, '').toLowerCase())
                   .join(' ');
                 return haystack.includes(fallbackTaxonomyToken);
@@ -499,11 +258,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
                 priceUsd: price,
                 href: `${routeBase}/${asText(row?.id, '')}`,
                 labels: Array.isArray(row?.productLabels) ? row.productLabels : [],
-                taxonomyId: asText(row?.categoryId, ''),
-                style: asText(row?.category?.name, asText(row?.categoryName, '')),
-                fabricType: asText(row?.fabricCategory?.name, asText(row?.fabricCategoryName, '')),
                 material: asText(row?.materialType?.name, asText(row?.materialTypeName, '')),
-                color: asText(row?.color, ''),
                 isNew: true,
               } satisfies ProductCard;
             })
@@ -514,16 +269,14 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
         const response = await api.products.getDesigns({
           country: selectedCountry || undefined,
           categoryId: taxonomyLoadedFromApi && selectedTaxonomyId ? selectedTaxonomyId : undefined,
-          materialTypeId: taxonomyLoadedFromApi && selectedTaxonomyId ? selectedTaxonomyId : undefined,
-          search: taxonomyLoadedFromApi ? undefined : fallbackTaxonomyToken || undefined,
           page: 1,
-          limit: maxRows,
+          limit: 32,
         });
         if (!response.success) throw new Error('Unable to load custom products.');
         const sourceRows = Array.isArray(response.data?.designs) ? response.data.designs : [];
         const rows = fallbackTaxonomyToken
           ? sourceRows.filter((row: any) => {
-              const haystack = [row?.name, row?.description, row?.category?.name, row?.materialType?.name]
+              const haystack = [row?.name, row?.description, row?.category?.name, row?.categoryName]
                 .map((entry) => asText(entry, '').toLowerCase())
                 .join(' ');
               return haystack.includes(fallbackTaxonomyToken);
@@ -539,11 +292,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
             priceUsd: toNumber(row?.finalPrice, row?.basePrice, 0),
             href: `${routeBase}/${asText(row?.id, '')}`,
             labels: Array.isArray(row?.productLabels) ? row.productLabels : [],
-            taxonomyId: asText(row?.categoryId, ''),
-            style: asText(row?.category?.name, asText(row?.categoryName, '')),
-            fabricType: asText(row?.fabricCategory?.name, asText(row?.fabricCategoryName, '')),
             material: asText(row?.materialType?.name, asText(row?.materialTypeName, '')),
-            color: asText(row?.color, ''),
             isNew: true,
           }))
         );
@@ -554,39 +303,13 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
         setLoading(false);
       }
     };
+
     void loadProducts();
-  }, [mode, routeBase, selectedCountry, selectedTaxonomyId, settings?.pageSize, taxonomyLoadedFromApi, taxonomyOptions]);
-
-  const filteredTaxonomyOptions = useMemo(() => {
-    const query = taxonomySearch.trim().toLowerCase();
-    if (!query) return taxonomyOptions;
-    return taxonomyOptions.filter((entry) => entry.name.toLowerCase().includes(query));
-  }, [taxonomyOptions, taxonomySearch]);
-
-  const selectedCountryCode = resolveCountryCode(selectedCountry);
+  }, [mode, routeBase, selectedCountry, selectedTaxonomyId, taxonomyLoadedFromApi, taxonomyOptions]);
 
   return (
     <div className="min-h-screen bg-[#F8F6F1] text-[#1A1A1A]">
-      <section className="relative overflow-hidden" style={{ minHeight: `${heroHeight}px` }}>
-        <img src={heroImage} alt={sectionTitle} className="h-full w-full object-cover" style={{ minHeight: `${heroHeight}px` }} />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/25 to-[#F8F6F1]/95" />
-        <div className="absolute inset-0 flex items-end">
-          <div className="mx-auto w-full max-w-[1600px] px-4 pb-10 sm:px-6 lg:px-10">
-            <nav className="mb-4 flex items-center gap-2 text-sm text-white/85">
-              <Link to="/" className="inline-flex items-center gap-1 text-white/80 transition hover:text-white">
-                <Home className="h-4 w-4" />
-                <span>Home</span>
-              </Link>
-              <ChevronRight className="h-4 w-4 text-white/65" />
-              <span className="text-white">{heroConfig.breadcrumb}</span>
-            </nav>
-            <h1 className="headline-lg text-[clamp(2rem,5vw,5rem)] text-white">{sectionTitle}</h1>
-            <p className="mt-3 max-w-2xl text-sm text-white/85 sm:text-base">{heroSubtitle}</p>
-          </div>
-        </div>
-      </section>
-
-      <div className="sticky top-20 z-30 border-b border-[#1A1A1A]/10 bg-[#F8F6F1]/95 backdrop-blur-md">
+      <div className="sticky top-0 z-30 border-b border-[#1A1A1A]/10 bg-[#F8F6F1]/95 backdrop-blur-md">
         <div className="mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6 lg:px-10">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -594,151 +317,71 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
               <h1 className="headline-lg mt-2 text-[clamp(2rem,4vw,4.5rem)]">{sectionTitle}</h1>
             </div>
             <p className="text-xs uppercase tracking-[0.12em] text-[#6B6B6B]">
-              {cardsToDisplay.length} {countLabel}
+              {products.length} {countLabel}
             </p>
           </div>
 
-          {countryFilterMeta ? (
-            <div className="mt-5">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="label-mono text-[#6B6B6B]">{countryFilterMeta.label.toUpperCase()}</p>
-                <button
-                  type="button"
-                  onClick={() => setShowAllCountries((prev) => !prev)}
-                  className="inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.12em] text-[#E85A3C] hover:underline"
-                >
-                  <Globe className="h-3.5 w-3.5" />
-                  {showAllCountries ? 'Show less' : `View all ${countryOptions.length} countries`}
-                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAllCountries ? 'rotate-180' : ''}`} />
-                </button>
-              </div>
-              <div className={`${showAllCountries ? 'grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12' : 'grid grid-cols-12 gap-2'}`}>
-                {(showAllCountries ? countryOptions : visibleCountries).map((country) => {
-                  const active = selectedCountry === country.name;
-                  return (
-                    <button
-                      key={`country-filter-${country.code}`}
-                      type="button"
-                      onClick={() => setSelectedCountry((previous) => (previous === country.name ? '' : country.name))}
-                      className={`group flex flex-col items-center px-1 py-2 text-center transition-colors ${
-                        active ? 'text-[#E85A3C]' : 'text-[#1A1A1A] hover:text-[#E85A3C]'
+          <div className="mt-5">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="label-mono text-[#6B6B6B]">COUNTRY</p>
+              <button
+                type="button"
+                onClick={() => setShowAllCountries((prev) => !prev)}
+                className="inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.12em] text-[#E85A3C] hover:underline"
+              >
+                <Globe className="h-3.5 w-3.5" />
+                {showAllCountries ? 'Show less' : `View all ${countryOptions.length} countries`}
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAllCountries ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+            <div className={`${showAllCountries ? 'grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12' : 'grid grid-cols-12 gap-2'}`}>
+              {visibleCountries.map((country) => {
+                const active = selectedCountry === country.name;
+                return (
+                  <button
+                    key={`country-filter-${country.code}`}
+                    type="button"
+                    onClick={() => setSelectedCountry((previous) => (previous === country.name ? '' : country.name))}
+                    className={`group flex flex-col items-center px-1 py-2 text-center transition-colors ${
+                      active ? 'text-[#E85A3C]' : 'text-[#1A1A1A] hover:text-[#E85A3C]'
+                    }`}
+                  >
+                    <span
+                      className={`flex h-12 w-12 items-center justify-center rounded-full border transition-colors ${
+                        active ? 'border-[#E85A3C]' : 'border-[#1A1A1A]/12 group-hover:border-[#E85A3C]'
                       }`}
                     >
-                      <span
-                        className={`flex h-12 w-12 items-center justify-center rounded-full border transition-colors ${
-                          active ? 'border-[#E85A3C]' : 'border-[#1A1A1A]/12 group-hover:border-[#E85A3C]'
-                        }`}
-                      >
-                        <span className="text-lg">{flagEmoji(country.code)}</span>
-                      </span>
-                      <span className="mt-1 line-clamp-1 text-[10px] font-medium uppercase tracking-[0.08em]">{country.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
-          {taxonomyFilterMeta ? (
-            <div className="mt-4">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="label-mono text-[#6B6B6B]">{taxonomyLabel.toUpperCase()}</p>
-                {taxonomyFilterMeta.inputType === 'SUGGESTIVE_SEARCH' ? (
-                  <input
-                    value={taxonomySearch}
-                    onChange={(event) => setTaxonomySearch(event.target.value)}
-                    placeholder={`Search ${taxonomyLabel.toLowerCase()}...`}
-                    className="w-full max-w-[260px] rounded border border-[#1A1A1A]/15 bg-white px-2.5 py-1.5 text-xs"
-                  />
-                ) : null}
-              </div>
-              {taxonomyFilterMeta.inputType === 'DROPDOWN' ? (
-                <select
-                  className="w-full max-w-[340px] rounded border border-[#1A1A1A]/15 bg-white px-3 py-2 text-sm"
-                  value={selectedTaxonomyId}
-                  onChange={(event) => setSelectedTaxonomyId(event.target.value)}
-                >
-                  <option value="">All {taxonomyLabel}</option>
-                  {filteredTaxonomyOptions.map((option) => (
-                    <option key={`taxonomy-option-${option.id}`} value={option.id}>
-                      {option.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {filteredTaxonomyOptions.slice(0, 16).map((option) => {
-                    const active = selectedTaxonomyId === option.id;
-                    return (
-                      <button
-                        key={`taxonomy-filter-${option.id}`}
-                        type="button"
-                        onClick={() => setSelectedTaxonomyId((previous) => (previous === option.id ? '' : option.id))}
-                        className={`border px-3 py-1.5 text-sm transition ${
-                          active
-                            ? 'border-[#E85A3C] bg-[#E85A3C] text-white'
-                            : 'border-[#1A1A1A]/14 bg-white text-[#1A1A1A] hover:border-[#E85A3C]/40'
-                        }`}
-                      >
-                        {option.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ) : null}
-
-          {extraFilterDefinitions.length > 0 ? (
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {extraFilterDefinitions.map((filter) => {
-                const selected = extraFilterValues[filter.key] || '';
-                const options =
-                  filter.options && filter.options.length > 0
-                    ? filter.options
-                    : filterOptionsByKey[filter.key as keyof typeof filterOptionsByKey] || [];
-                const datalistId = `filter-suggest-${mode}-${filter.key}`;
-                return (
-                  <label key={`extra-filter-${filter.id}-${filter.key}`} className="text-xs space-y-1">
-                    <span className="text-gray-700">{filter.label}</span>
-                    {filter.inputType === 'DROPDOWN' ? (
-                      <select
-                        className="w-full rounded border border-[#1A1A1A]/15 bg-white px-2.5 py-2 text-sm"
-                        value={selected}
-                        onChange={(event) =>
-                          setExtraFilterValues((prev) => ({ ...prev, [filter.key]: event.target.value }))
-                        }
-                      >
-                        <option value="">All</option>
-                        {options.map((option) => (
-                          <option key={`option-${filter.key}-${option}`} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <>
-                        <input
-                          list={datalistId}
-                          value={selected}
-                          onChange={(event) =>
-                            setExtraFilterValues((prev) => ({ ...prev, [filter.key]: event.target.value }))
-                          }
-                          placeholder={`Search ${filter.label.toLowerCase()}...`}
-                          className="w-full rounded border border-[#1A1A1A]/15 bg-white px-2.5 py-2 text-sm"
-                        />
-                        <datalist id={datalistId}>
-                          {options.map((option) => (
-                            <option key={`suggest-${filter.key}-${option}`} value={option} />
-                          ))}
-                        </datalist>
-                      </>
-                    )}
-                  </label>
+                      <span className="text-lg">{flagEmoji(country.code)}</span>
+                    </span>
+                    <span className="mt-1 line-clamp-1 text-[10px] font-medium uppercase tracking-[0.08em]">{country.name}</span>
+                  </button>
                 );
               })}
             </div>
-          ) : null}
+          </div>
+
+          <div className="mt-4">
+            <p className="label-mono mb-2 text-[#6B6B6B]">{taxonomyLabel}</p>
+            <div className="flex flex-wrap gap-2">
+              {taxonomyOptions.map((option) => {
+                const active = selectedTaxonomyId === option.id;
+                return (
+                  <button
+                    key={`taxonomy-filter-${option.id}`}
+                    type="button"
+                    onClick={() => setSelectedTaxonomyId((previous) => (previous === option.id ? '' : option.id))}
+                    className={`border px-3 py-1.5 text-sm transition ${
+                      active
+                        ? 'border-[#E85A3C] bg-[#E85A3C] text-white'
+                        : 'border-[#1A1A1A]/14 bg-white text-[#1A1A1A] hover:border-[#E85A3C]/40'
+                    }`}
+                  >
+                    {option.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -749,16 +392,20 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
           </div>
         ) : error ? (
           <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-        ) : cardsToDisplay.length === 0 ? (
+        ) : products.length === 0 ? (
           <div className="border border-[#d8d4cb] bg-white px-4 py-12 text-center text-sm text-[#6f6a60]">
             No products found for the selected filters.
           </div>
         ) : (
-          <div className={`grid grid-cols-1 gap-6 sm:grid-cols-2 ${gridColumnsClass}`}>
-            {cardsToDisplay.map((product) => {
-              const countryCode = resolveCountryCode(product.country || selectedCountryCode);
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {products.map((product, index) => {
+              const countryCode = resolveCountryCode(product.country);
               return (
-                <Link key={product.id} to={product.href} className="product-card group bg-white">
+                <Link
+                  key={product.id}
+                  to={product.href}
+                  className={`product-card group bg-white ${index % 5 === 0 ? 'sm:col-span-2 lg:col-span-1' : ''}`}
+                >
                   <div className="relative aspect-[3/4] overflow-hidden bg-[#ece8df]">
                     <img
                       src={product.image || '/images/placeholder.jpg'}
