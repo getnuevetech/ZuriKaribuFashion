@@ -9211,7 +9211,7 @@ export default function JenksV2FrontPageManager() {
                           ...prev.newsletterFooter.footer,
                           map: {
                             ...prev.newsletterFooter.footer.map,
-                            overlayOpacity: clamp(Math.round((Math.max(0, Math.min(1, Number(event.target.value) || 0)) * 100)), 0, 100),
+                            overlayOpacity: clamp(Math.round(toNumber(event.target.value, prev.newsletterFooter.footer.map.overlayOpacity)), 0, 100),
                           },
                         },
                       },

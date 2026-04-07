@@ -1098,6 +1098,13 @@ export default function JenksFrontpageV2() {
   const logoTextSplit = useMemo(() => {
     const compact = logoTextRaw.replace(/\s+/g, '').trim();
     if (!compact) return { left: 'ZURI', right: 'KARIBU' };
+    const upper = compact.toUpperCase();
+    if (upper.startsWith('ZURI') && compact.length > 4) {
+      return {
+        left: compact.slice(0, 4),
+        right: compact.slice(4),
+      };
+    }
     const pivot = Math.max(1, Math.ceil(compact.length / 2));
     return {
       left: compact.slice(0, pivot),
