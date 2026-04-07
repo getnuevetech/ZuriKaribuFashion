@@ -22,6 +22,7 @@
     "clsx": "^2.0.0",
     "country-state-city": "^3.2.1",
     "date-fns": "^2.30.0",
+    "gsap": "^3.14.2",
     "lucide-react": "^0.294.0",
     "qrcode": "^1.5.4",
     "react": "^18.2.0",

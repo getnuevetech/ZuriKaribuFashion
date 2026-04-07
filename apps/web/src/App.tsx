@@ -15,6 +15,7 @@ import Fabrics from './pages/Fabrics';
 import FabricDetail from './pages/FabricDetail';
 import Designs from './pages/Designs';
 import DesignDetail from './pages/DesignDetail';
+import KimiProductDetail from './pages/KimiProductDetail';
 import ReadyToWearTryOn from './pages/ReadyToWearTryOn';
 import TryOn from './pages/TryOn';
 import Cart from './pages/Cart';
@@ -223,6 +224,7 @@ function App() {
               <Route path="/readytowear/:id" element={<ReadyToWearDetail />} />
               <Route path="/fabricstobuy/:id" element={<FabricDetail />} />
               <Route path="/cystomtowear/:id" element={<DesignDetail />} />
+              <Route path="/product/:id" element={<KimiProductDetail />} />
               <Route path="/readytowear/:id/try-on" element={<ReadyToWearTryOn />} />
               <Route path="/home-legacy" element={<NavigateWithSearch to="/" />} />
               <Route path="/home" element={<NavigateWithSearch to="/" />} />
