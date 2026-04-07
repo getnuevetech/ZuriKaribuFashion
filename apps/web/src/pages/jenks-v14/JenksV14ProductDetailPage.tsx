@@ -38,7 +38,7 @@ const MODE_CONFIG: Record<
   DetailMode,
   {
     title: string;
-    listHref: '/readytowear' | '/fabricstobuy' | '/cystomtowear';
+    listHref: '/readytowear' | '/fabricstobuy' | '/customtowear';
     apiType: 'ready-to-wear' | 'fabric' | 'design';
     ownerFallback: string;
   }
@@ -57,7 +57,7 @@ const MODE_CONFIG: Record<
   },
   CUSTOM: {
     title: 'Custom To Wear',
-    listHref: '/cystomtowear',
+    listHref: '/customtowear',
     apiType: 'design',
     ownerFallback: 'Designer',
   },
@@ -87,7 +87,7 @@ const flagEmoji = (countryCode: string) => {
 
 const discoverHref = (entry: DiscoverProduct) =>
   entry.productType === 'DESIGN'
-    ? `/cystomtowear/${entry.id}`
+    ? `/customtowear/${entry.id}`
     : entry.productType === 'FABRIC'
       ? `/fabricstobuy/${entry.id}`
       : `/readytowear/${entry.id}`;

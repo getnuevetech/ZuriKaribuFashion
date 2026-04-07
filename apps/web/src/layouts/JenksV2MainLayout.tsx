@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Menu, Moon, Search, ShoppingBag, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import Footer from '../components/Footer';
+import JenksV2NewsletterFooter from '../components/JenksV2NewsletterFooter';
 import { api, resolveAssetUrl } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
@@ -20,8 +20,8 @@ const DEFAULT_HREF_BY_KEY: Record<string, string> = {
   READY_TO_WEAR: '/readytowear',
   FABRICS: '/fabricstobuy',
   FABRICS_TO_BUY: '/fabricstobuy',
-  CUSTOM_TO_WEAR: '/cystomtowear',
-  DESIGNERS: '/cystomtowear',
+  CUSTOM_TO_WEAR: '/customtowear',
+  DESIGNERS: '/customtowear',
   ABOUT: '/about',
   CONTACT: '/contact',
   HELP_CENTER: '/help-center',
@@ -78,13 +78,14 @@ const sanitizeLegacyInternalHref = (href: string) => {
   if (/^\/main\/?$/i.test(nextPath)) nextPath = '/';
   if (/^\/shop\/?$/i.test(nextPath)) nextPath = '/readytowear';
   if (/^\/ready-to-wear(\/.*)?$/i.test(nextPath)) nextPath = nextPath.replace(/^\/ready-to-wear/i, '/readytowear');
-  if (/^\/custom(\/.*)?$/i.test(nextPath)) nextPath = nextPath.replace(/^\/custom/i, '/cystomtowear');
+  if (/^\/custom(\/.*)?$/i.test(nextPath)) nextPath = nextPath.replace(/^\/custom/i, '/customtowear');
+  if (/^\/cystomtowear(\/.*)?$/i.test(nextPath)) nextPath = nextPath.replace(/^\/cystomtowear/i, '/customtowear');
   if (/^\/fabrics(\/.*)?$/i.test(nextPath)) nextPath = nextPath.replace(/^\/fabrics/i, '/fabricstobuy');
   if (/^\/jenks-v14\/ready-to-wear(\/.*)?$/i.test(nextPath)) {
     nextPath = nextPath.replace(/^\/jenks-v14\/ready-to-wear/i, '/readytowear');
   }
   if (/^\/jenks-v14\/custom-to-wear(\/.*)?$/i.test(nextPath)) {
-    nextPath = nextPath.replace(/^\/jenks-v14\/custom-to-wear/i, '/cystomtowear');
+    nextPath = nextPath.replace(/^\/jenks-v14\/custom-to-wear/i, '/customtowear');
   }
   if (/^\/jenks-v14\/fabrics(\/.*)?$/i.test(nextPath)) {
     nextPath = nextPath.replace(/^\/jenks-v14\/fabrics/i, '/fabricstobuy');
@@ -130,7 +131,7 @@ export default function JenksV2MainLayout() {
   const userRole = normalizeRole(user?.role);
   const profileRoute = userRole === 'CUSTOMER' ? '/profile' : getHomeRouteForUser(user);
   const cartItemCount = getItemCount();
-  const isProductRetailPath = /^\/(readytowear|cystomtowear|fabricstobuy)\/[^/]+$/i.test(location.pathname);
+  const isProductRetailPath = /^\/(readytowear|customtowear|cystomtowear|fabricstobuy)\/[^/]+$/i.test(location.pathname);
   const showFloatingCheckout = isProductRetailPath && cartItemCount > 0;
 
   const topNavigationsCfg = useMemo(() => asRecord(asRecord(frontpageConfig).topNavigations), [frontpageConfig]);
@@ -418,7 +419,7 @@ export default function JenksV2MainLayout() {
                       suggestion === 'Ready To Wear'
                         ? '/readytowear'
                         : suggestion === 'Custom To Wear'
-                          ? '/cystomtowear'
+                          ? '/customtowear'
                           : suggestion === 'Fabrics'
                             ? '/fabricstobuy'
                             : '/country-products'
@@ -460,7 +461,7 @@ export default function JenksV2MainLayout() {
                         { label: 'Shop', href: '/readytowear' },
                         { label: 'Ready To Wear', href: '/readytowear' },
                         { label: 'Fabrics To Buy', href: '/fabricstobuy' },
-                        { label: 'Custom To Wear', href: '/cystomtowear' },
+                        { label: 'Custom To Wear', href: '/customtowear' },
                         { label: 'About Us', href: '/about' },
                         { label: 'Contact Us', href: '/contact' },
                       ]
@@ -504,7 +505,7 @@ export default function JenksV2MainLayout() {
       <CustomerServiceChatWidgetBoundary>
         <CustomerServiceChatWidget />
       </CustomerServiceChatWidgetBoundary>
-      <Footer />
+      <JenksV2NewsletterFooter config={asRecord(frontpageConfig)} />
     </div>
   );
 }

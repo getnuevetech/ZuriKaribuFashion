@@ -513,7 +513,7 @@ type RouteOption = {
 const PAGE_HREF_BY_KEY: Record<string, string> = {
   HOME: '/',
   READY_TO_WEAR: '/readytowear',
-  CUSTOM_TO_WEAR: '/cystomtowear',
+  CUSTOM_TO_WEAR: '/customtowear',
   FABRICS: '/fabricstobuy',
   DESIGNERS: '/designers',
   ABOUT: '/about',
@@ -536,7 +536,7 @@ const ROUTE_OPTIONS: RouteOption[] = [
   { key: 'HOME', label: 'Home', href: '/' },
   { key: 'READY_TO_WEAR', label: 'Ready To Wear', href: '/readytowear' },
   { key: 'FABRICS', label: 'Fabric To Buy', href: '/fabricstobuy' },
-  { key: 'CUSTOM_TO_WEAR', label: 'Custom To Wear', href: '/cystomtowear' },
+  { key: 'CUSTOM_TO_WEAR', label: 'Custom To Wear', href: '/customtowear' },
   { key: 'DESIGNERS', label: 'Designers', href: '/designers' },
   { key: 'ABOUT', label: 'About Us', href: '/about' },
   { key: 'CONTACT', label: 'Contact', href: '/contact' },
@@ -1000,7 +1000,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         }),
         secondaryCtaEnabled: true,
         secondaryCtaText: 'EXPLORE DESIGNERS',
-        secondaryCtaLink: '/cystomtowear',
+        secondaryCtaLink: '/customtowear',
         secondaryCtaStyle: createCtaStyle({
           backgroundColor: 'transparent',
           textColor: '#111111',
@@ -1169,7 +1169,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         description: 'Manage title, tag, description and CTA for CTW block.',
         image: CATEGORY_FALLBACK_IMAGE_BY_KEY.CTW,
         ctaText: 'Explore CTW',
-        ctaLink: '/cystomtowear',
+        ctaLink: '/customtowear',
         ctaStyle: createCtaStyle({
           backgroundColor: 'transparent',
           textColor: '#ffffff',
@@ -1380,7 +1380,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Featured Custom To Wear',
         description: 'Spotlight featured CTW products.',
         ctaText: 'Explore CTW',
-        ctaLink: '/cystomtowear',
+        ctaLink: '/customtowear',
         ctaMode: 'PAGE',
         ctaPageKey: 'CUSTOM_TO_WEAR',
         productGroup: 'CTW',
@@ -1443,7 +1443,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Meet the Designers',
         description: 'Highlight featured designers with CTA.',
         ctaText: 'View Designer',
-        ctaLink: '/cystomtowear',
+        ctaLink: '/customtowear',
         ctaMode: 'PAGE',
         ctaPageKey: 'CUSTOM_TO_WEAR',
         ctaStyle: createCtaStyle({
@@ -1542,7 +1542,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
           title: 'Shop',
           links: [
             { id: uid(), label: 'Ready To Wear', hrefMode: 'PAGE', pageKey: 'READY_TO_WEAR', href: '/readytowear', enabled: true },
-            { id: uid(), label: 'Custom To Wear', hrefMode: 'PAGE', pageKey: 'CUSTOM_TO_WEAR', href: '/cystomtowear', enabled: true },
+            { id: uid(), label: 'Custom To Wear', hrefMode: 'PAGE', pageKey: 'CUSTOM_TO_WEAR', href: '/customtowear', enabled: true },
           ],
         },
       ],
@@ -1721,7 +1721,7 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
     heroBanners: next.topNavigations.heroBanners.map((banner) => ({
       ...banner,
       primaryCtaLink: normalizeManagerHref(banner.primaryCtaLink, '/readytowear'),
-      secondaryCtaLink: normalizeManagerHref(banner.secondaryCtaLink, '/cystomtowear'),
+      secondaryCtaLink: normalizeManagerHref(banner.secondaryCtaLink, '/customtowear'),
       rightPanelBackgroundMode:
         String((banner as HeroBanner)?.rightPanelBackgroundMode || '').trim().toUpperCase() === 'IMAGE' ? 'IMAGE' : 'NONE',
       rightPanelBackgroundImage: String((banner as HeroBanner)?.rightPanelBackgroundImage || ''),
@@ -1805,8 +1805,8 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
       ctaPageKey: String(item.ctaPageKey || '').trim().toUpperCase(),
       ctaLink:
         normalizeCtaMode(item.ctaMode, 'PAGE') === 'PAGE'
-          ? resolvePageHrefForKey(item.ctaPageKey, '/cystomtowear')
-          : normalizeManagerHref(item.ctaLink, '/cystomtowear'),
+          ? resolvePageHrefForKey(item.ctaPageKey, '/customtowear')
+          : normalizeManagerHref(item.ctaLink, '/customtowear'),
     })),
   };
   next.newsletterFooter = {
@@ -4055,7 +4055,7 @@ export default function JenksV2FrontPageManager() {
                           }),
                           secondaryCtaEnabled: true,
                           secondaryCtaText: 'EXPLORE',
-                          secondaryCtaLink: '/cystomtowear',
+                          secondaryCtaLink: '/customtowear',
                           secondaryCtaStyle: createCtaStyle({
                             backgroundColor: 'transparent',
                             textColor: '#111111',
@@ -7597,7 +7597,7 @@ export default function JenksV2FrontPageManager() {
                         title: 'New Spotlight Card',
                         description: '',
                         ctaText: 'View Designer',
-                        ctaLink: '/cystomtowear',
+                        ctaLink: '/customtowear',
                         ctaMode: 'PAGE',
                         ctaPageKey: 'CUSTOM_TO_WEAR',
                         ctaStyle: createCtaStyle({
@@ -7807,7 +7807,7 @@ export default function JenksV2FrontPageManager() {
                                 ...entry,
                                 ctaMode: 'PAGE',
                                 ctaPageKey: fallbackRoute?.key || 'CUSTOM_TO_WEAR',
-                                ctaLink: fallbackRoute?.href || '/cystomtowear',
+                                ctaLink: fallbackRoute?.href || '/customtowear',
                               };
                             }
                             return {
@@ -7859,7 +7859,7 @@ export default function JenksV2FrontPageManager() {
                     <input
                       className="mt-1 w-full rounded border px-2 py-1 text-xs"
                       value={card.ctaLink}
-                      placeholder="/cystomtowear or https://..."
+                      placeholder="/customtowear or https://..."
                       onChange={(event) =>
                         setConfig((prev) => ({
                           ...prev,

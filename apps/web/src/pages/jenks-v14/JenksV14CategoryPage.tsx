@@ -17,7 +17,7 @@ type JenksV14CategoryPageProps = {
     | '/jenks-v14/custom-to-wear'
     | '/fabricstobuy'
     | '/readytowear'
-    | '/cystomtowear';
+    | '/customtowear';
 };
 
 type TaxonomyOption = {

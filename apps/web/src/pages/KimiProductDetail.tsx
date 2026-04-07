@@ -18,7 +18,6 @@ import {
   Check,
   Star
 } from 'lucide-react';
-import ContactFooter from './jenks-v14/components/ContactFooter';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -538,7 +537,6 @@ export default function ProductDetailPage() {
         </div>
       </section>
 
-      <ContactFooter />
       </div>
     </ThemeProvider>
   );

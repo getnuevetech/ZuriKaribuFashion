@@ -4,7 +4,6 @@ import { Loader2, Search } from 'lucide-react';
 import { api, resolveAssetUrl } from '../services/api';
 import { resolveCountryCode } from '../data/locationOptions';
 import { ThemeProvider } from './jenks-v14/context/ThemeContext';
-import ContactFooter from './jenks-v14/components/ContactFooter';
 import '../styles/jenks-v2.css';
 
 type CategoryPageType = 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR' | 'COUNTRY' | 'SHOP';
@@ -69,7 +68,7 @@ const FILTER_PARAM_BY_KEY: Record<CategoryFilterKey, 'style' | 'fabricType' | 'm
 const PAGE_PATH_BY_TYPE: Record<CategoryPageType, string> = {
   READY_TO_WEAR: '/readytowear',
   FABRIC_TO_BUY: '/fabricstobuy',
-  CUSTOM_TO_WEAR: '/cystomtowear',
+  CUSTOM_TO_WEAR: '/customtowear',
   COUNTRY: '/country',
   SHOP: '/shop',
 };
@@ -422,7 +421,6 @@ export default function CategoryPageV2({
           </>
         )}
 
-        <ContactFooter />
       </div>
     </ThemeProvider>
   );

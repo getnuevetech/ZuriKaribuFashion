@@ -156,7 +156,7 @@ function NavigateCategoryDetailWithSearch({
   toBase,
   includeTryOn = false,
 }: {
-  toBase: '/readytowear' | '/fabricstobuy' | '/cystomtowear';
+  toBase: '/readytowear' | '/fabricstobuy' | '/customtowear';
   includeTryOn?: boolean;
 }) {
   const location = useLocation();
@@ -204,25 +204,27 @@ function App() {
             <Route path="/fabrics/:id" element={<NavigateCategoryDetailWithSearch toBase="/fabricstobuy" />} />
             <Route path="/jenks-v14/fabrics" element={<NavigateWithSearch to="/fabricstobuy" />} />
             <Route path="/jenks-v14/fabrics/:id" element={<NavigateCategoryDetailWithSearch toBase="/fabricstobuy" />} />
-            <Route path="/ctw" element={<NavigateWithSearch to="/cystomtowear" />} />
-            <Route path="/customtowear" element={<NavigateWithSearch to="/cystomtowear" />} />
-            <Route path="/custom-to-wear" element={<NavigateWithSearch to="/cystomtowear" />} />
-            <Route path="/custom-to-wear/:id" element={<NavigateCategoryDetailWithSearch toBase="/cystomtowear" />} />
-            <Route path="/custom" element={<NavigateWithSearch to="/cystomtowear" />} />
-            <Route path="/custom/:id" element={<NavigateCategoryDetailWithSearch toBase="/cystomtowear" />} />
-            <Route path="/designs" element={<NavigateWithSearch to="/cystomtowear" />} />
-            <Route path="/designs/:id" element={<NavigateCategoryDetailWithSearch toBase="/cystomtowear" />} />
-            <Route path="/jenks-v14/custom-to-wear" element={<NavigateWithSearch to="/cystomtowear" />} />
-            <Route path="/jenks-v14/custom-to-wear/:id" element={<NavigateCategoryDetailWithSearch toBase="/cystomtowear" />} />
+            <Route path="/ctw" element={<NavigateWithSearch to="/customtowear" />} />
+            <Route path="/cystomtowear" element={<NavigateWithSearch to="/customtowear" />} />
+            <Route path="/custom-to-wear" element={<NavigateWithSearch to="/customtowear" />} />
+            <Route path="/custom-to-wear/:id" element={<NavigateCategoryDetailWithSearch toBase="/customtowear" />} />
+            <Route path="/custom" element={<NavigateWithSearch to="/customtowear" />} />
+            <Route path="/custom/:id" element={<NavigateCategoryDetailWithSearch toBase="/customtowear" />} />
+            <Route path="/designs" element={<NavigateWithSearch to="/customtowear" />} />
+            <Route path="/designs/:id" element={<NavigateCategoryDetailWithSearch toBase="/customtowear" />} />
+            <Route path="/jenks-v14/custom-to-wear" element={<NavigateWithSearch to="/customtowear" />} />
+            <Route path="/jenks-v14/custom-to-wear/:id" element={<NavigateCategoryDetailWithSearch toBase="/customtowear" />} />
 
             {/* Public Routes */}
             <Route element={<JenksV2MainLayout />}>
               <Route path="/readytowear" element={<ReadyToWear />} />
               <Route path="/fabricstobuy" element={<Fabrics />} />
-              <Route path="/cystomtowear" element={<Designs />} />
+              <Route path="/customtowear" element={<Designs />} />
+              <Route path="/cystomtowear" element={<NavigateWithSearch to="/customtowear" />} />
               <Route path="/readytowear/:id" element={<ReadyToWearDetail />} />
               <Route path="/fabricstobuy/:id" element={<FabricDetail />} />
-              <Route path="/cystomtowear/:id" element={<DesignDetail />} />
+              <Route path="/customtowear/:id" element={<DesignDetail />} />
+              <Route path="/cystomtowear/:id" element={<NavigateCategoryDetailWithSearch toBase="/customtowear" />} />
               <Route path="/shop" element={<Shop />} />
               <Route path="/product/:id" element={<KimiProductDetail />} />
               <Route path="/readytowear/:id/try-on" element={<ReadyToWearTryOn />} />
@@ -234,7 +236,7 @@ function App() {
               <Route path="/contact-us" element={<Navigate to="/contact" replace />} />
               <Route path="/about" element={<Navigate to="/#about" replace />} />
               <Route path="/about-us" element={<Navigate to="/#about" replace />} />
-              <Route path="/designers" element={<Navigate to="/cystomtowear" replace />} />
+              <Route path="/designers" element={<Navigate to="/customtowear" replace />} />
               <Route path="/support" element={<Navigate to="/help-center" replace />} />
               <Route path="/faq" element={<Navigate to="/help-center" replace />} />
               <Route path="/terms" element={<NavigateWithSearch to="/help-center" />} />

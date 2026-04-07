@@ -218,12 +218,12 @@ const SHOP_BY_TAB_META: Array<{ key: ShopByTab; label: string; Icon: IconCompone
 
 const DEFAULT_HREF_BY_KEY: Record<string, string> = {
   RTW: '/readytowear',
-  CTW: '/cystomtowear',
+  CTW: '/customtowear',
   FTB: '/fabricstobuy',
   HOME: '/',
   SHOP: '/readytowear',
   READY_TO_WEAR: '/readytowear',
-  CUSTOM_TO_WEAR: '/cystomtowear',
+  CUSTOM_TO_WEAR: '/customtowear',
   FABRICS: '/fabricstobuy',
   CONTACT: '/contact',
   AUTH_LOGIN: '/auth/login',
@@ -243,7 +243,7 @@ const FEATURED_CTA_BY_KEY: Record<string, string> = {
 
 const FEATURED_HREF_BY_KEY: Record<string, string> = {
   RTW: '/readytowear',
-  CTW: '/cystomtowear',
+  CTW: '/customtowear',
   FTB: '/fabricstobuy',
 };
 
@@ -410,8 +410,8 @@ const PAGE_HREF_BY_KEY: Record<string, string> = {
   HOME: '/',
   READY_TO_WEAR: '/readytowear',
   FABRICS: '/fabricstobuy',
-  CUSTOM_TO_WEAR: '/cystomtowear',
-  DESIGNERS: '/cystomtowear',
+  CUSTOM_TO_WEAR: '/customtowear',
+  DESIGNERS: '/customtowear',
   ABOUT: '/about',
   CONTACT: '/contact',
   HELP_CENTER: '/help-center',
@@ -631,7 +631,7 @@ const HERO: HeroSlide[] = [
     primaryCtaHref: '/readytowear',
     primaryCtaEnabled: true,
     secondaryCtaText: 'EXPLORE DESIGNERS',
-    secondaryCtaHref: '/cystomtowear',
+    secondaryCtaHref: '/customtowear',
     secondaryCtaEnabled: true,
     tertiaryCtaText: 'SHOP FABRICS',
     tertiaryCtaHref: '/fabricstobuy',
@@ -654,7 +654,7 @@ const HERO: HeroSlide[] = [
     primaryCtaHref: '/readytowear',
     primaryCtaEnabled: true,
     secondaryCtaText: 'EXPLORE DESIGNERS',
-    secondaryCtaHref: '/cystomtowear',
+    secondaryCtaHref: '/customtowear',
     secondaryCtaEnabled: true,
     tertiaryCtaText: 'SHOP FABRICS',
     tertiaryCtaHref: '/fabricstobuy',
@@ -693,7 +693,7 @@ const SHOP_BY_CATEGORY = [
     title: 'CUSTOM TO WEAR',
     subtitle: 'Bespoke pieces tailored for your story',
     meta: '24 products',
-    href: '/cystomtowear',
+    href: '/customtowear',
     image: `${ASSET_BASE}/featured_custom_right.jpg`,
     Icon: Sparkles,
   },
@@ -828,14 +828,14 @@ const FEATURED_CTW = [
     image: `${ASSET_BASE}/product1.jpg`,
     title: 'Exclusive Gorgeous',
     subtitle: 'Custom craftsmanship for your story',
-    href: '/cystomtowear',
+    href: '/customtowear',
   },
   {
     id: 'fc2',
     image: `${ASSET_BASE}/featured_custom_left.jpg`,
     title: 'Signature Couture',
     subtitle: 'Tailored by African designers',
-    href: '/cystomtowear',
+    href: '/customtowear',
   },
 ];
 
@@ -888,7 +888,7 @@ const RTW_FTB_CTW_SECTIONS = [
     title: 'FEATURED CUSTOM TO WEAR',
     description: 'Work directly with designers for made-to-measure pieces shaped around your fit and vision.',
     cta: 'SHOP CUSTOM TO WEAR',
-    href: '/cystomtowear',
+    href: '/customtowear',
     image: `${ASSET_BASE}/custom_full.jpg`,
     textOnLeft: false,
     panelBg: 'bg-[#111]',
@@ -941,7 +941,7 @@ const DESIGNER_SPOTLIGHT = [
     title: 'DAKAR COUTURE STUDIO',
     description: 'Elegant made-to-measure looks inspired by Senegalese heritage details.',
     cta: 'SHOP COLLECTION',
-    href: '/cystomtowear',
+    href: '/customtowear',
   },
   {
     id: 'spot-3',
@@ -1178,7 +1178,7 @@ export default function JenksFrontpageV2() {
           row.secondaryCtaText,
           HERO[indexKey % HERO.length]?.secondaryCtaText || 'EXPLORE DESIGNERS'
         ),
-        secondaryCtaHref: normalizeHref(row.secondaryCtaLink, HERO[indexKey % HERO.length]?.secondaryCtaHref || '/cystomtowear'),
+        secondaryCtaHref: normalizeHref(row.secondaryCtaLink, HERO[indexKey % HERO.length]?.secondaryCtaHref || '/customtowear'),
         secondaryCtaStyle: row.secondaryCtaStyle,
         secondaryCtaEnabled: asBoolean(row.secondaryCtaEnabled, true),
         tertiaryCtaText: asString(
@@ -1564,7 +1564,7 @@ export default function JenksFrontpageV2() {
       .filter((entry) => asBoolean(entry.enabled, true))
       .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
       .map((entry, idx) => {
-        const fallbackHref = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.href || '/cystomtowear';
+        const fallbackHref = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.href || '/customtowear';
         const countryToken = asString((entry as Record<string, unknown>).countryCode, '').trim().toUpperCase();
         return {
           id: asString(entry.id, `spot-${idx + 1}`),
@@ -1848,7 +1848,7 @@ export default function JenksFrontpageV2() {
             title: 'Shop',
             links: [
               { id: 'fallback-rtw', label: 'Ready To Wear', href: '/readytowear' },
-              { id: 'fallback-ctw', label: 'Custom To Wear', href: '/cystomtowear' },
+              { id: 'fallback-ctw', label: 'Custom To Wear', href: '/customtowear' },
               { id: 'fallback-ftb', label: 'Fabrics', href: '/fabricstobuy' },
             ],
           },
@@ -2500,7 +2500,7 @@ export default function JenksFrontpageV2() {
                         suggestion === 'Ready To Wear'
                           ? '/readytowear'
                           : suggestion === 'Custom To Wear'
-                            ? '/cystomtowear'
+                            ? '/customtowear'
                             : suggestion === 'Fabrics'
                               ? '/fabricstobuy'
                               : '/country-products'
@@ -2541,7 +2541,7 @@ export default function JenksFrontpageV2() {
                           { label: 'Shop', href: '/readytowear' },
                           { label: 'Ready To Wear', href: '/readytowear' },
                           { label: 'Fabrics To Buy', href: '/fabricstobuy' },
-                          { label: 'Custom To Wear', href: '/cystomtowear' },
+                          { label: 'Custom To Wear', href: '/customtowear' },
                           { label: 'Designers', href: '/designers' },
                           { label: 'About Us', href: '/about' },
                           { label: 'Contact Us', href: '/contact' },
