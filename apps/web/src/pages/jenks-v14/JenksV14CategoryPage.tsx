@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ChevronRight, Home, Loader2 } from 'lucide-react';
+import { ArrowRight, ChevronDown, ChevronRight, Globe, Home, Loader2 } from 'lucide-react';
 import '../../styles/jenks-v2.css';
 import { api } from '../../services/api';
 import { useCurrencyStore } from '../../store/currencyStore';
 import { AFRICAN_COUNTRIES } from '../../data/africanCountries';
+import { resolveCountryCode } from '../../data/locationOptions';
 
 type CategoryMode = 'FABRICS' | 'READY' | 'CUSTOM';
 type CategoryPageType = 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
@@ -65,6 +66,8 @@ type CategoryPageSettings = {
   filterDefinitions: CategoryFilterDefinition[];
 };
 
+const QUICK_COUNTRY_CODES = ['NG', 'GH', 'KE', 'ZA', 'MA', 'SN', 'ET', 'TZ', 'UG', 'ML', 'EG', 'CM'] as const;
+
 const FALLBACK_FILTERS_BY_MODE: Record<CategoryMode, string[]> = {
   FABRICS: ['Ankara', 'Kente', 'Adire', 'Mud Cloth', 'Silk', 'Cotton', 'Kanga', 'Raffia', 'Shweshwe', 'Toghu'],
   READY: ['Dresses', 'Kaftan', 'Agbada', 'Skirt Sets', 'Shirts', 'Jackets', 'Occasion', 'Casual'],
@@ -82,6 +85,13 @@ const toNumber = (...values: unknown[]) => {
     if (Number.isFinite(parsed)) return parsed;
   }
   return 0;
+};
+
+const flagEmoji = (countryCode: string) => {
+  const normalized = String(countryCode || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(normalized)) return '🌍';
+  const base = 127397;
+  return String.fromCodePoint(...normalized.split('').map((char) => base + char.charCodeAt(0)));
 };
 
 const sortByName = (rows: TaxonomyOption[]) => [...rows].sort((a, b) => a.name.localeCompare(b.name));
@@ -196,6 +206,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
   const [products, setProducts] = useState<ProductCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showAllCountries, setShowAllCountries] = useState(false);
   const [settings, setSettings] = useState<CategoryPageSettings | null>(null);
   const [extraFilterValues, setExtraFilterValues] = useState<Record<string, string>>({});
 
@@ -211,6 +222,19 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
         .filter((entry) => Boolean(entry.code && entry.name))
         .sort((a, b) => a.name.localeCompare(b.name)),
     []
+  );
+
+  const quickCountries = useMemo(
+    () =>
+      QUICK_COUNTRY_CODES.map((code) => countryOptions.find((entry) => entry.code === code)).filter(
+        (entry): entry is { code: string; name: string } => Boolean(entry)
+      ),
+    [countryOptions]
+  );
+
+  const visibleCountries = useMemo(
+    () => (showAllCountries ? countryOptions : quickCountries),
+    [countryOptions, quickCountries, showAllCountries]
   );
 
   const activeFilterDefinitions = useMemo(
@@ -233,6 +257,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
   const extraFilterDefinitions = useMemo(
     () =>
       activeFilterDefinitions.filter((entry) => {
+        if (entry.key === 'COUNTRY') return false;
         if (!taxonomyFilterMeta) return true;
         return entry.key !== taxonomyFilterMeta.key;
       }),
@@ -284,9 +309,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
                 ? normalizeToken(product.material)
                 : filter.key === 'COLOR'
                   ? normalizeToken(product.color)
-                  : filter.key === 'COUNTRY'
-                    ? normalizeToken(product.country)
-                    : '';
+                  : '';
         if (!value) return false;
         if (filter.inputType === 'DROPDOWN') {
           if (value !== selected) return false;
@@ -540,6 +563,8 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
     return taxonomyOptions.filter((entry) => entry.name.toLowerCase().includes(query));
   }, [taxonomyOptions, taxonomySearch]);
 
+  const selectedCountryCode = resolveCountryCode(selectedCountry);
+
   return (
     <div className="min-h-screen bg-[#F8F6F1] text-[#1A1A1A]">
       <section className="relative overflow-hidden" style={{ minHeight: `${heroHeight}px` }}>
@@ -561,69 +586,111 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
         </div>
       </section>
 
-      <div className="border-b border-[#1A1A1A]/10 bg-[#F8F6F1]/95">
+      <div className="sticky top-20 z-30 border-b border-[#1A1A1A]/10 bg-[#F8F6F1]/95 backdrop-blur-md">
         <div className="mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6 lg:px-10">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
+              <p className="label-mono text-[#6B6B6B]">{mode === 'FABRICS' ? 'Kimi v14 Category' : 'Kimi v14 Collection'}</p>
               <h1 className="headline-lg mt-2 text-[clamp(2rem,4vw,4.5rem)]">{sectionTitle}</h1>
             </div>
             <p className="text-xs uppercase tracking-[0.12em] text-[#6B6B6B]">
               {cardsToDisplay.length} {countLabel}
             </p>
           </div>
-          <div className="mt-4 space-y-4">
-            {taxonomyFilterMeta ? (
-              <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="label-mono text-[#6B6B6B]">{taxonomyLabel.toUpperCase()}</p>
-                  {taxonomyFilterMeta.inputType === 'SUGGESTIVE_SEARCH' ? (
-                    <input
-                      value={taxonomySearch}
-                      onChange={(event) => setTaxonomySearch(event.target.value)}
-                      placeholder={`Search ${taxonomyLabel.toLowerCase()}...`}
-                      className="w-full max-w-[260px] rounded border border-[#1A1A1A]/15 bg-white px-2.5 py-1.5 text-xs"
-                    />
-                  ) : null}
-                </div>
-                {taxonomyFilterMeta.inputType === 'DROPDOWN' ? (
-                  <select
-                    className="w-full max-w-[340px] rounded border border-[#1A1A1A]/15 bg-white px-3 py-2 text-sm"
-                    value={selectedTaxonomyId}
-                    onChange={(event) => setSelectedTaxonomyId(event.target.value)}
-                  >
-                    <option value="">All {taxonomyLabel}</option>
-                    {filteredTaxonomyOptions.map((option) => (
-                      <option key={`taxonomy-option-${option.id}`} value={option.id}>
-                        {option.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {filteredTaxonomyOptions.slice(0, 16).map((option) => {
-                      const active = selectedTaxonomyId === option.id;
-                      return (
-                        <button
-                          key={`taxonomy-filter-${option.id}`}
-                          type="button"
-                          onClick={() => setSelectedTaxonomyId((previous) => (previous === option.id ? '' : option.id))}
-                          className={`border px-3 py-1.5 text-sm transition ${
-                            active
-                              ? 'border-[#E85A3C] bg-[#E85A3C] text-white'
-                              : 'border-[#1A1A1A]/14 bg-white text-[#1A1A1A] hover:border-[#E85A3C]/40'
-                          }`}
-                        >
-                          {option.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ) : null}
 
-            {extraFilterDefinitions.length > 0 ? (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {countryFilterMeta ? (
+            <div className="mt-5">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="label-mono text-[#6B6B6B]">{countryFilterMeta.label.toUpperCase()}</p>
+                <button
+                  type="button"
+                  onClick={() => setShowAllCountries((prev) => !prev)}
+                  className="inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.12em] text-[#E85A3C] hover:underline"
+                >
+                  <Globe className="h-3.5 w-3.5" />
+                  {showAllCountries ? 'Show less' : `View all ${countryOptions.length} countries`}
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAllCountries ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+              <div className={`${showAllCountries ? 'grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12' : 'grid grid-cols-12 gap-2'}`}>
+                {(showAllCountries ? countryOptions : visibleCountries).map((country) => {
+                  const active = selectedCountry === country.name;
+                  return (
+                    <button
+                      key={`country-filter-${country.code}`}
+                      type="button"
+                      onClick={() => setSelectedCountry((previous) => (previous === country.name ? '' : country.name))}
+                      className={`group flex flex-col items-center px-1 py-2 text-center transition-colors ${
+                        active ? 'text-[#E85A3C]' : 'text-[#1A1A1A] hover:text-[#E85A3C]'
+                      }`}
+                    >
+                      <span
+                        className={`flex h-12 w-12 items-center justify-center rounded-full border transition-colors ${
+                          active ? 'border-[#E85A3C]' : 'border-[#1A1A1A]/12 group-hover:border-[#E85A3C]'
+                        }`}
+                      >
+                        <span className="text-lg">{flagEmoji(country.code)}</span>
+                      </span>
+                      <span className="mt-1 line-clamp-1 text-[10px] font-medium uppercase tracking-[0.08em]">{country.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          {taxonomyFilterMeta ? (
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="label-mono text-[#6B6B6B]">{taxonomyLabel.toUpperCase()}</p>
+                {taxonomyFilterMeta.inputType === 'SUGGESTIVE_SEARCH' ? (
+                  <input
+                    value={taxonomySearch}
+                    onChange={(event) => setTaxonomySearch(event.target.value)}
+                    placeholder={`Search ${taxonomyLabel.toLowerCase()}...`}
+                    className="w-full max-w-[260px] rounded border border-[#1A1A1A]/15 bg-white px-2.5 py-1.5 text-xs"
+                  />
+                ) : null}
+              </div>
+              {taxonomyFilterMeta.inputType === 'DROPDOWN' ? (
+                <select
+                  className="w-full max-w-[340px] rounded border border-[#1A1A1A]/15 bg-white px-3 py-2 text-sm"
+                  value={selectedTaxonomyId}
+                  onChange={(event) => setSelectedTaxonomyId(event.target.value)}
+                >
+                  <option value="">All {taxonomyLabel}</option>
+                  {filteredTaxonomyOptions.map((option) => (
+                    <option key={`taxonomy-option-${option.id}`} value={option.id}>
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {filteredTaxonomyOptions.slice(0, 16).map((option) => {
+                    const active = selectedTaxonomyId === option.id;
+                    return (
+                      <button
+                        key={`taxonomy-filter-${option.id}`}
+                        type="button"
+                        onClick={() => setSelectedTaxonomyId((previous) => (previous === option.id ? '' : option.id))}
+                        className={`border px-3 py-1.5 text-sm transition ${
+                          active
+                            ? 'border-[#E85A3C] bg-[#E85A3C] text-white'
+                            : 'border-[#1A1A1A]/14 bg-white text-[#1A1A1A] hover:border-[#E85A3C]/40'
+                        }`}
+                      >
+                        {option.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {extraFilterDefinitions.length > 0 ? (
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
               {extraFilterDefinitions.map((filter) => {
                 const selected = extraFilterValues[filter.key] || '';
                 const options =
@@ -670,9 +737,8 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
                   </label>
                 );
               })}
-              </div>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -690,6 +756,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
         ) : (
           <div className={`grid grid-cols-1 gap-6 sm:grid-cols-2 ${gridColumnsClass}`}>
             {cardsToDisplay.map((product) => {
+              const countryCode = resolveCountryCode(product.country || selectedCountryCode);
               return (
                 <Link key={product.id} to={product.href} className="product-card group bg-white">
                   <div className="relative aspect-[3/4] overflow-hidden bg-[#ece8df]">
@@ -698,6 +765,9 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
                       alt={product.name}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
+                    <div className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-[16px] shadow">
+                      {flagEmoji(countryCode || 'NG')}
+                    </div>
                     {product.material ? (
                       <div className="absolute bottom-3 left-3">
                         <span className="bg-white/90 px-2 py-1 text-[10px] uppercase tracking-[0.08em] text-[#1A1A1A]">
