@@ -66,6 +66,14 @@ const FILTER_PARAM_BY_KEY: Record<CategoryFilterKey, 'style' | 'fabricType' | 'm
   CATEGORY: 'category',
 };
 
+const PAGE_PATH_BY_TYPE: Record<CategoryPageType, string> = {
+  READY_TO_WEAR: '/readytowear',
+  FABRIC_TO_BUY: '/fabricstobuy',
+  CUSTOM_TO_WEAR: '/cystomtowear',
+  COUNTRY: '/country',
+  SHOP: '/shop',
+};
+
 export default function CategoryPageV2({
   pageType,
   breadcrumbLabel,
@@ -240,7 +248,15 @@ export default function CategoryPageV2({
               />
               <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/35 to-transparent" />
               <div className="relative z-10 px-8 md:px-[8vw] py-16 md:py-20 lg:py-24 flex min-h-[inherit] flex-col justify-end">
-                <p className="text-sm text-white/70 mb-3">Home &gt; {breadcrumbLabel}</p>
+                <nav className="mb-3 flex items-center gap-2 text-sm text-white/75">
+                  <Link to="/" className="hover:text-white transition-colors">
+                    Home
+                  </Link>
+                  <span aria-hidden="true">&gt;</span>
+                  <Link to={PAGE_PATH_BY_TYPE[pageType]} className="hover:text-white transition-colors">
+                    {breadcrumbLabel}
+                  </Link>
+                </nav>
                 <h1 className="headline-lg text-[clamp(44px,7vw,96px)] leading-[0.95] text-white mb-4">{runtime?.settings.title || breadcrumbLabel}</h1>
                 <p className="max-w-2xl text-base md:text-lg text-white/85">{runtime?.settings.subtitle || ''}</p>
               </div>
@@ -261,23 +277,6 @@ export default function CategoryPageV2({
                   </div>
                   {enabledFilters.map((row) => {
                     const value = String(pendingFilters[row.key] || '');
-                    if (row.inputType === 'DROPDOWN') {
-                      return (
-                        <select
-                          key={row.id}
-                          value={value}
-                          onChange={(event) => setPendingFilters((prev) => ({ ...prev, [row.key]: event.target.value }))}
-                          className="min-w-[148px] px-3 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] text-sm focus:outline-none focus:border-[var(--accent)]"
-                        >
-                          <option value="">{row.label}</option>
-                          {(row.options || []).map((option) => (
-                            <option key={`${row.id}-${option}`} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      );
-                    }
                     const listId = `filter-suggest-${pageType}-${row.key}`;
                     return (
                       <div key={row.id} className="min-w-[148px]">
