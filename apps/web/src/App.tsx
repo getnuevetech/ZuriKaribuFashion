@@ -17,6 +17,7 @@ import Designs from './pages/Designs';
 import DesignDetail from './pages/DesignDetail';
 import KimiProductDetail from './pages/KimiProductDetail';
 import ReadyToWearTryOn from './pages/ReadyToWearTryOn';
+import Shop from './pages/Shop';
 import TryOn from './pages/TryOn';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
@@ -213,8 +214,6 @@ function App() {
             <Route path="/designs/:id" element={<NavigateCategoryDetailWithSearch toBase="/cystomtowear" />} />
             <Route path="/jenks-v14/custom-to-wear" element={<NavigateWithSearch to="/cystomtowear" />} />
             <Route path="/jenks-v14/custom-to-wear/:id" element={<NavigateCategoryDetailWithSearch toBase="/cystomtowear" />} />
-            <Route path="/shop" element={<NavigateWithSearch to="/readytowear" />} />
-            <Route path="/shop/*" element={<NavigateWithSearch to="/readytowear" />} />
 
             {/* Public Routes */}
             <Route element={<JenksV2MainLayout />}>
@@ -224,6 +223,7 @@ function App() {
               <Route path="/readytowear/:id" element={<ReadyToWearDetail />} />
               <Route path="/fabricstobuy/:id" element={<FabricDetail />} />
               <Route path="/cystomtowear/:id" element={<DesignDetail />} />
+              <Route path="/shop" element={<Shop />} />
               <Route path="/product/:id" element={<KimiProductDetail />} />
               <Route path="/readytowear/:id/try-on" element={<ReadyToWearTryOn />} />
               <Route path="/home-legacy" element={<NavigateWithSearch to="/" />} />
@@ -242,6 +242,7 @@ function App() {
               <Route path="/legal/terms" element={<NavigateWithSearch to="/help-center" />} />
               <Route path="/legal/privacy" element={<NavigateWithSearch to="/help-center" />} />
               <Route path="/country-products" element={<CountryProducts />} />
+              <Route path="/country" element={<CountryProducts />} />
               <Route path="/try-on/:id" element={<TryOn />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/stories/:slug" element={<StoryPage />} />
