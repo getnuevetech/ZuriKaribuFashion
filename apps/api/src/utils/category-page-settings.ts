@@ -2,10 +2,20 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma, ProductStatus } from '../db';
 
-export const CATEGORY_PAGE_TYPES = ['READY_TO_WEAR', 'FABRIC_TO_BUY', 'CUSTOM_TO_WEAR'] as const;
+export const CATEGORY_PAGE_TYPES = [
+  'READY_TO_WEAR',
+  'FABRIC_TO_BUY',
+  'CUSTOM_TO_WEAR',
+  'COUNTRY_CATEGORY',
+  'OTHER_CATEGORY',
+] as const;
 export type CategoryPageType = (typeof CATEGORY_PAGE_TYPES)[number];
 export const CATEGORY_PAGE_DESIGN_PRESETS = ['STANDARD', 'EDITORIAL', 'MINIMAL'] as const;
 export type CategoryPageDesignPreset = (typeof CATEGORY_PAGE_DESIGN_PRESETS)[number];
+export const CATEGORY_FILTER_KEYS = ['STYLE', 'FABRIC_TYPE', 'MATERIAL', 'COUNTRY', 'PRICE', 'COLOR', 'CATEGORY'] as const;
+export type CategoryFilterKey = (typeof CATEGORY_FILTER_KEYS)[number];
+export const CATEGORY_FILTER_INPUT_TYPES = ['DROPDOWN', 'SUGGESTIVE_SEARCH'] as const;
+export type CategoryFilterInputType = (typeof CATEGORY_FILTER_INPUT_TYPES)[number];
 
 export type CategoryPageProductPreview = {
   id: string;
@@ -34,6 +44,15 @@ const featuredSlotSchema = z.object({
   productId: z.string().trim().max(120).default(''),
   isActive: z.boolean().default(true),
 });
+const categoryFilterDefinitionSchema = z.object({
+  id: z.string().trim().max(120).default(''),
+  key: z.enum(CATEGORY_FILTER_KEYS),
+  label: z.string().trim().max(80),
+  inputType: z.enum(CATEGORY_FILTER_INPUT_TYPES),
+  enabled: z.boolean(),
+  options: z.array(z.string().trim().max(80)).max(40),
+  displayOrder: z.number().int().min(0).max(999),
+});
 
 const categoryPageSettingsSchema = z.object({
   bannerTitle: z.string().trim().max(120),
@@ -50,6 +69,10 @@ const categoryPageSettingsSchema = z.object({
   rotatingColumns: z.number().int().min(1).max(6),
   rotatingRows: z.number().int().min(1).max(6),
   rotatingTitleSize: z.number().int().min(16).max(64),
+  primaryGridRows: z.number().int().min(1).max(2),
+  primaryGridColumns: z.number().int().min(1).max(6),
+  primaryGridProductIds: z.array(z.string().trim().min(1)).max(24),
+  filterDefinitions: z.array(categoryFilterDefinitionSchema).max(20),
   recommendationProductIds: z.array(z.string().trim().min(1)).max(120),
   recommendationDisplayCount: z.number().int().min(1).max(24),
   recommendationConfiguredOnly: z.boolean(),
@@ -60,6 +83,70 @@ const categoryPageSettingsSchema = z.object({
 const categoryPageSettingsPatchSchema = categoryPageSettingsSchema.partial();
 
 export type CategoryPageSettings = z.infer<typeof categoryPageSettingsSchema>;
+
+const defaultFilterDefinitionsByPage = (pageType: CategoryPageType): Array<z.infer<typeof categoryFilterDefinitionSchema>> => {
+  if (pageType === 'READY_TO_WEAR') {
+    return [
+      { id: randomUUID(), key: 'STYLE', label: 'Style', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 1 },
+      {
+        id: randomUUID(),
+        key: 'FABRIC_TYPE',
+        label: 'Fabric Type',
+        inputType: 'SUGGESTIVE_SEARCH',
+        enabled: true,
+        options: [],
+        displayOrder: 2,
+      },
+      {
+        id: randomUUID(),
+        key: 'MATERIAL',
+        label: 'Material',
+        inputType: 'SUGGESTIVE_SEARCH',
+        enabled: true,
+        options: [],
+        displayOrder: 3,
+      },
+      { id: randomUUID(), key: 'COUNTRY', label: 'Country', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 4 },
+      { id: randomUUID(), key: 'PRICE', label: 'Price', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 5 },
+    ];
+  }
+  if (pageType === 'CUSTOM_TO_WEAR') {
+    return [
+      { id: randomUUID(), key: 'STYLE', label: 'Style', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 1 },
+      { id: randomUUID(), key: 'COUNTRY', label: 'Country', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 2 },
+      { id: randomUUID(), key: 'PRICE', label: 'Price', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 3 },
+    ];
+  }
+  if (pageType === 'FABRIC_TO_BUY') {
+    return [
+      { id: randomUUID(), key: 'COLOR', label: 'Color', inputType: 'SUGGESTIVE_SEARCH', enabled: true, options: [], displayOrder: 1 },
+      {
+        id: randomUUID(),
+        key: 'FABRIC_TYPE',
+        label: 'Fabric Type',
+        inputType: 'DROPDOWN',
+        enabled: true,
+        options: [],
+        displayOrder: 2,
+      },
+      { id: randomUUID(), key: 'MATERIAL', label: 'Material', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 3 },
+      { id: randomUUID(), key: 'PRICE', label: 'Price', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 4 },
+      { id: randomUUID(), key: 'COUNTRY', label: 'Country', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 5 },
+    ];
+  }
+  if (pageType === 'COUNTRY_CATEGORY') {
+    return [
+      { id: randomUUID(), key: 'COUNTRY', label: 'Country', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 1 },
+      { id: randomUUID(), key: 'CATEGORY', label: 'Category', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 2 },
+      { id: randomUUID(), key: 'PRICE', label: 'Price', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 3 },
+    ];
+  }
+  return [
+    { id: randomUUID(), key: 'CATEGORY', label: 'Category', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 1 },
+    { id: randomUUID(), key: 'COUNTRY', label: 'Country', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 2 },
+    { id: randomUUID(), key: 'PRICE', label: 'Price', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 3 },
+  ];
+};
 
 const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> = {
   READY_TO_WEAR: {
@@ -81,6 +168,10 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     rotatingColumns: 2,
     rotatingRows: 1,
     rotatingTitleSize: 32,
+    primaryGridRows: 2,
+    primaryGridColumns: 3,
+    primaryGridProductIds: [],
+    filterDefinitions: defaultFilterDefinitionsByPage('READY_TO_WEAR'),
     recommendationProductIds: [],
     recommendationDisplayCount: 12,
     recommendationConfiguredOnly: false,
@@ -106,6 +197,10 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     rotatingColumns: 2,
     rotatingRows: 1,
     rotatingTitleSize: 32,
+    primaryGridRows: 2,
+    primaryGridColumns: 3,
+    primaryGridProductIds: [],
+    filterDefinitions: defaultFilterDefinitionsByPage('FABRIC_TO_BUY'),
     recommendationProductIds: [],
     recommendationDisplayCount: 12,
     recommendationConfiguredOnly: false,
@@ -131,6 +226,68 @@ const DEFAULT_SETTINGS_BY_PAGE: Record<CategoryPageType, CategoryPageSettings> =
     rotatingColumns: 2,
     rotatingRows: 1,
     rotatingTitleSize: 32,
+    primaryGridRows: 2,
+    primaryGridColumns: 3,
+    primaryGridProductIds: [],
+    filterDefinitions: defaultFilterDefinitionsByPage('CUSTOM_TO_WEAR'),
+    recommendationProductIds: [],
+    recommendationDisplayCount: 12,
+    recommendationConfiguredOnly: false,
+    recommendationPreferSameCountry: true,
+    recommendationPreferDifferentSeller: true,
+  },
+  COUNTRY_CATEGORY: {
+    bannerTitle: 'Country Category',
+    bannerSubtitle: 'Curated country-based selections across all categories.',
+    bannerImage: '/images/hero-readytowear.jpg',
+    designPreset: 'STANDARD',
+    bannerHeight: 320,
+    pageSize: 24,
+    columns: 4,
+    showPagination: true,
+    featuredProductIds: [],
+    featuredSlots: [
+      { productId: '', isActive: false },
+      { productId: '', isActive: false },
+      { productId: '', isActive: false },
+    ],
+    rotatingProductIds: [],
+    rotatingColumns: 2,
+    rotatingRows: 1,
+    rotatingTitleSize: 32,
+    primaryGridRows: 2,
+    primaryGridColumns: 3,
+    primaryGridProductIds: [],
+    filterDefinitions: defaultFilterDefinitionsByPage('COUNTRY_CATEGORY'),
+    recommendationProductIds: [],
+    recommendationDisplayCount: 12,
+    recommendationConfiguredOnly: false,
+    recommendationPreferSameCountry: true,
+    recommendationPreferDifferentSeller: true,
+  },
+  OTHER_CATEGORY: {
+    bannerTitle: 'Other Category',
+    bannerSubtitle: 'Configure additional category page experiences.',
+    bannerImage: '/images/hero-readytowear.jpg',
+    designPreset: 'STANDARD',
+    bannerHeight: 320,
+    pageSize: 24,
+    columns: 4,
+    showPagination: true,
+    featuredProductIds: [],
+    featuredSlots: [
+      { productId: '', isActive: false },
+      { productId: '', isActive: false },
+      { productId: '', isActive: false },
+    ],
+    rotatingProductIds: [],
+    rotatingColumns: 2,
+    rotatingRows: 1,
+    rotatingTitleSize: 32,
+    primaryGridRows: 2,
+    primaryGridColumns: 3,
+    primaryGridProductIds: [],
+    filterDefinitions: defaultFilterDefinitionsByPage('OTHER_CATEGORY'),
     recommendationProductIds: [],
     recommendationDisplayCount: 12,
     recommendationConfiguredOnly: false,
@@ -147,6 +304,8 @@ const normalizePageTypeToken = (value: string): CategoryPageType | null => {
   if (token === 'READY_TO_WEAR' || token === 'READYTOWEAR') return 'READY_TO_WEAR';
   if (token === 'FABRIC_TO_BUY' || token === 'FABRICS' || token === 'FABRICS_TO_BUY') return 'FABRIC_TO_BUY';
   if (token === 'CUSTOM_TO_WEAR' || token === 'CUSTOMTOWEAR' || token === 'DESIGNS') return 'CUSTOM_TO_WEAR';
+  if (token === 'COUNTRY_CATEGORY' || token === 'COUNTRY_PRODUCTS' || token === 'COUNTRY') return 'COUNTRY_CATEGORY';
+  if (token === 'OTHER_CATEGORY' || token === 'OTHERS' || token === 'OTHER') return 'OTHER_CATEGORY';
   return null;
 };
 
@@ -214,6 +373,64 @@ const normalizeCategoryPageSettings = (pageType: CategoryPageType, raw: unknown)
         )
       )
     : fallback.recommendationProductIds;
+  const primaryGridProductIds = Array.isArray(row.primaryGridProductIds)
+    ? Array.from(
+        new Set(
+          row.primaryGridProductIds
+            .map((entry) => String(entry || '').trim())
+            .filter(Boolean)
+            .slice(0, 24)
+        )
+      )
+    : Array.isArray(row.rotatingProductIds)
+      ? Array.from(
+          new Set(
+            row.rotatingProductIds
+              .map((entry) => String(entry || '').trim())
+              .filter(Boolean)
+              .slice(0, 24)
+          )
+        )
+      : fallback.primaryGridProductIds;
+  const fallbackFilters = fallback.filterDefinitions || defaultFilterDefinitionsByPage(pageType);
+  const fallbackFilterByKey = new Map(fallbackFilters.map((entry) => [entry.key, entry] as const));
+  const rawFilters = Array.isArray(row.filterDefinitions) ? row.filterDefinitions : fallbackFilters;
+  const normalizedFilterByKey = new Map<string, z.infer<typeof categoryFilterDefinitionSchema>>();
+  for (const [index, entry] of rawFilters.entries()) {
+    const item = asObject(entry);
+    const keyToken = String(item.key || '').trim().toUpperCase();
+    if (!CATEGORY_FILTER_KEYS.includes(keyToken as CategoryFilterKey)) continue;
+    const fallbackFilter =
+      fallbackFilterByKey.get(keyToken as CategoryFilterKey) || fallbackFilters[index] || fallbackFilters[0];
+    const options = Array.isArray(item.options)
+      ? item.options
+          .map((option) => String(option || '').trim())
+          .filter(Boolean)
+          .slice(0, 40)
+      : fallbackFilter.options;
+    normalizedFilterByKey.set(keyToken, {
+      id: String(item.id || fallbackFilter.id || randomUUID()).slice(0, 120),
+      key: keyToken as CategoryFilterKey,
+      label: String(item.label || fallbackFilter.label || keyToken.replace(/_/g, ' ')).trim().slice(0, 80),
+      inputType:
+        String(item.inputType || fallbackFilter.inputType || 'DROPDOWN').trim().toUpperCase() === 'SUGGESTIVE_SEARCH'
+          ? 'SUGGESTIVE_SEARCH'
+          : 'DROPDOWN',
+      enabled: typeof item.enabled === 'boolean' ? item.enabled : fallbackFilter.enabled,
+      options,
+      displayOrder: Number.isFinite(Number(item.displayOrder))
+        ? Math.max(0, Math.min(999, Math.round(Number(item.displayOrder))))
+        : fallbackFilter.displayOrder,
+    });
+  }
+  for (const fallbackFilter of fallbackFilters) {
+    if (!normalizedFilterByKey.has(fallbackFilter.key)) {
+      normalizedFilterByKey.set(fallbackFilter.key, { ...fallbackFilter });
+    }
+  }
+  const filterDefinitions = Array.from(normalizedFilterByKey.values())
+    .sort((a, b) => a.displayOrder - b.displayOrder)
+    .slice(0, 20);
   const parsed = categoryPageSettingsSchema.safeParse({
     bannerTitle: String(row.bannerTitle ?? fallback.bannerTitle).trim().slice(0, 120),
     bannerSubtitle: String(row.bannerSubtitle ?? fallback.bannerSubtitle).trim().slice(0, 320),
@@ -243,6 +460,18 @@ const normalizeCategoryPageSettings = (pageType: CategoryPageType, raw: unknown)
     rotatingTitleSize: Number.isFinite(Number(row.rotatingTitleSize))
       ? Math.max(16, Math.min(64, Math.round(Number(row.rotatingTitleSize))))
       : fallback.rotatingTitleSize,
+    primaryGridRows: Number.isFinite(Number(row.primaryGridRows))
+      ? Math.max(1, Math.min(2, Math.round(Number(row.primaryGridRows))))
+      : Number.isFinite(Number(row.rotatingRows))
+        ? Math.max(1, Math.min(2, Math.round(Number(row.rotatingRows))))
+        : fallback.primaryGridRows,
+    primaryGridColumns: Number.isFinite(Number(row.primaryGridColumns))
+      ? Math.max(1, Math.min(6, Math.round(Number(row.primaryGridColumns))))
+      : Number.isFinite(Number(row.rotatingColumns))
+        ? Math.max(1, Math.min(6, Math.round(Number(row.rotatingColumns))))
+        : fallback.primaryGridColumns,
+    primaryGridProductIds,
+    filterDefinitions,
     recommendationProductIds,
     recommendationDisplayCount: Number.isFinite(Number(row.recommendationDisplayCount))
       ? Math.max(1, Math.min(24, Math.round(Number(row.recommendationDisplayCount))))
@@ -362,6 +591,75 @@ export async function readCategoryFeaturedProducts(
   const ids = Array.from(new Set((featuredProductIds || []).map((entry) => String(entry || '').trim()).filter(Boolean))).slice(0, 24);
   if (ids.length === 0) return [];
 
+  if (pageType === 'COUNTRY_CATEGORY' || pageType === 'OTHER_CATEGORY') {
+    const [readyRows, fabricRows, customRows] = await Promise.all([
+      prisma.readyToWear.findMany({
+        where: { id: { in: ids }, status: ProductStatus.APPROVED, isAvailable: true },
+        include: {
+          images: { take: 1, orderBy: { sortOrder: 'asc' } },
+          designer: { select: { businessName: true, country: true } },
+          sizeVariations: { where: { stock: { gt: 0 } }, select: { price: true } },
+        },
+      }),
+      prisma.fabric.findMany({
+        where: { id: { in: ids }, status: ProductStatus.APPROVED, isAvailable: true },
+        include: {
+          images: { take: 1, orderBy: { sortOrder: 'asc' } },
+          seller: { select: { businessName: true, country: true } },
+        },
+      }),
+      prisma.design.findMany({
+        where: { id: { in: ids }, status: ProductStatus.APPROVED, isAvailable: true },
+        include: {
+          images: { take: 1, orderBy: { sortOrder: 'asc' } },
+          designer: { select: { businessName: true, country: true } },
+        },
+      }),
+    ]);
+    const mapped = new Map<string, CategoryPageProductPreview>();
+    for (const row of readyRows) {
+      const variationPrices = (row.sizeVariations || [])
+        .map((entry) => Number(entry.price || 0))
+        .filter((value) => Number.isFinite(value) && value > 0);
+      const priceUsd = variationPrices.length > 0 ? Math.min(...variationPrices) : Number(row.basePrice || 0);
+      mapped.set(row.id, {
+        id: row.id,
+        name: row.name,
+        description: String((row as any).description || '').trim() || undefined,
+        image: pickFirstImage(row.images),
+        priceUsd,
+        country: String(row.designer?.country || ''),
+        ownerName: String(row.designer?.businessName || 'Designer'),
+        href: `/readytowear/${row.id}`,
+      });
+    }
+    for (const row of fabricRows) {
+      mapped.set(row.id, {
+        id: row.id,
+        name: row.name,
+        description: String((row as any).description || '').trim() || undefined,
+        image: pickFirstImage(row.images),
+        priceUsd: Number((row as any).finalPrice || (row as any).sellerPrice || 0),
+        country: String(row.seller?.country || ''),
+        ownerName: String(row.seller?.businessName || 'Seller'),
+        href: `/fabricstobuy/${row.id}`,
+      });
+    }
+    for (const row of customRows) {
+      mapped.set(row.id, {
+        id: row.id,
+        name: row.name,
+        description: String((row as any).description || '').trim() || undefined,
+        image: pickFirstImage(row.images),
+        priceUsd: Number((row as any).finalPrice || row.basePrice || 0),
+        country: String(row.designer?.country || ''),
+        ownerName: String(row.designer?.businessName || 'Designer'),
+        href: `/cystomtowear/${row.id}`,
+      });
+    }
+    return ids.map((id) => mapped.get(id)).filter((entry): entry is CategoryPageProductPreview => Boolean(entry));
+  }
+
   if (pageType === 'READY_TO_WEAR') {
     const rows = await prisma.readyToWear.findMany({
       where: { id: { in: ids }, status: ProductStatus.APPROVED, isAvailable: true },
@@ -387,7 +685,7 @@ export async function readCategoryFeaturedProducts(
             priceUsd,
             country: String(row.designer?.country || ''),
             ownerName: String(row.designer?.businessName || 'Designer'),
-            href: `/ready-to-wear/${row.id}`,
+            href: `/readytowear/${row.id}`,
           } satisfies CategoryPageProductPreview,
         ];
       })
@@ -414,7 +712,7 @@ export async function readCategoryFeaturedProducts(
           priceUsd: Number((row as any).finalPrice || (row as any).sellerPrice || 0),
           country: String(row.seller?.country || ''),
           ownerName: String(row.seller?.businessName || 'Seller'),
-          href: `/fabrics/${row.id}`,
+          href: `/fabricstobuy/${row.id}`,
         } satisfies CategoryPageProductPreview,
       ])
     );
@@ -439,7 +737,7 @@ export async function readCategoryFeaturedProducts(
         priceUsd: Number((row as any).finalPrice || row.basePrice || 0),
         country: String(row.designer?.country || ''),
         ownerName: String(row.designer?.businessName || 'Designer'),
-        href: `/designs/${row.id}`,
+        href: `/cystomtowear/${row.id}`,
       } satisfies CategoryPageProductPreview,
     ])
   );
@@ -452,6 +750,16 @@ export async function listCategoryPageProductOptions(
 ): Promise<CategoryPageProductOption[]> {
   const search = String(input?.search || '').trim();
   const limit = Math.max(10, Math.min(200, Math.round(Number(input?.limit || 80))));
+
+  if (pageType === 'COUNTRY_CATEGORY' || pageType === 'OTHER_CATEGORY') {
+    const perTypeLimit = Math.max(20, Math.ceil(limit / 3) + 8);
+    const [ready, fabrics, custom] = await Promise.all([
+      listCategoryPageProductOptions('READY_TO_WEAR', { search, limit: perTypeLimit }),
+      listCategoryPageProductOptions('FABRIC_TO_BUY', { search, limit: perTypeLimit }),
+      listCategoryPageProductOptions('CUSTOM_TO_WEAR', { search, limit: perTypeLimit }),
+    ]);
+    return [...ready, ...fabrics, ...custom].slice(0, limit);
+  }
 
   if (pageType === 'READY_TO_WEAR') {
     const rows = await prisma.readyToWear.findMany({

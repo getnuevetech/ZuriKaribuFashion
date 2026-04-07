@@ -299,6 +299,10 @@ type DesignerSpotlightCard = {
   id: string;
   image: string;
   tag: string;
+  countryCode: string;
+  country?: string;
+  designerName: string;
+  specialty: string;
   title: string;
   description: string;
   ctaText: string;
@@ -632,6 +636,7 @@ const AFRICAN_COUNTRIES_54 = [
 ] as const;
 
 const COUNTRY_BY_CODE = new Map(AFRICAN_COUNTRIES_54.map((entry) => [entry.code, entry]));
+const COUNTRY_CODE_BY_NAME = new Map(AFRICAN_COUNTRIES_54.map((entry) => [entry.name.toUpperCase(), entry.code]));
 
 const ICON_OPTIONS = [
   'Search',
@@ -674,6 +679,16 @@ const flagEmoji = (countryCode: string) => {
   if (!/^[A-Z]{2}$/.test(normalized)) return '🌍';
   return normalized.replace(/[A-Z]/g, (char) => String.fromCodePoint(char.charCodeAt(0) + 127397));
 };
+const countryCodeFromToken = (value: unknown, fallback = 'NG') => {
+  const token = String(value || '')
+    .trim()
+    .toUpperCase();
+  if (COUNTRY_BY_CODE.has(token)) return token;
+  const byName = COUNTRY_CODE_BY_NAME.get(token);
+  if (byName) return byName;
+  return fallback;
+};
+const countryNameFromCode = (countryCode: string) => COUNTRY_BY_CODE.get(countryCode)?.name || countryCode;
 
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 const toNumber = (value: string, fallback: number) => {
@@ -1422,6 +1437,9 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         id: uid(),
         image: '',
         tag: 'Designer Spotlight',
+        countryCode: 'NG',
+        designerName: 'Lagos Tailoring House',
+        specialty: 'Tailoring',
         title: 'Meet the Designers',
         description: 'Highlight featured designers with CTA.',
         ctaText: 'View Designer',
@@ -1620,7 +1638,17 @@ const toApiPayload = (config: JenksV2FrontpageConfig) => ({
   textIconCards: config.textIconCards,
   featured: config.featured,
   freshDrops: config.freshDrops,
-  designerSpotlight: config.designerSpotlight,
+  designerSpotlight: {
+    ...config.designerSpotlight,
+    cards: config.designerSpotlight.cards.map((card) => {
+      const countryCode = countryCodeFromToken(card.countryCode || card.country, 'NG');
+      return {
+        ...card,
+        countryCode,
+        country: countryNameFromCode(countryCode),
+      };
+    }),
+  },
   heritage: config.heritage,
   customerReviews: config.customerReviews,
   newsletterFooter: config.newsletterFooter,
@@ -1769,6 +1797,10 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
     ...next.designerSpotlight,
     cards: next.designerSpotlight.cards.map((item) => ({
       ...item,
+      countryCode: countryCodeFromToken(item.countryCode || item.country, 'NG'),
+      country: countryNameFromCode(countryCodeFromToken(item.countryCode || item.country, 'NG')),
+      designerName: String(item.designerName || item.title || '').slice(0, 120),
+      specialty: String(item.specialty || '').slice(0, 120),
       ctaMode: normalizeCtaMode(item.ctaMode, 'PAGE'),
       ctaPageKey: String(item.ctaPageKey || '').trim().toUpperCase(),
       ctaLink:
@@ -2246,6 +2278,25 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         ? designerSpotlight.cards.map((card) => ({
             ...fallbackSpotlight,
             ...card,
+            countryCode: countryCodeFromToken(
+              (card as DesignerSpotlightCard)?.countryCode || (card as DesignerSpotlightCard)?.country,
+              fallbackSpotlight.countryCode || 'NG'
+            ),
+            country: countryNameFromCode(
+              countryCodeFromToken(
+                (card as DesignerSpotlightCard)?.countryCode || (card as DesignerSpotlightCard)?.country,
+                fallbackSpotlight.countryCode || 'NG'
+              )
+            ),
+            designerName: String(
+              (card as DesignerSpotlightCard)?.designerName ||
+                (card as DesignerSpotlightCard)?.title ||
+                fallbackSpotlight.designerName ||
+                ''
+            )
+              .slice(0, 120),
+            specialty: String((card as DesignerSpotlightCard)?.specialty || fallbackSpotlight.specialty || '')
+              .slice(0, 120),
             ctaMode: normalizeCtaMode((card as DesignerSpotlightCard)?.ctaMode, fallbackSpotlight.ctaMode),
             ctaPageKey: ((): string => {
               const explicit = String((card as DesignerSpotlightCard)?.ctaPageKey || fallbackSpotlight.ctaPageKey || '').trim().toUpperCase();
@@ -7280,7 +7331,7 @@ export default function JenksV2FrontPageManager() {
           </div>
           {config.featured.cards.map((card, index) => (
             <div key={card.id} className="rounded border p-3 space-y-2">
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-14">
                 <label className="md:col-span-1 text-[11px]">
                   Key
                   <select
@@ -7322,7 +7373,7 @@ export default function JenksV2FrontPageManager() {
                   }
                 />
                 <input
-                  className="md:col-span-3 rounded border px-2 py-1 text-xs"
+                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
                   value={card.title}
                   placeholder="Title"
                   onChange={(event) =>
@@ -7733,6 +7784,10 @@ export default function JenksV2FrontPageManager() {
                         id: uid(),
                         image: '',
                         tag: '',
+                        countryCode: 'NG',
+                        country: countryNameFromCode('NG'),
+                        designerName: '',
+                        specialty: '',
                         title: 'New Spotlight Card',
                         description: '',
                         ctaText: 'View Designer',
@@ -7798,6 +7853,68 @@ export default function JenksV2FrontPageManager() {
           {config.designerSpotlight.cards.map((card, index) => (
             <div key={card.id} className="rounded border p-3 space-y-2">
               <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
+                <label className="md:col-span-2 text-[11px]">
+                  Country
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={countryCodeFromToken(card.countryCode || card.country, 'NG')}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        designerSpotlight: {
+                          ...prev.designerSpotlight,
+                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                            entryIndex === index
+                              ? {
+                                  ...entry,
+                                  countryCode: event.target.value,
+                                  country: countryNameFromCode(event.target.value),
+                                }
+                              : entry
+                          ),
+                        },
+                      }))
+                    }
+                  >
+                    {AFRICAN_COUNTRIES_54.map((entry) => (
+                      <option key={`spot-country-${entry.code}`} value={entry.code}>
+                        {entry.name} ({entry.code}) {flagEmoji(entry.code)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <input
+                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
+                  value={card.designerName || ''}
+                  placeholder="Designer name"
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      designerSpotlight: {
+                        ...prev.designerSpotlight,
+                        cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, designerName: event.target.value } : entry
+                        ),
+                      },
+                    }))
+                  }
+                />
+                <input
+                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
+                  value={card.specialty || ''}
+                  placeholder="Designer specialty"
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      designerSpotlight: {
+                        ...prev.designerSpotlight,
+                        cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, specialty: event.target.value } : entry
+                        ),
+                      },
+                    }))
+                  }
+                />
                 <input
                   className="md:col-span-2 rounded border px-2 py-1 text-xs"
                   value={card.tag}
@@ -7815,7 +7932,7 @@ export default function JenksV2FrontPageManager() {
                   }
                 />
                 <input
-                  className="md:col-span-3 rounded border px-2 py-1 text-xs"
+                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
                   value={card.title}
                   placeholder="Title"
                   onChange={(event) =>
@@ -7831,7 +7948,7 @@ export default function JenksV2FrontPageManager() {
                   }
                 />
                 <input
-                  className="md:col-span-3 rounded border px-2 py-1 text-xs"
+                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
                   value={card.description}
                   placeholder="Description"
                   onChange={(event) =>

@@ -115,6 +115,9 @@ type SpotlightRuntime = {
   image: string;
   title: string;
   description: string;
+  designerName?: string;
+  designerCountry?: string;
+  designerSpecialty?: string;
   cta: string;
   href: string;
   ctaMode: CtaMode;
@@ -951,6 +954,62 @@ const DESIGNER_SPOTLIGHT = [
 ] as const;
 
 const ALL_COUNTRIES_COUNT = 54;
+const COUNTRY_LABEL_BY_CODE: Record<string, string> = {
+  DZ: 'Algeria',
+  AO: 'Angola',
+  BJ: 'Benin',
+  BW: 'Botswana',
+  BF: 'Burkina Faso',
+  BI: 'Burundi',
+  CV: 'Cabo Verde',
+  CM: 'Cameroon',
+  CF: 'Central African Republic',
+  TD: 'Chad',
+  KM: 'Comoros',
+  CG: 'Congo',
+  CD: 'Democratic Republic of the Congo',
+  CI: "Cote d'Ivoire",
+  DJ: 'Djibouti',
+  EG: 'Egypt',
+  GQ: 'Equatorial Guinea',
+  ER: 'Eritrea',
+  SZ: 'Eswatini',
+  ET: 'Ethiopia',
+  GA: 'Gabon',
+  GM: 'Gambia',
+  GH: 'Ghana',
+  GN: 'Guinea',
+  GW: 'Guinea-Bissau',
+  KE: 'Kenya',
+  LS: 'Lesotho',
+  LR: 'Liberia',
+  LY: 'Libya',
+  MG: 'Madagascar',
+  MW: 'Malawi',
+  ML: 'Mali',
+  MR: 'Mauritania',
+  MU: 'Mauritius',
+  MA: 'Morocco',
+  MZ: 'Mozambique',
+  NA: 'Namibia',
+  NE: 'Niger',
+  NG: 'Nigeria',
+  RW: 'Rwanda',
+  ST: 'Sao Tome and Principe',
+  SN: 'Senegal',
+  SC: 'Seychelles',
+  SL: 'Sierra Leone',
+  SO: 'Somalia',
+  ZA: 'South Africa',
+  SS: 'South Sudan',
+  SD: 'Sudan',
+  TZ: 'Tanzania',
+  TG: 'Togo',
+  TN: 'Tunisia',
+  UG: 'Uganda',
+  ZM: 'Zambia',
+  ZW: 'Zimbabwe',
+};
 
 export default function JenksFrontpageV2() {
   const [managerConfig, setManagerConfig] = useState<JenksV2ManagerPayload | null>(null);
@@ -1506,10 +1565,17 @@ export default function JenksFrontpageV2() {
       .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
       .map((entry, idx) => {
         const fallbackHref = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.href || '/cystomtowear';
+        const countryToken = asString((entry as Record<string, unknown>).countryCode, '').trim().toUpperCase();
         return {
           id: asString(entry.id, `spot-${idx + 1}`),
           image: asString(entry.image, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.image || `${ASSET_BASE}/designer_spotlight.jpg`),
           title: asString(entry.title, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.title || 'Designer Spotlight'),
+          designerName: asString(entry.designerName, ''),
+          designerCountry: asString(
+            entry.country,
+            asString(entry.designerCountry, COUNTRY_LABEL_BY_CODE[countryToken] || '')
+          ),
+          designerSpecialty: asString(entry.specialty, asString(entry.designerSpecialty, '')),
           description: asString(entry.description, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.description || ''),
           cta: asString(entry.ctaText, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.cta || 'VIEW DESIGNER').toUpperCase(),
           href: spotCtaHref(entry, fallbackHref),
@@ -2517,207 +2583,222 @@ export default function JenksFrontpageV2() {
 
       {/* HERO */}
       {showHeroSection ? (
-      heroSlides.length > 0 && active ? (
-      <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 lg:grid-cols-12`} style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}>
-        <div className="relative lg:col-span-7" style={{ gridColumn: `span ${heroLeftColSpan} / span ${heroLeftColSpan}` }}>
-          {heroSlides.map((slide, i) => (
-            !heroImageLoadFailed[slide.id] && slide.image ? (
-              <img
-                key={slide.id}
-                src={slide.image}
-                alt={slide.titleA}
-                onError={() =>
-                  setHeroImageLoadFailed((prev) => ({
-                    ...prev,
-                    [slide.id]: true,
-                  }))
-                }
-                className={`absolute inset-0 h-full w-full object-cover transition-all duration-1000 ${
-                  i === index ? 'scale-100 opacity-100' : 'scale-105 opacity-0'
-                }`}
-              />
-            ) : null
-          ))}
-          {!active.image || heroImageLoadFailed[active.id] ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#0e0e0e] text-white">
+        heroSlides.length > 0 && active ? (
+          active.layoutMode === 'FULL' ? (
+            <section
+              className={`relative flex ${HERO_HEIGHT_CLASS} items-end px-5 py-10 sm:px-8 lg:px-12 xl:px-16`}
+              style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}
+            >
+              {active.image && !heroImageLoadFailed[active.id] ? (
+                <img
+                  src={active.image}
+                  alt={active.titleA}
+                  onError={() =>
+                    setHeroImageLoadFailed((prev) => ({
+                      ...prev,
+                      [active.id]: true,
+                    }))
+                  }
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              ) : null}
+              {!active.image || heroImageLoadFailed[active.id] ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#0e0e0e] text-white">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#e66045]" />
+                  <p className="font-['Oswald'] text-3xl font-bold uppercase tracking-[0.08em]">ZURIKARIBU</p>
+                </div>
+              ) : null}
+              <div className="absolute inset-0 bg-gradient-to-r from-black/58 via-black/34 to-black/45" />
+              <div className="relative ml-auto w-full max-w-[720px] text-right animate-fade-in" data-kimi-anim="fade-up">
+                <h1
+                  className="break-words font-['Oswald'] font-bold uppercase leading-[0.9] text-white"
+                  style={{ fontSize: `${Math.max(36, Math.min(120, Math.round(active.titleFontSize)))}px` }}
+                >
+                  <span>{active.titleA}</span>
+                  <span className="ml-[0.16em] text-[#e66045]">{active.titleB}</span>
+                </h1>
+                {active.textEnabled ? (
+                  <p className="mt-6 text-[16px] font-light leading-[1.35] text-white/92 sm:text-[18px]">{active.lineA}</p>
+                ) : null}
+                {active.descriptionEnabled ? (
+                  <p className="mt-4 text-white/82" style={{ fontSize: `${active.descriptionFontSize}px` }}>{active.lineB}</p>
+                ) : null}
+                <div className="mt-6 flex flex-wrap items-center justify-end gap-1.5">
+                  {active.primaryCtaEnabled ? (
+                    <Link
+                      to={toSafeInternalHref(active.primaryCtaHref)}
+                      style={buildCTAStyle(active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                      onMouseEnter={(event) =>
+                        applyHeroCtaHoverState(event.currentTarget, active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
+                      }
+                      onMouseLeave={(event) =>
+                        applyHeroCtaHoverState(event.currentTarget, active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
+                      }
+                      className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      {active.primaryCtaText}
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  ) : null}
+                  {active.secondaryCtaEnabled ? (
+                    <Link
+                      to={toSafeInternalHref(active.secondaryCtaHref)}
+                      style={buildCTAStyle(active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                      onMouseEnter={(event) =>
+                        applyHeroCtaHoverState(event.currentTarget, active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
+                      }
+                      onMouseLeave={(event) =>
+                        applyHeroCtaHoverState(event.currentTarget, active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
+                      }
+                      className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
+                    >
+                      <Heart className="h-3.5 w-3.5" />
+                      {active.secondaryCtaText}
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  ) : null}
+                  {active.tertiaryCtaEnabled ? (
+                    <Link
+                      to={toSafeInternalHref(active.tertiaryCtaHref)}
+                      style={buildCTAStyle(active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                      onMouseEnter={(event) =>
+                        applyHeroCtaHoverState(event.currentTarget, active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
+                      }
+                      onMouseLeave={(event) =>
+                        applyHeroCtaHoverState(event.currentTarget, active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
+                      }
+                      className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
+                    >
+                      <ShoppingBag className="h-3.5 w-3.5" />
+                      {active.tertiaryCtaText}
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 lg:grid-cols-12`} style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}>
+              <div className="relative lg:col-span-7" style={{ gridColumn: `span ${heroLeftColSpan} / span ${heroLeftColSpan}` }}>
+                {heroSlides.map((slide, i) => (
+                  !heroImageLoadFailed[slide.id] && slide.image ? (
+                    <img
+                      key={slide.id}
+                      src={slide.image}
+                      alt={slide.titleA}
+                      onError={() =>
+                        setHeroImageLoadFailed((prev) => ({
+                          ...prev,
+                          [slide.id]: true,
+                        }))
+                      }
+                      className={`absolute inset-0 h-full w-full object-cover transition-all duration-1000 ${
+                        i === index ? 'scale-100 opacity-100' : 'scale-105 opacity-0'
+                      }`}
+                    />
+                  ) : null
+                ))}
+                {!active.image || heroImageLoadFailed[active.id] ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#0e0e0e] text-white">
+                    <Loader2 className="h-8 w-8 animate-spin text-[#e66045]" />
+                    <p className="font-['Oswald'] text-3xl font-bold uppercase tracking-[0.08em]">ZURIKARIBU</p>
+                  </div>
+                ) : null}
+              </div>
+              <div
+                className={`relative flex ${heroTextAlignClass} px-5 py-10 lg:pl-8 lg:pr-12 xl:pl-10 xl:pr-16`}
+                style={{
+                  gridColumn: `span ${heroRightColSpan} / span ${heroRightColSpan}`,
+                  backgroundColor: '#f5f3ee',
+                  backgroundImage: heroRightHasPanelImage ? `url(${active.rightPanelBackgroundImage})` : 'none',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
+              >
+                {heroRightHasPanelImage ? <div className="absolute inset-0 bg-[#f5f3ee]/68" /> : null}
+                <div className="relative w-full max-w-[520px] pr-3 sm:pr-4 animate-fade-in" data-kimi-anim="fade-up">
+                  <h1
+                    className="break-words font-['Oswald'] font-bold uppercase leading-[0.9]"
+                    style={{ fontSize: `${Math.max(36, Math.min(120, Math.round(active.titleFontSize)))}px` }}
+                  >
+                    <span>{active.titleA}</span>
+                    <span className="ml-[0.16em] text-[#e66045]">{active.titleB}</span>
+                  </h1>
+                  {active.textEnabled ? (
+                    <p className="mt-6 text-[16px] font-light leading-[1.35] text-black/84 sm:text-[18px]">{active.lineA}</p>
+                  ) : null}
+                  {active.descriptionEnabled ? (
+                    <p className="mt-4 text-black/55" style={{ fontSize: `${active.descriptionFontSize}px` }}>{active.lineB}</p>
+                  ) : null}
+                  <div className="mt-6 flex flex-wrap items-center gap-1.5">
+                    {active.primaryCtaEnabled ? (
+                      <Link
+                        to={toSafeInternalHref(active.primaryCtaHref)}
+                        style={buildCTAStyle(active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                        onMouseEnter={(event) =>
+                          applyHeroCtaHoverState(event.currentTarget, active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
+                        }
+                        onMouseLeave={(event) =>
+                          applyHeroCtaHoverState(event.currentTarget, active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
+                        }
+                        className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        {active.primaryCtaText}
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    ) : null}
+                    {active.secondaryCtaEnabled ? (
+                      <Link
+                        to={toSafeInternalHref(active.secondaryCtaHref)}
+                        style={buildCTAStyle(active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                        onMouseEnter={(event) =>
+                          applyHeroCtaHoverState(event.currentTarget, active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
+                        }
+                        onMouseLeave={(event) =>
+                          applyHeroCtaHoverState(event.currentTarget, active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
+                        }
+                        className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
+                      >
+                        <Heart className="h-3.5 w-3.5" />
+                        {active.secondaryCtaText}
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    ) : null}
+                    {active.tertiaryCtaEnabled ? (
+                      <Link
+                        to={toSafeInternalHref(active.tertiaryCtaHref)}
+                        style={buildCTAStyle(active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                        onMouseEnter={(event) =>
+                          applyHeroCtaHoverState(event.currentTarget, active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
+                        }
+                        onMouseLeave={(event) =>
+                          applyHeroCtaHoverState(event.currentTarget, active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
+                        }
+                        className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
+                      >
+                        <ShoppingBag className="h-3.5 w-3.5" />
+                        {active.tertiaryCtaText}
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </section>
+          )
+        ) : (
+          <section
+            className={`relative flex ${HERO_HEIGHT_CLASS} items-center justify-center bg-[#0e0e0e]`}
+            style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}
+          >
+            <div className="flex flex-col items-center gap-4 text-white">
               <Loader2 className="h-8 w-8 animate-spin text-[#e66045]" />
               <p className="font-['Oswald'] text-3xl font-bold uppercase tracking-[0.08em]">ZURIKARIBU</p>
             </div>
-          ) : null}
-        </div>
-        {active.layoutMode === 'FULL' ? (
-          <div
-            className="relative flex h-full items-end px-5 py-10 sm:px-8 lg:col-span-12 lg:px-12 xl:px-16"
-            style={{
-              backgroundImage: active.image ? `url(${active.image})` : 'none',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-            }}
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-black/58 via-black/34 to-black/45" />
-            <div className="relative w-full max-w-[720px] pr-3 sm:pr-4 animate-fade-in" data-kimi-anim="fade-up">
-              <h1
-                className="break-words font-['Oswald'] font-bold uppercase leading-[0.9] text-white"
-                style={{ fontSize: `${Math.max(36, Math.min(120, Math.round(active.titleFontSize)))}px` }}
-              >
-                <span>{active.titleA}</span>
-                <span className="ml-[0.16em] text-[#e66045]">{active.titleB}</span>
-              </h1>
-              {active.textEnabled ? (
-                <p className="mt-6 text-[16px] font-light leading-[1.35] text-white/92 sm:text-[18px]">{active.lineA}</p>
-              ) : null}
-              {active.descriptionEnabled ? (
-                <p className="mt-4 text-white/82" style={{ fontSize: `${active.descriptionFontSize}px` }}>{active.lineB}</p>
-              ) : null}
-              <div className="mt-6 flex flex-wrap items-center gap-1.5">
-                {active.primaryCtaEnabled ? (
-                  <Link
-                    to={toSafeInternalHref(active.primaryCtaHref)}
-                    style={buildCTAStyle(active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                    onMouseEnter={(event) =>
-                      applyHeroCtaHoverState(event.currentTarget, active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
-                    }
-                    onMouseLeave={(event) =>
-                      applyHeroCtaHoverState(event.currentTarget, active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
-                    }
-                    className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {active.primaryCtaText}
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                ) : null}
-                {active.secondaryCtaEnabled ? (
-                  <Link
-                    to={toSafeInternalHref(active.secondaryCtaHref)}
-                    style={buildCTAStyle(active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                    onMouseEnter={(event) =>
-                      applyHeroCtaHoverState(event.currentTarget, active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
-                    }
-                    onMouseLeave={(event) =>
-                      applyHeroCtaHoverState(event.currentTarget, active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
-                    }
-                    className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
-                  >
-                    <Heart className="h-3.5 w-3.5" />
-                    {active.secondaryCtaText}
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                ) : null}
-                {active.tertiaryCtaEnabled ? (
-                  <Link
-                    to={toSafeInternalHref(active.tertiaryCtaHref)}
-                    style={buildCTAStyle(active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                    onMouseEnter={(event) =>
-                      applyHeroCtaHoverState(event.currentTarget, active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
-                    }
-                    onMouseLeave={(event) =>
-                      applyHeroCtaHoverState(event.currentTarget, active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
-                    }
-                    className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
-                  >
-                    <ShoppingBag className="h-3.5 w-3.5" />
-                    {active.tertiaryCtaText}
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        ) : (
-        <div
-          className={`relative flex ${heroTextAlignClass} px-5 py-10 lg:pl-8 lg:pr-12 xl:pl-10 xl:pr-16`}
-          style={{
-            gridColumn: `span ${heroRightColSpan} / span ${heroRightColSpan}`,
-            backgroundColor: '#f5f3ee',
-            backgroundImage: heroRightHasPanelImage ? `url(${active.rightPanelBackgroundImage})` : 'none',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-        >
-          {heroRightHasPanelImage ? <div className="absolute inset-0 bg-[#f5f3ee]/68" /> : null}
-          <div className="relative w-full max-w-[520px] pr-3 sm:pr-4 animate-fade-in" data-kimi-anim="fade-up">
-            <h1
-              className="break-words font-['Oswald'] font-bold uppercase leading-[0.9]"
-              style={{ fontSize: `${Math.max(36, Math.min(120, Math.round(active.titleFontSize)))}px` }}
-            >
-              <span>{active.titleA}</span>
-              <span className="ml-[0.16em] text-[#e66045]">{active.titleB}</span>
-            </h1>
-            {active.textEnabled ? (
-              <p className="mt-6 text-[16px] font-light leading-[1.35] text-black/84 sm:text-[18px]">{active.lineA}</p>
-            ) : null}
-            {active.descriptionEnabled ? (
-              <p className="mt-4 text-black/55" style={{ fontSize: `${active.descriptionFontSize}px` }}>{active.lineB}</p>
-            ) : null}
-            <div className="mt-6 flex flex-wrap items-center gap-1.5">
-              {active.primaryCtaEnabled ? (
-                <Link
-                  to={toSafeInternalHref(active.primaryCtaHref)}
-                  style={buildCTAStyle(active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                  onMouseEnter={(event) =>
-                    applyHeroCtaHoverState(event.currentTarget, active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
-                  }
-                  onMouseLeave={(event) =>
-                    applyHeroCtaHoverState(event.currentTarget, active.primaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
-                  }
-                  className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {active.primaryCtaText}
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              ) : null}
-              {active.secondaryCtaEnabled ? (
-                <Link
-                  to={toSafeInternalHref(active.secondaryCtaHref)}
-                  style={buildCTAStyle(active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                  onMouseEnter={(event) =>
-                    applyHeroCtaHoverState(event.currentTarget, active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
-                  }
-                  onMouseLeave={(event) =>
-                    applyHeroCtaHoverState(event.currentTarget, active.secondaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
-                  }
-                  className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
-                >
-                  <Heart className="h-3.5 w-3.5" />
-                  {active.secondaryCtaText}
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              ) : null}
-              {active.tertiaryCtaEnabled ? (
-                <Link
-                  to={toSafeInternalHref(active.tertiaryCtaHref)}
-                  style={buildCTAStyle(active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                  onMouseEnter={(event) =>
-                    applyHeroCtaHoverState(event.currentTarget, active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, true)
-                  }
-                  onMouseLeave={(event) =>
-                    applyHeroCtaHoverState(event.currentTarget, active.tertiaryCtaStyle, DEFAULT_SOLID_CTA_STYLE, false)
-                  }
-                  className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
-                >
-                  <ShoppingBag className="h-3.5 w-3.5" />
-                  {active.tertiaryCtaText}
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              ) : null}
-            </div>
-          </div>
-        </div>
-        )}
-      </section>
-      ) : (
-      <section
-        className={`relative flex ${HERO_HEIGHT_CLASS} items-center justify-center bg-[#0e0e0e]`}
-        style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}
-      >
-        <div className="flex flex-col items-center gap-4 text-white">
-          <Loader2 className="h-8 w-8 animate-spin text-[#e66045]" />
-          <p className="font-['Oswald'] text-3xl font-bold uppercase tracking-[0.08em]">ZURIKARIBU</p>
-        </div>
-      </section>
-      )
+          </section>
+        )
       ) : null}
 
       {/* SHOP BY */}
@@ -3198,6 +3279,14 @@ export default function JenksFrontpageV2() {
               <p className="absolute left-8 top-8 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80">{spot.tag}</p>
               <div className="absolute bottom-8 left-8 right-8 text-white">
                 <h3 className="mt-3 font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">{spot.title}</h3>
+                {spot.designerName ? (
+                  <p className="mt-2 text-sm font-semibold uppercase tracking-[0.08em] text-white/88">{spot.designerName}</p>
+                ) : null}
+                {(spot.designerCountry || spot.designerSpecialty) ? (
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-white/74">
+                    {[spot.designerCountry, spot.designerSpecialty].filter(Boolean).join(' • ')}
+                  </p>
+                ) : null}
                 <p className="mt-3 text-sm text-white/78">{spot.description}</p>
                 <span
                   className="mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
@@ -3477,7 +3566,7 @@ export default function JenksFrontpageV2() {
           </>
         ) : null}
         <div className="relative z-10 w-full px-4 pt-12 sm:px-6 lg:px-12 xl:px-20">
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-5">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4 lg:grid-cols-5">
             <div>
               {asString(footerLogoCfg.mode, 'TEXT').toUpperCase() === 'IMAGE' && footerLogoImageUrl ? (
                 <img
@@ -3527,7 +3616,7 @@ export default function JenksFrontpageV2() {
               </div>
             ))}
 
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 lg:col-span-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">Contact</p>
               <div className="mt-3 space-y-2 text-sm text-white/75">
                 <p className="inline-flex items-center gap-2"><Mail className="h-4 w-4" /> {asString(footerCfg.contactEmail, 'support@zurikaribu.com')}</p>

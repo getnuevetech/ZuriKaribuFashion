@@ -721,6 +721,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/admin/category-pages-manager"
+                  element={
+                    <AdminPermissionGuard required={['homepage:manage']}>
+                      <AdminCategoryPages />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
                   path="/admin/blogs"
                   element={
                     <AdminPermissionGuard required={['homepage:manage']}>

@@ -319,7 +319,10 @@ type DesignerSpotlightCard = {
   id: string;
   image: string;
   tag: string;
+  country: string;
+  designerName: string;
   title: string;
+  specialty: string;
   description: string;
   ctaText: string;
   ctaLink: string;
@@ -1317,7 +1320,10 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           id: randomUUID(),
           image: '',
           tag: 'Designer Spotlight',
+          country: 'Nigeria',
+          designerName: 'Lagos Tailoring House',
           title: 'Meet the Designers',
+          specialty: 'Bespoke tailoring',
           description: 'Highlight featured designers.',
           ctaText: 'View Designer',
           ctaLink: '/cystomtowear',
@@ -2144,7 +2150,10 @@ const normalizeDesignerSpotlight = (
         id: getString(item.id) || fallbackItem.id || randomUUID(),
         image: (getString(item.image) || fallbackItem.image).slice(0, 2000),
         tag: (getString(item.tag) || fallbackItem.tag).slice(0, 80),
+        country: (getString(item.country) || fallbackItem.country || '').slice(0, 80),
+        designerName: (getString(item.designerName) || fallbackItem.designerName || '').slice(0, 120),
         title: (getString(item.title) || fallbackItem.title).slice(0, 140),
+        specialty: (getString(item.specialty) || fallbackItem.specialty || '').slice(0, 140),
         description: (getString(item.description) || fallbackItem.description).slice(0, 320),
         ctaText: (getString(item.ctaText) || fallbackItem.ctaText).slice(0, 80),
         ctaMode: normalizeCtaMode(item.ctaMode, fallbackItem.ctaMode),

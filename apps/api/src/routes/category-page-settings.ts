@@ -38,6 +38,23 @@ const updateCategoryPageSettingsSchema = z
     rotatingColumns: z.number().int().min(1).max(6).optional(),
     rotatingRows: z.number().int().min(1).max(6).optional(),
     rotatingTitleSize: z.number().int().min(16).max(64).optional(),
+    primaryGridRows: z.number().int().min(1).max(2).optional(),
+    primaryGridColumns: z.number().int().min(1).max(6).optional(),
+    primaryGridProductIds: z.array(z.string().trim().min(1)).max(24).optional(),
+    filterDefinitions: z
+      .array(
+        z.object({
+          id: z.string().trim().max(120).optional(),
+          key: z.string().trim().max(80),
+          label: z.string().trim().max(80),
+          inputType: z.enum(['DROPDOWN', 'SUGGESTIVE_SEARCH']).optional(),
+          enabled: z.boolean().optional(),
+          options: z.array(z.string().trim().max(80)).max(40).optional(),
+          displayOrder: z.number().int().min(0).max(999).optional(),
+        })
+      )
+      .max(20)
+      .optional(),
     recommendationProductIds: z.array(z.string().trim().min(1)).max(120).optional(),
     recommendationDisplayCount: z.number().int().min(1).max(24).optional(),
     recommendationConfiguredOnly: z.boolean().optional(),
@@ -100,6 +117,7 @@ router.get('/admin/:pageType', authenticate, authorizePermissions(Permissions.HO
     const snapshot = await readCategoryPageSettings(pageType);
     const featuredProducts = await readCategoryFeaturedProducts(pageType, resolveActiveFeaturedIds(snapshot.settings));
     const rotatingProducts = await readCategoryFeaturedProducts(pageType, snapshot.settings.rotatingProductIds);
+    const primaryGridProducts = await readCategoryFeaturedProducts(pageType, snapshot.settings.primaryGridProductIds);
     res.json({
       success: true,
       data: {
@@ -107,6 +125,7 @@ router.get('/admin/:pageType', authenticate, authorizePermissions(Permissions.HO
         ...snapshot,
         featuredProducts,
         rotatingProducts,
+        primaryGridProducts,
       },
     });
   } catch (error) {
@@ -122,6 +141,7 @@ router.put('/admin/:pageType', authenticate, authorizePermissions(Permissions.HO
     const settings = await writeCategoryPageSettings(pageType, payload, false);
     const featuredProducts = await readCategoryFeaturedProducts(pageType, resolveActiveFeaturedIds(settings));
     const rotatingProducts = await readCategoryFeaturedProducts(pageType, settings.rotatingProductIds);
+    const primaryGridProducts = await readCategoryFeaturedProducts(pageType, settings.primaryGridProductIds);
     res.json({
       success: true,
       data: {
@@ -129,6 +149,7 @@ router.put('/admin/:pageType', authenticate, authorizePermissions(Permissions.HO
         settings,
         featuredProducts,
         rotatingProducts,
+        primaryGridProducts,
       },
     });
   } catch (error) {
@@ -147,6 +168,7 @@ router.patch('/admin/:pageType', authenticate, authorizePermissions(Permissions.
     const settings = await writeCategoryPageSettings(pageType, payload, true);
     const featuredProducts = await readCategoryFeaturedProducts(pageType, resolveActiveFeaturedIds(settings));
     const rotatingProducts = await readCategoryFeaturedProducts(pageType, settings.rotatingProductIds);
+    const primaryGridProducts = await readCategoryFeaturedProducts(pageType, settings.primaryGridProductIds);
     res.json({
       success: true,
       data: {
@@ -154,6 +176,7 @@ router.patch('/admin/:pageType', authenticate, authorizePermissions(Permissions.
         settings,
         featuredProducts,
         rotatingProducts,
+        primaryGridProducts,
       },
     });
   } catch (error) {
@@ -171,6 +194,7 @@ router.get('/:pageType', async (req, res, next) => {
     const snapshot = await readCategoryPageSettings(pageType);
     const featuredProducts = await readCategoryFeaturedProducts(pageType, resolveActiveFeaturedIds(snapshot.settings));
     const rotatingProducts = await readCategoryFeaturedProducts(pageType, snapshot.settings.rotatingProductIds);
+    const primaryGridProducts = await readCategoryFeaturedProducts(pageType, snapshot.settings.primaryGridProductIds);
     res.json({
       success: true,
       data: {
@@ -178,6 +202,7 @@ router.get('/:pageType', async (req, res, next) => {
         ...snapshot,
         featuredProducts,
         rotatingProducts,
+        primaryGridProducts,
       },
     });
   } catch (error) {

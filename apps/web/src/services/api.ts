@@ -1326,7 +1326,83 @@ const slugifyPartnerName = (value: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || `partner-${Date.now()}`;
 
-const readCategoryPageSettingsFallback = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR') => {
+type CategoryPageType = 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR' | 'COUNTRY_CATEGORY' | 'OTHER_CATEGORY';
+type CategoryFilterInputType = 'DROPDOWN' | 'SUGGESTIVE_SEARCH';
+type CategoryFilterDefinition = {
+  id: string;
+  key: 'STYLE' | 'FABRIC_TYPE' | 'MATERIAL' | 'COUNTRY' | 'PRICE' | 'COLOR' | 'CATEGORY';
+  label: string;
+  inputType: CategoryFilterInputType;
+  enabled: boolean;
+  options: string[];
+  displayOrder: number;
+};
+const CATEGORY_FILTER_KEYS: Array<CategoryFilterDefinition['key']> = [
+  'STYLE',
+  'FABRIC_TYPE',
+  'MATERIAL',
+  'COUNTRY',
+  'PRICE',
+  'COLOR',
+  'CATEGORY',
+];
+const defaultCategoryFilterDefinitions = (pageType: CategoryPageType): CategoryFilterDefinition[] => {
+  if (pageType === 'READY_TO_WEAR') {
+    return [
+      { id: 'style', key: 'STYLE', label: 'Style', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 1 },
+      {
+        id: 'fabric-type',
+        key: 'FABRIC_TYPE',
+        label: 'Fabric Type',
+        inputType: 'SUGGESTIVE_SEARCH',
+        enabled: true,
+        options: [],
+        displayOrder: 2,
+      },
+      {
+        id: 'material',
+        key: 'MATERIAL',
+        label: 'Material',
+        inputType: 'SUGGESTIVE_SEARCH',
+        enabled: true,
+        options: [],
+        displayOrder: 3,
+      },
+      { id: 'country', key: 'COUNTRY', label: 'Country', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 4 },
+      { id: 'price', key: 'PRICE', label: 'Price', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 5 },
+    ];
+  }
+  if (pageType === 'CUSTOM_TO_WEAR') {
+    return [
+      { id: 'style', key: 'STYLE', label: 'Style', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 1 },
+      { id: 'country', key: 'COUNTRY', label: 'Country', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 2 },
+      { id: 'price', key: 'PRICE', label: 'Price', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 3 },
+    ];
+  }
+  if (pageType === 'FABRIC_TO_BUY') {
+    return [
+      { id: 'color', key: 'COLOR', label: 'Color', inputType: 'SUGGESTIVE_SEARCH', enabled: true, options: [], displayOrder: 1 },
+      { id: 'fabric-type', key: 'FABRIC_TYPE', label: 'Fabric Type', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 2 },
+      { id: 'material', key: 'MATERIAL', label: 'Material', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 3 },
+      { id: 'price', key: 'PRICE', label: 'Price', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 4 },
+      { id: 'country', key: 'COUNTRY', label: 'Country', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 5 },
+    ];
+  }
+  if (pageType === 'COUNTRY_CATEGORY') {
+    return [
+      { id: 'country', key: 'COUNTRY', label: 'Country', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 1 },
+      { id: 'category', key: 'CATEGORY', label: 'Category', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 2 },
+      { id: 'price', key: 'PRICE', label: 'Price', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 3 },
+    ];
+  }
+  return [
+    { id: 'category', key: 'CATEGORY', label: 'Category', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 1 },
+    { id: 'country', key: 'COUNTRY', label: 'Country', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 2 },
+    { id: 'price', key: 'PRICE', label: 'Price', inputType: 'DROPDOWN', enabled: true, options: [], displayOrder: 3 },
+  ];
+};
+
+const readCategoryPageSettingsFallback = (pageType: CategoryPageType) => {
   if (typeof window === 'undefined' || !window.localStorage) return null as any;
   try {
     const raw = window.localStorage.getItem(`${CATEGORY_PAGE_SETTINGS_FALLBACK_KEY_PREFIX}${pageType}`);
@@ -1337,8 +1413,17 @@ const readCategoryPageSettingsFallback = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO
   }
 };
 
-const defaultCategoryPageSettings = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR') => ({
-  bannerTitle: pageType === 'FABRIC_TO_BUY' ? 'Fabrics To Buy' : pageType === 'CUSTOM_TO_WEAR' ? 'Custom To Wear' : 'Ready To Wear',
+const defaultCategoryPageSettings = (pageType: CategoryPageType) => ({
+  bannerTitle:
+    pageType === 'FABRIC_TO_BUY'
+      ? 'Fabrics To Buy'
+      : pageType === 'CUSTOM_TO_WEAR'
+        ? 'Custom To Wear'
+        : pageType === 'COUNTRY_CATEGORY'
+          ? 'Country Category'
+          : pageType === 'OTHER_CATEGORY'
+            ? 'Other Category'
+            : 'Ready To Wear',
   bannerSubtitle: '',
   bannerImage: '',
   designPreset: 'STANDARD' as 'STANDARD' | 'EDITORIAL' | 'MINIMAL',
@@ -1356,9 +1441,13 @@ const defaultCategoryPageSettings = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY'
   rotatingColumns: 2,
   rotatingRows: 1,
   rotatingTitleSize: 32,
+  primaryGridRows: 2,
+  primaryGridColumns: 3,
+  primaryGridProductIds: [] as string[],
+  filterDefinitions: defaultCategoryFilterDefinitions(pageType),
 });
 
-const normalizeCategoryPageSettingsPayload = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR', input: any) => {
+const normalizeCategoryPageSettingsPayload = (pageType: CategoryPageType, input: any) => {
   const merged = {
     ...defaultCategoryPageSettings(pageType),
     ...(input && typeof input === 'object' ? input : {}),
@@ -1368,10 +1457,42 @@ const normalizeCategoryPageSettingsPayload = (pageType: 'READY_TO_WEAR' | 'FABRI
     presetToken === 'EDITORIAL' || presetToken === 'MINIMAL' || presetToken === 'STANDARD'
       ? presetToken
       : 'STANDARD';
+  const normalizedFilterByKey = new Map<CategoryFilterDefinition['key'], CategoryFilterDefinition>();
+  const fallbackFilters = defaultCategoryFilterDefinitions(pageType);
+  const rawFilters = Array.isArray(merged.filterDefinitions) ? merged.filterDefinitions : fallbackFilters;
+  for (const [index, entry] of rawFilters.entries()) {
+    const row = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+    const keyToken = String(row.key || '').trim().toUpperCase() as CategoryFilterDefinition['key'];
+    if (!CATEGORY_FILTER_KEYS.includes(keyToken)) continue;
+    const fallback = fallbackFilters.find((item) => item.key === keyToken) || fallbackFilters[index] || fallbackFilters[0];
+    normalizedFilterByKey.set(keyToken, {
+      id: String(row.id || fallback.id || keyToken.toLowerCase()).slice(0, 120),
+      key: keyToken,
+      label: String(row.label || fallback.label || keyToken.replace(/_/g, ' ')).slice(0, 80),
+      inputType: String(row.inputType || fallback.inputType || 'DROPDOWN').trim().toUpperCase() === 'SUGGESTIVE_SEARCH' ? 'SUGGESTIVE_SEARCH' : 'DROPDOWN',
+      enabled: typeof row.enabled === 'boolean' ? row.enabled : fallback.enabled,
+      options: Array.isArray(row.options)
+        ? row.options.map((option) => String(option || '').trim()).filter(Boolean).slice(0, 40)
+        : fallback.options,
+      displayOrder: Number.isFinite(Number(row.displayOrder))
+        ? Math.max(0, Math.min(999, Math.round(Number(row.displayOrder))))
+        : fallback.displayOrder,
+    });
+  }
+  for (const fallback of fallbackFilters) {
+    if (!normalizedFilterByKey.has(fallback.key)) normalizedFilterByKey.set(fallback.key, fallback);
+  }
+
   return {
     ...merged,
     designPreset,
     bannerImage: resolveApiAssetUrl(merged.bannerImage),
+    primaryGridRows: Math.max(1, Math.min(2, Math.round(Number(merged.primaryGridRows || merged.rotatingRows || 2)))),
+    primaryGridColumns: Math.max(1, Math.min(6, Math.round(Number(merged.primaryGridColumns || merged.rotatingColumns || 3)))),
+    primaryGridProductIds: Array.isArray(merged.primaryGridProductIds)
+      ? Array.from(new Set(merged.primaryGridProductIds.map((entry: any) => String(entry || '').trim()).filter(Boolean))).slice(0, 24)
+      : Array.from(new Set((Array.isArray(merged.rotatingProductIds) ? merged.rotatingProductIds : []).map((entry: any) => String(entry || '').trim()).filter(Boolean))).slice(0, 24),
+    filterDefinitions: Array.from(normalizedFilterByKey.values()).sort((a, b) => a.displayOrder - b.displayOrder).slice(0, 20),
   };
 };
 
@@ -1391,11 +1512,15 @@ const resolveActiveFeaturedIdsFromSettings = (settings: any) => {
     : [];
 };
 
-const toCategoryPageHref = (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR', id: string) =>
-  pageType === 'FABRIC_TO_BUY' ? `/fabricstobuy/${id}` : pageType === 'CUSTOM_TO_WEAR' ? `/cystomtowear/${id}` : `/readytowear/${id}`;
+const toCategoryPageHref = (pageType: CategoryPageType, id: string) => {
+  if (pageType === 'FABRIC_TO_BUY') return `/fabricstobuy/${id}`;
+  if (pageType === 'CUSTOM_TO_WEAR') return `/cystomtowear/${id}`;
+  if (pageType === 'COUNTRY_CATEGORY' || pageType === 'OTHER_CATEGORY') return `/country-products`;
+  return `/readytowear/${id}`;
+};
 
 const optionToPreview = (
-  pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
+  pageType: CategoryPageType,
   option: any
 ) => ({
   id: String(option?.id || ''),
@@ -1408,7 +1533,7 @@ const optionToPreview = (
   href: toCategoryPageHref(pageType, String(option?.id || '')),
 });
 const writeCategoryPageSettingsFallback = (
-  pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
+  pageType: CategoryPageType,
   payload: any
 ) => {
   if (typeof window === 'undefined' || !window.localStorage) return;
@@ -1527,7 +1652,7 @@ async function sendAdminPartnerTestWebhookWithFallback<T>(appId: string) {
   } as T;
 }
 
-async function readAdminCategoryPageSettingsWithFallback<T>(pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR') {
+async function readAdminCategoryPageSettingsWithFallback<T>(pageType: CategoryPageType) {
   let lastError: unknown = null;
   for (const path of [`/category-page-settings/admin/${pageType}`, `/category-page-settings/${pageType}`]) {
     try {
@@ -1559,12 +1684,13 @@ async function readAdminCategoryPageSettingsWithFallback<T>(pageType: 'READY_TO_
       settings: fallbackSettings,
       featuredProducts: [],
       rotatingProducts: [],
+      primaryGridProducts: [],
     },
     message: 'Category page settings loaded from local fallback.',
   } as T;
 }
 async function writeAdminCategoryPageSettingsWithFallback<T>(
-  pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
+  pageType: CategoryPageType,
   data: Record<string, unknown>
 ) {
   let lastError: unknown = null;
@@ -1602,12 +1728,13 @@ async function writeAdminCategoryPageSettingsWithFallback<T>(
       settings,
       featuredProducts: [],
       rotatingProducts: [],
+      primaryGridProducts: [],
     },
     message: 'Category page settings saved to local fallback.',
   } as T;
 }
 async function readCategoryPageProductOptionsWithFallback<T>(
-  pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
+  pageType: CategoryPageType,
   params?: { search?: string; limit?: number }
 ) {
   try {
@@ -1624,6 +1751,23 @@ async function readCategoryPageProductOptionsWithFallback<T>(
   const search = String(params?.search || '').trim().toLowerCase();
   const limit = Math.max(10, Math.min(200, Number(params?.limit || 120)));
   let rows: any[] = [];
+  if (pageType === 'COUNTRY_CATEGORY' || pageType === 'OTHER_CATEGORY') {
+    const [readyRows, fabricRows, customRows] = await Promise.all([
+      readCategoryPageProductOptionsWithFallback<any>('READY_TO_WEAR', { search, limit: Math.max(20, Math.ceil(limit / 3) + 8) }),
+      readCategoryPageProductOptionsWithFallback<any>('FABRIC_TO_BUY', { search, limit: Math.max(20, Math.ceil(limit / 3) + 8) }),
+      readCategoryPageProductOptionsWithFallback<any>('CUSTOM_TO_WEAR', { search, limit: Math.max(20, Math.ceil(limit / 3) + 8) }),
+    ]);
+    const rows = [
+      ...(Array.isArray(readyRows?.data) ? readyRows.data : []),
+      ...(Array.isArray(fabricRows?.data) ? fabricRows.data : []),
+      ...(Array.isArray(customRows?.data) ? customRows.data : []),
+    ];
+    return {
+      success: true,
+      data: rows.slice(0, limit),
+      message: 'Product options loaded from mixed fallback products endpoint.',
+    } as T;
+  }
   if (pageType === 'READY_TO_WEAR') {
     const response = await apiService.get<any>('/products/ready-to-wear', {
       params: { limit: Math.max(200, limit), page: 1, _r: Date.now() },
@@ -1683,7 +1827,7 @@ async function readCategoryPageProductOptionsWithFallback<T>(
 }
 
 async function readPublicCategoryPageSettingsWithFallback<T>(
-  pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR'
+  pageType: CategoryPageType
 ) {
   let lastError: unknown = null;
   for (const path of [`/category-page-settings/${pageType}`, `/category-page-settings/admin/${pageType}`]) {
@@ -1694,13 +1838,18 @@ async function readPublicCategoryPageSettingsWithFallback<T>(
 
       let featuredProducts = Array.isArray(response?.data?.featuredProducts) ? response.data.featuredProducts : [];
       let rotatingProducts = Array.isArray(response?.data?.rotatingProducts) ? response.data.rotatingProducts : [];
+      let primaryGridProducts = Array.isArray(response?.data?.primaryGridProducts) ? response.data.primaryGridProducts : [];
       const activeFeaturedIds = resolveActiveFeaturedIdsFromSettings(settings);
       const needsFeaturedHydration = featuredProducts.length === 0 && activeFeaturedIds.length > 0;
       const needsRotatingHydration =
         rotatingProducts.length === 0 &&
         Array.isArray(settings?.rotatingProductIds) &&
         settings.rotatingProductIds.length > 0;
-      if (needsFeaturedHydration || needsRotatingHydration) {
+      const needsPrimaryGridHydration =
+        primaryGridProducts.length === 0 &&
+        Array.isArray(settings?.primaryGridProductIds) &&
+        settings.primaryGridProductIds.length > 0;
+      if (needsFeaturedHydration || needsRotatingHydration || needsPrimaryGridHydration) {
         const optionsResponse = await readCategoryPageProductOptionsWithFallback<any>(pageType, { limit: 220 });
         const optionsRows = Array.isArray(optionsResponse?.data) ? optionsResponse.data : [];
         const optionMap = new Map(optionsRows.map((row: any) => [String(row?.id || ''), row]));
@@ -1716,6 +1865,12 @@ async function readPublicCategoryPageSettingsWithFallback<T>(
             .filter(Boolean)
             .map((row: any) => optionToPreview(pageType, row));
         }
+        if (needsPrimaryGridHydration) {
+          primaryGridProducts = (settings.primaryGridProductIds || [])
+            .map((id: any) => optionMap.get(String(id || '').trim()))
+            .filter(Boolean)
+            .map((row: any) => optionToPreview(pageType, row));
+        }
       }
 
       return {
@@ -1727,6 +1882,7 @@ async function readPublicCategoryPageSettingsWithFallback<T>(
           settings,
           featuredProducts,
           rotatingProducts,
+          primaryGridProducts,
         },
       } as T;
     } catch (error) {
@@ -1739,6 +1895,7 @@ async function readPublicCategoryPageSettingsWithFallback<T>(
   const settings = normalizeCategoryPageSettingsPayload(pageType, readCategoryPageSettingsFallback(pageType) || {});
   let featuredProducts: any[] = [];
   let rotatingProducts: any[] = [];
+  let primaryGridProducts: any[] = [];
   try {
     const optionsResponse = await readCategoryPageProductOptionsWithFallback<any>(pageType, { limit: 220 });
     const optionsRows = Array.isArray(optionsResponse?.data) ? optionsResponse.data : [];
@@ -1751,9 +1908,14 @@ async function readPublicCategoryPageSettingsWithFallback<T>(
       .map((id: any) => optionMap.get(String(id || '').trim()))
       .filter(Boolean)
       .map((row: any) => optionToPreview(pageType, row));
+    primaryGridProducts = (settings.primaryGridProductIds || [])
+      .map((id: any) => optionMap.get(String(id || '').trim()))
+      .filter(Boolean)
+      .map((row: any) => optionToPreview(pageType, row));
   } catch {
     featuredProducts = [];
     rotatingProducts = [];
+    primaryGridProducts = [];
   }
   return {
     success: true,
@@ -1762,6 +1924,7 @@ async function readPublicCategoryPageSettingsWithFallback<T>(
       settings,
       featuredProducts,
       rotatingProducts,
+      primaryGridProducts,
     },
     message: 'Category page settings loaded from local fallback.',
   } as T;
@@ -4597,11 +4760,11 @@ const productsApi = {
   getFeatured: () =>
     apiService.get<{ success: boolean; data: any }>('/products/featured'),
 
-  getCategoryPageSettings: (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR') =>
+  getCategoryPageSettings: (pageType: CategoryPageType) =>
     readPublicCategoryPageSettingsWithFallback<{
       success: boolean;
       data: {
-        pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
+        pageType: CategoryPageType;
         rowId?: string | null;
         source?: 'DEFAULT' | 'DATABASE';
         updatedAt?: string | null;
@@ -4620,6 +4783,18 @@ const productsApi = {
           rotatingColumns: number;
           rotatingRows: number;
           rotatingTitleSize: number;
+          primaryGridRows: number;
+          primaryGridColumns: number;
+          primaryGridProductIds: string[];
+          filterDefinitions: Array<{
+            id: string;
+            key: CategoryFilterDefinition['key'];
+            label: string;
+            inputType: CategoryFilterInputType;
+            enabled: boolean;
+            options: string[];
+            displayOrder: number;
+          }>;
           recommendationProductIds: string[];
           recommendationDisplayCount: number;
           recommendationConfiguredOnly: boolean;
@@ -4637,6 +4812,16 @@ const productsApi = {
           href: string;
         }>;
         rotatingProducts: Array<{
+          id: string;
+          name: string;
+          description?: string;
+          image: string;
+          priceUsd: number;
+          country: string;
+          ownerName: string;
+          href: string;
+        }>;
+        primaryGridProducts: Array<{
           id: string;
           name: string;
           description?: string;
@@ -7753,11 +7938,11 @@ const adminApi = {
       data
     ),
 
-  getCategoryPageSettings: (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR') =>
+  getCategoryPageSettings: (pageType: CategoryPageType) =>
     readAdminCategoryPageSettingsWithFallback<{
       success: boolean;
       data: {
-        pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
+        pageType: CategoryPageType;
         source?: 'DEFAULT' | 'DATABASE';
         updatedAt?: string | null;
         settings: {
@@ -7775,6 +7960,18 @@ const adminApi = {
           rotatingColumns: number;
           rotatingRows: number;
           rotatingTitleSize: number;
+          primaryGridRows: number;
+          primaryGridColumns: number;
+          primaryGridProductIds: string[];
+          filterDefinitions: Array<{
+            id: string;
+            key: CategoryFilterDefinition['key'];
+            label: string;
+            inputType: CategoryFilterInputType;
+            enabled: boolean;
+            options: string[];
+            displayOrder: number;
+          }>;
           recommendationProductIds: string[];
           recommendationDisplayCount: number;
           recommendationConfiguredOnly: boolean;
@@ -7801,12 +7998,22 @@ const adminApi = {
           ownerName: string;
           href: string;
         }>;
+        primaryGridProducts: Array<{
+          id: string;
+          name: string;
+          description?: string;
+          image: string;
+          priceUsd: number;
+          country: string;
+          ownerName: string;
+          href: string;
+        }>;
       };
       message?: string;
     }>(pageType),
 
   updateCategoryPageSettings: (
-    pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
+    pageType: CategoryPageType,
     data: Partial<{
       bannerTitle: string;
       bannerSubtitle: string;
@@ -7822,6 +8029,18 @@ const adminApi = {
       rotatingColumns: number;
       rotatingRows: number;
       rotatingTitleSize: number;
+      primaryGridRows: number;
+      primaryGridColumns: number;
+      primaryGridProductIds: string[];
+      filterDefinitions: Array<{
+        id?: string;
+        key: CategoryFilterDefinition['key'];
+        label: string;
+        inputType?: CategoryFilterInputType;
+        enabled?: boolean;
+        options?: string[];
+        displayOrder?: number;
+      }>;
       recommendationProductIds: string[];
       recommendationDisplayCount: number;
       recommendationConfiguredOnly: boolean;
@@ -7832,7 +8051,7 @@ const adminApi = {
     writeAdminCategoryPageSettingsWithFallback<{
       success: boolean;
       data: {
-        pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
+        pageType: CategoryPageType;
         settings: {
           bannerTitle: string;
           bannerSubtitle: string;
@@ -7848,6 +8067,18 @@ const adminApi = {
           rotatingColumns: number;
           rotatingRows: number;
           rotatingTitleSize: number;
+          primaryGridRows: number;
+          primaryGridColumns: number;
+          primaryGridProductIds: string[];
+          filterDefinitions: Array<{
+            id: string;
+            key: CategoryFilterDefinition['key'];
+            label: string;
+            inputType: CategoryFilterInputType;
+            enabled: boolean;
+            options: string[];
+            displayOrder: number;
+          }>;
           recommendationProductIds: string[];
           recommendationDisplayCount: number;
           recommendationConfiguredOnly: boolean;
@@ -7874,12 +8105,22 @@ const adminApi = {
           ownerName: string;
           href: string;
         }>;
+        primaryGridProducts: Array<{
+          id: string;
+          name: string;
+          description?: string;
+          image: string;
+          priceUsd: number;
+          country: string;
+          ownerName: string;
+          href: string;
+        }>;
       };
       message?: string;
     }>(pageType, data as any),
 
   getCategoryPageProductOptions: (
-    pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR',
+    pageType: CategoryPageType,
     params?: { search?: string; limit?: number }
   ) =>
     readCategoryPageProductOptionsWithFallback<{
@@ -11049,6 +11290,10 @@ const jenksV2FrontpageManagerApi = {
             id: string;
             image: string;
             tag: string;
+            country?: string;
+            countryCode?: string;
+            designerName?: string;
+            specialty?: string;
             title: string;
             description: string;
             ctaText: string;
