@@ -323,6 +323,11 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
         ? fabricUnitPrice * safeFabricQty
         : customTotalPrice;
 
+  const customTryOnFabricId =
+    customFabricMode === 'CUSTOMER_SELECTED'
+      ? asText(selectedCustomFabricRow?.fabric?.id, '')
+      : asText(customFabricRows[0]?.fabric?.id, '');
+
   const productDetailRows = useMemo(() => {
     const rows: Array<{ label: string; value: string }> = [];
     const categoryLabel =
@@ -382,6 +387,41 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
     readySizes,
     readyVariations,
   ]);
+
+  const handleOpenVirtualTryOn = () => {
+    const productId = asText(product?.id, '');
+    if (!productId) return;
+    if (mode === 'READY') {
+      const draft = {
+        selectedSize: effectiveReadySize,
+        selectedColor: effectiveReadyColor || '',
+        quantity: Math.max(1, quantity),
+        measurements: {},
+      };
+      try {
+        window.sessionStorage.setItem(`rtwTryOnDraft:${productId}`, JSON.stringify(draft));
+      } catch {
+        // Ignore storage errors and continue via route state.
+      }
+      navigate(`/readytowear/${productId}/try-on`, { state: { tryOnDraft: draft } });
+      return;
+    }
+    if (mode !== 'CUSTOM') return;
+    if (!customTryOnFabricId) {
+      setNotice('Please add at least one suitable fabric for this design before using Virtual Try-On.');
+      return;
+    }
+    const query = `?fabric=${encodeURIComponent(customTryOnFabricId)}`;
+    navigate(`/try-on/${productId}${query}`, {
+      state: {
+        tryOnDraft: {
+          measurements: customMeasurements,
+          fabricMeters: safeCustomFabricMeters,
+          fabricMode: customFabricMode,
+        },
+      },
+    });
+  };
 
   const loginRedirect = () => {
     const returnTo = `${location.pathname}${location.search}${location.hash}`;
@@ -786,7 +826,12 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
               </div>
             ) : null}
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={`grid gap-3 ${mode === 'FABRIC' ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
+              {mode === 'READY' || mode === 'CUSTOM' ? (
+                <button type="button" onClick={() => handleOpenVirtualTryOn()} className="cta-button-outline justify-center">
+                  Virtual Try-On
+                </button>
+              ) : null}
               <button type="button" onClick={() => void handleAddToCart()} className="cta-button justify-center">
                 Add to Cart
               </button>
