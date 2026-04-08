@@ -33,6 +33,13 @@ type CategoryPageSettingsForm = {
   filterDefinitions: CategoryFilterDefinition[];
 };
 
+const splitCommaOptions = (input: string) =>
+  input
+    .split(',')
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .slice(0, 100);
+
 type ProductOption = {
   id: string;
   sourceType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
@@ -95,11 +102,28 @@ const normalizeSettings = (input: any): CategoryPageSettingsForm => ({
     : [],
 });
 
+const parseCommaSeparatedTokens = (raw: string, fallback: string[]) => {
+  const tokens = raw
+    .split(',')
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .slice(0, 100);
+  return tokens.length > 0 ? tokens : fallback;
+};
+
+const splitCommaSeparated = (value: string) =>
+  value
+    .split(',')
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .slice(0, 100);
+
 export default function AdminCategoryPages() {
   const [activePage, setActivePage] = useState<CategoryPageType>('READY_TO_WEAR');
   const [settings, setSettings] = useState<CategoryPageSettingsForm>(EMPTY_SETTINGS);
   const [productOptions, setProductOptions] = useState<ProductOption[]>([]);
   const [optionSearch, setOptionSearch] = useState('');
+  const [filterOptionsDraftById, setFilterOptionsDraftById] = useState<Record<string, string>>({});
   const [selectedPrimaryProductId, setSelectedPrimaryProductId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -140,6 +164,9 @@ export default function AdminCategoryPages() {
       const response = await api.admin.getCategoryPageSettings(activePage);
       const nextSettings = normalizeSettings(response?.data?.settings || {});
       setSettings(nextSettings);
+      setFilterOptionsDraftById(
+        Object.fromEntries(nextSettings.filterDefinitions.map((row) => [row.id, row.options.join(', ')]))
+      );
       await loadOptions(optionSearch);
     } catch {
       setSettings(EMPTY_SETTINGS);
@@ -205,6 +232,17 @@ export default function AdminCategoryPages() {
       ...prev,
       primaryGridProductIds: prev.primaryGridProductIds.filter((entry) => entry !== productId),
     }));
+  };
+
+  const commitFilterOptionsDraft = (filterIndex: number, filterId: string, draft: string) => {
+    const parsed = splitCommaOptions(draft);
+    setSettings((prev) => ({
+      ...prev,
+      filterDefinitions: prev.filterDefinitions.map((entry, entryIndex) =>
+        entryIndex === filterIndex ? { ...entry, options: parsed } : entry
+      ),
+    }));
+    setFilterOptionsDraftById((prev) => ({ ...prev, [filterId]: parsed.join(', ') }));
   };
 
   const handleBannerImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -559,24 +597,18 @@ export default function AdminCategoryPages() {
                           Options
                           <input
                             className="mt-1 w-full rounded border px-2 py-1"
-                            value={filter.options.join(', ')}
+                            value={filterOptionsDraftById[filter.id] ?? filter.options.join(', ')}
                             onChange={(event) =>
-                              setSettings((prev) => ({
-                                ...prev,
-                                filterDefinitions: prev.filterDefinitions.map((entry, entryIndex) =>
-                                  entryIndex === index
-                                    ? {
-                                        ...entry,
-                                        options: event.target.value
-                                          .split(',')
-                                          .map((token) => token.trim())
-                                          .filter(Boolean)
-                                          .slice(0, 100),
-                                      }
-                                    : entry
-                                ),
-                              }))
+                              setFilterOptionsDraftById((prev) => ({ ...prev, [filter.id]: event.target.value }))
                             }
+                            onBlur={(event) => commitFilterOptionsDraft(index, filter.id, event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                const next = (event.currentTarget as HTMLInputElement).value;
+                                commitFilterOptionsDraft(index, filter.id, next);
+                              }
+                            }}
                             placeholder="comma, separated, values"
                           />
                         </label>

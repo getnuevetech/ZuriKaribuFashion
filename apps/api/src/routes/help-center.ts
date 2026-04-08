@@ -10,6 +10,7 @@ const router = Router();
 const requireHelpCenterModule = requireModuleAccess('help_center');
 
 const HELP_CENTER_SETTINGS_KEY = 'HELP_CENTER_CONTENT_V1';
+const CONTACT_PAGE_SETTINGS_KEY = 'CONTACT_PAGE_CONTENT_V1';
 
 type HelpFaq = {
   id: string;
@@ -52,6 +53,26 @@ type HelpCenterContent = {
   vendor: HelpAudienceContent;
 };
 
+type ContactSupportChannel = {
+  id: string;
+  title: string;
+  description: string;
+  icon: 'CHAT' | 'EMAIL' | 'PHONE';
+  enabled: boolean;
+  sortOrder: number;
+};
+
+type ContactPageContent = {
+  heroTag: string;
+  heroTitle: string;
+  heroDescription: string;
+  formTitle: string;
+  formDescription: string;
+  issueTypePlaceholder: string;
+  issueDetailsPlaceholder: string;
+  supportChannels: ContactSupportChannel[];
+};
+
 const helpFaqSchema = z.object({
   id: z.string().trim().max(80).optional(),
   question: z.string().trim().min(2).max(400),
@@ -92,6 +113,28 @@ const adminPatchSchema = z
   .object({
     customer: audiencePatchSchema.optional(),
     vendor: audiencePatchSchema.optional(),
+  })
+  .strict();
+
+const contactSupportChannelSchema = z.object({
+  id: z.string().trim().max(80).optional(),
+  title: z.string().trim().min(2).max(140),
+  description: z.string().trim().min(2).max(800),
+  icon: z.enum(['CHAT', 'EMAIL', 'PHONE']).optional(),
+  enabled: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(10000).optional(),
+});
+
+const contactAdminPatchSchema = z
+  .object({
+    heroTag: z.string().trim().max(80).optional(),
+    heroTitle: z.string().trim().max(240).optional(),
+    heroDescription: z.string().trim().max(1200).optional(),
+    formTitle: z.string().trim().max(240).optional(),
+    formDescription: z.string().trim().max(1200).optional(),
+    issueTypePlaceholder: z.string().trim().max(240).optional(),
+    issueDetailsPlaceholder: z.string().trim().max(1200).optional(),
+    supportChannels: z.array(contactSupportChannelSchema).max(50).optional(),
   })
   .strict();
 
@@ -230,6 +273,42 @@ const DEFAULT_HELP_CENTER_CONTENT: HelpCenterContent = {
       { id: 'vendor-contact-2', label: 'Vendor Operations WhatsApp', value: '+2340000000000', type: 'WHATSAPP', isActive: true, sortOrder: 2 },
     ],
   },
+};
+
+const DEFAULT_CONTACT_PAGE_CONTENT: ContactPageContent = {
+  heroTag: 'Support',
+  heroTitle: 'Contact Jenks',
+  heroDescription: 'Start support immediately, route to the correct team, and communicate in your preferred language.',
+  formTitle: 'Start Live Support Now',
+  formDescription: 'This form is connected to your admin-controlled customer service configuration (departments and languages).',
+  issueTypePlaceholder: 'customer service / track order / refund',
+  issueDetailsPlaceholder: 'Briefly describe your request',
+  supportChannels: [
+    {
+      id: 'contact-channel-chat',
+      title: 'Live Chat',
+      description: 'Start support here or from the popup icon. Messages can be translated for agent and admin workflows.',
+      icon: 'CHAT',
+      enabled: true,
+      sortOrder: 1,
+    },
+    {
+      id: 'contact-channel-email',
+      title: 'Email Support',
+      description: 'Incoming email issues can be converted into tickets and routed through SLA and department rules.',
+      icon: 'EMAIL',
+      enabled: true,
+      sortOrder: 2,
+    },
+    {
+      id: 'contact-channel-phone',
+      title: 'VoIP Callback',
+      description: 'Where enabled, support agents can initiate in-app calls to resolve complex issues quickly.',
+      icon: 'PHONE',
+      enabled: true,
+      sortOrder: 3,
+    },
+  ],
 };
 
 function parseObject(value: unknown): Record<string, unknown> {
@@ -388,6 +467,67 @@ async function writeContent(content: HelpCenterContent): Promise<HelpCenterConte
   return normalized;
 }
 
+function normalizeContactSupportChannels(value: unknown, fallback: ContactSupportChannel[]) {
+  const rows = parseArray(value)
+    .map((entry) => parseObject(entry))
+    .map((row, index) => {
+      const iconToken = String(row.icon || '').trim().toUpperCase();
+      const icon: ContactSupportChannel['icon'] =
+        iconToken === 'EMAIL' || iconToken === 'PHONE' ? (iconToken as ContactSupportChannel['icon']) : 'CHAT';
+      return {
+        id: String(row.id || randomUUID()).trim().slice(0, 80),
+        title: String(row.title || '').trim().slice(0, 140),
+        description: String(row.description || '').trim().slice(0, 800),
+        icon,
+        enabled: row.enabled !== false,
+        sortOrder: Number.isFinite(Number(row.sortOrder)) ? Math.max(0, Math.floor(Number(row.sortOrder))) : index + 1,
+      } as ContactSupportChannel;
+    })
+    .filter((row) => row.title && row.description)
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+    .slice(0, 50);
+  return rows.length > 0 ? rows : fallback;
+}
+
+function normalizeContactPageContent(value: unknown): ContactPageContent {
+  const row = parseObject(value);
+  return {
+    heroTag: String(row.heroTag || DEFAULT_CONTACT_PAGE_CONTENT.heroTag).trim().slice(0, 80),
+    heroTitle: String(row.heroTitle || DEFAULT_CONTACT_PAGE_CONTENT.heroTitle).trim().slice(0, 240),
+    heroDescription: String(row.heroDescription || DEFAULT_CONTACT_PAGE_CONTENT.heroDescription).trim().slice(0, 1200),
+    formTitle: String(row.formTitle || DEFAULT_CONTACT_PAGE_CONTENT.formTitle).trim().slice(0, 240),
+    formDescription: String(row.formDescription || DEFAULT_CONTACT_PAGE_CONTENT.formDescription).trim().slice(0, 1200),
+    issueTypePlaceholder: String(row.issueTypePlaceholder || DEFAULT_CONTACT_PAGE_CONTENT.issueTypePlaceholder).trim().slice(0, 240),
+    issueDetailsPlaceholder: String(row.issueDetailsPlaceholder || DEFAULT_CONTACT_PAGE_CONTENT.issueDetailsPlaceholder)
+      .trim()
+      .slice(0, 1200),
+    supportChannels: normalizeContactSupportChannels(row.supportChannels, DEFAULT_CONTACT_PAGE_CONTENT.supportChannels),
+  };
+}
+
+async function readContactPageContent(): Promise<ContactPageContent> {
+  await ensureSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<{ value: unknown }>>(
+    `SELECT "value" FROM "HelpCenterSetting" WHERE "key" = $1 LIMIT 1`,
+    CONTACT_PAGE_SETTINGS_KEY
+  );
+  if (!rows[0]) return normalizeContactPageContent(DEFAULT_CONTACT_PAGE_CONTENT);
+  return normalizeContactPageContent(rows[0].value);
+}
+
+async function writeContactPageContent(content: ContactPageContent): Promise<ContactPageContent> {
+  const normalized = normalizeContactPageContent(content);
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HelpCenterSetting" ("key","value","createdAt","updatedAt")
+     VALUES ($1, $2::jsonb, NOW(), NOW())
+     ON CONFLICT ("key")
+     DO UPDATE SET "value" = EXCLUDED."value", "updatedAt" = NOW()`,
+    CONTACT_PAGE_SETTINGS_KEY,
+    JSON.stringify(normalized)
+  );
+  return normalized;
+}
+
 function asPublicContent(input: HelpAudienceContent) {
   const sortByOrder = <T extends { sortOrder: number }>(rows: T[]) =>
     [...rows].sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
@@ -461,6 +601,58 @@ router.patch(
       });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error?.message || 'Failed to update help center content.' });
+    }
+  }
+);
+
+router.get('/public/contact-page', async (_req, res) => {
+  try {
+    const data = await readContactPageContent();
+    return res.json({ success: true, data });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error?.message || 'Failed to load contact page content.' });
+  }
+});
+
+router.get(
+  '/admin/contact-page',
+  authenticate,
+  authorizePermissions(Permissions.HELP_CENTER_MANAGE, Permissions.HOMEPAGE_MANAGE),
+  requireHelpCenterModule,
+  async (_req, res) => {
+    try {
+      const data = await readContactPageContent();
+      return res.json({ success: true, data });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to load contact page content.' });
+    }
+  }
+);
+
+router.patch(
+  '/admin/contact-page',
+  authenticate,
+  authorizePermissions(Permissions.HELP_CENTER_MANAGE, Permissions.HOMEPAGE_MANAGE),
+  requireHelpCenterModule,
+  async (req, res) => {
+    try {
+      const parsed = contactAdminPatchSchema.safeParse(req.body || {});
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, message: parsed.error.errors[0]?.message || 'Invalid payload.' });
+      }
+      const current = await readContactPageContent();
+      const next = normalizeContactPageContent({
+        ...current,
+        ...parsed.data,
+      });
+      const saved = await writeContactPageContent(next);
+      return res.json({
+        success: true,
+        message: 'Contact page content updated.',
+        data: saved,
+      });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to update contact page content.' });
     }
   }
 );

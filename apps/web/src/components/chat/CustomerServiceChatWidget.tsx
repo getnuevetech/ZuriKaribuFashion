@@ -346,32 +346,32 @@ export default function CustomerServiceChatWidget() {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="fixed bottom-5 right-5 z-[60] inline-flex h-14 w-14 items-center justify-center rounded-full bg-black text-white shadow-xl hover:bg-gray-900"
+        className="fixed bottom-5 right-5 z-[60] inline-flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#0f1218] to-[#1f2a3a] text-white shadow-[0_18px_40px_rgba(0,0,0,0.35)] ring-1 ring-white/15 hover:from-[#111725] hover:to-[#28374d]"
         aria-label="Open customer service chat"
       >
         {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
       </button>
 
       {open ? (
-        <div className="fixed bottom-24 right-5 z-[60] w-[360px] max-w-[calc(100vw-1.5rem)] rounded-2xl border bg-white shadow-2xl">
-          <div className="flex items-center justify-between border-b px-4 py-3">
+        <div className="fixed bottom-24 right-5 z-[60] w-[370px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-[#d7dce5] bg-white shadow-[0_26px_70px_rgba(0,0,0,0.28)]">
+          <div className="flex items-center justify-between border-b border-[#e4e8ef] bg-gradient-to-r from-[#10131b] to-[#1f2634] px-4 py-3 text-white">
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 overflow-hidden rounded-full bg-gray-100">
                 {shoppingAvatar ? (
                   <img src={shoppingAvatar} alt="Shopping assistant avatar" className="h-full w-full object-cover" />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-gray-600">BOT</div>
+                  <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-gray-600">Z</div>
                 )}
               </div>
               <div>
-                <p className="text-sm font-semibold text-gray-900">ZuriKaribu Assistant</p>
-                <p className="text-[11px] text-gray-500">Live support + shopping helper</p>
+                <p className="text-sm font-semibold text-white">Zuri</p>
+                <p className="text-[11px] text-white/75">Live support + shopping helper</p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="rounded p-1 text-gray-600 hover:bg-gray-100"
+              className="rounded p-1 text-white/80 hover:bg-white/10 hover:text-white"
               aria-label="Close chat widget"
             >
               <X className="h-4 w-4" />

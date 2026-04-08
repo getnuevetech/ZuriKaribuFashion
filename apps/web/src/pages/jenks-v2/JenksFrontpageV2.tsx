@@ -242,7 +242,7 @@ const DEFAULT_HREF_BY_KEY: Record<string, string> = {
   CTW: '/customtowear',
   FTB: '/fabricstobuy',
   HOME: '/',
-  SHOP: '/readytowear',
+  SHOP: '/shop',
   READY_TO_WEAR: '/readytowear',
   CUSTOM_TO_WEAR: '/customtowear',
   FABRICS: '/fabricstobuy',
@@ -429,6 +429,7 @@ const productGroupHref = (groupRaw: unknown) => {
 
 const PAGE_HREF_BY_KEY: Record<string, string> = {
   HOME: '/',
+  SHOP: '/shop',
   READY_TO_WEAR: '/readytowear',
   FABRICS: '/fabricstobuy',
   CUSTOM_TO_WEAR: '/customtowear',
@@ -476,6 +477,14 @@ const countryCodeToFlagEmoji = (value: unknown) => {
   if (code.length !== 2) return '🌍';
   return String.fromCodePoint(...code.split('').map((char) => 127397 + char.charCodeAt(0)));
 };
+
+const wordsToText = (html: string) =>
+  String(html || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 const truncateWords = (value: unknown, maxWords: number) => {
   const text = asString(value, '');
@@ -627,10 +636,7 @@ const sanitizeLegacyInternalHref = (href: string) => {
     trimmed.startsWith('/shop?') ||
     trimmed.startsWith('/shop#')
   ) {
-    if (trimmed.startsWith('/shop?') || trimmed.startsWith('/shop#')) {
-      return `/readytowear${trimmed.slice('/shop'.length)}`;
-    }
-    return '/readytowear';
+    return trimmed;
   }
   return trimmed;
 };
@@ -1135,6 +1141,30 @@ export default function JenksFrontpageV2() {
     kind: 'idle',
     message: '',
   });
+  const searchSuggestions = useMemo(
+    () => [
+      { label: 'Ready To Wear', href: '/readytowear' },
+      { label: 'Custom To Wear', href: '/customtowear' },
+      { label: 'Fabrics', href: '/fabricstobuy' },
+      { label: 'Shop', href: '/shop' },
+      { label: 'Country', href: '/country' },
+    ],
+    []
+  );
+  const searchTargetHref = useMemo(() => {
+    const token = searchQuery.trim().toLowerCase();
+    if (!token) return '/shop';
+    const matched =
+      searchSuggestions.find((entry) => entry.label.toLowerCase() === token) ||
+      searchSuggestions.find((entry) => entry.label.toLowerCase().includes(token));
+    return matched?.href || `/shop?search=${encodeURIComponent(searchQuery.trim())}`;
+  }, [searchQuery, searchSuggestions]);
+  const submitSearchOverlay = () => {
+    const target = searchTargetHref;
+    setSearchOpen(false);
+    setSearchQuery('');
+    if (target) window.location.assign(target);
+  };
   const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
   const topNavigationsCfg = useMemo(() => asRecord(asRecord(managerConfig).topNavigations), [managerConfig]);
   const shopByCfg = useMemo(() => asRecord(asRecord(managerConfig).shopBy), [managerConfig]);
@@ -1654,7 +1684,7 @@ export default function JenksFrontpageV2() {
             return (
               <div
                 key={step.id}
-                className="relative overflow-hidden border backdrop-blur-md"
+                className="group relative overflow-hidden border backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_38px_rgba(0,0,0,0.42)]"
                 style={{
                   ...categoryStepCardOverlayStyle(section),
                   borderRadius: '0.08rem',
@@ -1662,14 +1692,14 @@ export default function JenksFrontpageV2() {
               >
                 <div className="flex min-h-[96px] items-stretch">
                   <div
-                    className="inline-flex w-[62px] shrink-0 items-center justify-center border-r border-white/35 text-[56px] font-semibold leading-none text-white"
+                    className="inline-flex w-[62px] shrink-0 items-center justify-center border-r border-white/35 text-[56px] font-semibold leading-none text-white transition-colors duration-300 group-hover:bg-[#e66045]"
                     style={{ backgroundColor: section.stepCardAccentColor }}
                   >
                     {orderLabel}
                   </div>
                   <div className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3">
                     <div
-                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/20 bg-black/25"
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/20 bg-black/25 transition-colors duration-300 group-hover:border-white/45"
                       style={{ color: section.stepCardIconColor }}
                     >
                       <StepIcon className="h-4 w-4" />
@@ -2080,11 +2110,22 @@ export default function JenksFrontpageV2() {
     [heritageCfg.description, heritageCfg.storyHtml]
   );
   const heritageReadMoreLabel = asString(heritageCfg.readMoreLabel, 'Read More');
-  const heritageReadMoreHrefRaw = asString(heritageCfg.readMoreHref, '/stories/our-heritage');
-  const heritageReadMoreHref = isExternalHref(heritageReadMoreHrefRaw)
-    ? heritageReadMoreHrefRaw
-    : toSafeInternalHref(heritageReadMoreHrefRaw);
-  const heritageStatsAnchorClass = 'bottom-[12%]';
+  const heritageStoryTitle = asString(heritageCfg.storyTitle, 'The Story');
+  const heritageStoryTitleFontSize = Math.max(12, Math.min(72, Math.round(asNumber(heritageCfg.storyTitleFontSize, 30))));
+  const heritageStoryTextFontSize = Math.max(10, Math.min(64, Math.round(asNumber(heritageCfg.storyTextFontSize, 16))));
+  const heritagePreviewWords = Math.max(10, Math.min(260, Math.round(asNumber(heritageCfg.storyPreviewWords, 60))));
+  const [heritageStoryExpanded, setHeritageStoryExpanded] = useState(false);
+  useEffect(() => {
+    setHeritageStoryExpanded(false);
+  }, [heritageStoryHtml, heritagePreviewWords]);
+  const heritageStoryPreviewText = useMemo(() => {
+    const plain = wordsToText(heritageStoryHtml);
+    const tokens = plain.split(/\s+/).filter(Boolean);
+    if (tokens.length <= heritagePreviewWords) return plain;
+    return `${tokens.slice(0, heritagePreviewWords).join(' ')}…`;
+  }, [heritageStoryHtml, heritagePreviewWords]);
+  const showFullStory = heritageStoryExpanded;
+  const heritageStatsAnchorClass = 'bottom-[9%] left-8';
 
   const newsletterCfg = useMemo(() => asRecord(newsletterFooterCfg.newsletter), [newsletterFooterCfg.newsletter]);
   const footerCfg = useMemo(() => asRecord(newsletterFooterCfg.footer), [newsletterFooterCfg.footer]);
@@ -2246,6 +2287,23 @@ export default function JenksFrontpageV2() {
   const hamburgerMenuFontSize = Math.max(16, Math.min(72, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontSize, 32))));
   const hamburgerMenuFontWeight = Math.max(500, Math.min(900, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontWeight, 800))));
   const footerLogoCfg = useMemo(() => asRecord(footerCfg.logo), [footerCfg.logo]);
+  const footerLogoTextRaw = asString(footerLogoCfg.text, asString(footerCfg.brandText, 'ZURIKARIBU'));
+  const footerLogoSplit = useMemo(() => {
+    const compact = footerLogoTextRaw.replace(/\s+/g, '').trim();
+    if (!compact) return { left: 'ZURI', right: 'KARIBU' };
+    const upper = compact.toUpperCase();
+    if (upper.startsWith('ZURI') && compact.length > 4) {
+      return {
+        left: compact.slice(0, 4),
+        right: compact.slice(4),
+      };
+    }
+    const pivot = Math.max(1, Math.ceil(compact.length / 2));
+    return {
+      left: compact.slice(0, pivot),
+      right: compact.slice(pivot),
+    };
+  }, [footerLogoTextRaw]);
   const footerLogoImageUrl = resolveManagerImage(footerLogoCfg.imageUrl, '');
   const footerLogoFontWeight = Math.max(100, Math.min(900, Math.round(asNumber(footerLogoCfg.fontWeight, 700))));
 
@@ -2736,17 +2794,37 @@ export default function JenksFrontpageV2() {
                 className="absolute inset-0 h-full w-full bg-white/40 backdrop-blur-[1px]"
                 onClick={() => setSearchOpen(false)}
               />
-              <div className="absolute left-1/2 top-16 w-[94vw] max-w-[860px] -translate-x-1/2 rounded-xl border border-black/10 bg-white/88 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur sm:p-5">
-                <div className="flex items-center gap-2">
-                  <Search className="h-4 w-4 text-black/60" />
+              <div className="absolute left-1/2 top-16 w-[94vw] max-w-[920px] -translate-x-1/2 rounded-xl border border-black/30 bg-white/95 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur sm:p-5">
+                <form
+                  className="flex items-center gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    submitSearchOverlay();
+                  }}
+                >
+                  <Search className="h-5 w-5 text-black/85" />
                   <input
                     type="text"
                     autoFocus
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        submitSearchOverlay();
+                      }
+                    }}
                     placeholder="Search products, categories, countries..."
-                    className="h-10 w-full bg-transparent text-sm text-black placeholder:text-black/45 focus:outline-none"
+                    className="h-11 w-full bg-transparent text-base font-medium text-black placeholder:text-black/60 focus:outline-none"
                   />
+                  <button
+                    type="submit"
+                    className="inline-flex h-9 items-center gap-1 rounded border border-black/40 px-3 text-black hover:bg-black/5"
+                    aria-label="Submit search"
+                  >
+                    <Search className="h-4 w-4" />
+                    <span className="text-xs font-semibold uppercase tracking-[0.08em]">Search</span>
+                  </button>
                   <button
                     type="button"
                     className="inline-flex h-8 w-8 items-center justify-center rounded border border-black/20 text-black/70 hover:bg-black/5"
@@ -2758,27 +2836,7 @@ export default function JenksFrontpageV2() {
                   >
                     ×
                   </button>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                  {['Ready To Wear', 'Custom To Wear', 'Fabrics', 'Shop By Country'].map((suggestion) => (
-                    <Link
-                      key={suggestion}
-                      to={toSafeInternalHref(
-                        suggestion === 'Ready To Wear'
-                          ? '/readytowear'
-                          : suggestion === 'Custom To Wear'
-                            ? '/customtowear'
-                            : suggestion === 'Fabrics'
-                              ? '/fabricstobuy'
-                              : '/country-products'
-                      )}
-                      onClick={() => setSearchOpen(false)}
-                      className="rounded border border-black/20 px-2.5 py-1 text-black/75 hover:border-[#e66045] hover:text-[#e66045]"
-                    >
-                      {suggestion}
-                    </Link>
-                  ))}
-                </div>
+                </form>
               </div>
             </div>
           ) : null}
@@ -3471,11 +3529,11 @@ export default function JenksFrontpageV2() {
                 spinnerClassName="h-8 w-8"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />
-              <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-white/80">
+              <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-black">
                 {spot.tag}
               </p>
               <p className="absolute right-6 top-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/25 text-xl">
-                {countryCodeToFlagEmoji(spot.countryCode)}
+                {countryCodeToFlagEmoji(resolveDesignerCountryCode(spot.countryCode, spot.designerCountry))}
               </p>
               <div className="absolute bottom-6 left-6 right-6 text-white">
                 <p
@@ -3538,30 +3596,56 @@ export default function JenksFrontpageV2() {
               <h2 className="mt-2 font-['Oswald'] text-6xl font-bold uppercase leading-[0.92]">
                 {asString(heritageCfg.title, 'ROOTED IN CULTURE.')}
               </h2>
-              <div className="prose prose-invert mt-4 max-w-xl text-base text-white/80 prose-p:text-white/80 prose-strong:text-white prose-a:text-white">
-                <div dangerouslySetInnerHTML={{ __html: heritageStoryHtml }} />
+              <p className="mt-3 max-w-xl text-base text-white/82">
+                {asString(
+                  heritageCfg.description,
+                  "The world is yet to experience Africa's fashion. We're building the bridge connecting heritage craft to modern wardrobes everywhere."
+                )}
+              </p>
+            </div>
+
+            <div className="absolute right-8 top-1/2 z-20 w-full max-w-xl -translate-y-1/2 text-right">
+              <h3
+                className="font-['Oswald'] font-bold uppercase leading-[0.94] text-white"
+                style={{ fontSize: `${heritageStoryTitleFontSize}px` }}
+              >
+                {heritageStoryTitle}
+              </h3>
+              <div
+                className="prose prose-invert mt-4 ml-auto max-w-xl text-white/84 prose-p:text-white/84 prose-strong:text-white prose-a:text-white"
+                style={{ fontSize: `${heritageStoryTextFontSize}px` }}
+              >
+                {showFullStory ? (
+                  <div dangerouslySetInnerHTML={{ __html: heritageStoryHtml }} />
+                ) : (
+                  <p>{heritageStoryPreviewText}</p>
+                )}
               </div>
               {isExternalHref(heritageReadMoreHref) ? (
                 <a
                   href={heritageReadMoreHref}
                   target="_blank"
                   rel="noreferrer"
-                  className="relative z-20 mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white hover:underline"
+                  onClick={() => setHeritageStoryExpanded((prev) => !prev)}
+                  className="group relative z-20 mt-5 inline-flex items-center gap-2 pb-1 text-sm font-semibold uppercase tracking-[0.08em] text-white"
                 >
                   {heritageReadMoreLabel}
                   <ArrowRight className="h-4 w-4" />
+                  <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-[#e66045] transition-all duration-300 group-hover:w-full" />
                 </a>
               ) : (
                 <Link
                   to={heritageReadMoreHref}
-                  className="relative z-20 mt-5 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-white hover:underline"
+                  onClick={() => setHeritageStoryExpanded((prev) => !prev)}
+                  className="group relative z-20 mt-5 inline-flex items-center gap-2 pb-1 text-sm font-semibold uppercase tracking-[0.08em] text-white"
                 >
                   {heritageReadMoreLabel}
                   <ArrowRight className="h-4 w-4" />
+                  <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-[#e66045] transition-all duration-300 group-hover:w-full" />
                 </Link>
               )}
             </div>
-            <div className={`pointer-events-none absolute left-8 right-8 z-10 ${heritageStatsAnchorClass}`}>
+            <div className={`pointer-events-none absolute z-10 ${heritageStatsAnchorClass}`}>
               <div className="flex flex-wrap items-end gap-x-8 gap-y-4 px-1 py-1">
                 {heritageStats.map((stat) => (
                   <div key={stat.id} className="min-w-[120px]">
@@ -3805,7 +3889,8 @@ export default function JenksFrontpageV2() {
                     fontWeight: footerLogoFontWeight,
                   }}
                 >
-                  {asString(footerLogoCfg.text, asString(footerCfg.brandText, 'Jenks')).toUpperCase()}
+                  <span className="text-[#ffffff]">{logoTextSplit.left}</span>
+                  <span className="text-[#e66045]">{logoTextSplit.right}</span>
                 </p>
               )}
               <div className="mt-5 flex items-center gap-3 text-white/75">
@@ -3837,7 +3922,9 @@ export default function JenksFrontpageV2() {
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">Contact</p>
               <div className="mt-3 space-y-2 text-sm text-white/75">
                 <p className="inline-flex items-center gap-2"><Mail className="h-4 w-4" /> {asString(footerCfg.contactEmail, 'support@zurikaribu.com')}</p>
-                <p className="inline-flex items-center gap-2"><Phone className="h-4 w-4" /> {asString(footerCfg.contactPhone, '+234 000 000 0000')}</p>
+                <p className="block">
+                  <span className="inline-flex items-center gap-2"><Phone className="h-4 w-4" /> {asString(footerCfg.contactPhone, '+234 000 000 0000')}</span>
+                </p>
                 <p className="inline-flex items-center gap-2 text-white/72"><MapPin className="h-4 w-4" /> {asString(footerCfg.address, 'Lagos, Nigeria')}</p>
               </div>
             </div>

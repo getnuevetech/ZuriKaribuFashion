@@ -362,6 +362,10 @@ type Heritage = {
   title: string;
   tag: string;
   description: string;
+  storyTitle: string;
+  storyTitleFontSize: number;
+  storyTextFontSize: number;
+  storyPreviewWords: number;
   storyHtml: string;
   readMoreLabel: string;
   readMoreHref: string;
@@ -1511,6 +1515,10 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     title: 'Our Heritage',
     tag: 'Culture & Craft',
     description: 'Configure heritage titles, description and floating stats.',
+    storyTitle: 'Our Story',
+    storyTitleFontSize: 28,
+    storyTextFontSize: 16,
+    storyPreviewWords: 34,
     storyHtml: '<p>Our heritage is woven from artisan craft, bold silhouettes, and stories passed down across generations.</p>',
     readMoreLabel: 'Read More',
     readMoreHref: '/stories/our-heritage',
@@ -1716,10 +1724,8 @@ const mapLegacyManagerHref = (href: string) => {
     normalized.startsWith('/shop?') ||
     normalized.startsWith('/shop#')
   ) {
-    if (normalized.startsWith('/shop?') || normalized.startsWith('/shop#')) {
-      return `/readytowear${normalized.slice('/shop'.length)}`;
-    }
-    return '/readytowear';
+    if (normalized.startsWith('/shop?') || normalized.startsWith('/shop#')) return `/shop${normalized.slice('/shop'.length)}`;
+    return '/shop';
   }
   return normalized;
 };
@@ -2482,6 +2488,37 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
     heritage: {
       ...DEFAULT_CONFIG.heritage,
       ...((data.heritage as Heritage | undefined) || {}),
+      storyTitle: String((data.heritage as Heritage | undefined)?.storyTitle || DEFAULT_CONFIG.heritage.storyTitle),
+      storyTitleFontSize: clamp(
+        Math.round(
+          toNumber(
+            String((data.heritage as Heritage | undefined)?.storyTitleFontSize ?? DEFAULT_CONFIG.heritage.storyTitleFontSize),
+            DEFAULT_CONFIG.heritage.storyTitleFontSize
+          )
+        ),
+        12,
+        80
+      ),
+      storyTextFontSize: clamp(
+        Math.round(
+          toNumber(
+            String((data.heritage as Heritage | undefined)?.storyTextFontSize ?? DEFAULT_CONFIG.heritage.storyTextFontSize),
+            DEFAULT_CONFIG.heritage.storyTextFontSize
+          )
+        ),
+        10,
+        56
+      ),
+      storyPreviewWords: clamp(
+        Math.round(
+          toNumber(
+            String((data.heritage as Heritage | undefined)?.storyPreviewWords ?? DEFAULT_CONFIG.heritage.storyPreviewWords),
+            DEFAULT_CONFIG.heritage.storyPreviewWords
+          )
+        ),
+        8,
+        240
+      ),
       storyHtml: String((data.heritage as Heritage | undefined)?.storyHtml || DEFAULT_CONFIG.heritage.storyHtml),
       readMoreLabel: String((data.heritage as Heritage | undefined)?.readMoreLabel || DEFAULT_CONFIG.heritage.readMoreLabel),
       readMoreHref: normalizeManagerHref(
@@ -2940,6 +2977,8 @@ export default function JenksV2FrontPageManager() {
   const [templateOrder, setTemplateOrder] = useState('');
   const [addingMenuRouteKey, setAddingMenuRouteKey] = useState<string>('HOME');
   const [blogRouteOptions, setBlogRouteOptions] = useState<RouteOption[]>([]);
+  const [freshDropsCountryFiltersRaw, setFreshDropsCountryFiltersRaw] = useState('');
+  const [freshDropsCategoryFiltersRaw, setFreshDropsCategoryFiltersRaw] = useState('');
 
   const logoUploadRef = useRef<HTMLInputElement | null>(null);
   const footerLogoUploadRef = useRef<HTMLInputElement | null>(null);
@@ -2986,6 +3025,8 @@ export default function JenksV2FrontPageManager() {
       const response = await api.jenksV2Frontpage.getConfig();
       if (!response.success || !response.data) throw new Error('Failed to load Jenks-V2 frontpage manager config.');
       const nextConfig = sanitizeConfigHrefs(asApiConfig(response.data));
+      setFreshDropsCountryFiltersRaw((nextConfig.freshDrops.countryFilters || []).join(', '));
+      setFreshDropsCategoryFiltersRaw((nextConfig.freshDrops.categoryFilters || []).join(', '));
       setConfig({
         ...nextConfig,
         sectionVisibility: ensureCompleteSectionVisibility(nextConfig.sectionVisibility),
@@ -7977,19 +8018,24 @@ export default function JenksV2FrontPageManager() {
               Country Filters (comma-separated)
               <input
                 className="mt-1 w-full rounded border px-2 py-1.5"
-                value={config.freshDrops.countryFilters.join(', ')}
+                value={freshDropsCountryFiltersRaw}
                 onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    freshDrops: {
-                      ...prev.freshDrops,
-                      countryFilters: event.target.value
-                        .split(',')
-                        .map((item) => item.trim().toUpperCase())
-                        .filter(Boolean)
-                        .slice(0, 100),
-                    },
-                  }))
+                  setConfig((prev) => {
+                    const raw = event.target.value;
+                    const endedWithComma = raw.trimEnd().endsWith(',');
+                    setFreshDropsCountryFiltersRaw(endedWithComma ? `${raw} ` : raw);
+                    return {
+                      ...prev,
+                      freshDrops: {
+                        ...prev.freshDrops,
+                        countryFilters: raw
+                          .split(',')
+                          .map((item) => item.trim().toUpperCase())
+                          .filter(Boolean)
+                          .slice(0, 100),
+                      },
+                    };
+                  })
                 }
               />
             </label>
@@ -7997,19 +8043,24 @@ export default function JenksV2FrontPageManager() {
               Category Filters (comma-separated)
               <input
                 className="mt-1 w-full rounded border px-2 py-1.5"
-                value={config.freshDrops.categoryFilters.join(', ')}
+                value={freshDropsCategoryFiltersRaw}
                 onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    freshDrops: {
-                      ...prev.freshDrops,
-                      categoryFilters: event.target.value
-                        .split(',')
-                        .map((item) => item.trim().toUpperCase())
-                        .filter(Boolean)
-                        .slice(0, 40),
-                    },
-                  }))
+                  setConfig((prev) => {
+                    const raw = event.target.value;
+                    const endedWithComma = raw.trimEnd().endsWith(',');
+                    setFreshDropsCategoryFiltersRaw(endedWithComma ? `${raw} ` : raw);
+                    return {
+                      ...prev,
+                      freshDrops: {
+                        ...prev.freshDrops,
+                        categoryFilters: raw
+                          .split(',')
+                          .map((item) => item.trim().toUpperCase())
+                          .filter(Boolean)
+                          .slice(0, 40),
+                      },
+                    };
+                  })
                 }
               />
             </label>
@@ -8611,6 +8662,14 @@ export default function JenksV2FrontPageManager() {
               />
             </label>
             <label className="text-xs">
+              Story Title
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.heritage.storyTitle}
+                onChange={(event) => setConfig((prev) => ({ ...prev, heritage: { ...prev.heritage, storyTitle: event.target.value } }))}
+              />
+            </label>
+            <label className="text-xs">
               Stats Position
               <select
                 className="mt-1 w-full rounded border px-2 py-1.5"
@@ -8629,8 +8688,61 @@ export default function JenksV2FrontPageManager() {
             </label>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <label className="text-xs">
+              Story Title Font Size (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.heritage.storyTitleFontSize}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    heritage: {
+                      ...prev.heritage,
+                      storyTitleFontSize: clamp(toNumber(event.target.value, prev.heritage.storyTitleFontSize), 12, 80),
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
+              Story Text Font Size (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.heritage.storyTextFontSize}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    heritage: {
+                      ...prev.heritage,
+                      storyTextFontSize: clamp(toNumber(event.target.value, prev.heritage.storyTextFontSize), 10, 56),
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
+              Story Preview Words
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.heritage.storyPreviewWords}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    heritage: {
+                      ...prev.heritage,
+                      storyPreviewWords: clamp(toNumber(event.target.value, prev.heritage.storyPreviewWords), 8, 240),
+                    },
+                  }))
+                }
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <label className="text-xs md:col-span-2">
-              Short Story (supports formatted HTML)
+              Short Story (supports formatted HTML, links, and images)
               <textarea
                 className="mt-1 min-h-[180px] w-full rounded border px-2 py-1.5"
                 value={config.heritage.storyHtml}

@@ -22,6 +22,7 @@ export default function ContactPage() {
     issueType: 'customer-service',
     issueDetails: '',
   });
+  const [managerContent, setManagerContent] = useState<any>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -49,6 +50,20 @@ export default function ContactPage() {
       }
     };
     void load();
+  }, []);
+
+  useEffect(() => {
+    const loadManagerContent = async () => {
+      try {
+        const response = await api.contactPage.getPublic();
+        if (response?.success) {
+          setManagerContent(response.data || null);
+        }
+      } catch {
+        setManagerContent(null);
+      }
+    };
+    void loadManagerContent();
   }, []);
 
   const openChatWidget = (payload?: Record<string, unknown>) => {
@@ -116,10 +131,17 @@ export default function ContactPage() {
     <div className="kimi-site min-h-screen bg-[#f4f2ed] text-[#111]">
       <section className="border-b border-black/10 bg-[#0c0c0d] py-16 text-white">
         <div className="mx-auto w-full max-w-[1700px] px-4 sm:px-6 lg:px-12">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/65">Support</p>
-          <h1 className="mt-3 font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] sm:text-6xl">Contact Jenks</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/65">
+            {String(managerContent?.heroEyebrow || 'Support')}
+          </p>
+          <h1 className="mt-3 font-['Oswald'] text-5xl font-bold uppercase leading-[0.92] sm:text-6xl">
+            {String(managerContent?.heroTitle || 'Contact Jenks')}
+          </h1>
           <p className="mt-4 max-w-2xl text-sm text-white/75 sm:text-base">
-            Start support immediately, route to the correct team, and communicate in your preferred language.
+            {String(
+              managerContent?.heroDescription ||
+                'Start support immediately, route to the correct team, and communicate in your preferred language.'
+            )}
           </p>
         </div>
       </section>
@@ -160,7 +182,10 @@ export default function ContactPage() {
           <div className="border border-black/10 bg-white p-6 sm:p-8">
             <h2 className="font-['Oswald'] text-3xl font-bold uppercase">Start Live Support Now</h2>
             <p className="mt-2 text-sm text-black/60">
-              This form is connected to your admin-controlled customer service configuration (departments and languages).
+              {String(
+                managerContent?.formDescription ||
+                  'This form is connected to your admin-controlled customer service configuration (departments and languages).'
+              )}
             </p>
 
             <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -236,7 +261,7 @@ export default function ContactPage() {
                 <input
                   value={form.issueType}
                   onChange={(event) => setForm((prev) => ({ ...prev, issueType: event.target.value }))}
-                  placeholder="customer service / track order / refund"
+                  placeholder={String(managerContent?.issueTypePlaceholder || 'customer service / track order / refund')}
                   className="h-10 w-full border border-black/15 px-3 text-sm outline-none focus:border-black/40"
                 />
               </label>
@@ -247,7 +272,7 @@ export default function ContactPage() {
                   value={form.issueDetails}
                   onChange={(event) => setForm((prev) => ({ ...prev, issueDetails: event.target.value }))}
                   rows={5}
-                  placeholder="Briefly describe your request"
+                  placeholder={String(managerContent?.issueDetailsPlaceholder || 'Briefly describe your request')}
                   className="w-full border border-black/15 px-3 py-2 text-sm outline-none focus:border-black/40"
                 />
               </label>
@@ -261,14 +286,14 @@ export default function ContactPage() {
                 className="inline-flex h-10 items-center gap-2 border border-black bg-black px-4 text-xs font-semibold uppercase tracking-[0.1em] text-white hover:bg-[#181818] disabled:opacity-60"
               >
                 <Send className="h-3.5 w-3.5" />
-                {saving ? 'Starting...' : 'Start Live Support Chat'}
+                {saving ? 'Starting...' : String(managerContent?.primaryButtonLabel || 'Start Live Support Chat')}
               </button>
               <button
                 type="button"
                 onClick={() => openChatWidget({ mode: 'support' })}
                 className="inline-flex h-10 items-center gap-2 border border-black/20 bg-white px-4 text-xs font-semibold uppercase tracking-[0.1em] text-black/75 hover:border-black/45"
               >
-                Open Chat Popup
+                {String(managerContent?.secondaryButtonLabel || 'Open Chat Popup')}
               </button>
             </div>
           </div>
@@ -276,17 +301,20 @@ export default function ContactPage() {
           <aside className="border border-black/10 bg-[#0f0f11] p-6 text-white">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">Need immediate help?</p>
             <h3 className="mt-3 font-['Oswald'] text-3xl font-bold uppercase leading-[0.95]">
-              Talk to our support team
+              {String(managerContent?.asideTitle || 'Talk to our support team')}
             </h3>
             <p className="mt-4 text-sm text-white/70">
-              If you already started a chat session, reopen the widget and continue your conversation.
+              {String(
+                managerContent?.asideDescription ||
+                  'If you already started a chat session, reopen the widget and continue your conversation.'
+              )}
             </p>
             <button
               type="button"
               onClick={() => openChatWidget({ mode: 'support' })}
               className="mt-6 inline-flex items-center gap-2 border border-white/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white hover:border-white"
             >
-              Open support widget
+              {String(managerContent?.asideButtonLabel || 'Open support widget')}
               <ArrowRight className="h-3.5 w-3.5" />
             </button>
           </aside>

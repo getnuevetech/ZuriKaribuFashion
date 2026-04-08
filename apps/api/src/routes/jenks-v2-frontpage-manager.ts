@@ -370,6 +370,10 @@ type HeritageSettings = {
   title: string;
   tag: string;
   description: string;
+  storyTitle: string;
+  storyTitleFontSize: number;
+  storyTextFontSize: number;
+  storyPreviewWords: number;
   storyHtml: string;
   readMoreLabel: string;
   readMoreHref: string;
@@ -628,20 +632,11 @@ const normalizeCtaStyle = (raw: unknown, fallback: CtaStyle): CtaStyle => {
 
 const mapLegacyV2Href = (value: string): string => {
   const normalized = value.trim();
-  if (
-    normalized === '/main' ||
-    normalized === '/main/' ||
-    normalized.startsWith('/main?') ||
-    normalized.startsWith('/main#') ||
-    normalized === '/shop' ||
-    normalized === '/shop/' ||
-    normalized.startsWith('/shop?') ||
-    normalized.startsWith('/shop#')
-  ) {
-    if (normalized.startsWith('/shop?') || normalized.startsWith('/shop#')) {
-      return `/readytowear${normalized.slice('/shop'.length)}`;
-    }
-    return '/readytowear';
+  if (normalized === '/main' || normalized === '/main/' || normalized.startsWith('/main?') || normalized.startsWith('/main#')) {
+    return '/';
+  }
+  if (normalized === '/shop' || normalized === '/shop/' || normalized.startsWith('/shop?') || normalized.startsWith('/shop#')) {
+    return normalized;
   }
   return normalized;
 };
@@ -1396,6 +1391,10 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       title: 'Our Heritage',
       tag: 'Culture & Craft',
       description: 'Celebrate African textile heritage with configurable stats and layout.',
+      storyTitle: 'Our Story',
+      storyTitleFontSize: 34,
+      storyTextFontSize: 16,
+      storyPreviewWords: 36,
       storyHtml:
         "<p>Our heritage is woven from artisan craft, bold silhouettes, and stories passed down across generations.</p>",
       readMoreLabel: 'Read More',
@@ -2306,6 +2305,10 @@ const normalizeHeritage = (raw: unknown, fallback: HeritageSettings): HeritageSe
     title: (getString(row.title) || fallback.title).slice(0, 140),
     tag: (getString(row.tag) || fallback.tag).slice(0, 80),
     description: (getString(row.description) || fallback.description).slice(0, 320),
+    storyTitle: (getString(row.storyTitle) || fallback.storyTitle || 'Our Story').slice(0, 180),
+    storyTitleFontSize: clamp(Math.round(getNumber(row.storyTitleFontSize) ?? fallback.storyTitleFontSize ?? 34), 12, 84),
+    storyTextFontSize: clamp(Math.round(getNumber(row.storyTextFontSize) ?? fallback.storyTextFontSize ?? 16), 10, 64),
+    storyPreviewWords: clamp(Math.round(getNumber(row.storyPreviewWords) ?? fallback.storyPreviewWords ?? 36), 8, 240),
     storyHtml: (getString(row.storyHtml) || fallback.storyHtml || '').slice(0, 12000),
     readMoreLabel: (getString(row.readMoreLabel) || fallback.readMoreLabel || 'Read More').slice(0, 80),
     readMoreHref: normalizeHref(row.readMoreHref, fallback.readMoreHref || '/stories/our-heritage'),

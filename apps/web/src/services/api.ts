@@ -11876,6 +11876,30 @@ const helpCenterApi = {
     ),
 };
 
+const contactPageApi = {
+  getPublicConfig: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        heroTag: string;
+        heroTitle: string;
+        heroDescription: string;
+        formTitle: string;
+        formDescription: string;
+        cardLiveChatTitle: string;
+        cardLiveChatDescription: string;
+        cardEmailTitle: string;
+        cardEmailDescription: string;
+        cardVoipTitle: string;
+        cardVoipDescription: string;
+        enabled: boolean;
+      };
+    }>('/help-center/public/contact'),
+  getAdminConfig: () => apiService.get<{ success: boolean; data: any }>('/help-center/admin/contact'),
+  updateAdminConfig: (payload: Record<string, unknown>) =>
+    apiService.patch<{ success: boolean; data: any; message?: string }>('/help-center/admin/contact', payload),
+};
+
 const moduleRuntimeApi = {
   getDecisions: (params?: { keys?: string[] }) =>
     apiService.get<{
@@ -11936,6 +11960,7 @@ export const api = {
   referrals: referralsApi,
   customerService: customerServiceApi,
   helpCenter: helpCenterApi,
+  contactPage: contactPageApi,
   moduleRuntime: moduleRuntimeApi,
 };
 
@@ -11966,6 +11991,7 @@ export {
   referralsApi,
   customerServiceApi,
   helpCenterApi,
+  contactPageApi,
   moduleRuntimeApi,
   apiService,
   httpClient,

@@ -16,7 +16,7 @@ type IconComponent = LucideIcon;
 
 const DEFAULT_HREF_BY_KEY: Record<string, string> = {
   HOME: '/',
-  SHOP: '/readytowear',
+  SHOP: '/shop',
   READY_TO_WEAR: '/readytowear',
   FABRICS: '/fabricstobuy',
   FABRICS_TO_BUY: '/fabricstobuy',
@@ -76,7 +76,7 @@ const sanitizeLegacyInternalHref = (href: string) => {
   const { path, suffix } = splitPathAndSuffix(href);
   let nextPath = path;
   if (/^\/main\/?$/i.test(nextPath)) nextPath = '/';
-  if (/^\/shop\/?$/i.test(nextPath)) nextPath = '/readytowear';
+  if (/^\/shop\/?$/i.test(nextPath)) nextPath = '/shop';
   if (/^\/ready-to-wear(\/.*)?$/i.test(nextPath)) nextPath = nextPath.replace(/^\/ready-to-wear/i, '/readytowear');
   if (/^\/custom(\/.*)?$/i.test(nextPath)) nextPath = nextPath.replace(/^\/custom/i, '/customtowear');
   if (/^\/cystomtowear(\/.*)?$/i.test(nextPath)) nextPath = nextPath.replace(/^\/cystomtowear/i, '/customtowear');

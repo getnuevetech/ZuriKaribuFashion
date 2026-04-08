@@ -133,6 +133,7 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Category Pages Manager', href: '/admin/category-pages', icon: LayoutGrid },
     { label: 'Blogs', href: '/admin/blogs', icon: FileText },
     { label: 'Help Center Content', href: '/admin/help-center-content', icon: FileText },
+    { label: 'Contact Page Manager', href: '/admin/contact-page-manager', icon: FileText },
     { label: 'Module Switchboard', href: '/admin/modules', icon: Settings },
     { label: 'Activity Logs', href: '/admin/activity-logs', icon: ClipboardCheck },
   ],

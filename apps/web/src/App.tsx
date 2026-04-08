@@ -89,6 +89,7 @@ import AdminCustomerServiceSettings from './pages/admin/CustomerServiceSettings'
 import AdminVoipConfiguration from './pages/admin/VoipConfiguration';
 import AdminAuthenticatorSettings from './pages/admin/AuthenticatorSettings';
 import AdminHelpCenterContent from './pages/admin/HelpCenterContent';
+import AdminContactPageManager from './pages/admin/ContactPageManager';
 import AdminModuleRuntimeSettings from './pages/admin/ModuleRuntimeSettings';
 import AdminHomepageRuntimeSwitchboard from './pages/admin/HomepageRuntimeSwitchboard';
 import AdminJenksHomepageManage from './pages/admin/JenksHomepageManage';
@@ -738,6 +739,14 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['homepage:manage']}>
                       <AdminBlogs />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/contact-page-manager"
+                  element={
+                    <AdminPermissionGuard required={['help_center:manage|homepage:manage']}>
+                      <AdminContactPageManager />
                     </AdminPermissionGuard>
                   }
                 />
