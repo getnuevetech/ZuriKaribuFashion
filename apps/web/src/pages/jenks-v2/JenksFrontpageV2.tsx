@@ -1762,13 +1762,20 @@ export default function JenksFrontpageV2() {
   const designerSpotlightTypography = useMemo<SpotlightTypography>(
     () => ({
       countryFontSize: Math.max(10, Math.min(72, Math.round(asNumber(designerSpotlightCfg.countryFontSize, 22)))),
-      nameFontSize: Math.max(16, Math.min(140, Math.round(asNumber(designerSpotlightCfg.designerNameFontSize, 52)))),
+      nameFontSize: Math.max(
+        16,
+        Math.min(
+          140,
+          Math.round(asNumber(designerSpotlightCfg.designerNameFontSize ?? designerSpotlightCfg.nameFontSize, 52))
+        )
+      ),
       specialtyFontSize: Math.max(10, Math.min(72, Math.round(asNumber(designerSpotlightCfg.specialtyFontSize, 22)))),
       descriptionFontSize: Math.max(10, Math.min(96, Math.round(asNumber(designerSpotlightCfg.descriptionFontSize, 24)))),
     }),
     [
       designerSpotlightCfg.countryFontSize,
       designerSpotlightCfg.designerNameFontSize,
+      designerSpotlightCfg.nameFontSize,
       designerSpotlightCfg.specialtyFontSize,
       designerSpotlightCfg.descriptionFontSize,
     ]

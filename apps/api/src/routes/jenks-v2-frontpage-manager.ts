@@ -2268,7 +2268,11 @@ const normalizeDesignerSpotlight = (
     rows: clamp(Math.round(getNumber(row.rows) ?? fallback.rows), 1, 12),
     columns: clamp(Math.round(getNumber(row.columns) ?? fallback.columns), 1, 12),
     countryFontSize: clamp(Math.round(getNumber(row.countryFontSize) ?? fallback.countryFontSize), 10, 72),
-    nameFontSize: clamp(Math.round(getNumber(row.nameFontSize) ?? fallback.nameFontSize), 16, 120),
+    nameFontSize: clamp(
+      Math.round(getNumber(row.nameFontSize) ?? getNumber(row.designerNameFontSize) ?? fallback.nameFontSize),
+      16,
+      120
+    ),
     specialtyFontSize: clamp(Math.round(getNumber(row.specialtyFontSize) ?? fallback.specialtyFontSize), 10, 96),
     descriptionFontSize: clamp(Math.round(getNumber(row.descriptionFontSize) ?? fallback.descriptionFontSize), 10, 96),
     cards,

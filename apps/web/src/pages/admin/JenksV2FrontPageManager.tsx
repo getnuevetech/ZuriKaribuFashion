@@ -1688,6 +1688,7 @@ const toApiPayload = (config: JenksV2FrontpageConfig) => ({
   freshDrops: config.freshDrops,
   designerSpotlight: {
     ...config.designerSpotlight,
+    nameFontSize: config.designerSpotlight.designerNameFontSize,
     cards: config.designerSpotlight.cards.map((card) => {
       const countryCode = countryCodeFromToken(card.countryCode || card.country, 'NG');
       return {
@@ -2403,6 +2404,7 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
           toNumber(
             String(
               (designerSpotlight as DesignerSpotlight | undefined)?.designerNameFontSize ??
+                (designerSpotlight as Record<string, unknown>)?.nameFontSize ??
                 DEFAULT_CONFIG.designerSpotlight.designerNameFontSize
             ),
             DEFAULT_CONFIG.designerSpotlight.designerNameFontSize
@@ -8158,13 +8160,17 @@ export default function JenksV2FrontPageManager() {
               <input
                 type="number"
                 className="mt-1 w-full rounded border px-2 py-1.5"
-                value={config.designerSpotlight.nameFontSize}
+                value={config.designerSpotlight.designerNameFontSize}
                 onChange={(event) =>
                   setConfig((prev) => ({
                     ...prev,
                     designerSpotlight: {
                       ...prev.designerSpotlight,
-                      nameFontSize: clamp(toNumber(event.target.value, prev.designerSpotlight.nameFontSize), 14, 140),
+                      designerNameFontSize: clamp(
+                        toNumber(event.target.value, prev.designerSpotlight.designerNameFontSize),
+                        14,
+                        140
+                      ),
                     },
                   }))
                 }
