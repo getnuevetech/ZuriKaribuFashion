@@ -329,6 +329,7 @@ type DesignerSpotlightCard = {
   id: string;
   image: string;
   tag: string;
+  countryCode: string;
   country: string;
   designerName: string;
   title: string;
@@ -1360,6 +1361,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           id: randomUUID(),
           image: '',
           tag: 'Designer Spotlight',
+          countryCode: 'NG',
           country: 'Nigeria',
           designerName: 'Lagos Tailoring House',
           title: 'Meet the Designers',
@@ -2227,6 +2229,15 @@ const normalizeDesignerSpotlight = (
         id: getString(item.id) || fallbackItem.id || randomUUID(),
         image: (getString(item.image) || fallbackItem.image).slice(0, 2000),
         tag: (getString(item.tag) || fallbackItem.tag).slice(0, 80),
+        countryCode: (
+          getString(item.countryCode) ||
+          getString((item as Record<string, unknown>).country_code) ||
+          fallbackItem.countryCode ||
+          'NG'
+        )
+          .trim()
+          .toUpperCase()
+          .slice(0, 8),
         country: (getString(item.country) || fallbackItem.country || '').slice(0, 80),
         designerName: (getString(item.designerName) || fallbackItem.designerName || '').slice(0, 120),
         title: (getString(item.title) || fallbackItem.title).slice(0, 140),

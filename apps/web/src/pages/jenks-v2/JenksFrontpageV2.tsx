@@ -1088,6 +1088,23 @@ const COUNTRY_LABEL_BY_CODE: Record<string, string> = {
   ZM: 'Zambia',
   ZW: 'Zimbabwe',
 };
+const normalizeCountryLabelToken = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '');
+const COUNTRY_CODE_BY_LABEL = Object.entries(COUNTRY_LABEL_BY_CODE).reduce<Record<string, string>>((acc, [code, label]) => {
+  acc[normalizeCountryLabelToken(label)] = code;
+  return acc;
+}, {});
+const resolveDesignerCountryCode = (countryCodeValue: unknown, countryValue: unknown) => {
+  const code = String(countryCodeValue || '')
+    .trim()
+    .toUpperCase();
+  if (/^[A-Z]{2}$/.test(code) && COUNTRY_LABEL_BY_CODE[code]) return code;
+  const labelToken = normalizeCountryLabelToken(countryValue);
+  return COUNTRY_CODE_BY_LABEL[labelToken] || 'NG';
+};
 
 export default function JenksFrontpageV2() {
   const [managerConfig, setManagerConfig] = useState<JenksV2ManagerPayload | null>(null);
@@ -1767,7 +1784,10 @@ export default function JenksFrontpageV2() {
           'With over 15 years of experience, Oluwaseun blends traditional Nigerian craftsmanship with modern silhouettes, creating pieces that honor heritage while embracing contemporary elegance.';
         const fallbackCountry = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.country || 'NIGERIA';
         const fallbackTag = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.tag || 'DESIGNER SPOTLIGHT';
-        const countryToken = asString((entry as Record<string, unknown>).countryCode, '').trim().toUpperCase();
+        const countryToken = resolveDesignerCountryCode(
+          (entry as Record<string, unknown>).countryCode,
+          asString(entry.country, asString(entry.designerCountry, ''))
+        );
         const designerName = asString(entry.designerName, asString(entry.title, fallbackTitle));
         const country = asString(
           entry.country,
@@ -1799,7 +1819,7 @@ export default function JenksFrontpageV2() {
             designerSpecialty: asString((row as any).specialty, 'Contemporary African Designer'),
             description: truncateWords(asString((row as any).description, ''), 25),
             tag: asString((row as any).tag, 'DESIGNER SPOTLIGHT'),
-            countryCode: 'NG',
+            countryCode: resolveDesignerCountryCode('', asString((row as any).country, '')),
           }));
     return source.slice(0, maxItems);
   }, [designerSpotlightCfg.cards, designerSpotlightColumns, designerSpotlightRows]);
