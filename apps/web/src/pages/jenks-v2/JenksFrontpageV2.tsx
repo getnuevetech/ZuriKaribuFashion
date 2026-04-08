@@ -20,6 +20,7 @@ import {
   Phone,
   MapPin,
   RefreshCw,
+  Scissors,
   Search,
   ShieldCheck,
   ShoppingBag,
@@ -102,6 +103,10 @@ type CategorySectionRuntime = {
   panelBg: string;
   stepsEnabled: boolean;
   stepCardHeaderTitle: string;
+  stepCardHeaderIcon: string;
+  stepCardHeaderFontSize: number;
+  stepCardHeaderFontStyle: 'normal' | 'italic';
+  stepCardHeaderFontWeight: number;
   stepCardBackgroundColor: string;
   stepCardOverlayOpacity: number;
   stepCardPanelWidth: number;
@@ -217,6 +222,7 @@ const ICON_BY_KEY: Record<string, IconComponent> = {
   Globe,
   Ruler,
   CreditCard,
+  Scissors,
 };
 
 const SHOP_BY_TAB_META: Array<{ key: ShopByTab; label: string; Icon: IconComponent }> = [
@@ -1408,7 +1414,20 @@ export default function JenksFrontpageV2() {
         textOnLeft: CATEGORY_TEXT_LEFT_BY_KEY[key] ?? (idx % 2 === 1),
         panelBg: CATEGORY_PANEL_BG_BY_KEY[key] || 'bg-[#111]',
         stepsEnabled: asBoolean(entry.stepsEnabled, true),
-        stepCardHeaderTitle: asString(entry.stepCardHeaderTitle, 'Create your own style step-by-step'),
+        stepCardHeaderTitle: asString(
+          entry.stepCardsTitle,
+          asString(entry.stepCardHeaderTitle, 'Create your own style step-by-step')
+        ),
+        stepCardHeaderIcon: asString(entry.stepCardsTitleIcon, asString(entry.stepCardHeaderIcon, 'Scissors')),
+        stepCardHeaderFontSize: Math.max(10, Math.min(40, Math.round(asNumber(entry.stepCardsTitleFontSize, 16)))),
+        stepCardHeaderFontStyle: String(
+          asString(entry.stepCardsTitleFontStyle, asString(entry.stepCardHeaderFontStyle, 'NORMAL'))
+        )
+          .trim()
+          .toUpperCase() === 'ITALIC'
+          ? 'italic'
+          : 'normal',
+        stepCardHeaderFontWeight: Math.max(100, Math.min(900, Math.round(asNumber(entry.stepCardsTitleFontWeight, 600)))),
         stepCardBackgroundColor: asString(entry.stepCardBackgroundColor, '#111111'),
         stepCardOverlayOpacity: Math.max(0, Math.min(100, Math.round(asNumber(entry.stepCardOverlayOpacity, 78)))),
         stepCardPanelWidth: Math.max(280, Math.min(640, Math.round(asNumber(entry.stepCardPanelWidth, 420)))),
@@ -1581,7 +1600,27 @@ export default function JenksFrontpageV2() {
             backgroundColor: 'rgba(55,53,51,0.88)',
           }}
         >
-          <p className="text-[12px] font-semibold leading-tight text-white/95">{section.stepCardHeaderTitle}</p>
+          <div className="flex items-center gap-2">
+            <span
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-white/20 bg-black/20"
+              style={{ color: section.stepCardAccentColor }}
+            >
+              {(() => {
+                const HeaderIcon = iconFromKey(section.stepCardHeaderIcon, Scissors);
+                return <HeaderIcon className="h-4 w-4" />;
+              })()}
+            </span>
+            <p
+              className="leading-tight text-white/95"
+              style={{
+                fontSize: `${section.stepCardHeaderFontSize}px`,
+                fontStyle: section.stepCardHeaderFontStyle,
+                fontWeight: section.stepCardHeaderFontWeight,
+              }}
+            >
+              {section.stepCardHeaderTitle}
+            </p>
+          </div>
         </div>
         {section.stepCards
           .slice()

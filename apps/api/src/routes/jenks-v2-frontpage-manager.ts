@@ -217,6 +217,10 @@ type CategorySection = {
   displayOrder: number;
   stepsEnabled: boolean;
   stepCardsTitle: string;
+  stepCardsTitleIcon: string;
+  stepCardsTitleFontSize: number;
+  stepCardsTitleFontStyle: 'NORMAL' | 'ITALIC';
+  stepCardsTitleFontWeight: number;
   stepCardBackgroundColor: string;
   stepCardOverlayOpacity: number;
   stepCardPanelWidth: number;
@@ -933,6 +937,10 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           displayOrder: 1,
           stepsEnabled: true,
           stepCardsTitle: 'Create your own style step-by-step',
+          stepCardsTitleIcon: 'Scissors',
+          stepCardsTitleFontSize: 16,
+          stepCardsTitleFontStyle: 'NORMAL',
+          stepCardsTitleFontWeight: 600,
           stepCardBackgroundColor: '#111111',
           stepCardOverlayOpacity: 78,
           stepCardPanelWidth: 430,
@@ -1013,6 +1021,10 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           displayOrder: 2,
           stepsEnabled: true,
           stepCardsTitle: 'Create your own style step-by-step',
+          stepCardsTitleIcon: 'Scissors',
+          stepCardsTitleFontSize: 16,
+          stepCardsTitleFontStyle: 'NORMAL',
+          stepCardsTitleFontWeight: 600,
           stepCardBackgroundColor: '#111111',
           stepCardOverlayOpacity: 78,
           stepCardPanelWidth: 430,
@@ -1093,6 +1105,10 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           displayOrder: 3,
           stepsEnabled: true,
           stepCardsTitle: 'Create your own style step-by-step',
+          stepCardsTitleIcon: 'Scissors',
+          stepCardsTitleFontSize: 16,
+          stepCardsTitleFontStyle: 'NORMAL',
+          stepCardsTitleFontWeight: 600,
           stepCardBackgroundColor: '#111111',
           stepCardOverlayOpacity: 78,
           stepCardPanelWidth: 430,
@@ -1867,6 +1883,22 @@ const normalizeCategoryManage = (
         stepCardsTitle: (getString(item.stepCardsTitle) || fallbackItem.stepCardsTitle || 'Create your own style step-by-step').slice(
           0,
           160
+        ),
+        stepCardsTitleIcon: (getString(item.stepCardsTitleIcon) || fallbackItem.stepCardsTitleIcon || 'Scissors').slice(0, 60),
+        stepCardsTitleFontSize: clamp(
+          Math.round(getNumber(item.stepCardsTitleFontSize) ?? fallbackItem.stepCardsTitleFontSize ?? 16),
+          10,
+          40
+        ),
+        stepCardsTitleFontStyle:
+          String(item.stepCardsTitleFontStyle || fallbackItem.stepCardsTitleFontStyle || 'NORMAL').trim().toUpperCase() ===
+          'ITALIC'
+            ? 'ITALIC'
+            : 'NORMAL',
+        stepCardsTitleFontWeight: clamp(
+          Math.round(getNumber(item.stepCardsTitleFontWeight) ?? fallbackItem.stepCardsTitleFontWeight ?? 600),
+          100,
+          900
         ),
         stepCardBackgroundColor: (getString(item.stepCardBackgroundColor) || fallbackItem.stepCardBackgroundColor || '#111111').slice(0, 40),
         stepCardOverlayOpacity: clamp(

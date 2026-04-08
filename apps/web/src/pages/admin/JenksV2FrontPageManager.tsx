@@ -189,6 +189,10 @@ type CategorySection = {
   title: string;
   tag: string;
   stepCardsTitle: string;
+  stepCardsTitleIcon: string;
+  stepCardsTitleFontSize: number;
+  stepCardsTitleFontStyle: 'NORMAL' | 'ITALIC';
+  stepCardsTitleFontWeight: number;
   description: string;
   image: string;
   ctaText: string;
@@ -1117,6 +1121,10 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Ready To Wear',
         tag: 'RTW',
         stepCardsTitle: 'Create your own style step-by-step',
+        stepCardsTitleIcon: 'Scissors',
+        stepCardsTitleFontSize: 16,
+        stepCardsTitleFontStyle: 'NORMAL',
+        stepCardsTitleFontWeight: 600,
         description: 'Manage title, tag, description and CTA for RTW block.',
         image: CATEGORY_FALLBACK_IMAGE_BY_KEY.RTW,
         ctaText: 'Shop RTW',
@@ -1179,6 +1187,10 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Custom To Wear',
         tag: 'CTW',
         stepCardsTitle: 'Create your own style step-by-step',
+        stepCardsTitleIcon: 'Scissors',
+        stepCardsTitleFontSize: 16,
+        stepCardsTitleFontStyle: 'NORMAL',
+        stepCardsTitleFontWeight: 600,
         description: 'Manage title, tag, description and CTA for CTW block.',
         image: CATEGORY_FALLBACK_IMAGE_BY_KEY.CTW,
         ctaText: 'Explore CTW',
@@ -1241,6 +1253,10 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Fabric To Buy',
         tag: 'FTB',
         stepCardsTitle: 'Create your own style step-by-step',
+        stepCardsTitleIcon: 'Scissors',
+        stepCardsTitleFontSize: 16,
+        stepCardsTitleFontStyle: 'NORMAL',
+        stepCardsTitleFontWeight: 600,
         description: 'Manage title, tag, description and CTA for FTB block.',
         image: CATEGORY_FALLBACK_IMAGE_BY_KEY.FTB,
         ctaText: 'Shop FTB',
@@ -2155,6 +2171,33 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             image: String((section as CategorySection)?.image || fallbackCategory.image || CATEGORY_FALLBACK_IMAGE_BY_KEY[String((section as CategorySection)?.key || '').toUpperCase()] || ''),
             stepCardsTitle: String(
               (section as CategorySection)?.stepCardsTitle || fallbackCategory.stepCardsTitle || 'Create your own style step-by-step'
+            ),
+            stepCardsTitleIcon: String(
+              (section as CategorySection)?.stepCardsTitleIcon || fallbackCategory.stepCardsTitleIcon || 'Scissors'
+            ),
+            stepCardsTitleFontSize: clamp(
+              toNumber(
+                String((section as CategorySection)?.stepCardsTitleFontSize ?? fallbackCategory.stepCardsTitleFontSize ?? 16),
+                fallbackCategory.stepCardsTitleFontSize ?? 16
+              ),
+              10,
+              40
+            ),
+            stepCardsTitleFontStyle:
+              String((section as CategorySection)?.stepCardsTitleFontStyle || fallbackCategory.stepCardsTitleFontStyle || 'NORMAL')
+                .trim()
+                .toUpperCase() === 'ITALIC'
+                ? 'ITALIC'
+                : 'NORMAL',
+            stepCardsTitleFontWeight: clamp(
+              toNumber(
+                String(
+                  (section as CategorySection)?.stepCardsTitleFontWeight ?? fallbackCategory.stepCardsTitleFontWeight ?? 600
+                ),
+                fallbackCategory.stepCardsTitleFontWeight ?? 600
+              ),
+              100,
+              900
             ),
             ctaMode: normalizeCtaMode((section as CategorySection)?.ctaMode, fallbackCategory.ctaMode),
             ctaPageKey: ((): string => {
@@ -5908,6 +5951,10 @@ export default function JenksV2FrontPageManager() {
                         title: 'New Category Section',
                         tag: '',
                         stepCardsTitle: 'Create your own style step-by-step',
+                        stepCardsTitleIcon: 'Scissors',
+                        stepCardsTitleFontSize: 16,
+                        stepCardsTitleFontStyle: 'NORMAL',
+                        stepCardsTitleFontWeight: 600,
                         description: '',
                         image: CATEGORY_FALLBACK_IMAGE_BY_KEY.RTW,
                         ctaText: '',
@@ -6389,6 +6436,112 @@ export default function JenksV2FrontPageManager() {
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    <label className="text-[11px]">
+                      Left Step Cards Title Icon
+                      <select
+                        className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                        value={section.stepCardsTitleIcon}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            categoryManage: {
+                              ...prev.categoryManage,
+                              sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, stepCardsTitleIcon: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      >
+                        {ICON_OPTIONS.map((iconKey) => (
+                          <option key={`step-header-icon-${section.id}-${iconKey}`} value={iconKey}>
+                            {iconKey}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-[11px]">
+                      Left Step Cards Title Font Size (px)
+                      <input
+                        type="number"
+                        className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                        value={section.stepCardsTitleFontSize}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            categoryManage: {
+                              ...prev.categoryManage,
+                              sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? {
+                                      ...entry,
+                                      stepCardsTitleFontSize: clamp(
+                                        toNumber(event.target.value, entry.stepCardsTitleFontSize),
+                                        10,
+                                        40
+                                      ),
+                                    }
+                                  : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-[11px]">
+                      Left Step Cards Title Font Style
+                      <select
+                        className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                        value={section.stepCardsTitleFontStyle}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            categoryManage: {
+                              ...prev.categoryManage,
+                              sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? {
+                                      ...entry,
+                                      stepCardsTitleFontStyle: event.target.value === 'ITALIC' ? 'ITALIC' : 'NORMAL',
+                                    }
+                                  : entry
+                              ),
+                            },
+                          }))
+                        }
+                      >
+                        <option value="NORMAL">NORMAL</option>
+                        <option value="ITALIC">ITALIC</option>
+                      </select>
+                    </label>
+                    <label className="text-[11px]">
+                      Left Step Cards Title Font Weight
+                      <input
+                        type="number"
+                        className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                        value={section.stepCardsTitleFontWeight}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            categoryManage: {
+                              ...prev.categoryManage,
+                              sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? {
+                                      ...entry,
+                                      stepCardsTitleFontWeight: clamp(
+                                        toNumber(event.target.value, entry.stepCardsTitleFontWeight),
+                                        100,
+                                        900
+                                      ),
+                                    }
+                                  : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
                     <label className="text-[11px]">
                       Step Card Panel Width (px)
                       <input
