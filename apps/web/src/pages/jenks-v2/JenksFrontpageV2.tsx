@@ -2110,6 +2110,7 @@ export default function JenksFrontpageV2() {
     [heritageCfg.description, heritageCfg.storyHtml]
   );
   const heritageReadMoreLabel = asString(heritageCfg.readMoreLabel, 'Read More');
+  const heritageReadMoreHref = normalizeHref(heritageCfg.readMoreHref, '/stories/our-heritage');
   const heritageStoryTitle = asString(heritageCfg.storyTitle, 'The Story');
   const heritageStoryTitleFontSize = Math.max(12, Math.min(72, Math.round(asNumber(heritageCfg.storyTitleFontSize, 30))));
   const heritageStoryTextFontSize = Math.max(10, Math.min(64, Math.round(asNumber(heritageCfg.storyTextFontSize, 16))));
