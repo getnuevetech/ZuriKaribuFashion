@@ -1708,7 +1708,7 @@ export default function JenksFrontpageV2() {
           DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.description ||
           'With over 15 years of experience, Oluwaseun blends traditional Nigerian craftsmanship with modern silhouettes, creating pieces that honor heritage while embracing contemporary elegance.';
         const fallbackCountry = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.country || 'NIGERIA';
-        const fallbackTag = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.tag || 'NIGERIA';
+        const fallbackTag = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.tag || 'DESIGNER SPOTLIGHT';
         const countryToken = asString((entry as Record<string, unknown>).countryCode, '').trim().toUpperCase();
         const designerName = asString(entry.designerName, asString(entry.title, fallbackTitle));
         const country = asString(
@@ -1725,7 +1725,7 @@ export default function JenksFrontpageV2() {
           description: truncateWords(asString(entry.description, fallbackDescription), 25),
           cta: asString(entry.ctaText, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.cta || 'VIEW COLLECTION').toUpperCase(),
           href: spotCtaHref(entry, fallbackHref),
-          tag: asString(country, asString(entry.tag, fallbackTag)),
+          tag: asString(entry.tag, fallbackTag),
           countryCode: countryToken || 'NG',
           ctaStyle: entry.ctaStyle,
         };
@@ -1740,7 +1740,7 @@ export default function JenksFrontpageV2() {
             designerCountry: asString((row as any).country, ''),
             designerSpecialty: asString((row as any).specialty, 'Contemporary African Designer'),
             description: truncateWords(asString((row as any).description, ''), 25),
-            tag: asString((row as any).country, asString(row.tag, 'NIGERIA')),
+            tag: asString((row as any).tag, 'DESIGNER SPOTLIGHT'),
             countryCode: 'NG',
           }));
     return source.slice(0, maxItems);
