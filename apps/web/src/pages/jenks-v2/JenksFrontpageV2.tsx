@@ -139,6 +139,12 @@ type SpotlightRuntime = {
   countryCode: string;
   ctaStyle?: CTAStyle;
 };
+type SpotlightTypography = {
+  countryFontSize: number;
+  nameFontSize: number;
+  specialtyFontSize: number;
+  descriptionFontSize: number;
+};
 
 type CustomerReviewCard = {
   id: string;
@@ -1753,6 +1759,20 @@ export default function JenksFrontpageV2() {
 
   const designerSpotlightRows = Math.max(1, Math.round(asNumber(designerSpotlightCfg.rows, 1)));
   const designerSpotlightColumns = Math.max(1, Math.min(12, Math.round(asNumber(designerSpotlightCfg.columns, 3))));
+  const designerSpotlightTypography = useMemo<SpotlightTypography>(
+    () => ({
+      countryFontSize: Math.max(10, Math.min(72, Math.round(asNumber(designerSpotlightCfg.countryFontSize, 22)))),
+      nameFontSize: Math.max(16, Math.min(140, Math.round(asNumber(designerSpotlightCfg.designerNameFontSize, 52)))),
+      specialtyFontSize: Math.max(10, Math.min(72, Math.round(asNumber(designerSpotlightCfg.specialtyFontSize, 22)))),
+      descriptionFontSize: Math.max(10, Math.min(96, Math.round(asNumber(designerSpotlightCfg.descriptionFontSize, 24)))),
+    }),
+    [
+      designerSpotlightCfg.countryFontSize,
+      designerSpotlightCfg.designerNameFontSize,
+      designerSpotlightCfg.specialtyFontSize,
+      designerSpotlightCfg.descriptionFontSize,
+    ]
+  );
   const designerSpotlightColsClass = (() => {
     if (designerSpotlightColumns <= 1) return 'md:grid-cols-1';
     if (designerSpotlightColumns === 2) return 'md:grid-cols-2';
@@ -3451,16 +3471,30 @@ export default function JenksFrontpageV2() {
                 {countryCodeToFlagEmoji(spot.countryCode)}
               </p>
               <div className="absolute bottom-6 left-6 right-6 text-white">
-                <p className="text-[clamp(15px,1vw,22px)] font-medium uppercase tracking-[0.08em] text-white/78">
+                <p
+                  className="font-medium uppercase tracking-[0.08em] text-white/78"
+                  style={{ fontSize: `${designerSpotlightTypography.countryFontSize}px` }}
+                >
                   {spot.designerCountry || spot.tag}
                 </p>
-                <h3 className="font-['Oswald'] text-[clamp(34px,3vw,52px)] font-bold uppercase leading-[0.95]">
+                <h3
+                  className="font-['Oswald'] font-bold uppercase leading-[0.95]"
+                  style={{ fontSize: `${designerSpotlightTypography.nameFontSize}px` }}
+                >
                   {spot.designerName || spot.title}
                 </h3>
-                <p className="mt-2 text-[clamp(18px,1.05vw,26px)] leading-[1.25] text-white/78">
+                <p
+                  className="mt-2 leading-[1.25] text-white/78"
+                  style={{ fontSize: `${designerSpotlightTypography.specialtyFontSize}px` }}
+                >
                   {spot.designerSpecialty || 'Contemporary African Designer'}
                 </p>
-                <p className="mt-3 max-w-[42ch] text-[clamp(18px,1.15vw,28px)] leading-[1.35] text-white/88">{spot.description}</p>
+                <p
+                  className="mt-3 max-w-[42ch] leading-[1.35] text-white/88"
+                  style={{ fontSize: `${designerSpotlightTypography.descriptionFontSize}px` }}
+                >
+                  {spot.description}
+                </p>
                 <span
                   className="relative mt-5 inline-flex items-center gap-3 pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-white"
                   style={buildCTAStyle(spot.ctaStyle, {

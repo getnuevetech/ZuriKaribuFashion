@@ -339,6 +339,10 @@ type CTAStyle = {
 type DesignerSpotlight = {
   rows: number;
   columns: number;
+  countryFontSize: number;
+  designerNameFontSize: number;
+  specialtyFontSize: number;
+  descriptionFontSize: number;
   cards: DesignerSpotlightCard[];
 };
 
@@ -1472,6 +1476,10 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
   designerSpotlight: {
     rows: 1,
     columns: 3,
+    countryFontSize: 22,
+    designerNameFontSize: 52,
+    specialtyFontSize: 22,
+    descriptionFontSize: 24,
     cards: [
       {
         id: uid(),
@@ -2380,6 +2388,55 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
     },
     designerSpotlight: {
       ...designerSpotlight,
+      countryFontSize: clamp(
+        Math.round(
+          toNumber(
+            String((designerSpotlight as DesignerSpotlight | undefined)?.countryFontSize ?? DEFAULT_CONFIG.designerSpotlight.countryFontSize),
+            DEFAULT_CONFIG.designerSpotlight.countryFontSize
+          )
+        ),
+        10,
+        72
+      ),
+      designerNameFontSize: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (designerSpotlight as DesignerSpotlight | undefined)?.designerNameFontSize ??
+                DEFAULT_CONFIG.designerSpotlight.designerNameFontSize
+            ),
+            DEFAULT_CONFIG.designerSpotlight.designerNameFontSize
+          )
+        ),
+        16,
+        140
+      ),
+      specialtyFontSize: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (designerSpotlight as DesignerSpotlight | undefined)?.specialtyFontSize ??
+                DEFAULT_CONFIG.designerSpotlight.specialtyFontSize
+            ),
+            DEFAULT_CONFIG.designerSpotlight.specialtyFontSize
+          )
+        ),
+        10,
+        72
+      ),
+      descriptionFontSize: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (designerSpotlight as DesignerSpotlight | undefined)?.descriptionFontSize ??
+                DEFAULT_CONFIG.designerSpotlight.descriptionFontSize
+            ),
+            DEFAULT_CONFIG.designerSpotlight.descriptionFontSize
+          )
+        ),
+        10,
+        96
+      ),
       cards: Array.isArray(designerSpotlight.cards)
         ? designerSpotlight.cards.map((card) => ({
             ...fallbackSpotlight,
@@ -8044,7 +8101,7 @@ export default function JenksV2FrontPageManager() {
               Add Card
             </Button>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <label className="text-xs">
               Rows
               <input
@@ -8079,8 +8136,75 @@ export default function JenksV2FrontPageManager() {
                 }
               />
             </label>
+            <label className="text-xs">
+              Country Text Size (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.designerSpotlight.countryFontSize}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    designerSpotlight: {
+                      ...prev.designerSpotlight,
+                      countryFontSize: clamp(toNumber(event.target.value, prev.designerSpotlight.countryFontSize), 10, 72),
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
+              Designer Name Text Size (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.designerSpotlight.nameFontSize}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    designerSpotlight: {
+                      ...prev.designerSpotlight,
+                      nameFontSize: clamp(toNumber(event.target.value, prev.designerSpotlight.nameFontSize), 14, 140),
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
+              Specialty Text Size (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.designerSpotlight.specialtyFontSize}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    designerSpotlight: {
+                      ...prev.designerSpotlight,
+                      specialtyFontSize: clamp(toNumber(event.target.value, prev.designerSpotlight.specialtyFontSize), 10, 72),
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
+              Description Text Size (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.designerSpotlight.descriptionFontSize}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    designerSpotlight: {
+                      ...prev.designerSpotlight,
+                      descriptionFontSize: clamp(toNumber(event.target.value, prev.designerSpotlight.descriptionFontSize), 10, 96),
+                    },
+                  }))
+                }
+              />
+            </label>
           </div>
-
           {config.designerSpotlight.cards.map((card, index) => (
             <div key={card.id} className="rounded border p-3 space-y-2">
               <div className="grid grid-cols-1 gap-2 md:grid-cols-12">

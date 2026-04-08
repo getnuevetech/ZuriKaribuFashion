@@ -347,6 +347,10 @@ type DesignerSpotlightCard = {
 type DesignerSpotlightSettings = {
   rows: number;
   columns: number;
+  countryFontSize: number;
+  nameFontSize: number;
+  specialtyFontSize: number;
+  descriptionFontSize: number;
   cards: DesignerSpotlightCard[];
 };
 
@@ -1356,6 +1360,10 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
     designerSpotlight: {
       rows: 1,
       columns: 3,
+      countryFontSize: 18,
+      nameFontSize: 52,
+      specialtyFontSize: 24,
+      descriptionFontSize: 24,
       cards: [
         {
           id: randomUUID(),
@@ -2259,6 +2267,10 @@ const normalizeDesignerSpotlight = (
   return {
     rows: clamp(Math.round(getNumber(row.rows) ?? fallback.rows), 1, 12),
     columns: clamp(Math.round(getNumber(row.columns) ?? fallback.columns), 1, 12),
+    countryFontSize: clamp(Math.round(getNumber(row.countryFontSize) ?? fallback.countryFontSize), 10, 72),
+    nameFontSize: clamp(Math.round(getNumber(row.nameFontSize) ?? fallback.nameFontSize), 16, 120),
+    specialtyFontSize: clamp(Math.round(getNumber(row.specialtyFontSize) ?? fallback.specialtyFontSize), 10, 96),
+    descriptionFontSize: clamp(Math.round(getNumber(row.descriptionFontSize) ?? fallback.descriptionFontSize), 10, 96),
     cards,
   };
 };
