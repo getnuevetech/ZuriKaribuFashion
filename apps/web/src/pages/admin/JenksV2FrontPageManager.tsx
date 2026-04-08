@@ -197,6 +197,11 @@ type CategorySection = {
   ctaStyle: CTAStyle;
   stepCardBackgroundColor: string;
   stepCardOverlayOpacity: number;
+  stepCardPanelWidth: number;
+  stepCardAccentColor: string;
+  stepCardIconColor: string;
+  stepCardTitleFontSize: number;
+  stepCardDescriptionFontSize: number;
   stepsEnabled: boolean;
   stepCards: CategoryStepCard[];
   enabled: boolean;
@@ -1123,6 +1128,11 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         }),
         stepCardBackgroundColor: '#111111',
         stepCardOverlayOpacity: 78,
+        stepCardPanelWidth: 340,
+        stepCardAccentColor: '#e66045',
+        stepCardIconColor: '#ff7c61',
+        stepCardTitleFontSize: 11,
+        stepCardDescriptionFontSize: 12,
         stepsEnabled: true,
         stepCards: [
           {
@@ -1179,6 +1189,11 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         }),
         stepCardBackgroundColor: '#111111',
         stepCardOverlayOpacity: 78,
+        stepCardPanelWidth: 340,
+        stepCardAccentColor: '#e66045',
+        stepCardIconColor: '#ff7c61',
+        stepCardTitleFontSize: 11,
+        stepCardDescriptionFontSize: 12,
         stepsEnabled: true,
         stepCards: [
           {
@@ -1235,6 +1250,11 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         }),
         stepCardBackgroundColor: '#111111',
         stepCardOverlayOpacity: 78,
+        stepCardPanelWidth: 340,
+        stepCardAccentColor: '#e66045',
+        stepCardIconColor: '#ff7c61',
+        stepCardTitleFontSize: 11,
+        stepCardDescriptionFontSize: 12,
         stepsEnabled: true,
         stepCards: [
           {
@@ -2156,6 +2176,42 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
               ),
               0,
               100
+            ),
+            stepCardPanelWidth: clamp(
+              toNumber(
+                String((section as CategorySection)?.stepCardPanelWidth ?? fallbackCategory.stepCardPanelWidth ?? 340),
+                fallbackCategory.stepCardPanelWidth ?? 340
+              ),
+              220,
+              460
+            ),
+            stepCardAccentColor: String(
+              (section as CategorySection)?.stepCardAccentColor || fallbackCategory.stepCardAccentColor || '#e66045'
+            ),
+            stepCardIconColor: String(
+              (section as CategorySection)?.stepCardIconColor || fallbackCategory.stepCardIconColor || '#ff7c61'
+            ),
+            stepCardTitleFontSize: clamp(
+              toNumber(
+                String(
+                  (section as CategorySection)?.stepCardTitleFontSize ?? fallbackCategory.stepCardTitleFontSize ?? 11
+                ),
+                fallbackCategory.stepCardTitleFontSize ?? 11
+              ),
+              10,
+              28
+            ),
+            stepCardDescriptionFontSize: clamp(
+              toNumber(
+                String(
+                  (section as CategorySection)?.stepCardDescriptionFontSize ??
+                    fallbackCategory.stepCardDescriptionFontSize ??
+                    12
+                ),
+                fallbackCategory.stepCardDescriptionFontSize ?? 12
+              ),
+              10,
+              26
             ),
             stepsEnabled: toBoolean(
               (section as any)?.stepsEnabled ?? (section as any)?.stepCardsEnabled,
@@ -5859,6 +5915,11 @@ export default function JenksV2FrontPageManager() {
                         }),
                         stepCardBackgroundColor: '#111111',
                         stepCardOverlayOpacity: 78,
+                        stepCardPanelWidth: 340,
+                        stepCardAccentColor: '#e66045',
+                        stepCardIconColor: '#ff7c61',
+                        stepCardTitleFontSize: 11,
+                        stepCardDescriptionFontSize: 12,
                         stepsEnabled: true,
                         stepCards: defaultCategoryStepCards('RTW'),
                         enabled: true,
@@ -6301,6 +6362,177 @@ export default function JenksV2FrontPageManager() {
                         Add Step
                       </Button>
                     </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    <label className="text-[11px]">
+                      Step Card Panel Width (px)
+                      <input
+                        type="number"
+                        className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                        value={section.stepCardPanelWidth}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            categoryManage: {
+                              ...prev.categoryManage,
+                              sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? {
+                                      ...entry,
+                                      stepCardPanelWidth: clamp(
+                                        toNumber(event.target.value, entry.stepCardPanelWidth),
+                                        220,
+                                        460
+                                      ),
+                                    }
+                                  : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-[11px]">
+                      Step Card Overlay Opacity (%)
+                      <input
+                        type="number"
+                        className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                        value={section.stepCardOverlayOpacity}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            categoryManage: {
+                              ...prev.categoryManage,
+                              sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? {
+                                      ...entry,
+                                      stepCardOverlayOpacity: clamp(
+                                        toNumber(event.target.value, entry.stepCardOverlayOpacity),
+                                        0,
+                                        100
+                                      ),
+                                    }
+                                  : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-[11px]">
+                      Step Card Background Color
+                      <input
+                        type="color"
+                        className="mt-1 h-9 w-full rounded border px-1 py-1"
+                        value={section.stepCardBackgroundColor}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            categoryManage: {
+                              ...prev.categoryManage,
+                              sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, stepCardBackgroundColor: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-[11px]">
+                      Step Card Accent Color
+                      <input
+                        type="color"
+                        className="mt-1 h-9 w-full rounded border px-1 py-1"
+                        value={section.stepCardAccentColor}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            categoryManage: {
+                              ...prev.categoryManage,
+                              sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, stepCardAccentColor: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-[11px]">
+                      Step Card Icon Color
+                      <input
+                        type="color"
+                        className="mt-1 h-9 w-full rounded border px-1 py-1"
+                        value={section.stepCardIconColor}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            categoryManage: {
+                              ...prev.categoryManage,
+                              sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, stepCardIconColor: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-[11px]">
+                      Step Card Title Font Size (px)
+                      <input
+                        type="number"
+                        className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                        value={section.stepCardTitleFontSize}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            categoryManage: {
+                              ...prev.categoryManage,
+                              sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? {
+                                      ...entry,
+                                      stepCardTitleFontSize: clamp(
+                                        toNumber(event.target.value, entry.stepCardTitleFontSize),
+                                        10,
+                                        28
+                                      ),
+                                    }
+                                  : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-[11px]">
+                      Step Card Description Font Size (px)
+                      <input
+                        type="number"
+                        className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                        value={section.stepCardDescriptionFontSize}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            categoryManage: {
+                              ...prev.categoryManage,
+                              sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? {
+                                      ...entry,
+                                      stepCardDescriptionFontSize: clamp(
+                                        toNumber(event.target.value, entry.stepCardDescriptionFontSize),
+                                        10,
+                                        26
+                                      ),
+                                    }
+                                  : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
                   </div>
                   {section.stepCards.map((step, stepIndex) => (
                     <div key={step.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">

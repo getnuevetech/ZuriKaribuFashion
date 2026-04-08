@@ -103,6 +103,11 @@ type CategorySectionRuntime = {
   stepsEnabled: boolean;
   stepCardBackgroundColor: string;
   stepCardOverlayOpacity: number;
+  stepCardPanelWidth: number;
+  stepCardAccentColor: string;
+  stepCardIconColor: string;
+  stepCardTitleFontSize: number;
+  stepCardDescriptionFontSize: number;
   stepCards: Array<{
     id: string;
     icon: string;
@@ -125,6 +130,7 @@ type SpotlightRuntime = {
   ctaMode: CtaMode;
   ctaPageKey?: string;
   tag: string;
+  countryCode: string;
   ctaStyle?: CTAStyle;
 };
 
@@ -446,6 +452,16 @@ const splitHeroTitle = (title: string) => {
     titleA: words.slice(0, 1).join(' '),
     titleB: words.slice(1).join(' '),
   };
+};
+
+const countryCodeToFlagEmoji = (value: unknown) => {
+  const code = asString(value, '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .slice(0, 2);
+  if (code.length !== 2) return '🌍';
+  return String.fromCodePoint(...code.split('').map((char) => 127397 + char.charCodeAt(0)));
 };
 
 const truncateWords = (value: unknown, maxWords: number) => {
@@ -1393,6 +1409,11 @@ export default function JenksFrontpageV2() {
         stepsEnabled: asBoolean(entry.stepsEnabled, true),
         stepCardBackgroundColor: asString(entry.stepCardBackgroundColor, '#111111'),
         stepCardOverlayOpacity: Math.max(0, Math.min(100, Math.round(asNumber(entry.stepCardOverlayOpacity, 78)))),
+        stepCardPanelWidth: Math.max(220, Math.min(460, Math.round(asNumber(entry.stepCardPanelWidth, 340)))),
+        stepCardAccentColor: asString(entry.stepCardAccentColor, '#e66045'),
+        stepCardIconColor: asString(entry.stepCardIconColor, '#ff7c61'),
+        stepCardTitleFontSize: Math.max(10, Math.min(28, Math.round(asNumber(entry.stepCardTitleFontSize, 11)))),
+        stepCardDescriptionFontSize: Math.max(10, Math.min(26, Math.round(asNumber(entry.stepCardDescriptionFontSize, 12)))),
         stepCards: ((): CategorySectionRuntime['stepCards'] => {
           const rawSteps = asArray(entry.stepCards)
             .map((step) => asRecord(step))
@@ -1545,7 +1566,10 @@ export default function JenksFrontpageV2() {
     };
   };
   const renderCategoryStepCards = (section: CategorySectionRuntime) => (
-    <div className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden w-[340px] overflow-y-auto pr-1 md:block">
+    <div
+      className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden overflow-y-auto pr-1 md:block"
+      style={{ width: `${section.stepCardPanelWidth}px` }}
+    >
       <div className="space-y-2">
         {section.stepCards
           .slice()
@@ -1559,18 +1583,31 @@ export default function JenksFrontpageV2() {
                 className="relative overflow-hidden rounded-xl border px-4 py-3 backdrop-blur-md"
                 style={categoryStepCardOverlayStyle(section)}
               >
-                <span className="absolute inset-y-0 left-0 w-1 bg-[#e66045]" />
+                <span className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: section.stepCardAccentColor }} />
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/12 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">
                     {orderLabel}
                   </div>
-                  <div className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/25 bg-black/30 text-[#ff7c61]">
+                  <div
+                    className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/25 bg-black/30"
+                    style={{ color: section.stepCardIconColor }}
+                  >
                     <StepIcon className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white">{step.title}</p>
+                    <p
+                      className="font-semibold uppercase tracking-[0.12em] text-white"
+                      style={{ fontSize: `${section.stepCardTitleFontSize}px` }}
+                    >
+                      {step.title}
+                    </p>
                     {step.description ? (
-                      <p className="mt-1 text-[12px] leading-snug text-white/84">{step.description}</p>
+                      <p
+                        className="mt-1 leading-snug text-white/84"
+                        style={{ fontSize: `${section.stepCardDescriptionFontSize}px` }}
+                      >
+                        {step.description}
+                      </p>
                     ) : null}
                   </div>
                 </div>
@@ -1686,6 +1723,7 @@ export default function JenksFrontpageV2() {
           cta: asString(entry.ctaText, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.cta || 'VIEW COLLECTION').toUpperCase(),
           href: spotCtaHref(entry, fallbackHref),
           tag: asString(country, asString(entry.tag, fallbackTag)),
+          countryCode: countryToken || 'NG',
           ctaStyle: entry.ctaStyle,
         };
       });
@@ -1699,6 +1737,7 @@ export default function JenksFrontpageV2() {
             designerCountry: asString((row as any).country, ''),
             description: truncateWords(asString((row as any).description, ''), 25),
             tag: asString((row as any).country, asString(row.tag, 'NIGERIA')),
+            countryCode: 'NG',
           }));
     return source.slice(0, maxItems);
   }, [designerSpotlightCfg.cards, designerSpotlightColumns, designerSpotlightRows]);
@@ -3323,31 +3362,30 @@ export default function JenksFrontpageV2() {
                 spinnerClassName="h-8 w-8"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />
-              <p className="absolute right-8 top-8 font-['Oswald'] text-sm font-bold uppercase tracking-[0.08em] text-white/95">
-                <span>ZURI</span>
-                <span className="text-[#e66045]">KARIBU</span>
+              <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-white/80">
+                {spot.tag}
               </p>
-              <div className="absolute bottom-8 left-8 right-8 bg-[#ececec]/95 p-6 text-[#111] shadow-[0_20px_46px_rgba(0,0,0,0.28)]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/80">{spot.tag}</p>
-                <p className="mt-2 text-[clamp(16px,1.05vw,24px)] font-medium uppercase tracking-[0.08em] text-[#667085]">
-                  {spot.designerCountry || spot.tag}
-                </p>
-                <h3 className="mt-3 font-['Oswald'] text-[clamp(34px,3vw,52px)] font-bold uppercase leading-[0.95]">
+              <p className="absolute right-6 top-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/25 text-xl">
+                {countryCodeToFlagEmoji(spot.countryCode)}
+              </p>
+              <div className="absolute bottom-6 left-6 right-6 text-white">
+                <h3 className="font-['Oswald'] text-[clamp(34px,3vw,52px)] font-bold uppercase leading-[0.95]">
                   {spot.designerName || spot.title}
                 </h3>
-                <p className="mt-4 max-w-[42ch] text-[clamp(18px,1.15vw,28px)] leading-[1.4] text-[#4b5563]">{spot.description}</p>
+                <p className="mt-3 max-w-[42ch] text-[clamp(18px,1.15vw,28px)] leading-[1.35] text-white/88">{spot.description}</p>
                 <span
-                  className="mt-6 inline-flex items-center gap-3 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-black"
+                  className="relative mt-5 inline-flex items-center gap-3 pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-white"
                   style={buildCTAStyle(spot.ctaStyle, {
                     ...DEFAULT_INLINE_CTA_STYLE,
-                    textColor: '#111111',
-                    hoverTextColor: '#111111',
+                    textColor: '#ffffff',
+                    hoverTextColor: '#ffffff',
                     borderColor: 'transparent',
                     hoverBorderColor: 'transparent',
                   })}
                 >
                   {spot.cta}
                   <ArrowRight className="h-4 w-4" />
+                  <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-[#e66045] transition-all duration-300 group-hover:w-full" />
                 </span>
               </div>
             </Link>

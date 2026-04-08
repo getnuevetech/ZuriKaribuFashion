@@ -218,6 +218,11 @@ type CategorySection = {
   stepsEnabled: boolean;
   stepCardBackgroundColor: string;
   stepCardOverlayOpacity: number;
+  stepCardPanelWidth: number;
+  stepCardAccentColor: string;
+  stepCardIconColor: string;
+  stepCardTitleFontSize: number;
+  stepCardDescriptionFontSize: number;
   stepCards: Array<{
     id: string;
     icon: string;
@@ -928,6 +933,11 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           stepsEnabled: true,
           stepCardBackgroundColor: '#111111',
           stepCardOverlayOpacity: 78,
+          stepCardPanelWidth: 340,
+          stepCardAccentColor: '#e66045',
+          stepCardIconColor: '#ff7c61',
+          stepCardTitleFontSize: 11,
+          stepCardDescriptionFontSize: 12,
           stepCards: [
             {
               id: randomUUID(),
@@ -1002,6 +1012,11 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           stepsEnabled: true,
           stepCardBackgroundColor: '#111111',
           stepCardOverlayOpacity: 78,
+          stepCardPanelWidth: 340,
+          stepCardAccentColor: '#e66045',
+          stepCardIconColor: '#ff7c61',
+          stepCardTitleFontSize: 11,
+          stepCardDescriptionFontSize: 12,
           stepCards: [
             {
               id: randomUUID(),
@@ -1076,6 +1091,11 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           stepsEnabled: true,
           stepCardBackgroundColor: '#111111',
           stepCardOverlayOpacity: 78,
+          stepCardPanelWidth: 340,
+          stepCardAccentColor: '#e66045',
+          stepCardIconColor: '#ff7c61',
+          stepCardTitleFontSize: 11,
+          stepCardDescriptionFontSize: 12,
           stepCards: [
             {
               id: randomUUID(),
@@ -1845,6 +1865,23 @@ const normalizeCategoryManage = (
           Math.round(getNumber(item.stepCardOverlayOpacity) ?? fallbackItem.stepCardOverlayOpacity ?? 78),
           0,
           100
+        ),
+        stepCardPanelWidth: clamp(
+          Math.round(getNumber(item.stepCardPanelWidth) ?? fallbackItem.stepCardPanelWidth ?? 340),
+          220,
+          460
+        ),
+        stepCardAccentColor: (getString(item.stepCardAccentColor) || fallbackItem.stepCardAccentColor || '#e66045').slice(0, 40),
+        stepCardIconColor: (getString(item.stepCardIconColor) || fallbackItem.stepCardIconColor || '#ff7c61').slice(0, 40),
+        stepCardTitleFontSize: clamp(
+          Math.round(getNumber(item.stepCardTitleFontSize) ?? fallbackItem.stepCardTitleFontSize ?? 11),
+          10,
+          28
+        ),
+        stepCardDescriptionFontSize: clamp(
+          Math.round(getNumber(item.stepCardDescriptionFontSize) ?? fallbackItem.stepCardDescriptionFontSize ?? 12),
+          10,
+          26
         ),
         stepCards: (Array.isArray(item.stepCards) ? item.stepCards : fallbackItem.stepCards || [])
           .map((stepEntry, stepIndex) => {
