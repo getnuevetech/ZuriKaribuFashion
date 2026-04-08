@@ -71,7 +71,31 @@ const PAGE_PATH_BY_TYPE: Record<CategoryPageType, string> = {
   FABRIC_TO_BUY: '/fabricstobuy',
   CUSTOM_TO_WEAR: '/customtowear',
   COUNTRY: '/country',
-  SHOP: '/shop',
+  SHOP: '/Shop',
+};
+
+const normalizeToken = (value: string) => String(value || '').trim().toLowerCase();
+
+const parseFilterTokens = (value: string, options: string[]) => {
+  const raw = String(value || '').trim();
+  if (!raw) return [] as string[];
+
+  if (raw.includes(',')) {
+    return raw
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  const exactOption = (Array.isArray(options) ? options : []).find((option) => normalizeToken(option) === normalizeToken(raw));
+  if (exactOption) return [exactOption];
+
+  const byWhitespace = raw
+    .split(/\s+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (byWhitespace.length > 1) return byWhitespace;
+  return [raw];
 };
 
 export default function CategoryPageV2({
@@ -84,6 +108,8 @@ export default function CategoryPageV2({
   allowCountryQuery?: boolean;
 }) {
   const [searchParams] = useSearchParams();
+  const queryCountry = allowCountryQuery ? String(searchParams.get('country') || '').trim() : '';
+  const queryCategory = allowCountryQuery ? String(searchParams.get('category') || '').trim() : '';
   const [runtime, setRuntime] = useState<CategoryPageRuntime | null>(null);
   const [products, setProducts] = useState<CategoryPageProduct[]>([]);
   const [loadingRuntime, setLoadingRuntime] = useState(true);
@@ -117,16 +143,14 @@ export default function CategoryPageV2({
           initialFilters[row.key] = '';
         }
         setPendingFilters(initialFilters);
-        const countryFromQuery = allowCountryQuery ? String(searchParams.get('country') || '').trim() : '';
-        const categoryFromQuery = allowCountryQuery ? String(searchParams.get('category') || '').trim() : '';
         const nextApplied: Record<string, string[]> = {};
-        if (countryFromQuery) {
-          initialFilters.COUNTRY = countryFromQuery;
-          nextApplied.country = [countryFromQuery];
+        if (queryCountry) {
+          initialFilters.COUNTRY = queryCountry;
+          nextApplied.country = [queryCountry];
         }
-        if (categoryFromQuery) {
-          initialFilters.CATEGORY = categoryFromQuery;
-          nextApplied.category = [categoryFromQuery];
+        if (queryCategory) {
+          initialFilters.CATEGORY = queryCategory;
+          nextApplied.category = [queryCategory];
         }
         setAppliedFilters(nextApplied);
         setPendingSearch('');
@@ -144,7 +168,7 @@ export default function CategoryPageV2({
     return () => {
       active = false;
     };
-  }, [pageType, allowCountryQuery, searchParams]);
+  }, [pageType, allowCountryQuery, queryCountry, queryCategory]);
 
   useEffect(() => {
     if (!runtime?.settings) return;
@@ -204,7 +228,9 @@ export default function CategoryPageV2({
     for (const row of enabledFilters) {
       const paramKey = FILTER_PARAM_BY_KEY[row.key];
       const value = String(pendingFilters[row.key] || '').trim();
-      if (value) nextApplied[paramKey] = [value];
+      if (!value) continue;
+      const tokens = parseFilterTokens(value, row.options || []);
+      if (tokens.length > 0) nextApplied[paramKey] = tokens;
     }
     setAppliedSearch(pendingSearch.trim());
     setAppliedFilters(nextApplied);
