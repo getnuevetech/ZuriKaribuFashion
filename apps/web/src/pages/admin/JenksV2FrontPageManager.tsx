@@ -7136,57 +7136,64 @@ export default function JenksV2FrontPageManager() {
 
           {config.textIconCards.cards.map((card, index) => (
             <div key={card.id} className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-12">
-              <select
-                className="md:col-span-2 rounded border px-2 py-1 text-xs"
-                value={card.sectionType}
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    textIconCards: {
-                      ...prev.textIconCards,
-                      cards: prev.textIconCards.cards.map((entry, entryIndex) =>
-                        entryIndex === index ? { ...entry, sectionType: event.target.value as TextIconCard['sectionType'] } : entry
-                      ),
-                    },
-                  }))
-                }
-              >
-                <option value="HOW_IT_WORKS">HOW_IT_WORKS</option>
-                <option value="SHOP_WITH_CONFIDENCE">SHOP_WITH_CONFIDENCE</option>
-                <option value="CUSTOM">CUSTOM</option>
-              </select>
-              <input
-                className="md:col-span-3 rounded border px-2 py-1 text-xs"
-                value={card.title}
-                placeholder="Title"
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    textIconCards: {
-                      ...prev.textIconCards,
-                      cards: prev.textIconCards.cards.map((entry, entryIndex) =>
-                        entryIndex === index ? { ...entry, title: event.target.value } : entry
-                      ),
-                    },
-                  }))
-                }
-              />
-              <input
-                className="md:col-span-4 rounded border px-2 py-1 text-xs"
-                value={card.description}
-                placeholder="Description"
-                onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    textIconCards: {
-                      ...prev.textIconCards,
-                      cards: prev.textIconCards.cards.map((entry, entryIndex) =>
-                        entryIndex === index ? { ...entry, description: event.target.value } : entry
-                      ),
-                    },
-                  }))
-                }
-              />
+              <label className="md:col-span-2 text-[11px]">
+                Section Type
+                <select
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={card.sectionType}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      textIconCards: {
+                        ...prev.textIconCards,
+                        cards: prev.textIconCards.cards.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, sectionType: event.target.value as TextIconCard['sectionType'] } : entry
+                        ),
+                      },
+                    }))
+                  }
+                >
+                  <option value="HOW_IT_WORKS">HOW_IT_WORKS</option>
+                  <option value="SHOP_WITH_CONFIDENCE">SHOP_WITH_CONFIDENCE</option>
+                  <option value="CUSTOM">CUSTOM</option>
+                </select>
+              </label>
+              <label className="md:col-span-3 text-[11px]">
+                Card Title
+                <input
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={card.title}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      textIconCards: {
+                        ...prev.textIconCards,
+                        cards: prev.textIconCards.cards.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, title: event.target.value } : entry
+                        ),
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="md:col-span-4 text-[11px]">
+                Card Description
+                <input
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={card.description}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      textIconCards: {
+                        ...prev.textIconCards,
+                        cards: prev.textIconCards.cards.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, description: event.target.value } : entry
+                        ),
+                      },
+                    }))
+                  }
+                />
+              </label>
               <label className="md:col-span-2 text-[11px]">
                 Icon
                 <select
@@ -7394,70 +7401,78 @@ export default function JenksV2FrontPageManager() {
                     ))}
                   </select>
                 </label>
-                <input
-                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
-                  value={card.tag}
-                  placeholder="Tag"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      featured: {
-                        ...prev.featured,
-                        cards: prev.featured.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, tag: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
-                <input
-                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
-                  value={card.title}
-                  placeholder="Title"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      featured: {
-                        ...prev.featured,
-                        cards: prev.featured.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, title: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
-                <input
-                  className="md:col-span-3 rounded border px-2 py-1 text-xs"
-                  value={card.description}
-                  placeholder="Description"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      featured: {
-                        ...prev.featured,
-                        cards: prev.featured.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, description: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
-                <input
-                  className="md:col-span-1 rounded border px-2 py-1 text-xs"
-                  value={card.ctaText}
-                  placeholder="CTA"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      featured: {
-                        ...prev.featured,
-                        cards: prev.featured.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, ctaText: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
+                <label className="md:col-span-2 text-[11px]">
+                  Section Tag
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.tag}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        featured: {
+                          ...prev.featured,
+                          cards: prev.featured.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, tag: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Section Title
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.title}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        featured: {
+                          ...prev.featured,
+                          cards: prev.featured.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, title: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="md:col-span-3 text-[11px]">
+                  Section Description
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.description}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        featured: {
+                          ...prev.featured,
+                          cards: prev.featured.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, description: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="md:col-span-1 text-[11px]">
+                  CTA Text
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.ctaText}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        featured: {
+                          ...prev.featured,
+                          cards: prev.featured.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, ctaText: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
                 <label className="md:col-span-1 text-[11px]">
                   CTA Route Type
                   <select
@@ -7921,102 +7936,114 @@ export default function JenksV2FrontPageManager() {
                     ))}
                   </select>
                 </label>
-                <input
-                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
-                  value={card.designerName || ''}
-                  placeholder="Designer name"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      designerSpotlight: {
-                        ...prev.designerSpotlight,
-                        cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, designerName: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
-                <input
-                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
-                  value={card.specialty || ''}
-                  placeholder="Designer specialty"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      designerSpotlight: {
-                        ...prev.designerSpotlight,
-                        cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, specialty: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
-                <input
-                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
-                  value={card.tag}
-                  placeholder="Tag"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      designerSpotlight: {
-                        ...prev.designerSpotlight,
-                        cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, tag: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
-                <input
-                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
-                  value={card.title}
-                  placeholder="Title"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      designerSpotlight: {
-                        ...prev.designerSpotlight,
-                        cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, title: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
-                <input
-                  className="md:col-span-2 rounded border px-2 py-1 text-xs"
-                  value={card.description}
-                  placeholder="Description"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      designerSpotlight: {
-                        ...prev.designerSpotlight,
-                        cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, description: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
-                <input
-                  className="md:col-span-1 rounded border px-2 py-1 text-xs"
-                  value={card.ctaText}
-                  placeholder="CTA"
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      designerSpotlight: {
-                        ...prev.designerSpotlight,
-                        cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, ctaText: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
+                <label className="md:col-span-2 text-[11px]">
+                  Designer Name
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.designerName || ''}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        designerSpotlight: {
+                          ...prev.designerSpotlight,
+                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, designerName: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Specialty
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.specialty || ''}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        designerSpotlight: {
+                          ...prev.designerSpotlight,
+                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, specialty: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Tag
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.tag}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        designerSpotlight: {
+                          ...prev.designerSpotlight,
+                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, tag: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Internal Title
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.title}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        designerSpotlight: {
+                          ...prev.designerSpotlight,
+                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, title: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Description
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.description}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        designerSpotlight: {
+                          ...prev.designerSpotlight,
+                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, description: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="md:col-span-1 text-[11px]">
+                  CTA Text
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.ctaText}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        designerSpotlight: {
+                          ...prev.designerSpotlight,
+                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, ctaText: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
                 <label className="md:col-span-2 text-[11px]">
                   CTA Route Type
                   <select
