@@ -448,6 +448,14 @@ const splitHeroTitle = (title: string) => {
   };
 };
 
+const truncateWords = (value: unknown, maxWords: number) => {
+  const text = asString(value, '');
+  if (!text) return '';
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return text;
+  return `${words.slice(0, maxWords).join(' ')}…`;
+};
+
 const normalizeDesignerSpotlightTag = (value: unknown) => {
   const raw = asString(value, '').trim().toUpperCase();
   if (!raw) return 'NIGERIA';
@@ -1533,9 +1541,45 @@ export default function JenksFrontpageV2() {
       backgroundColor: background,
       borderColor: `rgba(255,255,255,${Math.max(0.18, alpha * 0.4)})`,
       color: '#ffffff',
-      opacity: Math.max(0.38, alpha),
+      boxShadow: '0 14px 34px rgba(0,0,0,0.35)',
     };
   };
+  const renderCategoryStepCards = (section: CategorySectionRuntime) => (
+    <div className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden w-[340px] overflow-y-auto pr-1 md:block">
+      <div className="space-y-2">
+        {section.stepCards
+          .slice()
+          .sort((left, right) => left.displayOrder - right.displayOrder)
+          .map((step, stepIndex) => {
+            const StepIcon = iconFromKey(step.icon, Sparkles);
+            const orderLabel = String(stepIndex + 1).padStart(2, '0');
+            return (
+              <div
+                key={step.id}
+                className="relative overflow-hidden rounded-xl border px-4 py-3 backdrop-blur-md"
+                style={categoryStepCardOverlayStyle(section)}
+              >
+                <span className="absolute inset-y-0 left-0 w-1 bg-[#e66045]" />
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/12 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">
+                    {orderLabel}
+                  </div>
+                  <div className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/25 bg-black/30 text-[#ff7c61]">
+                    <StepIcon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white">{step.title}</p>
+                    {step.description ? (
+                      <p className="mt-1 text-[12px] leading-snug text-white/84">{step.description}</p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+      </div>
+    </div>
+  );
 
   const featuredHrefForCountry = (key: 'RTW' | 'CTW' | 'FTB') => {
     const categoryToken = categoryTokenFromSectionKey(key);
@@ -1625,12 +1669,9 @@ export default function JenksFrontpageV2() {
           DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.description ||
           'With over 15 years of experience, Oluwaseun blends traditional Nigerian craftsmanship with modern silhouettes, creating pieces that honor heritage while embracing contemporary elegance.';
         const fallbackCountry = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.country || 'NIGERIA';
-        const fallbackSpecialty =
-          DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.specialty || 'Contemporary Menswear Designer';
         const fallbackTag = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.tag || 'NIGERIA';
         const countryToken = asString((entry as Record<string, unknown>).countryCode, '').trim().toUpperCase();
         const designerName = asString(entry.designerName, asString(entry.title, fallbackTitle));
-        const specialty = asString(entry.specialty, asString(entry.designerSpecialty, fallbackSpecialty));
         const country = asString(
           entry.country,
           asString(entry.designerCountry, COUNTRY_LABEL_BY_CODE[countryToken] || fallbackCountry)
@@ -1641,8 +1682,7 @@ export default function JenksFrontpageV2() {
           title: designerName,
           designerName,
           designerCountry: country,
-          designerSpecialty: specialty,
-          description: asString(entry.description, fallbackDescription),
+          description: truncateWords(asString(entry.description, fallbackDescription), 25),
           cta: asString(entry.ctaText, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.cta || 'VIEW COLLECTION').toUpperCase(),
           href: spotCtaHref(entry, fallbackHref),
           tag: asString(country, asString(entry.tag, fallbackTag)),
@@ -1657,7 +1697,7 @@ export default function JenksFrontpageV2() {
             designerName: row.title,
             title: row.title,
             designerCountry: asString((row as any).country, ''),
-            designerSpecialty: asString((row as any).specialty, ''),
+            description: truncateWords(asString((row as any).description, ''), 25),
             tag: asString((row as any).country, asString(row.tag, 'NIGERIA')),
           }));
     return source.slice(0, maxItems);
@@ -3067,39 +3107,7 @@ export default function JenksFrontpageV2() {
                     spinnerClassName="h-7 w-7"
                     data-kimi-anim="zoom-in"
                   />
-                  {section.stepsEnabled && section.stepCards.length > 0 ? (
-                    <div className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden w-[312px] overflow-y-auto pr-1 md:block">
-                      <div className="space-y-1">
-                        {section.stepCards
-                          .slice()
-                          .sort((left, right) => left.displayOrder - right.displayOrder)
-                          .map((step, stepIndex) => {
-                            const StepIcon = iconFromKey(step.icon, Sparkles);
-                            const orderLabel = String(stepIndex + 1).padStart(2, '0');
-                            return (
-                              <div
-                                key={step.id}
-                                className="rounded border px-4 py-3 backdrop-blur-[1px]"
-                                style={categoryStepCardOverlayStyle(section)}
-                              >
-                                <div className="flex flex-col items-center text-center">
-                                  <div className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#e66045]/95 text-[10px] font-semibold text-white">
-                                    {orderLabel}
-                                  </div>
-                                  <StepIcon className="mt-1.5 h-5 w-5 shrink-0 text-[#ff7c61]" />
-                                  <div className="mt-1 min-w-0">
-                                    <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white">{step.title}</p>
-                                    {step.description ? (
-                                      <p className="mt-1 text-[12px] leading-tight text-white/88">{step.description}</p>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </div>
-                    </div>
-                  ) : null}
+                  {section.stepsEnabled && section.stepCards.length > 0 ? renderCategoryStepCards(section) : null}
                 </div>
               </>
             ) : (
@@ -3112,44 +3120,12 @@ export default function JenksFrontpageV2() {
                     spinnerClassName="h-7 w-7"
                     data-kimi-anim="zoom-in"
                   />
-                  {section.stepsEnabled && section.stepCards.length > 0 ? (
-                    <div className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden w-[312px] overflow-y-auto pr-1 md:block">
-                      <div className="space-y-1">
-                        {section.stepCards
-                          .slice()
-                          .sort((left, right) => left.displayOrder - right.displayOrder)
-                          .map((step, stepIndex) => {
-                            const StepIcon = iconFromKey(step.icon, Sparkles);
-                            const orderLabel = String(stepIndex + 1).padStart(2, '0');
-                            return (
-                              <div
-                                key={step.id}
-                                className="rounded border px-4 py-3 backdrop-blur-[1px]"
-                                style={categoryStepCardOverlayStyle(section)}
-                              >
-                                <div className="flex flex-col items-center text-center">
-                                  <div className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#e66045]/95 text-[10px] font-semibold text-white">
-                                    {orderLabel}
-                                  </div>
-                                  <StepIcon className="mt-1.5 h-5 w-5 shrink-0 text-[#ff7c61]" />
-                                  <div className="mt-1 min-w-0">
-                                    <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white">{step.title}</p>
-                                    {step.description ? (
-                                      <p className="mt-1 text-[12px] leading-tight text-white/88">{step.description}</p>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </div>
-                    </div>
-                  ) : null}
+                  {section.stepsEnabled && section.stepCards.length > 0 ? renderCategoryStepCards(section) : null}
                 </div>
                 <div className={`relative overflow-hidden px-8 py-12 text-white ${section.panelBg}`} data-kimi-anim="sidebar-right">
                   <div
                     className="pointer-events-none absolute inset-0 scale-105 bg-cover bg-center blur-2xl"
-                    style={{ backgroundImage: `url(${section.image})`, opacity: 0.18 }}
+                    style={{ backgroundImage: toSafeBackgroundImage(section.image), opacity: 0.18 }}
                   />
                   <div className="pointer-events-none absolute inset-0 bg-black/70" />
                   <div className="relative flex h-full items-center">
@@ -3347,12 +3323,18 @@ export default function JenksFrontpageV2() {
                 spinnerClassName="h-8 w-8"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />
+              <p className="absolute right-8 top-8 font-['Oswald'] text-sm font-bold uppercase tracking-[0.08em] text-white/95">
+                <span>ZURI</span>
+                <span className="text-[#e66045]">KARIBU</span>
+              </p>
               <div className="absolute bottom-8 left-8 right-8 bg-[#ececec]/95 p-6 text-[#111] shadow-[0_20px_46px_rgba(0,0,0,0.28)]">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/80">{spot.tag}</p>
-                <h3 className="mt-3 font-['Oswald'] text-[clamp(34px,3vw,52px)] font-bold uppercase leading-[0.95]">{spot.title}</h3>
-                {spot.designerSpecialty ? (
-                  <p className="mt-2 text-[clamp(20px,1.35vw,36px)] font-medium normal-case leading-[1.2] text-[#667085]">{spot.designerSpecialty}</p>
-                ) : null}
+                <p className="mt-2 text-[clamp(16px,1.05vw,24px)] font-medium uppercase tracking-[0.08em] text-[#667085]">
+                  {spot.designerCountry || spot.tag}
+                </p>
+                <h3 className="mt-3 font-['Oswald'] text-[clamp(34px,3vw,52px)] font-bold uppercase leading-[0.95]">
+                  {spot.designerName || spot.title}
+                </h3>
                 <p className="mt-4 max-w-[42ch] text-[clamp(18px,1.15vw,28px)] leading-[1.4] text-[#4b5563]">{spot.description}</p>
                 <span
                   className="mt-6 inline-flex items-center gap-3 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-black"
