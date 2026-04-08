@@ -92,6 +92,8 @@ const discoverHref = (entry: DiscoverProduct) =>
       ? `/fabricstobuy/${entry.id}`
       : `/readytowear/${entry.id}`;
 
+const uniqueNonEmpty = (rows: string[]) => Array.from(new Set(rows.map((entry) => asText(entry, '')).filter(Boolean)));
+
 export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetailPageProps) {
   const config = MODE_CONFIG[mode];
   const { id } = useParams<{ id: string }>();
@@ -320,6 +322,66 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
       : mode === 'FABRIC'
         ? fabricUnitPrice * safeFabricQty
         : customTotalPrice;
+
+  const productDetailRows = useMemo(() => {
+    const rows: Array<{ label: string; value: string }> = [];
+    const categoryLabel =
+      mode === 'FABRIC'
+        ? asText(product?.fabricCategory?.name, asText(product?.fabricCategoryName, 'Fabric'))
+        : asText(product?.category?.name, config.title);
+    const materialLabel = asText(product?.materialType?.name, asText(product?.materialTypeName, 'Material'));
+    const city = mode === 'FABRIC' ? asText(product?.seller?.city, '') : asText(product?.designer?.city, '');
+    rows.push(
+      { label: 'Product ID', value: asText(product?.id, 'N/A') },
+      { label: 'Type', value: config.title },
+      { label: 'Category', value: categoryLabel || 'N/A' },
+      { label: 'Material', value: materialLabel || 'N/A' },
+      { label: mode === 'FABRIC' ? 'Seller' : 'Designer', value: ownerName || 'N/A' },
+      { label: 'Origin', value: countryName || 'Africa' }
+    );
+    if (city) rows.push({ label: 'City', value: city });
+
+    if (mode === 'READY') {
+      const totalStock = readyVariations.reduce((sum, entry) => sum + Math.max(0, toNumber(entry?.stock, 0)), 0);
+      const sizes = uniqueNonEmpty(readySizes);
+      const colors = uniqueNonEmpty(readyColors);
+      rows.push(
+        { label: 'Sizes', value: sizes.length > 0 ? sizes.join(', ') : 'N/A' },
+        { label: 'Colors', value: colors.length > 0 ? colors.join(', ') : 'N/A' },
+        { label: 'Total Stock', value: `${totalStock}` }
+      );
+    } else if (mode === 'FABRIC') {
+      const color = asText(product?.predominantColor, '');
+      rows.push(
+        { label: 'Min Order', value: `${fabricMinYards} yards` },
+        { label: 'Stock', value: `${fabricStock} yards` }
+      );
+      if (color) rows.push({ label: 'Color', value: color });
+    } else {
+      const requiredMeasurements = uniqueNonEmpty(customRequiredRows.map((entry) => asText(entry?.name, '')));
+      rows.push(
+        { label: 'Fabric Choices', value: `${customFabricRows.length}` },
+        {
+          label: 'Required Measurements',
+          value: requiredMeasurements.length > 0 ? requiredMeasurements.join(', ') : 'None',
+        }
+      );
+    }
+    return rows;
+  }, [
+    config.title,
+    countryName,
+    customFabricRows.length,
+    customRequiredRows,
+    fabricMinYards,
+    fabricStock,
+    mode,
+    ownerName,
+    product,
+    readyColors,
+    readySizes,
+    readyVariations,
+  ]);
 
   const loginRedirect = () => {
     const returnTo = `${location.pathname}${location.search}${location.hash}`;
@@ -758,26 +820,12 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
 
             {activeTab === 'SPECS' ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="border border-[#e4e0d7] p-3">
-                  <p className="label-mono text-[#6B6B6B]">Category</p>
-                  <p className="mt-2 text-sm font-medium text-[#1A1A1A]">
-                    {mode === 'FABRIC'
-                      ? asText(product?.fabricCategory?.name, asText(product?.fabricCategoryName, 'Fabric'))
-                      : asText(product?.category?.name, config.title)}
-                  </p>
-                </div>
-                <div className="border border-[#e4e0d7] p-3">
-                  <p className="label-mono text-[#6B6B6B]">Material</p>
-                  <p className="mt-2 text-sm font-medium text-[#1A1A1A]">
-                    {mode === 'FABRIC'
-                      ? asText(product?.materialType?.name, asText(product?.materialTypeName, 'Material'))
-                      : asText(product?.materialType?.name, asText(product?.materialTypeName, 'Material'))}
-                  </p>
-                </div>
-                <div className="border border-[#e4e0d7] p-3">
-                  <p className="label-mono text-[#6B6B6B]">Origin</p>
-                  <p className="mt-2 text-sm font-medium text-[#1A1A1A]">{countryName || 'Africa'}</p>
-                </div>
+                {productDetailRows.map((row) => (
+                  <div key={`${row.label}-${row.value}`} className="border border-[#e4e0d7] p-3">
+                    <p className="label-mono text-[#6B6B6B]">{row.label}</p>
+                    <p className="mt-2 text-sm font-medium text-[#1A1A1A]">{row.value || 'N/A'}</p>
+                  </div>
+                ))}
                 {mode === 'CUSTOM' ? (
                   <div className="border border-[#e4e0d7] p-3 sm:col-span-2 lg:col-span-3">
                     <p className="label-mono text-[#6B6B6B]">Measurements</p>
@@ -824,17 +872,26 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
               <div className="grid gap-5 md:grid-cols-[1fr_2fr]">
                 <div className="space-y-2">
                   <p className="label-mono text-[#6B6B6B]">Leave a review</p>
-                  <select
-                    value={reviewRating}
-                    onChange={(event) => setReviewRating(toNumber(event.target.value, 5))}
-                    className="w-full border border-[#d7d3ca] px-3 py-2 text-sm outline-none focus:border-[#1A1A1A]"
-                  >
-                    {[5, 4, 3, 2, 1].map((value) => (
-                      <option key={`review-rating-${value}`} value={value}>
-                        {value} star{value > 1 ? 's' : ''}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: 5 }).map((_, idx) => {
+                      const value = idx + 1;
+                      const active = value <= reviewRating;
+                      return (
+                        <button
+                          key={`review-rating-${value}`}
+                          type="button"
+                          onClick={() => setReviewRating(value)}
+                          className="inline-flex h-8 w-8 items-center justify-center"
+                          aria-label={`Rate ${value} star${value > 1 ? 's' : ''}`}
+                        >
+                          <Star className={`h-5 w-5 ${active ? 'fill-[#E85A3C] text-[#E85A3C]' : 'text-[#c5bfb2]'}`} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-[#6B6B6B]">
+                    Selected rating: {reviewRating} star{reviewRating > 1 ? 's' : ''}
+                  </p>
                   <textarea
                     value={reviewComment}
                     onChange={(event) => setReviewComment(event.target.value)}
@@ -860,7 +917,18 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
                           <p className="text-sm font-semibold text-[#1A1A1A]">{asText(review.customer?.name, 'Customer')}</p>
                           <p className="text-xs text-[#6B6B6B]">{new Date(review.createdAt).toLocaleDateString()}</p>
                         </div>
-                        <p className="mt-1 text-xs text-[#E85A3C]">{'★'.repeat(Math.max(1, Math.min(5, toNumber(review.rating, 0))))}</p>
+                        <div className="mt-1 flex items-center gap-0.5">
+                          {Array.from({ length: 5 }).map((_, idx) => (
+                            <Star
+                              key={`review-${review.id}-star-${idx}`}
+                              className={`h-3.5 w-3.5 ${
+                                idx < Math.max(1, Math.min(5, toNumber(review.rating, 0)))
+                                  ? 'fill-[#E85A3C] text-[#E85A3C]'
+                                  : 'text-[#cfc8bc]'
+                              }`}
+                            />
+                          ))}
+                        </div>
                         <p className="mt-1 text-sm text-[#2f2d29]">{asText(review.comment, '')}</p>
                       </article>
                     ))
