@@ -2424,6 +2424,16 @@ export default function JenksFrontpageV2() {
   }, [hamburgerOpen]);
 
   useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (!hamburgerOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [hamburgerOpen]);
+
+  useEffect(() => {
     if (!searchOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setSearchOpen(false);
@@ -2848,7 +2858,7 @@ export default function JenksFrontpageV2() {
                 className="absolute inset-0 h-full w-full bg-black/60"
                 onClick={() => setHamburgerOpen(false)}
               />
-              <div className="absolute left-0 top-0 h-full w-[98vw] max-w-[760px] overflow-y-auto bg-black/96 shadow-none">
+              <div className="absolute left-0 top-0 h-full w-[98vw] max-w-[760px] overflow-hidden bg-black/96 shadow-none">
                 <button
                   type="button"
                   className="absolute left-4 top-8 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white hover:bg-white/10"
@@ -2857,7 +2867,7 @@ export default function JenksFrontpageV2() {
                 >
                   <span className="text-xl leading-none">×</span>
                 </button>
-                <nav className="flex h-full w-full items-start overflow-y-auto px-6 pt-20 sm:px-8">
+                <nav className="scrollbar-hide flex h-full w-full items-start overflow-y-auto px-6 pt-20 sm:px-8">
                   <div className="w-full space-y-2 pb-8">
                     {(hamburgerMenuLinks.length > 0
                       ? hamburgerMenuLinks

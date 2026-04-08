@@ -264,8 +264,8 @@ export default function CategoryPageV2({
 
             <div className="sticky top-20 z-40 bg-[var(--bg-primary)]/95 backdrop-blur-md border-b border-[var(--border)]">
               <div className="px-8 md:px-[8vw] py-4 space-y-3">
-                <form onSubmit={submitFilters} className="flex flex-wrap items-center gap-2">
-                  <div className="relative min-w-[260px] flex-1">
+                <form onSubmit={submitFilters} className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1 scrollbar-hide">
+                  <div className="relative w-[320px] flex-none md:w-[380px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)]" />
                     <input
                       type="text"
@@ -279,7 +279,7 @@ export default function CategoryPageV2({
                     const value = String(pendingFilters[row.key] || '');
                     const listId = `filter-suggest-${pageType}-${row.key}`;
                     return (
-                      <div key={row.id} className="min-w-[148px]">
+                      <div key={row.id} className="w-[156px] flex-none">
                         <input
                           value={value}
                           onChange={(event) => setPendingFilters((prev) => ({ ...prev, [row.key]: event.target.value }))}
@@ -297,11 +297,11 @@ export default function CategoryPageV2({
                   })}
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-2 px-3 py-2.5 text-sm border border-[var(--text-primary)] bg-[var(--text-primary)] text-[var(--bg-primary)]"
+                    className="inline-flex h-[42px] w-[42px] flex-none items-center justify-center border border-[var(--text-primary)] bg-[var(--text-primary)] text-[var(--bg-primary)]"
                     title="Search and apply filters"
+                    aria-label="Search"
                   >
                     <Search className="h-4 w-4" />
-                    <span>Search</span>
                   </button>
                   <button type="button" onClick={clearFilters} className="px-3 py-2.5 text-sm border border-[var(--border)] text-[var(--text-secondary)]">
                     Clear

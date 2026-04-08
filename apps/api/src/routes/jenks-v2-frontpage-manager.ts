@@ -643,8 +643,9 @@ const mapLegacyV2Href = (value: string): string => {
 
 const PAGE_HREF_BY_KEY: Record<string, string> = {
   HOME: '/',
+  SHOP: '/shop',
   READY_TO_WEAR: '/readytowear',
-  CUSTOM_TO_WEAR: '/cystomtowear',
+  CUSTOM_TO_WEAR: '/customtowear',
   FABRICS: '/fabricstobuy',
   COUNTRY_PRODUCTS: '/country-products',
   ABOUT: '/about',
@@ -735,7 +736,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         height: 50,
       },
       additionalTopMenu: [
-        defaultMenuLink('Shop', '/readytowear', 'READY_TO_WEAR'),
+        defaultMenuLink('Shop', '/shop', 'SHOP'),
         defaultMenuLink('Contact', '/contact', 'CONTACT'),
       ],
       signInMenu: {

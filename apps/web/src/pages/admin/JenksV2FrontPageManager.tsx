@@ -530,6 +530,7 @@ type RouteOption = {
 
 const PAGE_HREF_BY_KEY: Record<string, string> = {
   HOME: '/',
+  SHOP: '/shop',
   READY_TO_WEAR: '/readytowear',
   CUSTOM_TO_WEAR: '/customtowear',
   FABRICS: '/fabricstobuy',
@@ -552,6 +553,7 @@ const normalizeCtaMode = (value: unknown, fallback: 'URL' | 'PAGE' = 'PAGE'): 'U
 
 const ROUTE_OPTIONS: RouteOption[] = [
   { key: 'HOME', label: 'Home', href: '/' },
+  { key: 'SHOP', label: 'Shop', href: '/shop' },
   { key: 'READY_TO_WEAR', label: 'Ready To Wear', href: '/readytowear' },
   { key: 'FABRICS', label: 'Fabric To Buy', href: '/fabricstobuy' },
   { key: 'CUSTOM_TO_WEAR', label: 'Custom To Wear', href: '/customtowear' },
@@ -970,7 +972,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       width: 180,
       height: 50,
     },
-    additionalTopMenu: [defaultLink('Shop', '/readytowear', 'SHOP')],
+    additionalTopMenu: [defaultLink('Shop', '/shop', 'SHOP')],
     signInMenu: {
       enabled: true,
       label: 'Sign In',
@@ -3016,7 +3018,7 @@ export default function JenksV2FrontPageManager() {
     return merged;
   }, [blogRouteOptions]);
 
-  const pageRouteOptions = useMemo(() => routeOptions.filter((route) => route.key !== 'SHOP'), [routeOptions]);
+  const pageRouteOptions = useMemo(() => routeOptions, [routeOptions]);
 
   const fetchConfig = async () => {
     setLoading(true);
