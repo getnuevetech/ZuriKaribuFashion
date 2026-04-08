@@ -101,6 +101,7 @@ type CategorySectionRuntime = {
   textOnLeft: boolean;
   panelBg: string;
   stepsEnabled: boolean;
+  stepCardHeaderTitle: string;
   stepCardBackgroundColor: string;
   stepCardOverlayOpacity: number;
   stepCardPanelWidth: number;
@@ -1407,13 +1408,14 @@ export default function JenksFrontpageV2() {
         textOnLeft: CATEGORY_TEXT_LEFT_BY_KEY[key] ?? (idx % 2 === 1),
         panelBg: CATEGORY_PANEL_BG_BY_KEY[key] || 'bg-[#111]',
         stepsEnabled: asBoolean(entry.stepsEnabled, true),
+        stepCardHeaderTitle: asString(entry.stepCardHeaderTitle, 'Create your own style step-by-step'),
         stepCardBackgroundColor: asString(entry.stepCardBackgroundColor, '#111111'),
         stepCardOverlayOpacity: Math.max(0, Math.min(100, Math.round(asNumber(entry.stepCardOverlayOpacity, 78)))),
-        stepCardPanelWidth: Math.max(220, Math.min(460, Math.round(asNumber(entry.stepCardPanelWidth, 340)))),
+        stepCardPanelWidth: Math.max(280, Math.min(640, Math.round(asNumber(entry.stepCardPanelWidth, 420)))),
         stepCardAccentColor: asString(entry.stepCardAccentColor, '#e66045'),
         stepCardIconColor: asString(entry.stepCardIconColor, '#ff7c61'),
-        stepCardTitleFontSize: Math.max(10, Math.min(28, Math.round(asNumber(entry.stepCardTitleFontSize, 11)))),
-        stepCardDescriptionFontSize: Math.max(10, Math.min(26, Math.round(asNumber(entry.stepCardDescriptionFontSize, 12)))),
+        stepCardTitleFontSize: Math.max(10, Math.min(32, Math.round(asNumber(entry.stepCardTitleFontSize, 18)))),
+        stepCardDescriptionFontSize: Math.max(10, Math.min(28, Math.round(asNumber(entry.stepCardDescriptionFontSize, 20)))),
         stepCards: ((): CategorySectionRuntime['stepCards'] => {
           const rawSteps = asArray(entry.stepCards)
             .map((step) => asRecord(step))
@@ -1571,44 +1573,61 @@ export default function JenksFrontpageV2() {
       style={{ width: `${section.stepCardPanelWidth}px` }}
     >
       <div className="space-y-2">
+        <div
+          className="rounded-t-sm border border-white/25 px-4 py-3"
+          style={{
+            ...categoryStepCardOverlayStyle(section),
+            borderRadius: '0.08rem',
+            backgroundColor: 'rgba(55,53,51,0.88)',
+          }}
+        >
+          <p className="text-[12px] font-semibold leading-tight text-white/95">{section.stepCardHeaderTitle}</p>
+        </div>
         {section.stepCards
           .slice()
           .sort((left, right) => left.displayOrder - right.displayOrder)
           .map((step, stepIndex) => {
             const StepIcon = iconFromKey(step.icon, Sparkles);
-            const orderLabel = String(stepIndex + 1).padStart(2, '0');
+            const orderLabel = String(stepIndex + 1);
             return (
               <div
                 key={step.id}
-                className="relative overflow-hidden rounded-xl border px-4 py-3 backdrop-blur-md"
-                style={categoryStepCardOverlayStyle(section)}
+                className="relative overflow-hidden border backdrop-blur-md"
+                style={{
+                  ...categoryStepCardOverlayStyle(section),
+                  borderRadius: '0.08rem',
+                }}
               >
-                <span className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: section.stepCardAccentColor }} />
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/12 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">
+                <div className="flex min-h-[96px] items-stretch">
+                  <div
+                    className="inline-flex w-[62px] shrink-0 items-center justify-center border-r border-white/35 text-[56px] font-semibold leading-none text-white"
+                    style={{ backgroundColor: section.stepCardAccentColor }}
+                  >
                     {orderLabel}
                   </div>
-                  <div
-                    className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/25 bg-black/30"
-                    style={{ color: section.stepCardIconColor }}
-                  >
-                    <StepIcon className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <p
-                      className="font-semibold uppercase tracking-[0.12em] text-white"
-                      style={{ fontSize: `${section.stepCardTitleFontSize}px` }}
+                  <div className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3">
+                    <div
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/20 bg-black/25"
+                      style={{ color: section.stepCardIconColor }}
                     >
-                      {step.title}
-                    </p>
-                    {step.description ? (
+                      <StepIcon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
                       <p
-                        className="mt-1 leading-snug text-white/84"
-                        style={{ fontSize: `${section.stepCardDescriptionFontSize}px` }}
+                        className="font-semibold uppercase tracking-[0.14em] text-white"
+                        style={{ fontSize: `${section.stepCardTitleFontSize}px` }}
                       >
-                        {step.description}
+                        {step.title}
                       </p>
-                    ) : null}
+                      {step.description ? (
+                        <p
+                          className="mt-1 leading-snug text-white/88"
+                          style={{ fontSize: `${section.stepCardDescriptionFontSize}px` }}
+                        >
+                          {step.description}
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>

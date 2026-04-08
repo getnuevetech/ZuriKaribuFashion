@@ -188,6 +188,7 @@ type CategorySection = {
   key: string;
   title: string;
   tag: string;
+  stepCardsTitle: string;
   description: string;
   image: string;
   ctaText: string;
@@ -1115,6 +1116,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         key: 'RTW',
         title: 'Ready To Wear',
         tag: 'RTW',
+        stepCardsTitle: 'Create your own style step-by-step',
         description: 'Manage title, tag, description and CTA for RTW block.',
         image: CATEGORY_FALLBACK_IMAGE_BY_KEY.RTW,
         ctaText: 'Shop RTW',
@@ -1176,6 +1178,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         key: 'CTW',
         title: 'Custom To Wear',
         tag: 'CTW',
+        stepCardsTitle: 'Create your own style step-by-step',
         description: 'Manage title, tag, description and CTA for CTW block.',
         image: CATEGORY_FALLBACK_IMAGE_BY_KEY.CTW,
         ctaText: 'Explore CTW',
@@ -1237,6 +1240,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         key: 'FTB',
         title: 'Fabric To Buy',
         tag: 'FTB',
+        stepCardsTitle: 'Create your own style step-by-step',
         description: 'Manage title, tag, description and CTA for FTB block.',
         image: CATEGORY_FALLBACK_IMAGE_BY_KEY.FTB,
         ctaText: 'Shop FTB',
@@ -2149,6 +2153,9 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             ...fallbackCategory,
             ...section,
             image: String((section as CategorySection)?.image || fallbackCategory.image || CATEGORY_FALLBACK_IMAGE_BY_KEY[String((section as CategorySection)?.key || '').toUpperCase()] || ''),
+            stepCardsTitle: String(
+              (section as CategorySection)?.stepCardsTitle || fallbackCategory.stepCardsTitle || 'Create your own style step-by-step'
+            ),
             ctaMode: normalizeCtaMode((section as CategorySection)?.ctaMode, fallbackCategory.ctaMode),
             ctaPageKey: ((): string => {
               const explicit = String((section as CategorySection)?.ctaPageKey || fallbackCategory.ctaPageKey || '').trim().toUpperCase();
@@ -5900,6 +5907,7 @@ export default function JenksV2FrontPageManager() {
                         key: '',
                         title: 'New Category Section',
                         tag: '',
+                        stepCardsTitle: 'Create your own style step-by-step',
                         description: '',
                         image: CATEGORY_FALLBACK_IMAGE_BY_KEY.RTW,
                         ctaText: '',
@@ -5995,6 +6003,23 @@ export default function JenksV2FrontPageManager() {
                 />
               </label>
               <label className="md:col-span-3 text-[11px]">
+                Left Step Cards Title
+                <input
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={section.stepCardsTitle}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      categoryManage: {
+                        sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, stepCardsTitle: event.target.value } : entry
+                        ),
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="md:col-span-2 text-[11px]">
                 Description
                 <input
                   className="mt-1 w-full rounded border px-2 py-1 text-xs"
