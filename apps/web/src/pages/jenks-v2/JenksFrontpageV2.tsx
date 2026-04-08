@@ -1702,6 +1702,8 @@ export default function JenksFrontpageV2() {
       .map((entry, idx) => {
         const fallbackHref = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.href || '/customtowear';
         const fallbackTitle = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.title || 'OLUWASEUN ADEYEMI';
+        const fallbackSpecialty =
+          DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.specialty || 'Contemporary African Designer';
         const fallbackDescription =
           DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.description ||
           'With over 15 years of experience, Oluwaseun blends traditional Nigerian craftsmanship with modern silhouettes, creating pieces that honor heritage while embracing contemporary elegance.';
@@ -1719,6 +1721,7 @@ export default function JenksFrontpageV2() {
           title: designerName,
           designerName,
           designerCountry: country,
+          designerSpecialty: asString(entry.specialty, fallbackSpecialty),
           description: truncateWords(asString(entry.description, fallbackDescription), 25),
           cta: asString(entry.ctaText, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.cta || 'VIEW COLLECTION').toUpperCase(),
           href: spotCtaHref(entry, fallbackHref),
@@ -1735,6 +1738,7 @@ export default function JenksFrontpageV2() {
             designerName: row.title,
             title: row.title,
             designerCountry: asString((row as any).country, ''),
+            designerSpecialty: asString((row as any).specialty, 'Contemporary African Designer'),
             description: truncateWords(asString((row as any).description, ''), 25),
             tag: asString((row as any).country, asString(row.tag, 'NIGERIA')),
             countryCode: 'NG',
@@ -3369,9 +3373,15 @@ export default function JenksFrontpageV2() {
                 {countryCodeToFlagEmoji(spot.countryCode)}
               </p>
               <div className="absolute bottom-6 left-6 right-6 text-white">
+                <p className="text-[clamp(15px,1vw,22px)] font-medium uppercase tracking-[0.08em] text-white/78">
+                  {spot.designerCountry || spot.tag}
+                </p>
                 <h3 className="font-['Oswald'] text-[clamp(34px,3vw,52px)] font-bold uppercase leading-[0.95]">
                   {spot.designerName || spot.title}
                 </h3>
+                <p className="mt-2 text-[clamp(18px,1.05vw,26px)] leading-[1.25] text-white/78">
+                  {spot.designerSpecialty || 'Contemporary African Designer'}
+                </p>
                 <p className="mt-3 max-w-[42ch] text-[clamp(18px,1.15vw,28px)] leading-[1.35] text-white/88">{spot.description}</p>
                 <span
                   className="relative mt-5 inline-flex items-center gap-3 pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-white"
