@@ -2361,10 +2361,18 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
     ...DEFAULT_CONFIG.designerSpotlight,
     ...(data.designerSpotlight || {}),
   };
+  const designerSpotlightRaw =
+    data.designerSpotlight && typeof data.designerSpotlight === 'object'
+      ? (data.designerSpotlight as Record<string, unknown>)
+      : {};
   const rtwFtb = {
     ...DEFAULT_CONFIG.rtwFtb,
     ...((data as any).rtwFtb || {}),
   };
+  const rtwFtbRaw =
+    (data as any).rtwFtb && typeof (data as any).rtwFtb === 'object'
+      ? ((data as any).rtwFtb as Record<string, unknown>)
+      : {};
   const fallbackHero = DEFAULT_CONFIG.topNavigations.heroBanners[0];
   const fallbackCategory = DEFAULT_CONFIG.categoryManage.sections[0];
   const fallbackFeatured = DEFAULT_CONFIG.featured.cards[0];
@@ -2814,8 +2822,11 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         Math.round(
           toNumber(
             String(
-              (designerSpotlight as DesignerSpotlight | undefined)?.designerNameFontSize ??
-                (designerSpotlight as Record<string, unknown>)?.nameFontSize ??
+              (Object.prototype.hasOwnProperty.call(designerSpotlightRaw, 'designerNameFontSize')
+                ? (designerSpotlightRaw as Record<string, unknown>).designerNameFontSize
+                : undefined) ??
+                (designerSpotlightRaw as Record<string, unknown>).nameFontSize ??
+                (designerSpotlight as DesignerSpotlight | undefined)?.designerNameFontSize ??
                 DEFAULT_CONFIG.designerSpotlight.designerNameFontSize
             ),
             DEFAULT_CONFIG.designerSpotlight.designerNameFontSize
@@ -2906,8 +2917,11 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         Math.round(
           toNumber(
             String(
-              (rtwFtb as DesignerSpotlight | undefined)?.designerNameFontSize ??
-                (rtwFtb as Record<string, unknown>)?.nameFontSize ??
+              (Object.prototype.hasOwnProperty.call(rtwFtbRaw, 'designerNameFontSize')
+                ? (rtwFtbRaw as Record<string, unknown>).designerNameFontSize
+                : undefined) ??
+                (rtwFtbRaw as Record<string, unknown>).nameFontSize ??
+                (rtwFtb as DesignerSpotlight | undefined)?.designerNameFontSize ??
                 DEFAULT_CONFIG.rtwFtb.designerNameFontSize
             ),
             DEFAULT_CONFIG.rtwFtb.designerNameFontSize
