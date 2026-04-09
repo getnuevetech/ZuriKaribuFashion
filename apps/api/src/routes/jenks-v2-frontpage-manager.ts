@@ -605,6 +605,25 @@ const INSTANT_BUY_CATEGORY_LABEL: Record<InstantBuyCategoryKey, string> = {
   FTB: 'Fabrics To Buy',
   RTW: 'Ready To Wear',
 };
+const normalizeInstantBuyCategoryKey = (
+  value: unknown,
+  fallback: InstantBuyCategoryKey = 'FTB'
+): InstantBuyCategoryKey => {
+  const token = String(value || '')
+    .trim()
+    .toUpperCase();
+  if (token === 'RTW' || token === 'READY_TO_WEAR' || token === 'READY-TO-WEAR') return 'RTW';
+  if (
+    token === 'FTB' ||
+    token === 'FABRIC' ||
+    token === 'FABRICS' ||
+    token === 'FABRICS_TO_BUY' ||
+    token === 'FABRICS-TO-BUY'
+  ) {
+    return 'FTB';
+  }
+  return fallback;
+};
 
 const featuredCategoryKeyFromValue = (value: unknown): FeaturedCategoryKey | null => {
   const token = String(value || '')
@@ -2448,7 +2467,7 @@ const normalizeInstantBuy = (raw: unknown, fallback: InstantBuySettings): Instan
       const item = asRecord(entry);
       const fallbackItem = fallback.featureCards[index] || fallback.featureCards[0];
       const fallbackCategory = fallbackItem?.categoryKey || (index % 2 === 0 ? 'FTB' : 'RTW');
-      const categoryKey = normalizeCategoryKey(item.categoryKey, fallbackCategory);
+      const categoryKey = normalizeInstantBuyCategoryKey(item.categoryKey, fallbackCategory);
       const ctaMode = normalizeCtaMode(item.ctaMode, fallbackItem?.ctaMode || 'PAGE');
       const fallbackHref = categoryKey === 'FTB' ? '/fabricstobuy' : '/readytowear';
       const fallbackPageKey = categoryKey === 'FTB' ? 'FABRICS' : 'READY_TO_WEAR';
@@ -2481,7 +2500,7 @@ const normalizeInstantBuy = (raw: unknown, fallback: InstantBuySettings): Instan
       const item = asRecord(entry);
       const fallbackItem = fallback.productSlots[index] || fallback.productSlots[0];
       const fallbackCategory = fallbackItem?.categoryKey || (index % 2 === 0 ? 'FTB' : 'RTW');
-      const categoryKey = normalizeCategoryKey(item.categoryKey, fallbackCategory);
+      const categoryKey = normalizeInstantBuyCategoryKey(item.categoryKey, fallbackCategory);
       const sourceToken = String(item.sourceMode || fallbackItem?.sourceMode || 'AUTO_RANDOM').trim().toUpperCase();
       const sourceMode: InstantBuyProductSlot['sourceMode'] = sourceToken === 'MANUAL' ? 'MANUAL' : 'AUTO_RANDOM';
       const productTypeToken = String(
