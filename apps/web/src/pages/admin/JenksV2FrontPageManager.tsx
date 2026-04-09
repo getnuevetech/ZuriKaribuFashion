@@ -54,6 +54,7 @@ type HeroBanner = {
   tagColor: string;
   title: string;
   titleColor: string;
+  titleSecondaryColor: string;
   titleFontSize: number;
   text: string;
   textColor: string;
@@ -1032,6 +1033,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         tagColor: '#ffffff',
         title: 'Wear the Story of Africa',
         titleColor: '#ffffff',
+        titleSecondaryColor: '#ffffff',
         titleFontSize: 56,
         text: 'Curated fashion from top designers and textile houses.',
         textColor: '#ffffff',
@@ -1843,6 +1845,7 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
       ...banner,
       tagColor: String((banner as HeroBanner).tagColor || '#ffffff'),
       titleColor: String((banner as HeroBanner).titleColor || '#ffffff'),
+      titleSecondaryColor: String((banner as HeroBanner).titleSecondaryColor || (banner as HeroBanner).titleColor || '#ffffff'),
       textColor: String((banner as HeroBanner).textColor || '#ffffff'),
       descriptionColor: String((banner as HeroBanner).descriptionColor || '#ffffff'),
       primaryCtaLink: normalizeManagerHref(banner.primaryCtaLink, '/readytowear'),
@@ -4569,11 +4572,16 @@ export default function JenksV2FrontPageManager() {
                           leftWidthPercent: 58,
                           rightWidthPercent: 42,
                           tag: '',
+                          tagColor: '#ffffff',
                           title: 'New Hero Banner',
+                          titleColor: '#ffffff',
+                          titleSecondaryColor: '#ffffff',
                           titleFontSize: 56,
                           text: '',
+                          textColor: '#ffffff',
                           textEnabled: true,
                           description: '',
+                          descriptionColor: '#ffffff',
                           descriptionEnabled: true,
                           descriptionFontSize: 16,
                           primaryCtaEnabled: true,
@@ -4819,6 +4827,103 @@ export default function JenksV2FrontPageManager() {
                       }
                     />
                   </label>
+                  <div className="md:col-span-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                    <label className="text-xs">
+                      Tag Font Color
+                      <input
+                        type="color"
+                        className="mt-1 h-9 w-full rounded border px-1 py-1"
+                        value={banner.tagColor || '#ffffff'}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            topNavigations: {
+                              ...prev.topNavigations,
+                              heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, tagColor: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-xs">
+                      Title Color (Line 1)
+                      <input
+                        type="color"
+                        className="mt-1 h-9 w-full rounded border px-1 py-1"
+                        value={banner.titleColor || '#ffffff'}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            topNavigations: {
+                              ...prev.topNavigations,
+                              heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, titleColor: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-xs">
+                      Title Color (Line 2)
+                      <input
+                        type="color"
+                        className="mt-1 h-9 w-full rounded border px-1 py-1"
+                        value={banner.titleSecondaryColor || banner.titleColor || '#ffffff'}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            topNavigations: {
+                              ...prev.topNavigations,
+                              heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, titleSecondaryColor: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-xs">
+                      Text Font Color
+                      <input
+                        type="color"
+                        className="mt-1 h-9 w-full rounded border px-1 py-1"
+                        value={banner.textColor || '#ffffff'}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            topNavigations: {
+                              ...prev.topNavigations,
+                              heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, textColor: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-xs">
+                      Description Font Color
+                      <input
+                        type="color"
+                        className="mt-1 h-9 w-full rounded border px-1 py-1"
+                        value={banner.descriptionColor || '#ffffff'}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            topNavigations: {
+                              ...prev.topNavigations,
+                              heroBanners: prev.topNavigations.heroBanners.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, descriptionColor: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
                   <label className="text-xs">
                     Layout Mode
                     <select

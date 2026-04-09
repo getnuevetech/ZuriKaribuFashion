@@ -51,6 +51,7 @@ type HeroSlide = {
   tagColor: string;
   titleFontSize: number;
   titleColor: string;
+  titleSecondaryColor: string;
   textEnabled: boolean;
   textColor: string;
   descriptionEnabled: boolean;
@@ -765,6 +766,7 @@ const HERO: HeroSlide[] = [
     tag: 'Editorial Premium',
     tagColor: '#ffffff',
     titleColor: '#ffffff',
+    titleSecondaryColor: '#ffffff',
     textColor: '#ffffff',
     descriptionColor: '#ffffff',
     titleA: 'WEAR',
@@ -793,6 +795,7 @@ const HERO: HeroSlide[] = [
     tag: 'Editorial Premium',
     tagColor: '#111111',
     titleColor: '#111111',
+    titleSecondaryColor: '#111111',
     textColor: '#111111',
     descriptionColor: '#111111',
     titleA: 'DISCOVER',
@@ -1394,6 +1397,10 @@ export default function JenksFrontpageV2() {
         tagColor: asString(row.tagColor, fallbackSlide.tagColor || '#ffffff'),
         titleFontSize: Math.max(32, Math.min(120, Math.round(asNumber(row.titleFontSize, 72)))),
         titleColor: asString(row.titleColor, fallbackSlide.titleColor || '#ffffff'),
+        titleSecondaryColor: asString(
+          row.titleSecondaryColor,
+          fallbackSlide.titleSecondaryColor || fallbackSlide.titleColor || '#ffffff'
+        ),
         textEnabled: asBoolean(row.textEnabled, true),
         textColor: asString(row.textColor, fallbackSlide.textColor || '#ffffff'),
         descriptionEnabled: asBoolean(row.descriptionEnabled, true),
@@ -3069,11 +3076,12 @@ export default function JenksFrontpageV2() {
                   className="break-words font-['Oswald'] font-bold uppercase leading-[0.9]"
                   style={{
                     fontSize: `${Math.max(36, Math.min(120, Math.round(active.titleFontSize)))}px`,
-                    color: active.titleColor,
                   }}
                 >
-                  <span>{active.titleA}</span>
-                  <span className="ml-[0.16em]">{active.titleB}</span>
+                  <span style={{ color: active.titleColor }}>{active.titleA}</span>
+                  <span className="ml-[0.16em]" style={{ color: active.titleSecondaryColor || active.titleColor }}>
+                    {active.titleB}
+                  </span>
                 </h1>
                 {active.textEnabled ? (
                   <p
@@ -3185,11 +3193,12 @@ export default function JenksFrontpageV2() {
                     className="break-words font-['Oswald'] font-bold uppercase leading-[0.9]"
                     style={{
                       fontSize: `${Math.max(36, Math.min(120, Math.round(active.titleFontSize)))}px`,
-                      color: active.titleColor,
                     }}
                   >
-                    <span>{active.titleA}</span>
-                    <span className="ml-[0.16em]">{active.titleB}</span>
+                  <span style={{ color: active.titleColor }}>{active.titleA}</span>
+                  <span className="ml-[0.16em]" style={{ color: active.titleSecondaryColor || active.titleColor }}>
+                    {active.titleB}
+                  </span>
                   </h1>
                   {active.textEnabled ? (
                     <p

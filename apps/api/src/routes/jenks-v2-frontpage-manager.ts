@@ -75,6 +75,7 @@ type HeroBanner = {
   tagColor: string;
   title: string;
   titleColor: string;
+  titleSecondaryColor: string;
   titleFontSize: number;
   text: string;
   textColor: string;
@@ -838,6 +839,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           tagColor: '#ffffff',
           title: 'Wear the Story of Africa',
           titleColor: '#ffffff',
+          titleSecondaryColor: '#ffffff',
           titleFontSize: 56,
           text: 'Curated fashion from top designers and textile houses.',
           textColor: '#ffffff',
@@ -1685,6 +1687,12 @@ const normalizeHeroBanner = (raw: unknown, fallback: HeroBanner, index: number):
     tagColor: (getString(row.tagColor) || fallback.tagColor || '#ffffff').slice(0, 40),
     title: (getString(row.title) || fallback.title).slice(0, 180),
     titleColor: (getString(row.titleColor) || fallback.titleColor || '#ffffff').slice(0, 40),
+    titleSecondaryColor: (
+      getString(row.titleSecondaryColor) ||
+      fallback.titleSecondaryColor ||
+      fallback.titleColor ||
+      '#ffffff'
+    ).slice(0, 40),
     titleFontSize: clamp(Math.round(getNumber(row.titleFontSize) ?? fallback.titleFontSize), 16, 120),
     text: (getString(row.text) || fallback.text).slice(0, 240),
     textColor: (getString(row.textColor) || fallback.textColor || '#ffffff').slice(0, 40),
