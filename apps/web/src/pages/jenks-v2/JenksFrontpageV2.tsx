@@ -2261,7 +2261,12 @@ export default function JenksFrontpageV2() {
     return `${tokens.slice(0, heritagePreviewWords).join(' ')}…`;
   }, [heritageStoryHtml, heritagePreviewWords]);
   const showFullStory = heritageStoryExpanded;
-  const heritageStatsAnchorClass = 'bottom-8 left-8 md:bottom-10 md:left-10';
+  const heritageStatsAnchorClass = (() => {
+    const token = asString(heritageCfg.statsPosition, 'BOTTOM').trim().toUpperCase();
+    if (token === 'TOP') return 'top-10 md:top-12';
+    if (token === 'MIDDLE') return 'top-1/2 -translate-y-1/2';
+    return 'bottom-8 md:bottom-10';
+  })();
 
   const newsletterCfg = useMemo(() => asRecord(newsletterFooterCfg.newsletter), [newsletterFooterCfg.newsletter]);
   const footerCfg = useMemo(() => asRecord(newsletterFooterCfg.footer), [newsletterFooterCfg.footer]);
@@ -3795,9 +3800,11 @@ export default function JenksFrontpageV2() {
             spinnerClassName="h-7 w-7"
           />
           {hasImageSource(stripLegacyFallbackImage(heritageCfg.image)) ? <div className="absolute inset-0 bg-black/22" /> : null}
-          <div className="relative h-full px-8 py-10 text-white">
-            <div className="absolute right-8 top-10 z-20 w-full max-w-xl text-right md:right-10 md:top-12">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">{asString(heritageCfg.tag, 'Heritage')}</p>
+          <div className="relative mx-auto flex min-h-[84vh] w-full max-w-[1480px] flex-col px-8 py-10 text-white md:px-10 md:py-12">
+            <div className="ml-auto w-full max-w-xl text-right">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">
+                {asString(heritageCfg.tag, 'Heritage')}
+              </p>
               <h2 className="mt-2 font-['Oswald'] text-6xl font-bold uppercase leading-[0.92]">
                 {asString(heritageCfg.title, 'ROOTED IN CULTURE.')}
               </h2>
@@ -3809,48 +3816,50 @@ export default function JenksFrontpageV2() {
               </p>
             </div>
 
-            <div className="absolute left-1/2 top-1/2 z-20 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 text-center">
-              <h3
-                className="font-['Oswald'] font-bold uppercase leading-[0.94] text-white"
-                style={{ fontSize: `${heritageStoryTitleFontSize}px` }}
-              >
-                {heritageStoryTitle}
-              </h3>
-              <div
-                className="prose prose-invert mt-4 max-w-none text-white/84 prose-p:text-white/84 prose-strong:text-white prose-a:text-white"
-                style={{ fontSize: `${heritageStoryTextFontSize}px` }}
-              >
-                {showFullStory ? (
-                  <div dangerouslySetInnerHTML={{ __html: heritageStoryHtml }} />
+            <div className="mt-8 flex-1">
+              <div className="ml-auto w-full max-w-3xl text-right">
+                <h3
+                  className="font-['Oswald'] font-bold uppercase leading-[0.94] text-white"
+                  style={{ fontSize: `${heritageStoryTitleFontSize}px` }}
+                >
+                  {heritageStoryTitle}
+                </h3>
+                <div
+                  className="mt-4 max-h-[34vh] overflow-y-auto pr-1 text-white/84 [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/40 [&::-webkit-scrollbar]:w-1 [&_a]:text-white [&_a]:underline [&_b]:text-white [&_br]:leading-[1.35] [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white [&_li]:text-white/84 [&_ol]:my-0 [&_p]:my-0 [&_p+*]:mt-3 [&_strong]:text-white [&_ul]:my-0"
+                  style={{ fontSize: `${heritageStoryTextFontSize}px`, lineHeight: 1.45 }}
+                >
+                  {showFullStory ? (
+                    <div dangerouslySetInnerHTML={{ __html: heritageStoryHtml }} />
+                  ) : (
+                    <p>{heritageStoryPreviewText}</p>
+                  )}
+                </div>
+                {isExternalHref(heritageReadMoreHref) ? (
+                  <a
+                    href={heritageReadMoreHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => setHeritageStoryExpanded((prev) => !prev)}
+                    className="group relative z-20 mt-6 inline-flex items-center gap-2 pb-1 text-sm font-semibold uppercase tracking-[0.08em] text-white"
+                  >
+                    {heritageReadMoreLabel}
+                    <ArrowRight className="h-4 w-4" />
+                    <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-[#e66045] transition-all duration-300 group-hover:w-full" />
+                  </a>
                 ) : (
-                  <p>{heritageStoryPreviewText}</p>
+                  <Link
+                    to={heritageReadMoreHref}
+                    onClick={() => setHeritageStoryExpanded((prev) => !prev)}
+                    className="group relative z-20 mt-6 inline-flex items-center gap-2 pb-1 text-sm font-semibold uppercase tracking-[0.08em] text-white"
+                  >
+                    {heritageReadMoreLabel}
+                    <ArrowRight className="h-4 w-4" />
+                    <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-[#e66045] transition-all duration-300 group-hover:w-full" />
+                  </Link>
                 )}
               </div>
-              {isExternalHref(heritageReadMoreHref) ? (
-                <a
-                  href={heritageReadMoreHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => setHeritageStoryExpanded((prev) => !prev)}
-                  className="group relative z-20 mt-6 inline-flex items-center gap-2 pb-1 text-sm font-semibold uppercase tracking-[0.08em] text-white"
-                >
-                  {heritageReadMoreLabel}
-                  <ArrowRight className="h-4 w-4" />
-                  <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-[#e66045] transition-all duration-300 group-hover:w-full" />
-                </a>
-              ) : (
-                <Link
-                  to={heritageReadMoreHref}
-                  onClick={() => setHeritageStoryExpanded((prev) => !prev)}
-                  className="group relative z-20 mt-6 inline-flex items-center gap-2 pb-1 text-sm font-semibold uppercase tracking-[0.08em] text-white"
-                >
-                  {heritageReadMoreLabel}
-                  <ArrowRight className="h-4 w-4" />
-                  <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-[#e66045] transition-all duration-300 group-hover:w-full" />
-                </Link>
-              )}
             </div>
-            <div className={`pointer-events-none absolute z-10 ${heritageStatsAnchorClass}`}>
+            <div className={`pointer-events-none absolute left-8 z-10 md:left-10 ${heritageStatsAnchorClass}`}>
               <div className="flex flex-wrap items-end gap-x-8 gap-y-4 px-1 py-1">
                 {heritageStats.map((stat) => (
                   <div key={stat.id} className="min-w-[120px]">
