@@ -13,10 +13,16 @@ const TEMPLATE_KEYS = [
   'TOP_NAVIGATIONS',
   'SHOP_BY',
   'SHOP_BY_COUNTRY',
+  'CATEGORY_MANAGE_RTW',
+  'CATEGORY_MANAGE_FTB',
+  'CATEGORY_MANAGE_CTW',
   'CATEGORY_MANAGE',
   'HOW_IT_WORKS',
   'CUSTOM_TEXT_ICON',
   'SHOP_WITH_CONFIDENCE',
+  'FEATURED_RTW',
+  'FEATURED_CTW',
+  'FEATURED_FTB',
   'FEATURED',
   'FRESH_DROPS',
   'DESIGNER_SPOTLIGHT',
@@ -28,12 +34,16 @@ const TEMPLATE_KEYS = [
 type TemplateKey = (typeof TEMPLATE_KEYS)[number];
 type ThemeMode = 'SYSTEM' | 'LIGHT' | 'DARK';
 type CountMode = 'STATIC' | 'DATABASE';
+type LinkMode = 'PAGE' | 'CUSTOM_URL';
 
 type MenuLink = {
   id: string;
   label: string;
   href: string;
+  hrefMode?: LinkMode;
+  pageKey?: string;
   routeKey?: string;
+  customUrl?: string;
   icon?: string;
   enabled: boolean;
 };
@@ -62,11 +72,15 @@ type HeroBanner = {
   leftWidthPercent: number;
   rightWidthPercent: number;
   tag: string;
+  tagColor: string;
   title: string;
+  titleColor: string;
   titleFontSize: number;
   text: string;
+  textColor: string;
   textEnabled: boolean;
   description: string;
+  descriptionColor: string;
   descriptionEnabled: boolean;
   descriptionFontSize: number;
   primaryCtaEnabled: boolean;
@@ -106,6 +120,7 @@ type TopNavigationsSettings = {
     textColor: string;
     fontFamily: string;
     fontSize: number;
+    fontWeight: number;
     imageUrl: string;
     altText: string;
     width: number;
@@ -116,7 +131,10 @@ type TopNavigationsSettings = {
     enabled: boolean;
     label: string;
     href: string;
+    hrefMode?: LinkMode;
+    pageKey?: string;
     routeKey?: string;
+    customUrl?: string;
     icon: string;
   };
   controllers: {
@@ -507,17 +525,57 @@ const TEMPLATE_META: Array<{ templateKey: TemplateKey; key: string; name: string
   { templateKey: 'TOP_NAVIGATIONS', key: 'top-navigations', name: 'Top Navigations' },
   { templateKey: 'SHOP_BY', key: 'shop-by', name: 'Shop By' },
   { templateKey: 'SHOP_BY_COUNTRY', key: 'shop-by-country', name: 'Shop By Country' },
-  { templateKey: 'CATEGORY_MANAGE', key: 'category-manage', name: 'Category Manage' },
+  { templateKey: 'CATEGORY_MANAGE_RTW', key: 'category-manage-rtw', name: 'Category Manage RTW' },
+  { templateKey: 'CATEGORY_MANAGE_FTB', key: 'category-manage-ftb', name: 'Category Manage FTB' },
+  { templateKey: 'CATEGORY_MANAGE_CTW', key: 'category-manage-ctw', name: 'Category Manage CTW' },
   { templateKey: 'HOW_IT_WORKS', key: 'how-it-works', name: 'How It Works' },
   { templateKey: 'CUSTOM_TEXT_ICON', key: 'custom-text-icon', name: 'Custom' },
   { templateKey: 'SHOP_WITH_CONFIDENCE', key: 'shop-with-confidence', name: 'Shop With Confidence' },
-  { templateKey: 'FEATURED', key: 'featured', name: 'Featured' },
+  { templateKey: 'FEATURED_RTW', key: 'featured-rtw', name: 'Featured RTW' },
+  { templateKey: 'FEATURED_CTW', key: 'featured-ctw', name: 'Featured CTW' },
+  { templateKey: 'FEATURED_FTB', key: 'featured-ftb', name: 'Featured FTB' },
   { templateKey: 'FRESH_DROPS', key: 'fresh-drops', name: 'Fresh Drops' },
   { templateKey: 'DESIGNER_SPOTLIGHT', key: 'designer-spotlight', name: 'Designer Spotlight' },
   { templateKey: 'HERITAGE', key: 'heritage', name: 'Heritage' },
   { templateKey: 'CUSTOMER_REVIEWS', key: 'customer-reviews', name: 'From Our Customers' },
   { templateKey: 'NEWSLETTER_FOOTER', key: 'newsletter-footer', name: 'Newsletter and Footer' },
 ];
+
+const CATEGORY_MANAGE_TEMPLATE_BY_KEY: Record<FeaturedCategoryKey, TemplateKey> = {
+  RTW: 'CATEGORY_MANAGE_RTW',
+  FTB: 'CATEGORY_MANAGE_FTB',
+  CTW: 'CATEGORY_MANAGE_CTW',
+};
+
+const FEATURED_TEMPLATE_BY_KEY: Record<FeaturedCategoryKey, TemplateKey> = {
+  RTW: 'FEATURED_RTW',
+  CTW: 'FEATURED_CTW',
+  FTB: 'FEATURED_FTB',
+};
+
+const featuredCategoryKeyFromValue = (value: unknown): FeaturedCategoryKey | null => {
+  const token = String(value || '')
+    .trim()
+    .toUpperCase();
+  if (token === 'RTW' || token === 'READY_TO_WEAR') return 'RTW';
+  if (token === 'FTB' || token === 'FABRICS' || token === 'FABRICS_TO_BUY') return 'FTB';
+  if (token === 'CTW' || token === 'CUSTOM_TO_WEAR') return 'CTW';
+  return null;
+};
+
+const categorySectionKeyFromRow = (row: unknown): FeaturedCategoryKey | null => {
+  const item = asRecord(row);
+  return featuredCategoryKeyFromValue(item.key);
+};
+
+const CATEGORY_KEY_ORDER: FeaturedCategoryKey[] = ['RTW', 'FTB', 'CTW'];
+const FEATURED_KEY_ORDER: FeaturedCategoryKey[] = ['RTW', 'CTW', 'FTB'];
+
+const normalizeFeaturedCategoryKey = (value: unknown, fallback: FeaturedCategoryKey): FeaturedCategoryKey => {
+  const token = String(value || '').trim().toUpperCase();
+  if (token === 'RTW' || token === 'CTW' || token === 'FTB') return token;
+  return fallback;
+};
 
 const updateSchema = z.object({
   topNavigations: z.unknown().optional(),
@@ -635,15 +693,18 @@ const mapLegacyV2Href = (value: string): string => {
   if (normalized === '/main' || normalized === '/main/' || normalized.startsWith('/main?') || normalized.startsWith('/main#')) {
     return '/';
   }
-  if (normalized === '/shop' || normalized === '/shop/' || normalized.startsWith('/shop?') || normalized.startsWith('/shop#')) {
-    return normalized;
+  if (/^\/shop(\/)?$/i.test(normalized)) {
+    return '/Shop';
+  }
+  if (/^\/shop[?#]/i.test(normalized)) {
+    return `/Shop${normalized.slice('/shop'.length)}`;
   }
   return normalized;
 };
 
 const PAGE_HREF_BY_KEY: Record<string, string> = {
   HOME: '/',
-  SHOP: '/shop',
+  SHOP: '/Shop',
   READY_TO_WEAR: '/readytowear',
   CUSTOM_TO_WEAR: '/customtowear',
   FABRICS: '/fabricstobuy',
@@ -694,7 +755,10 @@ const defaultMenuLink = (label: string, href: string, routeKey?: string): MenuLi
   id: randomUUID(),
   label,
   href,
+  hrefMode: 'PAGE',
+  pageKey: routeKey,
   routeKey,
+  customUrl: '',
   icon: '',
   enabled: true,
 });
@@ -719,7 +783,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         defaultMenuLink('Home', '/', 'HOME'),
         defaultMenuLink('Ready To Wear', '/readytowear', 'READY_TO_WEAR'),
         defaultMenuLink('Fabric To Buy', '/fabricstobuy', 'FABRICS'),
-        defaultMenuLink('Custom To Wear', '/cystomtowear', 'CUSTOM_TO_WEAR'),
+        defaultMenuLink('Custom To Wear', '/customtowear', 'CUSTOM_TO_WEAR'),
       ],
       hamburgerMenuFontSize: 32,
       hamburgerMenuFontWeight: 800,
@@ -730,20 +794,24 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         textColor: '#111111',
         fontFamily: 'Montserrat',
         fontSize: 28,
+        fontWeight: 700,
         imageUrl: '',
         altText: 'Jenks',
         width: 180,
         height: 50,
       },
       additionalTopMenu: [
-        defaultMenuLink('Shop', '/shop', 'SHOP'),
+        defaultMenuLink('Shop', '/Shop', 'SHOP'),
         defaultMenuLink('Contact', '/contact', 'CONTACT'),
       ],
       signInMenu: {
         enabled: true,
         label: 'Sign In',
         href: '/auth/login',
+        hrefMode: 'PAGE',
+        pageKey: 'AUTH_LOGIN',
         routeKey: 'AUTH_LOGIN',
+        customUrl: '',
         icon: 'User',
       },
       controllers: {
@@ -767,12 +835,16 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           leftWidthPercent: 58,
           rightWidthPercent: 42,
           tag: 'Editorial Premium',
+          tagColor: '#ffffff',
           title: 'Wear the Story of Africa',
+          titleColor: '#ffffff',
           titleFontSize: 56,
           text: 'Curated fashion from top designers and textile houses.',
+          textColor: '#ffffff',
           textEnabled: true,
           description:
             'Manage title, copy, tags, CTA labels and links for each hero slide directly from admin.',
+          descriptionColor: '#ffffff',
           descriptionEnabled: true,
           descriptionFontSize: 16,
           primaryCtaEnabled: true,
@@ -1539,11 +1611,30 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
 
 const normalizeMenuLink = (raw: unknown, fallback: MenuLink): MenuLink => {
   const row = asRecord(raw);
+  const hrefModeToken = String(row.hrefMode || fallback.hrefMode || '').trim().toUpperCase();
+  const hrefMode: LinkMode = hrefModeToken === 'CUSTOM_URL' ? 'CUSTOM_URL' : 'PAGE';
+  const pageKey =
+    (
+      getString(row.pageKey) ||
+      getString(row.routeKey) ||
+      getString(fallback.pageKey) ||
+      getString(fallback.routeKey) ||
+      ''
+    )
+      .trim()
+      .toUpperCase() || undefined;
+  const customUrl = (getString(row.customUrl) || (hrefMode === 'CUSTOM_URL' ? getString(row.href) : '') || '').trim();
+  const fallbackHref = normalizeHref(row.href, fallback.href);
+  const routeHref = pageKey && PAGE_HREF_BY_KEY[pageKey] ? PAGE_HREF_BY_KEY[pageKey] : fallbackHref;
+  const href = hrefMode === 'CUSTOM_URL' ? normalizeHref(customUrl, routeHref) : routeHref;
   return {
     id: getString(row.id) || fallback.id || randomUUID(),
     label: (getString(row.label) || fallback.label).slice(0, 60),
-    href: normalizeHref(row.href, fallback.href),
-    routeKey: getString(row.routeKey)?.slice(0, 120),
+    href,
+    hrefMode,
+    pageKey,
+    routeKey: pageKey,
+    customUrl: hrefMode === 'CUSTOM_URL' ? customUrl : '',
     icon: (getString(row.icon) || fallback.icon || '').slice(0, 60),
     enabled: getBoolean(row.enabled) ?? fallback.enabled,
   };
@@ -1591,11 +1682,15 @@ const normalizeHeroBanner = (raw: unknown, fallback: HeroBanner, index: number):
     leftWidthPercent: normalizedLeftWidthPercent,
     rightWidthPercent: normalizedRightWidthPercent,
     tag: (getString(row.tag) || fallback.tag).slice(0, 80),
+    tagColor: (getString(row.tagColor) || fallback.tagColor || '#ffffff').slice(0, 40),
     title: (getString(row.title) || fallback.title).slice(0, 180),
+    titleColor: (getString(row.titleColor) || fallback.titleColor || '#ffffff').slice(0, 40),
     titleFontSize: clamp(Math.round(getNumber(row.titleFontSize) ?? fallback.titleFontSize), 16, 120),
     text: (getString(row.text) || fallback.text).slice(0, 240),
+    textColor: (getString(row.textColor) || fallback.textColor || '#ffffff').slice(0, 40),
     textEnabled: getBoolean(row.textEnabled) ?? fallback.textEnabled,
     description: (getString(row.description) || fallback.description).slice(0, 500),
+    descriptionColor: (getString(row.descriptionColor) || fallback.descriptionColor || '#ffffff').slice(0, 40),
     descriptionEnabled: getBoolean(row.descriptionEnabled) ?? fallback.descriptionEnabled,
     descriptionFontSize: clamp(Math.round(getNumber(row.descriptionFontSize) ?? fallback.descriptionFontSize), 10, 48),
     primaryCtaEnabled: getBoolean(row.primaryCtaEnabled) ?? fallback.primaryCtaEnabled,
@@ -1663,6 +1758,7 @@ const normalizeTopNavigations = (raw: unknown, fallback: TopNavigationsSettings)
       textColor: (getString(logoRaw.textColor) || fallback.logo.textColor).slice(0, 32),
       fontFamily: (getString(logoRaw.fontFamily) || fallback.logo.fontFamily).slice(0, 80),
       fontSize: clamp(Math.round(getNumber(logoRaw.fontSize) ?? fallback.logo.fontSize), 10, 96),
+      fontWeight: clamp(Math.round(getNumber(logoRaw.fontWeight) ?? fallback.logo.fontWeight ?? 700), 100, 900),
       imageUrl: (getString(logoRaw.imageUrl) || fallback.logo.imageUrl).slice(0, 2000),
       altText: (getString(logoRaw.altText) || fallback.logo.altText).slice(0, 120),
       width: clamp(Math.round(getNumber(logoRaw.width) ?? fallback.logo.width), 40, 600),
@@ -1672,10 +1768,46 @@ const normalizeTopNavigations = (raw: unknown, fallback: TopNavigationsSettings)
       .map((entry, index) => normalizeMenuLink(entry, fallback.additionalTopMenu[index] || defaultMenuLink('Link', '/')))
       .slice(0, 40),
     signInMenu: {
+      ...(fallback.signInMenu || {}),
       enabled: getBoolean(asRecord(row.signInMenu).enabled) ?? fallback.signInMenu.enabled,
       label: (getString(asRecord(row.signInMenu).label) || fallback.signInMenu.label).slice(0, 60),
-      href: normalizeHref(asRecord(row.signInMenu).href, fallback.signInMenu.href),
-      routeKey: (getString(asRecord(row.signInMenu).routeKey) || fallback.signInMenu.routeKey || '').slice(0, 120) || undefined,
+      hrefMode:
+        String(asRecord(row.signInMenu).hrefMode || fallback.signInMenu.hrefMode || '')
+          .trim()
+          .toUpperCase() === 'CUSTOM_URL'
+          ? 'CUSTOM_URL'
+          : 'PAGE',
+      pageKey: (
+        getString(asRecord(row.signInMenu).pageKey) ||
+        getString(asRecord(row.signInMenu).routeKey) ||
+        fallback.signInMenu.pageKey ||
+        fallback.signInMenu.routeKey ||
+        ''
+      )
+        .trim()
+        .toUpperCase() || undefined,
+      routeKey: (
+        getString(asRecord(row.signInMenu).pageKey) ||
+        getString(asRecord(row.signInMenu).routeKey) ||
+        fallback.signInMenu.pageKey ||
+        fallback.signInMenu.routeKey ||
+        ''
+      )
+        .trim()
+        .toUpperCase() || undefined,
+      customUrl: (getString(asRecord(row.signInMenu).customUrl) || '').slice(0, 2000),
+      href:
+        String(asRecord(row.signInMenu).hrefMode || fallback.signInMenu.hrefMode || '')
+          .trim()
+          .toUpperCase() === 'CUSTOM_URL'
+          ? normalizeHref(
+              getString(asRecord(row.signInMenu).customUrl),
+              normalizeHref(asRecord(row.signInMenu).href, fallback.signInMenu.href)
+            )
+          : resolveCtaPageHref(
+              getString(asRecord(row.signInMenu).pageKey) || getString(asRecord(row.signInMenu).routeKey),
+              normalizeHref(asRecord(row.signInMenu).href, fallback.signInMenu.href)
+            ),
       icon: (getString(asRecord(row.signInMenu).icon) || fallback.signInMenu.icon).slice(0, 60),
     },
     controllers: {
@@ -2448,6 +2580,21 @@ const buildTemplateSnapshot = (
       return cloneJson(asRecord(settings.shopBy));
     case 'SHOP_BY_COUNTRY':
       return cloneJson(asRecord(settings.shopByCountry));
+    case 'CATEGORY_MANAGE_RTW':
+    case 'CATEGORY_MANAGE_FTB':
+    case 'CATEGORY_MANAGE_CTW': {
+      const categoryKey =
+        templateKey === 'CATEGORY_MANAGE_RTW'
+          ? 'RTW'
+          : templateKey === 'CATEGORY_MANAGE_FTB'
+            ? 'FTB'
+            : 'CTW';
+      const rows = asArray(settings.categoryManage.sections).filter((entry) => {
+        const key = String(asRecord(entry).key || '').trim().toUpperCase();
+        return key === categoryKey;
+      });
+      return cloneJson({ sections: rows });
+    }
     case 'CATEGORY_MANAGE':
       return cloneJson(asRecord(settings.categoryManage));
     case 'HOW_IT_WORKS':
@@ -2456,6 +2603,25 @@ const buildTemplateSnapshot = (
       return cloneJson(asRecord(filterTextCardsByTemplate('CUSTOM')));
     case 'SHOP_WITH_CONFIDENCE':
       return cloneJson(asRecord(filterTextCardsByTemplate('SHOP_WITH_CONFIDENCE')));
+    case 'FEATURED_RTW':
+    case 'FEATURED_CTW':
+    case 'FEATURED_FTB': {
+      const featuredKey =
+        templateKey === 'FEATURED_RTW'
+          ? 'RTW'
+          : templateKey === 'FEATURED_CTW'
+            ? 'CTW'
+            : 'FTB';
+      const rows = asArray(settings.featured.cards).filter((entry) => {
+        const key = String(asRecord(entry).key || '').trim().toUpperCase();
+        return key === featuredKey;
+      });
+      return cloneJson({
+        columns: settings.featured.columns,
+        layoutByKey: settings.featured.layoutByKey,
+        cards: rows,
+      });
+    }
     case 'FEATURED':
       return cloneJson(asRecord(settings.featured));
     case 'FRESH_DROPS':
@@ -2528,6 +2694,57 @@ const mergeLegacyTextIconSectionEntries = (
   return next;
 };
 
+const mergeLegacyCategoryAndFeaturedSectionEntries = (sections: SectionVisibilityEntry[]) => {
+  const next = [...sections];
+
+  const migrateLegacy = (
+    legacyTemplateKey: 'CATEGORY_MANAGE' | 'FEATURED',
+    perKeyTemplateMap: Record<FeaturedCategoryKey, TemplateKey>,
+    keyPrefix: 'category-manage' | 'featured',
+    namePrefix: 'Category Manage' | 'Featured',
+    orderOffsets: Record<FeaturedCategoryKey, number>
+  ) => {
+    const legacyIndex = next.findIndex(
+      (section) => String(section.templateKey || '').toUpperCase() === legacyTemplateKey
+    );
+    if (legacyIndex === -1) return;
+    const legacy = next[legacyIndex];
+    next.splice(legacyIndex, 1);
+    const baseOrder = clamp(Math.round(getNumber(legacy.order) ?? 1), 1, 999);
+    (['RTW', 'FTB', 'CTW'] as const).forEach((categoryKey) => {
+      const templateKey = perKeyTemplateMap[categoryKey];
+      if (next.some((section) => section.templateKey === templateKey && !section.isCustom)) return;
+      next.push({
+        ...legacy,
+        id: randomUUID(),
+        key: `${keyPrefix}-${String(categoryKey).toLowerCase()}`,
+        name: `${namePrefix} ${categoryKey}`,
+        templateKey,
+        enabled: getBoolean(legacy.enabled) ?? true,
+        order: clamp(baseOrder + (orderOffsets[categoryKey] ?? 0), 1, 999),
+        isCustom: false,
+      });
+    });
+  };
+
+  migrateLegacy(
+    'CATEGORY_MANAGE',
+    CATEGORY_MANAGE_TEMPLATE_BY_KEY,
+    'category-manage',
+    'Category Manage',
+    { RTW: 0, FTB: 1, CTW: 2 }
+  );
+  migrateLegacy(
+    'FEATURED',
+    FEATURED_TEMPLATE_BY_KEY,
+    'featured',
+    'Featured',
+    { RTW: 0, FTB: 1, CTW: 2 }
+  );
+
+  return next;
+};
+
 const normalizeSectionVisibility = (
   raw: unknown,
   fallback: SectionVisibilitySettings,
@@ -2537,7 +2754,8 @@ const normalizeSectionVisibility = (
   const titleRaw = asRecord(row.titleSettings);
   const fallbackTitle = fallback.titleSettings;
   const rawRowsSource = Array.isArray(row.sections) ? row.sections : fallback.sections;
-  const rawRows = mergeLegacyTextIconSectionEntries(
+  const rawRows = mergeLegacyCategoryAndFeaturedSectionEntries(
+    mergeLegacyTextIconSectionEntries(
     rawRowsSource.map((entry, index) => {
       const source = asRecord(entry);
       return {
@@ -2554,8 +2772,9 @@ const normalizeSectionVisibility = (
             ? cloneJson(source.configSnapshot as Record<string, unknown>)
             : {},
       } as SectionVisibilityEntry;
-    }),
-    settings
+      }),
+      settings
+    )
   );
   const parsed = rawRows.map((entry, index) => {
     const item = asRecord(entry);
@@ -2661,6 +2880,26 @@ const applyTemplateSnapshotToSettings = (
     case 'SHOP_BY_COUNTRY':
       next.shopByCountry = normalizeShopByCountry(snapshotRecord, next.shopByCountry, next.shopBy);
       break;
+    case 'CATEGORY_MANAGE_RTW':
+    case 'CATEGORY_MANAGE_FTB':
+    case 'CATEGORY_MANAGE_CTW': {
+      const normalized = normalizeCategoryManage(snapshotRecord, next.categoryManage);
+      const categoryKey =
+        templateKey === 'CATEGORY_MANAGE_RTW'
+          ? 'RTW'
+          : templateKey === 'CATEGORY_MANAGE_FTB'
+            ? 'FTB'
+            : 'CTW';
+      const scopedRows = normalized.sections.filter((section) => String(section.key || '').trim().toUpperCase() === categoryKey);
+      const otherRows = next.categoryManage.sections.filter(
+        (section) => String(section.key || '').trim().toUpperCase() !== categoryKey
+      );
+      next.categoryManage = {
+        ...next.categoryManage,
+        sections: [...otherRows, ...scopedRows],
+      };
+      break;
+    }
     case 'CATEGORY_MANAGE':
       next.categoryManage = normalizeCategoryManage(snapshotRecord, next.categoryManage);
       break;
@@ -2687,6 +2926,22 @@ const applyTemplateSnapshotToSettings = (
         cardStyle: normalized.cardStyle,
         sectionStyles: normalized.sectionStyles,
         allowCustomCards: normalized.allowCustomCards,
+        cards: [...otherRows, ...scopedRows],
+      };
+      break;
+    }
+    case 'FEATURED_RTW':
+    case 'FEATURED_CTW':
+    case 'FEATURED_FTB': {
+      const normalized = normalizeFeatured(snapshotRecord, next.featured);
+      const featuredKey =
+        templateKey === 'FEATURED_RTW' ? 'RTW' : templateKey === 'FEATURED_CTW' ? 'CTW' : 'FTB';
+      const scopedRows = normalized.cards.filter((card) => String(card.key || '').trim().toUpperCase() === featuredKey);
+      const otherRows = next.featured.cards.filter((card) => String(card.key || '').trim().toUpperCase() !== featuredKey);
+      next.featured = {
+        ...next.featured,
+        columns: normalized.columns,
+        layoutByKey: normalized.layoutByKey,
         cards: [...otherRows, ...scopedRows],
       };
       break;

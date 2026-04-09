@@ -10,10 +10,16 @@ type TemplateKey =
   | 'TOP_NAVIGATIONS'
   | 'SHOP_BY'
   | 'SHOP_BY_COUNTRY'
+  | 'CATEGORY_MANAGE_RTW'
+  | 'CATEGORY_MANAGE_FTB'
+  | 'CATEGORY_MANAGE_CTW'
   | 'CATEGORY_MANAGE'
   | 'HOW_IT_WORKS'
   | 'CUSTOM_TEXT_ICON'
   | 'SHOP_WITH_CONFIDENCE'
+  | 'FEATURED_RTW'
+  | 'FEATURED_CTW'
+  | 'FEATURED_FTB'
   | 'FEATURED'
   | 'FRESH_DROPS'
   | 'DESIGNER_SPOTLIGHT'
@@ -25,7 +31,10 @@ type MenuLink = {
   id: string;
   label: string;
   href: string;
+  hrefMode?: 'PAGE' | 'CUSTOM_URL';
+  pageKey?: string;
   routeKey?: string;
+  customUrl?: string;
   icon?: string;
   enabled: boolean;
 };
@@ -42,11 +51,15 @@ type HeroBanner = {
   leftWidthPercent: number;
   rightWidthPercent: number;
   tag: string;
+  tagColor: string;
   title: string;
+  titleColor: string;
   titleFontSize: number;
   text: string;
+  textColor: string;
   textEnabled: boolean;
   description: string;
+  descriptionColor: string;
   descriptionEnabled: boolean;
   descriptionFontSize: number;
   primaryCtaText: string;
@@ -86,6 +99,7 @@ type TopNavigations = {
     textColor: string;
     fontFamily: string;
     fontSize: number;
+    fontWeight: number;
     imageUrl: string;
     altText: string;
     width: number;
@@ -96,7 +110,10 @@ type TopNavigations = {
     enabled: boolean;
     label: string;
     href: string;
+    hrefMode?: 'PAGE' | 'CUSTOM_URL';
+    pageKey?: string;
     routeKey?: string;
+    customUrl?: string;
     icon: string;
   };
   controllers: {
@@ -510,11 +527,15 @@ const TEMPLATES: Array<{ key: TemplateKey; label: string }> = [
   { key: 'TOP_NAVIGATIONS', label: 'Top Navigations' },
   { key: 'SHOP_BY', label: 'Shop By' },
   { key: 'SHOP_BY_COUNTRY', label: 'Shop By Country' },
-  { key: 'CATEGORY_MANAGE', label: 'Category Manage' },
+  { key: 'CATEGORY_MANAGE_RTW', label: 'Category Manage RTW' },
+  { key: 'CATEGORY_MANAGE_FTB', label: 'Category Manage FTB' },
+  { key: 'CATEGORY_MANAGE_CTW', label: 'Category Manage CTW' },
   { key: 'HOW_IT_WORKS', label: 'How It Works' },
   { key: 'CUSTOM_TEXT_ICON', label: 'Custom' },
   { key: 'SHOP_WITH_CONFIDENCE', label: 'Shop With Confidence' },
-  { key: 'FEATURED', label: 'Featured' },
+  { key: 'FEATURED_RTW', label: 'Featured RTW' },
+  { key: 'FEATURED_CTW', label: 'Featured CTW' },
+  { key: 'FEATURED_FTB', label: 'Featured FTB' },
   { key: 'FRESH_DROPS', label: 'Fresh Drops' },
   { key: 'DESIGNER_SPOTLIGHT', label: 'Designer Spotlight' },
   { key: 'HERITAGE', label: 'Heritage' },
@@ -804,7 +825,10 @@ const defaultLink = (label: string, href: string, routeKey?: string): MenuLink =
   id: uid(),
   label,
   href,
+  hrefMode: 'PAGE',
+  pageKey: routeKey,
   routeKey,
+  customUrl: '',
   icon: '',
   enabled: true,
 });
@@ -967,6 +991,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       textColor: '#111111',
       fontFamily: 'Montserrat',
       fontSize: 28,
+      fontWeight: 700,
       imageUrl: '',
       altText: 'Jenks',
       width: 180,
@@ -977,7 +1002,10 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       enabled: true,
       label: 'Sign In',
       href: '/auth/login',
+      hrefMode: 'PAGE',
+      pageKey: 'AUTH_LOGIN',
       routeKey: 'AUTH_LOGIN',
+      customUrl: '',
       icon: 'User',
     },
     controllers: {
@@ -1001,11 +1029,15 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         leftWidthPercent: 58,
         rightWidthPercent: 42,
         tag: 'Editorial Premium',
+        tagColor: '#ffffff',
         title: 'Wear the Story of Africa',
+        titleColor: '#ffffff',
         titleFontSize: 56,
         text: 'Curated fashion from top designers and textile houses.',
+        textColor: '#ffffff',
         textEnabled: true,
         description: 'Control title, text, tags, font size, CTA labels and links for each hero banner.',
+        descriptionColor: '#ffffff',
         descriptionEnabled: true,
         descriptionFontSize: 16,
         primaryCtaEnabled: true,
@@ -1732,6 +1764,42 @@ const mapLegacyManagerHref = (href: string) => {
   return normalized;
 };
 
+const normalizeMenuLinkMode = (value: unknown): LinkMode =>
+  String(value || '').trim().toUpperCase() === 'CUSTOM_URL' ? 'CUSTOM_URL' : 'PAGE';
+
+const normalizeMenuPageKey = (value: unknown, routeFallback?: unknown) => {
+  const token = String(value || routeFallback || '')
+    .trim()
+    .toUpperCase();
+  return token || undefined;
+};
+
+const normalizeMenuLink = (input: MenuLink, fallbackHref: string): MenuLink => {
+  const hrefMode = normalizeMenuLinkMode(input.hrefMode);
+  const pageKey = normalizeMenuPageKey(input.pageKey, input.routeKey);
+  const customUrl = String(input.customUrl || '').trim();
+  const pageHref = pageKey ? resolvePageHrefForKey(pageKey, normalizeManagerHref(input.href, fallbackHref)) : normalizeManagerHref(input.href, fallbackHref);
+  const href = hrefMode === 'CUSTOM_URL' ? normalizeManagerHref(customUrl, pageHref) : pageHref;
+  return {
+    ...input,
+    hrefMode,
+    pageKey,
+    routeKey: pageKey,
+    customUrl: hrefMode === 'CUSTOM_URL' ? customUrl : '',
+    href,
+  };
+};
+
+const resolveMenuHref = (entry: Pick<MenuLink, 'href' | 'hrefMode' | 'pageKey' | 'routeKey' | 'customUrl'>, fallback: string) => {
+  const mode = String(entry.hrefMode || 'PAGE').trim().toUpperCase() === 'CUSTOM_URL' ? 'CUSTOM_URL' : 'PAGE';
+  if (mode === 'CUSTOM_URL') {
+    return normalizeManagerHref(entry.customUrl || entry.href, fallback);
+  }
+  const pageToken = String(entry.pageKey || entry.routeKey || '').trim().toUpperCase();
+  if (pageToken) return resolvePageHrefForKey(pageToken, fallback);
+  return normalizeManagerHref(entry.href, fallback);
+};
+
 const normalizeManagerHref = (value: unknown, fallback: string) => {
   const raw = String(value ?? '').trim();
   if (!raw) return mapLegacyManagerHref(fallback);
@@ -1761,22 +1829,22 @@ const normalizeFeaturedLayoutByKey = (
 
 const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageConfig => {
   const next = { ...input };
+  const normalizeMenuItem = (item: MenuLink, fallbackHref: string): MenuLink =>
+    normalizeMenuLink(item, fallbackHref);
   next.topNavigations = {
     ...next.topNavigations,
-    hamburgerMenu: next.topNavigations.hamburgerMenu.map((item) => ({
-      ...item,
-      href: normalizeManagerHref(item.href, '/'),
-    })),
-    additionalTopMenu: next.topNavigations.additionalTopMenu.map((item) => ({
-      ...item,
-      href: normalizeManagerHref(item.href, '/'),
-    })),
+    hamburgerMenu: next.topNavigations.hamburgerMenu.map((item) => normalizeMenuItem(item, '/')),
+    additionalTopMenu: next.topNavigations.additionalTopMenu.map((item) => normalizeMenuItem(item, '/')),
     signInMenu: {
       ...next.topNavigations.signInMenu,
-      href: normalizeManagerHref(next.topNavigations.signInMenu.href, '/auth/login'),
+      ...normalizeMenuItem(next.topNavigations.signInMenu as unknown as MenuLink, '/auth/login'),
     },
     heroBanners: next.topNavigations.heroBanners.map((banner) => ({
       ...banner,
+      tagColor: String((banner as HeroBanner).tagColor || '#ffffff'),
+      titleColor: String((banner as HeroBanner).titleColor || '#ffffff'),
+      textColor: String((banner as HeroBanner).textColor || '#ffffff'),
+      descriptionColor: String((banner as HeroBanner).descriptionColor || '#ffffff'),
       primaryCtaLink: normalizeManagerHref(banner.primaryCtaLink, '/readytowear'),
       secondaryCtaLink: normalizeManagerHref(banner.secondaryCtaLink, '/customtowear'),
       rightPanelBackgroundMode:
@@ -3621,6 +3689,26 @@ export default function JenksV2FrontPageManager() {
                 />
               </label>
               <label className="text-xs">
+                Font Weight
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={config.topNavigations.logo.fontWeight}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        logo: {
+                          ...prev.topNavigations.logo,
+                          fontWeight: clamp(toNumber(event.target.value, prev.topNavigations.logo.fontWeight), 100, 900),
+                        },
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="text-xs">
                 Text Color
                 <input
                   type="color"
@@ -3825,6 +3913,26 @@ export default function JenksV2FrontPageManager() {
                 />
               </label>
               <label className="text-xs">
+                Font Weight
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={config.topNavigations.logo.fontWeight}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        logo: {
+                          ...prev.topNavigations.logo,
+                          fontWeight: clamp(toNumber(event.target.value, prev.topNavigations.logo.fontWeight), 100, 900),
+                        },
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="text-xs">
                 Width
                 <input
                   type="number"
@@ -3985,55 +4093,108 @@ export default function JenksV2FrontPageManager() {
                       }
                     />
                   </label>
-                  <label className="md:col-span-5 text-[11px]">
-                    Route
-                    <select
-                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                      value={item.href}
-                      onChange={(event) =>
-                        setConfig((prev) => ({
-                          ...prev,
-                          topNavigations: {
-                            ...prev.topNavigations,
-                            hamburgerMenu: prev.topNavigations.hamburgerMenu.map((entry, itemIndex) =>
-                              itemIndex === index ? { ...entry, href: event.target.value } : entry
-                            ),
-                          },
-                        }))
-                      }
-                    >
-                      {routeOptions.map((route) => (
-                        <option key={`${route.key}-${route.href}`} value={route.href}>
-                          {route.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
                   <label className="md:col-span-2 text-[11px]">
-                    Route Key
+                    Link Source
                     <select
                       className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                      value={item.routeKey || ''}
+                      value={item.hrefMode || 'PAGE'}
                       onChange={(event) =>
                         setConfig((prev) => ({
                           ...prev,
                           topNavigations: {
                             ...prev.topNavigations,
-                            hamburgerMenu: prev.topNavigations.hamburgerMenu.map((entry, itemIndex) =>
-                              itemIndex === index ? { ...entry, routeKey: event.target.value || undefined } : entry
-                            ),
+                            hamburgerMenu: prev.topNavigations.hamburgerMenu.map((entry, itemIndex) => {
+                              if (itemIndex !== index) return entry;
+                              const nextMode = event.target.value as LinkMode;
+                              const fallbackRoute = routeOptions.find((route) => route.key === 'HOME') || routeOptions[0];
+                              const activeRoute =
+                                routeOptions.find((route) => route.key === (entry.pageKey || entry.routeKey || '')) || fallbackRoute;
+                              return {
+                                ...entry,
+                                hrefMode: nextMode,
+                                pageKey: entry.pageKey || entry.routeKey || activeRoute.key,
+                                routeKey: entry.pageKey || entry.routeKey || activeRoute.key,
+                                customUrl:
+                                  nextMode === 'CUSTOM_URL'
+                                    ? entry.customUrl || entry.href || ''
+                                    : entry.customUrl || '',
+                                href: nextMode === 'CUSTOM_URL' ? entry.customUrl || entry.href || '' : activeRoute.href,
+                              };
+                            }),
                           },
                         }))
                       }
                     >
-                      <option value="">(None)</option>
-                      {routeOptions.map((route) => (
-                        <option key={route.key} value={route.key}>
-                          {route.key}
-                        </option>
-                      ))}
+                      <option value="PAGE">Pages dropdown</option>
+                      <option value="CUSTOM_URL">Custom URL</option>
                     </select>
                   </label>
+                  {(item.hrefMode || 'PAGE') === 'CUSTOM_URL' ? (
+                    <label className="md:col-span-5 text-[11px]">
+                      Custom URL
+                      <input
+                        className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                        value={item.customUrl || item.href || ''}
+                        placeholder="/readytowear or https://example.com"
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            topNavigations: {
+                              ...prev.topNavigations,
+                              hamburgerMenu: prev.topNavigations.hamburgerMenu.map((entry, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...entry,
+                                      hrefMode: 'CUSTOM_URL',
+                                      customUrl: event.target.value,
+                                      href: event.target.value,
+                                    }
+                                  : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                  ) : (
+                    <label className="md:col-span-5 text-[11px]">
+                      Route
+                      <select
+                        className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                        value={
+                          item.pageKey ||
+                          item.routeKey ||
+                          routeOptions.find((route) => route.href === item.href)?.key ||
+                          'HOME'
+                        }
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            topNavigations: {
+                              ...prev.topNavigations,
+                              hamburgerMenu: prev.topNavigations.hamburgerMenu.map((entry, itemIndex) => {
+                                if (itemIndex !== index) return entry;
+                                const selected = routeOptions.find((route) => route.key === event.target.value);
+                                return {
+                                  ...entry,
+                                  hrefMode: 'PAGE',
+                                  pageKey: event.target.value,
+                                  routeKey: event.target.value,
+                                  href: selected?.href || entry.href,
+                                };
+                              }),
+                            },
+                          }))
+                        }
+                      >
+                        {routeOptions.map((route) => (
+                          <option key={`${route.key}-${route.href}`} value={route.key}>
+                            {route.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   <div className="md:col-span-2 flex items-end justify-end gap-1">
                     <input
                       type="checkbox"
@@ -4093,30 +4254,108 @@ export default function JenksV2FrontPageManager() {
                         }
                       />
                     </label>
-                    <label className="md:col-span-6 text-[11px]">
-                      Route
+                    <label className="md:col-span-2 text-[11px]">
+                      Link Source
                       <select
                         className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                        value={item.href}
+                        value={item.hrefMode || 'PAGE'}
                         onChange={(event) =>
                           setConfig((prev) => ({
                             ...prev,
                             topNavigations: {
                               ...prev.topNavigations,
-                              additionalTopMenu: prev.topNavigations.additionalTopMenu.map((entry, itemIndex) =>
-                                itemIndex === index ? { ...entry, href: event.target.value } : entry
-                              ),
+                              additionalTopMenu: prev.topNavigations.additionalTopMenu.map((entry, itemIndex) => {
+                                if (itemIndex !== index) return entry;
+                                const nextMode = event.target.value as LinkMode;
+                                const fallbackRoute = routeOptions.find((route) => route.key === 'HOME') || routeOptions[0];
+                                const activeRoute =
+                                  routeOptions.find((route) => route.key === (entry.pageKey || entry.routeKey || '')) || fallbackRoute;
+                                return {
+                                  ...entry,
+                                  hrefMode: nextMode,
+                                  pageKey: entry.pageKey || entry.routeKey || activeRoute.key,
+                                  routeKey: entry.pageKey || entry.routeKey || activeRoute.key,
+                                  customUrl:
+                                    nextMode === 'CUSTOM_URL'
+                                      ? entry.customUrl || entry.href || ''
+                                      : entry.customUrl || '',
+                                  href: nextMode === 'CUSTOM_URL' ? entry.customUrl || entry.href || '' : activeRoute.href,
+                                };
+                              }),
                             },
                           }))
                         }
                       >
-                        {routeOptions.map((route) => (
-                          <option key={`top-${route.key}`} value={route.href}>
-                            {route.label}
-                          </option>
-                        ))}
+                        <option value="PAGE">Pages dropdown</option>
+                        <option value="CUSTOM_URL">Custom URL</option>
                       </select>
                     </label>
+                    {(item.hrefMode || 'PAGE') === 'CUSTOM_URL' ? (
+                      <label className="md:col-span-4 text-[11px]">
+                        Custom URL
+                        <input
+                          className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                          value={item.customUrl || item.href || ''}
+                          placeholder="/readytowear or https://example.com"
+                          onChange={(event) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              topNavigations: {
+                                ...prev.topNavigations,
+                                additionalTopMenu: prev.topNavigations.additionalTopMenu.map((entry, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...entry,
+                                        hrefMode: 'CUSTOM_URL',
+                                        customUrl: event.target.value,
+                                        href: event.target.value,
+                                      }
+                                    : entry
+                                ),
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                    ) : (
+                      <label className="md:col-span-4 text-[11px]">
+                        Route
+                        <select
+                          className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                          value={
+                            item.pageKey ||
+                            item.routeKey ||
+                            routeOptions.find((route) => route.href === item.href)?.key ||
+                            'HOME'
+                          }
+                          onChange={(event) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              topNavigations: {
+                                ...prev.topNavigations,
+                                additionalTopMenu: prev.topNavigations.additionalTopMenu.map((entry, itemIndex) => {
+                                  if (itemIndex !== index) return entry;
+                                  const selected = routeOptions.find((route) => route.key === event.target.value);
+                                  return {
+                                    ...entry,
+                                    hrefMode: 'PAGE',
+                                    pageKey: event.target.value,
+                                    routeKey: event.target.value,
+                                    href: selected?.href || entry.href,
+                                  };
+                                }),
+                              },
+                            }))
+                          }
+                        >
+                          {routeOptions.map((route) => (
+                            <option key={`top-${route.key}`} value={route.key}>
+                              {route.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                     <div className="md:col-span-3 flex items-end justify-end gap-1">
                       <input
                         type="checkbox"
@@ -4171,27 +4410,113 @@ export default function JenksV2FrontPageManager() {
                   />
                 </label>
                 <label className="text-xs">
-                  Sign In Route
+                  Sign In Link Source
                   <select
                     className="mt-1 w-full rounded border px-2 py-1.5"
-                    value={config.topNavigations.signInMenu.href}
+                    value={config.topNavigations.signInMenu.hrefMode || 'PAGE'}
                     onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        topNavigations: {
-                          ...prev.topNavigations,
-                          signInMenu: { ...prev.topNavigations.signInMenu, href: event.target.value },
-                        },
-                      }))
+                      setConfig((prev) => {
+                        const nextMode = event.target.value as LinkMode;
+                        const fallbackRoute = routeOptions.find((route) => route.key === 'AUTH_LOGIN') || routeOptions[0];
+                        const activeRoute =
+                          routeOptions.find(
+                            (route) =>
+                              route.key ===
+                              (prev.topNavigations.signInMenu.pageKey || prev.topNavigations.signInMenu.routeKey || '')
+                          ) || fallbackRoute;
+                        return {
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            signInMenu: {
+                              ...prev.topNavigations.signInMenu,
+                              hrefMode: nextMode,
+                              pageKey:
+                                prev.topNavigations.signInMenu.pageKey ||
+                                prev.topNavigations.signInMenu.routeKey ||
+                                activeRoute.key,
+                              routeKey:
+                                prev.topNavigations.signInMenu.pageKey ||
+                                prev.topNavigations.signInMenu.routeKey ||
+                                activeRoute.key,
+                              customUrl:
+                                nextMode === 'CUSTOM_URL'
+                                  ? prev.topNavigations.signInMenu.customUrl || prev.topNavigations.signInMenu.href || ''
+                                  : prev.topNavigations.signInMenu.customUrl || '',
+                              href:
+                                nextMode === 'CUSTOM_URL'
+                                  ? prev.topNavigations.signInMenu.customUrl || prev.topNavigations.signInMenu.href || ''
+                                  : activeRoute.href,
+                            },
+                          },
+                        };
+                      })
                     }
                   >
-                    {routeOptions.map((route) => (
-                      <option key={`signin-${route.key}`} value={route.href}>
-                        {route.label}
-                      </option>
-                    ))}
+                    <option value="PAGE">Pages dropdown</option>
+                    <option value="CUSTOM_URL">Custom URL</option>
                   </select>
                 </label>
+                {(config.topNavigations.signInMenu.hrefMode || 'PAGE') === 'CUSTOM_URL' ? (
+                  <label className="text-xs">
+                    Sign In Custom URL
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={config.topNavigations.signInMenu.customUrl || config.topNavigations.signInMenu.href || ''}
+                      placeholder="/auth/login or https://example.com/login"
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            signInMenu: {
+                              ...prev.topNavigations.signInMenu,
+                              hrefMode: 'CUSTOM_URL',
+                              customUrl: event.target.value,
+                              href: event.target.value,
+                            },
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                ) : (
+                  <label className="text-xs">
+                    Sign In Route
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={
+                        config.topNavigations.signInMenu.pageKey ||
+                        config.topNavigations.signInMenu.routeKey ||
+                        routeOptions.find((route) => route.href === config.topNavigations.signInMenu.href)?.key ||
+                        'AUTH_LOGIN'
+                      }
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          topNavigations: {
+                            ...prev.topNavigations,
+                            signInMenu: {
+                              ...prev.topNavigations.signInMenu,
+                              hrefMode: 'PAGE',
+                              pageKey: event.target.value,
+                              routeKey: event.target.value,
+                              href:
+                                routeOptions.find((route) => route.key === event.target.value)?.href ||
+                                prev.topNavigations.signInMenu.href,
+                            },
+                          },
+                        }))
+                      }
+                    >
+                      {routeOptions.map((route) => (
+                        <option key={`signin-${route.key}`} value={route.key}>
+                          {route.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <label className="text-xs">
                   Theme Mode
                   <select

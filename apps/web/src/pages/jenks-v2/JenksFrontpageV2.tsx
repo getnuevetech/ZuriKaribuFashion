@@ -185,10 +185,16 @@ type TemplateKey =
   | 'TOP_NAVIGATIONS'
   | 'SHOP_BY'
   | 'SHOP_BY_COUNTRY'
+  | 'CATEGORY_MANAGE_RTW'
+  | 'CATEGORY_MANAGE_FTB'
+  | 'CATEGORY_MANAGE_CTW'
   | 'CATEGORY_MANAGE'
   | 'HOW_IT_WORKS'
   | 'CUSTOM_TEXT_ICON'
   | 'SHOP_WITH_CONFIDENCE'
+  | 'FEATURED_RTW'
+  | 'FEATURED_CTW'
+  | 'FEATURED_FTB'
   | 'FEATURED'
   | 'FRESH_DROPS'
   | 'DESIGNER_SPOTLIGHT'
@@ -206,10 +212,16 @@ const TEMPLATE_KEYS: TemplateKey[] = [
   'TOP_NAVIGATIONS',
   'SHOP_BY',
   'SHOP_BY_COUNTRY',
+  'CATEGORY_MANAGE_RTW',
+  'CATEGORY_MANAGE_FTB',
+  'CATEGORY_MANAGE_CTW',
   'CATEGORY_MANAGE',
   'HOW_IT_WORKS',
   'CUSTOM_TEXT_ICON',
   'SHOP_WITH_CONFIDENCE',
+  'FEATURED_RTW',
+  'FEATURED_CTW',
+  'FEATURED_FTB',
   'FEATURED',
   'FRESH_DROPS',
   'DESIGNER_SPOTLIGHT',
@@ -217,6 +229,18 @@ const TEMPLATE_KEYS: TemplateKey[] = [
   'CUSTOMER_REVIEWS',
   'NEWSLETTER_FOOTER',
 ];
+
+const CATEGORY_SECTION_TEMPLATE_BY_KEY: Record<'RTW' | 'FTB' | 'CTW', TemplateKey> = {
+  RTW: 'CATEGORY_MANAGE_RTW',
+  FTB: 'CATEGORY_MANAGE_FTB',
+  CTW: 'CATEGORY_MANAGE_CTW',
+};
+
+const FEATURED_SECTION_TEMPLATE_BY_KEY: Record<'RTW' | 'CTW' | 'FTB', TemplateKey> = {
+  RTW: 'FEATURED_RTW',
+  CTW: 'FEATURED_CTW',
+  FTB: 'FEATURED_FTB',
+};
 
 const ICON_BY_KEY: Record<string, IconComponent> = {
   Search,
@@ -1234,19 +1258,21 @@ export default function JenksFrontpageV2() {
   const newsletterFooterCfg = useMemo(() => asRecord(asRecord(managerConfig).newsletterFooter), [managerConfig]);
   const sectionVisibilityCfg = useMemo(() => asRecord(asRecord(managerConfig).sectionVisibility), [managerConfig]);
 
-  const sectionLayoutByTemplate = useMemo(() => {
+  const sectionVisibilityState = useMemo(() => {
     const defaults = new Map<TemplateKey, { enabled: boolean; order: number }>();
     TEMPLATE_KEYS.forEach((key, index) => {
       defaults.set(key, { enabled: true, order: index + 1 });
     });
+    const configured = new Set<TemplateKey>();
     const rows = asArray(sectionVisibilityCfg.sections);
-    if (rows.length === 0) return defaults;
+    if (rows.length === 0) return { layout: defaults, configured };
     const byTemplate = new Map<TemplateKey, { enabled: boolean; order: number }>();
     rows.forEach((entry, index) => {
       const row = asRecord(entry);
       if (asBoolean(row.isCustom, false)) return;
       const token = asString(row.templateKey, '').toUpperCase() as TemplateKey;
       if (!TEMPLATE_KEYS.includes(token)) return;
+      configured.add(token);
       const enabled = asBoolean(row.enabled, true);
       const fallbackOrder = TEMPLATE_KEYS.indexOf(token) + 1 || index + 1;
       const order = Math.max(1, Math.round(asNumber(row.order, fallbackOrder)));
@@ -1260,13 +1286,26 @@ export default function JenksFrontpageV2() {
         order: Math.min(existing.order, order),
       });
     });
-    if (byTemplate.size === 0) return defaults;
+    if (byTemplate.size === 0) return { layout: defaults, configured };
     byTemplate.forEach((value, key) => defaults.set(key, value));
-    return defaults;
+    return { layout: defaults, configured };
   }, [sectionVisibilityCfg.sections]);
-  const isSectionVisible = (templateKey: TemplateKey) => sectionLayoutByTemplate.get(templateKey)?.enabled ?? true;
-  const getSectionOrder = (templateKey: TemplateKey) =>
-    sectionLayoutByTemplate.get(templateKey)?.order ?? Math.max(1, TEMPLATE_KEYS.indexOf(templateKey) + 1);
+  const sectionLayoutByTemplate = sectionVisibilityState.layout;
+  const configuredTemplateKeys = sectionVisibilityState.configured;
+  const resolveSectionLayout = (templateKey: TemplateKey, fallbackTemplateKey?: TemplateKey) => {
+    if (configuredTemplateKeys.has(templateKey)) {
+      return sectionLayoutByTemplate.get(templateKey);
+    }
+    if (fallbackTemplateKey) {
+      return sectionLayoutByTemplate.get(fallbackTemplateKey) || sectionLayoutByTemplate.get(templateKey);
+    }
+    return sectionLayoutByTemplate.get(templateKey);
+  };
+  const isSectionVisible = (templateKey: TemplateKey, fallbackTemplateKey?: TemplateKey) =>
+    resolveSectionLayout(templateKey, fallbackTemplateKey)?.enabled ?? true;
+  const getSectionOrder = (templateKey: TemplateKey, fallbackTemplateKey?: TemplateKey) =>
+    resolveSectionLayout(templateKey, fallbackTemplateKey)?.order ??
+    Math.max(1, TEMPLATE_KEYS.indexOf(templateKey) + 1);
   const sectionTitleCfg = useMemo(() => asRecord(sectionVisibilityCfg.titleSettings), [sectionVisibilityCfg.titleSettings]);
   const sectionTitlesEnabled = asBoolean(sectionTitleCfg.show, asBoolean(sectionTitleCfg.enabled, true));
   const sectionTitlePosition = ((): SectionTitlePosition => {
@@ -1690,6 +1729,33 @@ export default function JenksFrontpageV2() {
     return normalizeHref(section.href, '/readytowear');
   };
   const orderedSectionsRtwFtbCtw = useMemo(() => [...sectionsRtwFtbCtw], [sectionsRtwFtbCtw]);
+  const orderedCategorySections = useMemo(
+    () =>
+      (['RTW', 'FTB', 'CTW'] as const)
+        .map((key) =>
+          orderedSectionsRtwFtbCtw.find((section) => String(section.key || '').trim().toUpperCase() === key)
+        )
+        .filter((section): section is CategorySectionRuntime => Boolean(section)),
+    [orderedSectionsRtwFtbCtw]
+  );
+  const visibleCategorySections = useMemo(
+    () =>
+      orderedCategorySections.filter((section) =>
+        isSectionVisible(
+          CATEGORY_SECTION_TEMPLATE_BY_KEY[String(section.key || '').trim().toUpperCase() as 'RTW' | 'FTB' | 'CTW'],
+          'CATEGORY_MANAGE'
+        )
+      ),
+    [orderedCategorySections, sectionLayoutByTemplate, configuredTemplateKeys]
+  );
+  const featuredCategoryOrder = ['RTW', 'CTW', 'FTB'] as const;
+  const visibleFeaturedKeys = useMemo(
+    () =>
+      featuredCategoryOrder.filter((key) =>
+        isSectionVisible(FEATURED_SECTION_TEMPLATE_BY_KEY[key], 'FEATURED')
+      ),
+    [sectionLayoutByTemplate, configuredTemplateKeys]
+  );
   const categoryStepCardOverlayStyle = (section: CategorySectionRuntime): CSSProperties => {
     const alpha = Math.max(0, Math.min(1, section.stepCardOverlayOpacity / 100));
     const background = asString(section.stepCardBackgroundColor, '#111111');
@@ -3394,88 +3460,89 @@ export default function JenksFrontpageV2() {
       ) : null}
 
       {/* RTW / FTB / CTW HERO-HEIGHT SPLIT */}
-      {isSectionVisible('CATEGORY_MANAGE') ? (
-      <section className="space-y-0" style={{ order: getSectionOrder('CATEGORY_MANAGE') }}>
-        {orderedSectionsRtwFtbCtw.map((section) => (
-          <div
-            key={section.id}
-            className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 ${
-              section.textOnLeft ? 'md:grid-cols-[32%_68%]' : 'md:grid-cols-[68%_32%]'
-            }`}
-          >
-            {section.textOnLeft ? (
-              <>
-                <div className={`relative overflow-hidden px-8 py-12 text-white ${section.panelBg}`} data-kimi-anim="sidebar-left">
-                  <div
-                    className="pointer-events-none absolute inset-0 scale-105 bg-cover bg-center blur-2xl"
-                    style={{ backgroundImage: toSafeBackgroundImage(section.image), opacity: 0.18 }}
-                  />
-                  <div className="pointer-events-none absolute inset-0 bg-black/70" />
-                  <div className="relative flex h-full items-center">
-                    <div className="flex h-full max-w-[560px] flex-col items-start justify-center text-left">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
-                      <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
-                      <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
-                    <Link
-                      to={sectionCtaHref(section)}
-                      style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                      className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
-                    >
-                        {section.cta}
-                    </Link>
+      {visibleCategorySections.map((section) => {
+        const sectionKey = String(section.key || '').trim().toUpperCase() as 'RTW' | 'FTB' | 'CTW';
+        const sectionTemplateKey = CATEGORY_SECTION_TEMPLATE_BY_KEY[sectionKey];
+        return (
+          <section key={section.id} className="space-y-0" style={{ order: getSectionOrder(sectionTemplateKey, 'CATEGORY_MANAGE') }}>
+            <div
+              className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 ${
+                section.textOnLeft ? 'md:grid-cols-[32%_68%]' : 'md:grid-cols-[68%_32%]'
+              }`}
+            >
+              {section.textOnLeft ? (
+                <>
+                  <div className={`relative overflow-hidden px-8 py-12 text-white ${section.panelBg}`} data-kimi-anim="sidebar-left">
+                    <div
+                      className="pointer-events-none absolute inset-0 scale-105 bg-cover bg-center blur-2xl"
+                      style={{ backgroundImage: toSafeBackgroundImage(section.image), opacity: 0.18 }}
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-black/70" />
+                    <div className="relative flex h-full items-center">
+                      <div className="flex h-full max-w-[560px] flex-col items-start justify-center text-left">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
+                        <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
+                        <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
+                      <Link
+                        to={sectionCtaHref(section)}
+                        style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                        className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
+                      >
+                          {section.cta}
+                      </Link>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="relative h-full w-full">
-                  <BrandImageWithFallback
-                    src={section.image}
-                    alt={section.sectionName}
-                    className="h-full w-full object-cover"
-                    spinnerClassName="h-7 w-7"
-                    data-kimi-anim="zoom-in"
-                  />
-                  {section.stepsEnabled && section.stepCards.length > 0 ? renderCategoryStepCards(section) : null}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="relative h-full w-full">
-                  <BrandImageWithFallback
-                    src={section.image}
-                    alt={section.sectionName}
-                    className="h-full w-full object-cover"
-                    spinnerClassName="h-7 w-7"
-                    data-kimi-anim="zoom-in"
-                  />
-                  {section.stepsEnabled && section.stepCards.length > 0 ? renderCategoryStepCards(section) : null}
-                </div>
-                <div className={`relative overflow-hidden px-8 py-12 text-white ${section.panelBg}`} data-kimi-anim="sidebar-right">
-                  <div
-                    className="pointer-events-none absolute inset-0 scale-105 bg-cover bg-center blur-2xl"
-                    style={{ backgroundImage: toSafeBackgroundImage(section.image), opacity: 0.18 }}
-                  />
-                  <div className="pointer-events-none absolute inset-0 bg-black/70" />
-                  <div className="relative flex h-full items-center">
-                    <div className="flex h-full max-w-[560px] flex-col items-start justify-center text-left">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
-                      <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
-                      <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
-                    <Link
-                      to={sectionCtaHref(section)}
-                      style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                      className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
-                    >
-                        {section.cta}
-                    </Link>
+                  <div className="relative h-full w-full">
+                    <BrandImageWithFallback
+                      src={section.image}
+                      alt={section.sectionName}
+                      className="h-full w-full object-cover"
+                      spinnerClassName="h-7 w-7"
+                      data-kimi-anim="zoom-in"
+                    />
+                    {section.stepsEnabled && section.stepCards.length > 0 ? renderCategoryStepCards(section) : null}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="relative h-full w-full">
+                    <BrandImageWithFallback
+                      src={section.image}
+                      alt={section.sectionName}
+                      className="h-full w-full object-cover"
+                      spinnerClassName="h-7 w-7"
+                      data-kimi-anim="zoom-in"
+                    />
+                    {section.stepsEnabled && section.stepCards.length > 0 ? renderCategoryStepCards(section) : null}
+                  </div>
+                  <div className={`relative overflow-hidden px-8 py-12 text-white ${section.panelBg}`} data-kimi-anim="sidebar-right">
+                    <div
+                      className="pointer-events-none absolute inset-0 scale-105 bg-cover bg-center blur-2xl"
+                      style={{ backgroundImage: toSafeBackgroundImage(section.image), opacity: 0.18 }}
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-black/70" />
+                    <div className="relative flex h-full items-center">
+                      <div className="flex h-full max-w-[560px] flex-col items-start justify-center text-left">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
+                        <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
+                        <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
+                      <Link
+                        to={sectionCtaHref(section)}
+                        style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
+                        className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
+                      >
+                          {section.cta}
+                      </Link>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </>
-            )}
-          </div>
-        ))}
-      </section>
-      ) : null}
+                </>
+              )}
+            </div>
+          </section>
+        );
+      })}
 
       {/* HOW IT WORKS */}
       {showHowItWorksSection ? (
@@ -3532,11 +3599,11 @@ export default function JenksFrontpageV2() {
       ) : null}
 
       {/* FEATURED RTW + CTW + FTB */}
-      {isSectionVisible('FEATURED') ? (
-        <section className="space-y-0" style={{ order: getSectionOrder('FEATURED') }}>
-          {(['RTW', 'CTW', 'FTB'] as const).map((key) => (
+      {visibleFeaturedKeys.map((key) => {
+        const sectionTemplateKey = FEATURED_SECTION_TEMPLATE_BY_KEY[key];
+        return (
+          <section key={`featured-${key}`} className="space-y-0" style={{ order: getSectionOrder(sectionTemplateKey, 'FEATURED') }}>
             <div
-              key={key}
               className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 ${
                 (featuredLayoutByKey[key]?.columns ?? featuredColumns) >= 4
                   ? 'md:grid-cols-4'
@@ -3547,33 +3614,35 @@ export default function JenksFrontpageV2() {
                       : 'md:grid-cols-2'
               }`}
             >
-              {featuredCardsByKey[key].slice(0, (featuredLayoutByKey[key]?.rows ?? 1) * (featuredLayoutByKey[key]?.columns ?? featuredColumns)).map((card) => (
-                <Link key={card.id} to={featuredCardHref(card, key)} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
-                  <BrandImageWithFallback
-                    src={card.image}
-                    alt={card.title}
-                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                    spinnerClassName="h-6 w-6"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-                  <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-white/72">{card.tag}</p>
-                  <div className="absolute bottom-[10%] right-6 max-w-[58%] text-right text-white">
-                    <p className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">{card.title}</p>
-                    <p className="mt-2 text-sm text-white/78">{card.subtitle}</p>
-                    <span
-                      className="mt-4 inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.06em] text-white/92 hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
-                      style={buildCTAStyle(card.ctaStyle, DEFAULT_INLINE_CTA_STYLE)}
-                    >
-                      {card.cta}
-                      <ArrowRight className="h-4 w-4" />
-                    </span>
-                  </div>
-                </Link>
-              ))}
+              {featuredCardsByKey[key]
+                .slice(0, (featuredLayoutByKey[key]?.rows ?? 1) * (featuredLayoutByKey[key]?.columns ?? featuredColumns))
+                .map((card) => (
+                  <Link key={card.id} to={featuredCardHref(card, key)} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
+                    <BrandImageWithFallback
+                      src={card.image}
+                      alt={card.title}
+                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      spinnerClassName="h-6 w-6"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+                    <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-white/72">{card.tag}</p>
+                    <div className="absolute bottom-[10%] right-6 max-w-[58%] text-right text-white">
+                      <p className="font-['Oswald'] text-4xl font-bold uppercase leading-[0.95]">{card.title}</p>
+                      <p className="mt-2 text-sm text-white/78">{card.subtitle}</p>
+                      <span
+                        className="mt-4 inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.06em] text-white/92 hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
+                        style={buildCTAStyle(card.ctaStyle, DEFAULT_INLINE_CTA_STYLE)}
+                      >
+                        {card.cta}
+                        <ArrowRight className="h-4 w-4" />
+                      </span>
+                    </div>
+                  </Link>
+                ))}
             </div>
-          ))}
-        </section>
-      ) : null}
+          </section>
+        );
+      })}
 
       {/* FRESH DROPS */}
       {isSectionVisible('FRESH_DROPS') ? (
