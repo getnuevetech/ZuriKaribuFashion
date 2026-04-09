@@ -11886,18 +11886,42 @@ const contactPageApi = {
         heroDescription: string;
         formTitle: string;
         formDescription: string;
-        cardLiveChatTitle: string;
-        cardLiveChatDescription: string;
-        cardEmailTitle: string;
-        cardEmailDescription: string;
-        cardVoipTitle: string;
-        cardVoipDescription: string;
-        enabled: boolean;
+        issueTypePlaceholder: string;
+        issueDetailsPlaceholder: string;
+        supportChannels: Array<{
+          id: string;
+          title: string;
+          description: string;
+          icon: 'CHAT' | 'EMAIL' | 'PHONE';
+          enabled: boolean;
+          sortOrder: number;
+        }>;
       };
-    }>('/help-center/public/contact'),
-  getAdminConfig: () => apiService.get<{ success: boolean; data: any }>('/help-center/admin/contact'),
+    }>('/help-center/public/contact-page'),
+  getPublic: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        heroTag: string;
+        heroTitle: string;
+        heroDescription: string;
+        formTitle: string;
+        formDescription: string;
+        issueTypePlaceholder: string;
+        issueDetailsPlaceholder: string;
+        supportChannels: Array<{
+          id: string;
+          title: string;
+          description: string;
+          icon: 'CHAT' | 'EMAIL' | 'PHONE';
+          enabled: boolean;
+          sortOrder: number;
+        }>;
+      };
+    }>('/help-center/public/contact-page'),
+  getAdminConfig: () => apiService.get<{ success: boolean; data: any }>('/help-center/admin/contact-page'),
   updateAdminConfig: (payload: Record<string, unknown>) =>
-    apiService.patch<{ success: boolean; data: any; message?: string }>('/help-center/admin/contact', payload),
+    apiService.patch<{ success: boolean; data: any; message?: string }>('/help-center/admin/contact-page', payload),
 };
 
 const moduleRuntimeApi = {

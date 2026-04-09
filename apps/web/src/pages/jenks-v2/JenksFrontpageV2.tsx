@@ -47,10 +47,15 @@ type HeroSlide = {
   textVerticalAlign: 'TOP' | 'MIDDLE' | 'BOTTOM';
   leftWidthPercent: number;
   rightWidthPercent: number;
+  tag: string;
+  tagColor: string;
   titleFontSize: number;
+  titleColor: string;
   textEnabled: boolean;
+  textColor: string;
   descriptionEnabled: boolean;
   descriptionFontSize: number;
+  descriptionColor: string;
   titleA: string;
   titleB: string;
   lineA: string;
@@ -242,7 +247,7 @@ const DEFAULT_HREF_BY_KEY: Record<string, string> = {
   CTW: '/customtowear',
   FTB: '/fabricstobuy',
   HOME: '/',
-  SHOP: '/shop',
+  SHOP: '/Shop',
   READY_TO_WEAR: '/readytowear',
   CUSTOM_TO_WEAR: '/customtowear',
   FABRICS: '/fabricstobuy',
@@ -398,6 +403,19 @@ const normalizeHref = (value: unknown, fallback: string, routeKey?: unknown) => 
   return toSafeInternalHref(fallback);
 };
 
+const resolveConfiguredMenuHref = (
+  entry: Record<string, unknown>,
+  fallbackHref: string
+) => {
+  const hrefMode = asString(entry.hrefMode, 'PAGE').toUpperCase() === 'CUSTOM_URL' ? 'CUSTOM_URL' : 'PAGE';
+  if (hrefMode === 'CUSTOM_URL') {
+    return toSafeInternalHref(normalizeHref(entry.customUrl, normalizeHref(entry.href, fallbackHref)));
+  }
+  const pageKey = asString(entry.pageKey, asString(entry.routeKey, '')).toUpperCase();
+  const pageHref = pageKey && PAGE_HREF_BY_KEY[pageKey] ? PAGE_HREF_BY_KEY[pageKey] : normalizeHref(entry.href, fallbackHref);
+  return toSafeInternalHref(pageHref);
+};
+
 const normalizeCountryCategoryToken = (value: unknown): 'RTW' | 'CTW' | 'FTB' | 'ALL' => {
   const token = asString(value, '').trim().toUpperCase();
   if (!token) return 'ALL';
@@ -424,12 +442,12 @@ const productGroupHref = (groupRaw: unknown) => {
   if (group === 'RTW') return buildCountryProductsHref('Nigeria', 'RTW');
   if (group === 'CTW') return buildCountryProductsHref('Nigeria', 'CTW');
   if (group === 'FTB') return buildCountryProductsHref('Nigeria', 'FTB');
-  return '/readytowear';
+  return '/Shop';
 };
 
 const PAGE_HREF_BY_KEY: Record<string, string> = {
   HOME: '/',
-  SHOP: '/shop',
+  SHOP: '/Shop',
   READY_TO_WEAR: '/readytowear',
   FABRICS: '/fabricstobuy',
   CUSTOM_TO_WEAR: '/customtowear',
@@ -439,6 +457,20 @@ const PAGE_HREF_BY_KEY: Record<string, string> = {
   HELP_CENTER: '/help-center',
   COUNTRY_PRODUCTS: '/country-products',
   AUTH_LOGIN: '/auth/login',
+};
+
+const mapSourceCategoryToDetailHref = (
+  category: 'RTW' | 'CTW' | 'FTB',
+  id: string,
+  source: Record<string, unknown>
+) => {
+  const safeId = asString(id, '').trim();
+  if (!safeId) return '/Shop';
+  const preferredHref = asString(source.href, asString(source.url, ''));
+  if (preferredHref) return toSafeInternalHref(preferredHref);
+  if (category === 'RTW') return `/readytowear/${safeId}`;
+  if (category === 'CTW') return `/customtowear/${safeId}`;
+  return `/fabricstobuy/${safeId}`;
 };
 
 const resolveManagerImage = (value: unknown, fallback = '') => {
@@ -625,7 +657,7 @@ const isExternalHref = (href: string) => /^https?:\/\//i.test(href);
 
 const sanitizeLegacyInternalHref = (href: string) => {
   const trimmed = href.trim();
-  if (!trimmed) return '/readytowear';
+  if (!trimmed) return '/Shop';
   if (
     trimmed === '/main' ||
     trimmed === '/main/' ||
@@ -636,6 +668,8 @@ const sanitizeLegacyInternalHref = (href: string) => {
     trimmed.startsWith('/shop?') ||
     trimmed.startsWith('/shop#')
   ) {
+    if (/^\/shop(\/)?$/i.test(trimmed)) return '/Shop';
+    if (/^\/shop[?#]/i.test(trimmed)) return `/Shop${trimmed.slice('/shop'.length)}`;
     return trimmed;
   }
   return trimmed;
@@ -704,6 +738,11 @@ const HERO: HeroSlide[] = [
     textVerticalAlign: 'MIDDLE',
     leftWidthPercent: 58,
     rightWidthPercent: 42,
+    tag: 'Editorial Premium',
+    tagColor: '#ffffff',
+    titleColor: '#ffffff',
+    textColor: '#ffffff',
+    descriptionColor: '#ffffff',
     titleA: 'WEAR',
     titleB: 'THE STORY OF AFRICA',
     lineA: 'Curated fashion from top designers and textile houses.',
@@ -727,6 +766,11 @@ const HERO: HeroSlide[] = [
     textVerticalAlign: 'MIDDLE',
     leftWidthPercent: 58,
     rightWidthPercent: 42,
+    tag: 'Editorial Premium',
+    tagColor: '#111111',
+    titleColor: '#111111',
+    textColor: '#111111',
+    descriptionColor: '#111111',
     titleA: 'DISCOVER',
     titleB: 'AFRICAN ELEGANCE',
     lineA: 'Signature pieces and modern tailoring from trusted labels.',
@@ -976,13 +1020,21 @@ const RTW_FTB_CTW_SECTIONS = [
   },
 ] as const;
 
-const FRESH_DROPS = [
+const FRESH_DROPS: Array<{
+  id: string;
+  image: string;
+  name: string;
+  brand: string;
+  price: string;
+  href: string;
+}> = [
   {
     id: 'drop-1',
     image: `${ASSET_BASE}/featured_custom_left.jpg`,
     name: 'Awon Da',
     brand: 'Diallo Fabrics',
     price: '$230.00',
+    href: '/Shop',
   },
   {
     id: 'drop-2',
@@ -990,6 +1042,7 @@ const FRESH_DROPS = [
     name: 'Kakaki Kentus',
     brand: 'Diallo Fabrics',
     price: '$115.00',
+    href: '/Shop',
   },
   {
     id: 'drop-3',
@@ -997,6 +1050,7 @@ const FRESH_DROPS = [
     name: 'Ankara Agege',
     brand: 'Diallo Fabrics',
     price: '$0.13/yd',
+    href: '/Shop',
   },
   {
     id: 'drop-4',
@@ -1004,6 +1058,7 @@ const FRESH_DROPS = [
     name: 'Bazin Royale',
     brand: 'Diallo Fabrics',
     price: '$145.00',
+    href: '/Shop',
   },
 ];
 
@@ -1129,7 +1184,7 @@ export default function JenksFrontpageV2() {
   const [searchQuery, setSearchQuery] = useState('');
   const [themeMode, setThemeMode] = useState<'LIGHT' | 'DARK'>('LIGHT');
   const [freshDropsProducts, setFreshDropsProducts] = useState<
-    Array<{ id: string; image: string; name: string; brand: string; price: string; createdAtTs: number }>
+    Array<{ id: string; image: string; name: string; brand: string; price: string; href: string; createdAtTs: number }>
   >([]);
   const [productReviewCards, setProductReviewCards] = useState<CustomerReviewCard[]>([]);
   const [customerReviewIndex, setCustomerReviewIndex] = useState(0);
@@ -1146,18 +1201,18 @@ export default function JenksFrontpageV2() {
       { label: 'Ready To Wear', href: '/readytowear' },
       { label: 'Custom To Wear', href: '/customtowear' },
       { label: 'Fabrics', href: '/fabricstobuy' },
-      { label: 'Shop', href: '/shop' },
+      { label: 'Shop', href: '/Shop' },
       { label: 'Country', href: '/country' },
     ],
     []
   );
   const searchTargetHref = useMemo(() => {
     const token = searchQuery.trim().toLowerCase();
-    if (!token) return '/shop';
+    if (!token) return '/Shop';
     const matched =
       searchSuggestions.find((entry) => entry.label.toLowerCase() === token) ||
       searchSuggestions.find((entry) => entry.label.toLowerCase().includes(token));
-    return matched?.href || `/shop?search=${encodeURIComponent(searchQuery.trim())}`;
+    return matched?.href || `/Shop?search=${encodeURIComponent(searchQuery.trim())}`;
   }, [searchQuery, searchSuggestions]);
   const submitSearchOverlay = () => {
     const target = searchTargetHref;
@@ -1240,6 +1295,7 @@ export default function JenksFrontpageV2() {
       right: compact.slice(pivot),
     };
   }, [logoTextRaw]);
+  const headerLogoFontWeight = Math.max(100, Math.min(900, Math.round(asNumber(logoCfg.fontWeight, 700))));
   const themeCfg = useMemo(() => asRecord(asRecord(topNavigationsCfg.controllers).theme), [topNavigationsCfg.controllers]);
   const ThemeIcon = iconFromKey(themeCfg.icon, Sun);
   const hamburgerMenuLinks = useMemo(
@@ -1249,7 +1305,7 @@ export default function JenksFrontpageV2() {
         .filter((entry) => asBoolean(entry.enabled, true))
         .map((entry) => ({
           label: asString(entry.label, 'Menu'),
-          href: normalizeHref(entry.href, '/', entry.routeKey),
+          href: resolveConfiguredMenuHref(entry, '/'),
         })),
     [topNavigationsCfg.hamburgerMenu]
   );
@@ -1260,7 +1316,7 @@ export default function JenksFrontpageV2() {
         .filter((entry) => asBoolean(entry.enabled, true))
         .map((entry) => ({
           label: asString(entry.label, 'Link'),
-          href: normalizeHref(entry.href, '/', entry.routeKey),
+          href: resolveConfiguredMenuHref(entry, '/'),
         })),
     [topNavigationsCfg.additionalTopMenu]
   );
@@ -1295,10 +1351,15 @@ export default function JenksFrontpageV2() {
         textVerticalAlign,
         leftWidthPercent,
         rightWidthPercent,
+        tag: asString(row.tag, fallbackSlide.tag || ''),
+        tagColor: asString(row.tagColor, fallbackSlide.tagColor || '#ffffff'),
         titleFontSize: Math.max(32, Math.min(120, Math.round(asNumber(row.titleFontSize, 72)))),
+        titleColor: asString(row.titleColor, fallbackSlide.titleColor || '#ffffff'),
         textEnabled: asBoolean(row.textEnabled, true),
+        textColor: asString(row.textColor, fallbackSlide.textColor || '#ffffff'),
         descriptionEnabled: asBoolean(row.descriptionEnabled, true),
         descriptionFontSize: Math.max(10, Math.min(48, Math.round(asNumber(row.descriptionFontSize, 14)))),
+        descriptionColor: asString(row.descriptionColor, fallbackSlide.descriptionColor || '#ffffff'),
         titleA: split.titleA || HERO[indexKey % HERO.length]?.titleA || 'WEAR',
         titleB: split.titleB || HERO[indexKey % HERO.length]?.titleB || 'THE STORY OF AFRICA',
         lineA: asString(row.text, HERO[indexKey % HERO.length]?.lineA || ''),
@@ -1773,6 +1834,7 @@ export default function JenksFrontpageV2() {
       name: entry.name,
       brand: entry.brand,
       price: entry.price,
+      href: entry.href,
     }));
     if (dynamicRows.length > 0) return dynamicRows.slice(0, maxItems);
     return FRESH_DROPS.slice(0, maxItems);
@@ -2126,7 +2188,7 @@ export default function JenksFrontpageV2() {
     return `${tokens.slice(0, heritagePreviewWords).join(' ')}…`;
   }, [heritageStoryHtml, heritagePreviewWords]);
   const showFullStory = heritageStoryExpanded;
-  const heritageStatsAnchorClass = 'bottom-[9%] left-8';
+  const heritageStatsAnchorClass = 'bottom-8 left-8 md:bottom-10 md:left-10';
 
   const newsletterCfg = useMemo(() => asRecord(newsletterFooterCfg.newsletter), [newsletterFooterCfg.newsletter]);
   const footerCfg = useMemo(() => asRecord(newsletterFooterCfg.footer), [newsletterFooterCfg.footer]);
@@ -2536,7 +2598,8 @@ export default function JenksFrontpageV2() {
     let cancelled = false;
     const loadFreshDropsProducts = async () => {
       try {
-        if (asString(freshDropsCfg.sourceMode, 'NEWLY_LISTED').toUpperCase() !== 'FILTERED') {
+        const sourceMode = asString(freshDropsCfg.sourceMode, 'NEWLY_LISTED').toUpperCase();
+        if (sourceMode !== 'FILTERED' && sourceMode !== 'NEWLY_LISTED') {
           if (!cancelled) setFreshDropsProducts([]);
           return;
         }
@@ -2565,7 +2628,7 @@ export default function JenksFrontpageV2() {
         const selectedCountrySet = new Set(freshDropsCountryFilterTokens);
         const listingAgeDays = Math.max(1, Math.round(asNumber(freshDropsCfg.listingAgeDays, 14)));
         const listingAgeCutoff = Date.now() - listingAgeDays * 24 * 60 * 60 * 1000;
-        const includeOnlyFresh = asString(freshDropsCfg.sourceMode, 'NEWLY_LISTED').toUpperCase() === 'NEWLY_LISTED';
+        const includeOnlyFresh = sourceMode === 'NEWLY_LISTED';
 
         const rows: Array<{ id: string; image: string; name: string; brand: string; price: string; createdAtTs: number; category: 'RTW' | 'CTW' | 'FTB' }> = [];
         const pushRows = (sourceRows: unknown[], category: 'RTW' | 'CTW' | 'FTB') => {
@@ -2573,7 +2636,10 @@ export default function JenksFrontpageV2() {
             const row = asRecord(raw);
             const id = asString(row.id, asString(row._id, `${category}-${index + 1}`));
             if (!id) return;
-            const countryToken = asString(row.country, '').toUpperCase();
+            const countryToken = asString(
+              row.country,
+              asString(asRecord(row.designer).country, asString(asRecord(row.seller).country, ''))
+            ).toUpperCase();
             if (selectedCountrySet.size > 0 && !selectedCountrySet.has(countryToken)) return;
             if (selectedCategorySet.size > 0 && !selectedCategorySet.has(category)) return;
             const createdAtTs = toTimestamp(row.createdAt);
@@ -2590,6 +2656,7 @@ export default function JenksFrontpageV2() {
               name: asString(row.name, category === 'FTB' ? 'Fabric' : 'Product'),
               brand: asString(row.designerName, asString(row.sellerName, asString(row.ownerName, 'Jenks'))),
               price: formattedPrice,
+              href: category === 'RTW' ? `/readytowear/${id}` : category === 'CTW' ? `/customtowear/${id}` : `/fabricstobuy/${id}`,
               createdAtTs,
               category,
             });
@@ -2739,11 +2806,12 @@ export default function JenksFrontpageV2() {
                   />
                 ) : (
                   <p
-                    className="font-['Oswald'] font-semibold uppercase leading-none tracking-[0.08em]"
+                    className="font-['Oswald'] uppercase leading-none tracking-[0.08em]"
                     style={{
                       color: asString(logoCfg.textColor, '#111111'),
                       fontFamily: asString(logoCfg.fontFamily, 'Oswald'),
                       fontSize: Math.max(18, Math.round(asNumber(logoCfg.fontSize, 27))),
+                      fontWeight: headerLogoFontWeight,
                     }}
                   >
                     <span>{logoTextSplit.left}</span>
@@ -2923,18 +2991,39 @@ export default function JenksFrontpageV2() {
               />
               <div className="absolute inset-0 bg-gradient-to-r from-black/58 via-black/34 to-black/45" />
               <div className="relative ml-auto w-full max-w-[720px] text-right animate-fade-in" data-kimi-anim="fade-up">
+                {active.tag ? (
+                  <p
+                    className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em]"
+                    style={{ color: active.tagColor }}
+                  >
+                    {active.tag}
+                  </p>
+                ) : null}
                 <h1
-                  className="break-words font-['Oswald'] font-bold uppercase leading-[0.9] text-white"
-                  style={{ fontSize: `${Math.max(36, Math.min(120, Math.round(active.titleFontSize)))}px` }}
+                  className="break-words font-['Oswald'] font-bold uppercase leading-[0.9]"
+                  style={{
+                    fontSize: `${Math.max(36, Math.min(120, Math.round(active.titleFontSize)))}px`,
+                    color: active.titleColor,
+                  }}
                 >
                   <span>{active.titleA}</span>
-                  <span className="ml-[0.16em] text-[#e66045]">{active.titleB}</span>
+                  <span className="ml-[0.16em]">{active.titleB}</span>
                 </h1>
                 {active.textEnabled ? (
-                  <p className="mt-6 text-[16px] font-light leading-[1.35] text-white/92 sm:text-[18px]">{active.lineA}</p>
+                  <p
+                    className="mt-6 text-[16px] font-light leading-[1.35] sm:text-[18px]"
+                    style={{ color: active.textColor }}
+                  >
+                    {active.lineA}
+                  </p>
                 ) : null}
                 {active.descriptionEnabled ? (
-                  <p className="mt-4 text-white/82" style={{ fontSize: `${active.descriptionFontSize}px` }}>{active.lineB}</p>
+                  <p
+                    className="mt-4"
+                    style={{ fontSize: `${active.descriptionFontSize}px`, color: active.descriptionColor }}
+                  >
+                    {active.lineB}
+                  </p>
                 ) : null}
                 <div className="mt-6 flex flex-wrap items-center justify-end gap-1.5">
                   {active.primaryCtaEnabled ? (
@@ -3018,18 +3107,39 @@ export default function JenksFrontpageV2() {
               >
                 {heroRightHasPanelImage ? <div className="absolute inset-0 bg-[#f5f3ee]/68" /> : null}
                 <div className="relative w-full max-w-[520px] pr-3 sm:pr-4 animate-fade-in" data-kimi-anim="fade-up">
+                  {active.tag ? (
+                    <p
+                      className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em]"
+                      style={{ color: active.tagColor }}
+                    >
+                      {active.tag}
+                    </p>
+                  ) : null}
                   <h1
                     className="break-words font-['Oswald'] font-bold uppercase leading-[0.9]"
-                    style={{ fontSize: `${Math.max(36, Math.min(120, Math.round(active.titleFontSize)))}px` }}
+                    style={{
+                      fontSize: `${Math.max(36, Math.min(120, Math.round(active.titleFontSize)))}px`,
+                      color: active.titleColor,
+                    }}
                   >
                     <span>{active.titleA}</span>
-                    <span className="ml-[0.16em] text-[#e66045]">{active.titleB}</span>
+                    <span className="ml-[0.16em]">{active.titleB}</span>
                   </h1>
                   {active.textEnabled ? (
-                    <p className="mt-6 text-[16px] font-light leading-[1.35] text-black/84 sm:text-[18px]">{active.lineA}</p>
+                    <p
+                      className="mt-6 text-[16px] font-light leading-[1.35] sm:text-[18px]"
+                      style={{ color: active.textColor }}
+                    >
+                      {active.lineA}
+                    </p>
                   ) : null}
                   {active.descriptionEnabled ? (
-                    <p className="mt-4 text-black/55" style={{ fontSize: `${active.descriptionFontSize}px` }}>{active.lineB}</p>
+                    <p
+                      className="mt-4"
+                      style={{ fontSize: `${active.descriptionFontSize}px`, color: active.descriptionColor }}
+                    >
+                      {active.lineB}
+                    </p>
                   ) : null}
                   <div className="mt-6 flex flex-wrap items-center gap-1.5">
                     {active.primaryCtaEnabled ? (
@@ -3498,8 +3608,10 @@ export default function JenksFrontpageV2() {
             className="mt-8 flex gap-4 overflow-x-auto pb-1 scrollbar-hide"
           >
             {freshDropsCards.map((drop) => (
-              <article
+              <Link
                 key={drop.id}
+                to={toSafeInternalHref(drop.href)}
+                aria-label={`Open ${drop.name} quick view`}
                 className="group min-w-[312px] flex-1 overflow-hidden border border-black/10 bg-white transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_18px_46px_rgba(0,0,0,0.2)] md:min-w-[calc((100%-24px)/4)]"
               >
                 <div className="relative">
@@ -3512,13 +3624,17 @@ export default function JenksFrontpageV2() {
                   <span className="absolute left-4 top-4 bg-[#e66045] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white">
                     NEW
                   </span>
+                  <span className="pointer-events-none absolute bottom-4 right-4 inline-flex items-center gap-2 border border-white/70 bg-black/30 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white opacity-0 transition-all duration-300 group-hover:opacity-100">
+                    Quick View
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </span>
                 </div>
                 <div className="p-4">
                   <p className="text-xl font-semibold">{drop.name}</p>
                   <p className="mt-1 text-sm text-black/60">{drop.brand}</p>
                   <p className="mt-2 text-base font-semibold text-[#e66045]">{drop.price}</p>
                 </div>
-              </article>
+              </Link>
             ))}
           </div>
         </div>
@@ -3602,7 +3718,7 @@ export default function JenksFrontpageV2() {
           />
           {hasImageSource(stripLegacyFallbackImage(heritageCfg.image)) ? <div className="absolute inset-0 bg-black/22" /> : null}
           <div className="relative h-full px-8 py-10 text-white">
-            <div className="ml-auto max-w-xl text-right">
+            <div className="absolute right-8 top-10 z-20 w-full max-w-xl text-right md:right-10 md:top-12">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">{asString(heritageCfg.tag, 'Heritage')}</p>
               <h2 className="mt-2 font-['Oswald'] text-6xl font-bold uppercase leading-[0.92]">
                 {asString(heritageCfg.title, 'ROOTED IN CULTURE.')}
@@ -3615,7 +3731,7 @@ export default function JenksFrontpageV2() {
               </p>
             </div>
 
-            <div className="absolute right-8 top-1/2 z-20 w-full max-w-xl -translate-y-1/2 text-right">
+            <div className="absolute left-1/2 top-1/2 z-20 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 text-center">
               <h3
                 className="font-['Oswald'] font-bold uppercase leading-[0.94] text-white"
                 style={{ fontSize: `${heritageStoryTitleFontSize}px` }}
@@ -3623,7 +3739,7 @@ export default function JenksFrontpageV2() {
                 {heritageStoryTitle}
               </h3>
               <div
-                className="prose prose-invert mt-4 ml-auto max-w-xl text-white/84 prose-p:text-white/84 prose-strong:text-white prose-a:text-white"
+                className="prose prose-invert mt-4 max-w-none text-white/84 prose-p:text-white/84 prose-strong:text-white prose-a:text-white"
                 style={{ fontSize: `${heritageStoryTextFontSize}px` }}
               >
                 {showFullStory ? (
@@ -3638,7 +3754,7 @@ export default function JenksFrontpageV2() {
                   target="_blank"
                   rel="noreferrer"
                   onClick={() => setHeritageStoryExpanded((prev) => !prev)}
-                  className="group relative z-20 mt-5 inline-flex items-center gap-2 pb-1 text-sm font-semibold uppercase tracking-[0.08em] text-white"
+                  className="group relative z-20 mt-6 inline-flex items-center gap-2 pb-1 text-sm font-semibold uppercase tracking-[0.08em] text-white"
                 >
                   {heritageReadMoreLabel}
                   <ArrowRight className="h-4 w-4" />
@@ -3648,7 +3764,7 @@ export default function JenksFrontpageV2() {
                 <Link
                   to={heritageReadMoreHref}
                   onClick={() => setHeritageStoryExpanded((prev) => !prev)}
-                  className="group relative z-20 mt-5 inline-flex items-center gap-2 pb-1 text-sm font-semibold uppercase tracking-[0.08em] text-white"
+                  className="group relative z-20 mt-6 inline-flex items-center gap-2 pb-1 text-sm font-semibold uppercase tracking-[0.08em] text-white"
                 >
                   {heritageReadMoreLabel}
                   <ArrowRight className="h-4 w-4" />

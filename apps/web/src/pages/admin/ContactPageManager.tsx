@@ -7,7 +7,7 @@ type ContactCard = {
   id: string;
   title: string;
   description: string;
-  icon: 'CHAT' | 'MAIL' | 'PHONE';
+  icon: 'CHAT' | 'EMAIL' | 'PHONE';
   enabled: boolean;
   sortOrder: number;
 };
@@ -41,19 +41,24 @@ const EMPTY_SETTINGS: ContactPageSettings = {
 const normalizeSettings = (input: any): ContactPageSettings => ({
   heroTag: String(input?.heroTag || ''),
   heroTitle: String(input?.heroTitle || ''),
-  heroSubtitle: String(input?.heroSubtitle || ''),
+  heroSubtitle: String(input?.heroSubtitle || input?.heroDescription || ''),
   formTitle: String(input?.formTitle || ''),
-  formSubtitle: String(input?.formSubtitle || ''),
+  formSubtitle: String(input?.formSubtitle || input?.formDescription || ''),
   issueTypePlaceholder: String(input?.issueTypePlaceholder || ''),
   issueDetailsPlaceholder: String(input?.issueDetailsPlaceholder || ''),
-  startChatButtonLabel: String(input?.startChatButtonLabel || ''),
-  openWidgetButtonLabel: String(input?.openWidgetButtonLabel || ''),
-  cards: Array.isArray(input?.cards)
-    ? input.cards.map((row: any, index: number) => ({
+  startChatButtonLabel: String(input?.startChatButtonLabel || input?.primaryButtonLabel || ''),
+  openWidgetButtonLabel: String(input?.openWidgetButtonLabel || input?.secondaryButtonLabel || ''),
+  cards: Array.isArray(input?.supportChannels || input?.cards)
+    ? (input.supportChannels || input.cards).map((row: any, index: number) => ({
         id: String(row?.id || `card-${index + 1}`),
         title: String(row?.title || ''),
         description: String(row?.description || ''),
-        icon: String(row?.icon || 'CHAT') === 'MAIL' ? 'MAIL' : String(row?.icon || 'CHAT') === 'PHONE' ? 'PHONE' : 'CHAT',
+        icon:
+          String(row?.icon || 'CHAT').toUpperCase() === 'EMAIL'
+            ? 'EMAIL'
+            : String(row?.icon || 'CHAT').toUpperCase() === 'PHONE'
+              ? 'PHONE'
+              : 'CHAT',
         enabled: row?.enabled !== false,
         sortOrder: Number.isFinite(Number(row?.sortOrder)) ? Number(row.sortOrder) : index + 1,
       }))
@@ -77,7 +82,7 @@ export default function ContactPageManager() {
     setError('');
     setMessage('');
     try {
-      const response = await api.helpCenter.getContactPageSettings();
+      const response = await api.contactPage.getAdminConfig();
       setSettings(normalizeSettings(response?.data || {}));
     } catch (loadError: any) {
       setError(loadError?.response?.data?.message || 'Failed to load Contact page manager settings.');
@@ -96,14 +101,23 @@ export default function ContactPageManager() {
     setMessage('');
     try {
       const payload = {
-        ...settings,
-        cards: settings.cards.map((card) => ({
-          ...card,
+        heroTag: String(settings.heroTag || '').trim(),
+        heroTitle: String(settings.heroTitle || '').trim(),
+        heroDescription: String(settings.heroSubtitle || '').trim(),
+        formTitle: String(settings.formTitle || '').trim(),
+        formDescription: String(settings.formSubtitle || '').trim(),
+        issueTypePlaceholder: String(settings.issueTypePlaceholder || '').trim(),
+        issueDetailsPlaceholder: String(settings.issueDetailsPlaceholder || '').trim(),
+        supportChannels: settings.cards.map((card) => ({
+          id: String(card.id || '').trim(),
           title: String(card.title || '').trim(),
           description: String(card.description || '').trim(),
+          icon: card.icon === 'PHONE' ? 'PHONE' : card.icon === 'EMAIL' ? 'EMAIL' : 'CHAT',
+          enabled: card.enabled !== false,
+          sortOrder: Number.isFinite(Number(card.sortOrder)) ? Number(card.sortOrder) : 0,
         })),
       };
-      const response = await api.helpCenter.updateContactPageSettings(payload);
+      const response = await api.contactPage.updateAdminConfig(payload);
       setSettings(normalizeSettings(response?.data || payload));
       setMessage(response?.message || 'Contact page settings saved.');
     } catch (saveError: any) {
@@ -273,7 +287,7 @@ export default function ContactPageManager() {
                   }
                 >
                   <option value="CHAT">CHAT</option>
-                  <option value="MAIL">MAIL</option>
+                  <option value="EMAIL">EMAIL</option>
                   <option value="PHONE">PHONE</option>
                 </select>
               </label>
