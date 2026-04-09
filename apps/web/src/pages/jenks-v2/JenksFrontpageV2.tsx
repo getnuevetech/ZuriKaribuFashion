@@ -1352,10 +1352,12 @@ export default function JenksFrontpageV2() {
         byTemplate.set(token, { enabled, order });
         return;
       }
-      byTemplate.set(token, {
-        enabled: existing.enabled || enabled,
-        order: Math.min(existing.order, order),
-      });
+      // If duplicate core template rows exist, prefer the one with the
+      // smallest order (top-most in section visibility), and preserve that
+      // row's enabled state directly so disable/enable is deterministic.
+      if (order <= existing.order) {
+        byTemplate.set(token, { enabled, order });
+      }
     });
     if (byTemplate.size === 0) return { layout: defaults, configured };
     byTemplate.forEach((value, key) => defaults.set(key, value));
@@ -4238,7 +4240,7 @@ export default function JenksFrontpageV2() {
           />
           {hasImageSource(stripLegacyFallbackImage(heritageCfg.image)) ? <div className="absolute inset-0 bg-black/22" /> : null}
           <div className="relative mx-auto flex min-h-[84vh] w-full max-w-[1480px] flex-col px-8 py-10 text-white md:px-10 md:py-12">
-            <div className="ml-auto w-full max-w-xl text-right">
+            <div className="w-full max-w-xl text-left">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">
                 {asString(heritageCfg.tag, 'Heritage')}
               </p>

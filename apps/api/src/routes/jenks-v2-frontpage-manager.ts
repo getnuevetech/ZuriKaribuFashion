@@ -3072,17 +3072,19 @@ const normalizeSectionVisibility = (
     } as SectionVisibilityEntry;
   });
 
+  const customSections = parsed.filter((section) => section.isCustom);
   const sectionsByTemplate = new Map<TemplateKey, SectionVisibilityEntry>();
   for (const section of parsed) {
     if (section.isCustom) continue;
-    if (!sectionsByTemplate.has(section.templateKey)) {
+    const existing = sectionsByTemplate.get(section.templateKey);
+    if (!existing || section.order <= existing.order) {
       sectionsByTemplate.set(section.templateKey, section);
     }
   }
 
   for (const [index, meta] of TEMPLATE_META.entries()) {
     if (!sectionsByTemplate.has(meta.templateKey)) {
-      parsed.push({
+      sectionsByTemplate.set(meta.templateKey, {
         id: randomUUID(),
         key: meta.key,
         name: meta.name,
@@ -3094,9 +3096,11 @@ const normalizeSectionVisibility = (
       });
     }
   }
+  const parsedCore = Array.from(sectionsByTemplate.values());
+  const parsedMerged = [...customSections, ...parsedCore];
 
   const keySeen = new Set<string>();
-  const normalized = parsed
+  const normalized = parsedMerged
     .map((section, index) => {
       const keySeed = slugify(section.key || section.name || `section-${index + 1}`) || `section-${index + 1}`;
       let key = keySeed;
