@@ -253,6 +253,7 @@ type TemplateKey =
 
 type JenksV2ManagerPayload = Record<string, unknown>;
 type IconComponent = ComponentType<{ className?: string }>;
+type SpotlightVariant = 'DESIGNER' | 'RTW_FTB';
 
 const ASSET_BASE = 'https://african-fashion-zurikaribu.vercel.app';
 const HERO_HEIGHT_CLASS = 'min-h-[106vh]';
@@ -1326,6 +1327,7 @@ export default function JenksFrontpageV2() {
   const featuredCfg = useMemo(() => asRecord(asRecord(managerConfig).featured), [managerConfig]);
   const freshDropsCfg = useMemo(() => asRecord(asRecord(managerConfig).freshDrops), [managerConfig]);
   const designerSpotlightCfg = useMemo(() => asRecord(asRecord(managerConfig).designerSpotlight), [managerConfig]);
+  const rtwFtbCfg = useMemo(() => asRecord(asRecord(managerConfig).rtwFtb), [managerConfig]);
   const heritageCfg = useMemo(() => asRecord(asRecord(managerConfig).heritage), [managerConfig]);
   const customerReviewsCfg = useMemo(() => asRecord(asRecord(managerConfig).customerReviews), [managerConfig]);
   const newsletterFooterCfg = useMemo(() => asRecord(asRecord(managerConfig).newsletterFooter), [managerConfig]);
@@ -1994,103 +1996,115 @@ export default function JenksFrontpageV2() {
     return normalizeHref(entry.ctaLink, fallbackHref);
   };
 
-  const designerSpotlightRows = Math.max(1, Math.round(asNumber(designerSpotlightCfg.rows, 1)));
-  const designerSpotlightColumns = Math.max(1, Math.min(12, Math.round(asNumber(designerSpotlightCfg.columns, 3))));
+  const buildSpotlightModel = useCallback(
+    (cfg: Record<string, unknown>, variant: SpotlightVariant) => {
+      const rows = Math.max(1, Math.round(asNumber(cfg.rows, 1)));
+      const columns = Math.max(1, Math.min(12, Math.round(asNumber(cfg.columns, 3))));
+      const typography: SpotlightTypography = {
+        countryFontSize: Math.max(10, Math.min(72, Math.round(asNumber(cfg.countryFontSize, 22)))),
+        nameFontSize: Math.max(16, Math.min(140, Math.round(asNumber(cfg.designerNameFontSize ?? cfg.nameFontSize, 52)))),
+        specialtyFontSize: Math.max(10, Math.min(72, Math.round(asNumber(cfg.specialtyFontSize, 22)))),
+        descriptionFontSize: Math.max(10, Math.min(96, Math.round(asNumber(cfg.descriptionFontSize, 24)))),
+      };
+      const colsClass = (() => {
+        if (columns <= 1) return 'md:grid-cols-1';
+        if (columns === 2) return 'md:grid-cols-2';
+        if (columns === 3) return 'md:grid-cols-3';
+        if (columns === 4) return 'md:grid-cols-4';
+        if (columns === 5) return 'md:grid-cols-5';
+        if (columns === 6) return 'md:grid-cols-6';
+        if (columns === 7) return 'md:grid-cols-7';
+        if (columns === 8) return 'md:grid-cols-8';
+        if (columns === 9) return 'md:grid-cols-9';
+        if (columns === 10) return 'md:grid-cols-10';
+        if (columns === 11) return 'md:grid-cols-11';
+        return 'md:grid-cols-12';
+      })();
+      const maxItems = rows * columns;
+      const entries = asArray(cfg.cards)
+        .map((entry) => asRecord(entry))
+        .filter((entry) => asBoolean(entry.enabled, true))
+        .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
+        .map((entry, idx) => {
+          const fallbackHref =
+            variant === 'RTW_FTB'
+              ? '/Shop'
+              : DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.href || '/customtowear';
+          const fallbackTitle = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.title || 'OLUWASEUN ADEYEMI';
+          const fallbackSpecialty =
+            DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.specialty || 'Contemporary African Designer';
+          const fallbackDescription =
+            DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.description ||
+            'With over 15 years of experience, Oluwaseun blends traditional Nigerian craftsmanship with modern silhouettes, creating pieces that honor heritage while embracing contemporary elegance.';
+          const fallbackCountry = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.country || 'NIGERIA';
+          const fallbackTag = variant === 'RTW_FTB' ? 'RTW & FTB' : DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.tag || 'DESIGNER SPOTLIGHT';
+          const fallbackCta = variant === 'RTW_FTB' ? 'SHOP COLLECTION' : DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.cta || 'VIEW COLLECTION';
+          const countryToken = resolveDesignerCountryCode(
+            (entry as Record<string, unknown>).countryCode,
+            asString(entry.country, asString(entry.designerCountry, ''))
+          );
+          const designerName = asString(entry.designerName, asString(entry.title, fallbackTitle));
+          const country = asString(
+            entry.country,
+            asString(entry.designerCountry, COUNTRY_LABEL_BY_CODE[countryToken] || fallbackCountry)
+          );
+          return {
+            id: asString(entry.id, `spot-${idx + 1}`),
+            image: asString(stripLegacyFallbackImage(entry.image), ''),
+            title: designerName,
+            designerName,
+            designerCountry: country,
+            designerSpecialty: asString(entry.specialty, fallbackSpecialty),
+            description: truncateWords(asString(entry.description, fallbackDescription), 25),
+            cta: asString(entry.ctaText, fallbackCta).toUpperCase(),
+            href: spotCtaHref(entry, fallbackHref),
+            tag: asString(entry.tag, fallbackTag),
+            countryCode: countryToken || 'NG',
+            ctaStyle: entry.ctaStyle,
+          };
+        });
+      const source =
+        entries.length > 0
+          ? entries
+          : DESIGNER_SPOTLIGHT.map((row) => ({
+              ...row,
+              designerName: row.title,
+              title: row.title,
+              designerCountry: asString((row as any).country, ''),
+              designerSpecialty: asString((row as any).specialty, 'Contemporary African Designer'),
+              description: truncateWords(asString((row as any).description, ''), 25),
+              tag: variant === 'RTW_FTB' ? 'RTW & FTB' : asString((row as any).tag, 'DESIGNER SPOTLIGHT'),
+              countryCode: resolveDesignerCountryCode('', asString((row as any).country, '')),
+            }));
+      return {
+        rows,
+        columns,
+        typography,
+        colsClass,
+        cards: source.slice(0, maxItems),
+      };
+    },
+    [spotCtaHref]
+  );
+  const designerSpotlightModel = useMemo(
+    () => buildSpotlightModel(designerSpotlightCfg, 'DESIGNER'),
+    [buildSpotlightModel, designerSpotlightCfg]
+  );
+  const rtwFtbSpotlightModel = useMemo(
+    () => buildSpotlightModel(rtwFtbCfg, 'RTW_FTB'),
+    [buildSpotlightModel, rtwFtbCfg]
+  );
   const designerSpotlightTypography = useMemo<SpotlightTypography>(
     () => ({
-      countryFontSize: Math.max(10, Math.min(72, Math.round(asNumber(designerSpotlightCfg.countryFontSize, 22)))),
-      nameFontSize: Math.max(
-        16,
-        Math.min(
-          140,
-          Math.round(asNumber(designerSpotlightCfg.designerNameFontSize ?? designerSpotlightCfg.nameFontSize, 52))
-        )
-      ),
-      specialtyFontSize: Math.max(10, Math.min(72, Math.round(asNumber(designerSpotlightCfg.specialtyFontSize, 22)))),
-      descriptionFontSize: Math.max(10, Math.min(96, Math.round(asNumber(designerSpotlightCfg.descriptionFontSize, 24)))),
+      ...designerSpotlightModel.typography,
     }),
-    [
-      designerSpotlightCfg.countryFontSize,
-      designerSpotlightCfg.designerNameFontSize,
-      designerSpotlightCfg.nameFontSize,
-      designerSpotlightCfg.specialtyFontSize,
-      designerSpotlightCfg.descriptionFontSize,
-    ]
+    [designerSpotlightModel.typography]
   );
-  const designerSpotlightColsClass = (() => {
-    if (designerSpotlightColumns <= 1) return 'md:grid-cols-1';
-    if (designerSpotlightColumns === 2) return 'md:grid-cols-2';
-    if (designerSpotlightColumns === 3) return 'md:grid-cols-3';
-    if (designerSpotlightColumns === 4) return 'md:grid-cols-4';
-    if (designerSpotlightColumns === 5) return 'md:grid-cols-5';
-    if (designerSpotlightColumns === 6) return 'md:grid-cols-6';
-    if (designerSpotlightColumns === 7) return 'md:grid-cols-7';
-    if (designerSpotlightColumns === 8) return 'md:grid-cols-8';
-    if (designerSpotlightColumns === 9) return 'md:grid-cols-9';
-    if (designerSpotlightColumns === 10) return 'md:grid-cols-10';
-    if (designerSpotlightColumns === 11) return 'md:grid-cols-11';
-    return 'md:grid-cols-12';
-  })();
-
-  const spotlightCards = useMemo(() => {
-    const maxItems = designerSpotlightRows * designerSpotlightColumns;
-    const entries = asArray(designerSpotlightCfg.cards)
-      .map((entry) => asRecord(entry))
-      .filter((entry) => asBoolean(entry.enabled, true))
-      .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
-      .map((entry, idx) => {
-        const fallbackHref = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.href || '/customtowear';
-        const fallbackTitle = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.title || 'OLUWASEUN ADEYEMI';
-        const fallbackSpecialty =
-          DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.specialty || 'Contemporary African Designer';
-        const fallbackDescription =
-          DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.description ||
-          'With over 15 years of experience, Oluwaseun blends traditional Nigerian craftsmanship with modern silhouettes, creating pieces that honor heritage while embracing contemporary elegance.';
-        const fallbackCountry = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.country || 'NIGERIA';
-        const fallbackTag = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.tag || 'DESIGNER SPOTLIGHT';
-        const countryToken = resolveDesignerCountryCode(
-          (entry as Record<string, unknown>).countryCode,
-          asString(entry.country, asString(entry.designerCountry, ''))
-        );
-        const designerName = asString(entry.designerName, asString(entry.title, fallbackTitle));
-        const country = asString(
-          entry.country,
-          asString(entry.designerCountry, COUNTRY_LABEL_BY_CODE[countryToken] || fallbackCountry)
-        );
-        return {
-          id: asString(entry.id, `spot-${idx + 1}`),
-          image: asString(stripLegacyFallbackImage(entry.image), ''),
-          title: designerName,
-          designerName,
-          designerCountry: country,
-          designerSpecialty: asString(entry.specialty, fallbackSpecialty),
-          description: truncateWords(asString(entry.description, fallbackDescription), 25),
-          cta: asString(entry.ctaText, DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.cta || 'VIEW COLLECTION').toUpperCase(),
-          href: spotCtaHref(entry, fallbackHref),
-          tag: asString(entry.tag, fallbackTag),
-          countryCode: countryToken || 'NG',
-          ctaStyle: entry.ctaStyle,
-        };
-      });
-    const source =
-      entries.length > 0
-        ? entries
-        : DESIGNER_SPOTLIGHT.map((row) => ({
-            ...row,
-            designerName: row.title,
-            title: row.title,
-            designerCountry: asString((row as any).country, ''),
-            designerSpecialty: asString((row as any).specialty, 'Contemporary African Designer'),
-            description: truncateWords(asString((row as any).description, ''), 25),
-            tag: asString((row as any).tag, 'DESIGNER SPOTLIGHT'),
-            countryCode: resolveDesignerCountryCode('', asString((row as any).country, '')),
-          }));
-    return source.slice(0, maxItems);
-  }, [designerSpotlightCfg.cards, designerSpotlightColumns, designerSpotlightRows]);
-  const rtwFtbSpotlightCards = useMemo(
-    () => spotlightCards.map((spot) => ({ ...spot, tag: 'RTW & FTB' })),
-    [spotlightCards]
-  );
+  const spotlightCards = designerSpotlightModel.cards;
+  const designerSpotlightColsClass = designerSpotlightModel.colsClass;
+  const rtwFtbSpotlightCards = rtwFtbSpotlightModel.cards;
+  const rtwFtbSpotlightColsClass = rtwFtbSpotlightModel.colsClass;
+  const rtwFtbSpotlightTypography = rtwFtbSpotlightModel.typography;
   const staticReviewCards = useMemo(() => {
     const rows = asArray(customerReviewsCfg.staticMessages)
       .map((entry) => asRecord(entry))
@@ -4238,7 +4252,7 @@ export default function JenksFrontpageV2() {
       {/* RTW & FTB SPOTLIGHT */}
       {isSectionVisible('RTW_FTB') ? (
         <section
-          className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 bg-[#101010] ${designerSpotlightColsClass}`}
+          className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 bg-[#101010] ${rtwFtbSpotlightColsClass}`}
           style={{ order: getSectionOrder('RTW_FTB') }}
         >
           {rtwFtbSpotlightCards.map((spot) => (
@@ -4259,25 +4273,25 @@ export default function JenksFrontpageV2() {
               <div className="absolute bottom-6 left-6 right-6 text-white">
                 <p
                   className="font-medium uppercase tracking-[0.08em] text-white/78"
-                  style={{ fontSize: `${designerSpotlightTypography.countryFontSize}px` }}
+                  style={{ fontSize: `${rtwFtbSpotlightTypography.countryFontSize}px` }}
                 >
                   {spot.designerCountry || spot.tag}
                 </p>
                 <h3
                   className="font-['Oswald'] font-bold uppercase leading-[0.95]"
-                  style={{ fontSize: `${designerSpotlightTypography.nameFontSize}px` }}
+                  style={{ fontSize: `${rtwFtbSpotlightTypography.nameFontSize}px` }}
                 >
                   {spot.designerName || spot.title}
                 </h3>
                 <p
                   className="mt-2 leading-[1.25] text-white/78"
-                  style={{ fontSize: `${designerSpotlightTypography.specialtyFontSize}px` }}
+                  style={{ fontSize: `${rtwFtbSpotlightTypography.specialtyFontSize}px` }}
                 >
                   {spot.designerSpecialty || 'Contemporary African Designer'}
                 </p>
                 <p
                   className="mt-3 max-w-[42ch] leading-[1.35] text-white/88"
-                  style={{ fontSize: `${designerSpotlightTypography.descriptionFontSize}px` }}
+                  style={{ fontSize: `${rtwFtbSpotlightTypography.descriptionFontSize}px` }}
                 >
                   {spot.description}
                 </p>

@@ -562,6 +562,7 @@ type JenksV2FrontpageManagerSettings = {
   instantBuy: InstantBuySettings;
   freshDrops: FreshDropsSettings;
   designerSpotlight: DesignerSpotlightSettings;
+  rtwFtb: DesignerSpotlightSettings;
   heritage: HeritageSettings;
   customerReviews: CustomerReviewsSettings;
   newsletterFooter: NewsletterFooterSettings;
@@ -661,6 +662,7 @@ const updateSchema = z.object({
   instantBuy: z.unknown().optional(),
   freshDrops: z.unknown().optional(),
   designerSpotlight: z.unknown().optional(),
+  rtwFtb: z.unknown().optional(),
   heritage: z.unknown().optional(),
   customerReviews: z.unknown().optional(),
   newsletterFooter: z.unknown().optional(),
@@ -1613,6 +1615,40 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           ctaLink: '/cystomtowear',
           ctaMode: 'PAGE',
           ctaPageKey: 'CUSTOM_TO_WEAR',
+          ctaStyle: defaultCtaStyle({
+            backgroundColor: 'transparent',
+            textColor: '#ffffff',
+            borderColor: 'transparent',
+            borderWidth: 0,
+            fontSize: 14,
+          }),
+          enabled: true,
+          displayOrder: 1,
+        },
+      ],
+    },
+    rtwFtb: {
+      rows: 1,
+      columns: 3,
+      countryFontSize: 18,
+      nameFontSize: 52,
+      specialtyFontSize: 24,
+      descriptionFontSize: 24,
+      cards: [
+        {
+          id: randomUUID(),
+          image: '',
+          tag: 'RTW & FTB',
+          countryCode: 'NG',
+          country: 'Nigeria',
+          designerName: 'RTW & FTB Collection',
+          title: 'Ready To Wear & Fabrics',
+          specialty: 'Curated product spotlight',
+          description: 'Highlight RTW and FTB collections in one dedicated section.',
+          ctaText: 'Shop Collection',
+          ctaLink: '/Shop',
+          ctaMode: 'PAGE',
+          ctaPageKey: 'SHOP',
           ctaStyle: defaultCtaStyle({
             backgroundColor: 'transparent',
             textColor: '#ffffff',
@@ -2914,8 +2950,9 @@ const buildTemplateSnapshot = (
     case 'FRESH_DROPS':
       return cloneJson(asRecord(settings.freshDrops));
     case 'DESIGNER_SPOTLIGHT':
-    case 'RTW_FTB':
       return cloneJson(asRecord(settings.designerSpotlight));
+    case 'RTW_FTB':
+      return cloneJson(asRecord(settings.rtwFtb));
     case 'HERITAGE':
       return cloneJson(asRecord(settings.heritage));
     case 'CUSTOMER_REVIEWS':
@@ -3248,8 +3285,10 @@ const applyTemplateSnapshotToSettings = (
       next.freshDrops = normalizeFreshDrops(snapshotRecord, next.freshDrops);
       break;
     case 'DESIGNER_SPOTLIGHT':
-    case 'RTW_FTB':
       next.designerSpotlight = normalizeDesignerSpotlight(snapshotRecord, next.designerSpotlight);
+      break;
+    case 'RTW_FTB':
+      next.rtwFtb = normalizeDesignerSpotlight(snapshotRecord, next.rtwFtb);
       break;
     case 'HERITAGE':
       next.heritage = normalizeHeritage(snapshotRecord, next.heritage);
@@ -3286,6 +3325,7 @@ const normalizeSettings = (
   const instantBuy = normalizeInstantBuy(row.instantBuy, fallback.instantBuy);
   const freshDrops = normalizeFreshDrops(row.freshDrops, fallback.freshDrops);
   const designerSpotlight = normalizeDesignerSpotlight(row.designerSpotlight, fallback.designerSpotlight);
+  const rtwFtb = normalizeDesignerSpotlight((row as Record<string, unknown>).rtwFtb, fallback.rtwFtb);
   const heritage = normalizeHeritage(row.heritage, fallback.heritage);
   const customerReviews = normalizeCustomerReviews(row.customerReviews, fallback.customerReviews);
   const newsletterFooter = normalizeNewsletterFooter(row.newsletterFooter, fallback.newsletterFooter);
@@ -3300,6 +3340,7 @@ const normalizeSettings = (
     instantBuy,
     freshDrops,
     designerSpotlight,
+    rtwFtb,
     heritage,
     customerReviews,
     newsletterFooter,
@@ -3389,6 +3430,10 @@ const saveSettings = async (next: Partial<JenksV2FrontpageManagerSettings>) => {
       designerSpotlight: {
         ...existing.settings.designerSpotlight,
         ...asRecord(next.designerSpotlight),
+      },
+      rtwFtb: {
+        ...existing.settings.rtwFtb,
+        ...asRecord((next as Record<string, unknown>).rtwFtb),
       },
       heritage: {
         ...existing.settings.heritage,

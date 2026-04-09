@@ -555,6 +555,7 @@ type JenksV2FrontpageConfig = {
   instantBuy: InstantBuy;
   freshDrops: FreshDrops;
   designerSpotlight: DesignerSpotlight;
+  rtwFtb: DesignerSpotlight;
   heritage: Heritage;
   customerReviews: CustomerReviews;
   newsletterFooter: NewsletterFooter;
@@ -1687,6 +1688,39 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       },
     ],
   },
+  rtwFtb: {
+    rows: 1,
+    columns: 3,
+    countryFontSize: 22,
+    designerNameFontSize: 52,
+    specialtyFontSize: 22,
+    descriptionFontSize: 24,
+    cards: [
+      {
+        id: uid(),
+        image: '',
+        tag: 'RTW & FTB',
+        countryCode: 'NG',
+        designerName: 'RTW & FTB Collection',
+        specialty: 'Curated product spotlight',
+        title: 'Ready To Wear & Fabrics',
+        description: 'Highlight RTW and FTB collections in one dedicated section.',
+        ctaText: 'Shop Collection',
+        ctaLink: '/Shop',
+        ctaMode: 'PAGE',
+        ctaPageKey: 'SHOP',
+        ctaStyle: createCtaStyle({
+          backgroundColor: 'transparent',
+          textColor: '#ffffff',
+          borderColor: 'transparent',
+          borderWidth: 0,
+          fontSize: 14,
+        }),
+        enabled: true,
+        displayOrder: 1,
+      },
+    ],
+  },
   heritage: {
     image: '',
     title: 'Our Heritage',
@@ -1816,6 +1850,7 @@ type TabKey =
   | 'instantBuy'
   | 'freshDrops'
   | 'designerSpotlight'
+  | 'rtwFtb'
   | 'heritage'
   | 'customerReviews'
   | 'newsletterFooter'
@@ -1831,6 +1866,7 @@ const TAB_META: Array<{ key: TabKey; label: string }> = [
   { key: 'instantBuy', label: 'Instant Buy' },
   { key: 'freshDrops', label: 'Fresh Drops' },
   { key: 'designerSpotlight', label: 'Designer Spotlight' },
+  { key: 'rtwFtb', label: 'RTW & FTB' },
   { key: 'heritage', label: 'Heritage' },
   { key: 'customerReviews', label: 'From Our Customers' },
   { key: 'newsletterFooter', label: 'Newsletter & Footer' },
@@ -1846,6 +1882,7 @@ const SUBMENU_TO_TAB: Record<string, TabKey> = {
   'instant-buy': 'instantBuy',
   'fresh-drops': 'freshDrops',
   'designer-spotlight': 'designerSpotlight',
+  'rtw-ftb': 'rtwFtb',
   heritage: 'heritage',
   'customer-reviews': 'customerReviews',
   'newsletter-footer': 'newsletterFooter',
@@ -1861,6 +1898,7 @@ const TAB_TO_SUBMENU: Record<TabKey, string> = {
   instantBuy: 'instant-buy',
   freshDrops: 'fresh-drops',
   designerSpotlight: 'designer-spotlight',
+  rtwFtb: 'rtw-ftb',
   heritage: 'heritage',
   customerReviews: 'customer-reviews',
   newsletterFooter: 'newsletter-footer',
@@ -2108,6 +2146,22 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
           : normalizeManagerHref(item.ctaLink, '/customtowear'),
     })),
   };
+  next.rtwFtb = {
+    ...next.rtwFtb,
+    cards: next.rtwFtb.cards.map((item) => ({
+      ...item,
+      countryCode: countryCodeFromToken(item.countryCode || item.country, 'NG'),
+      country: countryNameFromCode(countryCodeFromToken(item.countryCode || item.country, 'NG')),
+      designerName: String(item.designerName || item.title || '').slice(0, 120),
+      specialty: String(item.specialty || '').slice(0, 120),
+      ctaMode: normalizeCtaMode(item.ctaMode, 'PAGE'),
+      ctaPageKey: String(item.ctaPageKey || '').trim().toUpperCase(),
+      ctaLink:
+        normalizeCtaMode(item.ctaMode, 'PAGE') === 'PAGE'
+          ? resolvePageHrefForKey(item.ctaPageKey, '/Shop')
+          : normalizeManagerHref(item.ctaLink, '/Shop'),
+    })),
+  };
   next.newsletterFooter = {
     ...next.newsletterFooter,
     footer: {
@@ -2295,12 +2349,17 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
     ...DEFAULT_CONFIG.designerSpotlight,
     ...(data.designerSpotlight || {}),
   };
+  const rtwFtb = {
+    ...DEFAULT_CONFIG.rtwFtb,
+    ...((data as any).rtwFtb || {}),
+  };
   const fallbackHero = DEFAULT_CONFIG.topNavigations.heroBanners[0];
   const fallbackCategory = DEFAULT_CONFIG.categoryManage.sections[0];
   const fallbackFeatured = DEFAULT_CONFIG.featured.cards[0];
   const fallbackInstantBuyFeatureCard = DEFAULT_CONFIG.instantBuy.featureCards[0];
   const fallbackInstantBuyProductSlot = DEFAULT_CONFIG.instantBuy.productSlots[0];
   const fallbackSpotlight = DEFAULT_CONFIG.designerSpotlight.cards[0];
+  const fallbackRtwFtbSpotlight = DEFAULT_CONFIG.rtwFtb.cards[0];
   const textIconCards = data.textIconCards as Partial<JenksV2FrontpageConfig['textIconCards']> | undefined;
   return {
     ...DEFAULT_CONFIG,
@@ -2819,6 +2878,101 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
           }))
         : DEFAULT_CONFIG.designerSpotlight.cards,
     },
+    rtwFtb: {
+      ...rtwFtb,
+      countryFontSize: clamp(
+        Math.round(
+          toNumber(
+            String((rtwFtb as DesignerSpotlight | undefined)?.countryFontSize ?? DEFAULT_CONFIG.rtwFtb.countryFontSize),
+            DEFAULT_CONFIG.rtwFtb.countryFontSize
+          )
+        ),
+        10,
+        72
+      ),
+      designerNameFontSize: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (rtwFtb as DesignerSpotlight | undefined)?.designerNameFontSize ??
+                (rtwFtb as Record<string, unknown>)?.nameFontSize ??
+                DEFAULT_CONFIG.rtwFtb.designerNameFontSize
+            ),
+            DEFAULT_CONFIG.rtwFtb.designerNameFontSize
+          )
+        ),
+        16,
+        140
+      ),
+      specialtyFontSize: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (rtwFtb as DesignerSpotlight | undefined)?.specialtyFontSize ??
+                DEFAULT_CONFIG.rtwFtb.specialtyFontSize
+            ),
+            DEFAULT_CONFIG.rtwFtb.specialtyFontSize
+          )
+        ),
+        10,
+        72
+      ),
+      descriptionFontSize: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (rtwFtb as DesignerSpotlight | undefined)?.descriptionFontSize ??
+                DEFAULT_CONFIG.rtwFtb.descriptionFontSize
+            ),
+            DEFAULT_CONFIG.rtwFtb.descriptionFontSize
+          )
+        ),
+        10,
+        96
+      ),
+      cards: Array.isArray(rtwFtb.cards)
+        ? rtwFtb.cards.map((card) => ({
+            ...fallbackRtwFtbSpotlight,
+            ...card,
+            countryCode: countryCodeFromToken(
+              (card as DesignerSpotlightCard)?.countryCode || (card as DesignerSpotlightCard)?.country,
+              fallbackRtwFtbSpotlight.countryCode || 'NG'
+            ),
+            country: countryNameFromCode(
+              countryCodeFromToken(
+                (card as DesignerSpotlightCard)?.countryCode || (card as DesignerSpotlightCard)?.country,
+                fallbackRtwFtbSpotlight.countryCode || 'NG'
+              )
+            ),
+            designerName: String(
+              (card as DesignerSpotlightCard)?.designerName ||
+                (card as DesignerSpotlightCard)?.title ||
+                fallbackRtwFtbSpotlight.designerName ||
+                ''
+            ).slice(0, 120),
+            specialty: String((card as DesignerSpotlightCard)?.specialty || fallbackRtwFtbSpotlight.specialty || '').slice(
+              0,
+              120
+            ),
+            ctaMode: normalizeCtaMode((card as DesignerSpotlightCard)?.ctaMode, fallbackRtwFtbSpotlight.ctaMode),
+            ctaPageKey: ((): string => {
+              const explicit = String((card as DesignerSpotlightCard)?.ctaPageKey || fallbackRtwFtbSpotlight.ctaPageKey || '')
+                .trim()
+                .toUpperCase();
+              if (explicit) return explicit;
+              return 'SHOP';
+            })(),
+            ctaLink:
+              normalizeCtaMode((card as DesignerSpotlightCard)?.ctaMode, fallbackRtwFtbSpotlight.ctaMode) === 'PAGE'
+                ? resolvePageHrefForKey(
+                    (card as DesignerSpotlightCard)?.ctaPageKey,
+                    (card as DesignerSpotlightCard)?.ctaLink || fallbackRtwFtbSpotlight.ctaLink
+                  )
+                : normalizeManagerHref((card as DesignerSpotlightCard)?.ctaLink, fallbackRtwFtbSpotlight.ctaLink),
+            ctaStyle: normalizeCtaStyle((card as DesignerSpotlightCard)?.ctaStyle, fallbackRtwFtbSpotlight.ctaStyle),
+          }))
+        : DEFAULT_CONFIG.rtwFtb.cards,
+    },
     heritage: {
       ...DEFAULT_CONFIG.heritage,
       ...((data.heritage as Heritage | undefined) || {}),
@@ -3326,6 +3480,7 @@ export default function JenksV2FrontPageManager() {
   const instantBuyProductImageUploadRef = useRef<HTMLInputElement | null>(null);
   const heritageImageUploadRef = useRef<HTMLInputElement | null>(null);
   const spotlightImageUploadRef = useRef<HTMLInputElement | null>(null);
+  const rtwFtbImageUploadRef = useRef<HTMLInputElement | null>(null);
 
   const [heroUploadIndex, setHeroUploadIndex] = useState<number | null>(null);
   const [shopByCategoryUploadIndex, setShopByCategoryUploadIndex] = useState<number | null>(null);
@@ -3334,6 +3489,7 @@ export default function JenksV2FrontPageManager() {
   const [instantBuyFeatureUploadIndex, setInstantBuyFeatureUploadIndex] = useState<number | null>(null);
   const [instantBuyProductUploadIndex, setInstantBuyProductUploadIndex] = useState<number | null>(null);
   const [spotlightUploadIndex, setSpotlightUploadIndex] = useState<number | null>(null);
+  const [rtwFtbUploadIndex, setRtwFtbUploadIndex] = useState<number | null>(null);
 
   const updatedAtLabel = useMemo(() => {
     if (!config.updatedAt) return 'Never';
@@ -3674,6 +3830,31 @@ export default function JenksV2FrontPageManager() {
     }
   };
 
+  const handleRtwFtbImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || rtwFtbUploadIndex === null) return;
+    triggerUpload('rtw-ftb');
+    try {
+      const url = await uploadImage(file);
+      setConfig((prev) => ({
+        ...prev,
+        rtwFtb: {
+          ...prev.rtwFtb,
+          cards: prev.rtwFtb.cards.map((card, index) =>
+            index === rtwFtbUploadIndex ? { ...card, image: url } : card
+          ),
+        },
+      }));
+      setSuccess('RTW & FTB image uploaded.');
+    } catch (uploadError: any) {
+      setError(uploadError?.message || 'Failed to upload RTW & FTB image.');
+    } finally {
+      setRtwFtbUploadIndex(null);
+      setUploadingTarget(null);
+      event.target.value = '';
+    }
+  };
+
   const handleHeritageImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -3804,6 +3985,16 @@ export default function JenksV2FrontPageManager() {
   }
 
   const activeSection = TAB_META.find((item) => item.key === activeTab);
+  const isRtwFtbTab = activeTab === 'rtwFtb';
+  const spotlightConfigKey: 'designerSpotlight' | 'rtwFtb' = isRtwFtbTab ? 'rtwFtb' : 'designerSpotlight';
+  const spotlightTabLabel = isRtwFtbTab ? 'RTW & FTB' : 'Designer Spotlight';
+  const spotlightConfig = config[spotlightConfigKey];
+  const updateSpotlightConfig = (updater: (current: DesignerSpotlight) => DesignerSpotlight) => {
+    setConfig((prev) => ({
+      ...prev,
+      [spotlightConfigKey]: updater(prev[spotlightConfigKey]),
+    }));
+  };
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 space-y-8">
@@ -9575,46 +9766,43 @@ export default function JenksV2FrontPageManager() {
         </section>
       ) : null}
 
-      {activeTab === 'designerSpotlight' ? (
+      {activeTab === 'designerSpotlight' || activeTab === 'rtwFtb' ? (
         <section className="rounded-lg border bg-white p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Designer Spotlight</h2>
+            <h2 className="text-xl font-semibold">{spotlightTabLabel}</h2>
             <Button
               type="button"
               variant="outline"
               onClick={() =>
-                setConfig((prev) => ({
-                  ...prev,
-                  designerSpotlight: {
-                    ...prev.designerSpotlight,
-                    cards: [
-                      ...prev.designerSpotlight.cards,
-                      {
-                        id: uid(),
-                        image: '',
-                        tag: '',
-                        countryCode: 'NG',
-                        country: countryNameFromCode('NG'),
-                        designerName: '',
-                        specialty: '',
-                        title: 'New Spotlight Card',
-                        description: '',
-                        ctaText: 'View Designer',
-                        ctaLink: '/customtowear',
-                        ctaMode: 'PAGE',
-                        ctaPageKey: 'CUSTOM_TO_WEAR',
-                        ctaStyle: createCtaStyle({
-                          backgroundColor: 'transparent',
-                          textColor: '#ffffff',
-                          borderColor: 'transparent',
-                          borderWidth: 0,
-                          fontSize: 14,
-                        }),
-                        enabled: true,
-                        displayOrder: prev.designerSpotlight.cards.length + 1,
-                      },
-                    ],
-                  },
+                updateSpotlightConfig((current) => ({
+                  ...current,
+                  cards: [
+                    ...current.cards,
+                    {
+                      id: uid(),
+                      image: '',
+                      tag: isRtwFtbTab ? 'RTW & FTB' : '',
+                      countryCode: 'NG',
+                      country: countryNameFromCode('NG'),
+                      designerName: '',
+                      specialty: '',
+                      title: 'New Spotlight Card',
+                      description: '',
+                      ctaText: isRtwFtbTab ? 'Shop Collection' : 'View Designer',
+                      ctaLink: isRtwFtbTab ? '/Shop' : '/customtowear',
+                      ctaMode: 'PAGE',
+                      ctaPageKey: isRtwFtbTab ? 'SHOP' : 'CUSTOM_TO_WEAR',
+                      ctaStyle: createCtaStyle({
+                        backgroundColor: 'transparent',
+                        textColor: '#ffffff',
+                        borderColor: 'transparent',
+                        borderWidth: 0,
+                        fontSize: 14,
+                      }),
+                      enabled: true,
+                      displayOrder: current.cards.length + 1,
+                    },
+                  ],
                 }))
               }
             >
@@ -9628,14 +9816,11 @@ export default function JenksV2FrontPageManager() {
               <input
                 type="number"
                 className="mt-1 w-full rounded border px-2 py-1.5"
-                value={config.designerSpotlight.rows}
+                value={spotlightConfig.rows}
                 onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    designerSpotlight: {
-                      ...prev.designerSpotlight,
-                      rows: clamp(toNumber(event.target.value, prev.designerSpotlight.rows), 1, 12),
-                    },
+                  updateSpotlightConfig((current) => ({
+                    ...current,
+                    rows: clamp(toNumber(event.target.value, current.rows), 1, 12),
                   }))
                 }
               />
@@ -9645,14 +9830,11 @@ export default function JenksV2FrontPageManager() {
               <input
                 type="number"
                 className="mt-1 w-full rounded border px-2 py-1.5"
-                value={config.designerSpotlight.columns}
+                value={spotlightConfig.columns}
                 onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    designerSpotlight: {
-                      ...prev.designerSpotlight,
-                      columns: clamp(toNumber(event.target.value, prev.designerSpotlight.columns), 1, 12),
-                    },
+                  updateSpotlightConfig((current) => ({
+                    ...current,
+                    columns: clamp(toNumber(event.target.value, current.columns), 1, 12),
                   }))
                 }
               />
@@ -9662,14 +9844,11 @@ export default function JenksV2FrontPageManager() {
               <input
                 type="number"
                 className="mt-1 w-full rounded border px-2 py-1.5"
-                value={config.designerSpotlight.countryFontSize}
+                value={spotlightConfig.countryFontSize}
                 onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    designerSpotlight: {
-                      ...prev.designerSpotlight,
-                      countryFontSize: clamp(toNumber(event.target.value, prev.designerSpotlight.countryFontSize), 10, 72),
-                    },
+                  updateSpotlightConfig((current) => ({
+                    ...current,
+                    countryFontSize: clamp(toNumber(event.target.value, current.countryFontSize), 10, 72),
                   }))
                 }
               />
@@ -9679,18 +9858,11 @@ export default function JenksV2FrontPageManager() {
               <input
                 type="number"
                 className="mt-1 w-full rounded border px-2 py-1.5"
-                value={config.designerSpotlight.designerNameFontSize}
+                value={spotlightConfig.designerNameFontSize}
                 onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    designerSpotlight: {
-                      ...prev.designerSpotlight,
-                      designerNameFontSize: clamp(
-                        toNumber(event.target.value, prev.designerSpotlight.designerNameFontSize),
-                        14,
-                        140
-                      ),
-                    },
+                  updateSpotlightConfig((current) => ({
+                    ...current,
+                    designerNameFontSize: clamp(toNumber(event.target.value, current.designerNameFontSize), 14, 140),
                   }))
                 }
               />
@@ -9700,14 +9872,11 @@ export default function JenksV2FrontPageManager() {
               <input
                 type="number"
                 className="mt-1 w-full rounded border px-2 py-1.5"
-                value={config.designerSpotlight.specialtyFontSize}
+                value={spotlightConfig.specialtyFontSize}
                 onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    designerSpotlight: {
-                      ...prev.designerSpotlight,
-                      specialtyFontSize: clamp(toNumber(event.target.value, prev.designerSpotlight.specialtyFontSize), 10, 72),
-                    },
+                  updateSpotlightConfig((current) => ({
+                    ...current,
+                    specialtyFontSize: clamp(toNumber(event.target.value, current.specialtyFontSize), 10, 72),
                   }))
                 }
               />
@@ -9717,20 +9886,17 @@ export default function JenksV2FrontPageManager() {
               <input
                 type="number"
                 className="mt-1 w-full rounded border px-2 py-1.5"
-                value={config.designerSpotlight.descriptionFontSize}
+                value={spotlightConfig.descriptionFontSize}
                 onChange={(event) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    designerSpotlight: {
-                      ...prev.designerSpotlight,
-                      descriptionFontSize: clamp(toNumber(event.target.value, prev.designerSpotlight.descriptionFontSize), 10, 96),
-                    },
+                  updateSpotlightConfig((current) => ({
+                    ...current,
+                    descriptionFontSize: clamp(toNumber(event.target.value, current.descriptionFontSize), 10, 96),
                   }))
                 }
               />
             </label>
           </div>
-          {config.designerSpotlight.cards.map((card, index) => (
+          {spotlightConfig.cards.map((card, index) => (
             <div key={card.id} className="rounded border p-3 space-y-2">
               <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
                 <label className="md:col-span-2 text-[11px]">
@@ -9741,9 +9907,9 @@ export default function JenksV2FrontPageManager() {
                     onChange={(event) =>
                       setConfig((prev) => ({
                         ...prev,
-                        designerSpotlight: {
-                          ...prev.designerSpotlight,
-                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
                             entryIndex === index
                               ? {
                                   ...entry,
@@ -9771,9 +9937,9 @@ export default function JenksV2FrontPageManager() {
                     onChange={(event) =>
                       setConfig((prev) => ({
                         ...prev,
-                        designerSpotlight: {
-                          ...prev.designerSpotlight,
-                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
                             entryIndex === index ? { ...entry, designerName: event.target.value } : entry
                           ),
                         },
@@ -9789,9 +9955,9 @@ export default function JenksV2FrontPageManager() {
                     onChange={(event) =>
                       setConfig((prev) => ({
                         ...prev,
-                        designerSpotlight: {
-                          ...prev.designerSpotlight,
-                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
                             entryIndex === index ? { ...entry, specialty: event.target.value } : entry
                           ),
                         },
@@ -9807,9 +9973,9 @@ export default function JenksV2FrontPageManager() {
                     onChange={(event) =>
                       setConfig((prev) => ({
                         ...prev,
-                        designerSpotlight: {
-                          ...prev.designerSpotlight,
-                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
                             entryIndex === index ? { ...entry, tag: event.target.value } : entry
                           ),
                         },
@@ -9825,9 +9991,9 @@ export default function JenksV2FrontPageManager() {
                     onChange={(event) =>
                       setConfig((prev) => ({
                         ...prev,
-                        designerSpotlight: {
-                          ...prev.designerSpotlight,
-                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
                             entryIndex === index ? { ...entry, title: event.target.value } : entry
                           ),
                         },
@@ -9843,9 +10009,9 @@ export default function JenksV2FrontPageManager() {
                     onChange={(event) =>
                       setConfig((prev) => ({
                         ...prev,
-                        designerSpotlight: {
-                          ...prev.designerSpotlight,
-                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
                             entryIndex === index ? { ...entry, description: event.target.value } : entry
                           ),
                         },
@@ -9861,9 +10027,9 @@ export default function JenksV2FrontPageManager() {
                     onChange={(event) =>
                       setConfig((prev) => ({
                         ...prev,
-                        designerSpotlight: {
-                          ...prev.designerSpotlight,
-                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
                             entryIndex === index ? { ...entry, ctaText: event.target.value } : entry
                           ),
                         },
@@ -9879,9 +10045,9 @@ export default function JenksV2FrontPageManager() {
                     onChange={(event) =>
                       setConfig((prev) => ({
                         ...prev,
-                        designerSpotlight: {
-                          ...prev.designerSpotlight,
-                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) => {
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) => {
                             if (entryIndex !== index) return entry;
                             const nextMode: 'URL' | 'PAGE' = event.target.value === 'URL' ? 'URL' : 'PAGE';
                             if (nextMode === 'PAGE') {
@@ -9919,9 +10085,9 @@ export default function JenksV2FrontPageManager() {
                       onChange={(event) =>
                         setConfig((prev) => ({
                           ...prev,
-                          designerSpotlight: {
-                            ...prev.designerSpotlight,
-                            cards: prev.designerSpotlight.cards.map((entry, entryIndex) => {
+                          [spotlightConfigKey]: {
+                            ...prev[spotlightConfigKey],
+                            cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) => {
                               if (entryIndex !== index) return entry;
                               const selected = pageRouteOptions.find((route) => route.key === event.target.value);
                               return {
@@ -9949,9 +10115,9 @@ export default function JenksV2FrontPageManager() {
                       onChange={(event) =>
                         setConfig((prev) => ({
                           ...prev,
-                          designerSpotlight: {
-                            ...prev.designerSpotlight,
-                            cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                          [spotlightConfigKey]: {
+                            ...prev[spotlightConfigKey],
+                            cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
                               entryIndex === index
                                 ? { ...entry, ctaMode: 'URL', ctaPageKey: '', ctaLink: event.target.value }
                                 : entry
@@ -9968,9 +10134,9 @@ export default function JenksV2FrontPageManager() {
                   (nextStyle) =>
                     setConfig((prev) => ({
                       ...prev,
-                      designerSpotlight: {
-                        ...prev.designerSpotlight,
-                        cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                      [spotlightConfigKey]: {
+                        ...prev[spotlightConfigKey],
+                        cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
                           entryIndex === index ? { ...entry, ctaStyle: nextStyle } : entry
                         ),
                       },
@@ -9981,10 +10147,15 @@ export default function JenksV2FrontPageManager() {
                   <Button
                     type="button"
                     variant="outline"
-                    isLoading={uploadingTarget === 'spotlight'}
+                    isLoading={uploadingTarget === (isRtwFtbTab ? 'rtw-ftb' : 'spotlight')}
                     onClick={() => {
-                      setSpotlightUploadIndex(index);
-                      spotlightImageUploadRef.current?.click();
+                      if (isRtwFtbTab) {
+                        setRtwFtbUploadIndex(index);
+                        rtwFtbImageUploadRef.current?.click();
+                      } else {
+                        setSpotlightUploadIndex(index);
+                        spotlightImageUploadRef.current?.click();
+                      }
                     }}
                   >
                     <Upload className="h-3.5 w-3.5" />
@@ -9995,9 +10166,9 @@ export default function JenksV2FrontPageManager() {
                     onClick={() =>
                       setConfig((prev) => ({
                         ...prev,
-                        designerSpotlight: {
-                          ...prev.designerSpotlight,
-                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
                             entryIndex === index ? { ...entry, image: '' } : entry
                           ),
                         },
@@ -10012,9 +10183,9 @@ export default function JenksV2FrontPageManager() {
                     onChange={(event) =>
                       setConfig((prev) => ({
                         ...prev,
-                        designerSpotlight: {
-                          ...prev.designerSpotlight,
-                          cards: prev.designerSpotlight.cards.map((entry, entryIndex) =>
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
                             entryIndex === index ? { ...entry, enabled: event.target.checked } : entry
                           ),
                         },
@@ -10027,9 +10198,9 @@ export default function JenksV2FrontPageManager() {
                     onClick={() =>
                       setConfig((prev) => ({
                         ...prev,
-                        designerSpotlight: {
-                          ...prev.designerSpotlight,
-                          cards: prev.designerSpotlight.cards.filter((_, entryIndex) => entryIndex !== index),
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.filter((_, entryIndex) => entryIndex !== index),
                         },
                       }))
                     }
@@ -10043,7 +10214,7 @@ export default function JenksV2FrontPageManager() {
                 {card.image ? (
                   <img
                     src={resolvePreviewUrl(card.image)}
-                    alt={`Spotlight image preview ${index + 1}`}
+                    alt={`${spotlightTabLabel} image preview ${index + 1}`}
                     className="h-24 w-full rounded object-cover"
                     onError={(event) => {
                       event.currentTarget.style.display = 'none';
@@ -10051,18 +10222,18 @@ export default function JenksV2FrontPageManager() {
                   />
                 ) : (
                   <div className="flex h-24 items-center justify-center rounded border border-dashed text-xs text-gray-500">
-                    No spotlight image uploaded
+                    No image uploaded
                   </div>
                 )}
               </div>
             </div>
           ))}
           <input
-            ref={spotlightImageUploadRef}
+            ref={isRtwFtbTab ? rtwFtbImageUploadRef : spotlightImageUploadRef}
             type="file"
             accept="image/*"
             className="hidden"
-            onChange={handleSpotlightImageUpload}
+            onChange={isRtwFtbTab ? handleRtwFtbImageUpload : handleSpotlightImageUpload}
           />
         </section>
       ) : null}
@@ -12104,6 +12275,7 @@ export default function JenksV2FrontPageManager() {
       activeTab === 'instantBuy' ||
       activeTab === 'freshDrops' ||
       activeTab === 'designerSpotlight' ||
+      activeTab === 'rtwFtb' ||
       activeTab === 'heritage' ||
       activeTab === 'customerReviews' ||
       activeTab === 'sectionVisibility' ? null : (
