@@ -27,6 +27,7 @@ const TEMPLATE_KEYS = [
   'INSTANT_BUY',
   'FRESH_DROPS',
   'DESIGNER_SPOTLIGHT',
+  'RTW_FTB',
   'HERITAGE',
   'CUSTOMER_REVIEWS',
   'NEWSLETTER_FOOTER',
@@ -583,6 +584,7 @@ const TEMPLATE_META: Array<{ templateKey: TemplateKey; key: string; name: string
   { templateKey: 'INSTANT_BUY', key: 'instant-buy', name: 'Instant Buy' },
   { templateKey: 'FRESH_DROPS', key: 'fresh-drops', name: 'Fresh Drops' },
   { templateKey: 'DESIGNER_SPOTLIGHT', key: 'designer-spotlight', name: 'Designer Spotlight' },
+  { templateKey: 'RTW_FTB', key: 'rtw-ftb', name: 'RTW & FTB' },
   { templateKey: 'HERITAGE', key: 'heritage', name: 'Heritage' },
   { templateKey: 'CUSTOMER_REVIEWS', key: 'customer-reviews', name: 'From Our Customers' },
   { templateKey: 'NEWSLETTER_FOOTER', key: 'newsletter-footer', name: 'Newsletter and Footer' },
@@ -2912,6 +2914,7 @@ const buildTemplateSnapshot = (
     case 'FRESH_DROPS':
       return cloneJson(asRecord(settings.freshDrops));
     case 'DESIGNER_SPOTLIGHT':
+    case 'RTW_FTB':
       return cloneJson(asRecord(settings.designerSpotlight));
     case 'HERITAGE':
       return cloneJson(asRecord(settings.heritage));
@@ -3245,6 +3248,7 @@ const applyTemplateSnapshotToSettings = (
       next.freshDrops = normalizeFreshDrops(snapshotRecord, next.freshDrops);
       break;
     case 'DESIGNER_SPOTLIGHT':
+    case 'RTW_FTB':
       next.designerSpotlight = normalizeDesignerSpotlight(snapshotRecord, next.designerSpotlight);
       break;
     case 'HERITAGE':

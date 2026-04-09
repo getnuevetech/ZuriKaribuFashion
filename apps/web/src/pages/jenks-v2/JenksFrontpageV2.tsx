@@ -246,6 +246,7 @@ type TemplateKey =
   | 'INSTANT_BUY'
   | 'FRESH_DROPS'
   | 'DESIGNER_SPOTLIGHT'
+  | 'RTW_FTB'
   | 'HERITAGE'
   | 'CUSTOMER_REVIEWS'
   | 'NEWSLETTER_FOOTER';
@@ -274,6 +275,7 @@ const TEMPLATE_KEYS: TemplateKey[] = [
   'INSTANT_BUY',
   'FRESH_DROPS',
   'DESIGNER_SPOTLIGHT',
+  'RTW_FTB',
   'HERITAGE',
   'CUSTOMER_REVIEWS',
   'NEWSLETTER_FOOTER',
@@ -2085,6 +2087,10 @@ export default function JenksFrontpageV2() {
           }));
     return source.slice(0, maxItems);
   }, [designerSpotlightCfg.cards, designerSpotlightColumns, designerSpotlightRows]);
+  const rtwFtbSpotlightCards = useMemo(
+    () => spotlightCards.map((spot) => ({ ...spot, tag: 'RTW & FTB' })),
+    [spotlightCards]
+  );
   const staticReviewCards = useMemo(() => {
     const rows = asArray(customerReviewsCfg.staticMessages)
       .map((entry) => asRecord(entry))
@@ -4171,6 +4177,72 @@ export default function JenksFrontpageV2() {
         >
           {spotlightCards.map((spot) => (
             <Link key={spot.id} to={spot.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
+              <BrandImageWithFallback
+                src={spot.image}
+                alt={spot.title}
+                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                spinnerClassName="h-8 w-8"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />
+              <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-black">
+                {spot.tag}
+              </p>
+              <p className="absolute right-6 top-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/25 text-xl">
+                {countryCodeToFlagEmoji(resolveDesignerCountryCode(spot.countryCode, spot.designerCountry))}
+              </p>
+              <div className="absolute bottom-6 left-6 right-6 text-white">
+                <p
+                  className="font-medium uppercase tracking-[0.08em] text-white/78"
+                  style={{ fontSize: `${designerSpotlightTypography.countryFontSize}px` }}
+                >
+                  {spot.designerCountry || spot.tag}
+                </p>
+                <h3
+                  className="font-['Oswald'] font-bold uppercase leading-[0.95]"
+                  style={{ fontSize: `${designerSpotlightTypography.nameFontSize}px` }}
+                >
+                  {spot.designerName || spot.title}
+                </h3>
+                <p
+                  className="mt-2 leading-[1.25] text-white/78"
+                  style={{ fontSize: `${designerSpotlightTypography.specialtyFontSize}px` }}
+                >
+                  {spot.designerSpecialty || 'Contemporary African Designer'}
+                </p>
+                <p
+                  className="mt-3 max-w-[42ch] leading-[1.35] text-white/88"
+                  style={{ fontSize: `${designerSpotlightTypography.descriptionFontSize}px` }}
+                >
+                  {spot.description}
+                </p>
+                <span
+                  className="relative mt-5 inline-flex items-center gap-3 pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-white"
+                  style={buildCTAStyle(spot.ctaStyle, {
+                    ...DEFAULT_INLINE_CTA_STYLE,
+                    textColor: '#ffffff',
+                    hoverTextColor: '#ffffff',
+                    borderColor: 'transparent',
+                    hoverBorderColor: 'transparent',
+                  })}
+                >
+                  {spot.cta}
+                  <ArrowRight className="h-4 w-4" />
+                  <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-[#e66045] transition-all duration-300 group-hover:w-full" />
+                </span>
+              </div>
+            </Link>
+          ))}
+        </section>
+      ) : null}
+
+      {/* RTW & FTB SPOTLIGHT */}
+      {isSectionVisible('RTW_FTB') ? (
+        <section
+          className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 bg-[#101010] ${designerSpotlightColsClass}`}
+          style={{ order: getSectionOrder('RTW_FTB') }}
+        >
+          {rtwFtbSpotlightCards.map((spot) => (
+            <Link key={`rtw-ftb-${spot.id}`} to={spot.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
               <BrandImageWithFallback
                 src={spot.image}
                 alt={spot.title}

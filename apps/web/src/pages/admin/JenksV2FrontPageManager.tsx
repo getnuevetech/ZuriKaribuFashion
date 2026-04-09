@@ -24,6 +24,7 @@ type TemplateKey =
   | 'INSTANT_BUY'
   | 'FRESH_DROPS'
   | 'DESIGNER_SPOTLIGHT'
+  | 'RTW_FTB'
   | 'HERITAGE'
   | 'CUSTOMER_REVIEWS'
   | 'NEWSLETTER_FOOTER';
@@ -588,6 +589,7 @@ const TEMPLATES: Array<{ key: TemplateKey; label: string }> = [
   { key: 'INSTANT_BUY', label: 'Instant Buy' },
   { key: 'FRESH_DROPS', label: 'Fresh Drops' },
   { key: 'DESIGNER_SPOTLIGHT', label: 'Designer Spotlight' },
+  { key: 'RTW_FTB', label: 'RTW & FTB' },
   { key: 'HERITAGE', label: 'Heritage' },
   { key: 'CUSTOMER_REVIEWS', label: 'From Our Customers' },
   { key: 'NEWSLETTER_FOOTER', label: 'Newsletter and Footer' },
