@@ -183,13 +183,11 @@ type SpotlightRuntime = {
   designerName?: string;
   designerCountry?: string;
   designerSpecialty?: string;
-  price?: string;
   showCountry: boolean;
   showDesignerName: boolean;
   showSpecialty: boolean;
   showTag: boolean;
   showDescription: boolean;
-  showPrice: boolean;
   textBackgroundEnabled: boolean;
   textBackgroundColor: string;
   cta: string;
@@ -205,7 +203,6 @@ type SpotlightTypography = {
   nameFontSize: number;
   specialtyFontSize: number;
   descriptionFontSize: number;
-  priceFontSize: number;
 };
 
 type CustomerReviewCard = {
@@ -263,7 +260,6 @@ type TemplateKey =
 
 type JenksV2ManagerPayload = Record<string, unknown>;
 type IconComponent = ComponentType<{ className?: string }>;
-type SpotlightVariant = 'DESIGNER' | 'RTW_FTB';
 
 const ASSET_BASE = 'https://african-fashion-zurikaribu.vercel.app';
 const HERO_HEIGHT_CLASS = 'min-h-[106vh]';
@@ -1193,6 +1189,42 @@ const DESIGNER_SPOTLIGHT = [
   },
 ] as const;
 
+const RTW_FTB_SPOTLIGHT = [
+  {
+    id: 'rtw-ftb-1',
+    image: `${ASSET_BASE}/featured_rw_left.jpg`,
+    title: 'RTW & FTB CURATION',
+    country: 'NIGERIA',
+    specialty: 'Ready-to-Wear & Fabric Curation',
+    description: 'Hand-picked ready-to-wear looks and premium fabrics curated for immediate shopping.',
+    cta: 'SHOP COLLECTION',
+    href: '/Shop',
+    tag: 'RTW & FTB',
+  },
+  {
+    id: 'rtw-ftb-2',
+    image: `${ASSET_BASE}/fabrics_full.jpg`,
+    title: 'PREMIUM FABRIC EDIT',
+    country: 'GHANA',
+    specialty: 'Fabric Selection',
+    description: 'Discover bold prints and artisan materials selected for modern African wardrobes.',
+    cta: 'SHOP COLLECTION',
+    href: '/Shop',
+    tag: 'RTW & FTB',
+  },
+  {
+    id: 'rtw-ftb-3',
+    image: `${ASSET_BASE}/featured_rw_right.jpg`,
+    title: 'READY-TO-WEAR PICKS',
+    country: 'SENEGAL',
+    specialty: 'Ready-to-Wear Styling',
+    description: 'From statement silhouettes to everyday staples, shop latest RTW selections instantly.',
+    cta: 'SHOP COLLECTION',
+    href: '/Shop',
+    tag: 'RTW & FTB',
+  },
+] as const;
+
 const ALL_COUNTRIES_COUNT = 54;
 const COUNTRY_LABEL_BY_CODE: Record<string, string> = {
   DZ: 'Algeria',
@@ -2007,7 +2039,8 @@ export default function JenksFrontpageV2() {
   };
 
   const buildSpotlightModel = useCallback(
-    (cfg: Record<string, unknown>, variant: SpotlightVariant) => {
+    (cfg: Record<string, unknown>, variant: 'DESIGNER' | 'RTW_FTB') => {
+      const fallbackRows = variant === 'RTW_FTB' ? RTW_FTB_SPOTLIGHT : DESIGNER_SPOTLIGHT;
       const rows = Math.max(1, Math.round(asNumber(cfg.rows, 1)));
       const columns = Math.max(1, Math.min(12, Math.round(asNumber(cfg.columns, 3))));
       const typography: SpotlightTypography = {
@@ -2015,7 +2048,11 @@ export default function JenksFrontpageV2() {
         nameFontSize: Math.max(16, Math.min(140, Math.round(asNumber(cfg.designerNameFontSize ?? cfg.nameFontSize, 52)))),
         specialtyFontSize: Math.max(10, Math.min(72, Math.round(asNumber(cfg.specialtyFontSize, 22)))),
         descriptionFontSize: Math.max(10, Math.min(96, Math.round(asNumber(cfg.descriptionFontSize, 24)))),
-        priceFontSize: Math.max(10, Math.min(96, Math.round(asNumber(cfg.priceFontSize, 18)))),
+        ...(variant === 'RTW_FTB'
+          ? {
+              priceFontSize: Math.max(10, Math.min(96, Math.round(asNumber(cfg.priceFontSize, 18)))),
+            }
+          : {}),
       };
       const colsClass = (() => {
         if (columns <= 1) return 'md:grid-cols-1';
@@ -2037,19 +2074,17 @@ export default function JenksFrontpageV2() {
         .filter((entry) => asBoolean(entry.enabled, true))
         .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
         .map((entry, idx) => {
-          const fallbackHref =
-            variant === 'RTW_FTB'
-              ? '/Shop'
-              : DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.href || '/customtowear';
-          const fallbackTitle = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.title || 'OLUWASEUN ADEYEMI';
-          const fallbackSpecialty =
-            DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.specialty || 'Contemporary African Designer';
+          const fallbackRow = fallbackRows[idx % fallbackRows.length];
+          const fallbackHref = fallbackRow?.href || (variant === 'RTW_FTB' ? '/Shop' : '/customtowear');
+          const fallbackTitle = fallbackRow?.title || 'OLUWASEUN ADEYEMI';
+          const fallbackSpecialty = fallbackRow?.specialty || 'Contemporary African Designer';
           const fallbackDescription =
-            DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.description ||
+            fallbackRow?.description ||
             'With over 15 years of experience, Oluwaseun blends traditional Nigerian craftsmanship with modern silhouettes, creating pieces that honor heritage while embracing contemporary elegance.';
-          const fallbackCountry = DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.country || 'NIGERIA';
-          const fallbackTag = variant === 'RTW_FTB' ? 'RTW & FTB' : DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.tag || 'DESIGNER SPOTLIGHT';
-          const fallbackCta = variant === 'RTW_FTB' ? 'SHOP COLLECTION' : DESIGNER_SPOTLIGHT[idx % DESIGNER_SPOTLIGHT.length]?.cta || 'VIEW COLLECTION';
+          const fallbackCountry = fallbackRow?.country || 'NIGERIA';
+          const fallbackTag =
+            variant === 'RTW_FTB' ? asString((fallbackRow as any)?.tag, 'RTW & FTB') : asString((fallbackRow as any)?.tag, 'DESIGNER SPOTLIGHT');
+          const fallbackCta = fallbackRow?.cta || (variant === 'RTW_FTB' ? 'SHOP COLLECTION' : 'VIEW COLLECTION');
           const countryToken = resolveDesignerCountryCode(
             (entry as Record<string, unknown>).countryCode,
             asString(entry.country, asString(entry.designerCountry, ''))
@@ -2075,13 +2110,13 @@ export default function JenksFrontpageV2() {
             designerCountry: country,
             designerSpecialty: asString(entry.specialty, fallbackSpecialty),
             description: truncateWords(asString(entry.description, fallbackDescription), 25),
-            price: asString(entry.price, ''),
+            price: variant === 'RTW_FTB' ? asString(entry.price, '') : '',
             showCountry: asBoolean(entry.showCountry, true),
             showDesignerName: asBoolean(entry.showDesignerName, true),
             showSpecialty: asBoolean(entry.showSpecialty, true),
             showTag: asBoolean(entry.showTag, true),
             showDescription: asBoolean(entry.showDescription, true),
-            showPrice: asBoolean(entry.showPrice, true),
+            showPrice: variant === 'RTW_FTB' ? asBoolean(entry.showPrice, true) : false,
             textBackgroundEnabled,
             textBackgroundColor,
             cta: asString(entry.ctaText, fallbackCta).toUpperCase(),
@@ -2094,23 +2129,23 @@ export default function JenksFrontpageV2() {
       const source =
         entries.length > 0
           ? entries
-          : DESIGNER_SPOTLIGHT.map((row) => ({
+          : fallbackRows.map((row) => ({
               ...row,
               designerName: row.title,
               title: row.title,
               designerCountry: asString((row as any).country, ''),
               designerSpecialty: asString((row as any).specialty, 'Contemporary African Designer'),
               description: truncateWords(asString((row as any).description, ''), 25),
-              price: '',
+              price: variant === 'RTW_FTB' ? asString((row as any).price, '') : '',
               showCountry: true,
               showDesignerName: true,
               showSpecialty: true,
               showTag: true,
               showDescription: true,
-              showPrice: true,
+              showPrice: variant === 'RTW_FTB',
               textBackgroundEnabled: true,
               textBackgroundColor: 'rgba(0,0,0,0.45)',
-              tag: variant === 'RTW_FTB' ? 'RTW & FTB' : asString((row as any).tag, 'DESIGNER SPOTLIGHT'),
+              tag: variant === 'RTW_FTB' ? asString((row as any).tag, 'RTW & FTB') : asString((row as any).tag, 'DESIGNER SPOTLIGHT'),
               countryCode: resolveDesignerCountryCode('', asString((row as any).country, '')),
             }));
       return {
@@ -4253,14 +4288,6 @@ export default function JenksFrontpageV2() {
                   borderRadius: spot.textBackgroundEnabled ? '2px' : '0px',
                 }}
               >
-                {spot.showPrice ? (
-                  <p
-                    className="font-semibold uppercase tracking-[0.08em] text-white"
-                    style={{ fontSize: `${designerSpotlightTypography.priceFontSize}px` }}
-                  >
-                    {spot.price || ''}
-                  </p>
-                ) : null}
                 {spot.showCountry ? (
                   <p
                     className="font-medium uppercase tracking-[0.08em] text-white/78"

@@ -1609,7 +1609,6 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       overlayEnabled: true,
       overlayBackgroundColor: 'rgba(0,0,0,0.36)',
       countryFontSize: 18,
-      priceFontSize: 20,
       nameFontSize: 52,
       specialtyFontSize: 24,
       descriptionFontSize: 24,
@@ -1622,8 +1621,6 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           countryCode: 'NG',
           country: 'Nigeria',
           showCountry: true,
-          price: '$0.00',
-          showPrice: true,
           designerName: 'Lagos Tailoring House',
           showDesignerName: true,
           title: 'Meet the Designers',
@@ -2708,8 +2705,12 @@ const normalizeFreshDrops = (raw: unknown, fallback: FreshDropsSettings): FreshD
 
 const normalizeDesignerSpotlight = (
   raw: unknown,
-  fallback: DesignerSpotlightSettings
+  fallback: DesignerSpotlightSettings,
+  options?: {
+    includePrice?: boolean;
+  }
 ): DesignerSpotlightSettings => {
+  const includePrice = options?.includePrice ?? false;
   const row = asRecord(raw);
   const rows = Array.isArray(row.cards) ? row.cards : fallback.cards;
   const cards = rows
@@ -2733,8 +2734,12 @@ const normalizeDesignerSpotlight = (
         country: (getString(item.country) || fallbackItem.country || '').slice(0, 80),
         showCountry:
           getBoolean(item.showCountry) ?? getBoolean((item as Record<string, unknown>).countryEnabled) ?? fallbackItem.showCountry ?? true,
-        price: (getString(item.price) || getString((item as Record<string, unknown>).amount) || fallbackItem.price || '').slice(0, 80),
-        showPrice: getBoolean(item.showPrice) ?? getBoolean((item as Record<string, unknown>).priceEnabled) ?? fallbackItem.showPrice ?? true,
+        price: includePrice
+          ? (getString(item.price) || getString((item as Record<string, unknown>).amount) || fallbackItem.price || '').slice(0, 80)
+          : '',
+        showPrice: includePrice
+          ? getBoolean(item.showPrice) ?? getBoolean((item as Record<string, unknown>).priceEnabled) ?? fallbackItem.showPrice ?? true
+          : false,
         designerName: (getString(item.designerName) || fallbackItem.designerName || '').slice(0, 120),
         showDesignerName:
           getBoolean(item.showDesignerName) ??
@@ -2775,7 +2780,11 @@ const normalizeDesignerSpotlight = (
         'rgba(0,0,0,0.36)')
         .slice(0, 64),
     countryFontSize: clamp(Math.round(getNumber(row.countryFontSize) ?? fallback.countryFontSize), 10, 72),
-    priceFontSize: clamp(Math.round(getNumber(row.priceFontSize) ?? fallback.priceFontSize ?? 20), 10, 96),
+    ...(includePrice
+      ? {
+          priceFontSize: clamp(Math.round(getNumber(row.priceFontSize) ?? fallback.priceFontSize ?? 20), 10, 96),
+        }
+      : {}),
     nameFontSize: clamp(
       Math.round(getNumber(row.nameFontSize) ?? getNumber(row.designerNameFontSize) ?? fallback.nameFontSize),
       16,
@@ -3343,7 +3352,7 @@ const applyTemplateSnapshotToSettings = (
       next.designerSpotlight = normalizeDesignerSpotlight(snapshotRecord, next.designerSpotlight);
       break;
     case 'RTW_FTB':
-      next.rtwFtb = normalizeDesignerSpotlight(snapshotRecord, next.rtwFtb);
+      next.rtwFtb = normalizeDesignerSpotlight(snapshotRecord, next.rtwFtb, { includePrice: true });
       break;
     case 'HERITAGE':
       next.heritage = normalizeHeritage(snapshotRecord, next.heritage);
@@ -3379,8 +3388,12 @@ const normalizeSettings = (
   const featured = normalizeFeatured(row.featured, fallback.featured);
   const instantBuy = normalizeInstantBuy(row.instantBuy, fallback.instantBuy);
   const freshDrops = normalizeFreshDrops(row.freshDrops, fallback.freshDrops);
-  const designerSpotlight = normalizeDesignerSpotlight(row.designerSpotlight, fallback.designerSpotlight);
-  const rtwFtb = normalizeDesignerSpotlight((row as Record<string, unknown>).rtwFtb, fallback.rtwFtb);
+  const designerSpotlight = normalizeDesignerSpotlight(row.designerSpotlight, fallback.designerSpotlight, {
+    includePrice: false,
+  });
+  const rtwFtb = normalizeDesignerSpotlight((row as Record<string, unknown>).rtwFtb, fallback.rtwFtb, {
+    includePrice: true,
+  });
   const heritage = normalizeHeritage(row.heritage, fallback.heritage);
   const customerReviews = normalizeCustomerReviews(row.customerReviews, fallback.customerReviews);
   const newsletterFooter = normalizeNewsletterFooter(row.newsletterFooter, fallback.newsletterFooter);
