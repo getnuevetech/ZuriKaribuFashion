@@ -1926,6 +1926,18 @@ const toApiPayload = (config: JenksV2FrontpageConfig) => ({
       };
     }),
   },
+  rtwFtb: {
+    ...config.rtwFtb,
+    nameFontSize: config.rtwFtb.designerNameFontSize,
+    cards: config.rtwFtb.cards.map((card) => {
+      const countryCode = countryCodeFromToken(card.countryCode || card.country, 'NG');
+      return {
+        ...card,
+        countryCode,
+        country: countryNameFromCode(countryCode),
+      };
+    }),
+  },
   heritage: config.heritage,
   customerReviews: config.customerReviews,
   newsletterFooter: config.newsletterFooter,
